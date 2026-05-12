@@ -8,6 +8,26 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// ROLE — RBAC: rol va unga biriktirilgan ruxsatlar (permissions)
+// Permissions list constants: backend/src/auth/permissions.ts
+// ─────────────────────────────────────────────────────────────────
+model Role {
+  id          String      @id @default(cuid())
+  name        String      @unique @db.VarChar(64)         // SUPERADMIN, ACCOUNTANT
+  label       String      @db.VarChar(128)                 // "Bosh admin"
+  description String?     @db.Text
+  permissions String[]                                     // ["transactions:view", "banks:manage", ...]
+  isSystem    Boolean     @default(false) @map("is_system") // o'chirib bo'lmaydigan tizim roli
+
+  users       AdminUser[]
+
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  @@map("roles")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // ADMIN USER — admin paneliga kirish uchun
 // ─────────────────────────────────────────────────────────────────
 model AdminUser {
@@ -15,13 +35,16 @@ model AdminUser {
   email        String    @unique @db.VarChar(190)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   fullName     String?   @map("full_name") @db.VarChar(190)
-  role         AdminRole @default(ADMIN)
+  role         AdminRole @default(ADMIN)                   // legacy enum (eski guard'lar uchun)
+  roleId       String?   @map("role_id")                   // Yangi RBAC: Role tablega FK
+  roleRef      Role?     @relation(fields: [roleId], references: [id])
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
 
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
+  @@index([roleId])
   @@map("admin_users")
 }
 

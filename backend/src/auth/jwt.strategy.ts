@@ -16,10 +16,27 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload) {
-    const user = await this.prisma.adminUser.findUnique({ where: { id: payload.sub } });
+    const user = await this.prisma.adminUser.findUnique({
+      where: { id: payload.sub },
+      include: { roleRef: true },
+    });
     if (!user || !user.isActive) {
       throw new UnauthorizedException();
     }
-    return { id: user.id, email: user.email, role: user.role, fullName: user.fullName };
+    // Permissions ni Role'dan olamiz, yoki enum default
+    let permissions: string[] = [];
+    if (user.roleRef) {
+      permissions = user.roleRef.permissions;
+    } else if (user.role === 'SUPERADMIN') {
+      permissions = ['*']; // PermissionsGuard SUPERADMIN'ga avtomatik o'tkazadi
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      roleId: user.roleId,
+      fullName: user.fullName,
+      permissions,
+    };
   }
 }

@@ -9,6 +9,9 @@ export interface AdminUser {
   email: string;
   fullName?: string | null;
   role: 'SUPERADMIN' | 'ADMIN' | 'VIEWER';
+  roleId?: string | null;
+  roleLabel?: string | null;
+  permissions: string[];
 }
 
 interface AuthState {
@@ -17,6 +20,7 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
+  hasPermission: (perm: string) => boolean;
 }
 
 export const useAuth = create<AuthState>()(
@@ -49,7 +53,22 @@ export const useAuth = create<AuthState>()(
           set({ token: null, user: null });
         }
       },
+      hasPermission(perm: string) {
+        const u = get().user;
+        if (!u) return false;
+        if (u.role === 'SUPERADMIN') return true;
+        return u.permissions?.includes(perm) ?? false;
+      },
     }),
     { name: 'xt_auth', partialize: (s) => ({ token: s.token, user: s.user }) },
   ),
 );
+
+/** UI helper — komponentda ishlatish uchun */
+export function useHasPermission(perm: string) {
+  return useAuth((s) => {
+    if (!s.user) return false;
+    if (s.user.role === 'SUPERADMIN') return true;
+    return s.user.permissions?.includes(perm) ?? false;
+  });
+}

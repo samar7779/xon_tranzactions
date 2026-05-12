@@ -7,6 +7,7 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { CryptoModule } from './common/crypto/crypto.module';
 import { AuthModule } from './auth/auth.module';
 import { AdminUsersModule } from './admin-users/admin-users.module';
+import { RolesModule } from './roles/roles.module';
 import { BanksModule } from './banks/banks.module';
 import { BankCredentialsModule } from './bank-credentials/bank-credentials.module';
 import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
@@ -26,6 +27,7 @@ import { DeployModule } from './deploy/deploy.module';
     KapitalbankModule,
     AuthModule,
     AdminUsersModule,
+    RolesModule,
     BanksModule,
     BankCredentialsModule,
     BankAccountsModule,

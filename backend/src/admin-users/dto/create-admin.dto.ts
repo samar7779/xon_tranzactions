@@ -21,9 +21,13 @@ export class CreateAdminDto {
   @IsOptional() @IsString()
   fullName?: string;
 
-  @ApiPropertyOptional({ enum: AdminRoleEnum, default: AdminRoleEnum.ADMIN })
+  @ApiPropertyOptional({ enum: AdminRoleEnum, default: AdminRoleEnum.ADMIN, description: 'Legacy enum role' })
   @IsOptional() @IsEnum(AdminRoleEnum)
   role?: AdminRoleEnum = AdminRoleEnum.ADMIN;
+
+  @ApiPropertyOptional({ description: 'Yangi RBAC: Role.id' })
+  @IsOptional() @IsString()
+  roleId?: string;
 }
 
 export class UpdateAdminDto {
@@ -34,6 +38,10 @@ export class UpdateAdminDto {
   @ApiPropertyOptional({ enum: AdminRoleEnum })
   @IsOptional() @IsEnum(AdminRoleEnum)
   role?: AdminRoleEnum;
+
+  @ApiPropertyOptional({ description: 'Yangi RBAC: Role.id (null/bo\'sh — rolni olib tashlash)' })
+  @IsOptional() @IsString()
+  roleId?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional() @IsBoolean()

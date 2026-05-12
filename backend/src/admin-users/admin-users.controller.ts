@@ -3,32 +3,36 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AdminUsersService } from './admin-users.service';
 import { CreateAdminDto, UpdateAdminDto } from './dto/create-admin.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { PERMISSIONS } from '../auth/permissions';
 
 @ApiTags('admin-users')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SUPERADMIN')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('admin-users')
 export class AdminUsersController {
   constructor(private readonly svc: AdminUsersService) {}
 
   @Get()
-  @ApiOperation({ summary: 'Adminlar ro\'yxati (faqat SUPERADMIN)' })
+  @RequirePermissions(PERMISSIONS.USERS_VIEW)
+  @ApiOperation({ summary: 'Adminlar ro\'yxati' })
   list() { return this.svc.list(); }
 
   @Post()
+  @RequirePermissions(PERMISSIONS.USERS_MANAGE)
   @ApiOperation({ summary: 'Yangi admin qo\'shish' })
   create(@Body() dto: CreateAdminDto) { return this.svc.create(dto); }
 
   @Patch(':id')
+  @RequirePermissions(PERMISSIONS.USERS_MANAGE)
   @ApiOperation({ summary: 'Adminni tahrirlash' })
   update(@Param('id') id: string, @Body() dto: UpdateAdminDto) {
     return this.svc.update(id, dto);
   }
 
   @Delete(':id')
+  @RequirePermissions(PERMISSIONS.USERS_MANAGE)
   @ApiOperation({ summary: 'Adminni o\'chirish' })
   remove(@Param('id') id: string) { return this.svc.remove(id); }
 }

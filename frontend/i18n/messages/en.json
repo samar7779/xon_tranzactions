@@ -11,6 +11,7 @@
     "banks": "Banks",
     "syncLogs": "Sync logs",
     "adminUsers": "Admins",
+    "roles": "Roles",
     "settings": "Settings",
     "logout": "Sign out"
   },
