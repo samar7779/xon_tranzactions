@@ -107,7 +107,7 @@ fi
 # 6. Backend o'rnatish
 echo "→ 6/8 Backend npm ci + migrate + build + seed"
 cd "$REPO_DIR/backend"
-npm install --no-audit --no-fund
+npm install --no-audit --no-fund --include=dev
 npx prisma generate
 # Birinchi marta: migrations yo'q bo'lsa, schema'ni to'g'ridan-to'g'ri push qilamiz.
 if [ -d "$REPO_DIR/backend/prisma/migrations" ] && [ -n "$(ls -A "$REPO_DIR/backend/prisma/migrations" 2>/dev/null)" ]; then
@@ -122,7 +122,7 @@ npm run seed || true
 # 7. Frontend o'rnatish
 echo "→ 7/8 Frontend npm ci + build"
 cd "$REPO_DIR/frontend"
-npm install --no-audit --no-fund
+npm install --no-audit --no-fund --include=dev
 npm run build
 
 # 8. Systemd + sudoers + nginx
