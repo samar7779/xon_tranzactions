@@ -1,5 +1,8 @@
-import { Controller, Get, Headers, HttpCode, Logger, Post, Req, Res, UseGuards } from '@nestjs/common';
-import { Request, Response } from 'express';
+import {
+  Body, Controller, Get, Headers, HttpCode, Logger, Post,
+  Req, UseGuards, RawBodyRequest,
+} from '@nestjs/common';
+import { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DeployService } from './deploy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -14,7 +17,7 @@ export class DeployController {
   constructor(private readonly svc: DeployService) {}
 
   @Get('health')
-  @ApiOperation({ summary: 'Deploy webhook sog\'lik tekshiruvi' })
+  @ApiOperation({ summary: "Deploy webhook sog'lik tekshiruvi" })
   health() {
     return this.svc.health();
   }
@@ -31,31 +34,31 @@ export class DeployController {
   @Post()
   @HttpCode(200)
   @ApiOperation({ summary: 'GitHub webhook — push paytida ishga tushadi' })
-  async deploy(@Req() req: Request, @Res() res: Response, @Headers() headers: any) {
-    const raw: Buffer = (req as any).rawBody || Buffer.from(JSON.stringify(req.body || {}));
-    const sig = headers['x-hub-signature-256'] || headers['X-Hub-Signature-256'];
-    const event = headers['x-github-event'] || headers['X-GitHub-Event'] || '';
+  async deploy(
+    @Req() req: RawBodyRequest<Request>,
+    @Body() body: any,
+    @Headers('x-hub-signature-256') sig: string,
+    @Headers('x-github-event') event: string,
+  ) {
+    const raw: Buffer | undefined = req.rawBody;
+    this.logger.log(`event=${event || '?'} rawBytes=${raw?.length ?? 0} hasSig=${!!sig}`);
 
     // 1. Signature
-    if (!this.svc.verifySignature(raw, sig)) {
-      this.logger.warn(`Yaroqsiz signature, ip=${req.ip}`);
-      return res.status(401).json({ ok: false, error: 'invalid signature' });
+    if (!raw || !this.svc.verifySignature(raw, sig)) {
+      this.logger.warn(`Yaroqsiz signature (raw=${raw?.length ?? 0}, sig=${sig?.slice(0, 16)}...)`);
+      return { ok: false, error: 'invalid signature' };
     }
 
     // 2. Event
-    if (event === 'ping') {
-      return res.json({ ok: true, msg: 'pong' });
-    }
-    if (event !== 'push') {
-      return res.json({ ok: true, msg: `ignored: ${event}` });
-    }
+    if (event === 'ping') return { ok: true, msg: 'pong' };
+    if (event !== 'push') return { ok: true, msg: `ignored: ${event}` };
 
     // 3. Branch
-    const payload: any = req.body || {};
+    const payload: any = body || {};
     const ref: string = payload.ref || '';
     const pushedBranch = ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : ref;
 
-    // 4. Fayl o'zgarishlari → qaysi service'larni restart qilish
+    // 4. O'zgargan fayllar
     const files = this.svc.changedFilesFromPayload(payload);
     const services = this.svc.servicesToRestart(files);
     const pusher: string = payload?.pusher?.name || '?';
@@ -65,15 +68,19 @@ export class DeployController {
       `━━ DEPLOY queued · branch=${pushedBranch} pusher=${pusher} files=${files.length} restart=${services.join(',') || '(none)'} ━━`,
     );
 
-    // 5. Fonda boshlab yuboramiz, webhook'ga darrov javob qaytaramiz
-    this.svc.triggerAsync({ pushedBranch, pusher, services, commit });
+    // 5. Fonda
+    try {
+      this.svc.triggerAsync({ pushedBranch, pusher, services, commit });
+    } catch (e: any) {
+      this.logger.error(`triggerAsync xato: ${e?.message}`);
+    }
 
-    return res.json({
+    return {
       ok: true,
       queued: true,
       branch: pushedBranch,
       files: files.length,
       services,
-    });
+    };
   }
 }
