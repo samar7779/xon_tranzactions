@@ -23,28 +23,23 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',    permission: PERMS.DASHBOARD_VIEW },
+  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
+  { href: '/accounts',     key: 'accounts',     icon: Wallet,           group: 'main',  permission: PERMS.ACCOUNTS_VIEW },
+  { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
 
-  // Billing — asosiy biznes oqim
-  { href: '/customers',    key: 'customers',    icon: UserCircle,       group: 'billing', permission: PERMS.CUSTOMERS_VIEW },
-  { href: '/contracts',    key: 'contracts',    icon: FileText,         group: 'billing', permission: PERMS.CONTRACTS_VIEW },
-  { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'billing', permission: PERMS.TRANSACTIONS_VIEW },
-
-  // Banklar
-  { href: '/accounts',     key: 'accounts',     icon: Wallet,           group: 'data',    permission: PERMS.ACCOUNTS_VIEW },
-  { href: '/credentials',  key: 'credentials',  icon: KeyRound,         group: 'data',    permission: PERMS.CREDENTIALS_VIEW },
-  { href: '/banks',        key: 'banks',        icon: Building2,        group: 'data',    permission: PERMS.BANKS_VIEW },
+  // Sozlash — bank ulanishlari
+  { href: '/banks',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
+  { href: '/credentials',  key: 'credentials',  icon: KeyRound,         group: 'setup', permission: PERMS.CREDENTIALS_VIEW },
 
   // Tizim
-  { href: '/sync-logs',    key: 'syncLogs',     icon: History,          group: 'system',  permission: PERMS.SYNC_VIEW },
-  { href: '/admin-users',  key: 'adminUsers',   icon: Users,            group: 'system',  permission: PERMS.USERS_VIEW },
-  { href: '/roles',        key: 'roles',        icon: ShieldCheck,      group: 'system',  permission: PERMS.ROLES_VIEW },
+  { href: '/sync-logs',    key: 'syncLogs',     icon: History,          group: 'system', permission: PERMS.SYNC_VIEW },
+  { href: '/admin-users',  key: 'adminUsers',   icon: Users,            group: 'system', permission: PERMS.USERS_VIEW },
+  { href: '/roles',        key: 'roles',        icon: ShieldCheck,      group: 'system', permission: PERMS.ROLES_VIEW },
 ];
 
 const GROUP_LABEL: Record<string, string> = {
   main: 'Asosiy',
-  billing: 'Billing',
-  data: 'Banklar',
+  setup: 'Sozlash',
   system: 'Tizim',
 };
 
