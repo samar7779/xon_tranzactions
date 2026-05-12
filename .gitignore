@@ -47,3 +47,7 @@ coverage/
 # Next.js
 **/next-env.d.ts
 .claude/
+
+# tz/ — bank API yo'riqnomalari, lokal misol fayllar (sirlar bor)
+tz/*.py
+tz/*.txt
