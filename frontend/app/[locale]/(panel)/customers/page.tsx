@@ -42,7 +42,7 @@ export default function CustomersPage() {
   const { locale } = useParams<{ locale: string }>();
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManage = user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.CUSTOMERS_MANAGE);
+  const canManage = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.CUSTOMERS_MANAGE));
 
   const [q, setQ] = useState('');
   const params = new URLSearchParams();

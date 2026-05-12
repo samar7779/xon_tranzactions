@@ -32,7 +32,7 @@ export default function RolesPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManage = user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.ROLES_MANAGE);
+  const canManage = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.ROLES_MANAGE));
 
   const { data: rolesData } = useQuery({
     queryKey: ['roles'],

@@ -43,7 +43,7 @@ export default function AdminUsersPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManage = user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.USERS_MANAGE);
+  const canManage = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.USERS_MANAGE));
 
   const { data } = useQuery({
     queryKey: ['admin-users'],

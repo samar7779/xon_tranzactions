@@ -41,7 +41,7 @@ export default function ContractsPage() {
   const customerIdFilter = search.get('customerId');
 
   const user = useAuth((s) => s.user);
-  const canManage = user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.CONTRACTS_MANAGE);
+  const canManage = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.CONTRACTS_MANAGE));
 
   const { data: contracts, isLoading } = useQuery({
     queryKey: ['contracts', customerIdFilter],
