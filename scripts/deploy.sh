@@ -81,7 +81,7 @@ fi
 if [ "$need_be" = "1" ]; then
   if [ -d "$REPO/backend" ]; then
     pushd "$REPO/backend" > /dev/null
-    if ! run "backend npm ci" npm install --silent --no-audit --no-fund; then
+    if ! run "backend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
       tg "❌ <b>Deploy xato</b>: backend npm ci"
       exit 1
     fi
@@ -110,7 +110,7 @@ fi
 if [ "$need_fe" = "1" ]; then
   if [ -d "$REPO/frontend" ]; then
     pushd "$REPO/frontend" > /dev/null
-    if ! run "frontend npm ci" npm install --silent --no-audit --no-fund; then
+    if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
       tg "❌ <b>Deploy xato</b>: frontend npm ci"
       exit 1
     fi
