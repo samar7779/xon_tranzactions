@@ -7,13 +7,12 @@ import { toast } from 'sonner';
 import {
   Search, Wand2, Link2Off, EyeOff, MoreHorizontal, Download,
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
-  Filter, X, Calendar, Wallet, Building2, FileText, Eye, FileSpreadsheet,
+  X, Calendar, Wallet, FileText, Eye, FileSpreadsheet,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -144,7 +143,7 @@ export default function TransactionsPage() {
         it.amount,
         it.currency,
         MATCH_CONFIG[it.matchStatus || 'UNMATCHED']?.label || '',
-        it.purpose || '',
+        it.description || '',
       ]),
     ];
     const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -615,26 +614,27 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
             <Row label="Nomi" value={row.fromName || '—'} />
             <Row label="STIR" value={row.fromInn || '—'} mono />
             <Row label="Hisob" value={row.fromAccount || '—'} mono />
-            <Row label="Bank MFO" value={row.fromBranch || '—'} mono />
+            <Row label="Bank MFO" value={row.fromMfo || '—'} mono />
           </Section>
 
           <Section title="Qabul qiluvchi">
             <Row label="Nomi" value={row.toName || '—'} />
             <Row label="STIR" value={row.toInn || '—'} mono />
             <Row label="Hisob" value={row.toAccount || '—'} mono />
-            <Row label="Bank MFO" value={row.toBranch || '—'} mono />
+            <Row label="Bank MFO" value={row.toMfo || '—'} mono />
           </Section>
 
-          {row.purpose && (
+          {row.description && (
             <Section title="To'lov maqsadi">
-              <div className="text-sm text-slate-700 leading-relaxed">{row.purpose}</div>
+              <div className="text-sm text-slate-700 leading-relaxed">{row.description}</div>
             </Section>
           )}
 
           <Section title="Tizim ma'lumotlari">
             <Row label="Bank" value={row.account?.bank?.name || '—'} />
             <Row label="Mahalliy hisob" value={row.account?.accountNo || '—'} mono />
-            <Row label="Tranzaksiya ID" value={row.b2Id || row.generalId || row.id} mono />
+            <Row label="Hujjat raqami" value={row.docNumber || '—'} mono />
+            <Row label="Tranzaksiya ID" value={row.externalId || row.id} mono />
             <Row label="Match holati" value={MATCH_CONFIG[row.matchStatus || 'UNMATCHED']?.label || 'Bog\'lanmagan'} />
           </Section>
         </div>
