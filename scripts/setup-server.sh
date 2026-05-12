@@ -107,7 +107,7 @@ fi
 # 6. Backend o'rnatish
 echo "→ 6/8 Backend npm ci + migrate + build + seed"
 cd "$REPO_DIR/backend"
-npm ci --no-audit --no-fund
+npm install --no-audit --no-fund
 npx prisma generate
 npx prisma migrate deploy
 npm run build
@@ -116,7 +116,7 @@ npm run seed || true
 # 7. Frontend o'rnatish
 echo "→ 7/8 Frontend npm ci + build"
 cd "$REPO_DIR/frontend"
-npm ci --no-audit --no-fund
+npm install --no-audit --no-fund
 npm run build
 
 # 8. Systemd + sudoers + nginx
