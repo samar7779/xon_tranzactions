@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ADMIN USER — admin paneliga kirish uchun
+// ─────────────────────────────────────────────────────────────────
+model AdminUser {
+  id           String    @id @default(cuid())
+  email        String    @unique @db.VarChar(190)
+  passwordHash String    @map("password_hash") @db.VarChar(255)
+  fullName     String?   @map("full_name") @db.VarChar(190)
+  role         AdminRole @default(ADMIN)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@map("admin_users")
+}
+
+enum AdminRole {
+  SUPERADMIN
+  ADMIN
+  VIEWER
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TRANSACTION — asosiy to'lov yozuvi
+// ─────────────────────────────────────────────────────────────────
+model Transaction {
+  id            String    @id @default(cuid())
+  externalId    String?   @unique @map("external_id")   // Bank tomonidan berilgan global_id yoki b2_id
+  type          TxnType
+  status        TxnStatus @default(PENDING)
+  direction     TxnDirection                            // IN yoki OUT
+
+  // Pul ma'lumotlari
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String    @default("UZS") @db.VarChar(3)
+
+  // Manba/qabul qiluvchi
+  fromMfo       String?   @map("from_mfo") @db.VarChar(8)
+  fromAccount   String?   @map("from_account")
+  fromName      String?   @map("from_name")
+  fromInn       String?   @map("from_inn") @db.VarChar(16)
+  toMfo         String?   @map("to_mfo") @db.VarChar(8)
+  toAccount     String?   @map("to_account")
+  toName        String?   @map("to_name")
+  toInn         String?   @map("to_inn") @db.VarChar(16)
+
+  // Tafsilot
+  description   String?   @db.Text
+  reference     String?   @db.VarChar(64)   // bank ref/code
+  purposeCode   String?   @map("purpose_code") @db.VarChar(16)
+  docNumber     String?   @map("doc_number") @db.VarChar(64)
+  docType       String?   @map("doc_type") @db.VarChar(8)
+  metadata      Json?
+
+  // Bog'lanishlar
+  bankId        String?      @map("bank_id")
+  bank          Bank?        @relation(fields: [bankId], references: [id])
+  accountId     String?      @map("account_id")
+  account       BankAccount? @relation(fields: [accountId], references: [id])
+  categoryId    String?      @map("category_id")
+  category      Category?    @relation(fields: [categoryId], references: [id])
+
+  // Vaqtlar
+  txnDate       DateTime  @map("txn_date")
+  syncedAt      DateTime  @default(now()) @map("synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([txnDate])
+  @@index([status])
+  @@index([type, direction])
+  @@index([bankId])
+  @@index([accountId])
+  @@map("transactions")
+}
+
+enum TxnType {
+  TRANSFER       // O'tkazma
+  PAYMENT        // To'lov
+  SALARY         // Maosh
+  TAX            // Soliq
+  FEE            // Komissiya
+  REFUND         // Qaytarish
+  OTHER          // Boshqa
+}
+
+enum TxnStatus {
+  PENDING        // Kutilmoqda
+  COMPLETED      // Yakunlangan
+  FAILED         // Muvaffaqiyatsiz
+  CANCELLED      // Bekor qilingan
+  REVERSED       // Qaytarilgan
+}
+
+enum TxnDirection {
+  IN             // Kiruvchi
+  OUT            // Chiquvchi
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BANK — bank manbalari (Kapitalbank, Uzcard, Humo, ...)
+// ─────────────────────────────────────────────────────────────────
+model Bank {
+  id           String           @id @default(cuid())
+  code         String           @unique @db.VarChar(32)  // KAPITALBANK, UZCARD, HUMO
+  name         String           @db.VarChar(128)
+  apiBaseUrl   String?          @map("api_base_url")
+  apiKind      BankApiKind      @default(KAPITALBANK_V3) @map("api_kind")
+  isActive     Boolean          @default(true) @map("is_active")
+
+  credentials  BankCredential[]
+  accounts     BankAccount[]
+  transactions Transaction[]
+
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  @@map("banks")
+}
+
+enum BankApiKind {
+  KAPITALBANK_V3
+  GENERIC
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BANK CREDENTIAL — har bir bankka ulanish (login/parol + org)
+// admin panel orqali kiritiladi, parol shifrlanib saqlanadi
+// ─────────────────────────────────────────────────────────────────
+model BankCredential {
+  id              String        @id @default(cuid())
+  bankId          String        @map("bank_id")
+  bank            Bank          @relation(fields: [bankId], references: [id], onDelete: Cascade)
+
+  label           String        @db.VarChar(128)              // "Xon Saroy — Kapitalbank Yunusobod"
+  loginPrefix     String?       @map("login_prefix") @db.VarChar(8)  // "IB#" yoki bo'sh
+  loginName       String        @map("login_name") @db.VarChar(128)
+  passwordEnc     String        @map("password_enc") @db.Text       // AES-256-GCM bilan shifrlangan
+  clientIdExt     String?       @map("client_id_ext") @db.VarChar(64) // KapitalBank Client.id (APILogin javobida)
+  branch          String?       @db.VarChar(8)                       // MFO
+  authMode        BankAuthMode  @default(IP_WHITELIST) @map("auth_mode")
+  isActive        Boolean       @default(true) @map("is_active")
+
+  // sessiya holatini ham saqlab qo'yamiz (SMS rejim uchun zaxira)
+  sid             String?       @db.VarChar(255)
+  sidExpiresAt    DateTime?     @map("sid_expires_at")
+  lastVerifiedAt  DateTime?     @map("last_verified_at")
+  lastError       String?       @map("last_error") @db.Text
+
+  accounts        BankAccount[]
+
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@unique([bankId, loginName])
+  @@map("bank_credentials")
+}
+
+enum BankAuthMode {
+  IP_WHITELIST    // Server IP banked oq ro'yxatda — har so'rovda Basic Auth
+  SMS_SID         // APILogin orqali SID olib, kesh
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BANK ACCOUNT — kompaniya hisob raqamlari (har biri o'z credential'iga bog'lanadi)
+// ─────────────────────────────────────────────────────────────────
+model BankAccount {
+  id             String          @id @default(cuid())
+  bankId         String          @map("bank_id")
+  bank           Bank            @relation(fields: [bankId], references: [id])
+  credentialId   String          @map("credential_id")
+  credential     BankCredential  @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+
+  branch         String          @db.VarChar(8)              // MFO (5 belgi, 8 zaxira)
+  accountNo      String          @map("account_no") @db.VarChar(32)
+  ownerName      String?         @map("owner_name") @db.VarChar(128)
+  currency       String          @default("UZS") @db.VarChar(3)
+  balance        Decimal?        @db.Decimal(18, 2)
+  syncEnabled    Boolean         @default(true) @map("sync_enabled")
+  lastSyncedAt   DateTime?       @map("last_synced_at")
+
+  transactions   Transaction[]
+
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  @@unique([branch, accountNo])
+  @@index([credentialId])
+  @@map("bank_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CATEGORY — tranzaksiya turlari (xarajat/daromad kategoriyalari)
+// ─────────────────────────────────────────────────────────────────
+model Category {
+  id           String        @id @default(cuid())
+  code         String        @unique @db.VarChar(32)
+  name         String        @db.VarChar(128)
+  parentId     String?       @map("parent_id")
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryHierarchy")
+  color        String?       @db.VarChar(16)   // UI uchun hex rang
+  icon         String?       @db.VarChar(64)
+
+  transactions Transaction[]
+
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SYNC LOG — bank API'dan ma'lumot olish tarixi
+// ─────────────────────────────────────────────────────────────────
+model SyncLog {
+  id           String      @id @default(cuid())
+  source       String      @db.VarChar(64)              // bank kodi yoki "credential:<id>"
+  accountId    String?     @map("account_id")
+  status       SyncStatus
+  fetched      Int         @default(0)
+  saved        Int         @default(0)
+  errors       Int         @default(0)
+  errorMessage String?     @map("error_message") @db.Text
+  durationMs   Int?        @map("duration_ms")
+  startedAt    DateTime    @default(now()) @map("started_at")
+  finishedAt   DateTime?   @map("finished_at")
+
+  @@index([startedAt])
+  @@index([source, status])
+  @@index([accountId])
+  @@map("sync_logs")
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
