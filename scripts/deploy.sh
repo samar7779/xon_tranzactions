@@ -15,11 +15,22 @@ SERVICES="${DEPLOY_SERVICES:-}"
 BE_SVC="${DEPLOY_BACKEND_SERVICE:-xon-tranzactions-backend}"
 FE_SVC="${DEPLOY_FRONTEND_SERVICE:-xon-tranzactions-frontend}"
 LOG="${DEPLOY_LOG:-/var/log/xon-tranzactions/deploy.log}"
+LOCK="${DEPLOY_LOCK:-/var/run/xon-tranzactions-deploy.lock}"
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
+mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
 
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { printf '%s [deploy] %s\n' "$(ts)" "$*" >> "$LOG"; }
+
+# Concurrency lock: keyingi deploy oldingisini kutsin (parallel deploylar
+# `.next/` papkasini buzadi). flock -w 600 ⇒ 10 min kutadi, keyin chiqib ketadi.
+exec 9>"$LOCK"
+if ! flock -w 600 9; then
+  log "✗ deploy lock ololmadik (10 min kutdik) — chiqamiz"
+  exit 1
+fi
+log "🔒 deploy lock olindi"
 
 tg() {
   [ -z "${TG_BOT_TOKEN:-}" ] && return 0
@@ -113,6 +124,10 @@ if [ "$need_fe" = "1" ]; then
     if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
       tg "❌ <b>Deploy xato</b>: frontend npm ci"
       exit 1
+    fi
+    # Clean .next to avoid stale chunks from prior partial/concurrent builds
+    if [ -d ".next" ]; then
+      run "frontend clean .next" rm -rf .next
     fi
     if ! run "frontend build" npm run build; then
       tg "❌ <b>Deploy xato</b>: frontend build"
