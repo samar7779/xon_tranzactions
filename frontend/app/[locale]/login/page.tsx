@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
@@ -30,9 +30,53 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Qochuvchi tugma — forma to'lmaganida sichqonchadan qochadi
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [btnOffset, setBtnOffset] = useState({ x: 0, y: 0 });
+  const formIncomplete = !email || !password;
+
   useEffect(() => {
     if (token) router.replace(`/${locale}/dashboard`);
   }, [token, router, locale]);
+
+  useEffect(() => {
+    if (!formIncomplete) {
+      setBtnOffset({ x: 0, y: 0 });
+      return;
+    }
+    // Touch qurilmalarda qochish kerakmas
+    if (typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches) {
+      return;
+    }
+
+    const onMove = (e: MouseEvent) => {
+      const el = btnRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const dx = e.clientX - cx;
+      const dy = e.clientY - cy;
+      const dist = Math.hypot(dx, dy);
+
+      const TRIGGER = 110;   // shu masofadan yaqin kelsa qochadi
+      const MAX_PUSH = 90;   // maksimal siljish px
+
+      if (dist < TRIGGER) {
+        const strength = Math.pow(1 - dist / TRIGGER, 1.2);
+        const norm = Math.max(dist, 1);
+        // O'qish oson bo'lishi uchun gorizontal kuchroq, vertikal mayinroq
+        const ox = -(dx / norm) * MAX_PUSH * strength;
+        const oy = -(dy / norm) * MAX_PUSH * strength * 0.6;
+        setBtnOffset({ x: ox, y: oy });
+      } else {
+        setBtnOffset({ x: 0, y: 0 });
+      }
+    };
+
+    window.addEventListener('mousemove', onMove);
+    return () => window.removeEventListener('mousemove', onMove);
+  }, [formIncomplete]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -178,16 +222,20 @@ export default function LoginPage() {
             )}
 
             <button
+              ref={btnRef}
               type="submit"
-              disabled={busy || !email || !password}
+              disabled={busy || formIncomplete}
+              style={{
+                transform: `translate(${btnOffset.x}px, ${btnOffset.y}px)`,
+                transition: 'transform 0.18s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.2s, filter 0.2s',
+              }}
               className="relative w-full h-12 mt-2 rounded-xl font-medium text-[15px] text-white
                          bg-gradient-to-r from-indigo-500 via-blue-500 to-cyan-500
                          bg-[length:200%_200%] animate-gradient
                          shadow-[0_10px_30px_-8px_rgba(99,102,241,0.6)]
                          hover:shadow-[0_14px_40px_-8px_rgba(99,102,241,0.8)]
                          hover:brightness-110 active:scale-[0.99]
-                         disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:brightness-100
-                         transition-all duration-200
+                         disabled:opacity-60 disabled:hover:brightness-100
                          flex items-center justify-center gap-2 group overflow-hidden"
             >
               {/* Tugma ichidagi shimmer */}
