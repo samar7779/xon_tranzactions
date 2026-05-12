@@ -1,6 +1,9 @@
 import { AuthGuard } from '@/components/auth-guard';
 import { Sidebar } from '@/components/sidebar';
 
+// Panel sahifalari faqat login'dan keyin ko'rinadi — statik render kerak emas
+export const dynamic = 'force-dynamic';
+
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   return (
     <AuthGuard>
