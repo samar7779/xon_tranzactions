@@ -86,9 +86,17 @@ if [ "$need_be" = "1" ]; then
       exit 1
     fi
     run "backend prisma generate" npx prisma generate || true
-    if ! run "backend prisma migrate deploy" npx prisma migrate deploy; then
-      tg "❌ <b>Deploy xato</b>: prisma migrate deploy"
-      exit 1
+    # Migration fayllar bo'lsa — migrate deploy, aks holda db push
+    if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+      if ! run "backend prisma migrate deploy" npx prisma migrate deploy; then
+        tg "❌ <b>Deploy xato</b>: prisma migrate deploy"
+        exit 1
+      fi
+    else
+      if ! run "backend prisma db push" npx prisma db push --accept-data-loss --skip-generate; then
+        tg "❌ <b>Deploy xato</b>: prisma db push"
+        exit 1
+      fi
     fi
     if ! run "backend build" npm run build; then
       tg "❌ <b>Deploy xato</b>: backend build"
