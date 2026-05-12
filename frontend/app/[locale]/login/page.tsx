@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Loader2, ArrowRight, Eye, EyeOff,
-  ShieldCheck, BarChart3, Layers, Zap,
+  Mail, Lock, AlertCircle, CornerDownLeft,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
@@ -26,7 +26,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     if (token) router.replace(`/${locale}/dashboard`);
@@ -34,131 +36,215 @@ export default function LoginPage() {
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setErrorMsg(null);
     setBusy(true);
     try {
       await login(email, password);
       toast.success(t('welcome'));
       router.replace(`/${locale}/dashboard`);
     } catch (err: any) {
-      toast.error(err?.message || t('invalidCredentials'));
+      const msg = err?.message || t('invalidCredentials');
+      setErrorMsg(msg);
+      toast.error(msg);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* ─── Chap panel: brending ─── */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden bg-gradient-to-br from-indigo-600 via-indigo-700 to-blue-900 text-white">
-        <div className="brand-blob bg-fuchsia-500/40 w-[420px] h-[420px] -top-20 -left-20 animate-float-slow" />
-        <div className="brand-blob bg-sky-400/40 w-[360px] h-[360px] bottom-0 right-0 animate-float-slow" style={{ animationDelay: '3s' }} />
-        <div className="bg-grid bg-grid-fade absolute inset-0 opacity-[0.08]" />
+    <div className="min-h-screen flex bg-slate-50">
+      {/* ─── Chap panel: mahsulot showcase ─── */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden text-white
+                      bg-[radial-gradient(circle_at_30%_20%,#3b3aed_0%,#1e1b4b_45%,#0b1027_100%)]">
+        {/* Animatsion blob'lar */}
+        <div className="brand-blob bg-fuchsia-500/30 w-[460px] h-[460px] -top-24 -left-24 animate-float-slow" />
+        <div className="brand-blob bg-cyan-400/30 w-[400px] h-[400px] bottom-0 right-0 animate-float-slow"
+             style={{ animationDelay: '4s' }} />
+        <div className="brand-blob bg-indigo-500/20 w-[320px] h-[320px] top-1/2 left-1/2 animate-float-slow"
+             style={{ animationDelay: '2s' }} />
+        <div className="bg-grid bg-grid-fade absolute inset-0 opacity-[0.06]" />
 
         <div className="relative z-10 flex flex-col w-full p-12 xl:p-16">
+          {/* Yuqori chap — brand mark */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-white/10 backdrop-blur ring-1 ring-white/20 grid place-items-center">
+            <div className="w-11 h-11 rounded-xl bg-white/10 backdrop-blur ring-1 ring-white/15 grid place-items-center shadow-lg">
               <Logo />
             </div>
             <div>
-              <div className="text-lg font-semibold tracking-tight">{tApp('title')}</div>
-              <div className="text-xs text-white/70">Xon Saroy</div>
+              <div className="text-[15px] font-semibold tracking-tight">{tApp('title')}</div>
+              <div className="text-[11px] text-white/60 uppercase tracking-wider">Xon Saroy · Internal</div>
             </div>
           </div>
 
-          <div className="mt-auto">
-            <h1 className="text-4xl xl:text-5xl font-semibold leading-[1.1] tracking-tight">
+          {/* O'rta — product preview */}
+          <div className="mt-auto pt-16">
+            <LivePill />
+
+            <h1 className="mt-5 text-4xl xl:text-[44px] font-semibold leading-[1.05] tracking-tight">
               Banklar bo'yicha<br />
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-white to-indigo-200">
-                yagona oyna
-              </span>
+              <span className="text-gradient-warm">yagona oyna</span>
             </h1>
-            <p className="mt-5 text-white/75 text-base max-w-md leading-relaxed">
-              Kapitalbank, UPC va boshqa banklardan kelgan tranzaksiyalarni
-              real-vaqtda kuzating. Hisoblar, kirim/chiqim, sync — bir joyda.
+            <p className="mt-4 text-white/65 text-[15px] max-w-md leading-relaxed">
+              Kapitalbank va boshqa banklardan tranzaksiyalar real-vaqtda — bir
+              joyda, shifrlangan, har 5 daqiqada sinxronlangan.
             </p>
 
-            <ul className="mt-10 grid grid-cols-2 gap-x-6 gap-y-4 text-sm">
-              <Feature icon={Zap} text="Har 5 daqiqada avto-sync" />
-              <Feature icon={ShieldCheck} text="AES-256 shifrlash" />
-              <Feature icon={BarChart3} text="Kunlik statistika" />
-              <Feature icon={Layers} text="Ko'p hisob qo'llab-quvvatlash" />
-            </ul>
+            {/* Live demo card stack */}
+            <div className="mt-10 max-w-md">
+              <TodayCard />
+              <TransactionStack />
+            </div>
           </div>
 
-          <div className="mt-12 text-xs text-white/50">
-            © {new Date().getFullYear()} Xon Saroy · Ichki tizim
+          {/* Pastki chap — copyright */}
+          <div className="mt-12 flex items-center justify-between text-[11px] text-white/40">
+            <span>© {new Date().getFullYear()} Xon Saroy</span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-ring" />
+              All systems operational
+            </span>
           </div>
         </div>
       </div>
 
       {/* ─── O'ng panel: forma ─── */}
       <div className="flex-1 flex items-center justify-center relative bg-background">
-        <div className="absolute top-4 right-6">
+        {/* Til o'zgartirgich — yuqori o'ng */}
+        <div className="absolute top-5 right-5 z-10">
           <LanguageSwitcher />
         </div>
 
-        <div className="lg:hidden absolute top-6 left-6 flex items-center gap-2">
-          <div className="w-9 h-9 rounded-lg bg-primary text-primary-foreground grid place-items-center">
+        {/* Mobil header — faqat <lg */}
+        <div className="lg:hidden absolute top-5 left-5 flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-brand grid place-items-center shadow-glow">
             <Logo small />
           </div>
-          <span className="text-sm font-semibold">{tApp('title')}</span>
+          <div>
+            <div className="text-[13px] font-semibold leading-tight">{tApp('title')}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Xon Saroy</div>
+          </div>
         </div>
 
-        <div className="w-full max-w-md px-6 sm:px-8 py-12 animate-fade-up">
+        <div className="w-full max-w-[400px] px-6 py-12 animate-fade-up">
+          {/* Sarlavha */}
           <div className="mb-8">
-            <h2 className="text-2xl font-semibold tracking-tight">{t('loginTitle')}</h2>
-            <p className="text-sm text-muted-foreground mt-1.5">{t('loginSubtitle')}</p>
+            <h2 className="text-[28px] font-semibold tracking-tight leading-tight">
+              {t('loginTitle')}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-2">
+              {t('loginSubtitle')}
+            </p>
           </div>
 
-          <form onSubmit={onSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-                required
-                placeholder="admin@xon.local"
-                className="h-11"
-              />
+          {/* Forma */}
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
+            <div className="space-y-1.5">
+              <Label htmlFor="email" className="text-[13px] font-medium">
+                {t('email')}
+              </Label>
+              <div className="relative group">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 group-focus-within:text-primary transition-colors pointer-events-none" />
+                <Input
+                  id="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => { setEmail(e.target.value); setErrorMsg(null); }}
+                  autoFocus
+                  required
+                  placeholder="admin@xon.local"
+                  className="h-12 pl-10 text-[15px] bg-white border-slate-200
+                             focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary/60
+                             transition-shadow"
+                />
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('password')}</Label>
-              <div className="relative">
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="password" className="text-[13px] font-medium">
+                  {t('password')}
+                </Label>
+                {capsOn && (
+                  <span className="text-[11px] text-amber-600 flex items-center gap-1 animate-fade-up">
+                    <AlertCircle className="h-3 w-3" />
+                    Caps Lock
+                  </span>
+                )}
+              </div>
+              <div className="relative group">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/70 group-focus-within:text-primary transition-colors pointer-events-none" />
                 <Input
                   id="password"
                   type={showPwd ? 'text' : 'password'}
+                  autoComplete="current-password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setErrorMsg(null); }}
+                  onKeyUp={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                  onKeyDown={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
                   required
                   placeholder="••••••••"
-                  className="h-11 pr-10"
+                  className="h-12 pl-10 pr-11 text-[15px] bg-white border-slate-200
+                             focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:border-primary/60
+                             transition-shadow"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPwd((s) => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 grid place-items-center
+                             rounded-md text-muted-foreground hover:text-foreground hover:bg-slate-100
+                             transition-colors"
                   tabIndex={-1}
+                  aria-label={showPwd ? 'Hide password' : 'Show password'}
                 >
                   {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full h-11 group" disabled={busy}>
+            {/* Inline xato */}
+            {errorMsg && (
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 border border-rose-200/70 text-[13px] text-rose-700 animate-fade-up">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            <Button
+              type="submit"
+              variant="gradient"
+              className="w-full h-12 text-[15px] font-medium group mt-2"
+              disabled={busy || !email || !password}
+            >
               {busy ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('submitting')}</>
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('submitting')}
+                </>
               ) : (
-                <>{t('submit')} <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" /></>
+                <>
+                  <span>{t('submit')}</span>
+                  <span className="ml-2 inline-flex items-center gap-1.5">
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    <kbd className="hidden sm:inline-flex items-center gap-0.5 h-5 px-1.5 rounded
+                                    border border-white/30 bg-white/10 text-[10px] text-white/80">
+                      <CornerDownLeft className="h-2.5 w-2.5" />
+                    </kbd>
+                  </span>
+                </>
               )}
             </Button>
           </form>
 
-          <div className="mt-8 pt-6 border-t text-xs text-muted-foreground text-center">
-            Kirishda muammomi? Tizim administratoriga murojaat qiling.
+          {/* Pastki yordam */}
+          <div className="mt-10 pt-6 border-t border-slate-200/70">
+            <p className="text-[12px] text-muted-foreground text-center leading-relaxed">
+              Kirishda muammomi?{' '}
+              <span className="text-foreground/80 font-medium">
+                Tizim administratoriga murojaat qiling.
+              </span>
+            </p>
           </div>
         </div>
       </div>
@@ -166,24 +252,104 @@ export default function LoginPage() {
   );
 }
 
-function Feature({ icon: Icon, text }: { icon: any; text: string }) {
+/* ─── Yordamchi komponentlar ─── */
+
+function LivePill() {
   return (
-    <li className="flex items-center gap-3">
-      <span className="w-7 h-7 rounded-md bg-white/10 ring-1 ring-white/15 grid place-items-center">
-        <Icon className="h-3.5 w-3.5" />
+    <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full
+                     bg-emerald-500/10 ring-1 ring-emerald-400/30 text-emerald-300
+                     text-[11px] font-medium tracking-wider uppercase">
+      <span className="relative flex h-2 w-2">
+        <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
       </span>
-      <span className="text-white/85">{text}</span>
-    </li>
+      Real-time sync
+    </span>
+  );
+}
+
+function TodayCard() {
+  return (
+    <div className="rounded-2xl bg-white/[0.06] ring-1 ring-white/10 backdrop-blur-md p-5
+                    shadow-[0_8px_40px_-8px_rgba(0,0,0,0.5)]">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] uppercase tracking-wider text-white/50">Bugun · Net flow</div>
+        <div className="text-[11px] text-emerald-300 flex items-center gap-1 font-medium">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M2 7L5 4L8 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          +12.4%
+        </div>
+      </div>
+      <div className="mt-2 text-3xl font-semibold tabular-nums tracking-tight">
+        +45 280 000 <span className="text-base font-normal text-white/50">UZS</span>
+      </div>
+      <div className="mt-3 flex items-center gap-4 text-[12px] text-white/55">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          12 kirim
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+          4 chiqim
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TransactionStack() {
+  // Static demo data — har refresh'da bir xil ko'rinadi
+  const items = useMemo(() => [
+    { bank: 'KAPITALBANK',     who: 'ABU SAHIY MCHJ',        amount: '+18 500 000', dir: 'in',  time: '14:23' },
+    { bank: 'KAPITALBANK',     who: 'PRIMER LLC',            amount: '+12 200 000', dir: 'in',  time: '13:48' },
+    { bank: 'UZUM BANK',       who: "Soliq to'lovi",         amount: '−4 850 000',  dir: 'out', time: '12:05' },
+  ], []);
+
+  return (
+    <div className="mt-3 space-y-2 relative">
+      {items.map((it, i) => (
+        <div
+          key={i}
+          className="rounded-xl bg-white/[0.04] ring-1 ring-white/10 backdrop-blur-sm p-3.5
+                     flex items-center gap-3 text-[13px]
+                     transition-all duration-500"
+          style={{
+            opacity: 1 - i * 0.15,
+            transform: `translateY(0) scale(${1 - i * 0.015})`,
+          }}
+        >
+          <div className={`w-8 h-8 rounded-lg grid place-items-center flex-shrink-0
+                          ${it.dir === 'in' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'}`}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              {it.dir === 'in' ? (
+                <path d="M7 11V3M3 7L7 3L11 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              ) : (
+                <path d="M7 3V11M3 7L7 11L11 7" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-white/85 font-medium truncate">{it.who}</div>
+            <div className="text-[11px] text-white/40 tracking-wide">{it.bank} · {it.time}</div>
+          </div>
+          <div className={`tabular-nums font-medium text-[13px]
+                          ${it.dir === 'in' ? 'text-emerald-300' : 'text-rose-300'}`}>
+            {it.amount}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
 function Logo({ small = false }: { small?: boolean }) {
   return (
-    <svg viewBox="0 0 64 64" className={small ? 'w-5 h-5' : 'w-7 h-7'}>
+    <svg viewBox="0 0 64 64" className={small ? 'w-5 h-5' : 'w-7 h-7'} aria-hidden>
       <path d="M22 16 L22 40 M14 33 L22 41 L30 33"
-        stroke="#22c55e" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        stroke="#22c55e" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
       <path d="M42 48 L42 24 M34 31 L42 23 L50 31"
-        stroke="#f87171" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+        stroke="#f87171" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
     </svg>
   );
 }
