@@ -13,6 +13,7 @@ import { BankAccountsModule } from './bank-accounts/bank-accounts.module';
 import { TransactionsModule } from './transactions/transactions.module';
 import { KapitalbankModule } from './integrations/kapitalbank/kapitalbank.module';
 import { SyncModule } from './sync/sync.module';
+import { DeployModule } from './deploy/deploy.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { SyncModule } from './sync/sync.module';
     BankAccountsModule,
     TransactionsModule,
     SyncModule,
+    DeployModule,
   ],
 })
 export class AppModule {}

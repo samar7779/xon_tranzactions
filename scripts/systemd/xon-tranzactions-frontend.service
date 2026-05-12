@@ -1,0 +1,19 @@
+[Unit]
+Description=Xon Tranzaksiyalar — Frontend (Next.js)
+After=network.target xon-tranzactions-backend.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/xon_tranzactions/frontend
+EnvironmentFile=/var/www/xon_tranzactions/frontend/.env.local
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=xon-tranzactions-frontend
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

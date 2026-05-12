@@ -106,27 +106,49 @@ npm run dev
 
 ## Production deploy
 
-Server: `/var/www/xon_tranzactions/`
+### Birinchi marta server'da sozlash
+
+Server: `/var/www/xon_tranzactions/` (yangi Ubuntu 22.04+).
 
 ```bash
-# Server'da
-cd /var/www/xon_tranzactions
-
-# Backend
-cd backend
-npm ci
-npx prisma migrate deploy
-npm run build
-systemctl restart xon-tranzactions-backend
-
-# Frontend
-cd ../frontend
-npm ci
-npm run build
-systemctl restart xon-tranzactions-frontend
+# Server'da (root sifatida) — bir marta
+curl -fsSL https://raw.githubusercontent.com/samar7779/xon_tranzactions/main/scripts/setup-server.sh | bash
 ```
 
-**KapitalBank IP whitelist** — production server statik IP'sini KapitalBank oq ro'yxatiga qo'shing (bank filialiga so'rov).
+Skript bajaradi:
+- Node.js 20 + PostgreSQL o'rnatish
+- DB va foydalanuvchi avto-yaratish
+- Repo clone qilish
+- `.env` fayllarni avto-generatsiya (JWT_SECRET, CRED_ENC_KEY, GH_DEPLOY_SECRET)
+- Backend + frontend build + migrate + seed
+- Systemd service'lar: `xon-tranzactions-backend`, `xon-tranzactions-frontend`
+- Nginx reverse proxy + sudoers (webhook o'zini restart qilish uchun)
+
+Skript oxirida `GH_DEPLOY_SECRET` chiqaradi — uni GitHub Webhook sozlamalariga qo'ying.
+
+### Avto-deploy (GitHub webhook — xonapp pattern)
+
+Har push paytida server o'zini avtomatik yangilaydi.
+
+1. GitHub repo → **Settings → Webhooks → Add webhook**:
+   - **Payload URL:** `https://<sizning-domain>/api/_deploy`
+   - **Content type:** `application/json`
+   - **Secret:** server `.env` dagi `GH_DEPLOY_SECRET`
+   - **Events:** Just the push event
+
+2. Test: `curl https://<domain>/api/_deploy/health` → `{"ok": true, ...}`
+
+3. Har push'dan keyin:
+   - Backend `/_deploy` endpoint HMAC-SHA256 ni tekshiradi
+   - Fonda `scripts/deploy.sh` ishga tushadi (smart restart — faqat o'zgargan tomon)
+   - `git fetch + reset → npm ci → prisma migrate → build → systemctl restart`
+   - Telegram'ga natija yuboriladi (agar `TG_BOT_TOKEN` sozlangan bo'lsa)
+
+Manual log: `GET /api/_deploy/log` (admin token) yoki `tail -f /var/log/xon-tranzactions/deploy.log`.
+
+### KapitalBank IP whitelist
+
+Production server statik IP'sini KapitalBank oq ro'yxatiga qo'shing (bank filialiga so'rov).
 
 ## Litsenziya
 
