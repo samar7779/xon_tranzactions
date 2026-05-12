@@ -1,4 +1,4 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateCustomerDto {
@@ -51,6 +51,4 @@ export class CreateCustomerDto {
   isActive?: boolean;
 }
 
-export class UpdateCustomerDto extends CreateCustomerDto {
-  declare name?: string;
-}
+export class UpdateCustomerDto extends PartialType(CreateCustomerDto) {}
