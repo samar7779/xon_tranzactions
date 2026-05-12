@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TRANSACTION — asosiy to'lov yozuvi
+// ─────────────────────────────────────────────────────────────────
+model Transaction {
+  id            String    @id @default(cuid())
+  externalId    String?   @unique @map("external_id")   // Server core'dan kelgan ID
+  type          TxnType
+  status        TxnStatus @default(PENDING)
+  direction     TxnDirection                            // IN yoki OUT
+
+  // Pul ma'lumotlari
+  amount        Decimal   @db.Decimal(18, 2)
+  currency      String    @default("UZS") @db.VarChar(3)
+
+  // Manba/qabul qiluvchi
+  fromAccount   String?   @map("from_account")
+  fromName      String?   @map("from_name")
+  toAccount     String?   @map("to_account")
+  toName        String?   @map("to_name")
+
+  // Tafsilot
+  description   String?   @db.Text
+  reference     String?   @db.VarChar(64)   // bank ref/code
+  metadata      Json?
+
+  // Bog'lanishlar
+  bankId        String?   @map("bank_id")
+  bank          Bank?     @relation(fields: [bankId], references: [id])
+  categoryId    String?   @map("category_id")
+  category      Category? @relation(fields: [categoryId], references: [id])
+
+  // Vaqtlar
+  txnDate       DateTime  @map("txn_date")
+  syncedAt      DateTime  @default(now()) @map("synced_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@index([txnDate])
+  @@index([status])
+  @@index([type, direction])
+  @@index([bankId])
+  @@map("transactions")
+}
+
+enum TxnType {
+  TRANSFER       // O'tkazma
+  PAYMENT        // To'lov
+  SALARY         // Maosh
+  TAX            // Soliq
+  FEE            // Komissiya
+  REFUND         // Qaytarish
+  OTHER          // Boshqa
+}
+
+enum TxnStatus {
+  PENDING        // Kutilmoqda
+  COMPLETED      // Yakunlangan
+  FAILED         // Muvaffaqiyatsiz
+  CANCELLED      // Bekor qilingan
+  REVERSED       // Qaytarilgan
+}
+
+enum TxnDirection {
+  IN             // Kiruvchi
+  OUT            // Chiquvchi
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BANK — bank manbalari (Kapitalbank, Uzcard, Humo, ...)
+// ─────────────────────────────────────────────────────────────────
+model Bank {
+  id           String        @id @default(cuid())
+  code         String        @unique @db.VarChar(16)  // KAPITALBANK, UZCARD, HUMO
+  name         String        @db.VarChar(128)
+  apiBaseUrl   String?       @map("api_base_url")
+  isActive     Boolean       @default(true) @map("is_active")
+
+  transactions Transaction[]
+  accounts     BankAccount[]
+
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("banks")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BANK ACCOUNT — kompaniya hisob raqamlari
+// ─────────────────────────────────────────────────────────────────
+model BankAccount {
+  id           String   @id @default(cuid())
+  bankId       String   @map("bank_id")
+  bank         Bank     @relation(fields: [bankId], references: [id])
+  accountNo    String   @map("account_no") @db.VarChar(32)
+  ownerName    String?  @map("owner_name") @db.VarChar(128)
+  currency     String   @default("UZS") @db.VarChar(3)
+  balance      Decimal? @db.Decimal(18, 2)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([bankId, accountNo])
+  @@map("bank_accounts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CATEGORY — tranzaksiya turlari (xarajat/daromad kategoriyalari)
+// ─────────────────────────────────────────────────────────────────
+model Category {
+  id           String        @id @default(cuid())
+  code         String        @unique @db.VarChar(32)
+  name         String        @db.VarChar(128)
+  parentId     String?       @map("parent_id")
+  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children     Category[]    @relation("CategoryHierarchy")
+  color        String?       @db.VarChar(16)   // UI uchun hex rang
+  icon         String?       @db.VarChar(64)
+
+  transactions Transaction[]
+
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("categories")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// SYNC LOG — Server core'dan ma'lumot olish tarixi
+// ─────────────────────────────────────────────────────────────────
+model SyncLog {
+  id           String      @id @default(cuid())
+  source       String      @db.VarChar(32)    // bank kodi yoki manba nomi
+  status       SyncStatus
+  fetched      Int         @default(0)         // necha yozuv olindi
+  saved        Int         @default(0)         // necha yozuv saqlandi (yangi)
+  errors       Int         @default(0)
+  errorMessage String?     @map("error_message") @db.Text
+  durationMs   Int?        @map("duration_ms")
+  startedAt    DateTime    @default(now()) @map("started_at")
+  finishedAt   DateTime?   @map("finished_at")
+
+  @@index([startedAt])
+  @@index([source, status])
+  @@map("sync_logs")
+}
+
+enum SyncStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
