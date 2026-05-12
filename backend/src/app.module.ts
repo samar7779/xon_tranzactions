@@ -15,6 +15,9 @@ import { TransactionsModule } from './transactions/transactions.module';
 import { KapitalbankModule } from './integrations/kapitalbank/kapitalbank.module';
 import { SyncModule } from './sync/sync.module';
 import { DeployModule } from './deploy/deploy.module';
+import { CustomersModule } from './customers/customers.module';
+import { ContractsModule } from './contracts/contracts.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -25,13 +28,21 @@ import { DeployModule } from './deploy/deploy.module';
     PrismaModule,
     CryptoModule,
     KapitalbankModule,
+
     AuthModule,
     AdminUsersModule,
     RolesModule,
+
     BanksModule,
     BankCredentialsModule,
     BankAccountsModule,
     TransactionsModule,
+
+    // Billing
+    CustomersModule,
+    ContractsModule,
+    PaymentsModule,
+
     SyncModule,
     DeployModule,
   ],

@@ -94,6 +94,15 @@ model Transaction {
   categoryId    String?      @map("category_id")
   category      Category?    @relation(fields: [categoryId], references: [id])
 
+  // Billing: avto-match orqali mijozga bog'lanadi (INN orqali)
+  customerId    String?     @map("customer_id")
+  customer      Customer?   @relation(fields: [customerId], references: [id])
+  matchStatus   MatchStatus @default(UNMATCHED) @map("match_status")
+  matchedAt     DateTime?   @map("matched_at")
+
+  // To'lov bosqichlariga taqsimlanishi (bitta tranzaksiya = bir nechta payment)
+  payments      Payment[]
+
   // Vaqtlar
   txnDate       DateTime  @map("txn_date")
   syncedAt      DateTime  @default(now()) @map("synced_at")
@@ -105,7 +114,18 @@ model Transaction {
   @@index([type, direction])
   @@index([bankId])
   @@index([accountId])
+  @@index([customerId])
+  @@index([matchStatus])
+  @@index([fromInn])
   @@map("transactions")
+}
+
+enum MatchStatus {
+  UNMATCHED     // INN topilmadi yoki hali tekshirilmagan
+  AUTO          // Avtomatik mos topildi (INN orqali)
+  MANUAL        // Admin qo'lda biriktirgan
+  PARTIAL       // Qisman taqsimlangan
+  IGNORED       // Admin "bu billing'ga aloqasi yo'q" deb belgilagan
 }
 
 enum TxnType {
@@ -271,4 +291,149 @@ enum SyncStatus {
   SUCCESS
   FAILED
   PARTIAL
+}
+
+// ═════════════════════════════════════════════════════════════════
+// BILLING — mijozlar, shartnomalar, bosqichlar, to'lovlar
+// ═════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────
+// CUSTOMER — buyurtmachi (yuridik shaxs)
+// Bank tranzaksiyasi INN orqali avtomatik mos topiladi
+// ─────────────────────────────────────────────────────────────────
+model Customer {
+  id            String     @id @default(cuid())
+  name          String     @db.VarChar(255)               // "OOO Tashkent Mall"
+  inn           String?    @unique @db.VarChar(16)        // 300123456 — INN/STIR
+  pinfl         String?    @db.VarChar(16)                // jismoniy shaxs uchun
+  shortName     String?    @map("short_name") @db.VarChar(64)
+  contactPerson String?    @map("contact_person") @db.VarChar(128)
+  phone         String?    @db.VarChar(32)
+  email         String?    @db.VarChar(128)
+  address       String?    @db.Text
+  bankAccount   String?    @map("bank_account") @db.VarChar(32)
+  bankMfo       String?    @map("bank_mfo") @db.VarChar(8)
+  notes         String?    @db.Text
+  isActive      Boolean    @default(true) @map("is_active")
+
+  contracts     Contract[]
+  transactions  Transaction[]
+
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@map("customers")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CONTRACT — shartnoma (mijoz bilan)
+// ─────────────────────────────────────────────────────────────────
+model Contract {
+  id            String           @id @default(cuid())
+  number        String           @unique @db.VarChar(64)  // SHRT-2026-001 — avto-generatsiya
+  customerId    String           @map("customer_id")
+  customer      Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  title         String           @db.VarChar(255)         // "Tashkent Mall qurilishi"
+  description   String?          @db.Text
+  projectAddress String?         @map("project_address") @db.Text
+
+  totalAmount   Decimal          @map("total_amount") @db.Decimal(18, 2)
+  currency      String           @default("UZS") @db.VarChar(3)
+
+  signDate      DateTime         @map("sign_date")
+  startDate     DateTime?        @map("start_date")
+  endDate       DateTime?        @map("end_date")
+
+  status        ContractStatus   @default(ACTIVE)
+  notes         String?          @db.Text
+
+  stages        ContractStage[]
+  payments      Payment[]
+
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
+
+  @@index([customerId])
+  @@index([status])
+  @@index([signDate])
+  @@map("contracts")
+}
+
+enum ContractStatus {
+  DRAFT          // Loyiha
+  ACTIVE         // Faol — to'lov kutilmoqda
+  COMPLETED      // To'liq to'langan
+  CANCELLED      // Bekor qilingan
+  SUSPENDED      // To'xtatilgan
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CONTRACT STAGE — to'lov bosqichi (avans, poydevor, devor, yakuniy ...)
+// ─────────────────────────────────────────────────────────────────
+model ContractStage {
+  id            String        @id @default(cuid())
+  contractId    String        @map("contract_id")
+  contract      Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  ordinal       Int                                       // 1, 2, 3, 4 — tartib raqami
+  title         String        @db.VarChar(128)            // "Avans", "Poydevor"
+  amount        Decimal       @db.Decimal(18, 2)
+  percentage    Decimal?      @db.Decimal(5, 2)           // 30.00 — ixtiyoriy
+  dueDate       DateTime?     @map("due_date")            // kutilgan to'lov sanasi
+
+  paidAmount    Decimal       @default(0) @map("paid_amount") @db.Decimal(18, 2)
+  status        StageStatus   @default(PENDING)
+  paidAt        DateTime?     @map("paid_at")             // to'liq to'langan sana
+  notes         String?       @db.Text
+
+  payments      Payment[]
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([contractId, ordinal])
+  @@index([status])
+  @@index([dueDate])
+  @@map("contract_stages")
+}
+
+enum StageStatus {
+  PENDING        // To'lanmagan
+  PARTIAL        // Qisman to'langan
+  PAID           // To'liq to'langan
+  OVERDUE        // Muddati o'tgan
+}
+
+// ─────────────────────────────────────────────────────────────────
+// PAYMENT — bank tranzaksiyasini bosqichga bog'lash (allocation)
+// Bitta tranzaksiya bir nechta bosqichga bo'linishi mumkin
+// Bitta bosqich bir nechta tranzaksiyadan to'lanishi mumkin
+// ─────────────────────────────────────────────────────────────────
+model Payment {
+  id            String        @id @default(cuid())
+  transactionId String        @map("transaction_id")
+  transaction   Transaction   @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  contractId    String        @map("contract_id")
+  contract      Contract      @relation(fields: [contractId], references: [id])
+  stageId       String        @map("stage_id")
+  stage         ContractStage @relation(fields: [stageId], references: [id])
+
+  amount        Decimal       @db.Decimal(18, 2)          // shu bosqichga taqsimlangan summa
+  source        PaymentSource @default(AUTO)
+  notes         String?       @db.Text
+
+  createdAt     DateTime      @default(now()) @map("created_at")
+  createdBy     String?       @map("created_by")          // AdminUser.id (manual link uchun)
+
+  @@index([transactionId])
+  @@index([contractId])
+  @@index([stageId])
+  @@map("payments")
+}
+
+enum PaymentSource {
+  AUTO           // Avtomatik (INN orqali)
+  MANUAL         // Admin qo'lda biriktirgan
 }

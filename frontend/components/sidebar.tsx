@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import {
   LayoutDashboard, Receipt, Wallet, KeyRound, Building2,
   History, Users, LogOut, ShieldCheck,
+  UserCircle, FileText, BadgeDollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -22,21 +23,28 @@ interface NavItem {
 }
 
 const NAV: NavItem[] = [
-  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard, group: 'main',   permission: PERMS.DASHBOARD_VIEW },
-  { href: '/transactions', key: 'transactions', icon: Receipt,         group: 'main',   permission: PERMS.TRANSACTIONS_VIEW },
+  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',    permission: PERMS.DASHBOARD_VIEW },
 
-  { href: '/accounts',    key: 'accounts',     icon: Wallet,    group: 'data',   permission: PERMS.ACCOUNTS_VIEW },
-  { href: '/credentials', key: 'credentials',  icon: KeyRound,  group: 'data',   permission: PERMS.CREDENTIALS_VIEW },
-  { href: '/banks',       key: 'banks',        icon: Building2, group: 'data',   permission: PERMS.BANKS_VIEW },
+  // Billing — asosiy biznes oqim
+  { href: '/customers',    key: 'customers',    icon: UserCircle,       group: 'billing', permission: PERMS.CUSTOMERS_VIEW },
+  { href: '/contracts',    key: 'contracts',    icon: FileText,         group: 'billing', permission: PERMS.CONTRACTS_VIEW },
+  { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'billing', permission: PERMS.TRANSACTIONS_VIEW },
 
-  { href: '/sync-logs',   key: 'syncLogs',     icon: History,      group: 'system', permission: PERMS.SYNC_VIEW },
-  { href: '/admin-users', key: 'adminUsers',   icon: Users,        group: 'system', permission: PERMS.USERS_VIEW },
-  { href: '/roles',       key: 'roles',        icon: ShieldCheck,  group: 'system', permission: PERMS.ROLES_VIEW },
+  // Banklar
+  { href: '/accounts',     key: 'accounts',     icon: Wallet,           group: 'data',    permission: PERMS.ACCOUNTS_VIEW },
+  { href: '/credentials',  key: 'credentials',  icon: KeyRound,         group: 'data',    permission: PERMS.CREDENTIALS_VIEW },
+  { href: '/banks',        key: 'banks',        icon: Building2,        group: 'data',    permission: PERMS.BANKS_VIEW },
+
+  // Tizim
+  { href: '/sync-logs',    key: 'syncLogs',     icon: History,          group: 'system',  permission: PERMS.SYNC_VIEW },
+  { href: '/admin-users',  key: 'adminUsers',   icon: Users,            group: 'system',  permission: PERMS.USERS_VIEW },
+  { href: '/roles',        key: 'roles',        icon: ShieldCheck,      group: 'system',  permission: PERMS.ROLES_VIEW },
 ];
 
 const GROUP_LABEL: Record<string, string> = {
   main: 'Asosiy',
-  data: "Ma'lumotlar",
+  billing: 'Billing',
+  data: 'Banklar',
   system: 'Tizim',
 };
 

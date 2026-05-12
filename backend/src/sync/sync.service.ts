@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 import { KbDoc1CItem } from '../integrations/kapitalbank/types';
+import { PaymentsService } from '../payments/payments.service';
 import { TxnDirection, TxnStatus, TxnType, Prisma } from '@prisma/client';
 import { format, parse, subDays } from 'date-fns';
 
@@ -17,6 +18,7 @@ export class SyncService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private kb: KapitalbankClient,
+    private payments: PaymentsService,
     config: ConfigService,
   ) {
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
@@ -159,7 +161,7 @@ export class SyncService {
     // tiyin → so'm (amount Decimal)
     const amountSom = new Prisma.Decimal((item.amount ?? 0) / 100);
 
-    await this.prisma.transaction.create({
+    const created = await this.prisma.transaction.create({
       data: {
         externalId,
         type,
@@ -186,6 +188,19 @@ export class SyncService {
         txnDate,
       },
     });
+
+    // Billing avto-match: faqat kirim tranzaksiya uchun, INN orqali mijoz qidirib
+    // ochiq bosqichlarga FIFO taqsimlab boradi
+    if (direction === 'IN' && item.inn_dt) {
+      try {
+        const r = await this.payments.autoMatch(created.id);
+        if (r.ok) {
+          this.logger.log(`💰 Auto-match: ${item.inn_dt} → ${(r as any).customer?.name}`);
+        }
+      } catch (e: any) {
+        this.logger.warn(`Auto-match xato (${created.id}): ${e?.message}`);
+      }
+    }
     return true;
   }
 

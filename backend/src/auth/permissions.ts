@@ -37,6 +37,14 @@ export const PERMISSIONS = {
 
   // Tizim
   SYSTEM_DEPLOY: 'system:deploy',
+
+  // ─── Billing ───
+  CUSTOMERS_VIEW: 'customers:view',
+  CUSTOMERS_MANAGE: 'customers:manage',
+  CONTRACTS_VIEW: 'contracts:view',
+  CONTRACTS_MANAGE: 'contracts:manage',
+  PAYMENTS_VIEW: 'payments:view',
+  PAYMENTS_MANAGE: 'payments:manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -99,6 +107,27 @@ export const PERMISSION_GROUPS: { group: string; items: { value: Permission; lab
     ],
   },
   {
+    group: 'Mijozlar',
+    items: [
+      { value: PERMISSIONS.CUSTOMERS_VIEW, label: 'Mijozlarni ko\'rish' },
+      { value: PERMISSIONS.CUSTOMERS_MANAGE, label: 'Mijoz qo\'shish/o\'zgartirish' },
+    ],
+  },
+  {
+    group: 'Shartnomalar',
+    items: [
+      { value: PERMISSIONS.CONTRACTS_VIEW, label: 'Shartnomalarni ko\'rish' },
+      { value: PERMISSIONS.CONTRACTS_MANAGE, label: 'Shartnoma qo\'shish/o\'zgartirish' },
+    ],
+  },
+  {
+    group: 'To\'lovlar',
+    items: [
+      { value: PERMISSIONS.PAYMENTS_VIEW, label: 'To\'lovlarni ko\'rish' },
+      { value: PERMISSIONS.PAYMENTS_MANAGE, label: 'To\'lovni qo\'lda bosqichga biriktirish' },
+    ],
+  },
+  {
     group: 'Tizim',
     items: [{ value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' }],
   },
@@ -117,7 +146,7 @@ export const SYSTEM_ROLES = [
   {
     name: 'ADMIN',
     label: 'Administrator',
-    description: 'Bank ulanishlari va hisoblarni boshqaradi, foydalanuvchilarga tegmaydi',
+    description: 'Mijozlar, shartnomalar, bank ulanishlari — hammasini boshqaradi',
     permissions: [
       PERMISSIONS.DASHBOARD_VIEW,
       PERMISSIONS.TRANSACTIONS_VIEW,
@@ -125,12 +154,29 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CREDENTIALS_VIEW, PERMISSIONS.CREDENTIALS_MANAGE, PERMISSIONS.CREDENTIALS_TEST,
       PERMISSIONS.BANKS_VIEW, PERMISSIONS.BANKS_MANAGE,
       PERMISSIONS.SYNC_VIEW, PERMISSIONS.SYNC_RUN,
+      PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_MANAGE,
+      PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
+      PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
+    ],
+  },
+  {
+    name: 'ACCOUNTANT',
+    label: 'Hisobchi',
+    description: 'Mijozlar, shartnomalar va to\'lovlarni boshqaradi, banklarga tegmaydi',
+    permissions: [
+      PERMISSIONS.DASHBOARD_VIEW,
+      PERMISSIONS.TRANSACTIONS_VIEW,
+      PERMISSIONS.ACCOUNTS_VIEW,
+      PERMISSIONS.SYNC_VIEW,
+      PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_MANAGE,
+      PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
+      PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
     ],
   },
   {
     name: 'VIEWER',
     label: 'Kuzatuvchi',
-    description: 'Faqat o\'qish — tranzaksiyalar va statistikani ko\'radi',
+    description: 'Faqat o\'qish — mijozlar, shartnomalar, tranzaksiyalarni ko\'radi',
     permissions: [
       PERMISSIONS.DASHBOARD_VIEW,
       PERMISSIONS.TRANSACTIONS_VIEW,
@@ -138,6 +184,9 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CREDENTIALS_VIEW,
       PERMISSIONS.BANKS_VIEW,
       PERMISSIONS.SYNC_VIEW,
+      PERMISSIONS.CUSTOMERS_VIEW,
+      PERMISSIONS.CONTRACTS_VIEW,
+      PERMISSIONS.PAYMENTS_VIEW,
     ],
   },
 ];

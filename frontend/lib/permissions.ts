@@ -18,6 +18,12 @@ export const PERMS = {
   ROLES_VIEW: 'roles:view',
   ROLES_MANAGE: 'roles:manage',
   SYSTEM_DEPLOY: 'system:deploy',
+  CUSTOMERS_VIEW: 'customers:view',
+  CUSTOMERS_MANAGE: 'customers:manage',
+  CONTRACTS_VIEW: 'contracts:view',
+  CONTRACTS_MANAGE: 'contracts:manage',
+  PAYMENTS_VIEW: 'payments:view',
+  PAYMENTS_MANAGE: 'payments:manage',
 } as const;
 
 export type Permission = (typeof PERMS)[keyof typeof PERMS];
