@@ -110,21 +110,33 @@ async function main() {
     console.log("  → Iltimos, birinchi kirishdan keyin parolni o'zgartiring.");
   }
 
-  // 3. KapitalBank yozuvi
-  const kbCode = 'KAPITALBANK';
-  const kb = await prisma.bank.findUnique({ where: { code: kbCode } });
-  if (!kb) {
-    await prisma.bank.create({
-      data: {
-        code: kbCode,
-        name: 'Kapitalbank',
-        apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
-        apiKind: 'KAPITALBANK_V3',
-      },
-    });
-    console.log("✓ Kapitalbank yozuvi qo'shildi");
-  } else {
-    console.log('⚠ Kapitalbank yozuvi allaqachon mavjud');
+  // 3. Banklar — bank24.uz protokoli oilasi (KapitalBank, Ipak Yo'li, ...)
+  const DEFAULT_BANKS = [
+    {
+      code: 'KAPITALBANK',
+      name: 'Kapitalbank',
+      apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
+      apiKind: 'KAPITALBANK_V3' as const,
+    },
+    {
+      code: 'IPAK_YULI',
+      name: "Ipak Yo'li banki",
+      apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',
+      apiKind: 'KAPITALBANK_V3' as const, // bir xil protokol — APILogin + GetDoc1C
+    },
+  ];
+
+  for (const b of DEFAULT_BANKS) {
+    const existing = await prisma.bank.findUnique({ where: { code: b.code } });
+    if (!existing) {
+      await prisma.bank.create({ data: b });
+      console.log(`✓ ${b.name} qo'shildi`);
+    } else if (!existing.apiBaseUrl) {
+      await prisma.bank.update({ where: { id: existing.id }, data: { apiBaseUrl: b.apiBaseUrl } });
+      console.log(`✓ ${b.name} apiBaseUrl yangilandi`);
+    } else {
+      console.log(`⚠ ${b.name} mavjud`);
+    }
   }
 }
 
