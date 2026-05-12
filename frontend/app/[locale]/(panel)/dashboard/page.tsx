@@ -14,6 +14,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
+import { OnboardingCard } from '@/components/onboarding-card';
+import { QuickActions } from '@/components/quick-actions';
+import { Sparkline } from '@/components/sparkline';
 import { api } from '@/lib/api';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
@@ -44,6 +47,18 @@ export default function DashboardPage() {
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const netFlow = inSum - outSum;
+
+  // Bo'sh tizimda onboarding ko'rsatamiz
+  const isEmpty = totalAccounts === 0 && (recent?.items?.length || 0) === 0;
+
+  // Banks/credentials count for onboarding
+  const banksCount = new Set((accounts?.items || []).map((a: any) => a.bankId)).size;
+  const credentialsCount = new Set((accounts?.items || []).map((a: any) => a.credentialId)).size;
+
+  // Mock sparkline data (real data kelganda almashtiriladi)
+  const sparkIn = [3, 5, 4, 7, 6, 8, 7, 9, 8, 11, 9, 12];
+  const sparkOut = [5, 4, 6, 5, 7, 5, 8, 6, 9, 7, 10, 8];
+  const sparkNet = sparkIn.map((v, i) => v - sparkOut[i]);
 
   const byBank = (() => {
     const map = new Map<string, { name: string; code: string; accounts: number; balance: number }>();
@@ -103,7 +118,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ─── GRADIENT KPI CARDS ─── */}
+        {/* ─── GRADIENT KPI CARDS bilan SPARKLINES ─── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <GradientKpi
             label="Kirim · 30 kun"
@@ -111,6 +126,7 @@ export default function DashboardPage() {
             icon={ArrowDownLeft}
             gradient="bg-brand-success"
             shadow="shadow-glow-green"
+            spark={sparkIn}
           />
           <GradientKpi
             label="Chiqim · 30 kun"
@@ -118,6 +134,7 @@ export default function DashboardPage() {
             icon={ArrowUpRight}
             gradient="bg-brand-rose"
             shadow="shadow-glow-rose"
+            spark={sparkOut}
           />
           <GradientKpi
             label="Sof oqim"
@@ -125,8 +142,15 @@ export default function DashboardPage() {
             icon={TrendingUp}
             gradient={netFlow >= 0 ? 'bg-brand-vivid' : 'bg-brand-rose'}
             shadow={netFlow >= 0 ? 'shadow-glow' : 'shadow-glow-rose'}
+            spark={sparkNet}
           />
         </div>
+
+        {/* ─── Onboarding (faqat bo'sh tizimda) yoki Quick Actions ─── */}
+        {isEmpty
+          ? <OnboardingCard banksCount={banksCount} credentialsCount={credentialsCount} accountsCount={totalAccounts} />
+          : <QuickActions accountsCount={totalAccounts} />
+        }
 
         {/* ─── Banklar + Top hisoblar ─── */}
         <div className="grid gap-6 lg:grid-cols-5">
@@ -293,8 +317,8 @@ function HeroChip({ icon: Icon, label, pulse }: { icon: any; label: string; puls
 }
 
 function GradientKpi({
-  label, value, icon: Icon, gradient, shadow,
-}: { label: string; value: string; icon: any; gradient: string; shadow: string }) {
+  label, value, icon: Icon, gradient, shadow, spark,
+}: { label: string; value: string; icon: any; gradient: string; shadow: string; spark?: number[] }) {
   return (
     <div className={cn("relative overflow-hidden rounded-2xl text-white p-6 group cursor-default card-hover", gradient, shadow)}>
       <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/15 blur-2xl pointer-events-none" />
@@ -308,6 +332,11 @@ function GradientKpi({
           </div>
         </div>
         <div className="text-3xl font-bold tracking-tight tabular-nums">{value}</div>
+        {spark && (
+          <div className="mt-3 -mb-2 -mx-2 text-white/85">
+            <Sparkline data={spark} width={240} height={42} stroke="white" fill="white" />
+          </div>
+        )}
       </div>
     </div>
   );
