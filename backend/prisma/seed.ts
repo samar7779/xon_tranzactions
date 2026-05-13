@@ -110,7 +110,7 @@ async function main() {
     console.log("  → Iltimos, birinchi kirishdan keyin parolni o'zgartiring.");
   }
 
-  // 3. Banklar — bank24.uz protokoli oilasi (KapitalBank, Ipak Yo'li, ...)
+  // 3. Banklar — bank24.uz protokoli oilasi (KapitalBank, Ipak Yo'li, Hayot, ...)
   const DEFAULT_BANKS = [
     {
       code: 'KAPITALBANK',
@@ -122,7 +122,13 @@ async function main() {
       code: 'IPAK_YULI',
       name: "Ipak Yo'li banki",
       apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',
-      apiKind: 'KAPITALBANK_V3' as const, // bir xil protokol — APILogin + GetDoc1C
+      apiKind: 'KAPITALBANK_V3' as const,
+    },
+    {
+      code: 'HAYOT',
+      name: 'Hayot Bank',
+      apiBaseUrl: process.env.HAYOT_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
+      apiKind: 'KAPITALBANK_V3' as const,
     },
   ];
 

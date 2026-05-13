@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Wifi, Send, Loader2, Eye, EyeOff, Copy, Check, ChevronRight,
   CheckCircle2, XCircle, Database, Sparkles, AlertCircle, ArrowDown,
-  Building2, KeyRound, Calendar, Search, FileText, Zap,
+  Building2, KeyRound, Calendar, Search, FileText, Zap, X, ArrowDownLeft, ArrowUpRight,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,10 +14,56 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
+  Dialog, DialogContent,
+} from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+// Tranzaksiya field labellari (foydalanuvchiga ko'rsatish uchun)
+const FIELD_LABELS: Record<string, { label: string; group: string; desc?: string }> = {
+  time:       { label: 'Operatsiya vaqti',     group: 'Vaqt' },
+  ddate:      { label: 'Hujjat sanasi',         group: 'Vaqt' },
+  vdate:      { label: 'Value date',            group: 'Vaqt', desc: 'Mablag\' mavjud bo\'lish sanasi' },
+  stime:      { label: 'Settlement vaqti',      group: 'Vaqt' },
+  input_date: { label: 'Kiritilgan sana',       group: 'Vaqt' },
+  input_time: { label: 'Kiritilgan vaqti',      group: 'Vaqt' },
+
+  dir:        { label: "Yo'nalish",             group: 'Asosiy', desc: '1=chiqim, 2=kirim' },
+  state:      { label: 'Holat',                 group: 'Asosiy' },
+  amount:     { label: 'Summa (tiyin)',         group: 'Asosiy' },
+  dtype:      { label: 'Hujjat turi',           group: 'Asosiy' },
+
+  mfo_dt:     { label: 'Yuboruvchi MFO',        group: 'Yuboruvchi' },
+  acc_dt:     { label: 'Yuboruvchi hisob',      group: 'Yuboruvchi' },
+  name_dt:    { label: 'Yuboruvchi nomi',       group: 'Yuboruvchi' },
+  inn_dt:     { label: 'Yuboruvchi STIR',       group: 'Yuboruvchi' },
+
+  mfo_ct:     { label: 'Qabul qiluvchi MFO',    group: 'Qabul qiluvchi' },
+  acc_ct:     { label: 'Qabul qiluvchi hisob',  group: 'Qabul qiluvchi' },
+  name_ct:    { label: 'Qabul qiluvchi nomi',   group: 'Qabul qiluvchi' },
+  inn_ct:     { label: 'Qabul qiluvchi STIR',   group: 'Qabul qiluvchi' },
+
+  purpose:    { label: "To'lov maqsadi",        group: 'Tafsilot' },
+  purp_code:  { label: 'Maqsad kodi',           group: 'Tafsilot' },
+  num:        { label: 'Hujjat raqami',         group: 'Tafsilot' },
+  client_id:  { label: 'Klient ID',             group: 'Tafsilot' },
+  branch:     { label: 'Filial MFO',            group: 'Tafsilot' },
+
+  general_id: { label: 'Global ID (NCI)',       group: 'Identifikator' },
+  b2_id:      { label: 'B2 ID',                 group: 'Identifikator', desc: 'Bank ichida noyob' },
+  uniq:       { label: 'Unique ID',             group: 'Identifikator' },
+
+  err:        { label: 'Xato kodi',             group: 'Xato' },
+  err_msg:    { label: 'Xato matni',            group: 'Xato' },
+  anor:       { label: 'Anor 24/7',             group: 'Xato', desc: '1 = Anor xizmati orqali' },
+};
+
+const FIELDS_SAVED = new Set([
+  'b2_id', 'general_id', 'ddate', 'dir', 'state', 'amount',
+  'mfo_dt', 'acc_dt', 'name_dt', 'inn_dt',
+  'mfo_ct', 'acc_ct', 'name_ct', 'inn_ct',
+  'purpose', 'purp_code', 'num', 'dtype', 'uniq',
+]);
 
 type Step = 'login' | 'transactions' | 'account';
 
@@ -407,8 +453,20 @@ function TransactionsResult({ data }: { data: any }) {
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
 
   const { summary, result, perDay = [], days = 1 } = data;
-  const items = result?.content || [];
+  const items: any[] = result?.content || [];
   const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
+
+  const [selectedDate, setSelectedDate] = useState<string | null>(perDay.length === 1 ? perDay[0]?.date : null);
+  const [selectedTxn, setSelectedTxn] = useState<any>(null);
+
+  // Sana bo'yicha guruhlash
+  const itemsByDate = new Map<string, any[]>();
+  for (const it of items) {
+    const d = it.ddate || '—';
+    if (!itemsByDate.has(d)) itemsByDate.set(d, []);
+    itemsByDate.get(d)!.push(it);
+  }
+  const itemsForSelected = selectedDate ? (itemsByDate.get(selectedDate) || []) : [];
 
   return (
     <>
@@ -423,27 +481,40 @@ function TransactionsResult({ data }: { data: any }) {
         ]}
       />
 
-      {/* Per-day breakdown */}
-      {perDay.length > 1 && (
-        <Card className="border-0 shadow-soft overflow-hidden">
-          <CardContent className="p-0">
-            <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/60 text-[12px] font-bold text-slate-900">
-              Kunma-kun taqsimot
-            </div>
-            <table className="w-full text-[12px]">
-              <thead>
-                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
-                  <th className="text-left px-3 py-2">Sana</th>
-                  <th className="text-right px-3 py-2">Operatsiyalar</th>
-                  <th className="text-right px-3 py-2">Kirim (UZS)</th>
-                  <th className="text-right px-3 py-2">Chiqim (UZS)</th>
-                  <th className="text-left px-3 py-2">Holat</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {perDay.map((d: any, i: number) => (
-                  <tr key={i} className={cn("hover:bg-slate-50", d.error && "bg-rose-50/30")}>
-                    <td className="px-3 py-2 font-mono text-slate-700">{d.date}</td>
+      {/* Step 1: Per-day list (clickable) */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <CardContent className="p-0">
+          <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/60 flex items-center justify-between">
+            <div className="text-[12px] font-bold text-slate-900">Kunma-kun taqsimot</div>
+            <div className="text-[10px] text-slate-500">Sanani bosing → o'sha kun tranzaksiyalari ko'rinadi</div>
+          </div>
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                <th className="text-left px-3 py-2">Sana</th>
+                <th className="text-right px-3 py-2">Operatsiyalar</th>
+                <th className="text-right px-3 py-2">Kirim (UZS)</th>
+                <th className="text-right px-3 py-2">Chiqim (UZS)</th>
+                <th className="text-left px-3 py-2">Holat</th>
+                <th className="w-8"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {perDay.map((d: any) => {
+                const isSelected = selectedDate === d.date;
+                const hasItems = d.count > 0;
+                return (
+                  <tr
+                    key={d.date}
+                    onClick={() => hasItems && setSelectedDate(isSelected ? null : d.date)}
+                    className={cn(
+                      "transition-colors",
+                      hasItems && "cursor-pointer",
+                      isSelected ? "bg-indigo-50/50" : "hover:bg-slate-50",
+                      d.error && "bg-rose-50/30",
+                    )}
+                  >
+                    <td className="px-3 py-2 font-mono text-slate-900 font-semibold">{d.date}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{d.count}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{fmt(d.credit)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-rose-700">{fmt(d.debit)}</td>
@@ -456,13 +527,88 @@ function TransactionsResult({ data }: { data: any }) {
                         </span>
                       )}
                     </td>
+                    <td className="px-3 py-2 text-right">
+                      {hasItems && (
+                        <ChevronRight className={cn(
+                          "h-3.5 w-3.5 text-slate-400 transition-transform",
+                          isSelected && "rotate-90 text-indigo-600",
+                        )} />
+                      )}
+                    </td>
                   </tr>
-                ))}
+                );
+              })}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      {/* Step 2: Transactions of selected day */}
+      {selectedDate && itemsForSelected.length > 0 && (
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <CardContent className="p-0">
+            <div className="px-4 py-2.5 border-b border-slate-200 bg-indigo-50/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-3.5 w-3.5 text-indigo-700" />
+                <div className="text-[12px] font-bold text-slate-900">{selectedDate} — {itemsForSelected.length} ta tranzaksiya</div>
+              </div>
+              <div className="text-[10px] text-slate-500">Tranzaksiyani bosing → barcha 29 ta field modal'da ochiladi</div>
+            </div>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                  <th className="text-left px-3 py-2 w-20">Vaqt</th>
+                  <th className="text-left px-3 py-2 w-20">Yo'nalish</th>
+                  <th className="text-left px-3 py-2">Kontragent</th>
+                  <th className="text-left px-3 py-2">Maqsad</th>
+                  <th className="text-right px-3 py-2 w-32">Summa (UZS)</th>
+                  <th className="text-left px-3 py-2 w-16">Hujjat</th>
+                  <th className="w-8"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {itemsForSelected.map((it: any, i: number) => {
+                  const counterparty = it.dir === 2 ? it.name_dt : it.name_ct;
+                  const cpInn = it.dir === 2 ? it.inn_dt : it.inn_ct;
+                  return (
+                    <tr
+                      key={i}
+                      onClick={() => setSelectedTxn(it)}
+                      className="hover:bg-slate-50 cursor-pointer transition-colors"
+                    >
+                      <td className="px-3 py-2 font-mono text-slate-700">{it.time || it.stime || '—'}</td>
+                      <td className="px-3 py-2">
+                        <span className={cn(
+                          "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
+                          it.dir === 2 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200",
+                        )}>
+                          {it.dir === 2 ? 'KIRIM' : 'CHIQIM'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 max-w-[280px]">
+                        <div className="truncate font-medium text-slate-900">{counterparty || '—'}</div>
+                        <div className="font-mono text-[10px] text-slate-500 truncate">{cpInn || ''}</div>
+                      </td>
+                      <td className="px-3 py-2 max-w-[200px] truncate text-slate-600">{(it.purpose || '').trim() || '—'}</td>
+                      <td className={cn(
+                        "px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap",
+                        it.dir === 2 ? "text-emerald-700" : "text-rose-700",
+                      )}>
+                        {it.dir === 2 ? '+' : '−'}{fmt(it.amount)}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-slate-600">{it.num || '—'}</td>
+                      <td className="px-3 py-2"><ChevronRight className="h-3.5 w-3.5 text-slate-400" /></td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </CardContent>
         </Card>
       )}
+
+      {/* Step 3: Modal with all fields */}
+      <TransactionDetailModal txn={selectedTxn} onClose={() => setSelectedTxn(null)} />
 
       {/* Field saved/not-saved analysis */}
       {summary?.fieldsInFirstItem?.length > 0 && (
@@ -507,48 +653,112 @@ function TransactionsResult({ data }: { data: any }) {
         </Card>
       )}
 
-      {/* Items preview */}
-      {items.length > 0 && (
-        <Card className="border-0 shadow-soft overflow-hidden">
-          <CardContent className="p-0">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <div className="text-base font-semibold tracking-tight">Tranzaksiyalar (birinchi 5 ta)</div>
-                <div className="text-xs text-slate-500 mt-0.5">Pastda to'liq JSON ko'rinishi</div>
+      {/* Raw JSON (collapsed by default) */}
+      <details className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+          <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
+        </summary>
+        <JsonViewer title="" json={result} />
+      </details>
+    </>
+  );
+}
+
+// Tranzaksiya tafsiloti modal — barcha 29 ta field guruh bo'yicha
+function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => void }) {
+  if (!txn) return null;
+  const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
+
+  // Field'larni group'lar bo'yicha guruhlash
+  const groups: Record<string, { key: string; label: string; value: any; desc?: string; saved: boolean }[]> = {};
+  for (const [key, val] of Object.entries(txn)) {
+    const meta = FIELD_LABELS[key] || { label: key, group: 'Boshqa' };
+    if (!groups[meta.group]) groups[meta.group] = [];
+    groups[meta.group].push({ key, label: meta.label, value: val, desc: meta.desc, saved: FIELDS_SAVED.has(key) });
+  }
+  const orderedGroups = ['Asosiy', 'Vaqt', 'Yuboruvchi', 'Qabul qiluvchi', 'Tafsilot', 'Identifikator', 'Xato', 'Boshqa'];
+
+  return (
+    <Dialog open={!!txn} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl p-0 overflow-hidden max-h-[90vh]">
+        {/* Header */}
+        <div className={cn(
+          "relative px-6 py-5 text-white",
+          txn.dir === 2 ? "bg-gradient-to-br from-emerald-600 to-teal-700" : "bg-gradient-to-br from-rose-600 to-red-700",
+        )}>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
+                  {txn.dir === 2 ? <><ArrowDownLeft className="h-3 w-3" /> KIRIM</> : <><ArrowUpRight className="h-3 w-3" /> CHIQIM</>}
+                </span>
+                <span className="text-[11px] text-white/85">{txn.ddate} · {txn.time || txn.stime}</span>
+              </div>
+              <div className="text-3xl font-bold tabular-nums tracking-tight">
+                {txn.dir === 2 ? '+' : '−'}{fmt(txn.amount)} <span className="text-base text-white/70 font-medium">UZS</span>
+              </div>
+              <div className="text-sm text-white/85 mt-1 truncate">
+                {txn.dir === 2 ? txn.name_dt : txn.name_ct}
               </div>
             </div>
-            <div className="divide-y divide-slate-100">
-              {items.slice(0, 5).map((it: any, i: number) => (
-                <div key={i} className="px-6 py-3 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-                  <div>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Yo'nalish · Sana</div>
-                    <div>
-                      <span className={cn(
-                        "inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1",
-                        it.dir === 2 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700",
-                      )}>{it.dir === 2 ? 'KIRIM' : 'CHIQIM'}</span>
-                      <span className="font-mono">{it.ddate}</span>
+            <button onClick={onClose} className="text-white/70 hover:text-white shrink-0">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="overflow-y-auto px-6 py-5 space-y-4">
+          {orderedGroups.filter((g) => groups[g]?.length).map((g) => (
+            <div key={g}>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2">{g}</div>
+              <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-4 py-2 divide-y divide-slate-100">
+                {groups[g].map((f) => (
+                  <div key={f.key} className="py-2 grid grid-cols-12 gap-3 items-start">
+                    <div className="col-span-4 min-w-0">
+                      <div className="text-[12px] text-slate-700 font-medium truncate">{f.label}</div>
+                      <div className="font-mono text-[10px] text-slate-400 truncate">{f.key}</div>
+                      {f.desc && <div className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{f.desc}</div>}
+                    </div>
+                    <div className="col-span-7 min-w-0">
+                      <div className="font-mono text-[12px] text-slate-900 break-words">
+                        {f.value === null || f.value === undefined || f.value === ''
+                          ? <span className="text-slate-400 italic font-sans">bo'sh</span>
+                          : typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}
+                      </div>
+                      {f.key === 'amount' && Number(f.value) > 0 && (
+                        <div className="text-[10px] text-slate-500 mt-0.5">≈ {fmt(Number(f.value))} UZS</div>
+                      )}
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      {f.saved ? (
+                        <span title="DB'da saqlanyapti" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-700">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      ) : (
+                        <span title="DB'da column yo'q (faqat metadata JSON'da)" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700">
+                          <AlertCircle className="h-3 w-3" />
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Summa</div>
-                    <div className="font-bold tabular-nums">{fmt(it.amount)} UZS</div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Kontragent</div>
-                    <div className="truncate">{it.dir === 2 ? it.name_dt : it.name_ct}</div>
-                    <div className="font-mono text-[10px] text-slate-500 truncate">{it.dir === 2 ? it.inn_dt : it.inn_ct}</div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ))}
 
-      {/* Raw JSON */}
-      <JsonViewer title="To'liq raw javob (GetDoc1C)" json={result} />
-    </>
+          {/* Legend */}
+          <div className="flex items-center gap-3 text-[10px] text-slate-500 pt-2 border-t border-slate-100">
+            <span className="inline-flex items-center gap-1">
+              <Check className="h-3 w-3 text-emerald-600" /> DB column'da saqlanadi
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <AlertCircle className="h-3 w-3 text-amber-600" /> Faqat metadata JSON'da
+            </span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
