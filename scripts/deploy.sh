@@ -31,10 +31,17 @@ mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { printf '%s [deploy] %s\n' "$(ts)" "$*" >> "$LOG"; }
 
-# Concurrency lock
+# Concurrency lock — qisqa kutish (60s). Eski stuck deploy bolib qolsa, tashlab ketamiz.
 exec 9>"$LOCK"
-if ! flock -w 600 9; then
-  log "✗ deploy lock ololmadik (10 min kutdik) — chiqamiz"
+if ! flock -w 60 9; then
+  log "⚠ deploy lock 60s da ololmadi — eski stuck deploy bo'lishi mumkin. Tashlab ketildi."
+  # Telegram'ga xabar (tg() funksiyasi pastda, lekin TG_BOT_TOKEN/CHAT yuqorida set qilingan)
+  TG_FILE=$(mktemp)
+  printf '{"chat_id":"%s","text":"⚠️ xon.transactions deploy lock band — eski jarayon ovqatga ket, yangi push tushdi: %s"}\n' \
+    "$DEPLOY_NOTIFY_CHAT" "${DEPLOY_COMMIT:-?}" > "$TG_FILE"
+  curl -sS -X POST -H "Content-Type: application/json" -d @"$TG_FILE" \
+    "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" > /dev/null 2>&1 || true
+  rm -f "$TG_FILE"
   exit 1
 fi
 log "🔒 deploy lock olindi"
@@ -73,6 +80,8 @@ esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/
 
 start_ts=$(date +%s)
 log "━━━ DEPLOY START · branch=${DEPLOY_PUSHED_BRANCH:-?} · pusher=${DEPLOY_PUSHER:-?} · services=${SERVICES:-(none)} ━━━"
+# Boshlanish notifikatsiyasi (debug: agar Telegram'da kelmayotgan bo'lsa)
+tg "🟡 <b>xon.transactions</b> · Deploy boshlandi · <code>${DEPLOY_COMMIT:0:8}</code>"
 
 run() {
   local title="$1"; shift
