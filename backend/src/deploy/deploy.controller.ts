@@ -70,7 +70,7 @@ export class DeployController {
 
     // 5. Fonda
     try {
-      this.svc.triggerAsync({ pushedBranch, pusher, services, commit });
+      this.svc.triggerAsync({ pushedBranch, pusher, services, commit, files });
     } catch (e: any) {
       this.logger.error(`triggerAsync xato: ${e?.message}`);
     }

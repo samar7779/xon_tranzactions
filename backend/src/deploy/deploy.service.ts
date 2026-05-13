@@ -100,7 +100,7 @@ export class DeployService {
    * Fonda detached process orqali deploy ishlatadi.
    * Webhook controller darrov 200 qaytaradi, deploy esa o'z holida davom etadi.
    */
-  triggerAsync(opts: { pushedBranch: string; pusher: string; services: string[]; commit?: string }) {
+  triggerAsync(opts: { pushedBranch: string; pusher: string; services: string[]; commit?: string; files?: string[] }) {
     const scriptPath = path.join(this.repoDir, 'scripts', 'deploy.sh');
     const env = {
       ...process.env,
@@ -110,6 +110,7 @@ export class DeployService {
       DEPLOY_FRONTEND_SERVICE: this.frontendService,
       DEPLOY_LOG: this.logFile,
       DEPLOY_SERVICES: opts.services.join(','),
+      DEPLOY_FILES: (opts.files || []).join(','),
       TG_BOT_TOKEN: this.tgToken,
       DEPLOY_NOTIFY_CHAT: this.tgChat,
       DEPLOY_PUSHER: opts.pusher,
