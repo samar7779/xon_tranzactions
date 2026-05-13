@@ -2,6 +2,7 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
   KapitalbankResponse,
   KbDoc1CResult,
@@ -42,9 +43,18 @@ interface GetAcc1CParams extends BaseAuthParams {
 export class KapitalbankClient {
   private readonly logger = new Logger(KapitalbankClient.name);
   private readonly timeoutMs: number;
+  private readonly proxyAgent?: HttpsProxyAgent<string>;
 
   constructor(private http: HttpService, config: ConfigService) {
     this.timeoutMs = Number(config.get<string>('KAPITALBANK_TIMEOUT_MS', '15000'));
+    // BANK_PROXY_URL — agar bank API faqat ma'lum IP'lardan kirishga ruxsat bersa,
+    // shu IP'ga ega ahost serveriga proxy o'rnatib, bu env orqali ulanamiz.
+    // Format: http://user:pass@host:port (HTTPS CONNECT qo'llab-quvvatlanadi)
+    const proxyUrl = config.get<string>('BANK_PROXY_URL');
+    if (proxyUrl) {
+      this.proxyAgent = new HttpsProxyAgent(proxyUrl);
+      this.logger.log(`🔀 Bank API proxy yoqilgan: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
+    }
   }
 
   private basicHeader(login: string, password: string) {
@@ -73,7 +83,13 @@ export class KapitalbankClient {
     const bankName = this.bankNameFromUrl(url);
     try {
       const resp = await firstValueFrom(
-        this.http.post(url, body, { headers, timeout: this.timeoutMs }),
+        this.http.post(url, body, {
+          headers,
+          timeout: this.timeoutMs,
+          httpsAgent: this.proxyAgent,
+          // Axios proxy=false — chunki biz HttpsAgent o'zimiz uzatamiz, axios o'rniga
+          proxy: this.proxyAgent ? false : undefined,
+        }),
       );
       return resp.data as KapitalbankResponse<T>;
     } catch (e: any) {

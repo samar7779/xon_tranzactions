@@ -659,10 +659,10 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 
   return (
     <Dialog open={!!txn} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[90vh] gap-0">
+      <DialogContent className="max-w-2xl p-0 max-h-[90vh] gap-0 flex flex-col overflow-hidden">
         {/* ─── Header ─── */}
         <div className={cn(
-          "relative px-6 py-5 text-white",
+          "relative px-6 py-5 text-white shrink-0",
           isIn ? "bg-gradient-to-br from-emerald-600 to-teal-700" : "bg-gradient-to-br from-rose-600 to-red-700",
         )}>
           <div className="flex items-start justify-between gap-4">
@@ -692,7 +692,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
         </div>
 
         {/* ─── Body ─── */}
-        <div className="overflow-y-auto px-6 py-5 space-y-4 bg-white">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
 
           {/* Status & document */}
           <div className="grid grid-cols-2 gap-3">
