@@ -44,16 +44,25 @@ export class KapitalbankClient {
   private readonly logger = new Logger(KapitalbankClient.name);
   private readonly timeoutMs: number;
   private readonly proxyAgent?: HttpsProxyAgent<string>;
+  private readonly forwarderUrl?: string;
+  private readonly forwarderSecret?: string;
 
   constructor(private http: HttpService, config: ConfigService) {
     this.timeoutMs = Number(config.get<string>('KAPITALBANK_TIMEOUT_MS', '15000'));
-    // BANK_PROXY_URL — agar bank API faqat ma'lum IP'lardan kirishga ruxsat bersa,
-    // shu IP'ga ega ahost serveriga proxy o'rnatib, bu env orqali ulanamiz.
-    // Format: http://user:pass@host:port (HTTPS CONNECT qo'llab-quvvatlanadi)
+
+    // PHP forwarder (cPanel shared hosting uchun) — bank.php fayl ahost'da turadi,
+    // u bank API'ga so'rov uzatadi, bank ahost IP'sini ko'radi.
+    this.forwarderUrl = config.get<string>('BANK_FORWARDER_URL');
+    this.forwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
+    if (this.forwarderUrl) {
+      this.logger.log(`🔀 Bank PHP forwarder: ${this.forwarderUrl}`);
+    }
+
+    // HTTPS proxy (Tinyproxy VPS uchun) — fallback
     const proxyUrl = config.get<string>('BANK_PROXY_URL');
     if (proxyUrl) {
       this.proxyAgent = new HttpsProxyAgent(proxyUrl);
-      this.logger.log(`🔀 Bank API proxy yoqilgan: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
+      this.logger.log(`🔀 Bank API proxy: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
     }
   }
 
@@ -81,13 +90,19 @@ export class KapitalbankClient {
     };
     if (authHeader) headers['Authorization'] = authHeader;
     const bankName = this.bankNameFromUrl(url);
+
+    // 1) Agar PHP forwarder sozlangan bo'lsa — bank.php orqali uzatamiz
+    if (this.forwarderUrl && this.forwarderSecret) {
+      return this.postViaForwarder<T>(url, body, headers, bankName);
+    }
+
+    // 2) Agar HTTPS proxy sozlangan bo'lsa — agent orqali
     try {
       const resp = await firstValueFrom(
         this.http.post(url, body, {
           headers,
           timeout: this.timeoutMs,
           httpsAgent: this.proxyAgent,
-          // Axios proxy=false — chunki biz HttpsAgent o'zimiz uzatamiz, axios o'rniga
           proxy: this.proxyAgent ? false : undefined,
         }),
       );
@@ -98,6 +113,53 @@ export class KapitalbankClient {
       this.logger.warn(`${bankName} POST ${url} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
       throw new ServiceUnavailableException(
         `${bankName} xizmati javob bermadi (${status || 'network'})`,
+      );
+    }
+  }
+
+  /**
+   * PHP forwarder orqali so'rov yuborish (cPanel shared hosting uchun).
+   * ahost'dagi bank-proxy.php fayli so'rovni qabul qilib, bank API'ga uzatadi.
+   * Bank ahost IP'sini ko'radi (whitelist'da).
+   */
+  private async postViaForwarder<T>(
+    targetUrl: string,
+    body: any,
+    headers: Record<string, string>,
+    bankName: string,
+  ): Promise<KapitalbankResponse<T>> {
+    try {
+      const resp = await firstValueFrom(
+        this.http.post(
+          this.forwarderUrl!,
+          {
+            url: targetUrl,
+            method: 'POST',
+            headers,
+            body: JSON.stringify(body),
+            timeout: Math.floor(this.timeoutMs / 1000),
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Proxy-Secret': this.forwarderSecret!,
+            },
+            timeout: this.timeoutMs + 5000,
+          },
+        ),
+      );
+      // PHP forwarder bank javobini bir xil status code bilan qaytaradi
+      return resp.data as KapitalbankResponse<T>;
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data || e?.message;
+      this.logger.warn(`${bankName} (forwarder) ${targetUrl} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
+      // Agar forwarder'dan kelgan response bo'lsa va data structure to'g'ri bo'lsa — qaytaramiz
+      if (e?.response?.data && typeof e.response.data === 'object' && 'error' in e.response.data) {
+        return e.response.data as KapitalbankResponse<T>;
+      }
+      throw new ServiceUnavailableException(
+        `${bankName} (forwarder orqali) javob bermadi: ${detail?.message || detail || status}`,
       );
     }
   }
