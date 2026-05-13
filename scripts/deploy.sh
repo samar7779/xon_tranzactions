@@ -17,7 +17,7 @@ DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
 export TG_BOT_TOKEN DEPLOY_NOTIFY_CHAT
 
 # Bank API forwarder (cPanel ahost orqali) — IP whitelist muammosini hal qiladi
-BANK_FORWARDER_URL="${BANK_FORWARDER_URL:-https://uz01.ahost.uz/~xonappuz/bank-proxy.php}"
+BANK_FORWARDER_URL="${BANK_FORWARDER_URL:-https://xonapp.uz/bank-proxy.php}"
 BANK_FORWARDER_SECRET="${BANK_FORWARDER_SECRET:-xonsaroy_bank_proxy_2026}"
 export BANK_FORWARDER_URL BANK_FORWARDER_SECRET
 
@@ -110,11 +110,14 @@ fi
 log "RAM: $(free -h 2>/dev/null | awk '/^Mem:/ {print $3"/"$2}')"
 log "Disk: $(df -h "$REPO" 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5" used)"}')"
 
-# 0c. Backend .env'ga Telegram token'ni qo'shamiz (agar yo'q bo'lsa)
+# 0c. Backend .env'ga env vars qo'shish/yangilash (idempotent)
 ensure_env_var() {
   local file="$1" key="$2" value="$3"
   [ -f "$file" ] || touch "$file"
   if grep -q "^${key}=" "$file" 2>/dev/null; then
+    # mavjud — qiymatni yangilaymiz (sed bilan)
+    local escaped; escaped=$(printf '%s' "$value" | sed -e 's/[\/&]/\\&/g')
+    sed -i "s|^${key}=.*|${key}=${escaped}|" "$file"
     return 0
   fi
   printf '%s=%s\n' "$key" "$value" >> "$file"
