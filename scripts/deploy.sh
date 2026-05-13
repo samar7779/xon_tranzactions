@@ -16,6 +16,11 @@ TG_BOT_TOKEN="${TG_BOT_TOKEN:-8128088490:AAErnIY_BG5rjdcp45S1OcHyVhiJm5WbUO8}"
 DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
 export TG_BOT_TOKEN DEPLOY_NOTIFY_CHAT
 
+# Bank API forwarder (cPanel ahost orqali) — IP whitelist muammosini hal qiladi
+BANK_FORWARDER_URL="${BANK_FORWARDER_URL:-https://uz01.ahost.uz/~xonappuz/bank-proxy.php}"
+BANK_FORWARDER_SECRET="${BANK_FORWARDER_SECRET:-xonsaroy_bank_proxy_2026}"
+export BANK_FORWARDER_URL BANK_FORWARDER_SECRET
+
 # Node memory limit — kichik serverda OOM'dan saqlanish uchun
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
 export NEXT_TELEMETRY_DISABLED=1
@@ -118,6 +123,13 @@ ensure_env_var() {
 if [ -d "$REPO/backend" ]; then
   ensure_env_var "$REPO/backend/.env" "TG_BOT_TOKEN" "$TG_BOT_TOKEN"
   ensure_env_var "$REPO/backend/.env" "DEPLOY_NOTIFY_CHAT" "$DEPLOY_NOTIFY_CHAT"
+  # Bank PHP forwarder (cPanel proxy uchun) — agar ENV'da bo'lsa qo'shamiz
+  if [ -n "${BANK_FORWARDER_URL:-}" ]; then
+    ensure_env_var "$REPO/backend/.env" "BANK_FORWARDER_URL" "$BANK_FORWARDER_URL"
+  fi
+  if [ -n "${BANK_FORWARDER_SECRET:-}" ]; then
+    ensure_env_var "$REPO/backend/.env" "BANK_FORWARDER_SECRET" "$BANK_FORWARDER_SECRET"
+  fi
 fi
 
 # 1. Kodni tortib olish
