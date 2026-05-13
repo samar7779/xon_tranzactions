@@ -19,51 +19,25 @@ import {
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-// Tranzaksiya field labellari (foydalanuvchiga ko'rsatish uchun)
-const FIELD_LABELS: Record<string, { label: string; group: string; desc?: string }> = {
-  time:       { label: 'Operatsiya vaqti',     group: 'Vaqt' },
-  ddate:      { label: 'Hujjat sanasi',         group: 'Vaqt' },
-  vdate:      { label: 'Value date',            group: 'Vaqt', desc: 'Mablag\' mavjud bo\'lish sanasi' },
-  stime:      { label: 'Settlement vaqti',      group: 'Vaqt' },
-  input_date: { label: 'Kiritilgan sana',       group: 'Vaqt' },
-  input_time: { label: 'Kiritilgan vaqti',      group: 'Vaqt' },
-
-  dir:        { label: "Yo'nalish",             group: 'Asosiy', desc: '1=chiqim, 2=kirim' },
-  state:      { label: 'Holat',                 group: 'Asosiy' },
-  amount:     { label: 'Summa (tiyin)',         group: 'Asosiy' },
-  dtype:      { label: 'Hujjat turi',           group: 'Asosiy' },
-
-  mfo_dt:     { label: 'Yuboruvchi MFO',        group: 'Yuboruvchi' },
-  acc_dt:     { label: 'Yuboruvchi hisob',      group: 'Yuboruvchi' },
-  name_dt:    { label: 'Yuboruvchi nomi',       group: 'Yuboruvchi' },
-  inn_dt:     { label: 'Yuboruvchi STIR',       group: 'Yuboruvchi' },
-
-  mfo_ct:     { label: 'Qabul qiluvchi MFO',    group: 'Qabul qiluvchi' },
-  acc_ct:     { label: 'Qabul qiluvchi hisob',  group: 'Qabul qiluvchi' },
-  name_ct:    { label: 'Qabul qiluvchi nomi',   group: 'Qabul qiluvchi' },
-  inn_ct:     { label: 'Qabul qiluvchi STIR',   group: 'Qabul qiluvchi' },
-
-  purpose:    { label: "To'lov maqsadi",        group: 'Tafsilot' },
-  purp_code:  { label: 'Maqsad kodi',           group: 'Tafsilot' },
-  num:        { label: 'Hujjat raqami',         group: 'Tafsilot' },
-  client_id:  { label: 'Klient ID',             group: 'Tafsilot' },
-  branch:     { label: 'Filial MFO',            group: 'Tafsilot' },
-
-  general_id: { label: 'Global ID (NCI)',       group: 'Identifikator' },
-  b2_id:      { label: 'B2 ID',                 group: 'Identifikator', desc: 'Bank ichida noyob' },
-  uniq:       { label: 'Unique ID',             group: 'Identifikator' },
-
-  err:        { label: 'Xato kodi',             group: 'Xato' },
-  err_msg:    { label: 'Xato matni',            group: 'Xato' },
-  anor:       { label: 'Anor 24/7',             group: 'Xato', desc: '1 = Anor xizmati orqali' },
+// Hujjat turi kodlari (KapitalBank PDF §9.6)
+const DTYPE_LABELS: Record<string, string> = {
+  '01': "To'lov topshiriq",
+  '21': 'Bankaro o\'tkazma',
+  '35': "Memorial order",
+  '16': 'SWIFT',
+  '97': 'Karta operatsiyasi',
+  '98': "G'azna",
+  '99': 'Byudjet',
 };
 
-const FIELDS_SAVED = new Set([
-  'b2_id', 'general_id', 'ddate', 'dir', 'state', 'amount',
-  'mfo_dt', 'acc_dt', 'name_dt', 'inn_dt',
-  'mfo_ct', 'acc_ct', 'name_ct', 'inn_ct',
-  'purpose', 'purp_code', 'num', 'dtype', 'uniq',
-]);
+// Holat kodlari (PDF §9.1)
+const STATE_LABELS: Record<number, { label: string; tone: 'emerald' | 'amber' | 'rose' | 'slate' }> = {
+  1: { label: 'Yaratilgan',  tone: 'slate' },
+  2: { label: 'Tasdiqlangan', tone: 'amber' },
+  3: { label: 'Bajarilgan',   tone: 'emerald' },
+  6: { label: "O'chirilgan",  tone: 'rose' },
+  16: { label: 'Kechiktirilgan', tone: 'amber' },
+};
 
 type Step = 'login' | 'transactions' | 'account';
 
@@ -664,101 +638,222 @@ function TransactionsResult({ data }: { data: any }) {
   );
 }
 
-// Tranzaksiya tafsiloti modal — barcha 29 ta field guruh bo'yicha
+// Tranzaksiya tafsiloti modal — tozalangan, biznes ma'lumotga ustivor
 function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => void }) {
   if (!txn) return null;
   const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
 
-  // Field'larni group'lar bo'yicha guruhlash
-  const groups: Record<string, { key: string; label: string; value: any; desc?: string; saved: boolean }[]> = {};
-  for (const [key, val] of Object.entries(txn)) {
-    const meta = FIELD_LABELS[key] || { label: key, group: 'Boshqa' };
-    if (!groups[meta.group]) groups[meta.group] = [];
-    groups[meta.group].push({ key, label: meta.label, value: val, desc: meta.desc, saved: FIELDS_SAVED.has(key) });
-  }
-  const orderedGroups = ['Asosiy', 'Vaqt', 'Yuboruvchi', 'Qabul qiluvchi', 'Tafsilot', 'Identifikator', 'Xato', 'Boshqa'];
+  const isIn = txn.dir === 2;
+  const state = STATE_LABELS[txn.state] || { label: `#${txn.state}`, tone: 'slate' as const };
+  const stateClass = {
+    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    amber:   'bg-amber-50 text-amber-700 ring-amber-200',
+    rose:    'bg-rose-50 text-rose-700 ring-rose-200',
+    slate:   'bg-slate-50 text-slate-700 ring-slate-200',
+  }[state.tone];
+  const dtypeLabel = DTYPE_LABELS[txn.dtype] || `${txn.dtype} (Boshqa)`;
+
+  // Yuboruvchi va qabul qiluvchi — agar kirim bo'lsa, biz qabul qiluvchimiz
+  const sender = { name: txn.name_dt, inn: txn.inn_dt, account: txn.acc_dt, mfo: txn.mfo_dt };
+  const receiver = { name: txn.name_ct, inn: txn.inn_ct, account: txn.acc_ct, mfo: txn.mfo_ct };
 
   return (
     <Dialog open={!!txn} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl p-0 overflow-hidden max-h-[90vh]">
-        {/* Header */}
+      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[90vh] gap-0">
+        {/* ─── Header ─── */}
         <div className={cn(
           "relative px-6 py-5 text-white",
-          txn.dir === 2 ? "bg-gradient-to-br from-emerald-600 to-teal-700" : "bg-gradient-to-br from-rose-600 to-red-700",
+          isIn ? "bg-gradient-to-br from-emerald-600 to-teal-700" : "bg-gradient-to-br from-rose-600 to-red-700",
         )}>
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
-                  {txn.dir === 2 ? <><ArrowDownLeft className="h-3 w-3" /> KIRIM</> : <><ArrowUpRight className="h-3 w-3" /> CHIQIM</>}
+                  {isIn ? <><ArrowDownLeft className="h-3 w-3" /> KIRIM</> : <><ArrowUpRight className="h-3 w-3" /> CHIQIM</>}
                 </span>
-                <span className="text-[11px] text-white/85">{txn.ddate} · {txn.time || txn.stime}</span>
+                <span className="text-[11px] text-white/85">{txn.ddate}{txn.time && ` · ${txn.time}`}</span>
+                {txn.anor === 1 && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-300/20 backdrop-blur-sm text-amber-100 ring-1 ring-amber-200/40">
+                    <Zap className="h-2.5 w-2.5" /> ANOR 24/7
+                  </span>
+                )}
               </div>
-              <div className="text-3xl font-bold tabular-nums tracking-tight">
-                {txn.dir === 2 ? '+' : '−'}{fmt(txn.amount)} <span className="text-base text-white/70 font-medium">UZS</span>
+              <div className="text-4xl font-bold tabular-nums tracking-tight">
+                {isIn ? '+' : '−'}{fmt(txn.amount)} <span className="text-lg text-white/70 font-medium">UZS</span>
               </div>
-              <div className="text-sm text-white/85 mt-1 truncate">
-                {txn.dir === 2 ? txn.name_dt : txn.name_ct}
+              <div className="text-sm text-white/90 mt-1.5 truncate font-medium">
+                {isIn ? sender.name : receiver.name}
               </div>
             </div>
-            <button onClick={onClose} className="text-white/70 hover:text-white shrink-0">
+            <button onClick={onClose} className="text-white/70 hover:text-white shrink-0 -mt-1 -mr-1 p-1">
               <X className="h-5 w-5" />
             </button>
           </div>
         </div>
 
-        {/* Body — scrollable */}
-        <div className="overflow-y-auto px-6 py-5 space-y-4">
-          {orderedGroups.filter((g) => groups[g]?.length).map((g) => (
-            <div key={g}>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2">{g}</div>
-              <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-4 py-2 divide-y divide-slate-100">
-                {groups[g].map((f) => (
-                  <div key={f.key} className="py-2 grid grid-cols-12 gap-3 items-start">
-                    <div className="col-span-4 min-w-0">
-                      <div className="text-[12px] text-slate-700 font-medium truncate">{f.label}</div>
-                      <div className="font-mono text-[10px] text-slate-400 truncate">{f.key}</div>
-                      {f.desc && <div className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{f.desc}</div>}
-                    </div>
-                    <div className="col-span-7 min-w-0">
-                      <div className="font-mono text-[12px] text-slate-900 break-words">
-                        {f.value === null || f.value === undefined || f.value === ''
-                          ? <span className="text-slate-400 italic font-sans">bo'sh</span>
-                          : typeof f.value === 'object' ? JSON.stringify(f.value) : String(f.value)}
-                      </div>
-                      {f.key === 'amount' && Number(f.value) > 0 && (
-                        <div className="text-[10px] text-slate-500 mt-0.5">≈ {fmt(Number(f.value))} UZS</div>
-                      )}
-                    </div>
-                    <div className="col-span-1 flex justify-end">
-                      {f.saved ? (
-                        <span title="DB'da saqlanyapti" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-700">
-                          <Check className="h-3 w-3" />
-                        </span>
-                      ) : (
-                        <span title="DB'da column yo'q (faqat metadata JSON'da)" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-700">
-                          <AlertCircle className="h-3 w-3" />
-                        </span>
-                      )}
-                    </div>
+        {/* ─── Body ─── */}
+        <div className="overflow-y-auto px-6 py-5 space-y-4 bg-white">
+
+          {/* Status & document */}
+          <div className="grid grid-cols-2 gap-3">
+            <DetailField label="Holat">
+              <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset", stateClass)}>
+                <span className={cn("w-1.5 h-1.5 rounded-full", state.tone === 'emerald' && "bg-emerald-500", state.tone === 'amber' && "bg-amber-500", state.tone === 'rose' && "bg-rose-500", state.tone === 'slate' && "bg-slate-400")} />
+                {state.label}
+              </span>
+            </DetailField>
+            <DetailField label="Hujjat turi">
+              <div className="text-[13px] font-semibold text-slate-900">{dtypeLabel}</div>
+              {txn.num && <div className="font-mono text-[11px] text-slate-500 mt-0.5">#{txn.num}</div>}
+            </DetailField>
+          </div>
+
+          {/* Sender */}
+          <Party
+            title="Yuboruvchi"
+            color="rose"
+            highlighted={!isIn}
+            name={sender.name}
+            inn={sender.inn}
+            account={sender.account}
+            mfo={sender.mfo}
+          />
+
+          {/* Receiver */}
+          <Party
+            title="Qabul qiluvchi"
+            color="emerald"
+            highlighted={isIn}
+            name={receiver.name}
+            inn={receiver.inn}
+            account={receiver.account}
+            mfo={receiver.mfo}
+          />
+
+          {/* Purpose */}
+          {txn.purpose && (
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">To'lov maqsadi</div>
+              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
+                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap">{txn.purpose.trim()}</div>
+                {txn.purp_code && (
+                  <div className="mt-2 pt-2 border-t border-slate-200 flex items-center gap-2 text-[11px]">
+                    <span className="text-slate-500">Maqsad kodi:</span>
+                    <span className="font-mono font-semibold text-slate-700">{txn.purp_code}</span>
                   </div>
-                ))}
+                )}
               </div>
             </div>
-          ))}
+          )}
 
-          {/* Legend */}
-          <div className="flex items-center gap-3 text-[10px] text-slate-500 pt-2 border-t border-slate-100">
-            <span className="inline-flex items-center gap-1">
-              <Check className="h-3 w-3 text-emerald-600" /> DB column'da saqlanadi
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <AlertCircle className="h-3 w-3 text-amber-600" /> Faqat metadata JSON'da
-            </span>
-          </div>
+          {/* Value date if differs */}
+          {txn.vdate && txn.vdate !== txn.ddate && (
+            <DetailField label="Value date (mablag' mavjud bo'lish sanasi)">
+              <div className="text-[13px] font-semibold text-slate-900 tabular-nums">{txn.vdate}</div>
+            </DetailField>
+          )}
+
+          {/* Error if any */}
+          {(txn.err && txn.err !== '0' && txn.err !== 0) || txn.err_msg ? (
+            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-rose-700 mb-1">Bank xatosi</div>
+              <div className="text-[12px] text-rose-900">
+                {txn.err_msg || `Kod: ${txn.err}`}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Technical details (collapsed by default) */}
+          <details className="rounded-xl border border-slate-200 overflow-hidden">
+            <summary className="px-4 py-2.5 cursor-pointer text-[11px] font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 uppercase tracking-wider">
+              <FileText className="h-3.5 w-3.5" /> Texnik tafsilot (ID, vaqt, raw)
+            </summary>
+            <div className="px-4 py-3 bg-slate-50/60 space-y-2 text-[11px]">
+              <TechRow label="B2 ID" value={txn.b2_id} mono />
+              <TechRow label="Global ID (NCI)" value={txn.general_id} mono />
+              <TechRow label="Unique ID" value={txn.uniq} mono />
+              <TechRow label="Klient ID" value={txn.client_id} mono />
+              <TechRow label="Filial MFO" value={txn.branch} mono />
+              <TechRow label="Hujjat sanasi (ddate)" value={txn.ddate} />
+              <TechRow label="Value date (vdate)" value={txn.vdate} />
+              <TechRow label="Operatsiya vaqti" value={txn.time} />
+              <TechRow label="Kiritilgan" value={`${txn.input_date || '—'} ${txn.input_time || ''}`} />
+              <TechRow label="Settlement vaqti (stime)" value={txn.stime} />
+              <TechRow label="Anor 24/7" value={txn.anor === 1 ? 'Ha' : "Yo'q"} />
+              <details className="pt-2">
+                <summary className="cursor-pointer text-[10px] text-slate-500 hover:text-slate-700">Raw JSON</summary>
+                <pre className="mt-2 p-2 bg-white border border-slate-200 rounded text-[10px] font-mono overflow-x-auto max-h-60 overflow-y-auto">{JSON.stringify(txn, null, 2)}</pre>
+              </details>
+            </div>
+          </details>
+
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function Party({
+  title, color, highlighted, name, inn, account, mfo,
+}: {
+  title: string;
+  color: 'rose' | 'emerald';
+  highlighted: boolean;
+  name?: string;
+  inn?: string;
+  account?: string;
+  mfo?: string;
+}) {
+  const c = {
+    rose:    { bg: 'bg-rose-50/60',    ring: 'ring-rose-200', dot: 'bg-rose-500', label: 'text-rose-700' },
+    emerald: { bg: 'bg-emerald-50/60', ring: 'ring-emerald-200', dot: 'bg-emerald-500', label: 'text-emerald-700' },
+  }[color];
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+        <span className={cn("w-1.5 h-1.5 rounded-full", c.dot)} />
+        {title}
+        {highlighted && <span className={cn("text-[9px] font-bold uppercase", c.label)}>· siz</span>}
+      </div>
+      <div className={cn("rounded-xl ring-1 px-4 py-3 space-y-1.5", highlighted ? `${c.bg} ${c.ring}` : 'bg-slate-50 ring-slate-200')}>
+        <div className="text-[14px] font-bold text-slate-900 truncate">{name || '—'}</div>
+        <div className="grid grid-cols-2 gap-3 text-[11px]">
+          <div>
+            <div className="text-slate-500 mb-0.5">STIR</div>
+            <div className="font-mono text-slate-900">{inn || '—'}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 mb-0.5">Bank MFO</div>
+            <div className="font-mono text-slate-900">{mfo || '—'}</div>
+          </div>
+          <div className="col-span-2">
+            <div className="text-slate-500 mb-0.5">Hisob raqami</div>
+            <div className="font-mono text-slate-900 truncate">{account || '—'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TechRow({ label, value, mono }: { label: string; value: any; mono?: boolean }) {
+  const isEmpty = value === null || value === undefined || value === '' || value === 'null';
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <div className="text-slate-500 shrink-0">{label}</div>
+      <div className={cn("text-slate-900 text-right truncate", mono && "font-mono", isEmpty && "text-slate-400 italic")}>
+        {isEmpty ? "bo'sh" : String(value)}
+      </div>
+    </div>
   );
 }
 
