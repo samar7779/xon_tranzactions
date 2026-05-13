@@ -145,6 +145,7 @@ fi
 if [ "$need_fe" = "1" ]; then
   if [ -d "$REPO/frontend" ]; then
     pushd "$REPO/frontend" > /dev/null
+    tg "🔨 <b>Frontend build boshlandi</b>"
     if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
       tg "❌ <b>Deploy xato</b>: frontend npm ci"
       exit 1
@@ -152,11 +153,14 @@ if [ "$need_fe" = "1" ]; then
     # Clean .next to avoid stale chunks from prior partial/concurrent builds
     if [ -d ".next" ]; then
       run "frontend clean .next" rm -rf .next
+      tg "🧹 .next tozalandi"
     fi
     if ! run "frontend build" npm run build; then
-      tg "❌ <b>Deploy xato</b>: frontend build"
+      lastErr=$(tail -50 "$LOG" | grep -E "Error|Failed|killed|Killed" | tail -5 | tr '\n' ' ' | head -c 500)
+      tg "❌ <b>Frontend build muvaffaqiyatsiz</b>%0A<code>$(esc "$lastErr")</code>"
       exit 1
     fi
+    tg "✅ Frontend build tugadi"
     popd > /dev/null
   fi
 fi
