@@ -16,11 +16,9 @@ TG_BOT_TOKEN="${TG_BOT_TOKEN:-8128088490:AAErnIY_BG5rjdcp45S1OcHyVhiJm5WbUO8}"
 DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
 export TG_BOT_TOKEN DEPLOY_NOTIFY_CHAT
 
-# Bank API forwarder (cPanel ahost orqali) — IP whitelist muammosini hal qiladi
-# MAJBURIY o'zgartirish — eski (noto'g'ri) qiymatlarni almashtirish uchun.
-# Agar boshqa URL kerak bo'lsa, shu yerda o'zgartiring va push qiling.
-BANK_FORWARDER_URL="https://xonapp.uz/bank-proxy.php"
-BANK_FORWARDER_SECRET="xonsaroy_bank_proxy_2026"
+# Xon bank API forwarder (xonapp.uz cPanel'da xt-forwarder.php)
+BANK_FORWARDER_URL="https://xonapp.uz/xt-forwarder.php"
+BANK_FORWARDER_SECRET="xt_a8f3e2d1c9b7654321fedcba0987abcd"
 export BANK_FORWARDER_URL BANK_FORWARDER_SECRET
 
 # Node memory limit — kichik serverda OOM'dan saqlanish uchun
