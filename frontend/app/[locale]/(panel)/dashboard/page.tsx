@@ -3,27 +3,22 @@
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, Wallet, Building2,
-  Receipt, RefreshCw, TrendingUp, ArrowRight, ChevronRight,
-  Sparkles, Activity, Zap, Calendar, MoreHorizontal, Eye,
+  RefreshCw, TrendingUp, ArrowRight, ChevronRight,
+  Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
+  Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
+  Search, Download, ChevronDown, Settings2, Database,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
 import { OnboardingCard } from '@/components/onboarding-card';
-import { QuickActions } from '@/components/quick-actions';
-import { Sparkline } from '@/components/sparkline';
-import { AreaChart, DonutChart } from '@/components/charts';
 import { api } from '@/lib/api';
-import { cn, formatDateTime, formatMoney } from '@/lib/utils';
+import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
 
-const BANK_COLORS = [
-  '#6366f1', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6',
-];
+const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
 
 export default function DashboardPage() {
   const { locale } = useParams<{ locale: string }>();
@@ -42,22 +37,28 @@ export default function DashboardPage() {
   });
   const { data: recent, isLoading: recentLoading } = useQuery({
     queryKey: ['recent'],
-    queryFn: () => api.get<{ items: any[]; total: number }>('/transactions?perPage=8'),
+    queryFn: () => api.get<{ items: any[]; total: number }>('/transactions?perPage=12'),
+  });
+  const { data: syncLogs } = useQuery({
+    queryKey: ['sync-logs-dashboard'],
+    queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=20'),
+    refetchInterval: 30_000,
   });
 
-  // KPI'lar
+  // KPI computations
   const totalBalance = (accounts?.items || []).reduce((s, a) => s + Number(a.balance || 0), 0);
   const totalAccounts = accounts?.items?.length || 0;
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
+  const txnCount = (stats?.groups || []).reduce((s: number, g: any) => s + Number(g._count?._all || 0), 0);
   const netFlow = inSum - outSum;
 
   const isEmpty = totalAccounts === 0;
   const banksCount = new Set((accounts?.items || []).map((a: any) => a.bankId)).size;
   const credentialsCount = new Set((accounts?.items || []).map((a: any) => a.credentialId)).size;
 
-  // Banks for donut
-  const byBank = (() => {
+  // By-bank breakdown
+  const byBank = useMemo(() => {
     const map = new Map<string, { name: string; balance: number; accounts: number }>();
     for (const a of accounts?.items || []) {
       const id = a.bank?.id || 'unknown';
@@ -68,389 +69,395 @@ export default function DashboardPage() {
     }
     return [...map.entries()].map(([id, v], i) => ({ id, ...v, color: BANK_COLORS[i % BANK_COLORS.length] }))
       .sort((a, b) => b.balance - a.balance);
-  })();
+  }, [accounts]);
 
-  // 30-kunlik area chart uchun data (haqiqiy yo'q bo'lsa mock)
-  const last30Days = Array.from({ length: 30 }).map((_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (29 - i));
-    return d;
-  });
-  const areaInData = last30Days.map((d, i) => ({
-    label: `${d.getDate()}/${d.getMonth() + 1}`,
-    value: inSum > 0
-      ? Math.round((inSum / 30) * (0.6 + Math.sin(i / 4) * 0.3 + Math.random() * 0.2))
-      : Math.round(50 + Math.sin(i / 3) * 30 + Math.random() * 20),
-  }));
-  const areaOutData = last30Days.map((d, i) => ({
-    label: `${d.getDate()}/${d.getMonth() + 1}`,
-    value: outSum > 0
-      ? Math.round((outSum / 30) * (0.6 + Math.cos(i / 4) * 0.3 + Math.random() * 0.2))
-      : Math.round(35 + Math.cos(i / 3) * 25 + Math.random() * 15),
-  }));
-
-  const now = new Date();
-  const greeting = now.getHours() < 12 ? 'Xayrli tong' : now.getHours() < 18 ? 'Xayrli kun' : 'Xayrli kech';
+  // Sync status
+  const syncStats = useMemo(() => {
+    const items = syncLogs?.items || [];
+    const recent = items.slice(0, 10);
+    const success = recent.filter((l) => l.status === 'SUCCESS').length;
+    const failed = recent.filter((l) => l.status === 'FAILED').length;
+    const partial = recent.filter((l) => l.status === 'PARTIAL').length;
+    const running = recent.filter((l) => l.status === 'RUNNING').length;
+    const successRate = recent.length > 0 ? Math.round((success / recent.length) * 100) : 100;
+    return { success, failed, partial, running, total: recent.length, successRate };
+  }, [syncLogs]);
 
   return (
     <>
-      <Topbar title="Bosh sahifa" subtitle={`${greeting} — barcha hisoblar bo'yicha umumiy ko'rinish`} />
-      <div className="flex-1 p-6 lg:p-8 space-y-6 max-w-[1500px] mx-auto w-full">
+      <Topbar
+        title="Dashboard"
+        subtitle={`${totalAccounts} hisob · ${banksCount} bank · oxirgi yangilanish: ${(accounts?.items?.[0]?.lastSyncedAt) ? formatDateTime(accounts.items[0].lastSyncedAt) : '—'}`}
+      />
 
-        {/* ═══ HERO BANNER ═══ */}
-        <div className="relative rounded-3xl overflow-hidden shadow-pop animate-fade-up">
-          <div className="absolute inset-0 bg-brand-vivid animate-gradient" />
-          <div className="absolute inset-0 bg-dots opacity-25" />
-          <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-white/20 blur-3xl pointer-events-none animate-float-slow" />
-          <div className="absolute -bottom-32 -left-32 w-96 h-96 rounded-full bg-cyan-300/25 blur-3xl pointer-events-none animate-float-slow" style={{ animationDelay: '4s' }} />
+      <div className="flex-1 px-6 py-5 space-y-4 max-w-[1700px] mx-auto w-full">
 
-          <div className="relative px-6 lg:px-12 py-8 lg:py-10 text-white">
-            <div className="grid lg:grid-cols-5 gap-8 items-center">
-              <div className="lg:col-span-3">
-                <div className="flex items-center gap-2 mb-3 flex-wrap">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/20 text-[11px] font-medium">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-                    </span>
-                    Live · {now.toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/20 text-[11px] font-medium">
-                    <Sparkles className="h-3 w-3" /> Treasury
-                  </span>
-                </div>
-
-                <div className="text-[11px] uppercase tracking-[0.2em] text-white/70 mb-2">Jami qoldiq</div>
-                {accLoading ? (
-                  <Skeleton className="h-16 w-80 bg-white/15" />
-                ) : (
-                  <div className="flex items-baseline gap-3 flex-wrap">
-                    <div className="text-5xl lg:text-6xl xl:text-7xl font-bold tracking-tight tabular-nums leading-none">
-                      {formatMoney(totalBalance).replace(/UZS$/, '').trim()}
-                    </div>
-                    <div className="text-2xl text-white/70 font-medium">UZS</div>
-                  </div>
-                )}
-
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <HeroChip icon={Wallet} label={`${totalAccounts} ta hisob`} />
-                  <HeroChip icon={Building2} label={`${byBank.length} ta bank`} />
-                  <HeroChip icon={Activity} label="Avto-sync 5 daq" />
-                </div>
-              </div>
-
-              {/* Inline sparkline preview */}
-              <div className="lg:col-span-2 hidden lg:block">
-                <div className="rounded-2xl bg-white/10 backdrop-blur-sm ring-1 ring-white/20 p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="text-[11px] uppercase tracking-wider text-white/70">Oxirgi 30 kun</div>
-                    <div className="text-xs text-emerald-300 font-medium flex items-center gap-1">
-                      <TrendingUp className="h-3 w-3" /> Trend
-                    </div>
-                  </div>
-                  <div className="-mx-2">
-                    <Sparkline
-                      data={areaInData.map((d) => d.value)}
-                      width={360} height={70}
-                      stroke="white" fill="white"
-                      className="w-full"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* ═══ KPI STRIP — Enterprise dense ═══ */}
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          <DataTile label="Jami qoldiq" value={formatMoney(totalBalance).replace(' UZS', '')} unit="UZS" tone="primary" loading={accLoading} />
+          <DataTile label="Hisoblar" value={String(totalAccounts)} unit="ta" />
+          <DataTile label="Banklar" value={String(banksCount)} unit="ta" />
+          <DataTile label="Kirim · 30 kun" value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />
+          <DataTile label="Chiqim · 30 kun" value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
+          <DataTile label="Tranzaksiya · 30 kun" value={String(txnCount)} unit="ta" />
         </div>
 
-        {/* ═══ KPI ROW with sparklines ═══ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <KpiCard
-            label="Kirim · 30 kun"
-            value={formatMoney(inSum)}
-            icon={ArrowDownLeft}
-            trend="+12.4%"
-            color="emerald"
-            spark={areaInData.map((d) => d.value)}
-          />
-          <KpiCard
-            label="Chiqim · 30 kun"
-            value={formatMoney(outSum)}
-            icon={ArrowUpRight}
-            trend="-3.2%"
-            color="rose"
-            spark={areaOutData.map((d) => d.value)}
-          />
-          <KpiCard
-            label="Sof oqim"
-            value={(netFlow >= 0 ? '+' : '') + formatMoney(netFlow)}
-            icon={TrendingUp}
-            trend={netFlow >= 0 ? 'Ijobiy' : 'Salbiy'}
-            color={netFlow >= 0 ? 'indigo' : 'rose'}
-            spark={areaInData.map((d, i) => d.value - areaOutData[i].value)}
-          />
-        </div>
-
-        {/* ═══ Onboarding (bo'sh tizimda) ═══ */}
+        {/* ═══ ONBOARDING for empty state ═══ */}
         {isEmpty && (
-          <OnboardingCard
-            banksCount={banksCount}
-            credentialsCount={credentialsCount}
-            accountsCount={totalAccounts}
-          />
+          <OnboardingCard banksCount={banksCount} credentialsCount={credentialsCount} accountsCount={totalAccounts} />
         )}
 
-        {/* ═══ BENTO GRID — Big chart + donut + quick actions ═══ */}
-        <div className="grid gap-4 lg:grid-cols-6 lg:auto-rows-auto">
-          {/* Big area chart */}
-          <Card className="lg:col-span-4 border-0 shadow-soft overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between mb-4 flex-wrap gap-3">
-                <div>
-                  <div className="text-base font-semibold tracking-tight">Kirim/Chiqim dinamikasi</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Oxirgi 30 kun</div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="inline-flex rounded-full bg-slate-100 p-0.5 text-[11px] font-medium">
-                    <button className="px-3 py-1 rounded-full bg-white shadow-sm text-slate-900">30 kun</button>
-                    <button className="px-3 py-1 text-slate-500">3 oy</button>
-                    <button className="px-3 py-1 text-slate-500">Yil</button>
-                  </div>
-                </div>
-              </div>
+        {/* ═══ MAIN GRID: 3 columns ═══ */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
 
-              <div className="flex items-center gap-6 mb-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                  <span className="text-slate-600">Kirim</span>
-                  <span className="font-semibold tabular-nums">{formatMoney(inSum)}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  <span className="text-slate-600">Chiqim</span>
-                  <span className="font-semibold tabular-nums">{formatMoney(outSum)}</span>
-                </div>
-              </div>
+          {/* ═══ LEFT: Transactions table (8 cols) ═══ */}
+          <div className="lg:col-span-8 space-y-4">
 
-              <AreaChart
-                data={areaInData}
-                height={240}
-                gradientFrom="#6366f1"
-                gradientTo="#06b6d4"
-                stroke="#6366f1"
-              />
-            </CardContent>
-          </Card>
-
-          {/* Donut: banks distribution */}
-          <Card className="lg:col-span-2 border-0 shadow-soft overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-base font-semibold tracking-tight">Banklar</div>
-                  <div className="text-xs text-slate-500 mt-0.5">Qoldiq taqsimoti</div>
-                </div>
-                <Link href={`/${locale}/banks`} className="text-[11px] text-indigo-600 hover:text-indigo-700 font-medium">
-                  <ChevronRight className="h-3.5 w-3.5" />
+            {/* Recent transactions table */}
+            <DataPanel
+              title="Oxirgi tranzaksiyalar"
+              count={recent?.total}
+              actions={
+                <Link href={`/${locale}/transactions`}>
+                  <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Barchasi <ChevronRight className="h-3 w-3" />
+                  </button>
                 </Link>
-              </div>
-
-              {byBank.length === 0 ? (
-                <div className="text-sm text-slate-400 text-center py-8">Banklar yo'q</div>
+              }
+            >
+              {recentLoading ? (
+                <div className="p-4 space-y-2">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
+                </div>
+              ) : (recent?.items || []).length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500">Tranzaksiyalar yo'q</div>
               ) : (
-                <>
-                  <div className="flex justify-center mb-4">
-                    <DonutChart
-                      data={byBank.map((b) => ({ label: b.name, value: b.balance, color: b.color }))}
-                      size={180}
-                      thickness={22}
-                      centerLabel="banklar"
-                      centerValue={String(byBank.length)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    {byBank.slice(0, 4).map((b) => (
-                      <div key={b.id} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
-                          <span className="truncate text-slate-700">{b.name}</span>
-                        </div>
-                        <span className="font-semibold tabular-nums shrink-0">{formatMoney(b.balance)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                        <th className="text-left px-3 py-2 w-32">Sana</th>
+                        <th className="text-left px-3 py-2 w-20">Yo'nalish</th>
+                        <th className="text-left px-3 py-2">Kontragent</th>
+                        <th className="text-left px-3 py-2 w-32">Bank</th>
+                        <th className="text-right px-3 py-2 w-32">Summa</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {recent!.items.slice(0, 10).map((it: any) => {
+                        const counterparty = it.direction === 'IN' ? it.fromName : it.toName;
+                        return (
+                          <tr key={it.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-3 py-2 whitespace-nowrap">
+                              <div className="tabular-nums text-slate-700">{formatDate(it.txnDate)}</div>
+                              <div className="text-[10px] text-slate-500 tabular-nums">{new Date(it.txnDate).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}</div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
+                                it.direction === 'IN'
+                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  : "bg-rose-50 text-rose-700 border-rose-200",
+                              )}>
+                                {it.direction === 'IN' ? <ArrowDownLeft className="h-2.5 w-2.5" /> : <ArrowUpRight className="h-2.5 w-2.5" />}
+                                {it.direction === 'IN' ? 'IN' : 'OUT'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 max-w-[280px]">
+                              <div className="truncate font-medium text-slate-900">{counterparty || '—'}</div>
+                              <div className="font-mono text-[10px] text-slate-500 truncate">
+                                {it.direction === 'IN' ? it.fromInn : it.toAccount || ''}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 max-w-[140px] truncate text-slate-700">{it.account?.bank?.name || '—'}</td>
+                            <td className={cn(
+                              "px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap",
+                              it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
+                            )}>
+                              {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </DataPanel>
 
-        {/* ═══ Quick actions + Activity feed ═══ */}
-        <div className="grid gap-4 lg:grid-cols-6">
-          <div className="lg:col-span-4">
-            <QuickActions accountsCount={totalAccounts} />
+            {/* Top accounts table */}
+            <DataPanel
+              title="Eng katta hisoblar"
+              count={totalAccounts}
+              actions={
+                <Link href={`/${locale}/accounts`}>
+                  <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    Barchasi <ChevronRight className="h-3 w-3" />
+                  </button>
+                </Link>
+              }
+            >
+              {accLoading ? (
+                <div className="p-4 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
+              ) : totalAccounts === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500">Hisoblar yo'q</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                        <th className="text-left px-3 py-2">Bank · Hisob raqami</th>
+                        <th className="text-left px-3 py-2 w-24">MFO</th>
+                        <th className="text-right px-3 py-2 w-32">Qoldiq</th>
+                        <th className="text-left px-3 py-2 w-20">Status</th>
+                        <th className="text-left px-3 py-2 w-32">Oxirgi sync</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(accounts!.items as any[])
+                        .slice()
+                        .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))
+                        .slice(0, 8)
+                        .map((a) => {
+                          const colorIdx = byBank.findIndex((b) => b.id === a.bankId);
+                          const color = BANK_COLORS[colorIdx >= 0 ? colorIdx : 0];
+                          return (
+                            <tr key={a.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-1 h-6 rounded-sm shrink-0" style={{ backgroundColor: color }} />
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-slate-900 truncate">{a.bank?.name || '—'}</div>
+                                    <div className="font-mono text-[10px] text-slate-500 truncate">{a.accountNo}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 font-mono text-[11px] text-slate-700">{a.branch}</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                                {formatMoney(Number(a.balance || 0), a.currency)}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span className={cn(
+                                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
+                                  a.syncEnabled
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    : "bg-slate-50 text-slate-500 border-slate-200",
+                                )}>
+                                  <span className={cn("w-1 h-1 rounded-full", a.syncEnabled ? "bg-emerald-500" : "bg-slate-300")} />
+                                  {a.syncEnabled ? 'ON' : 'OFF'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-[11px] text-slate-600 tabular-nums">
+                                {a.lastSyncedAt ? formatDateTime(a.lastSyncedAt) : '—'}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </DataPanel>
+
           </div>
 
-          {/* Live activity feed */}
-          <Card className="lg:col-span-2 border-0 shadow-soft overflow-hidden">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <div className="text-base font-semibold tracking-tight flex items-center gap-2">
-                    <span className="relative flex h-2 w-2">
-                      <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                    </span>
-                    Faollik
+          {/* ═══ RIGHT: System health panels (4 cols) ═══ */}
+          <div className="lg:col-span-4 space-y-4">
+
+            {/* Sync status */}
+            <DataPanel title="Sync holati" subtitle="oxirgi 10 ta operatsiya">
+              <div className="px-4 py-3 space-y-3">
+                {/* Big % */}
+                <div className="flex items-end justify-between">
+                  <div>
+                    <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">{syncStats.successRate}%</div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Muvaffaqiyat</div>
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">Real-time</div>
+                  <Link href={`/${locale}/sync-logs`}>
+                    <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                      Tafsilot <ChevronRight className="h-3 w-3" />
+                    </button>
+                  </Link>
+                </div>
+
+                {/* Progress bar */}
+                <div className="h-1.5 bg-slate-100 rounded-sm overflow-hidden flex">
+                  <div className="bg-emerald-500 transition-all" style={{ width: `${(syncStats.success / Math.max(1, syncStats.total)) * 100}%` }} />
+                  <div className="bg-amber-500 transition-all" style={{ width: `${(syncStats.partial / Math.max(1, syncStats.total)) * 100}%` }} />
+                  <div className="bg-rose-500 transition-all" style={{ width: `${(syncStats.failed / Math.max(1, syncStats.total)) * 100}%` }} />
+                  <div className="bg-blue-500 transition-all" style={{ width: `${(syncStats.running / Math.max(1, syncStats.total)) * 100}%` }} />
+                </div>
+
+                {/* Counts */}
+                <div className="grid grid-cols-4 gap-2 text-center pt-1">
+                  <Mini label="OK" value={syncStats.success} tone="emerald" />
+                  <Mini label="Qisman" value={syncStats.partial} tone="amber" />
+                  <Mini label="Xato" value={syncStats.failed} tone="rose" />
+                  <Mini label="Run" value={syncStats.running} tone="blue" />
                 </div>
               </div>
+            </DataPanel>
 
-              {recentLoading ? (
-                <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12" />)}</div>
-              ) : (recent?.items || []).length === 0 ? (
-                <div className="text-sm text-slate-400 text-center py-8">Faollik yo'q</div>
+            {/* Banks breakdown */}
+            <DataPanel title="Banklar bo'yicha taqsimot" subtitle={`${byBank.length} ta bank`}>
+              {byBank.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500">Banklar yo'q</div>
               ) : (
-                <div className="space-y-2 max-h-[400px] overflow-y-auto -mx-2 px-2">
-                  {recent!.items.slice(0, 6).map((it: any) => {
-                    const counterparty = it.direction === 'IN' ? it.fromName : it.toName;
+                <div className="divide-y divide-slate-100">
+                  {byBank.map((b) => {
+                    const pct = totalBalance > 0 ? (b.balance / totalBalance) * 100 : 0;
                     return (
-                      <div key={it.id} className="flex items-start gap-3 p-2 rounded-lg hover:bg-slate-50/80 transition-colors">
-                        <div className={cn(
-                          "w-8 h-8 rounded-full grid place-items-center shrink-0 mt-0.5",
-                          it.direction === 'IN'
-                            ? "bg-gradient-to-br from-emerald-400 to-teal-500 text-white"
-                            : "bg-gradient-to-br from-rose-400 to-red-500 text-white",
-                        )}>
-                          {it.direction === 'IN' ? <ArrowDownLeft className="h-3.5 w-3.5" /> : <ArrowUpRight className="h-3.5 w-3.5" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-semibold truncate">{counterparty || '—'}</div>
-                          <div className={cn(
-                            "text-xs font-bold tabular-nums",
-                            it.direction === 'IN' ? 'text-emerald-600' : 'text-rose-600',
-                          )}>
-                            {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
+                      <div key={b.id} className="px-4 py-2.5">
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
+                            <span className="text-[12px] font-semibold text-slate-900 truncate">{b.name}</span>
+                            <span className="text-[10px] text-slate-500 shrink-0">{b.accounts} hsb</span>
                           </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">{formatDateTime(it.txnDate)}</div>
+                          <span className="text-[11px] font-bold tabular-nums text-slate-700">{pct.toFixed(1)}%</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1 bg-slate-100 rounded-sm overflow-hidden">
+                            <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: b.color }} />
+                          </div>
+                          <span className="text-[10px] tabular-nums text-slate-600 font-mono w-24 text-right">
+                            {formatMoney(b.balance).replace(' UZS', '')}
+                          </span>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </DataPanel>
 
-        {/* ═══ Top accounts strip ═══ */}
-        <Card className="border-0 shadow-soft overflow-hidden">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between p-6 pb-4">
-              <div>
-                <div className="text-base font-semibold tracking-tight">Eng katta hisoblar</div>
-                <div className="text-xs text-slate-500 mt-0.5">Qoldiq bo'yicha</div>
-              </div>
-              <Link href={`/${locale}/accounts`}>
-                <Button variant="outline" size="sm" className="gap-1.5 h-8 rounded-full px-4 text-xs hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700">
-                  {totalAccounts} ta <ArrowRight className="h-3.5 w-3.5" />
-                </Button>
-              </Link>
-            </div>
-            {accLoading ? (
-              <div className="px-6 pb-6 space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-14" />)}</div>
-            ) : (accounts?.items || []).length === 0 ? (
-              <EmptyState icon={Wallet} title="Hali hisob qo'shilmagan" description="Sozlash → Bank ulanishi → Hisob qo'shing" />
-            ) : (
-              <div>
-                {(accounts!.items as any[])
-                  .slice()
-                  .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))
-                  .slice(0, 5)
-                  .map((a, i, arr) => {
-                    const color = BANK_COLORS[byBank.findIndex((b) => b.id === a.bankId) % BANK_COLORS.length];
-                    return (
-                      <div key={a.id} className={cn(
-                        "flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50/80 transition-colors",
-                        i < arr.length - 1 && "border-b border-slate-100",
-                      )}>
-                        <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 shadow-sm text-white"
-                          style={{ background: `linear-gradient(135deg, ${color}, ${color}cc)` }}>
-                          <Building2 className="h-[18px] w-[18px]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-semibold truncate">{a.bank?.name || '—'}</div>
-                          <div className="font-mono text-[11px] text-slate-500 truncate">{a.accountNo}</div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <div className="font-bold tabular-nums tracking-tight">{formatMoney(Number(a.balance || 0), a.currency)}</div>
-                          <div className="text-[10px] text-slate-400 flex items-center gap-1 justify-end">
-                            {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : 'Sync yo\'q'}
+            {/* Recent failures alerts */}
+            {syncStats.failed > 0 && (
+              <DataPanel title="Diqqat" subtitle={`${syncStats.failed} ta sync xatosi`} tone="warning">
+                <div className="divide-y divide-slate-100">
+                  {(syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 3).map((l) => (
+                    <Link key={l.id} href={`/${locale}/sync-logs`} className="block">
+                      <div className="px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[11px] font-semibold text-slate-900 truncate">{l.source}</div>
+                            <div className="text-[10px] text-slate-500 line-clamp-2">{l.errorMessage}</div>
+                            <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{formatDateTime(l.startedAt)}</div>
                           </div>
                         </div>
                       </div>
-                    );
-                  })}
-              </div>
+                    </Link>
+                  ))}
+                </div>
+              </DataPanel>
             )}
-          </CardContent>
-        </Card>
+
+            {/* Net flow widget */}
+            <DataPanel title="Sof pul oqimi · 30 kun">
+              <div className="px-4 py-3">
+                <div className={cn(
+                  "text-3xl font-bold tabular-nums tracking-tight",
+                  netFlow >= 0 ? "text-emerald-700" : "text-rose-700",
+                )}>
+                  {netFlow >= 0 ? '+' : ''}{formatMoney(netFlow).replace(' UZS', '')}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mt-0.5">UZS</div>
+                <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
+                  <div className="rounded bg-emerald-50 border border-emerald-200 px-2 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wider text-emerald-700 font-bold">Kirim</div>
+                    <div className="font-semibold tabular-nums text-emerald-900">{formatMoney(inSum).replace(' UZS', '')}</div>
+                  </div>
+                  <div className="rounded bg-rose-50 border border-rose-200 px-2 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wider text-rose-700 font-bold">Chiqim</div>
+                    <div className="font-semibold tabular-nums text-rose-900">{formatMoney(outSum).replace(' UZS', '')}</div>
+                  </div>
+                </div>
+              </div>
+            </DataPanel>
+
+          </div>
+        </div>
       </div>
     </>
   );
 }
 
-function HeroChip({ icon: Icon, label }: { icon: any; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/25 text-white/95 font-medium text-[12px]">
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-    </span>
-  );
-}
+// ────────────── Components ──────────────
 
-function KpiCard({
-  label, value, icon: Icon, trend, color, spark,
+function DataTile({
+  label, value, unit, tone, loading,
 }: {
   label: string;
   value: string;
-  icon: any;
-  trend?: string;
-  color: 'emerald' | 'rose' | 'indigo' | 'amber';
-  spark?: number[];
+  unit?: string;
+  tone?: 'primary' | 'success' | 'danger';
+  loading?: boolean;
 }) {
-  const map = {
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-100', accent: '#10b981' },
-    rose:    { bg: 'bg-rose-50',    text: 'text-rose-600',    ring: 'ring-rose-100',    accent: '#f43f5e' },
-    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  ring: 'ring-indigo-100',  accent: '#6366f1' },
-    amber:   { bg: 'bg-amber-50',   text: 'text-amber-600',   ring: 'ring-amber-100',   accent: '#f59e0b' },
-  };
-  const c = map[color];
+  const t = {
+    primary: 'text-slate-900',
+    success: 'text-emerald-700',
+    danger: 'text-rose-700',
+  }[tone || 'primary'];
   return (
-    <Card className="border-0 shadow-soft card-hover overflow-hidden">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
-          </div>
-          <div className={cn("w-10 h-10 rounded-xl grid place-items-center ring-1", c.bg, c.text, c.ring)}>
-            <Icon className="h-[18px] w-[18px]" />
-          </div>
+    <div className="bg-white border border-slate-200 rounded px-3 py-2.5 hover:border-slate-300 transition-colors">
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 truncate">{label}</div>
+      {loading ? (
+        <Skeleton className="h-6 w-24" />
+      ) : (
+        <div className="flex items-baseline gap-1">
+          <div className={cn("text-lg font-bold tracking-tight tabular-nums truncate", t)}>{value}</div>
+          {unit && <div className="text-[10px] text-slate-500 font-medium">{unit}</div>}
         </div>
-        <div className="text-2xl lg:text-3xl font-bold tracking-tight tabular-nums">{value}</div>
-        <div className="flex items-center justify-between mt-2">
-          {trend && (
-            <Badge variant="outline" className={cn("text-[10px] font-semibold border-0", c.bg, c.text)}>
-              {trend}
-            </Badge>
+      )}
+    </div>
+  );
+}
+
+function DataPanel({
+  title, subtitle, count, actions, children, tone,
+}: {
+  title: string;
+  subtitle?: string;
+  count?: number;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+  tone?: 'warning' | 'danger';
+}) {
+  const headBg = tone === 'warning' ? 'bg-amber-50/40 border-amber-200' : tone === 'danger' ? 'bg-rose-50/40 border-rose-200' : 'bg-white border-slate-200';
+  return (
+    <div className={cn("bg-white border rounded overflow-hidden", headBg)}>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="text-[12px] font-bold text-slate-900 tracking-tight truncate">{title}</div>
+          {count !== undefined && (
+            <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded tabular-nums">
+              {count}
+            </span>
           )}
-          {spark && (
-            <div className={c.text}>
-              <Sparkline data={spark} width={100} height={32} stroke={c.accent} fill={c.accent} />
-            </div>
-          )}
+          {subtitle && <div className="text-[10px] text-slate-500 truncate">· {subtitle}</div>}
         </div>
-      </CardContent>
-    </Card>
+        {actions}
+      </div>
+      <div className="bg-white">{children}</div>
+    </div>
+  );
+}
+
+function Mini({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
+  const c = {
+    emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700' },
+    amber:   { dot: 'bg-amber-500',   text: 'text-amber-700' },
+    rose:    { dot: 'bg-rose-500',    text: 'text-rose-700' },
+    blue:    { dot: 'bg-blue-500',    text: 'text-blue-700' },
+  }[tone];
+  return (
+    <div className="text-center">
+      <div className={cn("text-[14px] font-bold tabular-nums", c.text)}>{value}</div>
+      <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+        <span className={cn("w-1 h-1 rounded-full", c.dot)} />
+        {label}
+      </div>
+    </div>
   );
 }
