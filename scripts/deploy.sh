@@ -17,6 +17,15 @@ FE_SVC="${DEPLOY_FRONTEND_SERVICE:-xon-tranzactions-frontend}"
 LOG="${DEPLOY_LOG:-/var/log/xon-tranzactions/deploy.log}"
 LOCK="${DEPLOY_LOCK:-/var/run/xon-tranzactions-deploy.lock}"
 
+# Telegram fallback — agar env'da bo'lmasa, shu yerdan ishlatamiz.
+# Bu deploy notifikatsiyalari uchun, oddiy bot.
+TG_BOT_TOKEN="${TG_BOT_TOKEN:-8128088490:AAErnIY_BG5rjdcp45S1OcHyVhiJm5WbUO8}"
+DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
+export TG_BOT_TOKEN DEPLOY_NOTIFY_CHAT
+
+# Node memory limit — kichik serverda OOM'dan saqlanish uchun
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}"
+
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
 
@@ -59,6 +68,21 @@ run() {
 }
 
 cd "$REPO" || { log "✗ repo papkasi yo'q: $REPO"; tg "❌ <b>Deploy xato</b>: repo papkasi yo'q ($REPO)"; exit 1; }
+
+# 0. Backend .env'ga Telegram token'ni qo'shamiz (agar yo'q bo'lsa)
+ensure_env_var() {
+  local file="$1" key="$2" value="$3"
+  [ -f "$file" ] || touch "$file"
+  if grep -q "^${key}=" "$file" 2>/dev/null; then
+    return 0  # allaqachon bor
+  fi
+  printf '%s=%s\n' "$key" "$value" >> "$file"
+  log "→ $file ga $key qo'shildi"
+}
+if [ -d "$REPO/backend" ]; then
+  ensure_env_var "$REPO/backend/.env" "TG_BOT_TOKEN" "$TG_BOT_TOKEN"
+  ensure_env_var "$REPO/backend/.env" "DEPLOY_NOTIFY_CHAT" "$DEPLOY_NOTIFY_CHAT"
+fi
 
 # 1. Kodni tortib olish
 if ! run "git fetch" git fetch --all --prune; then
