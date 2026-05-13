@@ -61,7 +61,7 @@ export class KapitalbankClient {
     this.forwarderUrl = config.get<string>('BANK_FORWARDER_URL');
     this.forwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
     if (this.forwarderUrl) {
-      this.logger.log(`🔀 Bank PHP forwarder: ${this.forwarderUrl}`);
+      this.logger.log(`🔀 Bank PHP forwarder ulandi: ${this.forwarderUrl}`);
     }
 
     // HTTPS proxy (Tinyproxy VPS uchun) — fallback
