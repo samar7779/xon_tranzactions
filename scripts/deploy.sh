@@ -24,7 +24,9 @@ DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
 export TG_BOT_TOKEN DEPLOY_NOTIFY_CHAT
 
 # Node memory limit — kichik serverda OOM'dan saqlanish uchun
-export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=1536}"
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=2048}"
+# Next.js telemetry o'chirish — build vaqtini va ozini tezroq qiladi
+export NEXT_TELEMETRY_DISABLED=1
 
 mkdir -p "$(dirname "$LOG")" 2>/dev/null || true
 mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
@@ -69,7 +71,28 @@ run() {
 
 cd "$REPO" || { log "✗ repo papkasi yo'q: $REPO"; tg "❌ <b>Deploy xato</b>: repo papkasi yo'q ($REPO)"; exit 1; }
 
-# 0. Backend .env'ga Telegram token'ni qo'shamiz (agar yo'q bo'lsa)
+# 0a. Swap fayli — Next.js build OOM'dan saqlanish uchun (kichik VM uchun)
+SWAP_FILE="/swapfile_xon"
+if ! swapon --show 2>/dev/null | grep -q "$SWAP_FILE"; then
+  if [ ! -f "$SWAP_FILE" ]; then
+    log "→ swap fayli yaratish (2GB)"
+    if sudo -n fallocate -l 2G "$SWAP_FILE" 2>>"$LOG"; then
+      sudo -n chmod 600 "$SWAP_FILE" 2>>"$LOG"
+      sudo -n mkswap "$SWAP_FILE" >> "$LOG" 2>&1
+      sudo -n swapon "$SWAP_FILE" >> "$LOG" 2>&1 && log "✓ swap yoqildi (2GB)" || log "✗ swap yoqilmadi"
+    else
+      log "✗ swap yaratilmadi — sudo ruxsati yo'q"
+    fi
+  else
+    sudo -n swapon "$SWAP_FILE" >> "$LOG" 2>&1 && log "✓ mavjud swap yoqildi" || log "ℹ swap allaqachon yoqilgan"
+  fi
+fi
+
+# 0b. RAM/disk holatini lojikiga yozamiz
+log "RAM: $(free -h 2>/dev/null | awk '/^Mem:/ {print $3"/"$2}')"
+log "Disk: $(df -h "$REPO" 2>/dev/null | awk 'NR==2 {print $3"/"$2" ("$5" used)"}')"
+
+# 0c. Backend .env'ga Telegram token'ni qo'shamiz (agar yo'q bo'lsa)
 ensure_env_var() {
   local file="$1" key="$2" value="$3"
   [ -f "$file" ] || touch "$file"
@@ -156,8 +179,14 @@ if [ "$need_fe" = "1" ]; then
       tg "🧹 .next tozalandi"
     fi
     if ! run "frontend build" npm run build; then
-      lastErr=$(tail -50 "$LOG" | grep -E "Error|Failed|killed|Killed" | tail -5 | tr '\n' ' ' | head -c 500)
-      tg "❌ <b>Frontend build muvaffaqiyatsiz</b>%0A<code>$(esc "$lastErr")</code>"
+      # Build log'idan oxirgi 30 satrni telegram'ga yuboramiz — aniq xato sabab
+      tail -30 "$LOG" | tail -c 3500 > /tmp/build-err.txt
+      curl -sS -m 15 \
+        -d chat_id="${DEPLOY_NOTIFY_CHAT}" \
+        -F document=@/tmp/build-err.txt \
+        -F caption="❌ Frontend build muvaffaqiyatsiz — log oxiri" \
+        "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" >> "$LOG" 2>&1 || true
+      tg "❌ <b>Frontend build muvaffaqiyatsiz</b> — log fayli yuborildi"
       exit 1
     fi
     tg "✅ Frontend build tugadi"
