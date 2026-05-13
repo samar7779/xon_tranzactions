@@ -9,6 +9,7 @@
     "accounts": "Accounts",
     "credentials": "Bank connections",
     "banks": "Banks",
+    "apiExplorer": "API Explorer",
     "syncLogs": "Sync logs",
     "adminUsers": "Admins",
     "roles": "Roles",

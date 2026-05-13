@@ -1,0 +1,591 @@
+'use client';
+
+import { useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  Wifi, Send, Loader2, Eye, EyeOff, Copy, Check, ChevronRight,
+  CheckCircle2, XCircle, Database, Sparkles, AlertCircle, ArrowDown,
+  Building2, KeyRound, Calendar, Search, FileText, Zap,
+} from 'lucide-react';
+import { Topbar } from '@/components/topbar';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+
+type Step = 'login' | 'transactions' | 'account';
+
+export default function ApiExplorerPage() {
+  const [step, setStep] = useState<Step>('login');
+  const [showPwd, setShowPwd] = useState(false);
+  const [form, setForm] = useState({
+    baseUrl: 'https://m.bank24.uz:2713/Mobile.svc',
+    bankPreset: 'kapitalbank',
+    login: '',
+    loginPrefix: 'IB#',
+    password: '',
+    smsCode: '',
+    branch: '',
+    account: '',
+    date: '',
+  });
+
+  const { data: banks } = useQuery({
+    queryKey: ['banks'],
+    queryFn: () => api.get<{ items: any[] }>('/banks'),
+  });
+
+  const fullLogin = form.loginPrefix + form.login;
+
+  const loginMut = useMutation({
+    mutationFn: () => api.post<any>('/api-explorer/kapitalbank/login', {
+      baseUrl: form.baseUrl,
+      login: fullLogin,
+      password: form.password,
+      smsCode: form.smsCode || undefined,
+    }),
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success(`✓ Ulanish muvaffaqiyatli (${r.summary?.totalAccounts} hisob)`);
+        // Auto-fill first account/branch if found
+        if (r.result?.clients?.[0]?.accounts?.[0]) {
+          const a = r.result.clients[0].accounts[0];
+          setForm((s) => ({ ...s, branch: a.branch, account: a.account }));
+        }
+      } else toast.error(r.error || 'Xato');
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
+
+  const txnsMut = useMutation({
+    mutationFn: () => api.post<any>('/api-explorer/kapitalbank/transactions', {
+      baseUrl: form.baseUrl,
+      login: fullLogin,
+      password: form.password,
+      branch: form.branch,
+      account: form.account,
+      date: form.date || undefined,
+    }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success(`✓ ${r.summary?.itemsCount} ta tranzaksiya olindi`);
+      else toast.error(r.error || 'Xato');
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
+
+  const accMut = useMutation({
+    mutationFn: () => api.post<any>('/api-explorer/kapitalbank/account', {
+      baseUrl: form.baseUrl,
+      login: fullLogin,
+      password: form.password,
+      branch: form.branch,
+      account: form.account,
+    }),
+    onSuccess: (r) => {
+      if (r.ok) toast.success('✓ Hisob ma\'lumotlari olindi');
+      else toast.error(r.error || 'Xato');
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
+
+  function selectBank(code: string) {
+    const b = banks?.items.find((x: any) => x.code === code);
+    if (b) {
+      setForm({ ...form, baseUrl: b.apiBaseUrl || '', bankPreset: code });
+    }
+  }
+
+  return (
+    <>
+      <Topbar
+        title="API Explorer"
+        subtitle="Bank API'dan keladigan barcha ma'lumotlarni tekshirish"
+        actions={
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 ring-1 ring-amber-200/40 text-[11px] font-semibold text-white backdrop-blur-sm">
+            <Zap className="h-3 w-3" /> DEV / DEBUG
+          </span>
+        }
+      />
+
+      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+
+        {/* ═══ STEPS PROGRESS ═══ */}
+        <div className="flex items-center gap-2">
+          <StepChip num={1} label="Bank ulanishi" active={step === 'login'} done={loginMut.data?.ok} onClick={() => setStep('login')} />
+          <ChevronRight className="h-4 w-4 text-slate-300" />
+          <StepChip num={2} label="Tranzaksiyalar" active={step === 'transactions'} done={txnsMut.data?.ok} onClick={() => setStep('transactions')} disabled={!loginMut.data?.ok} />
+          <ChevronRight className="h-4 w-4 text-slate-300" />
+          <StepChip num={3} label="Hisob saldo" active={step === 'account'} done={accMut.data?.ok} onClick={() => setStep('account')} disabled={!loginMut.data?.ok} />
+        </div>
+
+        {/* ═══ FORM ═══ */}
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <CardContent className="p-6 space-y-4">
+            {/* Bank presets */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank tanlash</Label>
+              <div className="flex flex-wrap gap-2">
+                {(banks?.items || []).map((b: any) => (
+                  <button
+                    key={b.id}
+                    onClick={() => selectBank(b.code)}
+                    className={cn(
+                      "inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all",
+                      form.bankPreset === b.code
+                        ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                        : "bg-slate-50 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100",
+                    )}
+                  >
+                    <Building2 className="h-3.5 w-3.5" />
+                    {b.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Form fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">API Endpoint</Label>
+                <Input
+                  value={form.baseUrl}
+                  onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                  className="font-mono text-sm h-10 rounded-xl"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Login prefix</Label>
+                <Input
+                  value={form.loginPrefix}
+                  onChange={(e) => setForm({ ...form, loginPrefix: e.target.value })}
+                  className="font-mono text-sm h-10 rounded-xl"
+                  placeholder="IB#"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Login nomi</Label>
+                <Input
+                  value={form.login}
+                  onChange={(e) => setForm({ ...form, login: e.target.value })}
+                  className="font-mono text-sm h-10 rounded-xl"
+                  placeholder="username"
+                />
+              </div>
+
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Parol</Label>
+                <div className="relative">
+                  <Input
+                    type={showPwd ? 'text' : 'password'}
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="font-mono text-sm h-10 rounded-xl pr-10"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((s) => !s)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  >
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {step !== 'login' && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Branch (MFO)</Label>
+                    <Input
+                      value={form.branch}
+                      onChange={(e) => setForm({ ...form, branch: e.target.value })}
+                      className="font-mono text-sm h-10 rounded-xl"
+                      placeholder="00974"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob raqami</Label>
+                    <Input
+                      value={form.account}
+                      onChange={(e) => setForm({ ...form, account: e.target.value })}
+                      className="font-mono text-sm h-10 rounded-xl"
+                      placeholder="20208000..."
+                    />
+                  </div>
+                </>
+              )}
+
+              {step === 'transactions' && (
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Sana (dd.MM.yyyy)</Label>
+                  <Input
+                    value={form.date}
+                    onChange={(e) => setForm({ ...form, date: e.target.value })}
+                    className="font-mono text-sm h-10 rounded-xl"
+                    placeholder="bugungi sana (default)"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Run button */}
+            <div className="flex items-center gap-3 pt-2">
+              {step === 'login' && (
+                <Button
+                  onClick={() => loginMut.mutate()}
+                  disabled={loginMut.isPending || !form.login || !form.password}
+                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                >
+                  {loginMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
+                  APILogin tekshirish
+                </Button>
+              )}
+              {step === 'transactions' && (
+                <Button
+                  onClick={() => txnsMut.mutate()}
+                  disabled={txnsMut.isPending || !form.branch || !form.account}
+                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                >
+                  {txnsMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  GetDoc1C — Tranzaksiyalarni olish
+                </Button>
+              )}
+              {step === 'account' && (
+                <Button
+                  onClick={() => accMut.mutate()}
+                  disabled={accMut.isPending || !form.branch || !form.account}
+                  className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
+                >
+                  {accMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
+                  GetAcc1C — Hisob saldo
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ═══ RESULTS ═══ */}
+        {step === 'login' && loginMut.data && <LoginResult data={loginMut.data} onPickAccount={(branch, account) => { setForm({ ...form, branch, account }); setStep('transactions'); }} />}
+        {step === 'transactions' && txnsMut.data && <TransactionsResult data={txnsMut.data} />}
+        {step === 'account' && accMut.data && <AccountResult data={accMut.data} />}
+      </div>
+    </>
+  );
+}
+
+// ────────────── Components ──────────────
+
+function StepChip({
+  num, label, active, done, disabled, onClick,
+}: {
+  num: number;
+  label: string;
+  active?: boolean;
+  done?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors",
+        active && "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
+        !active && done && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
+        !active && !done && !disabled && "bg-slate-50 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100",
+        disabled && "bg-slate-50 text-slate-400 ring-1 ring-slate-100 cursor-not-allowed",
+      )}
+    >
+      <span className={cn(
+        "w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold",
+        active && "bg-indigo-600 text-white",
+        !active && done && "bg-emerald-500 text-white",
+        !active && !done && "bg-slate-200 text-slate-700",
+      )}>{done ? <Check className="h-3 w-3" /> : num}</span>
+      {label}
+    </button>
+  );
+}
+
+function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branch: string, account: string) => void }) {
+  if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
+
+  const { summary, result } = data;
+  return (
+    <>
+      <SuccessCard
+        title="APILogin muvaffaqiyatli"
+        duration={data.durationMs}
+        summary={[
+          { label: 'Klient', value: summary?.name || '—' },
+          { label: 'STIR', value: summary?.inn || '—', mono: true },
+          { label: 'Hisoblar', value: String(summary?.totalAccounts || 0) },
+          { label: 'Session ID', value: summary?.sid?.slice(0, 12) + '...' || '—', mono: true },
+        ]}
+      />
+
+      {/* Accounts list */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <CardContent className="p-0">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <div className="text-base font-semibold tracking-tight">Mavjud hisoblar</div>
+            <div className="text-xs text-slate-500 mt-0.5">Tranzaksiyalarini olish uchun birini tanlang</div>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {(result?.clients || []).flatMap((c: any) =>
+              (c.accounts || []).map((a: any) => ({ ...a, clientName: c.name, clientInn: c.inn }))
+            ).map((a: any, i: number) => (
+              <button
+                key={i}
+                onClick={() => onPickAccount(a.branch, a.account)}
+                className="w-full px-6 py-3.5 flex items-center gap-4 hover:bg-slate-50/60 transition-colors text-left"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center text-white shrink-0">
+                  <Building2 className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-mono text-[12px] font-semibold">{a.account}</div>
+                  <div className="text-[11px] text-slate-500">MFO {a.branch} · {a.name || a.clientName}</div>
+                </div>
+                <ChevronRight className="h-4 w-4 text-slate-400" />
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Raw JSON */}
+      <JsonViewer title="To'liq raw javob" json={result} />
+    </>
+  );
+}
+
+function TransactionsResult({ data }: { data: any }) {
+  if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
+
+  const { summary, result } = data;
+  const items = result?.content || [];
+  const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
+
+  return (
+    <>
+      <SuccessCard
+        title={`${summary?.itemsCount || 0} ta tranzaksiya · ${data.date}`}
+        duration={data.durationMs}
+        summary={[
+          { label: 'Operatsion kun', value: summary?.operDay || '—' },
+          { label: 'Kiruvchi saldo', value: fmt(summary?.saldoIn) + ' UZS' },
+          { label: 'Jami kirim', value: fmt(summary?.totalCredit) + ' UZS', accent: 'emerald' },
+          { label: 'Jami chiqim', value: fmt(summary?.totalDebit) + ' UZS', accent: 'rose' },
+        ]}
+      />
+
+      {/* Field saved/not-saved analysis */}
+      {summary?.fieldsInFirstItem?.length > 0 && (
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              <div className="text-base font-semibold tracking-tight">Tranzaksiya field tahlili</div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-emerald-700 font-semibold mb-2 flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  Saqlanyapti ({summary.fieldsSaved.length})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {summary.fieldsSaved.filter((f: string) => summary.fieldsInFirstItem.includes(f)).map((f: string) => (
+                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{f}</span>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-rose-700 font-semibold mb-2 flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  Saqlanmaydi ({summary.fieldsNotSaved.length})
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {summary.fieldsNotSaved.map((f: string) => (
+                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 ring-1 ring-rose-200">{f}</span>
+                  ))}
+                </div>
+                {summary.fieldsNotSaved.length > 0 && (
+                  <div className="text-[10px] text-slate-500 mt-2">
+                    Bu fieldlar bizning DB'da saqlanmaydi. Agar kerak bo'lsa schema'ga qo'shamiz.
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Items preview */}
+      {items.length > 0 && (
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <CardContent className="p-0">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <div className="text-base font-semibold tracking-tight">Tranzaksiyalar (birinchi 5 ta)</div>
+                <div className="text-xs text-slate-500 mt-0.5">Pastda to'liq JSON ko'rinishi</div>
+              </div>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {items.slice(0, 5).map((it: any, i: number) => (
+                <div key={i} className="px-6 py-3 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Yo'nalish · Sana</div>
+                    <div>
+                      <span className={cn(
+                        "inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1",
+                        it.dir === 2 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700",
+                      )}>{it.dir === 2 ? 'KIRIM' : 'CHIQIM'}</span>
+                      <span className="font-mono">{it.ddate}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Summa</div>
+                    <div className="font-bold tabular-nums">{fmt(it.amount)} UZS</div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <div className="text-[10px] text-slate-500 uppercase tracking-wider mb-0.5">Kontragent</div>
+                    <div className="truncate">{it.dir === 2 ? it.name_dt : it.name_ct}</div>
+                    <div className="font-mono text-[10px] text-slate-500 truncate">{it.dir === 2 ? it.inn_dt : it.inn_ct}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Raw JSON */}
+      <JsonViewer title="To'liq raw javob (GetDoc1C)" json={result} />
+    </>
+  );
+}
+
+function AccountResult({ data }: { data: any }) {
+  if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
+  const accounts = data.result || [];
+  return (
+    <>
+      <SuccessCard
+        title="GetAcc1C muvaffaqiyatli"
+        duration={data.durationMs}
+        summary={[
+          { label: 'Topilgan hisoblar', value: String(accounts.length) },
+          { label: 'Field soni', value: String(data.summary?.fieldsInFirst?.length || 0) },
+        ]}
+      />
+      <JsonViewer title="To'liq raw javob (GetAcc1C)" json={data.result} />
+    </>
+  );
+}
+
+function SuccessCard({
+  title, duration, summary,
+}: {
+  title: string;
+  duration: number;
+  summary: { label: string; value: string; mono?: boolean; accent?: 'emerald' | 'rose' }[];
+}) {
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-600" />
+      <CardContent className="p-6">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shrink-0">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="text-base font-bold tracking-tight">{title}</div>
+              <div className="text-xs text-slate-500">{duration} ms da bajarildi</div>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {summary.map((s, i) => (
+            <div key={i} className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">{s.label}</div>
+              <div className={cn(
+                "text-sm font-bold tracking-tight truncate",
+                s.mono && "font-mono text-[12px]",
+                s.accent === 'emerald' && "text-emerald-700",
+                s.accent === 'rose' && "text-rose-700",
+              )}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ErrorCard({ error, duration }: { error: string; duration: number }) {
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="h-1.5 bg-gradient-to-r from-rose-500 to-red-600" />
+      <CardContent className="p-6">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-red-600 grid place-items-center text-white shrink-0">
+            <XCircle className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold tracking-tight">Xato</div>
+            <div className="text-xs text-slate-500 mb-2">{duration} ms</div>
+            <div className="text-sm text-rose-700 bg-rose-50 ring-1 ring-rose-200 rounded-lg px-3 py-2 font-mono break-words">
+              {error}
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function JsonViewer({ title, json }: { title: string; json: any }) {
+  const [copied, setCopied] = useState(false);
+  const str = JSON.stringify(json, null, 2);
+
+  function copy() {
+    navigator.clipboard.writeText(str);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <CardContent className="p-0">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-slate-600" />
+            <div className="text-base font-semibold tracking-tight">{title}</div>
+            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+              {str.length.toLocaleString()} bayt
+            </span>
+          </div>
+          <Button size="sm" variant="outline" onClick={copy} className="h-8 gap-1.5 rounded-full text-xs">
+            {copied ? <><Check className="h-3.5 w-3.5 text-emerald-600" /> Nusxalandi</> : <><Copy className="h-3.5 w-3.5" /> Nusxalash</>}
+          </Button>
+        </div>
+        <pre className="px-6 py-4 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto bg-slate-50/40">
+          <code className="text-slate-700">{str}</code>
+        </pre>
+      </CardContent>
+    </Card>
+  );
+}

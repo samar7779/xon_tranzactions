@@ -9,6 +9,7 @@
     "accounts": "Счета",
     "credentials": "Подключения к банкам",
     "banks": "Банки",
+    "apiExplorer": "API Explorer",
     "syncLogs": "История синхронизации",
     "adminUsers": "Администраторы",
     "roles": "Роли",
