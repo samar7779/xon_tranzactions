@@ -80,7 +80,7 @@ export default function AccountsPage() {
   });
   const toggleSyncMut = useMutation({
     mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      api.put(`/bank-accounts/${id}`, { syncEnabled: enabled }),
+      api.patch(`/bank-accounts/${id}`, { syncEnabled: enabled }),
     onSuccess: () => { toast.success(tc('success')); qc.invalidateQueries({ queryKey: ['bank-accounts'] }); },
     onError: (e: any) => toast.error(e?.message),
   });
