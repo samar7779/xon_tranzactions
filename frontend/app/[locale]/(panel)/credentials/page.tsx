@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Wifi, AlertCircle, CheckCircle2, KeyRound, MoreVertical,
-  Activity, RefreshCw, Lock, Shield, Globe,
+  Activity, RefreshCw, Lock, Shield, Globe, Eye, EyeOff, Copy, Check,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -25,6 +25,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { cn, formatDateTime } from '@/lib/utils';
 
 const BANK_COLORS = [
@@ -40,6 +41,9 @@ export default function CredentialsPage() {
   const t = useTranslations('credentials');
   const tc = useTranslations('common');
   const qc = useQueryClient();
+  const me = useAuth((s) => s.user);
+  const isSuperAdmin = me?.role === 'SUPERADMIN';
+  const [revealed, setRevealed] = useState<any>(null);
 
   const { data: creds, isLoading } = useQuery({
     queryKey: ['bank-credentials'],
@@ -69,6 +73,12 @@ export default function CredentialsPage() {
       qc.invalidateQueries({ queryKey: ['bank-credentials'] });
     },
     onError: (e: any) => toast.error(`${t('testFailed')}: ${e?.message}`),
+  });
+
+  const revealMut = useMutation({
+    mutationFn: (id: string) => api.get<any>(`/bank-credentials/${id}/reveal-password`),
+    onSuccess: (r) => setRevealed(r),
+    onError: (e: any) => toast.error(e?.message || 'Parolni ko\'rish uchun ruxsat yo\'q'),
   });
 
   const list = creds?.items || [];
@@ -122,6 +132,7 @@ export default function CredentialsPage() {
                   status={status}
                   onTest={() => testMut.mutate(c.id)}
                   onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(c.id)}
+                  onReveal={isSuperAdmin ? () => revealMut.mutate(c.id) : undefined}
                   testing={testMut.isPending}
                 />
               );
@@ -129,7 +140,83 @@ export default function CredentialsPage() {
           </div>
         )}
       </div>
+
+      {/* Parolni ko'rsatish modali */}
+      <RevealPasswordDialog data={revealed} onClose={() => setRevealed(null)} />
     </>
+  );
+}
+
+function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => void }) {
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showPwd, setShowPwd] = useState(false);
+
+  function copy(field: string, value: string) {
+    navigator.clipboard.writeText(value);
+    setCopiedField(field);
+    toast.success(`${field} nusxalandi`);
+    setTimeout(() => setCopiedField(null), 2000);
+  }
+
+  if (!data) return null;
+
+  return (
+    <Dialog open={!!data} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-6 py-4 text-white">
+          <div className="flex items-center gap-2 mb-1">
+            <Eye className="h-4 w-4" />
+            <span className="text-[11px] uppercase tracking-wider font-bold">Maxfiy ma'lumotlar</span>
+          </div>
+          <div className="text-base font-bold tracking-tight">{data.label}</div>
+          <div className="text-xs text-white/80">{data.bank}</div>
+        </div>
+        <div className="p-5 space-y-3">
+          <RevealRow label="Login" value={data.loginFull} onCopy={() => copy('Login', data.loginFull)} copied={copiedField === 'Login'} />
+          <RevealRow label="Bank MFO" value={data.branch || '—'} onCopy={() => copy('MFO', data.branch || '')} copied={copiedField === 'MFO'} />
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Parol</div>
+            <div className="flex items-center gap-2 bg-amber-50 ring-1 ring-amber-200 rounded-xl px-3 py-2.5">
+              <code className="flex-1 font-mono text-sm text-slate-900 break-all select-all">
+                {showPwd ? data.password : '•'.repeat(Math.min(data.password.length, 16))}
+              </code>
+              <button
+                type="button"
+                onClick={() => setShowPwd((s) => !s)}
+                className="text-amber-700 hover:text-amber-900 shrink-0 p-1"
+              >
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => copy('Parol', data.password)}
+                className="text-amber-700 hover:text-amber-900 shrink-0 p-1"
+              >
+                {copiedField === 'Parol' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-rose-600">
+              <Shield className="h-3 w-3" />
+              Ehtiyot bo'ling: parolni faqat ishonchli joyda nusxalang. Bu amal logga yoziladi.
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RevealRow({ label, value, onCopy, copied }: { label: string; value: string; onCopy: () => void; copied: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">{label}</div>
+      <div className="flex items-center gap-2 bg-slate-50 ring-1 ring-slate-200 rounded-xl px-3 py-2">
+        <code className="flex-1 font-mono text-sm text-slate-900 break-all">{value}</code>
+        <button type="button" onClick={onCopy} className="text-slate-500 hover:text-slate-900 shrink-0 p-1">
+          {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -164,13 +251,14 @@ function KpiTile({
 }
 
 function CredentialCard({
-  cred: c, color, status, onTest, onDelete, testing,
+  cred: c, color, status, onTest, onDelete, onReveal, testing,
 }: {
   cred: any;
   color: { from: string; to: string };
   status: 'ok' | 'error' | 'untested';
   onTest: () => void;
   onDelete: () => void;
+  onReveal?: () => void;
   testing: boolean;
 }) {
   return (
@@ -199,6 +287,11 @@ function CredentialCard({
               <DropdownMenuItem onClick={onTest} disabled={testing}>
                 <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> Ulanishni tekshirish
               </DropdownMenuItem>
+              {onReveal && (
+                <DropdownMenuItem onClick={onReveal} className="text-amber-700">
+                  <Eye className="h-4 w-4 mr-2" /> Parolni ko'rsatish
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-rose-600" onClick={onDelete}>
                 <Trash2 className="h-4 w-4 mr-2" /> O'chirish

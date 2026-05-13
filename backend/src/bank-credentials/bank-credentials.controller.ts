@@ -44,4 +44,9 @@ export class BankCredentialsController {
   @Roles('SUPERADMIN', 'ADMIN')
   @ApiOperation({ summary: 'Bankga ulanishni tekshirish (APILogin chaqirilad)' })
   test(@Param('id') id: string) { return this.svc.testConnection(id); }
+
+  @Get(':id/reveal-password')
+  @Roles('SUPERADMIN')
+  @ApiOperation({ summary: "Parolni ochiq holda ko'rsatish (faqat SUPERADMIN)" })
+  reveal(@Param('id') id: string) { return this.svc.revealPassword(id); }
 }
