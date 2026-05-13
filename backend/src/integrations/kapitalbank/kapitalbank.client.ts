@@ -131,34 +131,14 @@ export class KapitalbankClient {
   }
 
   /**
-   * Bank URL'idan forwarder uchun bank kodi va endpoint pathini ajratish.
-   * Foydalanuvchining mavjud bank-proxy.php fayli quyidagi API'ni kutadi:
-   *   POST {forwarder}?bank=BANK&endpoint=/path/to/api
-   */
-  private parseForwarderTarget(url: string): { bank: string; endpoint: string } | null {
-    try {
-      const u = new URL(url);
-      const host = u.host.toLowerCase();
-      let bank: string | null = null;
-      if (host.includes('bank24.uz')) bank = 'kapitalbank';
-      else if (host.includes('ipakyulibank')) bank = 'ipak_yoli';
-      else if (host.includes('hayatbank') || host.includes('hayot')) bank = 'hayot';
-      if (!bank) return null;
-      return { bank, endpoint: u.pathname };
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * PHP forwarder orqali so'rov yuborish (cPanel shared hosting uchun).
-   * ahost'dagi bank-proxy.php fayli so'rovni qabul qilib, bank API'ga uzatadi.
-   * Bank ahost IP'sini ko'radi (whitelist'da).
+   * Xon PHP forwarder (xt-forwarder.php) orqali so'rov yuborish.
+   * PHP fayl xonapp.uz cPanel'da turadi, bank IP whitelist'da bo'lgan IP.
    *
-   * PHP API formati:
-   *   POST {BANK_FORWARDER_URL}?bank=kapitalbank|ipak_yoli|hayot&endpoint=/Mobile.svc/APILogin
-   *   Headers: X-Proxy-Secret, Authorization (passthrough), Content-Type: application/json
-   *   Body: raw bank API request body (JSON)
+   * PHP API formati (clean):
+   *   POST {BANK_FORWARDER_URL}
+   *   Headers: X-Proxy-Secret, Content-Type: application/json
+   *   Body: {url, method, headers, body, timeout}
+   *   Returns: bank javobi (xuddi shunday status + body)
    */
   private async postViaForwarder<T>(
     targetUrl: string,
@@ -166,41 +146,46 @@ export class KapitalbankClient {
     headers: Record<string, string>,
     bankName: string,
   ): Promise<KapitalbankResponse<T>> {
-    const target = this.parseForwarderTarget(targetUrl);
-    if (!target) {
-      throw new ServiceUnavailableException(
-        `${bankName} URL forwarder uchun mos emas: ${targetUrl}`,
-      );
-    }
-
-    const forwarderFullUrl = `${this.forwarderUrl}?bank=${target.bank}&endpoint=${encodeURIComponent(target.endpoint)}`;
-
-    // Forwarder'ga uzatiladigan headerlar — Authorization passthrough qilamiz
-    const fwdHeaders: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Proxy-Secret': this.forwarderSecret!,
-    };
-    if (headers['Authorization']) fwdHeaders['Authorization'] = headers['Authorization'];
-
     try {
       const resp = await firstValueFrom(
-        this.http.post(forwarderFullUrl, body, {
-          headers: fwdHeaders,
-          timeout: this.timeoutMs + 5000,
-        }),
+        this.http.post(
+          this.forwarderUrl!,
+          {
+            url: targetUrl,
+            method: 'POST',
+            headers, // Authorization, Content-Type ham ichida
+            body: JSON.stringify(body),
+            timeout: Math.floor(this.timeoutMs / 1000),
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Proxy-Secret': this.forwarderSecret!,
+            },
+            timeout: this.timeoutMs + 5000,
+          },
+        ),
       );
       // PHP forwarder bank javobini xuddi shunday qaytaradi
       return resp.data as KapitalbankResponse<T>;
     } catch (e: any) {
       const status = e?.response?.status;
       const detail = e?.response?.data || e?.message;
-      this.logger.warn(`${bankName} (forwarder ${target.bank}) ${target.endpoint} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
-      // Agar forwarder'dan kelgan to'liq response bo'lsa — uzatamiz (bank xatosi bo'lishi mumkin)
+      this.logger.warn(`${bankName} (forwarder) ${targetUrl} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
+
+      // Forwarder o'zidan xato qaytargan bo'lsa (auth, IP, host whitelist)
       if (e?.response?.data && typeof e.response.data === 'object' && 'error' in e.response.data) {
+        const err = e.response.data;
+        throw new Error(
+          `Forwarder xatosi: ${err.error}${err.message ? ' — ' + err.message : ''}${err.ip ? ' (IP: ' + err.ip + ')' : ''}${err.host ? ' (host: ' + err.host + ')' : ''}`,
+        );
+      }
+      // Bank o'zining standard javobini qaytargan bo'lsa
+      if (e?.response?.data && typeof e.response.data === 'object' && 'result' in e.response.data) {
         return e.response.data as KapitalbankResponse<T>;
       }
       throw new ServiceUnavailableException(
-        `${bankName} (forwarder orqali) javob bermadi: ${detail?.error || detail?.message || detail || status}`,
+        `${bankName} (forwarder orqali) javob bermadi: ${detail?.message || detail || status}`,
       );
     }
   }
