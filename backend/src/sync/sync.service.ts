@@ -121,7 +121,7 @@ export class SyncService {
           account: acc.accountNo,
           date: dateStr,
           sid: cred.sid && cred.sidExpiresAt && cred.sidExpiresAt > new Date() ? cred.sid : undefined,
-          useProxy: (cred as any).useProxy === true, // future: per-credential proxy flag
+          useProxy: cred.useProxy === true,
         });
         const items = result?.content || [];
         fetched += items.length;

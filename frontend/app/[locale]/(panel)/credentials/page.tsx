@@ -223,6 +223,15 @@ function CredentialCard({
               {c.authMode === 'IP_WHITELIST' ? <><Globe className="h-3 w-3" /> IP Whitelist</> : <><Lock className="h-3 w-3" /> SMS SID</>}
             </span>
           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Yo'l</span>
+            <span className={cn(
+              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
+              c.useProxy ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600",
+            )}>
+              {c.useProxy ? '🔀 ahost orqali' : '↗ to\'g\'ridan-to\'g\'ri'}
+            </span>
+          </div>
         </div>
 
         {/* Status */}
@@ -275,7 +284,7 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
-    bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST',
+    bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST', useProxy: true,
   });
 
   const mut = useMutation({
@@ -284,7 +293,7 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
       toast.success(tc('success'));
       qc.invalidateQueries({ queryKey: ['bank-credentials'] });
       setOpen(false);
-      setForm({ bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST' });
+      setForm({ bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST', useProxy: true });
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -343,7 +352,36 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
           </div>
           <div className="space-y-2">
             <Label>{t('branch')}</Label>
-            <Input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} placeholder="00974" />
+            <Input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="00974" maxLength={5} />
+            <div className="text-[10px] text-slate-500">5 xonalik MFO kod</div>
+          </div>
+
+          {/* ahost proxy toggle */}
+          <div className={cn(
+            "rounded-xl p-3 transition-all flex items-center gap-3 ring-1",
+            form.useProxy ? "bg-emerald-50/60 ring-emerald-200" : "bg-slate-50 ring-slate-200",
+          )}>
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, useProxy: !form.useProxy })}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full ring-1 ring-inset transition-colors",
+                form.useProxy ? "bg-emerald-500 ring-emerald-600" : "bg-slate-300 ring-slate-400",
+              )}
+            >
+              <span className={cn(
+                "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform mt-1",
+                form.useProxy ? "translate-x-6" : "translate-x-1",
+              )} />
+            </button>
+            <div className="flex-1 min-w-0">
+              <div className="text-[12px] font-bold text-slate-900">ahost orqali yuborish</div>
+              <div className="text-[10px] text-slate-600 mt-0.5">
+                {form.useProxy
+                  ? "Bank API'ga so'rovlar ahost (37.153.159.11) orqali — IP whitelist'da bor"
+                  : "To'g'ridan-to'g'ri bizning server (185.228.88.247) dan — whitelist talab qiladi"}
+              </div>
+            </div>
           </div>
         </div>
         <DialogFooter>

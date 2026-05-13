@@ -58,6 +58,7 @@ export class BankCredentialsService {
         branch: dto.branch,
         authMode: dto.authMode || 'IP_WHITELIST',
         isActive: dto.isActive ?? true,
+        useProxy: dto.useProxy ?? false,
       },
     });
     return { ok: true, credential: this.mask(cred) };
@@ -75,6 +76,7 @@ export class BankCredentialsService {
     if (dto.branch !== undefined) data.branch = dto.branch;
     if (dto.authMode !== undefined) data.authMode = dto.authMode;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    if (dto.useProxy !== undefined) data.useProxy = dto.useProxy;
     const cred = await this.prisma.bankCredential.update({ where: { id }, data });
     return { ok: true, credential: this.mask(cred) };
   }
@@ -105,6 +107,7 @@ export class BankCredentialsService {
         baseUrl: c.bank.apiBaseUrl!,
         login,
         password,
+        useProxy: c.useProxy === true,
       });
       const updates: any = {
         lastVerifiedAt: new Date(),

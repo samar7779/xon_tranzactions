@@ -42,6 +42,10 @@ export class CreateCredentialDto {
   @ApiPropertyOptional({ default: true })
   @IsOptional() @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ default: false, description: 'ahost forwarder orqali yuborish' })
+  @IsOptional() @IsBoolean()
+  useProxy?: boolean;
 }
 
 export class UpdateCredentialDto {
@@ -76,4 +80,8 @@ export class UpdateCredentialDto {
   @ApiPropertyOptional()
   @IsOptional() @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsBoolean()
+  useProxy?: boolean;
 }

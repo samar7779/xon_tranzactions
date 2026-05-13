@@ -219,6 +219,7 @@ model BankCredential {
   branch          String?       @db.VarChar(8)                       // MFO
   authMode        BankAuthMode  @default(IP_WHITELIST) @map("auth_mode")
   isActive        Boolean       @default(true) @map("is_active")
+  useProxy        Boolean       @default(false) @map("use_proxy")  // ahost orqali yuborish (IP whitelist'ni chetlab o'tish)
 
   // sessiya holatini ham saqlab qo'yamiz (SMS rejim uchun zaxira)
   sid             String?       @db.VarChar(255)
