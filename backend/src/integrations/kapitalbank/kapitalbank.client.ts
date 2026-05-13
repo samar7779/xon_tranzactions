@@ -52,12 +52,25 @@ export class KapitalbankClient {
     return `Basic ${token}`;
   }
 
+  /** URL'dan bank nomini chiqarib olamiz — xabarlar uchun foydali */
+  private bankNameFromUrl(url: string): string {
+    if (url.includes('ipakyulibank')) return 'Ipak Yo\'li';
+    if (url.includes('bank24.uz')) return 'KapitalBank';
+    if (url.includes('hayot')) return 'Hayot Bank';
+    try {
+      return new URL(url).hostname;
+    } catch {
+      return 'Bank';
+    }
+  }
+
   private async post<T>(url: string, body: any, authHeader?: string, extraHeaders?: Record<string, string>): Promise<KapitalbankResponse<T>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(extraHeaders || {}),
     };
     if (authHeader) headers['Authorization'] = authHeader;
+    const bankName = this.bankNameFromUrl(url);
     try {
       const resp = await firstValueFrom(
         this.http.post(url, body, { headers, timeout: this.timeoutMs }),
@@ -66,16 +79,16 @@ export class KapitalbankClient {
     } catch (e: any) {
       const status = e?.response?.status;
       const detail = e?.response?.data || e?.message;
-      this.logger.warn(`KapitalBank POST ${url} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
+      this.logger.warn(`${bankName} POST ${url} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
       throw new ServiceUnavailableException(
-        `KapitalBank xizmati javob bermadi (${status || 'network'})`,
+        `${bankName} xizmati javob bermadi (${status || 'network'})`,
       );
     }
   }
 
-  private ensureNoError<T>(resp: KapitalbankResponse<T>): T {
+  private ensureNoError<T>(resp: KapitalbankResponse<T>, bankName = 'Bank'): T {
     if (resp.error && resp.error.code !== 0) {
-      throw new Error(`KapitalBank #${resp.error.code}: ${resp.error.message}`);
+      throw new Error(`${bankName} #${resp.error.code}: ${resp.error.message}`);
     }
     return resp.result;
   }
@@ -93,7 +106,7 @@ export class KapitalbankClient {
       : `${params.login}:${params.password}`;
     const authHeader = `Basic ${Buffer.from(cred).toString('base64')}`;
     const resp = await this.post<KbLoginResult>(url, {}, authHeader);
-    return this.ensureNoError(resp);
+    return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 
   /**
@@ -110,7 +123,7 @@ export class KapitalbankClient {
     if (params.sid) body.sid = params.sid;
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
     const resp = await this.post<KbDoc1CResult>(url, body, authHeader);
-    return this.ensureNoError(resp);
+    return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 
   /**
@@ -126,6 +139,6 @@ export class KapitalbankClient {
     if (params.sid) body.sid = params.sid;
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
     const resp = await this.post<KbAccount[]>(url, body, authHeader);
-    return this.ensureNoError(resp);
+    return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 }
