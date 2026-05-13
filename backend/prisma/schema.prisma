@@ -80,11 +80,33 @@ model Transaction {
 
   // Tafsilot
   description   String?   @db.Text
-  reference     String?   @db.VarChar(64)   // bank ref/code
+  reference     String?   @db.VarChar(64)   // uniq — bank ref/code
   purposeCode   String?   @map("purpose_code") @db.VarChar(16)
   docNumber     String?   @map("doc_number") @db.VarChar(64)
   docType       String?   @map("doc_type") @db.VarChar(8)
-  metadata      Json?
+
+  // Bank ID'lari — composite externalId'ni hosil qilish uchun ham, alohida indeks uchun ham
+  bankGeneralId String?   @map("bank_general_id") @db.VarChar(64)  // general_id (NCI)
+  bankB2Id      String?   @map("bank_b2_id") @db.VarChar(64)        // b2_id
+
+  // Bank ichki ma'lumotlari
+  bankClientId  String?   @map("bank_client_id") @db.VarChar(32)    // client_id
+  bankBranch    String?   @map("bank_branch") @db.VarChar(8)        // branch (operatsiya o'tgan filial)
+
+  // Qo'shimcha vaqtlar
+  valueDate     DateTime? @map("value_date") @db.Date               // vdate — mablag' mavjud bo'lish sanasi
+  operationTime String?   @map("operation_time") @db.VarChar(8)     // time HH:mm:ss
+  settlementTime String?  @map("settlement_time") @db.VarChar(8)    // stime
+  inputAt       DateTime? @map("input_at")                          // input_date + input_time birlashtirilgan
+
+  // Anor 24/7 va xato
+  isAnor        Boolean   @default(false) @map("is_anor")           // anor=1
+  bankErrCode   String?   @map("bank_err_code") @db.VarChar(32)     // err
+  bankErrMsg    String?   @map("bank_err_msg") @db.Text             // err_msg
+
+  // To'liq raw javob va kelajakda qo'shilishi mumkin bo'lgan fieldlar uchun
+  metadata      Json?                                                // bank javobining to'liq raw
+  rawExtra      Json?     @map("raw_extra")                          // bizga noma'lum fieldlar (future-proof)
 
   // Bog'lanishlar
   bankId        String?      @map("bank_id")
@@ -117,6 +139,9 @@ model Transaction {
   @@index([customerId])
   @@index([matchStatus])
   @@index([fromInn])
+  @@index([bankB2Id])
+  @@index([bankGeneralId])
+  @@index([valueDate])
   @@map("transactions")
 }
 

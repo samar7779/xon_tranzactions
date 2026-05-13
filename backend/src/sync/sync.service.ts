@@ -9,6 +9,17 @@ import { PaymentsService } from '../payments/payments.service';
 import { TxnDirection, TxnStatus, TxnType, Prisma } from '@prisma/client';
 import { format, parse, subDays } from 'date-fns';
 
+// Bank javobining ma'lum (mapped) fieldlari — Python kodingiz bilan moslangan.
+// Bu set'da bo'lmagan har qanday field rawExtra JSON'iga tushadi.
+const KNOWN_FIELDS = new Set([
+  'time', 'input_date', 'input_time', 'client_id', 'num', 'branch',
+  'general_id', 'b2_id', 'uniq', 'ddate', 'vdate', 'stime',
+  'mfo_dt', 'acc_dt', 'name_dt', 'inn_dt',
+  'mfo_ct', 'acc_ct', 'name_ct', 'inn_ct',
+  'purpose', 'purp_code', 'amount', 'dtype', 'state', 'dir',
+  'err', 'err_msg', 'anor',
+]);
+
 @Injectable()
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
@@ -25,8 +36,34 @@ export class SyncService {
   }
 
   /**
+   * Composite tranzaksiya ID — Python skriptidagi formatga aynan mos:
+   *   {general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
+   * sign = '+' agar bizning hisob acc_dt bo'lsa (chiqim), aks holda '-'
+   */
+  private makeCompositeId(item: KbDoc1CItem, ourAccount: string): string {
+    const sign = item.acc_dt === ourAccount ? '+' : '-';
+    return [
+      item.general_id || 'no_general_id',
+      String(item.num || 'no_num'),
+      item.ddate || 'no_date',
+      item.acc_ct || 'no_acc_ct',
+      item.acc_dt || 'no_acc_dt',
+      item.amount != null ? String(item.amount) : 'no_amount',
+      sign,
+    ].join('_');
+  }
+
+  /** Bank javobida bizga noma'lum fieldlar — rawExtra'ga */
+  private extractRawExtra(item: any): Prisma.InputJsonValue | null {
+    const extra: Record<string, any> = {};
+    for (const [k, v] of Object.entries(item)) {
+      if (!KNOWN_FIELDS.has(k)) extra[k] = v;
+    }
+    return Object.keys(extra).length > 0 ? extra : null;
+  }
+
+  /**
    * Cron har 5 daqiqada (default) — barcha faol credentiallar bo'yicha sync.
-   * .env TXN_SYNC_CRON orqali boshqariladi.
    */
   @Cron(process.env.TXN_SYNC_CRON || '*/5 * * * *')
   async tick() {
@@ -61,11 +98,7 @@ export class SyncService {
     }
 
     const log = await this.prisma.syncLog.create({
-      data: {
-        source: `kb:${cred.id}`,
-        accountId: acc.id,
-        status: 'RUNNING',
-      },
+      data: { source: `kb:${cred.id}`, accountId: acc.id, status: 'RUNNING' },
     });
     const t0 = Date.now();
     const password = this.crypto.decrypt(cred.passwordEnc);
@@ -88,12 +121,13 @@ export class SyncService {
           account: acc.accountNo,
           date: dateStr,
           sid: cred.sid && cred.sidExpiresAt && cred.sidExpiresAt > new Date() ? cred.sid : undefined,
+          useProxy: (cred as any).useProxy === true, // future: per-credential proxy flag
         });
         const items = result?.content || [];
         fetched += items.length;
         for (const item of items) {
           try {
-            const ok = await this.upsertOne(item, acc.id, cred.bankId);
+            const ok = await this.upsertOne(item, acc.id, acc.accountNo, cred.bankId);
             if (ok) saved++;
           } catch (e: any) {
             errors++;
@@ -135,31 +169,54 @@ export class SyncService {
 
   /**
    * KapitalBank doc → bizning Transaction modeli.
-   * b2_id (bank bo'yicha noyob) externalId sifatida ishlatiladi.
-   * Sumalar tiyin (10^-2) — amount Decimal(18,2) ga olib o'tamiz.
+   * externalId = composite (Python kodi formati):
+   *   {general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
+   *
+   * Barcha 29 field saqlanadi (alohida column'lar) + bilmagan fieldlar rawExtra JSON'ga.
+   * Hech qanday ma'lumot yo'qolmaydi.
    */
-  private async upsertOne(item: KbDoc1CItem, accountId: string, bankId: string): Promise<boolean> {
-    const externalId = item.b2_id || item.general_id;
-    if (!externalId) return false;
+  private async upsertOne(
+    item: KbDoc1CItem,
+    accountId: string,
+    accountNo: string,
+    bankId: string,
+  ): Promise<boolean> {
+    if (!item.general_id && !item.b2_id) return false;
 
-    // Ikkilanma yozuvni tekshiramiz
-    const existing = await this.prisma.transaction.findUnique({ where: { externalId } });
+    const externalId = this.makeCompositeId(item, accountNo);
+
+    // Mavjudligini tekshirish: yangi composite ID yoki eski format (b2_id/general_id)
+    const existing = await this.prisma.transaction.findFirst({
+      where: {
+        OR: [
+          { externalId },
+          { externalId: item.b2_id || undefined },
+          { externalId: item.general_id || undefined },
+          { bankB2Id: item.b2_id || undefined },
+        ],
+      },
+    });
     if (existing) return false;
 
-    // sana
+    // Sanalar
     const txnDate = this.parseKbDate(item.ddate) || new Date();
-    // yo'nalish — PDF §9.7: 1 chiqim, 2 kirim
+    const valueDate = this.parseKbDate(item.vdate);
+    const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
+
+    // Yo'nalish: PDF §9.7: 1 chiqim, 2 kirim
     const direction: TxnDirection = item.dir === 2 ? 'IN' : 'OUT';
-    // status — PDF §9.1 (1 introduced, 2 approved, 3 proved, 6 deleted, 16 deferred)
-    const status: TxnStatus = item.state === 3
-      ? 'COMPLETED'
-      : item.state === 6 ? 'CANCELLED'
-      : item.state === 16 ? 'PENDING'
-      : 'COMPLETED';
-    // tur — purpose_code yoki dtype'dan taxminiy
+
+    // Holat: PDF §9.1 (1 introduced, 2 approved, 3 proved, 6 deleted, 16 deferred)
+    const status: TxnStatus =
+      item.state === 3 ? 'COMPLETED'
+        : item.state === 6 ? 'CANCELLED'
+        : item.state === 16 ? 'PENDING'
+        : 'COMPLETED';
+
     const type: TxnType = this.guessType(item.purp_code, item.dtype);
-    // tiyin → so'm (amount Decimal)
     const amountSom = new Prisma.Decimal((item.amount ?? 0) / 100);
+
+    const rawExtra = this.extractRawExtra(item);
 
     const created = await this.prisma.transaction.create({
       data: {
@@ -169,20 +226,50 @@ export class SyncService {
         direction,
         amount: amountSom,
         currency: 'UZS',
+
+        // Yuboruvchi
         fromMfo: item.mfo_dt,
         fromAccount: item.acc_dt,
         fromName: item.name_dt,
         fromInn: item.inn_dt,
+
+        // Qabul qiluvchi
         toMfo: item.mfo_ct,
         toAccount: item.acc_ct,
         toName: item.name_ct,
         toInn: item.inn_ct,
+
+        // Tafsilot
         description: item.purpose,
         reference: item.uniq || null,
         purposeCode: item.purp_code,
         docNumber: item.num,
         docType: item.dtype,
+
+        // Bank ID'lari (alohida column)
+        bankGeneralId: item.general_id,
+        bankB2Id: item.b2_id,
+
+        // Bank ichki
+        bankClientId: item.client_id != null ? String(item.client_id) : null,
+        bankBranch: item.branch,
+
+        // Vaqtlar (qo'shimcha)
+        valueDate,
+        operationTime: item.time,
+        settlementTime: item.stime,
+        inputAt,
+
+        // Anor va xato
+        isAnor: item.anor === 1,
+        bankErrCode: item.err,
+        bankErrMsg: item.err_msg,
+
+        // Raw va ekstra
         metadata: item as any,
+        rawExtra: rawExtra as any,
+
+        // Bog'lanish
         bankId,
         accountId,
         txnDate,
@@ -190,7 +277,6 @@ export class SyncService {
     });
 
     // Billing avto-match: faqat kirim tranzaksiya uchun, INN orqali mijoz qidirib
-    // ochiq bosqichlarga FIFO taqsimlab boradi
     if (direction === 'IN' && item.inn_dt) {
       try {
         const r = await this.payments.autoMatch(created.id);
@@ -204,10 +290,23 @@ export class SyncService {
     return true;
   }
 
+  /** "dd.MM.yyyy" → Date */
   private parseKbDate(s?: string): Date | null {
     if (!s) return null;
     try {
       return parse(s, 'dd.MM.yyyy', new Date());
+    } catch {
+      return null;
+    }
+  }
+
+  /** "dd.MM.yyyy" + "HH:mm:ss" → Date */
+  private parseKbDateTime(d?: string, t?: string): Date | null {
+    if (!d) return null;
+    try {
+      const dateStr = t ? `${d} ${t}` : d;
+      const fmt = t ? 'dd.MM.yyyy HH:mm:ss' : 'dd.MM.yyyy';
+      return parse(dateStr, fmt, new Date());
     } catch {
       return null;
     }
@@ -218,7 +317,6 @@ export class SyncService {
     if (dtype === '99') return 'TAX';
     if (dtype === '98') return 'TAX';
     if (dtype === '97') return 'PAYMENT';
-    // Zarplata kodi taxminan 00634
     if (purpCode === '00634') return 'SALARY';
     if (dtype === '21' || dtype === '01' || dtype === '35') return 'TRANSFER';
     return 'OTHER';

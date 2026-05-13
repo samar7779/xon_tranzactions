@@ -160,11 +160,14 @@ export class ApiExplorerController {
     }
 
     const fieldsInFirstItem = allItems.length > 0 ? Object.keys(allItems[0]).sort() : [];
+    // Endi BARCHA bank fieldlari saqlanadi — ma'lum'lar alohida column'da, qolganlari rawExtra JSON'da
     const fieldsSaved = [
       'b2_id', 'general_id', 'ddate', 'dir', 'state',
       'amount', 'mfo_dt', 'acc_dt', 'name_dt', 'inn_dt',
       'mfo_ct', 'acc_ct', 'name_ct', 'inn_ct', 'purpose',
       'purp_code', 'num', 'dtype', 'uniq',
+      'time', 'input_date', 'input_time', 'client_id', 'branch',
+      'vdate', 'stime', 'err', 'err_msg', 'anor',
     ];
     const fieldsNotSaved = fieldsInFirstItem.filter((f) => !fieldsSaved.includes(f));
 
