@@ -14,6 +14,12 @@ interface BaseAuthParams {
   baseUrl: string;
   login: string;
   password: string;
+  /**
+   * useProxy=true bo'lsa, so'rov forwarder (ahost) orqali yuboriladi.
+   * false yoki undefined bo'lsa, to'g'ridan-to'g'ri bizning serverdan ketadi.
+   * Bank IP whitelist'iga sozlash uchun foydali.
+   */
+  useProxy?: boolean;
 }
 
 interface ApiLoginParams extends BaseAuthParams {
@@ -83,7 +89,13 @@ export class KapitalbankClient {
     }
   }
 
-  private async post<T>(url: string, body: any, authHeader?: string, extraHeaders?: Record<string, string>): Promise<KapitalbankResponse<T>> {
+  private async post<T>(
+    url: string,
+    body: any,
+    authHeader?: string,
+    extraHeaders?: Record<string, string>,
+    useProxy?: boolean,
+  ): Promise<KapitalbankResponse<T>> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(extraHeaders || {}),
@@ -91,19 +103,20 @@ export class KapitalbankClient {
     if (authHeader) headers['Authorization'] = authHeader;
     const bankName = this.bankNameFromUrl(url);
 
-    // 1) Agar PHP forwarder sozlangan bo'lsa — bank.php orqali uzatamiz
-    if (this.forwarderUrl && this.forwarderSecret) {
+    // Agar useProxy=true VA forwarder sozlangan bo'lsa — ahost orqali
+    if (useProxy && this.forwarderUrl && this.forwarderSecret) {
+      this.logger.debug(`→ ${bankName} via PHP forwarder (ahost)`);
       return this.postViaForwarder<T>(url, body, headers, bankName);
     }
 
-    // 2) Agar HTTPS proxy sozlangan bo'lsa — agent orqali
+    // Aks holda — to'g'ridan-to'g'ri (yoki HTTPS proxy agent orqali)
     try {
       const resp = await firstValueFrom(
         this.http.post(url, body, {
           headers,
           timeout: this.timeoutMs,
-          httpsAgent: this.proxyAgent,
-          proxy: this.proxyAgent ? false : undefined,
+          httpsAgent: useProxy ? this.proxyAgent : undefined,
+          proxy: useProxy && this.proxyAgent ? false : undefined,
         }),
       );
       return resp.data as KapitalbankResponse<T>;
@@ -206,19 +219,14 @@ export class KapitalbankClient {
    */
   async apiLogin(params: ApiLoginParams): Promise<KbLoginResult> {
     const url = `${params.baseUrl}/APILogin`;
-    // Basic auth header: login[:password][:sms]
     const cred = params.smsCode
       ? `${params.login}:${params.password}:${params.smsCode}`
       : `${params.login}:${params.password}`;
     const authHeader = `Basic ${Buffer.from(cred).toString('base64')}`;
-    const resp = await this.post<KbLoginResult>(url, {}, authHeader);
+    const resp = await this.post<KbLoginResult>(url, {}, authHeader, undefined, params.useProxy);
     return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 
-  /**
-   * GetDoc1C — hisob bo'yicha ko'rsatilgan sana uchun tranzaksiyalar.
-   * PDF §4.1
-   */
   async getDoc1C(params: GetDoc1CParams): Promise<KbDoc1CResult> {
     const url = `${params.baseUrl}/GetDoc1C`;
     const body: any = {
@@ -228,14 +236,10 @@ export class KapitalbankClient {
     if (params.date) body.date = params.date;
     if (params.sid) body.sid = params.sid;
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
-    const resp = await this.post<KbDoc1CResult>(url, body, authHeader);
+    const resp = await this.post<KbDoc1CResult>(url, body, authHeader, undefined, params.useProxy);
     return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 
-  /**
-   * GetAcc1C — bitta hisob ma'lumoti (saldo, oborot).
-   * PDF §5.1
-   */
   async getAcc1C(params: GetAcc1CParams): Promise<KbAccount[]> {
     const url = `${params.baseUrl}/GetAcc1C`;
     const body: any = {
@@ -244,7 +248,7 @@ export class KapitalbankClient {
     };
     if (params.sid) body.sid = params.sid;
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
-    const resp = await this.post<KbAccount[]>(url, body, authHeader);
+    const resp = await this.post<KbAccount[]>(url, body, authHeader, undefined, params.useProxy);
     return this.ensureNoError(resp, this.bankNameFromUrl(url));
   }
 }

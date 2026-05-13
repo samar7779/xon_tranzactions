@@ -58,6 +58,7 @@ export default function ApiExplorerPage() {
     dateFrom: todayISO,
     dateTo: todayISO,
   });
+  const [useProxy, setUseProxy] = useState(false); // ahost orqali yuborish
 
   const { data: banks } = useQuery({
     queryKey: ['banks'],
@@ -74,6 +75,7 @@ export default function ApiExplorerPage() {
       login: fullLogin,
       password: form.password,
       smsCode: form.smsCode || undefined,
+      useProxy,
     }),
     onSuccess: (r) => {
       if (r.ok) {
@@ -104,6 +106,7 @@ export default function ApiExplorerPage() {
       account: form.account,
       dateFrom: isoToBank(form.dateFrom),
       dateTo: isoToBank(form.dateTo),
+      useProxy,
     }),
     onSuccess: (r) => {
       if (r.ok) toast.success(`✓ ${r.summary?.itemsCount} ta tranzaksiya olindi`);
@@ -119,6 +122,7 @@ export default function ApiExplorerPage() {
       password: form.password,
       branch: branchPadded,
       account: form.account,
+      useProxy,
     }),
     onSuccess: (r) => {
       if (r.ok) toast.success('✓ Hisob ma\'lumotlari olindi');
@@ -180,6 +184,50 @@ export default function ApiExplorerPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ahost proxy toggle */}
+            <div className={cn(
+              "rounded-2xl p-4 transition-all flex items-center gap-4 ring-1",
+              useProxy
+                ? "bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200"
+                : "bg-slate-50 ring-slate-200",
+            )}>
+              <button
+                type="button"
+                onClick={() => setUseProxy(!useProxy)}
+                className={cn(
+                  "relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full ring-1 ring-inset transition-colors",
+                  useProxy
+                    ? "bg-emerald-500 ring-emerald-600"
+                    : "bg-slate-300 ring-slate-400",
+                )}
+              >
+                <span className={cn(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform mt-1",
+                  useProxy ? "translate-x-6" : "translate-x-1",
+                )} />
+              </button>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <span className="text-[13px] font-bold text-slate-900">ahost orqali yuborish</span>
+                  {useProxy ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                      YOQILGAN
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                      OFF
+                    </span>
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-600 leading-relaxed">
+                  {useProxy
+                    ? <>So'rovlar <code className="font-mono bg-white px-1 py-0.5 rounded text-emerald-700">ahost (37.153.159.11)</code> orqali yuboriladi — bank whitelist'da bo'lgan IP</>
+                    : <>So'rovlar to'g'ridan-to'g'ri bizning serverdan (<code className="font-mono bg-white px-1 py-0.5 rounded">185.228.88.247</code>) yuboriladi</>}
+                </div>
+              </div>
+              <Zap className={cn("h-5 w-5 shrink-0 transition-colors", useProxy ? "text-emerald-600" : "text-slate-400")} />
             </div>
 
             {/* Form fields */}

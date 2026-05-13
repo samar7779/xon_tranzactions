@@ -1,6 +1,6 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString } from 'class-validator';
+import { IsOptional, IsString, IsBoolean } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -27,6 +27,7 @@ class TestLoginDto {
   @IsString() login!: string;
   @IsString() password!: string;
   @IsOptional() @IsString() smsCode?: string;
+  @IsOptional() @IsBoolean() useProxy?: boolean;
 }
 
 class FetchTxnsDto {
@@ -35,9 +36,10 @@ class FetchTxnsDto {
   @IsString() password!: string;
   @IsString() branch!: string;
   @IsString() account!: string;
-  @IsOptional() @IsString() dateFrom?: string; // dd.MM.yyyy
-  @IsOptional() @IsString() dateTo?: string;   // dd.MM.yyyy
-  @IsOptional() @IsString() date?: string;     // legacy single-day
+  @IsOptional() @IsString() dateFrom?: string;
+  @IsOptional() @IsString() dateTo?: string;
+  @IsOptional() @IsString() date?: string;
+  @IsOptional() @IsBoolean() useProxy?: boolean;
 }
 
 class GetAccDto {
@@ -46,6 +48,7 @@ class GetAccDto {
   @IsString() password!: string;
   @IsString() branch!: string;
   @IsString() account!: string;
+  @IsOptional() @IsBoolean() useProxy?: boolean;
 }
 
 /**
@@ -73,6 +76,7 @@ export class ApiExplorerController {
         login: body.login,
         password: body.password,
         smsCode: body.smsCode,
+        useProxy: body.useProxy,
       });
       return {
         ok: true,
@@ -138,6 +142,7 @@ export class ApiExplorerController {
           branch,
           account: body.account,
           date: dStr,
+          useProxy: body.useProxy,
         });
         const items = result?.content || [];
         allItems.push(...items);
@@ -200,8 +205,9 @@ export class ApiExplorerController {
         baseUrl: body.baseUrl,
         login: body.login,
         password: body.password,
-        branch: body.branch,
+        branch: body.branch.padStart(5, '0'),
         account: body.account,
+        useProxy: body.useProxy,
       });
       return {
         ok: true,
