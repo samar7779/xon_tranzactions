@@ -190,6 +190,8 @@ if [ "$need_be" = "1" ]; then
         exit 1
       fi
     fi
+    # Seed — banklar, rollar, admin (idempotent — har deploy'da xavfsiz)
+    run "backend prisma seed" npm run seed || log "⚠ seed xatosi (jiddiy emas)"
     if ! run "backend build" npm run build; then
       tg_with_log "❌ <b>xon.transactions</b> · backend build xatosi"
       tg "❌ <b>xon.transactions</b> · backend build muvaffaqiyatsiz"

@@ -1,10 +1,52 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateBankDto, UpdateBankDto } from './dto/bank.dto';
 
+// Boshlang'ich banklar — bank24.uz protokoli oilasi
+const DEFAULT_BANKS = [
+  {
+    code: 'KAPITALBANK',
+    name: 'Kapitalbank',
+    apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
+    apiKind: 'KAPITALBANK_V3' as const,
+  },
+  {
+    code: 'IPAK_YULI',
+    name: "Ipak Yo'li banki",
+    apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',
+    apiKind: 'KAPITALBANK_V3' as const,
+  },
+  {
+    code: 'HAYOT',
+    name: 'Hayot Bank',
+    apiBaseUrl: process.env.HAYOT_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
+    apiKind: 'KAPITALBANK_V3' as const,
+  },
+];
+
 @Injectable()
-export class BanksService {
+export class BanksService implements OnModuleInit {
+  private readonly logger = new Logger(BanksService.name);
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * Backend startup'da boshlang'ich banklarni DB'ga qo'shamiz (agar yo'q bo'lsa).
+   * Bu seed-ni har deploy'da qo'lda ishga tushirish shart bo'lmasligi uchun.
+   */
+  async onModuleInit() {
+    let added = 0;
+    for (const b of DEFAULT_BANKS) {
+      const existing = await this.prisma.bank.findUnique({ where: { code: b.code } });
+      if (!existing) {
+        await this.prisma.bank.create({ data: b });
+        added++;
+        this.logger.log(`✓ Bank qo'shildi: ${b.name}`);
+      }
+    }
+    if (added > 0) {
+      this.logger.log(`🏦 Banks bootstrap: ${added} ta yangi bank qo'shildi`);
+    }
+  }
 
   async list() {
     const items = await this.prisma.bank.findMany({
