@@ -36,7 +36,7 @@ export class SyncService {
   }
 
   /**
-   * Composite tranzaksiya ID — Python skriptidagi formatga aynan mos:
+   * Composite tranzaksiya ID — Python skripti formatiga aynan mos:
    *   {general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
    * sign = '+' agar bizning hisob acc_dt bo'lsa (chiqim), aks holda '-'
    */
