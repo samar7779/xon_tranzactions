@@ -24,6 +24,8 @@ type Step = 'login' | 'transactions' | 'account';
 export default function ApiExplorerPage() {
   const [step, setStep] = useState<Step>('login');
   const [showPwd, setShowPwd] = useState(false);
+  const today = new Date();
+  const todayISO = today.toISOString().slice(0, 10);
   const [form, setForm] = useState({
     baseUrl: 'https://m.bank24.uz:2713/Mobile.svc',
     bankPreset: 'kapitalbank',
@@ -33,7 +35,8 @@ export default function ApiExplorerPage() {
     smsCode: '',
     branch: '',
     account: '',
-    date: '',
+    dateFrom: todayISO,
+    dateTo: todayISO,
   });
 
   const { data: banks } = useQuery({
@@ -42,6 +45,8 @@ export default function ApiExplorerPage() {
   });
 
   const fullLogin = form.loginPrefix + form.login;
+  // MFO 5 xonalik bo'lishi kerak — leading zero qo'shamiz (974 → 00974)
+  const branchPadded = form.branch.padStart(5, '0');
 
   const loginMut = useMutation({
     mutationFn: () => api.post<any>('/api-explorer/kapitalbank/login', {
@@ -63,14 +68,22 @@ export default function ApiExplorerPage() {
     onError: (e: any) => toast.error(e?.message),
   });
 
+  // ISO sanani dd.MM.yyyy ga aylantirib uzatamiz
+  const isoToBank = (iso: string) => {
+    if (!iso) return undefined;
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y}`;
+  };
+
   const txnsMut = useMutation({
     mutationFn: () => api.post<any>('/api-explorer/kapitalbank/transactions', {
       baseUrl: form.baseUrl,
       login: fullLogin,
       password: form.password,
-      branch: form.branch,
+      branch: branchPadded,
       account: form.account,
-      date: form.date || undefined,
+      dateFrom: isoToBank(form.dateFrom),
+      dateTo: isoToBank(form.dateTo),
     }),
     onSuccess: (r) => {
       if (r.ok) toast.success(`✓ ${r.summary?.itemsCount} ta tranzaksiya olindi`);
@@ -84,7 +97,7 @@ export default function ApiExplorerPage() {
       baseUrl: form.baseUrl,
       login: fullLogin,
       password: form.password,
-      branch: form.branch,
+      branch: branchPadded,
       account: form.account,
     }),
     onSuccess: (r) => {
@@ -203,36 +216,57 @@ export default function ApiExplorerPage() {
               {step !== 'login' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Branch (MFO)</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 flex items-center justify-between">
+                      <span>Branch (MFO)</span>
+                      {form.branch && form.branch !== branchPadded && (
+                        <span className="text-[10px] text-amber-700 font-medium normal-case tracking-normal">→ {branchPadded} (5 xonalik)</span>
+                      )}
+                    </Label>
                     <Input
                       value={form.branch}
-                      onChange={(e) => setForm({ ...form, branch: e.target.value })}
+                      onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
                       className="font-mono text-sm h-10 rounded-xl"
                       placeholder="00974"
+                      maxLength={5}
                     />
+                    <div className="text-[10px] text-slate-500">5 xonalik MFO kod (74 / 974 → 00074 / 00974)</div>
                   </div>
                   <div className="space-y-1.5">
                     <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob raqami</Label>
                     <Input
                       value={form.account}
-                      onChange={(e) => setForm({ ...form, account: e.target.value })}
+                      onChange={(e) => setForm({ ...form, account: e.target.value.replace(/\D/g, '').slice(0, 20) })}
                       className="font-mono text-sm h-10 rounded-xl"
                       placeholder="20208000..."
+                      maxLength={20}
                     />
+                    <div className="text-[10px] text-slate-500">20 xonalik hisob raqami</div>
                   </div>
                 </>
               )}
 
               {step === 'transactions' && (
-                <div className="space-y-1.5">
-                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Sana (dd.MM.yyyy)</Label>
-                  <Input
-                    value={form.date}
-                    onChange={(e) => setForm({ ...form, date: e.target.value })}
-                    className="font-mono text-sm h-10 rounded-xl"
-                    placeholder="bugungi sana (default)"
-                  />
-                </div>
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Boshlanish sanasi</Label>
+                    <Input
+                      type="date"
+                      value={form.dateFrom}
+                      onChange={(e) => setForm({ ...form, dateFrom: e.target.value })}
+                      className="text-sm h-10 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Tugash sanasi</Label>
+                    <Input
+                      type="date"
+                      value={form.dateTo}
+                      onChange={(e) => setForm({ ...form, dateTo: e.target.value })}
+                      className="text-sm h-10 rounded-xl"
+                    />
+                    <div className="text-[10px] text-slate-500">Maksimal 31 kun oralig'i</div>
+                  </div>
+                </>
               )}
             </div>
 
@@ -372,22 +406,63 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
 function TransactionsResult({ data }: { data: any }) {
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
 
-  const { summary, result } = data;
+  const { summary, result, perDay = [], days = 1 } = data;
   const items = result?.content || [];
   const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
 
   return (
     <>
       <SuccessCard
-        title={`${summary?.itemsCount || 0} ta tranzaksiya · ${data.date}`}
+        title={`${summary?.itemsCount || 0} ta tranzaksiya · ${data.dateFrom} → ${data.dateTo} (${days} kun)`}
         duration={data.durationMs}
         summary={[
-          { label: 'Operatsion kun', value: summary?.operDay || '—' },
-          { label: 'Kiruvchi saldo', value: fmt(summary?.saldoIn) + ' UZS' },
+          { label: 'Kunlar soni', value: String(days) },
+          { label: 'Operatsiyalar', value: String(summary?.itemsCount || 0) },
           { label: 'Jami kirim', value: fmt(summary?.totalCredit) + ' UZS', accent: 'emerald' },
           { label: 'Jami chiqim', value: fmt(summary?.totalDebit) + ' UZS', accent: 'rose' },
         ]}
       />
+
+      {/* Per-day breakdown */}
+      {perDay.length > 1 && (
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <CardContent className="p-0">
+            <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/60 text-[12px] font-bold text-slate-900">
+              Kunma-kun taqsimot
+            </div>
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                  <th className="text-left px-3 py-2">Sana</th>
+                  <th className="text-right px-3 py-2">Operatsiyalar</th>
+                  <th className="text-right px-3 py-2">Kirim (UZS)</th>
+                  <th className="text-right px-3 py-2">Chiqim (UZS)</th>
+                  <th className="text-left px-3 py-2">Holat</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {perDay.map((d: any, i: number) => (
+                  <tr key={i} className={cn("hover:bg-slate-50", d.error && "bg-rose-50/30")}>
+                    <td className="px-3 py-2 font-mono text-slate-700">{d.date}</td>
+                    <td className="px-3 py-2 text-right tabular-nums font-semibold">{d.count}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{fmt(d.credit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-rose-700">{fmt(d.debit)}</td>
+                    <td className="px-3 py-2">
+                      {d.error ? (
+                        <span className="text-[10px] text-rose-700 truncate max-w-[200px] inline-block" title={d.error}>{d.error}</span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                          OK
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Field saved/not-saved analysis */}
       {summary?.fieldsInFirstItem?.length > 0 && (
