@@ -158,4 +158,27 @@ export class BankCredentialsService {
     if (!c) throw new NotFoundException('Credential topilmadi');
     return { ...c, password: this.crypto.decrypt(c.passwordEnc) };
   }
+
+  /**
+   * Parolni ochiq holda qaytaradi (admin recovery uchun).
+   * Faqat SUPERADMIN chaqira oladi (RBAC controller'da tekshiriladi).
+   * Log'ga yoziladi.
+   */
+  async revealPassword(id: string) {
+    const c = await this.prisma.bankCredential.findUnique({
+      where: { id },
+      include: { bank: { select: { name: true, code: true } } },
+    });
+    if (!c) throw new NotFoundException('Credential topilmadi');
+    const password = this.crypto.decrypt(c.passwordEnc);
+    this.logger.warn(`🔓 Parol ochildi: credential=${c.id} (${c.label}, bank=${c.bank.code})`);
+    return {
+      ok: true,
+      label: c.label,
+      bank: c.bank.name,
+      loginFull: (c.loginPrefix || '') + c.loginName,
+      branch: c.branch,
+      password,
+    };
+  }
 }

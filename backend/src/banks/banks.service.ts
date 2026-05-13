@@ -16,12 +16,6 @@ const DEFAULT_BANKS = [
     apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',
     apiKind: 'KAPITALBANK_V3' as const,
   },
-  {
-    code: 'HAYOT',
-    name: 'Hayot Bank',
-    apiBaseUrl: process.env.HAYOT_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
-    apiKind: 'KAPITALBANK_V3' as const,
-  },
 ];
 
 @Injectable()
@@ -45,6 +39,16 @@ export class BanksService implements OnModuleInit {
     }
     if (added > 0) {
       this.logger.log(`🏦 Banks bootstrap: ${added} ta yangi bank qo'shildi`);
+    }
+
+    // Hayot Bank vaqtincha kerakmas — agar mavjud bo'lsa va credentiallar yo'q bo'lsa o'chiramiz
+    const hayot = await this.prisma.bank.findUnique({
+      where: { code: 'HAYOT' },
+      include: { _count: { select: { credentials: true, accounts: true } } },
+    });
+    if (hayot && hayot._count.credentials === 0 && hayot._count.accounts === 0) {
+      await this.prisma.bank.delete({ where: { id: hayot.id } });
+      this.logger.log(`🗑 Hayot Bank o'chirildi (kerakmas)`);
     }
   }
 
