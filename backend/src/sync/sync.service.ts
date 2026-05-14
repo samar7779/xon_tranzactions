@@ -155,7 +155,7 @@ export class SyncService {
     // Source'da hisob raqami ko'rsatiladi — qaysi hisobda xato bo'lganini aniqlash uchun
     const log = await this.prisma.syncLog.create({
       data: {
-        source: `${acc.accountNo}${acc.ownerName ? ' · ' + acc.ownerName : ''}`,
+        source: `${acc.accountNo}${acc.ownerName ? ' · ' + acc.ownerName : ''}`.slice(0, 255),
         accountId: acc.id,
         status: 'RUNNING',
       },

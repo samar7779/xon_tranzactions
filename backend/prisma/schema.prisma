@@ -295,7 +295,7 @@ model Category {
 // ─────────────────────────────────────────────────────────────────
 model SyncLog {
   id           String      @id @default(cuid())
-  source       String      @db.VarChar(64)              // bank kodi yoki "credential:<id>"
+  source       String      @db.VarChar(255)             // "accountNo · ownerName" yoki bank kodi
   accountId    String?     @map("account_id")
   status       SyncStatus
   fetched      Int         @default(0)
