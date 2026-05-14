@@ -66,8 +66,10 @@ export class SyncService {
    * Cron har 5 daqiqada (default) — barcha faol credentiallar bo'yicha sync.
    * Eski stuck sid'larni ham tozalaydi (#60101 oldini oladi).
    */
-  @Cron(process.env.TXN_SYNC_CRON || '*/5 * * * *')
-  async tick() {
+  // Cron har daqiqada ishlaydi — lekin har bank o'z intervaliga qarab sync qilinadi
+  // (Bank.syncIntervalMinutes). force=true bo'lsa intervalga qaramay hammasi sync qilinadi.
+  @Cron(process.env.TXN_SYNC_CRON || '* * * * *')
+  async tick(force = false) {
     // Muddati o'tgan sid'larni tozalash
     await this.prisma.bankCredential.updateMany({
       where: { sid: { not: null }, sidExpiresAt: { lt: new Date() } },
@@ -83,8 +85,15 @@ export class SyncService {
       return;
     }
 
+    const now = Date.now();
     for (const c of creds) {
+      const intervalMs = Math.max(1, c.bank.syncIntervalMinutes || 5) * 60_000;
       for (const acc of c.accounts) {
+        // Bank intervaliga qarab — vaqti kelmagan hisobni o'tkazib yuboramiz
+        if (!force && acc.lastSyncedAt) {
+          const elapsed = now - new Date(acc.lastSyncedAt).getTime();
+          if (elapsed < intervalMs) continue;
+        }
         try {
           await this.syncAccount(c.id, acc.id);
         } catch (e: any) {
@@ -95,8 +104,63 @@ export class SyncService {
     }
   }
 
-  /** Bitta hisob bo'yicha sync (manual yoki cron'dan chaqiriladi). */
-  async syncAccount(credentialId: string, accountId: string) {
+  /**
+   * Backfill — eski tarixni bazaga yozish.
+   * scope: 'all' (barcha hisob), 'bank' (bitta bank), 'account' (bitta hisob).
+   * dateFrom/dateTo — ISO (yyyy-MM-dd). Fonda chaqiriladi (uzoq davom etadi).
+   */
+  async backfill(opts: {
+    scope: 'all' | 'bank' | 'account';
+    bankId?: string;
+    accountId?: string;
+    dateFrom: string;
+    dateTo: string;
+  }): Promise<{ accounts: number; days: number }> {
+    let accounts: { id: string; credentialId: string }[] = [];
+    if (opts.scope === 'account' && opts.accountId) {
+      const a = await this.prisma.bankAccount.findUnique({
+        where: { id: opts.accountId },
+        select: { id: true, credentialId: true },
+      });
+      if (a) accounts = [a];
+    } else if (opts.scope === 'bank' && opts.bankId) {
+      accounts = await this.prisma.bankAccount.findMany({
+        where: { bankId: opts.bankId },
+        select: { id: true, credentialId: true },
+      });
+    } else {
+      accounts = await this.prisma.bankAccount.findMany({
+        select: { id: true, credentialId: true },
+      });
+    }
+
+    const from = new Date(opts.dateFrom);
+    const to = new Date(opts.dateTo);
+    const dates: string[] = [];
+    for (let t = from.getTime(); t <= to.getTime(); t += 86_400_000) {
+      dates.push(format(new Date(t), 'dd.MM.yyyy'));
+    }
+    if (accounts.length === 0 || dates.length === 0) {
+      return { accounts: accounts.length, days: dates.length };
+    }
+
+    this.logger.log(`Backfill boshlandi: ${accounts.length} hisob × ${dates.length} kun`);
+    for (const acc of accounts) {
+      try {
+        await this.syncAccount(acc.credentialId, acc.id, { dates });
+      } catch (e: any) {
+        this.logger.warn(`Backfill xato (${acc.id}): ${e?.message?.slice(0, 150)}`);
+      }
+    }
+    this.logger.log(`Backfill tugadi: ${accounts.length} hisob × ${dates.length} kun`);
+    return { accounts: accounts.length, days: dates.length };
+  }
+
+  /**
+   * Bitta hisob bo'yicha sync (manual yoki cron'dan chaqiriladi).
+   * opts.dates berilsa — o'sha sanalar bo'yicha backfill qilinadi (qoldiq yangilanmaydi).
+   */
+  async syncAccount(credentialId: string, accountId: string, opts?: { dates?: string[] }) {
     const cred = await this.prisma.bankCredential.findUnique({
       where: { id: credentialId },
       include: { bank: true },
@@ -108,10 +172,20 @@ export class SyncService {
       throw new Error('Hozircha faqat KAPITALBANK_V3 qo\'llab-quvvatlanadi');
     }
 
+    const isBackfill = !!opts?.dates?.length;
+    // Sana ro'yxati — backfill bo'lsa berilgan sanalar, aks holda oxirgi daysBack kun
+    const dateList: string[] = isBackfill
+      ? opts!.dates!
+      : Array.from({ length: Math.max(1, this.daysBack) }, (_, i) =>
+          format(subDays(new Date(), i), 'dd.MM.yyyy'),
+        );
+
     // Source'da hisob raqami ko'rsatiladi — qaysi hisobda xato bo'lganini aniqlash uchun
     const log = await this.prisma.syncLog.create({
       data: {
-        source: `${acc.accountNo}${acc.ownerName ? ' · ' + acc.ownerName : ''}`.slice(0, 255),
+        source: `${acc.accountNo}${acc.ownerName ? ' · ' + acc.ownerName : ''}${
+          isBackfill ? ` · backfill ${dateList[0]}–${dateList[dateList.length - 1]}` : ''
+        }`.slice(0, 255),
         accountId: acc.id,
         status: 'RUNNING',
       },
@@ -127,9 +201,8 @@ export class SyncService {
 
     let latestSaldoOut: number | null = null;
     try {
-      for (let i = 0; i < Math.max(1, this.daysBack); i++) {
-        const day = subDays(new Date(), i);
-        const dateStr = format(day, 'dd.MM.yyyy');
+      for (let i = 0; i < dateList.length; i++) {
+        const dateStr = dateList[i];
         const result = await this.kb.getDoc1C({
           baseUrl: cred.bank.apiBaseUrl!,
           login,
@@ -142,8 +215,8 @@ export class SyncService {
         });
         const items = result?.content || [];
         fetched += items.length;
-        // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq
-        if (i === 0 && result?.saldo_out != null) {
+        // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq (backfill'da qoldiqqa tegmaymiz)
+        if (!isBackfill && i === 0 && result?.saldo_out != null) {
           latestSaldoOut = Number(result.saldo_out);
         }
         for (const item of items) {
@@ -157,38 +230,40 @@ export class SyncService {
         }
       }
 
-      // Qoldiqni ham yangilash: GetDoc1C dan saldo_out (yopuvchi qoldiq) — tiyin → so'm
+      // Qoldiqni ham yangilash: GetDoc1C dan saldo_out — faqat oddiy sync'da (backfill'da emas)
       let balanceSom: Prisma.Decimal | undefined;
-      if (latestSaldoOut != null) {
-        balanceSom = new Prisma.Decimal(latestSaldoOut / 100);
-      }
-      // GetAcc1C ni faqat saldo_out bo'lmasa va xato bo'lsa ham sync to'xtamasin
-      if (balanceSom === undefined) {
-        try {
-          const accInfo = await this.kb.getAcc1C({
-            baseUrl: cred.bank.apiBaseUrl!,
-            login,
-            password,
-            branch: acc.branch,
-            account: acc.accountNo,
-            useProxy: cred.useProxy === true,
-          });
-          const found = (accInfo || []).find((a: any) => a.account === acc.accountNo);
-          if (found && found.s_out != null) {
-            balanceSom = new Prisma.Decimal(Number(found.s_out) / 100);
+      if (!isBackfill) {
+        if (latestSaldoOut != null) {
+          balanceSom = new Prisma.Decimal(latestSaldoOut / 100);
+        }
+        // GetAcc1C ni faqat saldo_out bo'lmasa va xato bo'lsa ham sync to'xtamasin
+        if (balanceSom === undefined) {
+          try {
+            const accInfo = await this.kb.getAcc1C({
+              baseUrl: cred.bank.apiBaseUrl!,
+              login,
+              password,
+              branch: acc.branch,
+              account: acc.accountNo,
+              useProxy: cred.useProxy === true,
+            });
+            const found = (accInfo || []).find((a: any) => a.account === acc.accountNo);
+            if (found && found.s_out != null) {
+              balanceSom = new Prisma.Decimal(Number(found.s_out) / 100);
+            }
+          } catch (e: any) {
+            this.logger.warn(`GetAcc1C qoldiq olishda xato (jiddiy emas): ${e?.message}`);
           }
-        } catch (e: any) {
-          this.logger.warn(`GetAcc1C qoldiq olishda xato (jiddiy emas): ${e?.message}`);
         }
       }
 
-      await this.prisma.bankAccount.update({
-        where: { id: acc.id },
-        data: {
-          lastSyncedAt: new Date(),
-          ...(balanceSom !== undefined ? { balance: balanceSom } : {}),
-        },
-      });
+      // Backfill lastSyncedAt'ga tegmaydi (cron intervali buzilmasin)
+      const accUpdate: Prisma.BankAccountUpdateInput = {};
+      if (!isBackfill) accUpdate.lastSyncedAt = new Date();
+      if (balanceSom !== undefined) accUpdate.balance = balanceSom;
+      if (Object.keys(accUpdate).length > 0) {
+        await this.prisma.bankAccount.update({ where: { id: acc.id }, data: accUpdate });
+      }
       await this.prisma.syncLog.update({
         where: { id: log.id },
         data: {

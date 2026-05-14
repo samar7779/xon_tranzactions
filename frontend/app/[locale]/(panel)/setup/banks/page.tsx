@@ -1,9 +1,10 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Building2, Check, KeyRound, Wallet, Plus, ExternalLink,
-  Globe, Shield, Sparkles, MoreVertical,
+  Globe, Shield, Sparkles, MoreVertical, Timer,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -11,9 +12,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { BankLogo, bankAbbr } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+const SYNC_INTERVALS = [5, 10, 15, 30, 60];
 
 // Bank brand mapping
 const BANK_BRAND: Record<string, { color: string; gradient: string; abbr: string; name?: string }> = {
@@ -140,6 +146,15 @@ export default function BanksPage() {
 function BankCard({ b, locale }: { b: any; locale: string }) {
   const brand = getBrand(b.code);
   const isWired = (b._count?.credentials || 0) > 0;
+  const qc = useQueryClient();
+  const intervalMut = useMutation({
+    mutationFn: (minutes: number) => api.patch(`/banks/${b.id}`, { syncIntervalMinutes: minutes }),
+    onSuccess: () => {
+      toast.success('Sync vaqti yangilandi');
+      qc.invalidateQueries({ queryKey: ['banks'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
   return (
     <Card className="group relative border-0 shadow-soft card-hover overflow-hidden">
       <div className={cn("h-1.5 bg-gradient-to-r", brand.gradient)} />
@@ -176,6 +191,23 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
               </span>
             </div>
           )}
+          {/* Sync intervali — bank bo'yicha sozlanadi */}
+          <div className="flex items-center justify-between text-[11px] gap-2 pt-1.5 border-t border-slate-100">
+            <span className="text-slate-500 flex items-center gap-1.5 shrink-0"><Timer className="h-3 w-3" /> Sync vaqti</span>
+            <Select
+              value={String(b.syncIntervalMinutes ?? 5)}
+              onValueChange={(v) => intervalMut.mutate(Number(v))}
+            >
+              <SelectTrigger className="h-7 w-[110px] text-[11px] font-mono rounded-lg">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SYNC_INTERVALS.map((m) => (
+                  <SelectItem key={m} value={String(m)}>{m} daqiqa</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2 mb-3">
