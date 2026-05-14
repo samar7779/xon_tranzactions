@@ -30,6 +30,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/dashboard', permission: PERMS.DASHBOARD_VIEW },
   { prefix: '/transactions', permission: PERMS.TRANSACTIONS_VIEW },
   { prefix: '/statement', permission: PERMS.TRANSACTIONS_VIEW },
+  { prefix: '/check', permission: PERMS.TRANSACTIONS_VIEW },
   { prefix: '/customers', permission: PERMS.CUSTOMERS_VIEW },
   { prefix: '/contracts', permission: PERMS.CONTRACTS_VIEW },
 ];

@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { TransactionsService } from './transactions.service';
 import { StatementService } from './statement.service';
+import { ReconcileService } from './reconcile.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -14,6 +15,7 @@ export class TransactionsController {
   constructor(
     private readonly svc: TransactionsService,
     private readonly statementSvc: StatementService,
+    private readonly reconcileSvc: ReconcileService,
   ) {}
 
   @Get()
@@ -37,6 +39,12 @@ export class TransactionsController {
     @Query('accountId') accountId?: string,
   ) {
     return this.svc.daily(from, to, bankId, accountId);
+  }
+
+  @Post('reconcile')
+  @ApiOperation({ summary: "Hisob sverkasi — bank qoldig'i va oborotini DB bilan solishtiradi" })
+  reconcile(@Body() body: { accountId: string; dateFrom: string; dateTo: string }) {
+    return this.reconcileSvc.reconcile(body?.accountId, body?.dateFrom, body?.dateTo);
   }
 
   @Get('export')
