@@ -132,10 +132,19 @@ export default function ApiExplorerPage() {
 
   function selectBank(code: string) {
     const b = banks?.items.find((x: any) => x.code === code);
-    if (b) {
+    if (b && b.isActive) {
       setForm({ ...form, baseUrl: b.apiBaseUrl || '', bankPreset: code });
     }
   }
+
+  // Aktivlar yuqorida, qolganlari pastda (alfavit bo'yicha)
+  const sortedBanks = [...(banks?.items || [])].sort((a: any, b: any) => {
+    if (a.isActive && !b.isActive) return -1;
+    if (!a.isActive && b.isActive) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  const activeBanks = sortedBanks.filter((b: any) => b.isActive);
+  const inactiveBanks = sortedBanks.filter((b: any) => !b.isActive);
 
   return (
     <>
@@ -163,25 +172,63 @@ export default function ApiExplorerPage() {
         <Card className="border-0 shadow-soft overflow-hidden">
           <CardContent className="p-6 space-y-4">
             {/* Bank presets */}
-            <div className="space-y-1.5">
+            <div className="space-y-2.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank tanlash</Label>
+
+              {/* Aktiv banklar — rangli, effektli */}
               <div className="flex flex-wrap gap-2">
-                {(banks?.items || []).map((b: any) => (
-                  <button
-                    key={b.id}
-                    onClick={() => selectBank(b.code)}
-                    className={cn(
-                      "inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all",
-                      form.bankPreset === b.code
-                        ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                        : "bg-slate-50 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100",
-                    )}
-                  >
-                    <Building2 className="h-3.5 w-3.5" />
-                    {b.name}
-                  </button>
-                ))}
+                {activeBanks.map((b: any) => {
+                  const selected = form.bankPreset === b.code;
+                  return (
+                    <button
+                      key={b.id}
+                      onClick={() => selectBank(b.code)}
+                      className={cn(
+                        "group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
+                        selected
+                          ? "bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-300 scale-105"
+                          : "bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-700 ring-1 ring-emerald-200 hover:ring-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+                      )}
+                    >
+                      <span className={cn(
+                        "relative flex h-2 w-2",
+                      )}>
+                        <span className={cn(
+                          "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
+                          selected ? "bg-white" : "bg-emerald-400",
+                        )} />
+                        <span className={cn(
+                          "relative inline-flex rounded-full h-2 w-2",
+                          selected ? "bg-white" : "bg-emerald-500",
+                        )} />
+                      </span>
+                      {b.name}
+                      {selected && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  );
+                })}
               </div>
+
+              {/* Noaktiv banklar — kulrang, yopiq */}
+              {inactiveBanks.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mt-3 mb-1.5">
+                    Kelajakda — integratsiya yo'q
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {inactiveBanks.map((b: any) => (
+                      <span
+                        key={b.id}
+                        title="Bu bank uchun API integratsiyasi hali yo'q"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 text-slate-400 ring-1 ring-slate-150 cursor-not-allowed"
+                      >
+                        <Building2 className="h-3 w-3" />
+                        {b.name}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ahost proxy toggle */}
