@@ -64,9 +64,16 @@ export class SyncService {
 
   /**
    * Cron har 5 daqiqada (default) — barcha faol credentiallar bo'yicha sync.
+   * Eski stuck sid'larni ham tozalaydi (#60101 oldini oladi).
    */
   @Cron(process.env.TXN_SYNC_CRON || '*/5 * * * *')
   async tick() {
+    // Muddati o'tgan sid'larni tozalash
+    await this.prisma.bankCredential.updateMany({
+      where: { sid: { not: null }, sidExpiresAt: { lt: new Date() } },
+      data: { sid: null, sidExpiresAt: null },
+    });
+
     const creds = await this.prisma.bankCredential.findMany({
       where: { isActive: true, bank: { apiKind: 'KAPITALBANK_V3', isActive: true } },
       include: { bank: true, accounts: { where: { syncEnabled: true } } },
@@ -121,7 +128,7 @@ export class SyncService {
           branch: acc.branch,
           account: acc.accountNo,
           date: dateStr,
-          sid: cred.sid && cred.sidExpiresAt && cred.sidExpiresAt > new Date() ? cred.sid : undefined,
+          // sid o'tkazib yubormaymiz — har so'rovda yangi Basic Auth (#60101 'Session expired' xatosini oldini oladi)
           useProxy: cred.useProxy === true,
         });
         const items = result?.content || [];
