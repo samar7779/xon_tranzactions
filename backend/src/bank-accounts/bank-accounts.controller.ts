@@ -40,12 +40,12 @@ export class BankAccountsController {
 
   @Post('bulk')
   @RequirePermissions(PERMISSIONS.ACCOUNTS_MANAGE)
-  @ApiOperation({ summary: "Ko'p hisoblarni bir vaqtda qo'shish (paste orqali)" })
+  @ApiOperation({ summary: "Ko'p hisoblarni bir vaqtda qo'shish (paste yoki API Explorer orqali)" })
   bulk(@Body() dto: {
     credentialId: string;
-    branch: string;
+    branch?: string;
     currency?: string;
-    accounts: { accountNo: string; ownerName?: string }[];
+    accounts: { accountNo: string; ownerName?: string; branch?: string; currency?: string }[];
   }) {
     return this.svc.bulkCreate(dto);
   }
