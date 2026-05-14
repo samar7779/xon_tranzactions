@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Wifi, Send, Loader2, Eye, EyeOff, Copy, Check, ChevronRight,
   CheckCircle2, XCircle, Database, Sparkles, AlertCircle, ArrowDown,
   Building2, KeyRound, Calendar, Search, FileText, Zap, X, ArrowDownLeft, ArrowUpRight,
+  Plus, Wallet, Layers,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,10 +15,42 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { BankLogo } from '@/components/bank-logo';
 import {
-  Dialog, DialogContent,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+// Valyuta kodini normallashtirish — bank ISO raqam yoki harf qaytarishi mumkin
+function normCurrency(val?: string): string {
+  if (!val) return 'UZS';
+  const v = String(val).toUpperCase().trim();
+  if (['UZS', '860', '000'].includes(v)) return 'UZS';
+  if (['USD', '840'].includes(v)) return 'USD';
+  if (['RUB', '643'].includes(v)) return 'RUB';
+  if (['EUR', '978'].includes(v)) return 'EUR';
+  return v;
+}
+const CURRENCY_ORDER = ['UZS', 'RUB', 'USD', 'EUR'];
+
+// Hisob raqami prefiksi → tur nomi
+const ACC_TYPE_LABELS: Record<string, string> = {
+  '20208': 'Joriy hisob',
+  '20210': 'Joriy hisob (valyuta)',
+  '22613': 'Maxsus hisob',
+  '22618': 'Akkreditiv hisobi',
+  '16401': 'Foiz hisobi',
+  '16403': 'Foiz hisobi',
+  '17402': 'Karta hisobi',
+  '23402': "G'azna / transit hisob",
+  '23106': 'Oylik (ZP) transit',
+};
+function accTypeLabel(accountNo?: string): string {
+  const p = (accountNo || '').slice(0, 5);
+  return ACC_TYPE_LABELS[p] || `Hisob ${p || '—'}`;
+}
 
 // Hujjat turi kodlari (KapitalBank PDF §9.6)
 const DTYPE_LABELS: Record<string, string> = {
@@ -454,9 +487,64 @@ function StepChip({
 }
 
 function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branch: string, account: string) => void }) {
+  // Hooks — early return'dan oldin chaqirilishi shart
+  const [addTarget, setAddTarget] = useState<any>(null);
+
+  const { data: dbAccounts } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+  });
+  const { data: creds } = useQuery({
+    queryKey: ['bank-credentials'],
+    queryFn: () => api.get<{ items: any[] }>('/bank-credentials'),
+  });
+
+  const result = data?.result;
+  const summary = data?.summary;
+
+  // Bankdan kelgan barcha hisoblar (flat)
+  const allAccs = useMemo(
+    () => (result?.clients || []).flatMap((c: any) =>
+      (c.accounts || []).map((a: any) => ({ ...a, clientName: c.name, clientInn: c.inn })),
+    ),
+    [result],
+  );
+
+  // Bazada bor hisoblar to'plami
+  const dbSet = useMemo(
+    () => new Set((dbAccounts?.items || []).map((a: any) => a.accountNo)),
+    [dbAccounts],
+  );
+
+  // Guruhlash: valyuta → tur → hisoblar
+  const grouped = useMemo(() => {
+    const byCur = new Map<string, Map<string, any[]>>();
+    for (const a of allAccs) {
+      const cur = normCurrency(a.val);
+      const type = accTypeLabel(a.account);
+      if (!byCur.has(cur)) byCur.set(cur, new Map());
+      const byType = byCur.get(cur)!;
+      if (!byType.has(type)) byType.set(type, []);
+      byType.get(type)!.push(a);
+    }
+    // Valyutalarni tartiblash
+    const curs = Array.from(byCur.keys()).sort((a, b) => {
+      const ia = CURRENCY_ORDER.indexOf(a);
+      const ib = CURRENCY_ORDER.indexOf(b);
+      return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+    });
+    return curs.map((cur) => {
+      const byType = byCur.get(cur)!;
+      const types = Array.from(byType.keys()).sort();
+      const count = types.reduce((s, t) => s + byType.get(t)!.length, 0);
+      return { cur, count, types: types.map((t) => ({ type: t, accs: byType.get(t)! })) };
+    });
+  }, [allAccs]);
+
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
 
-  const { summary, result } = data;
+  const addedCount = allAccs.filter((a: any) => dbSet.has(a.account)).length;
+
   return (
     <>
       <SuccessCard
@@ -465,44 +553,172 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
         summary={[
           { label: 'Klient', value: summary?.name || '—' },
           { label: 'STIR', value: summary?.inn || '—', mono: true },
-          { label: 'Hisoblar', value: String(summary?.totalAccounts || 0) },
-          { label: 'Session ID', value: summary?.sid?.slice(0, 12) + '...' || '—', mono: true },
+          { label: 'Hisoblar', value: String(summary?.totalAccounts || allAccs.length || 0) },
+          { label: 'Bazada bor', value: `${addedCount} / ${allAccs.length}` },
         ]}
       />
 
-      {/* Accounts list */}
+      {/* Accounts — valyuta + tur bo'yicha guruhlangan */}
       <Card className="border-0 shadow-soft overflow-hidden">
         <CardContent className="p-0">
           <div className="px-6 py-4 border-b border-slate-100">
-            <div className="text-base font-semibold tracking-tight">Mavjud hisoblar</div>
-            <div className="text-xs text-slate-500 mt-0.5">Tranzaksiyalarini olish uchun birini tanlang</div>
+            <div className="text-base font-semibold tracking-tight">
+              Mavjud hisoblar <span className="text-slate-400 font-normal">({allAccs.length})</span>
+            </div>
+            <div className="text-xs text-slate-500 mt-0.5">
+              Valyuta va hisob turi bo'yicha guruhlangan · qatorni bosing → tranzaksiyalar · <span className="text-emerald-600 font-medium">+ Qo'shish</span> → bazaga
+            </div>
           </div>
+
           <div className="divide-y divide-slate-100">
-            {(result?.clients || []).flatMap((c: any) =>
-              (c.accounts || []).map((a: any) => ({ ...a, clientName: c.name, clientInn: c.inn }))
-            ).map((a: any, i: number) => (
-              <button
-                key={i}
-                onClick={() => onPickAccount(a.branch, a.account)}
-                className="w-full px-6 py-3.5 flex items-center gap-4 hover:bg-slate-50/60 transition-colors text-left"
-              >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center text-white shrink-0">
-                  <Building2 className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-mono text-[12px] font-semibold">{a.account}</div>
-                  <div className="text-[11px] text-slate-500">MFO {a.branch} · {a.name || a.clientName}</div>
-                </div>
-                <ChevronRight className="h-4 w-4 text-slate-400" />
-              </button>
+            {grouped.map((g) => (
+              <details key={g.cur} open className="group">
+                <summary className="px-6 py-2.5 cursor-pointer bg-slate-50/70 hover:bg-slate-100/70 flex items-center gap-2 select-none">
+                  <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90" />
+                  <Wallet className="h-3.5 w-3.5 text-indigo-500" />
+                  <span className="text-[13px] font-bold text-slate-800">{g.cur}</span>
+                  <span className="text-[11px] text-slate-500">· {g.count} ta hisob</span>
+                </summary>
+
+                {g.types.map((t) => (
+                  <div key={t.type}>
+                    <div className="px-6 py-1.5 bg-white flex items-center gap-1.5 border-t border-slate-50">
+                      <Layers className="h-3 w-3 text-slate-300" />
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                        {t.type}
+                      </span>
+                      <span className="text-[10px] text-slate-300">· {t.accs.length}</span>
+                    </div>
+                    {t.accs.map((a: any, i: number) => {
+                      const inDb = dbSet.has(a.account);
+                      return (
+                        <div
+                          key={a.account + i}
+                          className="pl-10 pr-6 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 transition-colors"
+                        >
+                          <button
+                            onClick={() => onPickAccount(a.branch, a.account)}
+                            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                          >
+                            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center text-white shrink-0">
+                              <Building2 className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="font-mono text-[12px] font-semibold truncate">{a.account}</div>
+                              <div className="text-[11px] text-slate-500 truncate">MFO {a.branch} · {a.name || a.clientName}</div>
+                            </div>
+                          </button>
+
+                          {inDb ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shrink-0">
+                              <CheckCircle2 className="h-3 w-3" /> Bazada
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => setAddTarget(a)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shrink-0"
+                            >
+                              <Plus className="h-3 w-3" /> Qo'shish
+                            </button>
+                          )}
+                          <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </details>
             ))}
           </div>
         </CardContent>
       </Card>
 
+      <AddBankAccountDialog account={addTarget} creds={creds?.items || []} onClose={() => setAddTarget(null)} />
+
       {/* Raw JSON */}
       <JsonViewer title="To'liq raw javob" json={result} />
     </>
+  );
+}
+
+// Bankdan kelgan hisobni bazaga qo'shish — credential tanlash bilan
+function AddBankAccountDialog({ account, creds, onClose }: { account: any; creds: any[]; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [credentialId, setCredentialId] = useState('');
+
+  const mut = useMutation({
+    mutationFn: () => api.post('/bank-accounts', {
+      credentialId,
+      branch: (account.branch || '').padStart(5, '0'),
+      accountNo: account.account,
+      ownerName: account.name || account.clientName || undefined,
+      currency: normCurrency(account.val),
+    }),
+    onSuccess: () => {
+      toast.success('Hisob bazaga qo\'shildi');
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+      onClose();
+      setCredentialId('');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Qo\'shishda xato'),
+  });
+
+  if (!account) return null;
+
+  return (
+    <Dialog open={!!account} onOpenChange={(o) => { if (!o) { onClose(); setCredentialId(''); } }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="h-4 w-4 text-indigo-600" /> Hisobni bazaga qo'shish
+          </DialogTitle>
+          <DialogDescription>Hisobni qaysi bank ulanishiga biriktiramiz?</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Tanlangan hisob */}
+          <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 space-y-1">
+            <div className="font-mono text-[13px] font-semibold text-slate-900">{account.account}</div>
+            <div className="text-[11px] text-slate-500">
+              MFO {account.branch} · {normCurrency(account.val)} · {account.name || account.clientName || '—'}
+            </div>
+          </div>
+
+          {/* Credential tanlash */}
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Bank ulanishi <span className="text-rose-500">*</span>
+            </Label>
+            <Select value={credentialId} onValueChange={setCredentialId}>
+              <SelectTrigger className={cn(!credentialId && 'ring-1 ring-rose-200')}>
+                <SelectValue placeholder="Ulanishni tanlang" />
+              </SelectTrigger>
+              <SelectContent>
+                {creds.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-slate-500">Saqlangan bank ulanishi yo'q</div>
+                ) : (
+                  creds.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            {creds.length === 0 && (
+              <div className="text-[10px] text-slate-500">
+                Avval Sozlash → Bank ulanishlari bo'limidan ulanish qo'shing
+              </div>
+            )}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => { onClose(); setCredentialId(''); }}>Bekor qilish</Button>
+          <Button onClick={() => mut.mutate()} disabled={mut.isPending || !credentialId}>
+            {mut.isPending ? 'Qo\'shilmoqda...' : 'Qo\'shish'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
