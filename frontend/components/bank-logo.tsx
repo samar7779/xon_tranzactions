@@ -7,6 +7,12 @@ const BANK_LOGOS: Record<string, string> = {
   IPAK_YULI: '/banks/ipak.svg',
 };
 
+// Logo orqa foni — ba'zi logolar oq fonda yaxshi ko'rinmaydi
+const BANK_LOGO_BG: Record<string, string> = {
+  KAPITALBANK: 'bg-amber-400 ring-amber-300',  // sariq fon
+  IPAK_YULI: 'bg-white ring-slate-200',
+};
+
 // Bank kodi → brand rangi (logo yo'q banklar uchun fallback gradient)
 const BANK_GRADIENTS: Record<string, string> = {
   KAPITALBANK: 'from-sky-500 to-blue-700',
@@ -60,9 +66,10 @@ export function BankLogo({
   const logo = BANK_LOGOS[code];
 
   if (logo) {
+    const bg = BANK_LOGO_BG[code] || 'bg-white ring-slate-200';
     return (
       <div
-        className={cn('grid place-items-center bg-white ring-1 ring-slate-200 shrink-0 overflow-hidden', rounded, className)}
+        className={cn('grid place-items-center ring-1 shrink-0 overflow-hidden', bg, rounded, className)}
         style={{ width: size, height: size }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
