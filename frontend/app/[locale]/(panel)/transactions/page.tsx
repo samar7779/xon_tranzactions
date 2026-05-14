@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import {
   Search, Wand2, Link2Off, EyeOff, MoreHorizontal, Download,
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
-  X, Calendar, Wallet, FileText, Eye, FileSpreadsheet,
+  X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
+  Hash, Receipt, Link2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -584,81 +585,195 @@ function FilterChip({
 
 function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => void }) {
   if (!row) return null;
+  const isIn = row.direction === 'IN';
+  const match = MATCH_CONFIG[row.matchStatus || 'UNMATCHED'];
+
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden">
+      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col gap-0">
+        {/* ─── Header ─── */}
         <div className={cn(
-          "relative px-6 py-6",
-          row.direction === 'IN' ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-rose-500 to-red-600',
+          "relative px-6 py-5 shrink-0",
+          isIn ? 'bg-gradient-to-br from-emerald-600 to-teal-700' : 'bg-gradient-to-br from-rose-600 to-red-700',
         )}>
-          <div className="absolute inset-0 bg-dots opacity-20" />
+          <div className="absolute inset-0 bg-dots opacity-15" />
           <div className="relative text-white">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-medium">
-                {row.direction === 'IN' ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                {row.direction === 'IN' ? 'Kirim to\'lov' : 'Chiqim to\'lov'}
-              </span>
-              <span className="text-[11px] text-white/70">{formatDateTime(row.txnDate)}</span>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
+                  {isIn ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
+                  {isIn ? 'KIRIM' : 'CHIQIM'}
+                </span>
+                <span className="text-[11px] text-white/80 tabular-nums">{formatDateTime(row.txnDate)}</span>
+                {row.isAnor && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-300/25 text-amber-100 ring-1 ring-amber-200/40">
+                    ⚡ ANOR 24/7
+                  </span>
+                )}
+              </div>
+              <button onClick={onClose} className="text-white/70 hover:text-white shrink-0 -mr-1 -mt-1 p-1">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <div className="text-3xl lg:text-4xl font-bold tabular-nums tracking-tight">
-              {row.direction === 'IN' ? '+' : '−'}{formatMoney(row.amount, row.currency)}
+            <div className="text-3xl lg:text-4xl font-bold tabular-nums tracking-tight mt-2">
+              {isIn ? '+' : '−'}{formatMoney(row.amount, row.currency)}
             </div>
-            <div className="text-sm text-white/80 mt-1">
-              {row.direction === 'IN' ? row.fromName : row.toName || '—'}
+            <div className="text-sm text-white/90 mt-1 font-medium truncate">
+              {isIn ? row.fromName : row.toName || '—'}
             </div>
           </div>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
-          <Section title="Yuboruvchi">
-            <Row label="Nomi" value={row.fromName || '—'} />
-            <Row label="STIR" value={row.fromInn || '—'} mono />
-            <Row label="Hisob" value={row.fromAccount || '—'} mono />
-            <Row label="Bank MFO" value={row.fromMfo || '—'} mono />
-          </Section>
+        {/* ─── Body — scrollable ─── */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
+          {/* Status + match badges */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset",
+              match.cls,
+            )}>
+              <Link2 className="h-3 w-3" /> {match.label}
+            </span>
+            {row.docNumber && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
+                <Receipt className="h-3 w-3" /> #{row.docNumber}
+              </span>
+            )}
+          </div>
 
-          <Section title="Qabul qiluvchi">
-            <Row label="Nomi" value={row.toName || '—'} />
-            <Row label="STIR" value={row.toInn || '—'} mono />
-            <Row label="Hisob" value={row.toAccount || '—'} mono />
-            <Row label="Bank MFO" value={row.toMfo || '—'} mono />
-          </Section>
+          {/* Yuboruvchi */}
+          <DetailSection title="Yuboruvchi" icon={ArrowUpRight} highlighted={!isIn} tone="rose">
+            <CopyRow label="Nomi" value={row.fromName || '—'} />
+            <CopyRow label="STIR" value={row.fromInn} mono copyable />
+            <CopyRow label="Hisob raqami" value={row.fromAccount} mono copyable />
+            <CopyRow label="Bank MFO" value={row.fromMfo} mono />
+          </DetailSection>
 
+          {/* Qabul qiluvchi */}
+          <DetailSection title="Qabul qiluvchi" icon={ArrowDownLeft} highlighted={isIn} tone="emerald">
+            <CopyRow label="Nomi" value={row.toName || '—'} />
+            <CopyRow label="STIR" value={row.toInn} mono copyable />
+            <CopyRow label="Hisob raqami" value={row.toAccount} mono copyable />
+            <CopyRow label="Bank MFO" value={row.toMfo} mono />
+          </DetailSection>
+
+          {/* To'lov maqsadi */}
           {row.description && (
-            <Section title="To'lov maqsadi">
-              <div className="text-sm text-slate-700 leading-relaxed">{row.description}</div>
-            </Section>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">To'lov maqsadi</div>
+              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
+                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap">{row.description.trim()}</div>
+                {row.purposeCode && (
+                  <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+                    Maqsad kodi: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
-          <Section title="Tizim ma'lumotlari">
-            <Row label="Bank" value={row.account?.bank?.name || '—'} />
-            <Row label="Mahalliy hisob" value={row.account?.accountNo || '—'} mono />
-            <Row label="Hujjat raqami" value={row.docNumber || '—'} mono />
-            <Row label="Tranzaksiya ID" value={row.externalId || row.id} mono />
-            <Row label="Match holati" value={MATCH_CONFIG[row.matchStatus || 'UNMATCHED']?.label || 'Bog\'lanmagan'} />
-          </Section>
+          {/* Tizim ma'lumotlari */}
+          <DetailSection title="Tizim ma'lumotlari" icon={Hash}>
+            <CopyRow label="Bank" value={row.account?.bank?.name || '—'} />
+            <CopyRow label="Mahalliy hisob" value={row.account?.accountNo} mono copyable />
+            <CopyRow label="B2 ID" value={row.bankB2Id} mono copyable />
+            <CopyRow label="Global ID (NCI)" value={row.bankGeneralId} mono copyable />
+          </DetailSection>
+
+          {/* Tranzaksiya ID — to'liq, alohida blok */}
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">Tranzaksiya ID (composite)</div>
+            <CopyBlock value={row.externalId || row.id} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function DetailSection({
+  title, icon: Icon, highlighted, tone, children,
+}: {
+  title: string;
+  icon: any;
+  highlighted?: boolean;
+  tone?: 'rose' | 'emerald';
+  children: React.ReactNode;
+}) {
+  const ring = highlighted
+    ? tone === 'emerald' ? 'ring-emerald-200 bg-emerald-50/50' : 'ring-rose-200 bg-rose-50/50'
+    : 'ring-slate-200 bg-slate-50/60';
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2">{title}</div>
-      <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-4 py-3 space-y-1.5">
+      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+        <Icon className="h-3 w-3" /> {title}
+        {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· SIZ</span>}
+      </div>
+      <div className={cn("rounded-xl ring-1 px-4 py-2.5 divide-y divide-slate-100/80", ring)}>
         {children}
       </div>
     </div>
   );
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function CopyRow({ label, value, mono, copyable }: { label: string; value?: string; mono?: boolean; copyable?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const isEmpty = !value || value === '—';
+
+  function copy() {
+    if (isEmpty) return;
+    navigator.clipboard.writeText(value!);
+    setCopied(true);
+    toast.success(`${label} nusxalandi`);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
   return (
-    <div className="flex items-baseline justify-between gap-3 py-1">
+    <div className="flex items-center justify-between gap-3 py-1.5 group">
       <div className="text-[12px] text-slate-500 shrink-0">{label}</div>
-      <div className={cn("text-[13px] text-slate-900 text-right truncate", mono && 'font-mono text-[12px]')}>{value}</div>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <div className={cn(
+          "text-[13px] text-slate-900 text-right truncate",
+          mono && 'font-mono text-[12px]',
+          isEmpty && 'text-slate-400 italic',
+        )}>
+          {isEmpty ? "bo'sh" : value}
+        </div>
+        {copyable && !isEmpty && (
+          <button
+            onClick={copy}
+            className="shrink-0 p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all"
+            title="Nusxalash"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// To'liq qiymat — wrap qilingan, copy tugmasi bilan (uzun ID lar uchun)
+function CopyBlock({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    toast.success('Tranzaksiya ID nusxalandi');
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <div className="rounded-xl bg-slate-900 ring-1 ring-slate-700 px-3 py-2.5 flex items-start gap-2">
+      <code className="flex-1 font-mono text-[11px] text-emerald-300 break-all leading-relaxed select-all">
+        {value}
+      </code>
+      <button
+        onClick={copy}
+        className="shrink-0 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
+        title="Nusxalash"
+      >
+        {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 }
