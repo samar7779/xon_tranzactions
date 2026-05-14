@@ -121,18 +121,22 @@ export class SyncService {
   }): Promise<{ accounts: number; days: number }> {
     let accounts: { id: string; credentialId: string }[] = [];
     if (opts.scope === 'account' && opts.accountId) {
+      // Bitta hisob — foydalanuvchi aniq tanlagan, syncEnabled tekshirilmaydi
       const a = await this.prisma.bankAccount.findUnique({
         where: { id: opts.accountId },
         select: { id: true, credentialId: true },
       });
       if (a) accounts = [a];
     } else if (opts.scope === 'bank' && opts.bankId) {
+      // Bank bo'yicha — faqat sync yoqilgan hisoblar
       accounts = await this.prisma.bankAccount.findMany({
-        where: { bankId: opts.bankId },
+        where: { bankId: opts.bankId, syncEnabled: true },
         select: { id: true, credentialId: true },
       });
     } else {
+      // Barcha hisob — faqat sync yoqilganlari (o'chirilganlar tashlab ketiladi)
       accounts = await this.prisma.bankAccount.findMany({
+        where: { syncEnabled: true },
         select: { id: true, credentialId: true },
       });
     }
