@@ -108,17 +108,16 @@ export class SyncService {
   }
 
   /**
-   * Backfill — eski tarixni bazaga yozish.
-   * scope: 'all' (barcha hisob), 'bank' (bitta bank), 'account' (bitta hisob).
-   * dateFrom/dateTo — ISO (yyyy-MM-dd). Fonda chaqiriladi (uzoq davom etadi).
+   * Backfill uchun maqsadli hisoblar + sanalar ro'yxatini hisoblaydi.
+   * scope: 'all' (barcha sync yoqilgan), 'bank' (bitta bank), 'account' (bitta hisob).
    */
-  async backfill(opts: {
+  async resolveBackfillTargets(opts: {
     scope: 'all' | 'bank' | 'account';
     bankId?: string;
     accountId?: string;
     dateFrom: string;
     dateTo: string;
-  }): Promise<{ accounts: number; days: number }> {
+  }): Promise<{ accounts: { id: string; credentialId: string }[]; dates: string[] }> {
     let accounts: { id: string; credentialId: string }[] = [];
     if (opts.scope === 'account' && opts.accountId) {
       // Bitta hisob — foydalanuvchi aniq tanlagan, syncEnabled tekshirilmaydi
@@ -147,10 +146,16 @@ export class SyncService {
     for (let t = from.getTime(); t <= to.getTime(); t += 86_400_000) {
       dates.push(format(new Date(t), 'dd.MM.yyyy'));
     }
-    if (accounts.length === 0 || dates.length === 0) {
-      return { accounts: accounts.length, days: dates.length };
-    }
+    return { accounts, dates };
+  }
 
+  /**
+   * Backfill — eski tarixni bazaga yozish. Fonda chaqiriladi (uzoq davom etadi).
+   * Har hisob uchun alohida SyncLog yoziladi (source'da "· backfill" bo'ladi) —
+   * frontend shu loglarni kuzatib jarayonni ko'rsatadi.
+   */
+  async runBackfill(accounts: { id: string; credentialId: string }[], dates: string[]) {
+    if (accounts.length === 0 || dates.length === 0) return;
     this.logger.log(`Backfill boshlandi: ${accounts.length} hisob × ${dates.length} kun`);
     for (const acc of accounts) {
       try {
@@ -160,7 +165,6 @@ export class SyncService {
       }
     }
     this.logger.log(`Backfill tugadi: ${accounts.length} hisob × ${dates.length} kun`);
-    return { accounts: accounts.length, days: dates.length };
   }
 
   /**
