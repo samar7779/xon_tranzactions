@@ -410,7 +410,30 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
               <Select value={form.bankId} onValueChange={(v) => setForm({ ...form, bankId: v })}>
                 <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
                 <SelectContent>
-                  {banks.map((b) => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  {/* Aktiv banklar */}
+                  {banks.filter((b) => b.isActive).length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50">
+                        ✓ Aktiv (API ishlaydi)
+                      </div>
+                      {banks.filter((b) => b.isActive).map((b) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </>
+                  )}
+                  {/* Noaktiv banklar */}
+                  {banks.filter((b) => !b.isActive).length > 0 && (
+                    <>
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-slate-50 mt-1">
+                        🚧 Kelajakda (hozir tanlash mumkin emas)
+                      </div>
+                      {banks.filter((b) => !b.isActive).map((b) => (
+                        <SelectItem key={b.id} value={b.id} disabled className="opacity-60">
+                          {b.name}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
                 </SelectContent>
               </Select>
             </div>

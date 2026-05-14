@@ -2,20 +2,41 @@ import { Injectable, NotFoundException, ConflictException, OnModuleInit, Logger 
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateBankDto, UpdateBankDto } from './dto/bank.dto';
 
-// Boshlang'ich banklar — bank24.uz protokoli oilasi
+// Boshlang'ich banklar — O'zbekiston bo'yicha barcha asosiy banklar
+// Aktiv = API integratsiyasi ishlaydi va sync uchun ishlatish mumkin
+// Aktiv emas = ko'rinadi lekin tanlash uchun yopiq (integratsiya kelajakda)
 const DEFAULT_BANKS = [
-  {
-    code: 'KAPITALBANK',
-    name: 'Kapitalbank',
-    apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',
-    apiKind: 'KAPITALBANK_V3' as const,
-  },
-  {
-    code: 'IPAK_YULI',
-    name: "Ipak Yo'li banki",
-    apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',
-    apiKind: 'KAPITALBANK_V3' as const,
-  },
+  // Aktiv — bank24.uz protokoli (KapitalBank V3 oilasi)
+  { code: 'KAPITALBANK',  name: 'Kapitalbank',           apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',  apiKind: 'KAPITALBANK_V3' as const, isActive: true },
+  { code: 'IPAK_YULI',    name: "Ipak Yo'li banki",      apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',                              apiKind: 'KAPITALBANK_V3' as const, isActive: true },
+
+  // Aktiv emas — kelajakda integratsiya bo'ladi
+  { code: 'NBU',          name: 'NBU — Milliy bank',     apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'HAMKORBANK',   name: 'Hamkorbank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'ASAKABANK',    name: 'Asaka Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'IPOTEKA',      name: 'Ipoteka Bank',          apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'AGROBANK',     name: 'Agrobank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'XALQ_BANK',    name: 'Xalq banki',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'MIKROKREDIT',  name: 'Mikrokreditbank',       apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'TURONBANK',    name: 'Turonbank',             apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'UZPSB',        name: 'UzPSB — Sanoat Qurilish bank', apiBaseUrl: null, apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'ALOQABANK',    name: 'Aloqabank',             apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'TRUSTBANK',    name: 'Trustbank',             apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'UNIVERSAL',    name: 'Universal Bank',        apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'DAVRBANK',     name: 'Davrbank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'ANORBANK',     name: 'Anorbank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'TBC',          name: 'TBC Bank',              apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'TENGE',        name: 'Tenge Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'HAYOT',        name: 'Hayot Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'ASIA_ALLIANCE', name: 'Asia Alliance Bank',   apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'GARANT',       name: 'Garant Bank',           apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'KDB',          name: 'KDB Bank Uzbekistan',   apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'SADERAT',      name: 'Saderat Bank',          apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'OFB',          name: 'OFB — Orient Finans',   apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'INFINBANK',    name: 'Infinbank',             apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'ZIRAAT',       name: 'Ziraat Bank Uzbekistan', apiBaseUrl: null, apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'CAPITAL_BANK', name: 'Capital Bank',          apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
+  { code: 'YANGI_BANK',   name: 'Yangi Bank',            apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },
 ];
 
 @Injectable()
@@ -29,26 +50,30 @@ export class BanksService implements OnModuleInit {
    */
   async onModuleInit() {
     let added = 0;
+    let updated = 0;
     for (const b of DEFAULT_BANKS) {
       const existing = await this.prisma.bank.findUnique({ where: { code: b.code } });
       if (!existing) {
         await this.prisma.bank.create({ data: b });
         added++;
         this.logger.log(`✓ Bank qo'shildi: ${b.name}`);
+      } else if (existing.isActive !== b.isActive && existing._count === undefined) {
+        // Aktivlik holatini tekshiramiz (faqat credentiallar yo'q bo'lsa yangilaymiz)
+        const withCount = await this.prisma.bank.findUnique({
+          where: { code: b.code },
+          include: { _count: { select: { credentials: true } } },
+        });
+        if (withCount && withCount._count.credentials === 0) {
+          await this.prisma.bank.update({
+            where: { code: b.code },
+            data: { isActive: b.isActive },
+          });
+          updated++;
+        }
       }
     }
-    if (added > 0) {
-      this.logger.log(`🏦 Banks bootstrap: ${added} ta yangi bank qo'shildi`);
-    }
-
-    // Hayot Bank vaqtincha kerakmas — agar mavjud bo'lsa va credentiallar yo'q bo'lsa o'chiramiz
-    const hayot = await this.prisma.bank.findUnique({
-      where: { code: 'HAYOT' },
-      include: { _count: { select: { credentials: true, accounts: true } } },
-    });
-    if (hayot && hayot._count.credentials === 0 && hayot._count.accounts === 0) {
-      await this.prisma.bank.delete({ where: { id: hayot.id } });
-      this.logger.log(`🗑 Hayot Bank o'chirildi (kerakmas)`);
+    if (added > 0 || updated > 0) {
+      this.logger.log(`🏦 Banks bootstrap: ${added} qo'shildi, ${updated} yangilandi`);
     }
   }
 
