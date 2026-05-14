@@ -32,7 +32,6 @@ interface AdminItem {
   id: string;
   email: string;
   fullName?: string | null;
-  role: string;
   roleId?: string | null;
   roleRef?: { id: string; name: string; label: string } | null;
   isActive: boolean;
@@ -64,7 +63,7 @@ export default function AdminUsersPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const me = useAuth((s) => s.user);
-  const canManage = !!(me?.role === 'SUPERADMIN' || me?.permissions?.includes(PERMS.USERS_MANAGE));
+  const canManage = !!me?.permissions?.includes(PERMS.USERS_MANAGE);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -98,7 +97,7 @@ export default function AdminUsersPage() {
     );
   }
   if (roleFilter !== 'all') {
-    filtered = filtered.filter((u) => (u.roleRef?.id || u.role) === roleFilter);
+    filtered = filtered.filter((u) => u.roleRef?.id === roleFilter);
   }
 
   const stats = useMemo(() => {
@@ -106,7 +105,7 @@ export default function AdminUsersPage() {
     return {
       total: items.length,
       active: items.filter((u) => u.isActive).length,
-      admins: items.filter((u) => u.role === 'SUPERADMIN' || u.role === 'ADMIN').length,
+      admins: items.filter((u) => !!u.roleRef).length,
       recent: items.filter((u) => u.lastLoginAt && (Date.now() - new Date(u.lastLoginAt).getTime() < 7 * 86400000)).length,
     };
   }, [data]);
@@ -184,8 +183,8 @@ export default function AdminUsersPage() {
         ) : (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
             {filtered.map((u) => {
-              const role = u.roleRef?.label || u.role;
-              const roleKey = u.role;
+              const role = u.roleRef?.label || '— rol biriktirilmagan';
+              const roleKey = u.roleRef?.name || '';
               const c = getRoleColor(roleKey);
               return (
                 <Card key={u.id} className="group border-0 shadow-soft card-hover overflow-hidden relative">

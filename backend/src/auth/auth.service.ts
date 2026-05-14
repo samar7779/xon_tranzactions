@@ -19,32 +19,12 @@ export class AuthService {
     private jwt: JwtService,
   ) {}
 
-  private async resolvePermissions(user: { role: string; roleRef: { permissions: string[] } | null }): Promise<string[]> {
-    // Yangi RBAC: Role table'dan permissions[]
-    if (user.roleRef) return user.roleRef.permissions;
-    // Backwards compat: enum'ga qarab default permissions
-    if (user.role === 'SUPERADMIN') {
-      return [
-        'dashboard:view','transactions:view',
-        'accounts:view','accounts:manage',
-        'credentials:view','credentials:manage','credentials:test',
-        'banks:view','banks:manage',
-        'sync:view','sync:run',
-        'users:view','users:manage',
-        'roles:view','roles:manage',
-        'system:deploy',
-      ];
-    }
-    if (user.role === 'ADMIN') {
-      return [
-        'dashboard:view','transactions:view',
-        'accounts:view','accounts:manage',
-        'credentials:view','credentials:manage','credentials:test',
-        'banks:view','banks:manage',
-        'sync:view','sync:run',
-      ];
-    }
-    return ['dashboard:view','transactions:view','accounts:view','credentials:view','banks:view','sync:view'];
+  /**
+   * Ruxsatlar faqat foydalanuvchiga biriktirilgan Role'dan olinadi.
+   * Hech qanday hardcode yo'q — roli bo'lmasa, ruxsatlar ham bo'lmaydi.
+   */
+  private resolvePermissions(user: { roleRef: { permissions: string[] } | null }): string[] {
+    return user.roleRef?.permissions ?? [];
   }
 
   async login(dto: LoginDto) {
@@ -65,7 +45,7 @@ export class AuthService {
     });
     const payload: JwtPayload = { sub: user.id, email: user.email, role: user.role };
     const token = await this.jwt.signAsync(payload);
-    const permissions = await this.resolvePermissions(user);
+    const permissions = this.resolvePermissions(user);
     return {
       ok: true,
       token,
@@ -87,7 +67,7 @@ export class AuthService {
       include: { roleRef: true },
     });
     if (!user) throw new UnauthorizedException();
-    const permissions = await this.resolvePermissions(user);
+    const permissions = this.resolvePermissions(user);
     return {
       id: user.id,
       email: user.email,

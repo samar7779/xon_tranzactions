@@ -11,9 +11,14 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const token = useAuth((s) => s.token);
   const user = useAuth((s) => s.user);
   const hydrate = useAuth((s) => s.hydrate);
+  const hasHydrated = useAuth((s) => s.hasHydrated);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    // localStorage'dan o'qib bo'lguncha kutamiz — aks holda birinchi
+    // render'da token=null ko'rinib, login'ga noto'g'ri yo'naltirib yuboramiz.
+    if (!hasHydrated) return;
+
     if (!token) {
       router.replace(`/${locale}/login`);
       return;
@@ -23,9 +28,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     } else {
       setReady(true);
     }
-  }, [token, user, hydrate, router, locale]);
+  }, [hasHydrated, token, user, hydrate, router, locale]);
 
-  if (!ready) {
+  if (!hasHydrated || !ready) {
     return <SplashLoader />;
   }
   return <>{children}</>;

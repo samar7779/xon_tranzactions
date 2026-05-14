@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
-import { ALL_PERMISSIONS, PERMISSION_GROUPS, SYSTEM_ROLES } from '../auth/permissions';
+import { ALL_PERMISSIONS, PERMISSION_GROUPS } from '../auth/permissions';
 
 @Injectable()
 export class RolesService {
@@ -57,10 +57,8 @@ export class RolesService {
   async update(id: string, dto: UpdateRoleDto) {
     const exists = await this.prisma.role.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Rol topilmadi');
-    if (exists.isSystem && dto.permissions) {
-      // System rollarning ruxsatlarini o'zgartirib bo'lmaydi
-      throw new BadRequestException('Tizim rolining ruxsatlarini o\'zgartirib bo\'lmaydi');
-    }
+    // Har qanday rolning ruxsatlari tahrirlanishi mumkin — tizim roli ham.
+    // Faqat o'chirib bo'lmaydi (remove() da tekshiriladi).
     if (dto.permissions) this.validatePerms(dto.permissions);
     const role = await this.prisma.role.update({
       where: { id },

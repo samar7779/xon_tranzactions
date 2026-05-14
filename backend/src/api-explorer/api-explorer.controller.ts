@@ -2,8 +2,9 @@ import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, IsBoolean } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { PERMISSIONS } from '../auth/permissions';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 
 // dd.MM.yyyy ↔ Date helpers
@@ -55,12 +56,12 @@ class GetAccDto {
  * API Explorer — bank API'lardan keladigan TO'LIQ raw javobni qaytaradi.
  * Frontend'da JSON viewer ko'rsatish uchun.
  *
- * Faqat SUPERADMIN/ADMIN — chunki credential'larni qabul qiladi.
+ * credentials:manage ruxsati talab qilinadi — chunki raw credential qabul qiladi.
  */
 @ApiTags('api-explorer')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
-@Roles('SUPERADMIN', 'ADMIN')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions(PERMISSIONS.CREDENTIALS_MANAGE)
 @Controller('api-explorer')
 export class ApiExplorerController {
   constructor(private kb: KapitalbankClient) {}

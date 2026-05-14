@@ -6,79 +6,44 @@ dotenv.config();
 
 const prisma = new PrismaClient();
 
-// Permissions ro'yxati (src/auth/permissions.ts bilan sinxron)
-const PERMS = {
-  DASHBOARD_VIEW: 'dashboard:view',
-  TRANSACTIONS_VIEW: 'transactions:view',
-  ACCOUNTS_VIEW: 'accounts:view',
-  ACCOUNTS_MANAGE: 'accounts:manage',
-  CREDENTIALS_VIEW: 'credentials:view',
-  CREDENTIALS_MANAGE: 'credentials:manage',
-  CREDENTIALS_TEST: 'credentials:test',
-  BANKS_VIEW: 'banks:view',
-  BANKS_MANAGE: 'banks:manage',
-  SYNC_VIEW: 'sync:view',
-  SYNC_RUN: 'sync:run',
-  USERS_VIEW: 'users:view',
-  USERS_MANAGE: 'users:manage',
-  ROLES_VIEW: 'roles:view',
-  ROLES_MANAGE: 'roles:manage',
-  SYSTEM_DEPLOY: 'system:deploy',
-};
-const ALL_PERMS = Object.values(PERMS);
-
-const SYSTEM_ROLES = [
-  {
-    name: 'SUPERADMIN',
-    label: 'Bosh administrator',
-    description: 'Barcha ruxsatlarga ega — rollarni boshqarishi mumkin',
-    permissions: ALL_PERMS,
-  },
-  {
-    name: 'ADMIN',
-    label: 'Administrator',
-    description: 'Bank ulanishlari va hisoblarni boshqaradi, foydalanuvchilarga tegmaydi',
-    permissions: [
-      PERMS.DASHBOARD_VIEW, PERMS.TRANSACTIONS_VIEW,
-      PERMS.ACCOUNTS_VIEW, PERMS.ACCOUNTS_MANAGE,
-      PERMS.CREDENTIALS_VIEW, PERMS.CREDENTIALS_MANAGE, PERMS.CREDENTIALS_TEST,
-      PERMS.BANKS_VIEW, PERMS.BANKS_MANAGE,
-      PERMS.SYNC_VIEW, PERMS.SYNC_RUN,
-    ],
-  },
-  {
-    name: 'VIEWER',
-    label: 'Kuzatuvchi',
-    description: "Faqat o'qish — tranzaksiyalar va statistikani ko'radi",
-    permissions: [
-      PERMS.DASHBOARD_VIEW, PERMS.TRANSACTIONS_VIEW,
-      PERMS.ACCOUNTS_VIEW, PERMS.CREDENTIALS_VIEW,
-      PERMS.BANKS_VIEW, PERMS.SYNC_VIEW,
-    ],
-  },
+// Tizimdagi BARCHA ruxsatlar ro'yxati (src/auth/permissions.ts bilan sinxron).
+// Yangi permission qo'shilsa — shu yerga ham qo'shing.
+const ALL_PERMS = [
+  'dashboard:view',
+  'transactions:view',
+  'accounts:view', 'accounts:manage',
+  'credentials:view', 'credentials:manage', 'credentials:test',
+  'banks:view', 'banks:manage',
+  'sync:view', 'sync:run',
+  'users:view', 'users:manage',
+  'roles:view', 'roles:manage',
+  'system:deploy',
+  'customers:view', 'customers:manage',
+  'contracts:view', 'contracts:manage',
+  'payments:view', 'payments:manage',
 ];
 
 async function main() {
-  // 1. System rollar
-  for (const r of SYSTEM_ROLES) {
-    await prisma.role.upsert({
-      where: { name: r.name },
-      update: {
-        label: r.label,
-        description: r.description,
-        permissions: r.permissions,
-        isSystem: true,
-      },
-      create: {
-        name: r.name,
-        label: r.label,
-        description: r.description,
-        permissions: r.permissions,
-        isSystem: true,
-      },
-    });
-  }
-  console.log(`✓ ${SYSTEM_ROLES.length} ta tizim roli sinxronlandi`);
+  // 1. Bootstrap roli — birinchi admin tizimga kira olishi uchun shart.
+  //    Boshqa rollar admin panel orqali qo'lda yaratiladi.
+  //    Bu rolning ruxsatlari ham UI orqali tahrirlanishi mumkin.
+  await prisma.role.upsert({
+    where: { name: 'SUPERADMIN' },
+    update: {
+      label: 'Bosh administrator',
+      description: 'Barcha ruxsatlarga ega — birinchi admin uchun bootstrap roli',
+      // Faqat YANGI bo'lganida to'liq ruxsat beriladi; mavjud bo'lsa tegmaymiz,
+      // chunki admin uni UI orqali o'zgartirgan bo'lishi mumkin.
+    },
+    create: {
+      name: 'SUPERADMIN',
+      label: 'Bosh administrator',
+      description: 'Barcha ruxsatlarga ega — birinchi admin uchun bootstrap roli',
+      permissions: ALL_PERMS,
+      isSystem: true,
+    },
+  });
+  console.log('✓ Bootstrap roli (SUPERADMIN) tayyor');
 
   // 2. Birinchi admin (SUPERADMIN role bilan)
   const email = (process.env.SEED_ADMIN_EMAIL || 'admin@xon.local').toLowerCase();
@@ -102,7 +67,6 @@ async function main() {
     const user = await prisma.adminUser.create({
       data: {
         email, passwordHash, fullName,
-        role: 'SUPERADMIN',
         roleId: superRole?.id,
       },
     });

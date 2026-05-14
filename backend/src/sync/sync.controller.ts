@@ -3,12 +3,13 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { PERMISSIONS } from '../auth/permissions';
 
 @ApiTags('sync')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('sync')
 export class SyncController {
   constructor(
@@ -17,7 +18,7 @@ export class SyncController {
   ) {}
 
   @Post('account/:id')
-  @Roles('SUPERADMIN', 'ADMIN')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
   @ApiOperation({ summary: 'Bitta hisob bo\'yicha manual sync ishga tushirish' })
   async runAccount(@Param('id') id: string) {
     const acc = await this.prisma.bankAccount.findUnique({ where: { id } });
@@ -37,7 +38,7 @@ export class SyncController {
   }
 
   @Get('logs')
-  @Roles('SUPERADMIN', 'ADMIN', 'VIEWER')
+  @RequirePermissions(PERMISSIONS.SYNC_VIEW)
   @ApiOperation({ summary: 'Sync log tarixi' })
   async logs(@Query('limit') limit?: string) {
     const take = Math.min(Number(limit) || 50, 200);
