@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -27,15 +27,6 @@ import { BankLogo } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn, formatDateTime } from '@/lib/utils';
-
-const BANK_COLORS = [
-  { from: '#6366f1', to: '#4f46e5' },
-  { from: '#10b981', to: '#059669' },
-  { from: '#a855f7', to: '#7c3aed' },
-  { from: '#f59e0b', to: '#d97706' },
-  { from: '#ec4899', to: '#db2777' },
-  { from: '#06b6d4', to: '#0891b2' },
-];
 
 export default function CredentialsPage() {
   const t = useTranslations('credentials');
@@ -55,12 +46,6 @@ export default function CredentialsPage() {
     queryKey: ['banks'],
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
-
-  const bankColorMap = useMemo(() => {
-    const m = new Map<string, { from: string; to: string }>();
-    (banks?.items || []).forEach((b, i) => m.set(b.id, BANK_COLORS[i % BANK_COLORS.length]));
-    return m;
-  }, [banks]);
 
   const removeMut = useMutation({
     mutationFn: (id: string) => api.delete(`/bank-credentials/${id}`),
@@ -92,10 +77,7 @@ export default function CredentialsPage() {
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
-          <div>
-            <div className="text-lg font-bold tracking-tight">Bank ulanishlari</div>
-            <div className="text-xs text-slate-500">Banklar API uchun login/parol — har bir ulanish bir nechta hisobni o'z ichiga oladi</div>
-          </div>
+          <div className="text-lg font-bold tracking-tight">Bank ulanishlari</div>
           <Button
             size="sm"
             onClick={() => { setEditing(null); setDialogOpen(true); }}
@@ -131,13 +113,11 @@ export default function CredentialsPage() {
         ) : (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {list.map((c: any) => {
-              const color = bankColorMap.get(c.bankId) || BANK_COLORS[0];
               const status: 'ok' | 'error' | 'untested' = c.lastError ? 'error' : c.lastVerifiedAt ? 'ok' : 'untested';
               return (
                 <CredentialCard
                   key={c.id}
                   cred={c}
-                  color={color}
                   status={status}
                   onTest={() => testMut.mutate(c.id)}
                   onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(c.id)}
@@ -268,11 +248,19 @@ function KpiTile({
   );
 }
 
+function InfoTile({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg bg-slate-50 ring-1 ring-slate-100 px-2.5 py-1.5 min-w-0">
+      <div className="text-[9px] uppercase tracking-[0.1em] text-slate-400 font-bold mb-0.5">{label}</div>
+      <div className="text-[11px] font-medium text-slate-700 truncate">{children}</div>
+    </div>
+  );
+}
+
 function CredentialCard({
-  cred: c, color, status, onTest, onDelete, onReveal, onEdit, testing,
+  cred: c, status, onTest, onDelete, onReveal, onEdit, testing,
 }: {
   cred: any;
-  color: { from: string; to: string };
   status: 'ok' | 'error' | 'untested';
   onTest: () => void;
   onDelete: () => void;
@@ -280,22 +268,37 @@ function CredentialCard({
   onEdit: () => void;
   testing: boolean;
 }) {
+  const login = (c.loginPrefix || '') + (c.loginName || '');
   return (
-    <Card className="group border-0 shadow-soft card-hover overflow-hidden relative">
-      <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${color.from}, ${color.to})` }} />
-
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={44} />
-            <div className="min-w-0">
-              <div className="text-[14px] font-bold truncate tracking-tight">{c.label}</div>
-              <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>
-            </div>
+    <Card className="group border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all overflow-hidden bg-white">
+      <CardContent className="p-0">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={42} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{c.label}</div>
+            <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>
           </div>
+          <span className={cn(
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0",
+            status === 'ok' && "bg-emerald-100 text-emerald-700",
+            status === 'error' && "bg-rose-100 text-rose-700",
+            status === 'untested' && "bg-slate-100 text-slate-500",
+          )}>
+            <span className="relative flex h-1.5 w-1.5">
+              {status === 'ok' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
+              <span className={cn(
+                "relative inline-flex rounded-full h-1.5 w-1.5",
+                status === 'ok' && "bg-emerald-500",
+                status === 'error' && "bg-rose-500",
+                status === 'untested' && "bg-slate-300",
+              )} />
+            </span>
+            {status === 'ok' ? 'Ulangan' : status === 'error' ? 'Xato' : 'Tekshirilmagan'}
+          </span>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1">
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1 shrink-0">
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -319,72 +322,43 @@ function CredentialCard({
           </DropdownMenu>
         </div>
 
-        {/* Login */}
-        <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2 mb-3 space-y-1.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Login</span>
-            <span className="font-mono text-xs text-slate-700">{(c.loginPrefix || '') + c.loginName}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">MFO</span>
-            <span className="font-mono text-xs text-slate-700">{c.branch || '—'}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Avtorizatsiya</span>
-            <span className="text-xs font-medium text-slate-700 flex items-center gap-1">
-              {c.authMode === 'IP_WHITELIST' ? <><Globe className="h-3 w-3" /> IP Whitelist</> : <><Lock className="h-3 w-3" /> SMS SID</>}
+        {/* Info grid */}
+        <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+          <InfoTile label="Login"><span className="font-mono">{login || '—'}</span></InfoTile>
+          <InfoTile label="MFO"><span className="font-mono">{c.branch || '—'}</span></InfoTile>
+          <InfoTile label="Avtorizatsiya">
+            <span className="flex items-center gap-1">
+              {c.authMode === 'IP_WHITELIST'
+                ? <><Globe className="h-3 w-3 text-slate-400" /> IP Whitelist</>
+                : <><Lock className="h-3 w-3 text-slate-400" /> SMS SID</>}
             </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Yo'l</span>
-            <span className={cn(
-              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold",
-              c.useProxy ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600",
-            )}>
-              {c.useProxy ? '🔀 ahost orqali' : '↗ to\'g\'ridan-to\'g\'ri'}
+          </InfoTile>
+          <InfoTile label="Yo'l">
+            <span className={cn("font-semibold", c.useProxy ? "text-emerald-700" : "text-slate-600")}>
+              {c.useProxy ? 'ahost orqali' : "to'g'ridan-to'g'ri"}
             </span>
-          </div>
-        </div>
-
-        {/* Status */}
-        <div className="flex items-center justify-between">
-          <span className={cn(
-            "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ring-1 ring-inset",
-            status === 'ok' && "bg-emerald-50 text-emerald-700 ring-emerald-200",
-            status === 'error' && "bg-rose-50 text-rose-700 ring-rose-200",
-            status === 'untested' && "bg-slate-50 text-slate-500 ring-slate-200",
-          )}>
-            <span className="relative flex h-1.5 w-1.5">
-              {status === 'ok' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
-              <span className={cn(
-                "relative inline-flex rounded-full h-1.5 w-1.5",
-                status === 'ok' && "bg-emerald-500",
-                status === 'error' && "bg-rose-500",
-                status === 'untested' && "bg-slate-300",
-              )} />
-            </span>
-            {status === 'ok' && 'Ulangan'}
-            {status === 'error' && 'Xato'}
-            {status === 'untested' && 'Tekshirilmagan'}
-          </span>
-          <div className="text-[10px] text-slate-400">
-            {c.lastVerifiedAt ? formatDateTime(c.lastVerifiedAt) : 'Hech qachon'}
-          </div>
+          </InfoTile>
         </div>
 
         {c.lastError && (
-          <div className="mt-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-2.5 py-2 text-[11px] text-rose-700 truncate">
-            <AlertCircle className="h-3 w-3 inline mr-1" /> {c.lastError}
+          <div className="mx-4 mb-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-2.5 py-2 text-[11px] text-rose-700 line-clamp-2">
+            <AlertCircle className="h-3 w-3 inline mr-1 -mt-0.5" /> {c.lastError}
           </div>
         )}
 
-        <Button
-          size="sm" variant="outline" onClick={onTest} disabled={testing}
-          className="w-full mt-3 h-9 rounded-xl text-xs font-medium gap-1.5 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700"
-        >
-          <Wifi className={cn("h-3.5 w-3.5", testing && "animate-pulse")} />
-          {testing ? 'Tekshirilmoqda...' : 'Ulanishni tekshirish'}
-        </Button>
+        {/* Footer */}
+        <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-100 bg-slate-50/40">
+          <div className="text-[10px] text-slate-400 flex-1 truncate">
+            {c.lastVerifiedAt ? `Tekshirilgan: ${formatDateTime(c.lastVerifiedAt)}` : 'Hech tekshirilmagan'}
+          </div>
+          <Button
+            size="sm" onClick={onTest} disabled={testing}
+            className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+          >
+            <Wifi className={cn("h-3.5 w-3.5", testing && "animate-pulse")} />
+            {testing ? 'Tekshirilmoqda...' : 'Tekshirish'}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );
@@ -407,6 +381,7 @@ function CredDialog({
   const qc = useQueryClient();
   const isEdit = !!editing;
   const [form, setForm] = useState(EMPTY_FORM);
+  const [showPwd, setShowPwd] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -444,19 +419,33 @@ function CredDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? 'Ulanishni tahrirlash' : t('add')}</DialogTitle>
-          <DialogDescription>{t('subtitle')}</DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
+      <DialogContent className="max-w-lg p-0 overflow-hidden gap-0">
+        {/* Header */}
+        <div className="bg-gradient-to-br from-indigo-500 to-blue-600 px-6 py-5 text-white">
+          <div className="flex items-center gap-1.5 mb-1.5 text-white/80">
+            <KeyRound className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Bank ulanishi</span>
+          </div>
+          <DialogTitle className="text-white text-lg font-bold tracking-tight">
+            {isEdit ? 'Ulanishni tahrirlash' : t('add')}
+          </DialogTitle>
+          <DialogDescription className="text-white/75 text-xs mt-0.5">
+            Banklar API uchun login/parol — bir ulanish bir nechta hisobni o'z ichiga oladi
+          </DialogDescription>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>{t('bank')}</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                {t('bank')} <span className="text-rose-500">*</span>
+              </Label>
               <Select value={form.bankId} onValueChange={(v) => setForm({ ...form, bankId: v })}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectTrigger className={cn(!form.bankId && 'ring-1 ring-rose-200')}>
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
                 <SelectContent>
-                  {/* Aktiv banklar */}
                   {banks.filter((b) => b.isActive).length > 0 && (
                     <>
                       <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50">
@@ -467,11 +456,10 @@ function CredDialog({
                       ))}
                     </>
                   )}
-                  {/* Noaktiv banklar */}
                   {banks.filter((b) => !b.isActive).length > 0 && (
                     <>
                       <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-slate-50 mt-1">
-                        🚧 Kelajakda (hozir tanlash mumkin emas)
+                        🚧 Kelajakda (tanlash mumkin emas)
                       </div>
                       {banks.filter((b) => !b.isActive).map((b) => (
                         <SelectItem key={b.id} value={b.id} disabled className="opacity-60">
@@ -483,8 +471,8 @@ function CredDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>{t('authMode')}</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('authMode')}</Label>
               <Select value={form.authMode} onValueChange={(v) => setForm({ ...form, authMode: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -494,39 +482,74 @@ function CredDialog({
               </Select>
             </div>
           </div>
-          <div className="space-y-2">
-            <Label>{t('label')}</Label>
-            <Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="KapitalBank #1" />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label>{t('loginPrefix')}</Label>
-              <Input value={form.loginPrefix} onChange={(e) => setForm({ ...form, loginPrefix: e.target.value })} placeholder="IB#" />
-            </div>
-            <div className="col-span-2 space-y-2">
-              <Label>{t('loginName')}</Label>
-              <Input value={form.loginName} onChange={(e) => setForm({ ...form, loginName: e.target.value })} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label>{t('password')}</Label>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('label')}</Label>
             <Input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder={isEdit ? "Bo'sh qoldirsangiz o'zgartirilmaydi" : ''}
+              value={form.label}
+              onChange={(e) => setForm({ ...form, label: e.target.value })}
+              placeholder="KapitalBank #1"
+              autoComplete="off"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              API login <span className="text-rose-500">*</span>
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                value={form.loginPrefix}
+                onChange={(e) => setForm({ ...form, loginPrefix: e.target.value })}
+                placeholder="IB#"
+                autoComplete="off"
+                className="w-24 shrink-0 font-mono text-center"
+              />
+              <Input
+                value={form.loginName}
+                onChange={(e) => setForm({ ...form, loginName: e.target.value })}
+                placeholder="login nomi"
+                autoComplete="off"
+                className={cn('flex-1 font-mono', !form.loginName && 'ring-1 ring-rose-200')}
+              />
+            </div>
+            <div className="text-[10px] text-slate-500">Prefiks (KapitalBank uchun "IB#") + login nomi</div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('password')}</Label>
+            <div className="relative">
+              <Input
+                type={showPwd ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder={isEdit ? "Bo'sh qoldirsangiz o'zgartirilmaydi" : '••••••••'}
+                autoComplete="new-password"
+                className="pr-10 font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPwd((s) => !s)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5"
+              >
+                {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {isEdit && (
               <div className="text-[10px] text-slate-500">Parolni o'zgartirish uchun yangi parolni kiriting</div>
             )}
           </div>
-          <div className="space-y-2">
-            <Label>{t('branch')} <span className="text-rose-500">*</span></Label>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              {t('branch')} <span className="text-rose-500">*</span>
+            </Label>
             <Input
               value={form.branch}
               onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
               placeholder="00974"
               maxLength={5}
+              autoComplete="off"
               className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
             />
             <div className="text-[10px] text-slate-500">5 xonalik MFO kod — majburiy</div>
@@ -560,15 +583,17 @@ function CredDialog({
             </div>
           </div>
         </div>
-        <DialogFooter>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/60 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
           <Button
             onClick={() => mut.mutate()}
             disabled={mut.isPending || !form.bankId || !form.branch || !form.loginName}
           >
-            {tc('save')}
+            {mut.isPending ? 'Saqlanmoqda...' : tc('save')}
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
