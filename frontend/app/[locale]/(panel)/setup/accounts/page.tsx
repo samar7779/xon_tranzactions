@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
-  Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet,
+  Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet, Download, Loader2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import {
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
@@ -39,6 +39,7 @@ export default function AccountsPage() {
   const [bankFilter, setBankFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [exporting, setExporting] = useState(false);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['bank-accounts'],
@@ -72,6 +73,25 @@ export default function AccountsPage() {
     onSuccess: () => { toast.success(tc('success')); qc.invalidateQueries({ queryKey: ['bank-accounts'] }); },
     onError: (e: any) => toast.error(e?.message),
   });
+  const syncAllMut = useMutation({
+    mutationFn: () => api.post<any>('/sync/run-all'),
+    onSuccess: (r: any) => {
+      toast.success(`Sync boshlandi — ${r?.accounts || 0} ta hisob (bir necha daqiqada tugaydi)`);
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
+
+  async function exportAll() {
+    setExporting(true);
+    try {
+      await apiDownload('/bank-accounts/export', 'hisoblar.xlsx');
+      toast.success('Hisoblar Excel qilib yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklashda xato');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   // Banklar — aktivlar boshida (filtr uchun)
   const sortedBanks = useMemo(() => {
@@ -158,6 +178,30 @@ export default function AccountsPage() {
                   </button>
                 )}
               </div>
+
+              {/* Barchasiga sync + Excel yuklab olish */}
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => syncAllMut.mutate()}
+                  disabled={syncAllMut.isPending}
+                  className="h-10 rounded-xl gap-1.5 font-medium"
+                >
+                  <RefreshCw className={cn('h-3.5 w-3.5', syncAllMut.isPending && 'animate-spin')} />
+                  Barchasiga sync
+                </Button>
+              )}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={exportAll}
+                disabled={exporting}
+                className="h-10 rounded-xl gap-1.5 font-medium"
+              >
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Excel yuklab olish
+              </Button>
 
               <Select value={bankFilter} onValueChange={setBankFilter}>
                 <SelectTrigger className={cn(

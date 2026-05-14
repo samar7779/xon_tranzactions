@@ -37,6 +37,16 @@ export class SyncController {
     }
   }
 
+  @Post('run-all')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Barcha faol hisoblarni sync qilish (fonda)' })
+  async runAll() {
+    // 100+ hisob uzoq davom etadi — fonda ishga tushiramiz, javobni kutmaymiz
+    this.svc.tick().catch(() => {});
+    const accounts = await this.prisma.bankAccount.count({ where: { syncEnabled: true } });
+    return { ok: true, started: true, accounts };
+  }
+
   @Get('logs')
   @RequirePermissions(PERMISSIONS.SYNC_VIEW)
   @ApiOperation({ summary: 'Sync log tarixi' })
