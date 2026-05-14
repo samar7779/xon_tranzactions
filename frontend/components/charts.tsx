@@ -14,9 +14,9 @@ interface DualAreaChartProps {
 
 /**
  * Ikki maydonli (kirim yashil, chiqim qizil) kunma-kun grafik.
- * Hover'da vertikal chiziq + nuqtalar + tooltip ko'rsatadi.
+ * Glow effekt, chizilish animatsiyasi, pulsing nuqtalar, hover tooltip.
  */
-export function DualAreaChart({ data, height = 260, className }: DualAreaChartProps) {
+export function DualAreaChart({ data, height = 300, className }: DualAreaChartProps) {
   const id = useMemo(() => `dual-${Math.random().toString(36).slice(2, 8)}`, []);
   const [hover, setHover] = useState<number | null>(null);
 
@@ -48,8 +48,6 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
 
   const gridYs = [0, 0.25, 0.5, 0.75, 1];
   const yTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => formatShort(max * p));
-
-  // X label'lar — har Nth (siqilib ketmasligi uchun)
   const step = Math.max(1, Math.ceil(n / 8));
 
   function onMove(e: React.MouseEvent<HTMLDivElement>) {
@@ -60,6 +58,8 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
   }
 
   const h = hover;
+  const lastIn = inPts[n - 1];
+  const lastOut = outPts[n - 1];
 
   return (
     <div className={cn('w-full', className)}>
@@ -69,7 +69,7 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
           {yTicks.map((t, i) => (
             <div
               key={i}
-              className="absolute right-2 text-[10px] text-slate-400 tabular-nums -translate-y-1/2"
+              className="absolute right-2 text-[10px] text-slate-400 tabular-nums font-medium -translate-y-1/2"
               style={{ top: `${(i / (yTicks.length - 1)) * 100}%` }}
             >
               {t}
@@ -79,7 +79,7 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
 
         {/* Plot maydoni */}
         <div
-          className="flex-1 relative"
+          className="flex-1 relative rounded-lg bg-gradient-to-b from-slate-50/40 to-transparent"
           style={{ height: H }}
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
@@ -87,15 +87,33 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full overflow-visible">
             <defs>
               <linearGradient id={`${id}-in`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
+                <stop offset="55%" stopColor="#10b981" stopOpacity="0.12" />
                 <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
               </linearGradient>
               <linearGradient id={`${id}-out`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.30" />
+                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.38" />
+                <stop offset="55%" stopColor="#f43f5e" stopOpacity="0.10" />
                 <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
               </linearGradient>
+              <linearGradient id={`${id}-in-stroke`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#34d399" />
+                <stop offset="100%" stopColor="#10b981" />
+              </linearGradient>
+              <linearGradient id={`${id}-out-stroke`} x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#fb7185" />
+                <stop offset="100%" stopColor="#f43f5e" />
+              </linearGradient>
+              <filter id={`${id}-glow`} x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
             </defs>
 
+            {/* Grid */}
             {gridYs.map((p, i) => (
               <line
                 key={i}
@@ -103,55 +121,117 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
                 y1={p * H}
                 x2={W}
                 y2={p * H}
-                stroke="#e5e7eb"
+                stroke="#e2e8f0"
                 strokeWidth="1"
-                strokeDasharray={i === gridYs.length - 1 ? '0' : '3 3'}
+                strokeDasharray={i === gridYs.length - 1 ? '0' : '4 4'}
                 vectorEffect="non-scaling-stroke"
               />
             ))}
 
-            <path d={outArea} fill={`url(#${id}-out)`} />
-            <path d={inArea} fill={`url(#${id}-in)`} />
-            <path d={outLine} fill="none" stroke="#f43f5e" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-            <path d={inLine} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            {/* Maydonlar — fade-in */}
+            <path d={outArea} fill={`url(#${id}-out)`} opacity="0">
+              <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="0.3s" fill="freeze" />
+            </path>
+            <path d={inArea} fill={`url(#${id}-in)`} opacity="0">
+              <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="0.4s" fill="freeze" />
+            </path>
+
+            {/* Chiziqlar — glow + chizilish animatsiyasi */}
+            <path
+              d={outLine}
+              fill="none"
+              stroke={`url(#${id}-out-stroke)`}
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              filter={`url(#${id}-glow)`}
+              pathLength={1}
+              strokeDasharray="1"
+              strokeDashoffset="1"
+            >
+              <animate attributeName="stroke-dashoffset" from="1" to="0" dur="1.1s" fill="freeze"
+                calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1" />
+            </path>
+            <path
+              d={inLine}
+              fill="none"
+              stroke={`url(#${id}-in-stroke)`}
+              strokeWidth="2.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+              filter={`url(#${id}-glow)`}
+              pathLength={1}
+              strokeDasharray="1"
+              strokeDashoffset="1"
+            >
+              <animate attributeName="stroke-dashoffset" from="1" to="0" dur="1.1s" begin="0.15s" fill="freeze"
+                calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1" />
+            </path>
           </svg>
+
+          {/* Oxirgi nuqtalar — pulsing */}
+          <div
+            className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ left: '100%', top: `${(lastOut[1] / H) * 100}%` }}
+          >
+            <span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-60" />
+            <span className="absolute inset-[3px] rounded-full bg-rose-500 ring-2 ring-white" />
+          </div>
+          <div
+            className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ left: '100%', top: `${(lastIn[1] / H) * 100}%` }}
+          >
+            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
+            <span className="absolute inset-[3px] rounded-full bg-emerald-500 ring-2 ring-white" />
+          </div>
 
           {/* Hover qatlami */}
           {h !== null && (
             <>
-              {/* Vertikal chiziq */}
               <div
-                className="absolute top-0 bottom-0 w-px bg-slate-300 pointer-events-none"
+                className="absolute top-0 bottom-0 w-px pointer-events-none
+                           bg-gradient-to-b from-slate-400/0 via-slate-400/60 to-slate-400/0"
                 style={{ left: `${xFrac(h) * 100}%` }}
               />
-              {/* Kirim nuqtasi */}
               <div
-                className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].inflow)) * 100}%` }}
               />
-              {/* Chiqim nuqtasi */}
               <div
-                className="absolute w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].outflow)) * 100}%` }}
               />
               {/* Tooltip */}
               <div
-                className="absolute z-10 pointer-events-none bg-white rounded-lg shadow-lg ring-1 ring-slate-200 px-3 py-2 text-[11px] -translate-x-1/2"
-                style={{
-                  left: `${Math.min(85, Math.max(15, xFrac(h) * 100))}%`,
-                  top: 8,
-                }}
+                className="absolute z-10 pointer-events-none -translate-x-1/2 bg-white rounded-xl
+                           shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 overflow-hidden"
+                style={{ left: `${Math.min(82, Math.max(18, xFrac(h) * 100))}%`, top: 10 }}
               >
-                <div className="font-semibold text-slate-700 mb-1 tabular-nums">{data[h].label}</div>
-                <div className="flex items-center gap-1.5 whitespace-nowrap">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-slate-500">Kirim:</span>
-                  <span className="font-semibold text-emerald-700 tabular-nums">{formatFull(data[h].inflow)}</span>
+                <div className="bg-slate-900 text-white text-[11px] font-bold tabular-nums px-3 py-1.5">
+                  {data[h].label}
                 </div>
-                <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  <span className="text-slate-500">Chiqim:</span>
-                  <span className="font-semibold text-rose-700 tabular-nums">{formatFull(data[h].outflow)}</span>
+                <div className="px-3 py-2 space-y-1">
+                  <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span className="text-slate-500">Kirim</span>
+                    <span className="ml-auto font-bold text-emerald-700 tabular-nums">{formatFull(data[h].inflow)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    <span className="text-slate-500">Chiqim</span>
+                    <span className="ml-auto font-bold text-rose-700 tabular-nums">{formatFull(data[h].outflow)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100">
+                    <span className="text-slate-500">Sof</span>
+                    <span className={cn(
+                      "ml-auto font-bold tabular-nums",
+                      data[h].inflow - data[h].outflow >= 0 ? "text-emerald-700" : "text-rose-700",
+                    )}>
+                      {data[h].inflow - data[h].outflow >= 0 ? '+' : ''}{formatFull(data[h].inflow - data[h].outflow)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </>
@@ -160,7 +240,7 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
       </div>
 
       {/* X o'qi belgilari */}
-      <div className="flex mt-1.5">
+      <div className="flex mt-2">
         <div className="w-14 shrink-0" />
         <div className="flex-1 relative h-4">
           {data.map((d, i) => {
@@ -168,7 +248,7 @@ export function DualAreaChart({ data, height = 260, className }: DualAreaChartPr
             return (
               <div
                 key={i}
-                className="absolute text-[10px] text-slate-400 tabular-nums -translate-x-1/2"
+                className="absolute text-[10px] text-slate-400 tabular-nums font-medium -translate-x-1/2"
                 style={{ left: `${xFrac(i) * 100}%` }}
               >
                 {d.label}
