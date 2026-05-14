@@ -101,11 +101,19 @@ export default function DashboardPage() {
     );
   }, [accounts, chartBankId, accSearch]);
 
+  // ISO sanadan: dam olish kuni (shanba/yakshanba)mi?
+  const isWeekend = (iso: string) => {
+    const [y, m, dd] = iso.split('-').map(Number);
+    const wd = new Date(y, m - 1, dd).getDay();
+    return wd === 0 || wd === 6;
+  };
+
   const chartData = useMemo(() => {
     return (daily?.days || []).map((d: any) => ({
       label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
       inflow: Number(d.inflow || 0),
       outflow: Number(d.outflow || 0),
+      weekend: isWeekend(d.date),
     }));
   }, [daily]);
 
@@ -116,6 +124,7 @@ export default function DashboardPage() {
       inflow: Number(d.inflow || 0),
       outflow: Number(d.outflow || 0),
       count: Number(d.count || 0),
+      weekend: isWeekend(d.date),
     }));
   }, [daily]);
 
