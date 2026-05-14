@@ -8,7 +8,6 @@ import {
   Plus, Trash2, Wifi, AlertCircle, CheckCircle2, KeyRound, MoreVertical,
   Activity, RefreshCw, Lock, Shield, Globe, Eye, EyeOff, Copy, Check,
 } from 'lucide-react';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +23,7 @@ import {
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { BankLogo } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn, formatDateTime } from '@/lib/utils';
@@ -88,13 +88,14 @@ export default function CredentialsPage() {
 
   return (
     <>
-      <Topbar
-        title={t('title')}
-        subtitle={t('subtitle')}
-        actions={<CreateCredDialog banks={banks?.items || []} />}
-      />
-
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-bold tracking-tight">Bank ulanishlari</div>
+            <div className="text-xs text-slate-500">Banklar API uchun login/parol — har bir ulanish bir nechta hisobni o'z ichiga oladi</div>
+          </div>
+          <CreateCredDialog banks={banks?.items || []} />
+        </div>
 
         {/* ═══ KPI ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -268,10 +269,7 @@ function CredentialCard({
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl grid place-items-center shrink-0 shadow-sm text-white"
-              style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}>
-              <KeyRound className="h-5 w-5" />
-            </div>
+            <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={44} />
             <div className="min-w-0">
               <div className="text-[14px] font-bold truncate tracking-tight">{c.label}</div>
               <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>

@@ -73,7 +73,7 @@ export default function RolesPage() {
 
   return (
     <>
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">Rollar</div>

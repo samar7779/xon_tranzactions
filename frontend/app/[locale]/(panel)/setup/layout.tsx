@@ -2,26 +2,25 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { Users, ShieldCheck, History, Zap } from 'lucide-react';
+import { Building2, KeyRound, Wallet } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { key: 'users',        label: 'Adminlar',     icon: Users },
-  { key: 'roles',        label: 'Rollar',       icon: ShieldCheck },
-  { key: 'sync-logs',    label: 'Sync tarixi',  icon: History },
-  { key: 'api-explorer', label: 'API Explorer', icon: Zap },
+  { key: 'banks',       label: 'Banklar',          icon: Building2 },
+  { key: 'credentials', label: 'Bank ulanishlari', icon: KeyRound },
+  { key: 'accounts',    label: 'Bank hisoblari',   icon: Wallet },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function SetupLayout({ children }: { children: React.ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
 
-  const activeTab = TABS.find((t) => pathname.includes(`/admin/${t.key}`))?.key || 'users';
+  const activeTab = TABS.find((t) => pathname.includes(`/setup/${t.key}`))?.key || 'banks';
 
   return (
     <>
-      <Topbar title="Admin paneli" subtitle="Foydalanuvchilar, rollar, sync va API boshqaruvi" />
+      <Topbar title="Banklar" subtitle="Banklar, ulanishlar va hisob raqamlari" />
 
       {/* Tab bar */}
       <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200">
@@ -33,7 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               return (
                 <Link
                   key={tab.key}
-                  href={`/${locale}/admin/${tab.key}`}
+                  href={`/${locale}/setup/${tab.key}`}
                   className={cn(
                     'inline-flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
                     active
