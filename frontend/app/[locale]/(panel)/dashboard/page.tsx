@@ -15,6 +15,10 @@ import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { OnboardingCard } from '@/components/onboarding-card';
+import { DualAreaChart } from '@/components/charts';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
@@ -40,6 +44,54 @@ export default function DashboardPage() {
     queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=20'),
     refetchInterval: 30_000,
   });
+  const { data: banks } = useQuery({
+    queryKey: ['banks'],
+    queryFn: () => api.get<{ items: any[] }>('/banks'),
+  });
+
+  // ─── Kunma-kun kirim/chiqim diagrammasi ───
+  const [range, setRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
+  const [customFrom, setCustomFrom] = useState('');
+  const [customTo, setCustomTo] = useState('');
+  const [chartBankId, setChartBankId] = useState('all');
+  const [chartAccountId, setChartAccountId] = useState('all');
+
+  const { from: chartFrom, to: chartTo } = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    if (range === 'custom') return { from: customFrom, to: customTo };
+    if (range === 'today') return { from: fmt(today), to: fmt(today) };
+    const back = range === '7d' ? 6 : 29;
+    const f = new Date(today);
+    f.setDate(f.getDate() - back);
+    return { from: fmt(f), to: fmt(today) };
+  }, [range, customFrom, customTo]);
+
+  const chartParams = new URLSearchParams();
+  if (chartFrom) chartParams.set('from', chartFrom);
+  if (chartTo) chartParams.set('to', chartTo);
+  if (chartBankId !== 'all') chartParams.set('bankId', chartBankId);
+  if (chartAccountId !== 'all') chartParams.set('accountId', chartAccountId);
+
+  const { data: daily, isLoading: dailyLoading } = useQuery({
+    queryKey: ['daily', chartFrom, chartTo, chartBankId, chartAccountId],
+    queryFn: () => api.get<any>(`/transactions/daily?${chartParams}`),
+    enabled: range !== 'custom' || (!!customFrom && !!customTo),
+  });
+
+  // Tanlangan bankka tegishli hisoblar (account filtri uchun)
+  const chartAccounts = useMemo(() => {
+    const all = accounts?.items || [];
+    return chartBankId === 'all' ? all : all.filter((a: any) => a.bankId === chartBankId);
+  }, [accounts, chartBankId]);
+
+  const chartData = useMemo(() => {
+    return (daily?.days || []).map((d: any) => ({
+      label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
+      inflow: Number(d.inflow || 0),
+      outflow: Number(d.outflow || 0),
+    }));
+  }, [daily]);
 
   // KPI computations
   const totalBalance = (accounts?.items || []).reduce((s, a) => s + Number(a.balance || 0), 0);
@@ -102,6 +154,117 @@ export default function DashboardPage() {
         {isEmpty && (
           <OnboardingCard banksCount={banksCount} credentialsCount={credentialsCount} accountsCount={totalAccounts} />
         )}
+
+        {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
+        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+          {/* Header + boshqaruv */}
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Kunma-kun kirim/chiqim</div>
+              <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Bank filtri */}
+              <Select
+                value={chartBankId}
+                onValueChange={(v) => { setChartBankId(v); setChartAccountId('all'); }}
+              >
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white border-slate-200">
+                  <SelectValue placeholder="Hamma banklar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Hamma banklar</SelectItem>
+                  {(banks?.items || []).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Hisob filtri */}
+              <Select value={chartAccountId} onValueChange={setChartAccountId}>
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
+                  <SelectValue placeholder="Hamma hisoblar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Hamma hisoblar</SelectItem>
+                  {chartAccounts.map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.accountNo} {a.ownerName ? `· ${a.ownerName}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Sana oralig'i presetlari */}
+              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+                <RangeBtn active={range === 'today'} onClick={() => setRange('today')}>Bugun</RangeBtn>
+                <RangeBtn active={range === '7d'} onClick={() => setRange('7d')}>7 kun</RangeBtn>
+                <RangeBtn active={range === '30d'} onClick={() => setRange('30d')}>30 kun</RangeBtn>
+                <RangeBtn active={range === 'custom'} onClick={() => setRange('custom')}>Sana</RangeBtn>
+              </div>
+
+              {/* Custom sana oralig'i */}
+              {range === 'custom' && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={customFrom}
+                    onChange={(e) => setCustomFrom(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-blue-400"
+                  />
+                  <span className="text-slate-400 text-[11px]">→</span>
+                  <input
+                    type="date"
+                    value={customTo}
+                    onChange={(e) => setCustomTo(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-blue-400"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Body: jami + grafik */}
+          <div className="p-4">
+            {/* Jami kirim/chiqim/sof */}
+            <div className="flex items-center gap-5 mb-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Kirim</span>
+                <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                  {formatMoney(Number(daily?.totalIn || 0)).replace(' UZS', '')}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Chiqim</span>
+                <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                  {formatMoney(Number(daily?.totalOut || 0)).replace(' UZS', '')}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sof oqim</span>
+                <span className={cn(
+                  "text-[13px] font-bold tabular-nums",
+                  Number(daily?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700",
+                )}>
+                  {Number(daily?.net || 0) >= 0 ? '+' : ''}{formatMoney(Number(daily?.net || 0)).replace(' UZS', '')}
+                </span>
+              </div>
+            </div>
+
+            {/* Grafik */}
+            {range === 'custom' && (!customFrom || !customTo) ? (
+              <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                Sana oralig'ini tanlang
+              </div>
+            ) : dailyLoading ? (
+              <Skeleton className="h-[260px] w-full" />
+            ) : (
+              <DualAreaChart data={chartData} height={260} />
+            )}
+          </div>
+        </div>
 
         {/* ═══ MAIN GRID: 3 columns ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -365,6 +528,20 @@ function DataPanel({
       </div>
       <div className="bg-white">{children}</div>
     </div>
+  );
+}
+
+function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "px-2.5 h-8 text-[11px] font-semibold transition-colors border-r border-slate-200 last:border-r-0",
+        active ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 

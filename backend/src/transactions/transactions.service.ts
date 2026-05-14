@@ -65,6 +65,56 @@ export class TransactionsService {
     });
   }
 
+  /**
+   * Kunma-kun kirim/chiqim — dashboard diagrammasi uchun.
+   * Sana oralig'i berilmasa — oxirgi 30 kun. bankId/accountId bilan filtrlanadi.
+   * Har bir kun to'ldiriladi (tranzaksiyasiz kunlar ham 0 bilan), grafik uzluksiz bo'lishi uchun.
+   */
+  async daily(from?: string, to?: string, bankId?: string, accountId?: string) {
+    const toDate = to ? new Date(to) : new Date();
+    const fromDate = from
+      ? new Date(from)
+      : (() => { const d = new Date(toDate); d.setDate(d.getDate() - 29); return d; })();
+
+    const startStr = fromDate.toISOString().slice(0, 10);
+    const endStr = toDate.toISOString().slice(0, 10);
+    const start = new Date(`${startStr}T00:00:00.000Z`);
+    const end = new Date(`${endStr}T23:59:59.999Z`);
+
+    const where: any = { txnDate: { gte: start, lte: end } };
+    if (bankId) where.bankId = bankId;
+    if (accountId) where.accountId = accountId;
+
+    const txns = await this.prisma.transaction.findMany({
+      where,
+      select: { txnDate: true, direction: true, amount: true },
+    });
+
+    const map = new Map<string, { inflow: number; outflow: number; count: number }>();
+    for (const t of txns) {
+      const key = t.txnDate.toISOString().slice(0, 10);
+      const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
+      const amt = Number(t.amount);
+      if (t.direction === 'IN') e.inflow += amt;
+      else e.outflow += amt;
+      e.count += 1;
+      map.set(key, e);
+    }
+
+    const days: { date: string; inflow: number; outflow: number; net: number; count: number }[] = [];
+    const cursor = new Date(start);
+    while (cursor <= end) {
+      const key = cursor.toISOString().slice(0, 10);
+      const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
+      days.push({ date: key, inflow: e.inflow, outflow: e.outflow, net: e.inflow - e.outflow, count: e.count });
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    const totalIn = days.reduce((s, d) => s + d.inflow, 0);
+    const totalOut = days.reduce((s, d) => s + d.outflow, 0);
+    return { ok: true, from: startStr, to: endStr, totalIn, totalOut, net: totalIn - totalOut, days };
+  }
+
   async stats(dateFrom?: string, dateTo?: string) {
     const where: any = {};
     if (dateFrom || dateTo) {

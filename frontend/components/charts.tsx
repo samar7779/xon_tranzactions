@@ -2,8 +2,184 @@
  * Pure-SVG chart komponentlar — tashqi paket talab qilinmaydi.
  * Modern fintech dashboard'lari uslubida.
  */
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
+
+// ─────────────── Dual area chart (kirim/chiqim) ───────────────
+interface DualAreaChartProps {
+  data: { label: string; inflow: number; outflow: number }[];
+  height?: number;
+  className?: string;
+}
+
+/**
+ * Ikki maydonli (kirim yashil, chiqim qizil) kunma-kun grafik.
+ * Hover'da vertikal chiziq + nuqtalar + tooltip ko'rsatadi.
+ */
+export function DualAreaChart({ data, height = 260, className }: DualAreaChartProps) {
+  const id = useMemo(() => `dual-${Math.random().toString(36).slice(2, 8)}`, []);
+  const [hover, setHover] = useState<number | null>(null);
+
+  if (data.length === 0) {
+    return (
+      <div className={cn('grid place-items-center text-xs text-slate-400', className)} style={{ height }}>
+        Ma'lumot yo'q
+      </div>
+    );
+  }
+
+  const W = 800;
+  const H = height;
+  const n = data.length;
+  const max = Math.max(...data.map((d) => Math.max(d.inflow, d.outflow)), 1);
+
+  const xFrac = (i: number) => (n === 1 ? 0.5 : i / (n - 1));
+  const yFrac = (v: number) => v / max;
+  const X = (i: number) => xFrac(i) * W;
+  const Y = (v: number) => (1 - yFrac(v)) * H;
+
+  const inPts = data.map((d, i) => [X(i), Y(d.inflow)] as [number, number]);
+  const outPts = data.map((d, i) => [X(i), Y(d.outflow)] as [number, number]);
+
+  const inLine = smoothPath(inPts);
+  const outLine = smoothPath(outPts);
+  const inArea = `${inLine} L${inPts[n - 1][0]},${H} L${inPts[0][0]},${H} Z`;
+  const outArea = `${outLine} L${outPts[n - 1][0]},${H} L${outPts[0][0]},${H} Z`;
+
+  const gridYs = [0, 0.25, 0.5, 0.75, 1];
+  const yTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => formatShort(max * p));
+
+  // X label'lar — har Nth (siqilib ketmasligi uchun)
+  const step = Math.max(1, Math.ceil(n / 8));
+
+  function onMove(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const frac = (e.clientX - rect.left) / rect.width;
+    const idx = Math.min(n - 1, Math.max(0, Math.round(frac * (n - 1))));
+    setHover(idx);
+  }
+
+  const h = hover;
+
+  return (
+    <div className={cn('w-full', className)}>
+      <div className="flex">
+        {/* Y o'qi belgilari */}
+        <div className="w-14 shrink-0 relative" style={{ height: H }}>
+          {yTicks.map((t, i) => (
+            <div
+              key={i}
+              className="absolute right-2 text-[10px] text-slate-400 tabular-nums -translate-y-1/2"
+              style={{ top: `${(i / (yTicks.length - 1)) * 100}%` }}
+            >
+              {t}
+            </div>
+          ))}
+        </div>
+
+        {/* Plot maydoni */}
+        <div
+          className="flex-1 relative"
+          style={{ height: H }}
+          onMouseMove={onMove}
+          onMouseLeave={() => setHover(null)}
+        >
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full overflow-visible">
+            <defs>
+              <linearGradient id={`${id}-in`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id={`${id}-out`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.30" />
+                <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+
+            {gridYs.map((p, i) => (
+              <line
+                key={i}
+                x1={0}
+                y1={p * H}
+                x2={W}
+                y2={p * H}
+                stroke="#e5e7eb"
+                strokeWidth="1"
+                strokeDasharray={i === gridYs.length - 1 ? '0' : '3 3'}
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+
+            <path d={outArea} fill={`url(#${id}-out)`} />
+            <path d={inArea} fill={`url(#${id}-in)`} />
+            <path d={outLine} fill="none" stroke="#f43f5e" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            <path d={inLine} fill="none" stroke="#10b981" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          </svg>
+
+          {/* Hover qatlami */}
+          {h !== null && (
+            <>
+              {/* Vertikal chiziq */}
+              <div
+                className="absolute top-0 bottom-0 w-px bg-slate-300 pointer-events-none"
+                style={{ left: `${xFrac(h) * 100}%` }}
+              />
+              {/* Kirim nuqtasi */}
+              <div
+                className="absolute w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].inflow)) * 100}%` }}
+              />
+              {/* Chiqim nuqtasi */}
+              <div
+                className="absolute w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].outflow)) * 100}%` }}
+              />
+              {/* Tooltip */}
+              <div
+                className="absolute z-10 pointer-events-none bg-white rounded-lg shadow-lg ring-1 ring-slate-200 px-3 py-2 text-[11px] -translate-x-1/2"
+                style={{
+                  left: `${Math.min(85, Math.max(15, xFrac(h) * 100))}%`,
+                  top: 8,
+                }}
+              >
+                <div className="font-semibold text-slate-700 mb-1 tabular-nums">{data[h].label}</div>
+                <div className="flex items-center gap-1.5 whitespace-nowrap">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span className="text-slate-500">Kirim:</span>
+                  <span className="font-semibold text-emerald-700 tabular-nums">{formatFull(data[h].inflow)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 whitespace-nowrap mt-0.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  <span className="text-slate-500">Chiqim:</span>
+                  <span className="font-semibold text-rose-700 tabular-nums">{formatFull(data[h].outflow)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* X o'qi belgilari */}
+      <div className="flex mt-1.5">
+        <div className="w-14 shrink-0" />
+        <div className="flex-1 relative h-4">
+          {data.map((d, i) => {
+            if (i % step !== 0 && i !== n - 1) return null;
+            return (
+              <div
+                key={i}
+                className="absolute text-[10px] text-slate-400 tabular-nums -translate-x-1/2"
+                style={{ left: `${xFrac(i) * 100}%` }}
+              >
+                {d.label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─────────────── Smooth area chart ───────────────
 interface AreaChartProps {
@@ -228,4 +404,9 @@ function formatShort(n: number): string {
   if (abs >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (abs >= 1e3) return (n / 1e3).toFixed(0) + 'K';
   return n.toFixed(0);
+}
+
+// To'liq raqam — mingliklar probel bilan ajratiladi (1 234 567)
+function formatFull(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }

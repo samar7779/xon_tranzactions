@@ -28,6 +28,17 @@ export class TransactionsController {
     return this.svc.stats(from, to);
   }
 
+  @Get('daily')
+  @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob filtri bilan)' })
+  daily(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('bankId') bankId?: string,
+    @Query('accountId') accountId?: string,
+  ) {
+    return this.svc.daily(from, to, bankId, accountId);
+  }
+
   @Get('statement')
   @ApiOperation({ summary: "Bank vipiskasi — Excel (hisob + sana oralig'i)" })
   async statement(
