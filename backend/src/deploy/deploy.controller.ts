@@ -6,8 +6,9 @@ import { Request } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { DeployService } from './deploy.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { RolesGuard } from '../auth/guards/roles.guard';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { PERMISSIONS } from '../auth/permissions';
 
 @ApiTags('deploy')
 @Controller('_deploy')
@@ -23,10 +24,10 @@ export class DeployController {
   }
 
   @Get('log')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('SUPERADMIN', 'ADMIN')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.SYSTEM_DEPLOY)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Deploy log oxirgi 200 satr (admin only)' })
+  @ApiOperation({ summary: 'Deploy log oxirgi 200 satr' })
   async log() {
     return { ok: true, log: await this.svc.tail(200) };
   }

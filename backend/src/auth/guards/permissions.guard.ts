@@ -6,8 +6,8 @@ import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
  * `@RequirePermissions(...)` dekoratori bilan ishlatiladi.
  * Foydalanuvchi req.user.permissions ichida kamida bittasi mos kelsa — ruxsat.
  *
- * Jwt strategy req.user.permissions ni Role tablesidan yuklaydi.
- * SUPERADMIN enum'iga ega bo'lganlarga avtomatik barcha ruxsat (backwards compat).
+ * req.user.permissions FAQAT biriktirilgan Role tablesidan yuklanadi.
+ * Hech qanday hardcode yo'q — barcha ruxsat rolga berilган permissions[] orqali.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
@@ -22,9 +22,6 @@ export class PermissionsGuard implements CanActivate {
 
     const { user } = ctx.switchToHttp().getRequest();
     if (!user) throw new ForbiddenException('Tizimga kirilmagan');
-
-    // SUPERADMIN enum'iga ega bo'lganlarga avtomatik ruxsat
-    if (user.role === 'SUPERADMIN') return true;
 
     const userPerms: string[] = user.permissions || [];
     const ok = required.some((p) => userPerms.includes(p));

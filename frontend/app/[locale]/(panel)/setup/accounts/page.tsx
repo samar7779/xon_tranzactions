@@ -33,7 +33,7 @@ export default function AccountsPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManage = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.ACCOUNTS_MANAGE));
+  const canManage = !!user?.permissions?.includes(PERMS.ACCOUNTS_MANAGE);
 
   const [q, setQ] = useState('');
   const [bankFilter, setBankFilter] = useState<string>('all');

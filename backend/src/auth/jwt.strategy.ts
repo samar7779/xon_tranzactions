@@ -23,13 +23,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user || !user.isActive) {
       throw new UnauthorizedException();
     }
-    // Permissions ni Role'dan olamiz, yoki enum default
-    let permissions: string[] = [];
-    if (user.roleRef) {
-      permissions = user.roleRef.permissions;
-    } else if (user.role === 'SUPERADMIN') {
-      permissions = ['*']; // PermissionsGuard SUPERADMIN'ga avtomatik o'tkazadi
-    }
+    // Ruxsatlar faqat biriktirilgan Role'dan olinadi — hardcode yo'q.
+    // Roli yo'q foydalanuvchida hech qanday ruxsat bo'lmaydi.
+    const permissions: string[] = user.roleRef?.permissions ?? [];
     return {
       id: user.id,
       email: user.email,

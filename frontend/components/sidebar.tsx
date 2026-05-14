@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Building2,
   LogOut, ShieldCheck, BadgeDollarSign,
   Bell, ChevronUp, UserCircle, Settings, ChevronRight,
-  AlertCircle, CheckCircle2,
+  AlertCircle, CheckCircle2, FileSpreadsheet,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -32,6 +32,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
+  { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
 
   { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
 
@@ -56,7 +57,6 @@ export function Sidebar() {
   const can = (perm?: string) => {
     if (!perm) return true;
     if (!user) return false;
-    if (user.role === 'SUPERADMIN') return true;
     return user.permissions?.includes(perm) ?? false;
   };
 

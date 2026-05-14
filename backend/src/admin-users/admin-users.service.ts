@@ -26,14 +26,11 @@ export class AdminUsersService {
     if (exists) throw new ConflictException('Bu email allaqachon mavjud');
     const passwordHash = await bcrypt.hash(dto.password, 10);
 
-    // Yangi roleId yoki eski enum role qabul qilamiz
-    let roleId = dto.roleId;
-    let enumRole = dto.role || 'ADMIN';
+    // Foydalanuvchi faqat Role tabledan rol oladi — barcha ruxsat shu roldan.
+    const roleId = dto.roleId || null;
     if (roleId) {
       const role = await this.prisma.role.findUnique({ where: { id: roleId } });
       if (!role) throw new NotFoundException('Rol topilmadi');
-      // Enum'ni roleName ga moslashtiramiz (legacy bilan ishlashi uchun)
-      enumRole = ['SUPERADMIN', 'ADMIN', 'VIEWER'].includes(role.name) ? (role.name as any) : 'ADMIN';
     }
 
     const user = await this.prisma.adminUser.create({
@@ -41,7 +38,6 @@ export class AdminUsersService {
         email,
         passwordHash,
         fullName: dto.fullName,
-        role: enumRole as any,
         roleId,
       },
       include: { roleRef: { select: { id: true, name: true, label: true } } },
@@ -55,7 +51,6 @@ export class AdminUsersService {
     if (!exists) throw new NotFoundException('Admin topilmadi');
     const data: any = {};
     if (dto.fullName !== undefined) data.fullName = dto.fullName;
-    if (dto.role !== undefined) data.role = dto.role;
     if (dto.isActive !== undefined) data.isActive = dto.isActive;
     if (dto.password) data.passwordHash = await bcrypt.hash(dto.password, 10);
     if (dto.roleId !== undefined) {
@@ -65,9 +60,6 @@ export class AdminUsersService {
         const role = await this.prisma.role.findUnique({ where: { id: dto.roleId } });
         if (!role) throw new NotFoundException('Rol topilmadi');
         data.roleId = role.id;
-        if (['SUPERADMIN', 'ADMIN', 'VIEWER'].includes(role.name)) {
-          data.role = role.name;
-        }
       }
     }
     const user = await this.prisma.adminUser.update({

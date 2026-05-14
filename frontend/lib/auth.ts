@@ -8,7 +8,7 @@ export interface AdminUser {
   id: string;
   email: string;
   fullName?: string | null;
-  role: 'SUPERADMIN' | 'ADMIN' | 'VIEWER';
+  role?: string | null;
   roleId?: string | null;
   roleLabel?: string | null;
   permissions: string[];
@@ -17,6 +17,9 @@ export interface AdminUser {
 interface AuthState {
   token: string | null;
   user: AdminUser | null;
+  /** zustand persist localStorage'dan o'qib bo'lganini bildiradi */
+  hasHydrated: boolean;
+  setHasHydrated: (v: boolean) => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hydrate: () => Promise<void>;
@@ -28,6 +31,8 @@ export const useAuth = create<AuthState>()(
     (set, get) => ({
       token: null,
       user: null,
+      hasHydrated: false,
+      setHasHydrated: (v) => set({ hasHydrated: v }),
       async login(email, password) {
         const data = await api.post<{ token: string; user: AdminUser }>(
           '/auth/login',
@@ -53,22 +58,27 @@ export const useAuth = create<AuthState>()(
           set({ token: null, user: null });
         }
       },
+      // Ruxsat faqat foydalanuvchining roliga berilgan permissions[] dan tekshiriladi.
       hasPermission(perm: string) {
         const u = get().user;
         if (!u) return false;
-        if (u.role === 'SUPERADMIN') return true;
         return u.permissions?.includes(perm) ?? false;
       },
     }),
-    { name: 'xt_auth', partialize: (s) => ({ token: s.token, user: s.user }) },
+    {
+      name: 'xt_auth',
+      partialize: (s) => ({ token: s.token, user: s.user }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
+    },
   ),
 );
 
-/** UI helper — komponentda ishlatish uchun */
+/** UI helper — komponentda ishlatish uchun. Ruxsat faqat roldan. */
 export function useHasPermission(perm: string) {
   return useAuth((s) => {
     if (!s.user) return false;
-    if (s.user.role === 'SUPERADMIN') return true;
     return s.user.permissions?.includes(perm) ?? false;
   });
 }

@@ -26,6 +26,7 @@ import {
 import { BankLogo } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime } from '@/lib/utils';
 
 export default function CredentialsPage() {
@@ -33,7 +34,7 @@ export default function CredentialsPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const me = useAuth((s) => s.user);
-  const isSuperAdmin = me?.role === 'SUPERADMIN';
+  const canRevealPassword = !!me?.permissions?.includes(PERMS.CREDENTIALS_MANAGE);
   const [revealed, setRevealed] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
@@ -121,7 +122,7 @@ export default function CredentialsPage() {
                   status={status}
                   onTest={() => testMut.mutate(c.id)}
                   onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(c.id)}
-                  onReveal={isSuperAdmin ? () => revealMut.mutate(c.id) : undefined}
+                  onReveal={canRevealPassword ? () => revealMut.mutate(c.id) : undefined}
                   onEdit={() => { setEditing(c); setDialogOpen(true); }}
                   testing={testMut.isPending && testMut.variables === c.id}
                 />

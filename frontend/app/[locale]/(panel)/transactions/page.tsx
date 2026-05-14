@@ -45,7 +45,7 @@ export default function TransactionsPage() {
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManagePayments = !!(user?.role === 'SUPERADMIN' || user?.permissions?.includes(PERMS.PAYMENTS_MANAGE));
+  const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);

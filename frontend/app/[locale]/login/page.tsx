@@ -18,6 +18,7 @@ export default function LoginPage() {
   const { locale } = useParams<{ locale: string }>();
   const login = useAuth((s) => s.login);
   const token = useAuth((s) => s.token);
+  const hasHydrated = useAuth((s) => s.hasHydrated);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,8 +29,9 @@ export default function LoginPage() {
   const [clock, setClock] = useState('00:00:00');
 
   useEffect(() => {
-    if (token) router.replace(`/${locale}/dashboard`);
-  }, [token, router, locale]);
+    // localStorage o'qilgandan keyingina yo'naltiramiz
+    if (hasHydrated && token) router.replace(`/${locale}/dashboard`);
+  }, [hasHydrated, token, router, locale]);
 
   useEffect(() => {
     const tick = () => {
