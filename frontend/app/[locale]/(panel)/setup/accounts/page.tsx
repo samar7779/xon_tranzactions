@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
-  Eye, X, Power, PowerOff, ArrowUpRight,
+  Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,17 +28,6 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
-
-const BANK_COLORS = [
-  { from: '#6366f1', to: '#4f46e5' },   // indigo
-  { from: '#10b981', to: '#059669' },   // emerald
-  { from: '#a855f7', to: '#7c3aed' },   // purple
-  { from: '#f59e0b', to: '#d97706' },   // amber
-  { from: '#ec4899', to: '#db2777' },   // pink
-  { from: '#06b6d4', to: '#0891b2' },   // cyan
-  { from: '#ef4444', to: '#dc2626' },   // red
-  { from: '#8b5cf6', to: '#6d28d9' },   // violet
-];
 
 export default function AccountsPage() {
   const tc = useTranslations('common');
@@ -84,11 +73,13 @@ export default function AccountsPage() {
     onError: (e: any) => toast.error(e?.message),
   });
 
-  // Bank → color map
-  const bankColorMap = useMemo(() => {
-    const m = new Map<string, { from: string; to: string }>();
-    (banks?.items || []).forEach((b, i) => m.set(b.id, BANK_COLORS[i % BANK_COLORS.length]));
-    return m;
+  // Banklar — aktivlar boshida (filtr uchun)
+  const sortedBanks = useMemo(() => {
+    return [...(banks?.items || [])].sort((a: any, b: any) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return a.name.localeCompare(b.name);
+    });
   }, [banks]);
 
   // Filtering
@@ -192,8 +183,21 @@ export default function AccountsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Hamma banklar</SelectItem>
-                  {(banks?.items || []).map((b) => (
-                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  {sortedBanks.filter((b: any) => b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        {b.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {sortedBanks.filter((b: any) => !b.isActive).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                      Aktiv emas
+                    </div>
+                  )}
+                  {sortedBanks.filter((b: any) => !b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -253,7 +257,6 @@ export default function AccountsPage() {
               <AccountCard
                 key={a.id}
                 account={a}
-                color={bankColorMap.get(a.bankId) || BANK_COLORS[0]}
                 canManage={canManage}
                 onSync={() => syncMut.mutate(a.id)}
                 onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}
@@ -280,7 +283,6 @@ export default function AccountsPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filtered.map((a) => {
-                      const c = bankColorMap.get(a.bankId) || BANK_COLORS[0];
                       return (
                         <tr key={a.id} className="hover:bg-slate-50/60 transition-colors group">
                           <td className="px-4 py-3">
@@ -383,10 +385,9 @@ function BigStat({
 }
 
 function AccountCard({
-  account: a, color, canManage, onSync, onDelete, onToggleSync, busy,
+  account: a, canManage, onSync, onDelete, onToggleSync, busy,
 }: {
   account: any;
-  color: { from: string; to: string };
   canManage: boolean;
   onSync: () => void;
   onDelete: () => void;
@@ -394,25 +395,21 @@ function AccountCard({
   busy: boolean;
 }) {
   const balance = Number(a.balance || 0);
+  const hasBalance = balance > 0;
   return (
-    <Card className="group relative border-0 shadow-soft card-hover overflow-hidden">
-      {/* Color stripe top */}
-      <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${color.from}, ${color.to})` }} />
-
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={44} />
-            <div className="min-w-0">
-              <div className="text-[14px] font-bold truncate tracking-tight">{a.bank?.name}</div>
-              <div className="text-[10px] font-mono text-slate-500">MFO {a.branch}</div>
-            </div>
+    <Card className="group relative border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all overflow-hidden bg-white">
+      <CardContent className="p-0">
+        {/* Header — bank logo, name, menu */}
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={40} />
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{a.bank?.name}</div>
+            <div className="text-[10px] font-mono text-slate-400">MFO {a.branch} · {a.currency}</div>
           </div>
-
           {canManage && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1">
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1 shrink-0">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -433,33 +430,40 @@ function AccountCard({
           )}
         </div>
 
-        <div className="font-mono text-[11px] text-slate-500 tracking-tight mb-2">
-          {formatAccount(a.accountNo)}
+        {/* Owner name */}
+        <div className="px-4 pb-2">
+          <div className="text-[13px] font-semibold text-slate-800 truncate">{a.ownerName || '—'}</div>
+          <div className="font-mono text-[11px] text-slate-400 tracking-tight">{formatAccount(a.accountNo)}</div>
         </div>
-        {a.ownerName && <div className="text-xs text-slate-700 truncate mb-3">{a.ownerName}</div>}
 
-        <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 p-3.5 mt-3">
-          <div className="text-[10px] uppercase tracking-[0.15em] text-slate-500 font-semibold mb-0.5">Qoldiq</div>
-          <div className="text-2xl font-bold tracking-tight tabular-nums">
+        {/* Balance — big, prominent */}
+        <div className={cn(
+          "mx-4 mb-3 rounded-xl px-4 py-3",
+          hasBalance ? "bg-gradient-to-br from-indigo-50 to-blue-50 ring-1 ring-indigo-100" : "bg-slate-50 ring-1 ring-slate-100",
+        )}>
+          <div className="text-[9px] uppercase tracking-[0.15em] text-slate-500 font-bold mb-0.5">Qoldiq</div>
+          <div className={cn(
+            "text-xl font-bold tracking-tight tabular-nums",
+            hasBalance ? "text-indigo-900" : "text-slate-400",
+          )}>
             {formatMoney(balance, a.currency)}
           </div>
         </div>
 
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-100">
+        {/* Footer — sync status + last sync */}
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 bg-slate-50/40">
           <span className={cn(
-            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset",
-            a.syncEnabled
-              ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-              : "bg-slate-50 text-slate-500 ring-slate-200",
+            "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold",
+            a.syncEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500",
           )}>
             <span className="relative flex h-1.5 w-1.5">
               {a.syncEnabled && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
-              <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", a.syncEnabled ? "bg-emerald-500" : "bg-slate-300")} />
+              <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", a.syncEnabled ? "bg-emerald-500" : "bg-slate-400")} />
             </span>
             {a.syncEnabled ? 'Sync ON' : 'Sync OFF'}
           </span>
-          <div className="text-[10px] text-slate-400 flex items-center gap-1">
-            {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : 'Hech qachon'}
+          <div className="text-[10px] text-slate-400 flex items-center gap-1 tabular-nums">
+            {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : 'Hech sync bo\'lmagan'}
           </div>
         </div>
       </CardContent>
@@ -600,8 +604,8 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
   return (
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="bg-white/15 hover:bg-white/25 text-white border-0 rounded-full">
-          📋 Ko'p qo'shish
+        <Button size="sm" variant="outline" className="rounded-full font-medium gap-1.5">
+          <FileSpreadsheet className="h-3.5 w-3.5" /> Ko'p qo'shish
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">

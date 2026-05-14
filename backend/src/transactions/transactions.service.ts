@@ -39,7 +39,12 @@ export class TransactionsService {
         take: perPage,
         include: {
           bank: { select: { id: true, code: true, name: true } },
-          account: { select: { id: true, branch: true, accountNo: true, ownerName: true } },
+          account: {
+            select: {
+              id: true, branch: true, accountNo: true, ownerName: true,
+              bank: { select: { id: true, code: true, name: true } },
+            },
+          },
           category: true,
         },
       }),

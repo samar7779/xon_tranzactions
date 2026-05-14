@@ -11,6 +11,7 @@ import {
   Hash, Receipt, Link2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -281,7 +282,14 @@ export default function TransactionsPage() {
                 onChange={(v) => { setBankId(v); setPage(1); }}
                 options={[
                   { value: 'all', label: 'Barcha banklar' },
-                  ...((banks?.items || []).map((b: any) => ({ value: b.id, label: b.name }))),
+                  // Aktiv banklar boshida
+                  ...[...(banks?.items || [])]
+                    .sort((a: any, b: any) => {
+                      if (a.isActive && !b.isActive) return -1;
+                      if (!a.isActive && b.isActive) return 1;
+                      return a.name.localeCompare(b.name);
+                    })
+                    .map((b: any) => ({ value: b.id, label: b.isActive ? `● ${b.name}` : b.name })),
                 ]}
               />
 
@@ -413,9 +421,17 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 max-w-[200px]">
-                            <div className="text-[12px] truncate">{it.account?.bank?.name || '—'}</div>
-                            <div className="font-mono text-[10px] text-slate-500 truncate">{it.account?.accountNo || ''}</div>
+                          <td className="px-4 py-3 max-w-[220px]">
+                            <div className="flex items-center gap-2">
+                              <BankLogo code={it.account?.bank?.code || it.bank?.code || ''} name={it.account?.bank?.name || it.bank?.name} size={28} rounded="rounded-lg" />
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-medium truncate">{it.account?.bank?.name || it.bank?.name || '—'}</div>
+                                {it.account?.ownerName && (
+                                  <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
+                                )}
+                                <div className="font-mono text-[10px] text-slate-400 truncate">{it.account?.accountNo || ''}</div>
+                              </div>
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <span className={cn(
