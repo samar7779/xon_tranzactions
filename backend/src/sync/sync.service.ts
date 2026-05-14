@@ -109,6 +109,7 @@ export class SyncService {
     let errors = 0;
     let errorMessage: string | null = null;
 
+    let latestSaldoOut: number | null = null;
     try {
       for (let i = 0; i < Math.max(1, this.daysBack); i++) {
         const day = subDays(new Date(), i);
@@ -125,6 +126,10 @@ export class SyncService {
         });
         const items = result?.content || [];
         fetched += items.length;
+        // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq
+        if (i === 0 && result?.saldo_out != null) {
+          latestSaldoOut = Number(result.saldo_out);
+        }
         for (const item of items) {
           try {
             const ok = await this.upsertOne(item, acc.id, acc.accountNo, cred.bankId);
@@ -135,9 +140,37 @@ export class SyncService {
           }
         }
       }
+
+      // Qoldiqni ham yangilash: GetDoc1C dan saldo_out (yopuvchi qoldiq) — tiyin → so'm
+      // Yoki agar saldo_out yo'q bo'lsa, GetAcc1C orqali real-time saldo olamiz
+      let balanceSom: Prisma.Decimal | undefined;
+      if (latestSaldoOut != null) {
+        balanceSom = new Prisma.Decimal(latestSaldoOut / 100);
+      } else {
+        try {
+          const accInfo = await this.kb.getAcc1C({
+            baseUrl: cred.bank.apiBaseUrl!,
+            login,
+            password,
+            branch: acc.branch,
+            account: acc.accountNo,
+            useProxy: cred.useProxy === true,
+          });
+          const found = (accInfo || []).find((a: any) => a.account === acc.accountNo);
+          if (found && found.s_out != null) {
+            balanceSom = new Prisma.Decimal(Number(found.s_out) / 100);
+          }
+        } catch (e: any) {
+          this.logger.warn(`GetAcc1C qoldiq olishda xato: ${e?.message}`);
+        }
+      }
+
       await this.prisma.bankAccount.update({
         where: { id: acc.id },
-        data: { lastSyncedAt: new Date() },
+        data: {
+          lastSyncedAt: new Date(),
+          ...(balanceSom !== undefined ? { balance: balanceSom } : {}),
+        },
       });
       await this.prisma.syncLog.update({
         where: { id: log.id },

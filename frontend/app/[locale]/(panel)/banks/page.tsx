@@ -45,10 +45,18 @@ export default function BanksPage() {
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
 
-  const banks = data?.items || [];
+  const banksRaw = data?.items || [];
+  // Aktivlarni yuqoriga
+  const banks = [...banksRaw].sort((a: any, b: any) => {
+    if (a.isActive && !b.isActive) return -1;
+    if (!a.isActive && b.isActive) return 1;
+    return a.name.localeCompare(b.name);
+  });
+  const activeList = banks.filter((b: any) => b.isActive);
+  const inactiveList = banks.filter((b: any) => !b.isActive);
   const totalAccounts = banks.reduce((s, b: any) => s + (b._count?.accounts || 0), 0);
   const totalCreds = banks.reduce((s, b: any) => s + (b._count?.credentials || 0), 0);
-  const activeBanks = banks.filter((b: any) => b.isActive).length;
+  const activeBanks = activeList.length;
 
   return (
     <>
@@ -72,87 +80,35 @@ export default function BanksPage() {
         ) : banks.length === 0 ? (
           <Card><CardContent className="p-0"><EmptyState icon={Building2} title="Banklar yo'q" /></CardContent></Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {banks.map((b: any) => {
-              const brand = getBrand(b.code);
-              const isWired = (b._count?.credentials || 0) > 0;
-              return (
-                <Card key={b.id} className="group relative border-0 shadow-soft card-hover overflow-hidden">
-                  {/* Top color bar */}
-                  <div className={cn("h-1.5 bg-gradient-to-r", brand.gradient)} />
+          <>
+            {/* Aktiv banklar — rangli, yuqorida */}
+            {activeList.length > 0 && (
+              <>
+                <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-emerald-700 flex items-center gap-2 mt-2">
+                  <Check className="h-3.5 w-3.5" /> Aktiv banklar — API integratsiyasi ishlaydi
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {activeList.map((b: any) => (
+                    <BankCard key={b.id} b={b} locale={locale} />
+                  ))}
+                </div>
+              </>
+            )}
 
-                  {/* Decorative bg */}
-                  <div className={cn("absolute -top-12 -right-12 w-44 h-44 rounded-full blur-3xl opacity-25 bg-gradient-to-br", brand.gradient)} />
-
-                  <CardContent className="p-5 relative">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn(
-                          "w-14 h-14 rounded-2xl grid place-items-center text-white text-base font-black tracking-tight shadow-md bg-gradient-to-br",
-                          brand.gradient,
-                        )} style={{ letterSpacing: '-0.05em' }}>
-                          {brand.abbr}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[15px] font-bold truncate tracking-tight">{b.name}</div>
-                          <div className="text-[10px] font-mono text-slate-500">{b.code}</div>
-                        </div>
-                      </div>
-                      <span className={cn(
-                        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ring-1 ring-inset",
-                        b.isActive
-                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                          : "bg-slate-50 text-slate-500 ring-slate-200",
-                      )}>
-                        <span className="relative flex h-1.5 w-1.5">
-                          {b.isActive && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
-                          <span className={cn("relative inline-flex rounded-full h-1.5 w-1.5", b.isActive ? "bg-emerald-500" : "bg-slate-300")} />
-                        </span>
-                        {b.isActive ? 'Faol' : 'Faolsiz'}
-                      </span>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2.5 space-y-1.5 mb-4">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-500 flex items-center gap-1.5"><Shield className="h-3 w-3" /> API turi</span>
-                        <span className="font-mono font-semibold text-slate-700">{b.apiKind}</span>
-                      </div>
-                      {b.apiBaseUrl && (
-                        <div className="flex items-start justify-between text-[11px] gap-2">
-                          <span className="text-slate-500 flex items-center gap-1.5 shrink-0"><Globe className="h-3 w-3" /> Endpoint</span>
-                          <span className="font-mono truncate text-right text-slate-700" title={b.apiBaseUrl}>
-                            {b.apiBaseUrl.replace(/^https?:\/\//, '')}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <div className="rounded-lg bg-indigo-50/60 ring-1 ring-indigo-100 px-3 py-2">
-                        <div className="flex items-center gap-1.5 text-[10px] text-indigo-700 font-semibold uppercase tracking-wider">
-                          <KeyRound className="h-3 w-3" /> Ulanish
-                        </div>
-                        <div className="text-xl font-bold text-indigo-900 tabular-nums">{b._count?.credentials || 0}</div>
-                      </div>
-                      <div className="rounded-lg bg-emerald-50/60 ring-1 ring-emerald-100 px-3 py-2">
-                        <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-semibold uppercase tracking-wider">
-                          <Wallet className="h-3 w-3" /> Hisob
-                        </div>
-                        <div className="text-xl font-bold text-emerald-900 tabular-nums">{b._count?.accounts || 0}</div>
-                      </div>
-                    </div>
-
-                    <Link href={`/${locale}/credentials`}>
-                      <Button size="sm" variant="outline" className="w-full h-9 rounded-xl text-xs font-medium gap-1.5 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700">
-                        {isWired ? 'Ulanishlarni ko\'rish' : 'Ulanish qo\'shish'}
-                        <ExternalLink className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+            {/* Noaktiv banklar — kulrang, pastda */}
+            {inactiveList.length > 0 && (
+              <>
+                <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 flex items-center gap-2 mt-6 pt-6 border-t border-slate-200">
+                  <Building2 className="h-3.5 w-3.5" /> Kelajakda — {inactiveList.length} ta bank (integratsiya yo'q)
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {inactiveList.map((b: any) => (
+                    <BankCardMuted key={b.id} b={b} />
+                  ))}
+                </div>
+              </>
+            )}
+          </>
         )}
 
         {/* Hint card — premium look */}
@@ -180,6 +136,99 @@ export default function BanksPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+// ─────────── Aktiv bank — rangli, to'liq ─────────────
+function BankCard({ b, locale }: { b: any; locale: string }) {
+  const brand = getBrand(b.code);
+  const isWired = (b._count?.credentials || 0) > 0;
+  return (
+    <Card className="group relative border-0 shadow-soft card-hover overflow-hidden">
+      <div className={cn("h-1.5 bg-gradient-to-r", brand.gradient)} />
+      <div className={cn("absolute -top-12 -right-12 w-44 h-44 rounded-full blur-3xl opacity-25 bg-gradient-to-br", brand.gradient)} />
+
+      <CardContent className="p-5 relative">
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={cn(
+              "w-14 h-14 rounded-2xl grid place-items-center text-white text-base font-black tracking-tight shadow-md bg-gradient-to-br",
+              brand.gradient,
+            )} style={{ letterSpacing: '-0.05em' }}>
+              {brand.abbr}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[15px] font-bold truncate tracking-tight">{b.name}</div>
+              <div className="text-[10px] font-mono text-slate-500">{b.code}</div>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            Faol
+          </span>
+        </div>
+
+        <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2.5 space-y-1.5 mb-4">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-slate-500 flex items-center gap-1.5"><Shield className="h-3 w-3" /> API turi</span>
+            <span className="font-mono font-semibold text-slate-700">{b.apiKind}</span>
+          </div>
+          {b.apiBaseUrl && (
+            <div className="flex items-start justify-between text-[11px] gap-2">
+              <span className="text-slate-500 flex items-center gap-1.5 shrink-0"><Globe className="h-3 w-3" /> Endpoint</span>
+              <span className="font-mono truncate text-right text-slate-700" title={b.apiBaseUrl}>
+                {b.apiBaseUrl.replace(/^https?:\/\//, '')}
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <div className="rounded-lg bg-indigo-50/60 ring-1 ring-indigo-100 px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-indigo-700 font-semibold uppercase tracking-wider">
+              <KeyRound className="h-3 w-3" /> Ulanish
+            </div>
+            <div className="text-xl font-bold text-indigo-900 tabular-nums">{b._count?.credentials || 0}</div>
+          </div>
+          <div className="rounded-lg bg-emerald-50/60 ring-1 ring-emerald-100 px-3 py-2">
+            <div className="flex items-center gap-1.5 text-[10px] text-emerald-700 font-semibold uppercase tracking-wider">
+              <Wallet className="h-3 w-3" /> Hisob
+            </div>
+            <div className="text-xl font-bold text-emerald-900 tabular-nums">{b._count?.accounts || 0}</div>
+          </div>
+        </div>
+
+        <Link href={`/${locale}/credentials`}>
+          <Button size="sm" variant="outline" className="w-full h-9 rounded-xl text-xs font-medium gap-1.5 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700">
+            {isWired ? 'Ulanishlarni ko\'rish' : 'Ulanish qo\'shish'}
+            <ExternalLink className="h-3 w-3" />
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─────────── Noaktiv bank — kichik, kulrang ─────────────
+function BankCardMuted({ b }: { b: any }) {
+  const brand = getBrand(b.code);
+  // Faqat abbreviation ko'rinadi, gradient yo'q
+  return (
+    <Card className="border border-slate-200 shadow-none hover:bg-slate-50/60 transition-colors overflow-hidden bg-slate-50/30 opacity-80 hover:opacity-100">
+      <CardContent className="p-3 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-slate-200 grid place-items-center text-slate-500 text-[11px] font-black tracking-tight" style={{ letterSpacing: '-0.05em' }}>
+          {brand.abbr}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-semibold text-slate-700 truncate">{b.name}</div>
+          <div className="text-[10px] font-mono text-slate-400 truncate">{b.code}</div>
+        </div>
+        <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold shrink-0">Kelajakda</span>
+      </CardContent>
+    </Card>
   );
 }
 
