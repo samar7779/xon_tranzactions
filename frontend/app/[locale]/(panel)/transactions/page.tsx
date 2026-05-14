@@ -623,6 +623,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
   const [scope, setScope] = useState<'all' | 'bank' | 'account'>('all');
   const [bankId, setBankId] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [accSearch, setAccSearch] = useState('');
   const today = new Date().toISOString().slice(0, 10);
   const [dateFrom, setDateFrom] = useState(today);
   const [dateTo, setDateTo] = useState(today);
@@ -632,10 +633,17 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
     enabled: open,
   });
-  const bankAccounts = useMemo(
-    () => (accounts?.items || []).filter((a: any) => !bankId || a.bankId === bankId),
-    [accounts, bankId],
-  );
+  const bankAccounts = useMemo(() => {
+    let list = (accounts?.items || []).filter((a: any) => !bankId || a.bankId === bankId);
+    const q = accSearch.trim().toLowerCase();
+    if (q) {
+      list = list.filter((a: any) =>
+        a.accountNo?.toLowerCase().includes(q) ||
+        a.ownerName?.toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [accounts, bankId, accSearch]);
 
   const mut = useMutation({
     mutationFn: () => api.post<any>('/sync/backfill', {
@@ -714,11 +722,27 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                   <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {bankAccounts.map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      <span className="font-mono text-xs">{a.accountNo}</span>
-                    </SelectItem>
-                  ))}
+                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                    <Input
+                      value={accSearch}
+                      onChange={(e) => setAccSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder="Hisob raqami yoki egasi..."
+                      className="h-8 text-[11px]"
+                    />
+                  </div>
+                  {bankAccounts.length === 0 ? (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
+                  ) : (
+                    bankAccounts.slice(0, 100).map((a: any) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        <span className="flex flex-col text-left">
+                          <span className="font-mono text-xs">{a.accountNo}</span>
+                          <span className="text-[10px] text-slate-500">{a.ownerName || '—'}</span>
+                        </span>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
