@@ -488,7 +488,7 @@ function StepChip({
 
 function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branch: string, account: string) => void }) {
   // Hooks — early return'dan oldin chaqirilishi shart
-  const [addTarget, setAddTarget] = useState<any>(null);
+  const [addTargets, setAddTargets] = useState<any[] | null>(null);
 
   const { data: dbAccounts } = useQuery({
     queryKey: ['bank-accounts'],
@@ -589,7 +589,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
 
           <div className="divide-y divide-slate-100">
             {grouped.map((g) => (
-              <details key={g.cur} open className="group">
+              <details key={g.cur} className="group">
                 <summary className="px-6 py-2.5 cursor-pointer bg-slate-50/70 hover:bg-slate-100/70 flex items-center gap-2 select-none">
                   <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90" />
                   <Wallet className="h-3.5 w-3.5 text-indigo-500" />
@@ -599,6 +599,8 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
 
                 {g.types.map((t) => {
                   const isSalary = t.type.includes('Oylik');
+                  // Bazada yo'q, oylik bo'lmagan hisoblar — bulk qo'shish uchun
+                  const addable = isSalary ? [] : t.accs.filter((a: any) => !dbSet.has(a.account));
                   return (
                   <div key={t.type}>
                     <div className={cn(
@@ -614,7 +616,15 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                       </span>
                       <span className={cn("text-[10px]", isSalary ? "text-amber-400" : "text-slate-300")}>· {t.accs.length}</span>
                       {isSalary && (
-                        <span className="text-[10px] text-amber-600/80 ml-1">— faqat oylik chiqariladi, kirim bo'lmaydi</span>
+                        <span className="text-[10px] text-amber-600/80 ml-1">— faqat oylik chiqariladi, vipiska uchun emas</span>
+                      )}
+                      {addable.length > 0 && (
+                        <button
+                          onClick={() => setAddTargets(addable)}
+                          className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" /> {addable.length} ta yangini qo'shish
+                        </button>
                       )}
                     </div>
                     {t.accs.map((a: any, i: number) => {
@@ -637,13 +647,15 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                             </div>
                           </button>
 
-                          {inDb ? (
+                          {isSalary ? (
+                            <span className="text-[10px] text-amber-600/70 italic shrink-0">vipiska uchun emas</span>
+                          ) : inDb ? (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shrink-0">
                               <CheckCircle2 className="h-3 w-3" /> Bazada
                             </span>
                           ) : (
                             <button
-                              onClick={() => setAddTarget(a)}
+                              onClick={() => setAddTargets([a])}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shrink-0"
                             >
                               <Plus className="h-3 w-3" /> Qo'shish
@@ -662,7 +674,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
         </CardContent>
       </Card>
 
-      <AddBankAccountDialog account={addTarget} creds={creds?.items || []} onClose={() => setAddTarget(null)} />
+      <AddBankAccountDialog accounts={addTargets} creds={creds?.items || []} onClose={() => setAddTargets(null)} />
 
       {/* Raw JSON — yopiq holatda, bosilganda ochiladi */}
       <details className="bg-white border border-slate-200 rounded-lg overflow-hidden">
@@ -675,21 +687,42 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
   );
 }
 
-// Bankdan kelgan hisobni bazaga qo'shish — credential tanlash bilan
-function AddBankAccountDialog({ account, creds, onClose }: { account: any; creds: any[]; onClose: () => void }) {
+// Bankdan kelgan hisob(lar)ni bazaga qo'shish — credential tanlash bilan (bitta yoki bulk)
+function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | null; creds: any[]; onClose: () => void }) {
   const qc = useQueryClient();
   const [credentialId, setCredentialId] = useState('');
 
+  const list = accounts || [];
+  const isBulk = list.length > 1;
+
   const mut = useMutation({
-    mutationFn: () => api.post('/bank-accounts', {
-      credentialId,
-      branch: (account.branch || '').padStart(5, '0'),
-      accountNo: account.account,
-      ownerName: account.name || account.clientName || undefined,
-      currency: normCurrency(account.val),
-    }),
-    onSuccess: () => {
-      toast.success('Hisob bazaga qo\'shildi');
+    mutationFn: () => {
+      if (isBulk) {
+        return api.post<any>('/bank-accounts/bulk', {
+          credentialId,
+          accounts: list.map((a) => ({
+            accountNo: a.account,
+            ownerName: a.name || a.clientName || undefined,
+            branch: (a.branch || '').padStart(5, '0'),
+            currency: normCurrency(a.val),
+          })),
+        });
+      }
+      const a = list[0];
+      return api.post('/bank-accounts', {
+        credentialId,
+        branch: (a.branch || '').padStart(5, '0'),
+        accountNo: a.account,
+        ownerName: a.name || a.clientName || undefined,
+        currency: normCurrency(a.val),
+      });
+    },
+    onSuccess: (r: any) => {
+      if (isBulk) {
+        toast.success(`✓ ${r?.added ?? 0} qo'shildi · ${r?.skipped ?? 0} mavjud · ${r?.errors?.length ?? 0} xato`);
+      } else {
+        toast.success('Hisob bazaga qo\'shildi');
+      }
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
       onClose();
       setCredentialId('');
@@ -697,26 +730,41 @@ function AddBankAccountDialog({ account, creds, onClose }: { account: any; creds
     onError: (e: any) => toast.error(e?.message || 'Qo\'shishda xato'),
   });
 
-  if (!account) return null;
+  if (!accounts || accounts.length === 0) return null;
 
   return (
-    <Dialog open={!!account} onOpenChange={(o) => { if (!o) { onClose(); setCredentialId(''); } }}>
+    <Dialog open={list.length > 0} onOpenChange={(o) => { if (!o) { onClose(); setCredentialId(''); } }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-4 w-4 text-indigo-600" /> Hisobni bazaga qo'shish
+            <Plus className="h-4 w-4 text-indigo-600" />
+            {isBulk ? `${list.length} ta hisobni bazaga qo'shish` : "Hisobni bazaga qo'shish"}
           </DialogTitle>
-          <DialogDescription>Hisobni qaysi bank ulanishiga biriktiramiz?</DialogDescription>
+          <DialogDescription>Hisob(lar)ni qaysi bank ulanishiga biriktiramiz?</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Tanlangan hisob */}
-          <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 space-y-1">
-            <div className="font-mono text-[13px] font-semibold text-slate-900">{account.account}</div>
-            <div className="text-[11px] text-slate-500">
-              MFO {account.branch} · {normCurrency(account.val)} · {account.name || account.clientName || '—'}
+          {/* Tanlangan hisob(lar) */}
+          {isBulk ? (
+            <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
+              <div className="text-[12px] font-semibold text-slate-900 mb-1.5">{list.length} ta hisob qo'shiladi</div>
+              <div className="max-h-32 overflow-y-auto space-y-0.5">
+                {list.slice(0, 30).map((a, i) => (
+                  <div key={i} className="font-mono text-[10px] text-slate-500 truncate">{a.account}</div>
+                ))}
+                {list.length > 30 && (
+                  <div className="text-[10px] text-slate-400">… va yana {list.length - 30} ta</div>
+                )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 space-y-1">
+              <div className="font-mono text-[13px] font-semibold text-slate-900">{list[0].account}</div>
+              <div className="text-[11px] text-slate-500">
+                MFO {list[0].branch} · {normCurrency(list[0].val)} · {list[0].name || list[0].clientName || '—'}
+              </div>
+            </div>
+          )}
 
           {/* Credential tanlash */}
           <div className="space-y-1.5">
@@ -748,7 +796,7 @@ function AddBankAccountDialog({ account, creds, onClose }: { account: any; creds
         <DialogFooter>
           <Button variant="outline" onClick={() => { onClose(); setCredentialId(''); }}>Bekor qilish</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending || !credentialId}>
-            {mut.isPending ? 'Qo\'shilmoqda...' : 'Qo\'shish'}
+            {mut.isPending ? 'Qo\'shilmoqda...' : isBulk ? `${list.length} tani qo'shish` : "Qo'shish"}
           </Button>
         </DialogFooter>
       </DialogContent>

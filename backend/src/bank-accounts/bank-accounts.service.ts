@@ -74,15 +74,16 @@ export class BankAccountsService {
    */
   async bulkCreate(dto: {
     credentialId: string;
-    branch: string;
+    branch?: string;
     currency?: string;
-    accounts: { accountNo: string; ownerName?: string }[];
+    // Har bir hisob o'z branch/currency'sini ham olib kelishi mumkin (API Explorer uchun)
+    accounts: { accountNo: string; ownerName?: string; branch?: string; currency?: string }[];
   }) {
     const cred = await this.prisma.bankCredential.findUnique({ where: { id: dto.credentialId } });
     if (!cred) throw new NotFoundException('Credential topilmadi');
 
-    const branch = (dto.branch || '').padStart(5, '0');
-    const currency = dto.currency || 'UZS';
+    const defBranch = dto.branch || '';
+    const defCurrency = dto.currency || 'UZS';
 
     let added = 0;
     let skipped = 0;
@@ -94,6 +95,8 @@ export class BankAccountsService {
         errors.push({ accountNo: a.accountNo, error: '20 belgi bo\'lishi kerak' });
         continue;
       }
+      const branch = (a.branch || defBranch || '').padStart(5, '0');
+      const currency = a.currency || defCurrency;
       try {
         const existing = await this.prisma.bankAccount.findUnique({
           where: { branch_accountNo: { branch, accountNo } },
