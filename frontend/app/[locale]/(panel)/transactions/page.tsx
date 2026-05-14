@@ -8,7 +8,7 @@ import {
   Search, Wand2, Link2Off, EyeOff, MoreHorizontal, Download,
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
-  Hash, Receipt, Link2,
+  Hash, Receipt, Link2, History, Loader2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { BankLogo } from '@/components/bank-logo';
@@ -60,6 +60,7 @@ export default function TransactionsPage() {
   const [idSearchOpen, setIdSearchOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
   const [idSearching, setIdSearching] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
 
   async function searchById() {
     const id = idQuery.trim();
@@ -285,6 +286,15 @@ export default function TransactionsPage() {
                   </button>
                 )}
               </div>
+
+              {/* Eski tarixni yuklash (backfill) */}
+              <button
+                onClick={() => setBackfillOpen(true)}
+                title="Eski tarixni yuklash — sana oralig'i bo'yicha"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 ring-1 ring-slate-200 hover:ring-indigo-200 transition-colors shrink-0"
+              >
+                <History className="h-4 w-4" />
+              </button>
 
               {/* Tranzaksiya ID orqali qidirish */}
               <button
@@ -573,6 +583,9 @@ export default function TransactionsPage() {
       {/* ═══ DETAIL MODAL ═══ */}
       <TransactionDetailDialog row={detailRow} onClose={() => setDetailRow(null)} />
 
+      {/* ═══ ESKI TARIXNI YUKLASH (BACKFILL) ═══ */}
+      <BackfillDialog open={backfillOpen} onOpenChange={setBackfillOpen} banks={banks?.items || []} />
+
       {/* ═══ TRANZAKSIYA ID QIDIRUV ═══ */}
       <Dialog open={idSearchOpen} onOpenChange={setIdSearchOpen}>
         <DialogContent className="max-w-md">
@@ -604,6 +617,142 @@ export default function TransactionsPage() {
 }
 
 // ────────────── Components ──────────────
+
+// Eski tarixni yuklash — sana oralig'i bo'yicha bankdan olib bazaga yozadi
+function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenChange: (o: boolean) => void; banks: any[] }) {
+  const [scope, setScope] = useState<'all' | 'bank' | 'account'>('all');
+  const [bankId, setBankId] = useState('');
+  const [accountId, setAccountId] = useState('');
+  const today = new Date().toISOString().slice(0, 10);
+  const [dateFrom, setDateFrom] = useState(today);
+  const [dateTo, setDateTo] = useState(today);
+
+  const { data: accounts } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+    enabled: open,
+  });
+  const bankAccounts = useMemo(
+    () => (accounts?.items || []).filter((a: any) => !bankId || a.bankId === bankId),
+    [accounts, bankId],
+  );
+
+  const mut = useMutation({
+    mutationFn: () => api.post<any>('/sync/backfill', {
+      scope,
+      bankId: scope === 'bank' ? bankId : undefined,
+      accountId: scope === 'account' ? accountId : undefined,
+      dateFrom,
+      dateTo,
+    }),
+    onSuccess: () => {
+      toast.success("Tarix yuklash boshlandi — fonda bajariladi, natija Sync tarixida ko'rinadi");
+      onOpenChange(false);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const valid = !!dateFrom && !!dateTo && dateFrom <= dateTo
+    && (scope !== 'bank' || !!bankId)
+    && (scope !== 'account' || !!accountId);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <History className="h-4 w-4 text-indigo-600" /> Eski tarixni yuklash
+          </DialogTitle>
+          <DialogDescription>
+            Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* Qamrov */}
+          <div className="space-y-1.5">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Qamrov</div>
+            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium w-full">
+              {[
+                { v: 'all', l: 'Barcha hisob' },
+                { v: 'bank', l: "Bank bo'yicha" },
+                { v: 'account', l: 'Bitta hisob' },
+              ].map((o) => (
+                <button
+                  key={o.v}
+                  onClick={() => setScope(o.v as any)}
+                  className={cn(
+                    'flex-1 px-2 h-8 rounded-lg transition-colors',
+                    scope === o.v ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                  )}
+                >
+                  {o.l}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {(scope === 'bank' || scope === 'account') && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank</div>
+              <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); }}>
+                <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
+                <SelectContent>
+                  {banks.filter((b: any) => b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {scope === 'account' && (
+            <div className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob</div>
+              <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {bankAccounts.map((a: any) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      <span className="font-mono text-xs">{a.accountNo}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Sana oralig'i */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Dan</div>
+              <Input type="date" value={dateFrom} max={dateTo || today} onChange={(e) => setDateFrom(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Gacha</div>
+              <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => setDateTo(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="text-[10px] text-amber-700 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+            ⚠ Katta oraliq + ko'p hisob uzoq davom etadi. Jarayon fonda ishlaydi — natijani Sync tarixida kuzating.
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Bekor qilish</Button>
+          <Button onClick={() => mut.mutate()} disabled={!valid || mut.isPending}>
+            {mut.isPending
+              ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Boshlanmoqda...</>
+              : 'Yuklashni boshlash'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function StatCard({
   label, value, icon: Icon, color, spark,

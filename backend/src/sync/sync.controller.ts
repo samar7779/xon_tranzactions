@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -39,12 +39,31 @@ export class SyncController {
 
   @Post('run-all')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @ApiOperation({ summary: 'Barcha faol hisoblarni sync qilish (fonda)' })
+  @ApiOperation({ summary: 'Barcha faol hisoblarni sync qilish (fonda, intervalga qaramay)' })
   async runAll() {
     // 100+ hisob uzoq davom etadi — fonda ishga tushiramiz, javobni kutmaymiz
-    this.svc.tick().catch(() => {});
+    // force=true — bank intervaliga qaramay hammasi sync qilinadi
+    this.svc.tick(true).catch(() => {});
     const accounts = await this.prisma.bankAccount.count({ where: { syncEnabled: true } });
     return { ok: true, started: true, accounts };
+  }
+
+  @Post('backfill')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Eski tarixni yuklash — sana oralig\'i bo\'yicha (fonda)' })
+  async backfill(@Body() body: {
+    scope: 'all' | 'bank' | 'account';
+    bankId?: string;
+    accountId?: string;
+    dateFrom: string;
+    dateTo: string;
+  }) {
+    if (!body?.dateFrom || !body?.dateTo) {
+      return { ok: false, error: 'dateFrom va dateTo kerak' };
+    }
+    // Fonda ishga tushiramiz — uzoq davom etadi
+    this.svc.backfill(body).catch(() => {});
+    return { ok: true, started: true };
   }
 
   @Get('logs')

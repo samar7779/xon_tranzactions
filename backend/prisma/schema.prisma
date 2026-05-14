@@ -186,6 +186,7 @@ model Bank {
   apiBaseUrl   String?          @map("api_base_url")
   apiKind      BankApiKind      @default(KAPITALBANK_V3) @map("api_kind")
   isActive     Boolean          @default(true) @map("is_active")
+  syncIntervalMinutes Int       @default(5) @map("sync_interval_minutes") // har necha daqiqada sync
 
   credentials  BankCredential[]
   accounts     BankAccount[]

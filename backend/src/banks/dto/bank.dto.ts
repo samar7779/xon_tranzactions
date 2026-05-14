@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 
 export enum BankApiKindEnum {
   KAPITALBANK_V3 = 'KAPITALBANK_V3',
@@ -44,4 +44,8 @@ export class UpdateBankDto {
   @ApiPropertyOptional()
   @IsOptional() @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sync intervali (daqiqa)', minimum: 1, maximum: 1440 })
+  @IsOptional() @IsInt() @Min(1) @Max(1440)
+  syncIntervalMinutes?: number;
 }
