@@ -149,11 +149,12 @@ export class SyncService {
       }
 
       // Qoldiqni ham yangilash: GetDoc1C dan saldo_out (yopuvchi qoldiq) — tiyin → so'm
-      // Yoki agar saldo_out yo'q bo'lsa, GetAcc1C orqali real-time saldo olamiz
       let balanceSom: Prisma.Decimal | undefined;
       if (latestSaldoOut != null) {
         balanceSom = new Prisma.Decimal(latestSaldoOut / 100);
-      } else {
+      }
+      // GetAcc1C ni faqat saldo_out bo'lmasa va xato bo'lsa ham sync to'xtamasin
+      if (balanceSom === undefined) {
         try {
           const accInfo = await this.kb.getAcc1C({
             baseUrl: cred.bank.apiBaseUrl!,
@@ -168,7 +169,7 @@ export class SyncService {
             balanceSom = new Prisma.Decimal(Number(found.s_out) / 100);
           }
         } catch (e: any) {
-          this.logger.warn(`GetAcc1C qoldiq olishda xato: ${e?.message}`);
+          this.logger.warn(`GetAcc1C qoldiq olishda xato (jiddiy emas): ${e?.message}`);
         }
       }
 

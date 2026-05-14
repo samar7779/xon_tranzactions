@@ -22,7 +22,18 @@ export class SyncController {
   async runAccount(@Param('id') id: string) {
     const acc = await this.prisma.bankAccount.findUnique({ where: { id } });
     if (!acc) return { ok: false, error: 'Hisob topilmadi' };
-    return this.svc.syncAccount(acc.credentialId, acc.id);
+    try {
+      return await this.svc.syncAccount(acc.credentialId, acc.id);
+    } catch (e: any) {
+      // Bank API yoki tarmoq xatosi — 500 emas, javob qaytaramiz
+      return {
+        ok: false,
+        error: e?.message?.slice(0, 500) || 'Noma\'lum sync xatosi',
+        fetched: 0,
+        saved: 0,
+        errors: 1,
+      };
+    }
   }
 
   @Get('logs')
