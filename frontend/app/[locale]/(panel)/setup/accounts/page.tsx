@@ -115,19 +115,6 @@ export default function AccountsPage() {
   return (
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <div className="text-lg font-bold tracking-tight">Bank hisoblari</div>
-            <div className="text-xs text-slate-500">{accounts?.items?.length || 0} ta hisob · {banks?.items?.length || 0} ta bank</div>
-          </div>
-          {canManage && (
-            <div className="flex items-center gap-2">
-              <BulkImportDialog creds={creds?.items || []} />
-              <CreateAccountDialog creds={creds?.items || []} />
-            </div>
-          )}
-        </div>
-
         {/* ═══ TOP STATS ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <BigStat
@@ -234,6 +221,13 @@ export default function AccountsPage() {
                   )}
                 >Jadval</button>
               </div>
+
+              {canManage && (
+                <div className="flex items-center gap-2">
+                  <BulkImportDialog creds={creds?.items || []} />
+                  <CreateAccountDialog creds={creds?.items || []} />
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -497,7 +491,7 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm">
+        <Button size="sm" className="bg-indigo-600 text-white hover:bg-indigo-700 rounded-full font-semibold shadow-sm">
           <Plus className="h-3.5 w-3.5 mr-1.5" />{t('add')}
         </Button>
       </DialogTrigger>
