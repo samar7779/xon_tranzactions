@@ -127,7 +127,12 @@ export default function AccountsPage() {
       <Topbar
         title={t('title')}
         subtitle={`${accounts?.items?.length || 0} ta hisob · ${banks?.items?.length || 0} ta bank`}
-        actions={canManage ? <CreateAccountDialog creds={creds?.items || []} /> : null}
+        actions={canManage ? (
+          <div className="flex items-center gap-2">
+            <BulkImportDialog creds={creds?.items || []} />
+            <CreateAccountDialog creds={creds?.items || []} />
+          </div>
+        ) : null}
       />
       <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
 
@@ -539,6 +544,173 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>{tc('cancel')}</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending || !form.credentialId || !form.branch || !form.accountNo}>{tc('save')}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────── Bulk import dialog — paste qilib ko'p hisob qo'shish ───────────
+function BulkImportDialog({ creds }: { creds: any[] }) {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [credentialId, setCredentialId] = useState('');
+  const [branch, setBranch] = useState('00974');
+  const [currency, setCurrency] = useState('UZS');
+  const [rawText, setRawText] = useState('');
+  const [result, setResult] = useState<any>(null);
+
+  // Matnni parse qilish: "NAME\tACCOUNT_NO" (tab) yoki "NAME   ACCOUNT_NO" (space)
+  // Yoki faqat ACCOUNT_NO (har qatorda bittadan)
+  const parsed = useMemo(() => {
+    const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
+    return lines.map((line) => {
+      // Oxirgi 20 raqamlik son = hisob raqami
+      const match = line.match(/(\d{20})\s*$/);
+      if (match) {
+        const accountNo = match[1];
+        const ownerName = line.slice(0, match.index).trim();
+        return { accountNo, ownerName: ownerName || undefined };
+      }
+      // Faqat raqam bo'lsa
+      const digits = line.replace(/\D/g, '');
+      if (digits.length === 20) return { accountNo: digits };
+      return { accountNo: line, error: '20 belgilik hisob raqami topilmadi' };
+    });
+  }, [rawText]);
+
+  const validCount = parsed.filter((p: any) => !p.error).length;
+  const invalidCount = parsed.filter((p: any) => p.error).length;
+
+  const mut = useMutation({
+    mutationFn: () => api.post<any>('/bank-accounts/bulk', {
+      credentialId,
+      branch: branch.padStart(5, '0'),
+      currency,
+      accounts: parsed.filter((p: any) => !p.error).map((p: any) => ({ accountNo: p.accountNo, ownerName: p.ownerName })),
+    }),
+    onSuccess: (r) => {
+      setResult(r);
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+      toast.success(`✓ ${r.added} qo'shildi · ${r.skipped} skip · ${r.errors?.length || 0} xato`);
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
+
+  function reset() {
+    setRawText('');
+    setResult(null);
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="bg-white/15 hover:bg-white/25 text-white border-0 rounded-full">
+          📋 Ko'p qo'shish
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
+        <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+          <DialogTitle className="text-white text-base font-bold">Ko'p hisob qo'shish</DialogTitle>
+          <DialogDescription className="text-white/85 text-xs mt-1">
+            Excel/Sheets'dan nusxalab paste qiling — formatda: "NOMI &nbsp;&nbsp; HISOB_NO" (har qatorda bittadan)
+          </DialogDescription>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+          {/* Settings */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="col-span-3 space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank ulanishi</Label>
+              <Select value={credentialId} onValueChange={setCredentialId}>
+                <SelectTrigger><SelectValue placeholder="— tanlang —" /></SelectTrigger>
+                <SelectContent>
+                  {creds.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">MFO</Label>
+              <Input value={branch} onChange={(e) => setBranch(e.target.value.replace(/\D/g, '').slice(0, 5))} className="font-mono" maxLength={5} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Valyuta</Label>
+              <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} className="font-mono" maxLength={3} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Tahlil</Label>
+              <div className="h-9 rounded-md ring-1 ring-slate-200 px-3 flex items-center text-[12px] font-medium">
+                <span className="text-emerald-700">{validCount}</span>
+                <span className="text-slate-400 mx-1">/</span>
+                <span className="text-slate-700">{parsed.length}</span>
+                {invalidCount > 0 && <span className="text-rose-600 ml-2">({invalidCount} xato)</span>}
+              </div>
+            </div>
+          </div>
+
+          {/* Paste area */}
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Hisoblar ro'yxati (paste)
+            </Label>
+            <textarea
+              value={rawText}
+              onChange={(e) => setRawText(e.target.value)}
+              rows={10}
+              className="w-full font-mono text-[12px] rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
+              placeholder={"APELSIN RESIDENCE\t20208000904501402001\nART-ZAL BARAKA BIZNES\t20208000004793065002\n..."}
+            />
+            <div className="text-[10px] text-slate-500">
+              Tab yoki bo'sh joy bilan ajratilgan. Hisob raqami 20 belgilik bo'lishi shart.
+            </div>
+          </div>
+
+          {/* Preview parsed */}
+          {parsed.length > 0 && (
+            <div>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-1.5 block">
+                Qabul qilinadigan ro'yxat (birinchi 10 ta)
+              </Label>
+              <div className="rounded-xl border border-slate-200 max-h-44 overflow-y-auto divide-y divide-slate-100 bg-slate-50/40">
+                {parsed.slice(0, 10).map((p: any, i: number) => (
+                  <div key={i} className={cn("px-3 py-1.5 text-[11px] flex items-center gap-3", p.error && "bg-rose-50/40")}>
+                    <span className={cn("inline-block w-5 text-center font-bold", p.error ? "text-rose-600" : "text-emerald-600")}>
+                      {p.error ? '✗' : '✓'}
+                    </span>
+                    <span className="font-mono text-slate-700 w-44 truncate">{p.accountNo}</span>
+                    <span className="text-slate-600 truncate flex-1">{p.ownerName || (p.error || '—')}</span>
+                  </div>
+                ))}
+                {parsed.length > 10 && (
+                  <div className="px-3 py-1.5 text-[10px] text-slate-500 text-center">… va yana {parsed.length - 10} ta</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Result after import */}
+          {result && (
+            <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 space-y-1 text-[12px]">
+              <div className="font-bold text-emerald-900">Natija:</div>
+              <div>✓ <span className="font-semibold">{result.added}</span> ta yangi qo'shildi</div>
+              <div>↺ <span className="font-semibold">{result.skipped}</span> ta allaqachon mavjud (skip)</div>
+              {result.errors?.length > 0 && (
+                <div className="text-rose-700">✗ <span className="font-semibold">{result.errors.length}</span> ta xato</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="px-6 py-4 border-t border-slate-200 bg-slate-50/60">
+          <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Bekor qilish</Button>
+          <Button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || !credentialId || !branch || validCount === 0}
+          >
+            {mut.isPending ? 'Qo\'shilmoqda...' : `${validCount} ta hisobni qo'shish`}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

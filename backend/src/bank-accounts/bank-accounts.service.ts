@@ -67,4 +67,58 @@ export class BankAccountsService {
     await this.prisma.bankAccount.delete({ where: { id } });
     return { ok: true };
   }
+
+  /**
+   * Ko'p hisoblarni bir vaqtda qo'shish.
+   * Mavjud bo'lganlari skip qilinadi (duplicate xato chiqarmaydi).
+   */
+  async bulkCreate(dto: {
+    credentialId: string;
+    branch: string;
+    currency?: string;
+    accounts: { accountNo: string; ownerName?: string }[];
+  }) {
+    const cred = await this.prisma.bankCredential.findUnique({ where: { id: dto.credentialId } });
+    if (!cred) throw new NotFoundException('Credential topilmadi');
+
+    const branch = (dto.branch || '').padStart(5, '0');
+    const currency = dto.currency || 'UZS';
+
+    let added = 0;
+    let skipped = 0;
+    const errors: { accountNo: string; error: string }[] = [];
+
+    for (const a of dto.accounts) {
+      const accountNo = (a.accountNo || '').replace(/\D/g, '');
+      if (accountNo.length !== 20) {
+        errors.push({ accountNo: a.accountNo, error: '20 belgi bo\'lishi kerak' });
+        continue;
+      }
+      try {
+        const existing = await this.prisma.bankAccount.findUnique({
+          where: { branch_accountNo: { branch, accountNo } },
+        });
+        if (existing) {
+          skipped++;
+          continue;
+        }
+        await this.prisma.bankAccount.create({
+          data: {
+            credentialId: dto.credentialId,
+            bankId: cred.bankId,
+            branch,
+            accountNo,
+            ownerName: a.ownerName?.trim() || null,
+            currency,
+            syncEnabled: true,
+          },
+        });
+        added++;
+      } catch (e: any) {
+        errors.push({ accountNo: a.accountNo, error: e?.message?.slice(0, 100) || 'xato' });
+      }
+    }
+
+    return { ok: true, added, skipped, errors, total: dto.accounts.length };
+  }
 }
