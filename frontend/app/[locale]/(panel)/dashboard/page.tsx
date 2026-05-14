@@ -15,7 +15,7 @@ import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { Input } from '@/components/ui/input';
-import { DualAreaChart } from '@/components/charts';
+import { DualAreaChart, DailyBarChart } from '@/components/charts';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -106,6 +106,16 @@ export default function DashboardPage() {
       label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
       inflow: Number(d.inflow || 0),
       outflow: Number(d.outflow || 0),
+    }));
+  }, [daily]);
+
+  // Ustunli grafik uchun — kirim/chiqim/tranzaksiya soni
+  const barData = useMemo(() => {
+    return (daily?.days || []).map((d: any) => ({
+      label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
+      inflow: Number(d.inflow || 0),
+      outflow: Number(d.outflow || 0),
+      count: Number(d.count || 0),
     }));
   }, [daily]);
 
@@ -301,6 +311,19 @@ export default function DashboardPage() {
             ) : (
               <DualAreaChart data={chartData} height={260} />
             )}
+
+            {/* Ustunli grafik — yopiq holatda, bosilganda ochiladi */}
+            {!(range === 'custom' && (!customFrom || !customTo)) && !dailyLoading && (
+              <details className="group mt-3 pt-3 border-t border-slate-100">
+                <summary className="cursor-pointer select-none flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-slate-900">
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
+                  Kunma-kun ustunli grafik — kirim / chiqim / tranzaksiya soni
+                </summary>
+                <div className="mt-3">
+                  <DailyBarChart data={barData} height={280} />
+                </div>
+              </details>
+            )}
           </div>
         </div>
 
@@ -315,13 +338,6 @@ export default function DashboardPage() {
               title="Eng katta hisoblar"
               count={totalAccounts}
               collapsible
-              actions={
-                <Link href={`/${locale}/setup/accounts`}>
-                  <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    Barchasi <ChevronRight className="h-3 w-3" />
-                  </button>
-                </Link>
-              }
             >
               {accLoading ? (
                 <div className="p-4 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
