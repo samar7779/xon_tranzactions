@@ -150,7 +150,11 @@ export default function DashboardPage() {
                           <tr key={it.id} className="hover:bg-slate-50 transition-colors">
                             <td className="px-3 py-2 whitespace-nowrap">
                               <div className="tabular-nums text-slate-700">{formatDate(it.txnDate)}</div>
-                              <div className="text-[10px] text-slate-500 tabular-nums">{new Date(it.txnDate).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}</div>
+                              <div className="text-[10px] text-slate-500 tabular-nums">
+                                {it.operationTime
+                                  ? it.operationTime.slice(0, 5)
+                                  : new Date(it.txnDate).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               <span className={cn(
