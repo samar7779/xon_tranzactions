@@ -389,7 +389,14 @@ export default function TransactionsPage() {
                         >
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-[13px] font-medium tabular-nums">{formatDate(it.txnDate)}</div>
-                            <div className="text-[10px] text-slate-500 tabular-nums">{new Date(it.txnDate).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}</div>
+                            <div className="text-[10px] text-slate-500 tabular-nums">
+                              {/* operationTime — bank bergan haqiqiy vaqt (HH:mm:ss); yo'q bo'lsa txnDate'dan */}
+                              {it.operationTime
+                                ? it.operationTime.slice(0, 5)
+                                : (it.inputAt
+                                    ? new Date(it.inputAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })
+                                    : '—')}
+                            </div>
                           </td>
                           <td className="px-4 py-3">
                             <span className={cn(
@@ -621,7 +628,9 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
                   {isIn ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
                   {isIn ? 'KIRIM' : 'CHIQIM'}
                 </span>
-                <span className="text-[11px] text-white/80 tabular-nums">{formatDateTime(row.txnDate)}</span>
+                <span className="text-[11px] text-white/80 tabular-nums">
+                  {formatDate(row.txnDate)}{row.operationTime ? ` · ${row.operationTime}` : ''}
+                </span>
                 {row.isAnor && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-300/25 text-amber-100 ring-1 ring-amber-200/40">
                     ⚡ ANOR 24/7
