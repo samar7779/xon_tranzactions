@@ -9,7 +9,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const token = useAuth((s) => s.token);
-  const user = useAuth((s) => s.user);
   const hydrate = useAuth((s) => s.hydrate);
   const hasHydrated = useAuth((s) => s.hasHydrated);
   const [ready, setReady] = useState(false);
@@ -23,12 +22,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
       router.replace(`/${locale}/login`);
       return;
     }
-    if (!user) {
-      hydrate().finally(() => setReady(true));
-    } else {
-      setReady(true);
-    }
-  }, [hasHydrated, token, user, hydrate, router, locale]);
+    // Panel har ochilganda /auth/me dan yangi ruxsatlarni olamiz — rol
+    // o'zgartirilgan bo'lsa, keshlangan eski ruxsatlar bilan qolmaymiz.
+    hydrate().finally(() => setReady(true));
+  }, [hasHydrated, token, hydrate, router, locale]);
 
   if (!hasHydrated || !ready) {
     return <SplashLoader />;

@@ -219,6 +219,9 @@ function RoleDialog({
     onSuccess: () => {
       toast.success(tc('success'));
       qc.invalidateQueries({ queryKey: ['roles'] });
+      // Joriy foydalanuvchining roli o'zgargan bo'lishi mumkin —
+      // ruxsatlarni darrov /auth/me dan yangilaymiz (sidebar/route guard uchun).
+      useAuth.getState().hydrate();
       onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message),
