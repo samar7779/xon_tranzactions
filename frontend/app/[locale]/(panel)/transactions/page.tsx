@@ -27,7 +27,7 @@ import {
 import { Sparkline } from '@/components/sparkline';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
@@ -155,6 +155,24 @@ export default function TransactionsPage() {
   const spark = (factor: number) => Array.from({ length: 24 }).map((_, i) =>
     Math.round(40 + Math.sin(i / 2.5) * 25 + Math.cos(i / 1.7) * 18 + Math.random() * 10) * factor);
 
+  // Filtr bo'yicha BARCHA tranzaksiyalar — backend Excel qiladi (joriy sahifa emas)
+  async function exportExcel() {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (direction !== 'all') p.set('direction', direction);
+    if (matchStatus !== 'all') p.set('matchStatus', matchStatus);
+    if (bankId !== 'all') p.set('bankId', bankId);
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo) p.set('dateTo', dateTo);
+    try {
+      toast.loading('Excel tayyorlanmoqda...', { id: 'tx-export' });
+      await apiDownload(`/transactions/export?${p}`, `tranzaksiyalar-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success('Excel yuklab olindi', { id: 'tx-export' });
+    } catch (e: any) {
+      toast.error(e?.message || 'Eksportda xato', { id: 'tx-export' });
+    }
+  }
+
   function exportCsv() {
     if (!data?.items?.length) return toast.error("Eksport uchun ma'lumot yo'q");
     const rows = [
@@ -217,10 +235,15 @@ export default function TransactionsPage() {
                 <Download className="h-3.5 w-3.5 mr-1.5" /> Eksport
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-44">
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filtr bo'yicha (hammasi)</DropdownMenuLabel>
+              <DropdownMenuItem onClick={exportExcel}>
+                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel — barcha mos yozuvlar
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
               <DropdownMenuItem onClick={exportCsv}>
-                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> CSV (Excel)
+                <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" /> CSV
               </DropdownMenuItem>
               <DropdownMenuItem onClick={exportJson}>
                 <FileText className="h-4 w-4 mr-2 text-blue-600" /> JSON

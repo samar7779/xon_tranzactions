@@ -39,6 +39,31 @@ export class TransactionsController {
     return this.svc.daily(from, to, bankId, accountId);
   }
 
+  @Get('export')
+  @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
+  async export(
+    @Res() res: Response,
+    @Query('q') q?: string,
+    @Query('direction') direction?: string,
+    @Query('bankId') bankId?: string,
+    @Query('accountId') accountId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('type') type?: string,
+    @Query('status') status?: string,
+    @Query('matchStatus') matchStatus?: string,
+  ) {
+    const { buffer, filename } = await this.svc.exportXlsx({
+      q, direction, bankId, accountId, dateFrom, dateTo, type, status, matchStatus,
+    });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Get('statement')
   @ApiOperation({ summary: "Bank vipiskasi — Excel (hisob + sana oralig'i)" })
   async statement(

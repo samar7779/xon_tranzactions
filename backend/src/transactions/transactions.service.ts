@@ -1,6 +1,19 @@
 import { Injectable } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
+
+export interface ExportFilters {
+  q?: string;
+  direction?: string;
+  bankId?: string;
+  accountId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: string;
+  status?: string;
+  matchStatus?: string;
+}
 
 @Injectable()
 export class TransactionsService {
@@ -113,6 +126,103 @@ export class TransactionsService {
     const totalIn = days.reduce((s, d) => s + d.inflow, 0);
     const totalOut = days.reduce((s, d) => s + d.outflow, 0);
     return { ok: true, from: startStr, to: endStr, totalIn, totalOut, net: totalIn - totalOut, days };
+  }
+
+  /**
+   * Tranzaksiyalarni filtr bo'yicha Excel qilib eksport — sahifalanmagan,
+   * barcha mos yozuvlar (xavfsizlik uchun 50 000 ta bilan cheklangan).
+   */
+  async exportXlsx(filters: ExportFilters) {
+    const where: any = {};
+    if (filters.type) where.type = filters.type;
+    if (filters.status) where.status = filters.status;
+    if (filters.direction) where.direction = filters.direction;
+    if (filters.bankId) where.bankId = filters.bankId;
+    if (filters.accountId) where.accountId = filters.accountId;
+    if (filters.matchStatus) where.matchStatus = filters.matchStatus;
+    if (filters.dateFrom || filters.dateTo) {
+      where.txnDate = {};
+      if (filters.dateFrom) where.txnDate.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.txnDate.lte = new Date(filters.dateTo);
+    }
+    if (filters.q) {
+      where.OR = [
+        { description: { contains: filters.q, mode: 'insensitive' } },
+        { fromName: { contains: filters.q, mode: 'insensitive' } },
+        { toName: { contains: filters.q, mode: 'insensitive' } },
+        { reference: { contains: filters.q, mode: 'insensitive' } },
+        { fromAccount: { contains: filters.q } },
+        { toAccount: { contains: filters.q } },
+      ];
+    }
+
+    const items = await this.prisma.transaction.findMany({
+      where,
+      orderBy: { txnDate: 'desc' },
+      take: 50000,
+      include: {
+        bank: { select: { name: true } },
+        account: {
+          select: {
+            accountNo: true, ownerName: true,
+            bank: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Tranzaksiyalar');
+
+    ws.columns = [
+      { header: 'Bank nomi', key: 'bank', width: 22 },
+      { header: 'Hisob raqami', key: 'accountNo', width: 26 },
+      { header: 'Hisob nomi', key: 'accountName', width: 32 },
+      { header: 'Yuboruvchi nomi', key: 'fromName', width: 32 },
+      { header: "Yo'nalish", key: 'direction', width: 12 },
+      { header: 'Summa', key: 'amount', width: 18 },
+      { header: "Izoh (to'lov maqsadi)", key: 'description', width: 50 },
+      { header: 'Tranzaksiya ID', key: 'externalId', width: 30 },
+    ];
+
+    // Sarlavha qatorini bezash
+    const headRow = ws.getRow(1);
+    headRow.font = { bold: true, size: 10 };
+    headRow.height = 22;
+    headRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+
+    for (const it of items) {
+      const row = ws.addRow({
+        bank: it.bank?.name || it.account?.bank?.name || '',
+        accountNo: it.account?.accountNo || '',
+        accountName: it.account?.ownerName || '',
+        fromName: it.fromName || '',
+        direction: it.direction === 'IN' ? 'Kirim' : 'Chiqim',
+        amount: Number(it.amount),
+        description: it.description || '',
+        externalId: it.externalId || it.id,
+      });
+      row.font = { size: 9 };
+      row.getCell('amount').numFmt = '#,##0.00';
+      row.getCell('amount').font = {
+        size: 9,
+        color: { argb: it.direction === 'IN' ? 'FF047857' : 'FFBE123C' },
+      };
+    }
+
+    const raw = await wb.xlsx.writeBuffer();
+    const buffer: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+    const filename = `tranzaksiyalar_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    return { buffer, filename, count: items.length };
   }
 
   async stats(dateFrom?: string, dateTo?: string) {
