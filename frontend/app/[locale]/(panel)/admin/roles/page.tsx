@@ -8,7 +8,6 @@ import {
   Plus, ShieldCheck, Pencil, Trash2, Lock, MoreVertical,
   Users, Shield, Check,
 } from 'lucide-react';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,7 +43,6 @@ function getRoleGrad(name: string) {
 }
 
 export default function RolesPage() {
-  const t = useTranslations('nav');
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
@@ -75,16 +73,18 @@ export default function RolesPage() {
 
   return (
     <>
-      <Topbar
-        title={t('roles')}
-        subtitle="Rollarni boshqaring va har biriga ruxsatlar bering"
-        actions={canManage ? (
-          <Button size="sm" onClick={openCreate} className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm">
-            <Plus className="h-3.5 w-3.5 mr-1.5" />Yangi rol
-          </Button>
-        ) : null}
-      />
       <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-bold tracking-tight">Rollar</div>
+            <div className="text-xs text-slate-500">Rollarni boshqaring va har biriga ruxsatlar bering</div>
+          </div>
+          {canManage && (
+            <Button size="sm" onClick={openCreate} className="rounded-full font-semibold">
+              <Plus className="h-3.5 w-3.5 mr-1.5" />Yangi rol
+            </Button>
+          )}
+        </div>
 
         {(rolesData?.items?.length ?? 0) === 0 ? (
           <Card><CardContent className="p-0"><EmptyState icon={ShieldCheck} title="Hali rollar yo'q" /></CardContent></Card>

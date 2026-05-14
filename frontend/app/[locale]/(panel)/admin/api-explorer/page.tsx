@@ -8,7 +8,6 @@ import {
   CheckCircle2, XCircle, Database, Sparkles, AlertCircle, ArrowDown,
   Building2, KeyRound, Calendar, Search, FileText, Zap, X, ArrowDownLeft, ArrowUpRight,
 } from 'lucide-react';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -140,17 +139,16 @@ export default function ApiExplorerPage() {
 
   return (
     <>
-      <Topbar
-        title="API Explorer"
-        subtitle="Bank API'dan keladigan barcha ma'lumotlarni tekshirish"
-        actions={
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/20 ring-1 ring-amber-200/40 text-[11px] font-semibold text-white backdrop-blur-sm">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-bold tracking-tight">API Explorer</div>
+            <div className="text-xs text-slate-500">Bank API'dan keladigan barcha ma'lumotlarni tekshirish</div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 ring-1 ring-amber-200 text-[11px] font-semibold text-amber-700">
             <Zap className="h-3 w-3" /> DEV / DEBUG
           </span>
-        }
-      />
-
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+        </div>
 
         {/* ═══ STEPS PROGRESS ═══ */}
         <div className="flex items-center gap-2">

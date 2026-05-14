@@ -6,9 +6,9 @@ import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Wallet, KeyRound, Building2,
-  History, Users, LogOut, ShieldCheck, BadgeDollarSign,
+  LogOut, ShieldCheck, BadgeDollarSign,
   Bell, ChevronUp, UserCircle, Settings, ChevronRight,
-  AlertCircle, CheckCircle2, Sparkles, Zap,
+  AlertCircle, CheckCircle2, Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -37,10 +37,7 @@ const NAV: NavItem[] = [
   { href: '/banks',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
   { href: '/credentials',  key: 'credentials',  icon: KeyRound,         group: 'setup', permission: PERMS.CREDENTIALS_VIEW },
 
-  { href: '/sync-logs',    key: 'syncLogs',     icon: History,          group: 'system', permission: PERMS.SYNC_VIEW },
-  { href: '/api-explorer', key: 'apiExplorer',  icon: Zap,              group: 'system', permission: PERMS.CREDENTIALS_TEST },
-  { href: '/admin-users',  key: 'adminUsers',   icon: Users,            group: 'system', permission: PERMS.USERS_VIEW },
-  { href: '/roles',        key: 'roles',        icon: ShieldCheck,      group: 'system', permission: PERMS.ROLES_VIEW },
+  { href: '/admin',        key: 'adminPanel',   icon: ShieldCheck,      group: 'system', permission: PERMS.USERS_VIEW },
 ];
 
 const GROUP_LABEL: Record<string, string> = {
