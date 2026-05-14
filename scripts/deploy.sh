@@ -226,6 +226,9 @@ if [ "$need_be" = "1" ]; then
 fi
 
 # 4. Frontend build (ovozsiz)
+# MUHIM: temp papkaga (.next-build) build qilamiz — eski .next buzilmaydi,
+# shuning uchun build davomida (1-2 min) sayt STILDA ishlab turadi.
+# Build tugagach atomik almashtiramiz va darrov restart qilamiz.
 if [ "$need_fe" = "1" ]; then
   if [ -d "$REPO/frontend" ]; then
     pushd "$REPO/frontend" > /dev/null
@@ -234,22 +237,24 @@ if [ "$need_fe" = "1" ]; then
       tg "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz"
       exit 1
     fi
-    # Stale chunk'lardan saqlanish
-    if [ -d ".next" ]; then
-      run "frontend clean .next" rm -rf .next
-    fi
-    if ! run "frontend build" npm run build; then
+    # Eski temp build qoldiqlarini tozalash
+    rm -rf .next-build .next-old
+    # Temp papkaga build — eski .next tegilmaydi
+    if ! run "frontend build (→ .next-build)" env NEXT_DIST_DIR=.next-build npm run build; then
       tg_with_log "❌ <b>xon.transactions</b> · frontend build xatosi"
       tg "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz"
+      rm -rf .next-build
       exit 1
     fi
+    # Atomik almashtirish — eski .next'ni chetga surib, yangisini qo'yamiz
+    [ -d .next ] && mv .next .next-old
+    mv .next-build .next
+    log "✓ frontend .next almashtirildi"
+    # Darrov restart — eski server yangi .next bilan ishlamasligi uchun
+    run "restart $FE_SVC" sudo -n /bin/systemctl restart "$FE_SVC" || true
+    rm -rf .next-old
     popd > /dev/null
   fi
-fi
-
-# 5. Restart
-if [ "$need_fe" = "1" ]; then
-  run "restart $FE_SVC" sudo -n /bin/systemctl restart "$FE_SVC" || true
 fi
 
 # 6. Bitta yakuniy xabar — sizning format bo'yicha
