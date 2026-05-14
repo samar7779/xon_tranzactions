@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Building2, Check, KeyRound, Wallet, Plus, ExternalLink,
-  Globe, Shield, Sparkles, MoreVertical, Timer, Power,
+  Building2, Check, KeyRound, Wallet, ExternalLink,
+  Globe, Shield, Timer, Power, ChevronRight,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -95,45 +95,22 @@ export default function BanksPage() {
               </>
             )}
 
-            {/* Noaktiv banklar — kulrang, pastda */}
+            {/* Noaktiv banklar — yopiq holatda, bosilganda ochiladi */}
             {inactiveList.length > 0 && (
-              <>
-                <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 flex items-center gap-2 mt-6 pt-6 border-t border-slate-200">
+              <details className="group mt-6 pt-6 border-t border-slate-200">
+                <summary className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 flex items-center gap-2 cursor-pointer select-none hover:text-slate-700">
+                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
                   <Building2 className="h-3.5 w-3.5" /> Kelajakda — {inactiveList.length} ta bank (integratsiya yo'q)
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                </summary>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-3">
                   {inactiveList.map((b: any) => (
                     <BankCardMuted key={b.id} b={b} />
                   ))}
                 </div>
-              </>
+              </details>
             )}
           </>
         )}
-
-        {/* Hint card — premium look */}
-        <Card className="border-0 shadow-soft overflow-hidden relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-50 via-blue-50 to-cyan-50 opacity-50" />
-          <CardContent className="p-6 relative">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center shrink-0 shadow-md">
-                <Sparkles className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-bold tracking-tight">Yangi bank qo'shish kerakmi?</div>
-                <div className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                  Hozircha to'liq ishlaydigan: <span className="font-semibold text-slate-900">KapitalBank V3</span> va <span className="font-semibold text-slate-900">Ipak Yo'li</span> (bank24.uz protocol).
-                  Hamkorbank, NBU, Asaka va boshqa banklar uchun API integratsiya talab qilinadi.
-                </div>
-                <div className="flex items-center gap-2 mt-3 text-[11px] text-indigo-700 font-medium">
-                  <span className="px-2 py-1 rounded-full bg-white/80 ring-1 ring-indigo-100">Server adminga murojaat qiling</span>
-                  <span className="text-slate-400">·</span>
-                  <span>support@xonapps.uz</span>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </>
   );
