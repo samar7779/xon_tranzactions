@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import {
-  ArrowDownLeft, ArrowUpRight, Wallet, Building2,
+  Wallet, Building2,
   RefreshCw, TrendingUp, ArrowRight, ChevronRight,
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
@@ -16,7 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { OnboardingCard } from '@/components/onboarding-card';
 import { api } from '@/lib/api';
-import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
+import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
 
@@ -34,10 +34,6 @@ export default function DashboardPage() {
       from.setDate(from.getDate() - 30);
       return api.get<any>(`/transactions/stats?from=${from.toISOString().slice(0, 10)}`);
     },
-  });
-  const { data: recent, isLoading: recentLoading } = useQuery({
-    queryKey: ['recent'],
-    queryFn: () => api.get<{ items: any[]; total: number }>('/transactions?perPage=12'),
   });
   const { data: syncLogs } = useQuery({
     queryKey: ['sync-logs-dashboard'],
@@ -112,82 +108,6 @@ export default function DashboardPage() {
 
           {/* ═══ LEFT: Transactions table (8 cols) ═══ */}
           <div className="lg:col-span-8 space-y-4">
-
-            {/* Recent transactions table */}
-            <DataPanel
-              title="Oxirgi tranzaksiyalar"
-              count={recent?.total}
-              actions={
-                <Link href={`/${locale}/transactions`}>
-                  <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                    Barchasi <ChevronRight className="h-3 w-3" />
-                  </button>
-                </Link>
-              }
-            >
-              {recentLoading ? (
-                <div className="p-4 space-y-2">
-                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10" />)}
-                </div>
-              ) : (recent?.items || []).length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">Tranzaksiyalar yo'q</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
-                        <th className="text-left px-3 py-2 w-32">Sana</th>
-                        <th className="text-left px-3 py-2 w-20">Yo'nalish</th>
-                        <th className="text-left px-3 py-2">Kontragent</th>
-                        <th className="text-left px-3 py-2 w-32">Bank</th>
-                        <th className="text-right px-3 py-2 w-32">Summa</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {recent!.items.slice(0, 10).map((it: any) => {
-                        const counterparty = it.direction === 'IN' ? it.fromName : it.toName;
-                        return (
-                          <tr key={it.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-3 py-2 whitespace-nowrap">
-                              <div className="tabular-nums text-slate-700">{formatDate(it.txnDate)}</div>
-                              <div className="text-[10px] text-slate-500 tabular-nums">
-                                {it.operationTime
-                                  ? it.operationTime.slice(0, 5)
-                                  : new Date(it.txnDate).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' })}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <span className={cn(
-                                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
-                                it.direction === 'IN'
-                                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : "bg-rose-50 text-rose-700 border-rose-200",
-                              )}>
-                                {it.direction === 'IN' ? <ArrowDownLeft className="h-2.5 w-2.5" /> : <ArrowUpRight className="h-2.5 w-2.5" />}
-                                {it.direction === 'IN' ? 'IN' : 'OUT'}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 max-w-[280px]">
-                              <div className="truncate font-medium text-slate-900">{counterparty || '—'}</div>
-                              <div className="font-mono text-[10px] text-slate-500 truncate">
-                                {it.direction === 'IN' ? it.fromInn : it.toAccount || ''}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2 max-w-[140px] truncate text-slate-700">{it.account?.bank?.name || '—'}</td>
-                            <td className={cn(
-                              "px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap",
-                              it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
-                            )}>
-                              {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </DataPanel>
 
             {/* Top accounts table */}
             <DataPanel

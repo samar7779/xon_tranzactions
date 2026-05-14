@@ -4,9 +4,10 @@ import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
-  TrendingUp, Zap, Database, RefreshCcw,
+  TrendingUp, Zap, Database, RefreshCcw, Search, X,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Sparkline } from '@/components/sparkline';
@@ -20,13 +21,37 @@ const STATUS_CONFIG: Record<string, { icon: any; label: string; cls: string; dot
   PARTIAL: { icon: AlertTriangle, label: 'Qisman', cls: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
 };
 
+const STATUS_FILTERS = [
+  { value: 'all', label: 'Barchasi' },
+  { value: 'SUCCESS', label: 'Muvaffaqiyatli' },
+  { value: 'FAILED', label: 'Xato' },
+  { value: 'PARTIAL', label: 'Qisman' },
+  { value: 'RUNNING', label: 'Bajarilmoqda' },
+];
+
 export default function SyncLogsPage() {
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [q, setQ] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['sync-logs'],
     queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=100'),
     refetchInterval: 10_000,
   });
+
+  // Filtr — status + qidiruv (hisob raqami / egasi / xato matni)
+  const filtered = useMemo(() => {
+    let items = data?.items || [];
+    if (statusFilter !== 'all') items = items.filter((l) => l.status === statusFilter);
+    const ql = q.trim().toLowerCase();
+    if (ql) {
+      items = items.filter((l) =>
+        (l.source || '').toLowerCase().includes(ql) ||
+        (l.errorMessage || '').toLowerCase().includes(ql),
+      );
+    }
+    return items;
+  }, [data, statusFilter, q]);
 
   const stats = useMemo(() => {
     const items = data?.items || [];
@@ -72,20 +97,57 @@ export default function SyncLogsPage() {
         {/* ═══ TIMELINE ═══ */}
         <Card className="border-0 shadow-soft overflow-hidden">
           <CardContent className="p-0">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-              <div>
-                <div className="text-base font-semibold tracking-tight flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-indigo-600" />
-                  Sync tarixi
+            <div className="px-6 py-4 border-b border-slate-100 space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <div className="text-base font-semibold tracking-tight flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-indigo-600" />
+                    Sync tarixi
+                  </div>
+                  <div className="text-xs text-slate-500 mt-0.5">Oxirgi 100 ta operatsiya · har 10 soniyada yangilanadi</div>
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">Oxirgi 100 ta operatsiya · har 10 soniyada yangilanadi</div>
+                <div className="flex items-center gap-1.5 text-[11px]">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {stats.success}
+                  </span>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 ring-1 ring-rose-200 text-rose-700 font-medium">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> {stats.failed}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px]">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {stats.success}
-                </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 ring-1 ring-rose-200 text-rose-700 font-medium">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> {stats.failed}
+
+              {/* Filtr — status + qidiruv */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium">
+                  {STATUS_FILTERS.map((f) => (
+                    <button
+                      key={f.value}
+                      onClick={() => setStatusFilter(f.value)}
+                      className={cn(
+                        'px-2.5 h-8 rounded-lg transition-colors',
+                        statusFilter === f.value ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Input
+                    className="pl-8 h-9 rounded-xl bg-slate-50/60 text-sm"
+                    placeholder="Hisob raqami, egasi yoki xato matni..."
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                  {q && (
+                    <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11px] text-slate-400 tabular-nums">
+                  {filtered.length} / {data?.items?.length ?? 0}
                 </span>
               </div>
             </div>
@@ -94,15 +156,17 @@ export default function SyncLogsPage() {
               <div className="p-6 space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14" />)}
               </div>
-            ) : (data?.items?.length ?? 0) === 0 ? (
+            ) : filtered.length === 0 ? (
               <EmptyState
                 icon={RefreshCcw}
-                title="Sync logi yo'q"
-                description="Cron har 5 daqiqada ishlaydi yoki bank hisobini qo'lda sync qilganingizda log yoziladi"
+                title={(data?.items?.length ?? 0) === 0 ? "Sync logi yo'q" : "Filtr bo'yicha topilmadi"}
+                description={(data?.items?.length ?? 0) === 0
+                  ? "Cron har 5 daqiqada ishlaydi yoki bank hisobini qo'lda sync qilganingizda log yoziladi"
+                  : "Filtr yoki qidiruvni o'zgartirib ko'ring"}
               />
             ) : (
               <div className="divide-y divide-slate-100">
-                {data!.items.map((l: any) => {
+                {filtered.map((l: any) => {
                   const cfg = STATUS_CONFIG[l.status] || STATUS_CONFIG.SUCCESS;
                   const Icon = cfg.icon;
                   return (
