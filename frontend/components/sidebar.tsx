@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Building2,
   LogOut, ShieldCheck, BadgeDollarSign,
   Bell, ChevronUp, UserCircle, Settings, ChevronRight,
-  AlertCircle, CheckCircle2, FileSpreadsheet,
+  AlertCircle, CheckCircle2, FileSpreadsheet, Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -33,6 +33,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
   { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
+  { href: '/check',        key: 'check',        icon: Scale,           group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
 
   { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
 
