@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2,
   LogOut, ShieldCheck, BadgeDollarSign,
   Bell, ChevronUp, UserCircle, Settings, ChevronRight,
-  AlertCircle, CheckCircle2, Sparkles,
+  AlertCircle, CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -48,6 +48,7 @@ export function Sidebar() {
   const t = useTranslations('nav');
   const tApp = useTranslations('app');
   const pathname = usePathname();
+  const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
@@ -124,28 +125,31 @@ export function Sidebar() {
             ) : (
               <div className="max-h-72 overflow-y-auto">
                 {failures.map((l) => (
-                  <Link key={l.id} href={`/${locale}/admin/sync-logs`}>
-                    <div className="px-3 py-2 hover:bg-slate-50 cursor-pointer">
-                      <div className="flex items-start gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-rose-50 grid place-items-center shrink-0">
-                          <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="text-[12px] font-semibold text-slate-700">Sync xato</div>
-                          <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
-                          <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
-                        </div>
+                  <DropdownMenuItem
+                    key={l.id}
+                    onClick={() => router.push(`/${locale}/admin/sync-logs`)}
+                    className="px-3 py-2 cursor-pointer"
+                  >
+                    <div className="flex items-start gap-2 w-full">
+                      <div className="w-7 h-7 rounded-lg bg-rose-50 grid place-items-center shrink-0">
+                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-semibold text-slate-700">Sync xato</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
                       </div>
                     </div>
-                  </Link>
+                  </DropdownMenuItem>
                 ))}
                 <DropdownMenuSeparator />
-                <Link href={`/${locale}/admin/sync-logs`}>
-                  <DropdownMenuItem className="justify-center text-indigo-600 font-medium">
-                    Barchasini ko'rish
-                    <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                  </DropdownMenuItem>
-                </Link>
+                <DropdownMenuItem
+                  onClick={() => router.push(`/${locale}/admin/sync-logs`)}
+                  className="justify-center text-indigo-600 font-medium cursor-pointer"
+                >
+                  Barchasini ko'rish
+                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                </DropdownMenuItem>
               </div>
             )}
           </DropdownMenuContent>
@@ -190,17 +194,6 @@ export function Sidebar() {
             </div>
           );
         })}
-
-        {/* Upgrade prompt card */}
-        <div className="mt-4 mx-1 relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-600 to-blue-600 p-4 text-white shadow-lg shadow-indigo-500/20">
-          <div className="absolute inset-0 bg-dots opacity-20" />
-          <div className="absolute -top-8 -right-8 w-24 h-24 rounded-full bg-white/15 blur-2xl" />
-          <div className="relative">
-            <Sparkles className="h-4 w-4 mb-2 text-amber-300" />
-            <div className="text-[13px] font-bold tracking-tight">Pro tariff yoqilgan</div>
-            <div className="text-[10px] text-white/80 mt-0.5 leading-relaxed">Cheksiz tranzaksiya, 100+ hisob, avto-sync har 5 daqiqa</div>
-          </div>
-        </div>
       </nav>
 
       {/* User dropdown */}
