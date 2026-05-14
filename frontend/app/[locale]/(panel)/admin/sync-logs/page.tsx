@@ -1,13 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
   TrendingUp, Zap, Database, RefreshCcw,
 } from 'lucide-react';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
@@ -23,7 +21,6 @@ const STATUS_CONFIG: Record<string, { icon: any; label: string; cls: string; dot
 };
 
 export default function SyncLogsPage() {
-  const t = useTranslations('syncLogs');
 
   const { data, isLoading } = useQuery({
     queryKey: ['sync-logs'],
@@ -49,17 +46,20 @@ export default function SyncLogsPage() {
 
   return (
     <>
-      <Topbar title={t('title')} subtitle={t('subtitle')} actions={
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/20 text-[11px] font-medium text-white">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-          </span>
-          Live · 10s yangilanish
-        </span>
-      } />
-
       <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-bold tracking-tight">Sync tarixi</div>
+            <div className="text-xs text-slate-500">Banklardan ma'lumot olish jurnali</div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-[11px] font-medium text-emerald-700">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            Live · 10s yangilanish
+          </span>
+        </div>
 
         {/* ═══ KPI ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
