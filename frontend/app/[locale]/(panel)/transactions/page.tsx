@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -8,7 +8,7 @@ import {
   Search, Wand2, Link2Off, EyeOff, MoreHorizontal, Download,
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
-  Hash, Receipt, Link2, History, Loader2,
+  Hash, Receipt, Link2, History, Loader2, AlertCircle,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { BankLogo } from '@/components/bank-logo';
@@ -670,6 +670,11 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
   const [progress, setProgress] = useState<{ total: number; days: number; startedAt: string } | null>(null);
 
+  // To'xtab qolishni aniqlash uchun (deploy/crash server jarayonini o'ldiradi)
+  const prevDoneRef = useRef(0);
+  const [lastAdvanceAt, setLastAdvanceAt] = useState(Date.now());
+  const [, forceTick] = useState(0);
+
   const mut = useMutation({
     mutationFn: () => api.post<any>('/sync/backfill', {
       scope,
@@ -681,6 +686,8 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     onSuccess: (r: any) => {
       if (r?.ok && r?.started) {
         setProgress({ total: r.accounts, days: r.days, startedAt: r.startedAt });
+        prevDoneRef.current = 0;
+        setLastAdvanceAt(Date.now());
       } else {
         toast.error(r?.error || 'Xato');
       }
@@ -703,6 +710,25 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
   const allDone = !!progress && doneCount >= progress.total;
   const pct = progress ? Math.round((doneCount / Math.max(1, progress.total)) * 100) : 0;
 
+  // ─── To'xtab qolishni aniqlash ───
+  // Backfill server jarayonida ishlaydi; server qayta ishga tushsa (deploy/crash)
+  // jarayon o'rtada o'ladi. Agar 30s davomida progress o'zgarmasa — "to'xtagan" deb belgilaymiz.
+  useEffect(() => {
+    if (doneCount !== prevDoneRef.current) {
+      prevDoneRef.current = doneCount;
+      setLastAdvanceAt(Date.now());
+    }
+  }, [doneCount]);
+
+  useEffect(() => {
+    if (!progress || allDone) return;
+    const id = setInterval(() => forceTick((t) => t + 1), 4000);
+    return () => clearInterval(id);
+  }, [progress, allDone]);
+
+  const stalled =
+    !!progress && !allDone && doneCount > 0 && Date.now() - lastAdvanceAt > 30_000;
+
   const valid = !!dateFrom && !!dateTo && dateFrom <= dateTo
     && (scope !== 'bank' || !!bankId)
     && (scope !== 'account' || !!accountId);
@@ -718,9 +744,11 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             <History className="h-4 w-4 text-indigo-600" /> Eski tarixni yuklash
           </DialogTitle>
           <DialogDescription>
-            {progress
-              ? 'Jarayon davom etmoqda — oynani yopsangiz ham fonda ishlayveradi'
-              : "Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi"}
+            {stalled
+              ? 'Jarayon to\'xtab qolgan ko\'rinadi'
+              : progress
+                ? 'Jarayon davom etmoqda — oynani yopsangiz ham fonda ishlayveradi'
+                : "Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi"}
           </DialogDescription>
         </DialogHeader>
 
@@ -809,9 +837,30 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
               </div>
             )}
 
+            {stalled && (
+              <div className="text-[11px] text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <AlertCircle className="h-3.5 w-3.5" /> Jarayon to'xtab qolgan
+                </div>
+                <div className="mt-0.5 text-amber-700">
+                  Server qayta ishga tushgan bo'lishi mumkin. {doneCount} / {progress.total} hisob
+                  bajarilgan. Qaytadan boshlasangiz — qolganlari yuklanadi (allaqachon yuklangan
+                  hisoblar takrorlanmaydi, faqat tekshiriladi).
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-1">
               {allDone ? (
                 <Button onClick={() => { setProgress(null); onOpenChange(false); }}>Yopish</Button>
+              ) : stalled ? (
+                <>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>Yopish</Button>
+                  <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
+                    {mut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <History className="h-4 w-4 mr-1.5" />}
+                    Qaytadan boshlash
+                  </Button>
+                </>
               ) : (
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Fonda davom etsin · yopish</Button>
               )}
