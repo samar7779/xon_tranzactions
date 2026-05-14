@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 
 // ─────────────── Dual area chart (kirim/chiqim) ───────────────
 interface DualAreaChartProps {
-  data: { label: string; inflow: number; outflow: number }[];
+  data: { label: string; inflow: number; outflow: number; weekend?: boolean }[];
   height?: number;
   className?: string;
 }
@@ -79,11 +79,25 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
 
         {/* Plot maydoni */}
         <div
-          className="flex-1 relative rounded-lg bg-gradient-to-b from-slate-50/40 to-transparent"
+          className="flex-1 relative rounded-lg bg-gradient-to-b from-slate-50/40 to-transparent overflow-hidden"
           style={{ height: H }}
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
         >
+          {/* Dam olish kunlari (shanba/yakshanba) — yengil sariq fon */}
+          {data.map((d, i) => {
+            if (!d.weekend) return null;
+            const sp = n > 1 ? 1 / (n - 1) : 1;
+            const left = Math.max(0, xFrac(i) - sp / 2);
+            const right = Math.min(1, xFrac(i) + sp / 2);
+            return (
+              <div
+                key={`wk-${i}`}
+                className="absolute top-0 bottom-0 bg-amber-50 pointer-events-none"
+                style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
+              />
+            );
+          })}
           <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full overflow-visible">
             <defs>
               <linearGradient id={`${id}-in`} x1="0" y1="0" x2="0" y2="1">
@@ -466,7 +480,7 @@ export function BarChart({ data, height = 180, className }: BarChartProps) {
 
 // ─────────────── Daily grouped bar chart (kirim / chiqim / tranzaksiya soni) ───────────────
 interface DailyBarChartProps {
-  data: { label: string; inflow: number; outflow: number; count: number }[];
+  data: { label: string; inflow: number; outflow: number; count: number; weekend?: boolean }[];
   height?: number;
   className?: string;
 }
@@ -489,7 +503,6 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
   const maxMoney = Math.max(...data.map((d) => Math.max(d.inflow, d.outflow)), 1);
   const maxCount = Math.max(...data.map((d) => d.count), 1);
   const plotH = height - 28;
-  const step = Math.max(1, Math.ceil(data.length / 14));
   const moneyTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => formatShort(maxMoney * p));
   const countTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => Math.round(maxCount * p).toString());
 
@@ -515,7 +528,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
                 key={i}
                 className={cn(
                   'flex-1 h-full flex items-end justify-center gap-[2px] min-w-0 relative rounded-sm transition-colors',
-                  hover === i && 'bg-slate-50',
+                  hover === i ? 'bg-slate-100' : d.weekend ? 'bg-amber-50' : '',
                 )}
                 onMouseEnter={() => setHover(i)}
               >
@@ -560,13 +573,19 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
         </div>
       </div>
 
-      {/* X o'qi belgilari */}
+      {/* X o'qi belgilari — barchasi ko'rsatiladi, dam olish kunlari sariq */}
       <div className="flex mt-1.5">
         <div className="w-14 shrink-0" />
         <div className="flex-1 flex gap-1">
           {data.map((d, i) => (
-            <div key={i} className="flex-1 text-[9px] text-slate-400 text-center truncate">
-              {i % step === 0 || i === data.length - 1 ? d.label : ''}
+            <div
+              key={i}
+              className={cn(
+                'flex-1 text-[8px] text-center leading-tight tabular-nums',
+                d.weekend ? 'text-amber-600 font-semibold' : 'text-slate-400',
+              )}
+            >
+              {d.label}
             </div>
           ))}
         </div>
@@ -578,6 +597,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kirim</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" /> Chiqim</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500" /> Tranzaksiya soni</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-100 ring-1 ring-amber-300" /> Dam olish kuni</span>
       </div>
     </div>
   );
