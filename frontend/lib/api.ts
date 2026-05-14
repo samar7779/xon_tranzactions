@@ -67,6 +67,38 @@ function safeJson(s: string) {
   try { return JSON.parse(s); } catch { return s; }
 }
 
+/**
+ * Faylni yuklab olish (Excel/PDF va h.k.) — JWT bilan, blob orqali.
+ * Content-Disposition'dan filename'ni o'qiydi, bo'lmasa fallback ishlatadi.
+ */
+export async function apiDownload(path: string, fallbackName = 'download'): Promise<void> {
+  const token = getToken();
+  const resp = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    const data = text ? safeJson(text) : null;
+    const err: ApiError = new Error(data?.message || data?.error?.message || resp.statusText);
+    err.status = resp.status;
+    err.data = data;
+    throw err;
+  }
+  const blob = await resp.blob();
+  let fname = fallbackName;
+  const cd = resp.headers.get('Content-Disposition');
+  const m = cd?.match(/filename="?([^"]+)"?/);
+  if (m) fname = m[1];
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export const api = {
   get: <T = any>(path: string, opts?: { timeout?: number }) =>
     apiFetch<T>(path, { method: 'GET', ...opts }),
