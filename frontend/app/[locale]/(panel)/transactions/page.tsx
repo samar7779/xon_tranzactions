@@ -698,12 +698,29 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
             </div>
           )}
 
+          {/* Vaqt ma'lumotlari */}
+          <DetailSection title="Vaqt ma'lumotlari" icon={Calendar}>
+            <CopyRow label="Hujjat sanasi" value={formatDate(row.txnDate)} />
+            <CopyRow label="Operatsiya vaqti" value={row.operationTime} mono />
+            <CopyRow
+              label="Value date"
+              value={row.valueDate ? formatDate(row.valueDate) : undefined}
+            />
+            <CopyRow label="Settlement vaqti" value={row.settlementTime} mono />
+            <CopyRow
+              label="Kiritilgan"
+              value={row.inputAt ? formatDateTime(row.inputAt) : undefined}
+            />
+          </DetailSection>
+
           {/* Tizim ma'lumotlari */}
           <DetailSection title="Tizim ma'lumotlari" icon={Hash}>
             <CopyRow label="Bank" value={row.account?.bank?.name || '—'} />
             <CopyRow label="Mahalliy hisob" value={row.account?.accountNo} mono copyable />
             <CopyRow label="B2 ID" value={row.bankB2Id} mono copyable />
             <CopyRow label="Global ID (NCI)" value={row.bankGeneralId} mono copyable />
+            {row.bankClientId && <CopyRow label="Klient ID" value={row.bankClientId} mono />}
+            {row.docType && <CopyRow label="Hujjat turi" value={row.docType} mono />}
           </DetailSection>
 
           {/* Tranzaksiya ID — to'liq, alohida blok */}
