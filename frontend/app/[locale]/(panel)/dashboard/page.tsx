@@ -14,6 +14,7 @@ import {
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
+import { Input } from '@/components/ui/input';
 import { OnboardingCard } from '@/components/onboarding-card';
 import { DualAreaChart } from '@/components/charts';
 import {
@@ -55,6 +56,7 @@ export default function DashboardPage() {
   const [customTo, setCustomTo] = useState('');
   const [chartBankId, setChartBankId] = useState('all');
   const [chartAccountId, setChartAccountId] = useState('all');
+  const [accSearch, setAccSearch] = useState('');
 
   const { from: chartFrom, to: chartTo } = useMemo(() => {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -79,11 +81,26 @@ export default function DashboardPage() {
     enabled: range !== 'custom' || (!!customFrom && !!customTo),
   });
 
-  // Tanlangan bankka tegishli hisoblar (account filtri uchun)
+  // Banklar — aktivlar boshida (chart filtri uchun)
+  const sortedChartBanks = useMemo(() => {
+    return [...(banks?.items || [])].sort((a: any, b: any) => {
+      if (a.isActive && !b.isActive) return -1;
+      if (!a.isActive && b.isActive) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  }, [banks]);
+
+  // Tanlangan bankka tegishli hisoblar (account filtri uchun) + qidiruv
   const chartAccounts = useMemo(() => {
     const all = accounts?.items || [];
-    return chartBankId === 'all' ? all : all.filter((a: any) => a.bankId === chartBankId);
-  }, [accounts, chartBankId]);
+    const byBank = chartBankId === 'all' ? all : all.filter((a: any) => a.bankId === chartBankId);
+    const q = accSearch.trim().toLowerCase();
+    if (!q) return byBank;
+    return byBank.filter((a: any) =>
+      a.accountNo?.toLowerCase().includes(q) ||
+      a.ownerName?.toLowerCase().includes(q),
+    );
+  }, [accounts, chartBankId, accSearch]);
 
   const chartData = useMemo(() => {
     return (daily?.days || []).map((d: any) => ({
@@ -164,7 +181,7 @@ export default function DashboardPage() {
               <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Bank filtri */}
+              {/* Bank filtri — aktivlar boshida, effekt bilan */}
               <Select
                 value={chartBankId}
                 onValueChange={(v) => { setChartBankId(v); setChartAccountId('all'); }}
@@ -174,24 +191,53 @@ export default function DashboardPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Hamma banklar</SelectItem>
-                  {(banks?.items || []).map((b: any) => (
-                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                  {sortedChartBanks.filter((b: any) => b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        {b.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {sortedChartBanks.filter((b: any) => !b.isActive).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                      Aktiv emas
+                    </div>
+                  )}
+                  {sortedChartBanks.filter((b: any) => !b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
-              {/* Hisob filtri */}
+              {/* Hisob filtri — qidiruv bilan */}
               <Select value={chartAccountId} onValueChange={setChartAccountId}>
                 <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
                   <SelectValue placeholder="Hamma hisoblar" />
                 </SelectTrigger>
                 <SelectContent>
+                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                    <Input
+                      value={accSearch}
+                      onChange={(e) => setAccSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder="Hisob raqami yoki egasi..."
+                      className="h-8 text-[11px]"
+                    />
+                  </div>
                   <SelectItem value="all">Hamma hisoblar</SelectItem>
-                  {chartAccounts.map((a: any) => (
-                    <SelectItem key={a.id} value={a.id}>
-                      {a.accountNo} {a.ownerName ? `· ${a.ownerName}` : ''}
-                    </SelectItem>
-                  ))}
+                  {chartAccounts.length === 0 ? (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
+                  ) : (
+                    chartAccounts.slice(0, 100).map((a: any) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.accountNo} {a.ownerName ? `· ${a.ownerName}` : ''}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
 
