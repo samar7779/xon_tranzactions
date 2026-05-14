@@ -238,7 +238,7 @@ export default function TransactionsPage() {
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filtr bo'yicha (hammasi)</DropdownMenuLabel>
               <DropdownMenuItem onClick={exportExcel}>
-                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel — barcha mos yozuvlar
+                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
