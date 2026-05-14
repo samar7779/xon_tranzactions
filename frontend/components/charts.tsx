@@ -82,7 +82,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
         >
-          {/* Dam olish kunlari (shanba/yakshanba) — yengil sariq fon */}
+          {/* Dam olish kunlari (shanba/yakshanba) — yengil pushti fon */}
           {data.map((d, i) => {
             if (!d.weekend) return null;
             const sp = n > 1 ? 1 / (n - 1) : 1;
@@ -91,7 +91,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             return (
               <div
                 key={`wk-${i}`}
-                className="absolute top-0 bottom-0 bg-amber-50 pointer-events-none"
+                className="absolute top-0 bottom-0 bg-rose-100/60 pointer-events-none"
                 style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
               />
             );
@@ -150,6 +150,20 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             />
           </svg>
 
+          {/* Har bir nuqtada belgi (n ko'p bo'lsa ko'rsatilmaydi) */}
+          {n <= 45 && data.map((d, i) => (
+            <div key={`pt-${i}`}>
+              <div
+                className="absolute w-[7px] h-[7px] rounded-full bg-emerald-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${xFrac(i) * 100}%`, top: `${(1 - yFrac(d.inflow)) * 100}%` }}
+              />
+              <div
+                className="absolute w-[7px] h-[7px] rounded-full bg-rose-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${xFrac(i) * 100}%`, top: `${(1 - yFrac(d.outflow)) * 100}%` }}
+              />
+            </div>
+          ))}
+
           {/* Hover qatlami */}
           {h !== null && (
             <>
@@ -202,16 +216,20 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
         </div>
       </div>
 
-      {/* X o'qi belgilari */}
+      {/* X o'qi belgilari — n kichik bo'lsa barchasi, dam olish kunlari qizil */}
       <div className="flex mt-2">
         <div className="w-14 shrink-0" />
         <div className="flex-1 relative h-4">
           {data.map((d, i) => {
-            if (i % step !== 0 && i !== n - 1) return null;
+            const showAll = n <= 35;
+            if (!showAll && i % step !== 0 && i !== n - 1) return null;
             return (
               <div
                 key={i}
-                className="absolute text-[10px] text-slate-400 tabular-nums font-medium -translate-x-1/2"
+                className={cn(
+                  "absolute text-[10px] tabular-nums font-medium -translate-x-1/2",
+                  d.weekend ? "text-rose-500" : "text-slate-400",
+                )}
                 style={{ left: `${xFrac(i) * 100}%` }}
               >
                 {d.label}
@@ -219,6 +237,19 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             );
           })}
         </div>
+      </div>
+
+      {/* Legenda */}
+      <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Kirim
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Chiqim
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 ring-1 ring-rose-200" /> Dam olish kuni
+        </span>
       </div>
     </div>
   );
