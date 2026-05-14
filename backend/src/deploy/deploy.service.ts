@@ -104,6 +104,7 @@ export class DeployService {
     const scriptPath = path.join(this.repoDir, 'scripts', 'deploy.sh');
     const env = {
       ...process.env,
+      DEPLOY_FROM_WEBHOOK: '1',
       DEPLOY_REPO_DIR: this.repoDir,
       DEPLOY_BRANCH: this.branch,
       DEPLOY_BACKEND_SERVICE: this.backendService,
@@ -113,8 +114,8 @@ export class DeployService {
       DEPLOY_FILES: (opts.files || []).join(','),
       TG_BOT_TOKEN: this.tgToken,
       DEPLOY_NOTIFY_CHAT: this.tgChat,
-      DEPLOY_PUSHER: opts.pusher,
-      DEPLOY_PUSHED_BRANCH: opts.pushedBranch,
+      DEPLOY_PUSHER: opts.pusher || '?',
+      DEPLOY_PUSHED_BRANCH: opts.pushedBranch || this.branch,
       DEPLOY_COMMIT: opts.commit || '',
     };
     // /bin/sh -c "..." orqali nohup bilan detached
