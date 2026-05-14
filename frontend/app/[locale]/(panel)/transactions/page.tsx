@@ -122,7 +122,8 @@ export default function TransactionsPage() {
   // 30-day KPI
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
-  const txnCount = (stats?.groups || []).reduce((s: number, g: any) => s + Number(g._count?._all || 0), 0);
+  // stats.total — backend'dan to'g'ridan-to'g'ri count; groups[]._count raqam (obyekt emas)
+  const txnCount = stats?.total ?? (stats?.groups || []).reduce((s: number, g: any) => s + Number(typeof g._count === 'number' ? g._count : g._count?._all || 0), 0);
   const net = inSum - outSum;
 
   // Mock sparkline data (for visual continuity until backend serves daily breakdown)

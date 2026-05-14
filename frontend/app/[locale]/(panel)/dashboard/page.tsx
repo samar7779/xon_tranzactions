@@ -50,7 +50,7 @@ export default function DashboardPage() {
   const totalAccounts = accounts?.items?.length || 0;
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
-  const txnCount = (stats?.groups || []).reduce((s: number, g: any) => s + Number(g._count?._all || 0), 0);
+  const txnCount = stats?.total ?? (stats?.groups || []).reduce((s: number, g: any) => s + Number(typeof g._count === 'number' ? g._count : g._count?._all || 0), 0);
   const netFlow = inSum - outSum;
 
   const isEmpty = totalAccounts === 0;
