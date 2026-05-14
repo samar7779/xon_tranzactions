@@ -6,6 +6,7 @@
   "nav": {
     "dashboard": "Главная",
     "transactions": "Транзакции",
+    "statement": "Выписка",
     "accounts": "Счета",
     "credentials": "Подключения к банкам",
     "banks": "Банки",
