@@ -36,4 +36,16 @@ export class BankAccountsController {
   @Delete(':id')
   @Roles('SUPERADMIN', 'ADMIN')
   remove(@Param('id') id: string) { return this.svc.remove(id); }
+
+  @Post('bulk')
+  @Roles('SUPERADMIN', 'ADMIN')
+  @ApiOperation({ summary: "Ko'p hisoblarni bir vaqtda qo'shish (paste orqali)" })
+  bulk(@Body() dto: {
+    credentialId: string;
+    branch: string;
+    currency?: string;
+    accounts: { accountNo: string; ownerName?: string }[];
+  }) {
+    return this.svc.bulkCreate(dto);
+  }
 }
