@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { BankAccountsService } from './bank-accounts.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -18,6 +19,19 @@ export class BankAccountsController {
   @RequirePermissions(PERMISSIONS.ACCOUNTS_VIEW)
   @ApiOperation({ summary: 'Bank hisoblari ro\'yxati' })
   list(@Query('credentialId') credentialId?: string) { return this.svc.list(credentialId); }
+
+  @Get('export')
+  @RequirePermissions(PERMISSIONS.ACCOUNTS_VIEW)
+  @ApiOperation({ summary: 'Barcha hisoblarni Excel qilib yuklab olish' })
+  async export(@Res() res: Response) {
+    const { buffer, filename } = await this.svc.exportXlsx();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
 
   @Get(':id')
   @RequirePermissions(PERMISSIONS.ACCOUNTS_VIEW)

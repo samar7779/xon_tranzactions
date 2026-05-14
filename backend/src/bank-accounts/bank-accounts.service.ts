@@ -1,10 +1,60 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 
 @Injectable()
 export class BankAccountsService {
   constructor(private prisma: PrismaService) {}
+
+  // Barcha hisoblarni Excel'ga: hisob raqami, bank nomi, MFO, hisob nomi
+  async exportXlsx(): Promise<{ buffer: Buffer; filename: string }> {
+    const items = await this.prisma.bankAccount.findMany({
+      orderBy: [{ accountNo: 'asc' }],
+      include: { bank: { select: { name: true } } },
+    });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Hisoblar');
+    ws.columns = [
+      { header: 'Hisob raqami', key: 'accountNo', width: 26 },
+      { header: 'Bank nomi', key: 'bankName', width: 24 },
+      { header: 'MFO', key: 'branch', width: 10 },
+      { header: 'Hisob nomi', key: 'ownerName', width: 44 },
+    ];
+    const headRow = ws.getRow(1);
+    headRow.font = { bold: true, size: 11 };
+    headRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+    headRow.eachCell((c) => {
+      c.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+
+    for (const a of items) {
+      const row = ws.addRow({
+        accountNo: a.accountNo,
+        bankName: a.bank?.name || '',
+        branch: a.branch,
+        ownerName: a.ownerName || '',
+      });
+      row.eachCell((c) => {
+        c.font = { size: 10 };
+        c.border = {
+          top: { style: 'thin' }, bottom: { style: 'thin' },
+          left: { style: 'thin' }, right: { style: 'thin' },
+        };
+      });
+    }
+
+    const raw = await wb.xlsx.writeBuffer();
+    const buffer: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+    const filename = `hisoblar_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    return { buffer, filename };
+  }
 
   async list(credentialId?: string) {
     const items = await this.prisma.bankAccount.findMany({
