@@ -27,7 +27,10 @@ const STATUS_FILTERS = [
   { value: 'FAILED', label: 'Xato' },
   { value: 'PARTIAL', label: 'Qisman' },
   { value: 'RUNNING', label: 'Bajarilmoqda' },
+  { value: 'BACKFILL', label: 'Tarix yuklash' },
 ];
+
+const isBackfillLog = (l: any) => (l.source || '').includes('backfill');
 
 export default function SyncLogsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
@@ -39,10 +42,11 @@ export default function SyncLogsPage() {
     refetchInterval: 10_000,
   });
 
-  // Filtr — status + qidiruv (hisob raqami / egasi / xato matni)
+  // Filtr — status / backfill + qidiruv (hisob raqami / egasi / xato matni)
   const filtered = useMemo(() => {
     let items = data?.items || [];
-    if (statusFilter !== 'all') items = items.filter((l) => l.status === statusFilter);
+    if (statusFilter === 'BACKFILL') items = items.filter(isBackfillLog);
+    else if (statusFilter !== 'all') items = items.filter((l) => l.status === statusFilter);
     const ql = q.trim().toLowerCase();
     if (ql) {
       items = items.filter((l) =>
@@ -192,6 +196,11 @@ export default function SyncLogsPage() {
                                 )}>
                                   {cfg.label}
                                 </span>
+                                {isBackfillLog(l) && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
+                                    Tarix yuklash
+                                  </span>
+                                )}
                                 <span className="font-mono text-[11px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">{l.source}</span>
                                 <span className="text-[11px] text-slate-500 tabular-nums">{formatDateTime(l.startedAt)}</span>
                               </div>

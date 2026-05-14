@@ -645,6 +645,8 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     return list;
   }, [accounts, bankId, accSearch]);
 
+  const [progress, setProgress] = useState<{ total: number; days: number; startedAt: string } | null>(null);
+
   const mut = useMutation({
     mutationFn: () => api.post<any>('/sync/backfill', {
       scope,
@@ -653,126 +655,247 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
       dateFrom,
       dateTo,
     }),
-    onSuccess: () => {
-      toast.success("Tarix yuklash boshlandi — fonda bajariladi, natija Sync tarixida ko'rinadi");
-      onOpenChange(false);
+    onSuccess: (r: any) => {
+      if (r?.ok && r?.started) {
+        setProgress({ total: r.accounts, days: r.days, startedAt: r.startedAt });
+      } else {
+        toast.error(r?.error || 'Xato');
+      }
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
+
+  // Jarayon holatini kuzatish — har 2 soniyada
+  const { data: statusData } = useQuery({
+    queryKey: ['backfill-status', progress?.startedAt],
+    queryFn: () => api.get<{ items: any[] }>(`/sync/backfill/status?since=${encodeURIComponent(progress!.startedAt)}`),
+    enabled: !!progress,
+    refetchInterval: 2000,
+  });
+  const logs = statusData?.items || [];
+  const doneCount = logs.filter((l: any) => l.status !== 'RUNNING').length;
+  const totalFetched = logs.reduce((s: number, l: any) => s + (l.fetched || 0), 0);
+  const totalSaved = logs.reduce((s: number, l: any) => s + (l.saved || 0), 0);
+  const totalErrors = logs.reduce((s: number, l: any) => s + (l.errors || 0), 0);
+  const allDone = !!progress && doneCount >= progress.total;
+  const pct = progress ? Math.round((doneCount / Math.max(1, progress.total)) * 100) : 0;
 
   const valid = !!dateFrom && !!dateTo && dateFrom <= dateTo
     && (scope !== 'bank' || !!bankId)
     && (scope !== 'account' || !!accountId);
 
+  // Sync log source'idan hisob nomini ajratib olamiz (· backfill ... qismini tashlaymiz)
+  const accLabel = (src: string) => (src || '').split(' · backfill')[0];
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onOpenChange(false); }}>
+      <DialogContent className={progress ? 'max-w-lg' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-4 w-4 text-indigo-600" /> Eski tarixni yuklash
           </DialogTitle>
           <DialogDescription>
-            Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi
+            {progress
+              ? 'Jarayon davom etmoqda — oynani yopsangiz ham fonda ishlayveradi'
+              : "Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi"}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          {/* Qamrov */}
-          <div className="space-y-1.5">
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Qamrov</div>
-            <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium w-full">
-              {[
-                { v: 'all', l: 'Barcha hisob' },
-                { v: 'bank', l: "Bank bo'yicha" },
-                { v: 'account', l: 'Bitta hisob' },
-              ].map((o) => (
-                <button
-                  key={o.v}
-                  onClick={() => setScope(o.v as any)}
-                  className={cn(
-                    'flex-1 px-2 h-8 rounded-lg transition-colors',
-                    scope === o.v ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
-                  )}
-                >
-                  {o.l}
-                </button>
-              ))}
+        {progress ? (
+          /* ─── JARAYON KO'RINISHI ─── */
+          <div className="space-y-4">
+            {/* Progress bar */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[12px] font-semibold text-slate-700">
+                  {doneCount} / {progress.total} hisob bajarildi
+                </span>
+                <span className="text-[12px] font-bold tabular-nums text-indigo-600">{pct}%</span>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={cn('h-full rounded-full transition-all duration-500', allDone ? 'bg-emerald-500' : 'bg-indigo-500')}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-slate-400 mt-1">{progress.days} kun · {scope === 'all' ? 'barcha hisob' : scope === 'bank' ? 'bank bo\'yicha' : 'bitta hisob'}</div>
             </div>
-          </div>
 
-          {(scope === 'bank' || scope === 'account') && (
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank</div>
-              <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); }}>
-                <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
-                <SelectContent>
-                  {banks.filter((b: any) => b.isActive).map((b: any) => (
-                    <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            {/* 3 ta jami */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-100 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Olindi</div>
+                <div className="text-lg font-bold tabular-nums text-slate-800">{totalFetched}</div>
+              </div>
+              <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-100 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-emerald-600 font-bold">Yangi qo'shildi</div>
+                <div className="text-lg font-bold tabular-nums text-emerald-700">{totalSaved}</div>
+              </div>
+              <div className="rounded-xl bg-rose-50 ring-1 ring-rose-100 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-rose-600 font-bold">Xato</div>
+                <div className="text-lg font-bold tabular-nums text-rose-700">{totalErrors}</div>
+              </div>
             </div>
-          )}
 
-          {scope === 'account' && (
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob</div>
-              <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
-                <SelectTrigger>
-                  <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
-                </SelectTrigger>
-                <SelectContent>
-                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
-                    <Input
-                      value={accSearch}
-                      onChange={(e) => setAccSearch(e.target.value)}
-                      onKeyDown={(e) => e.stopPropagation()}
-                      placeholder="Hisob raqami yoki egasi..."
-                      className="h-8 text-[11px]"
-                    />
+            {/* Hisoblar ro'yxati */}
+            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+              <div className="px-3 py-1.5 bg-slate-50 text-[10px] uppercase tracking-wider font-semibold text-slate-500 flex items-center justify-between">
+                <span>Hisoblar bo'yicha</span>
+                <span>{logs.length} ta yozuv</span>
+              </div>
+              <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+                {logs.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-[11px] text-slate-400 flex items-center justify-center gap-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Boshlanmoqda...
                   </div>
-                  {bankAccounts.length === 0 ? (
-                    <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
-                  ) : (
-                    bankAccounts.slice(0, 100).map((a: any) => (
-                      <SelectItem key={a.id} value={a.id}>
-                        <span className="flex flex-col text-left">
-                          <span className="font-mono text-xs">{a.accountNo}</span>
-                          <span className="text-[10px] text-slate-500">{a.ownerName || '—'}</span>
+                ) : (
+                  logs.map((l: any) => {
+                    const running = l.status === 'RUNNING';
+                    const failed = l.status === 'FAILED';
+                    return (
+                      <div key={l.id} className="px-3 py-2 flex items-center gap-2">
+                        {running ? (
+                          <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin shrink-0" />
+                        ) : failed ? (
+                          <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 grid place-items-center text-white text-[8px]">✕</span>
+                        ) : (
+                          <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                        )}
+                        <span className="font-mono text-[11px] text-slate-700 truncate flex-1" title={accLabel(l.source)}>
+                          {accLabel(l.source)}
                         </span>
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+                        {l.errorMessage ? (
+                          <span className="text-[10px] text-rose-600 truncate max-w-[120px]" title={l.errorMessage}>
+                            {l.errorMessage}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+                            {l.fetched ?? 0} olindi · <span className="text-emerald-600 font-semibold">{l.saved ?? 0} yangi</span>
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
-          )}
 
-          {/* Sana oralig'i */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Dan</div>
-              <Input type="date" value={dateFrom} max={dateTo || today} onChange={(e) => setDateFrom(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Gacha</div>
-              <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => setDateTo(e.target.value)} />
+            {allDone && (
+              <div className="text-[11px] text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5" /> Tugadi — {totalSaved} ta yangi tranzaksiya qo'shildi
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-1">
+              {allDone ? (
+                <Button onClick={() => { setProgress(null); onOpenChange(false); }}>Yopish</Button>
+              ) : (
+                <Button variant="outline" onClick={() => onOpenChange(false)}>Fonda davom etsin · yopish</Button>
+              )}
             </div>
           </div>
+        ) : (
+          /* ─── FORMA ─── */
+          <>
+            <div className="space-y-4">
+              {/* Qamrov */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Qamrov</div>
+                <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium w-full">
+                  {[
+                    { v: 'all', l: 'Barcha hisob' },
+                    { v: 'bank', l: "Bank bo'yicha" },
+                    { v: 'account', l: 'Bitta hisob' },
+                  ].map((o) => (
+                    <button
+                      key={o.v}
+                      onClick={() => setScope(o.v as any)}
+                      className={cn(
+                        'flex-1 px-2 h-8 rounded-lg transition-colors',
+                        scope === o.v ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                      )}
+                    >
+                      {o.l}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-          <div className="text-[10px] text-amber-700 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2 leading-relaxed">
-            ⚠ Katta oraliq + ko'p hisob uzoq davom etadi. Jarayon fonda ishlaydi — natijani Sync tarixida kuzating.
-          </div>
-        </div>
+              {(scope === 'bank' || scope === 'account') && (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank</div>
+                  <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); }}>
+                    <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
+                    <SelectContent>
+                      {banks.filter((b: any) => b.isActive).map((b: any) => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
-        <div className="flex justify-end gap-2 pt-1">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Bekor qilish</Button>
-          <Button onClick={() => mut.mutate()} disabled={!valid || mut.isPending}>
-            {mut.isPending
-              ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Boshlanmoqda...</>
-              : 'Yuklashni boshlash'}
-          </Button>
-        </div>
+              {scope === 'account' && (
+                <div className="space-y-1.5">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob</div>
+                  <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                        <Input
+                          value={accSearch}
+                          onChange={(e) => setAccSearch(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          placeholder="Hisob raqami yoki egasi..."
+                          className="h-8 text-[11px]"
+                        />
+                      </div>
+                      {bankAccounts.length === 0 ? (
+                        <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
+                      ) : (
+                        bankAccounts.slice(0, 100).map((a: any) => (
+                          <SelectItem key={a.id} value={a.id}>
+                            <span className="flex flex-col text-left">
+                              <span className="font-mono text-xs">{a.accountNo}</span>
+                              <span className="text-[10px] text-slate-500">{a.ownerName || '—'}</span>
+                            </span>
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Sana oralig'i */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Dan</div>
+                  <Input type="date" value={dateFrom} max={dateTo || today} onChange={(e) => setDateFrom(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Gacha</div>
+                  <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => setDateTo(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="text-[10px] text-amber-700 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+                ⚠ Katta oraliq + ko'p hisob uzoq davom etadi. Boshlangach jarayon shu yerda jonli ko'rsatiladi.
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Bekor qilish</Button>
+              <Button onClick={() => mut.mutate()} disabled={!valid || mut.isPending}>
+                {mut.isPending
+                  ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Boshlanmoqda...</>
+                  : 'Yuklashni boshlash'}
+              </Button>
+            </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

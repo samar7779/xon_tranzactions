@@ -61,9 +61,31 @@ export class SyncController {
     if (!body?.dateFrom || !body?.dateTo) {
       return { ok: false, error: 'dateFrom va dateTo kerak' };
     }
+    const { accounts, dates } = await this.svc.resolveBackfillTargets(body);
+    if (accounts.length === 0) {
+      return { ok: false, error: 'Sync yoqilgan hisob topilmadi' };
+    }
+    if (dates.length === 0) {
+      return { ok: false, error: 'Sana oralig\'i noto\'g\'ri' };
+    }
+    const startedAt = new Date().toISOString();
     // Fonda ishga tushiramiz — uzoq davom etadi
-    this.svc.backfill(body).catch(() => {});
-    return { ok: true, started: true };
+    this.svc.runBackfill(accounts, dates).catch(() => {});
+    return { ok: true, started: true, accounts: accounts.length, days: dates.length, startedAt };
+  }
+
+  @Get('backfill/status')
+  @RequirePermissions(PERMISSIONS.SYNC_VIEW)
+  @ApiOperation({ summary: 'Backfill jarayoni holati — berilgan vaqtdan keyingi loglar' })
+  async backfillStatus(@Query('since') since?: string) {
+    const where: any = { source: { contains: 'backfill' } };
+    if (since) where.startedAt = { gte: new Date(since) };
+    const items = await this.prisma.syncLog.findMany({
+      where,
+      orderBy: { startedAt: 'desc' },
+      take: 500,
+    });
+    return { ok: true, items };
   }
 
   @Get('logs')
