@@ -8,13 +8,13 @@ import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
   Eye, X, Power, PowerOff, ArrowUpRight,
 } from 'lucide-react';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
+import { BankLogo } from '@/components/bank-logo';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
@@ -41,7 +41,6 @@ const BANK_COLORS = [
 ];
 
 export default function AccountsPage() {
-  const t = useTranslations('accounts');
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
@@ -124,17 +123,19 @@ export default function AccountsPage() {
 
   return (
     <>
-      <Topbar
-        title={t('title')}
-        subtitle={`${accounts?.items?.length || 0} ta hisob · ${banks?.items?.length || 0} ta bank`}
-        actions={canManage ? (
-          <div className="flex items-center gap-2">
-            <BulkImportDialog creds={creds?.items || []} />
-            <CreateAccountDialog creds={creds?.items || []} />
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div className="text-lg font-bold tracking-tight">Bank hisoblari</div>
+            <div className="text-xs text-slate-500">{accounts?.items?.length || 0} ta hisob · {banks?.items?.length || 0} ta bank</div>
           </div>
-        ) : null}
-      />
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+          {canManage && (
+            <div className="flex items-center gap-2">
+              <BulkImportDialog creds={creds?.items || []} />
+              <CreateAccountDialog creds={creds?.items || []} />
+            </div>
+          )}
+        </div>
 
         {/* ═══ TOP STATS ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -284,10 +285,7 @@ export default function AccountsPage() {
                         <tr key={a.id} className="hover:bg-slate-50/60 transition-colors group">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2.5">
-                              <div className="w-9 h-9 rounded-xl grid place-items-center text-white shadow-sm shrink-0"
-                                style={{ background: `linear-gradient(135deg, ${c.from}, ${c.to})` }}>
-                                <Building2 className="h-4 w-4" />
-                              </div>
+                              <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={36} />
                               <div className="min-w-0">
                                 <div className="text-[13px] font-semibold truncate">{a.bank?.name || '—'}</div>
                                 <div className="font-mono text-[10px] text-slate-500">MFO {a.branch}</div>
@@ -404,10 +402,7 @@ function AccountCard({
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-11 h-11 rounded-xl grid place-items-center shrink-0 shadow-sm text-white"
-              style={{ background: `linear-gradient(135deg, ${color.from}, ${color.to})` }}>
-              <Building2 className="h-5 w-5" />
-            </div>
+            <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={44} />
             <div className="min-w-0">
               <div className="text-[14px] font-bold truncate tracking-tight">{a.bank?.name}</div>
               <div className="text-[10px] font-mono text-slate-500">MFO {a.branch}</div>

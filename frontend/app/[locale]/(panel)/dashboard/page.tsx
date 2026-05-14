@@ -90,7 +90,7 @@ export default function DashboardPage() {
         subtitle={`${totalAccounts} hisob · ${banksCount} bank · oxirgi yangilanish: ${(accounts?.items?.[0]?.lastSyncedAt) ? formatDateTime(accounts.items[0].lastSyncedAt) : '—'}`}
       />
 
-      <div className="flex-1 px-6 py-5 space-y-4 max-w-[1700px] mx-auto w-full">
+      <div className="flex-1 px-6 py-5 space-y-4 w-full">
 
         {/* ═══ KPI STRIP — Enterprise dense ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -190,7 +190,7 @@ export default function DashboardPage() {
               title="Eng katta hisoblar"
               count={totalAccounts}
               actions={
-                <Link href={`/${locale}/accounts`}>
+                <Link href={`/${locale}/setup/accounts`}>
                   <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
                     Barchasi <ChevronRight className="h-3 w-3" />
                   </button>
@@ -273,7 +273,7 @@ export default function DashboardPage() {
                     <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">{syncStats.successRate}%</div>
                     <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Muvaffaqiyat</div>
                   </div>
-                  <Link href={`/${locale}/sync-logs`}>
+                  <Link href={`/${locale}/admin/sync-logs`}>
                     <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
                       Tafsilot <ChevronRight className="h-3 w-3" />
                     </button>
@@ -336,7 +336,7 @@ export default function DashboardPage() {
               <DataPanel title="Diqqat" subtitle={`${syncStats.failed} ta sync xatosi`} tone="warning">
                 <div className="divide-y divide-slate-100">
                   {(syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 3).map((l) => (
-                    <Link key={l.id} href={`/${locale}/sync-logs`} className="block">
+                    <Link key={l.id} href={`/${locale}/admin/sync-logs`} className="block">
                       <div className="px-4 py-2.5 hover:bg-slate-50 transition-colors">
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />

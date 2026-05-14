@@ -1,6 +1,5 @@
 'use client';
 
-import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   Building2, Check, KeyRound, Wallet, Plus, ExternalLink,
@@ -8,11 +7,11 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
+import { BankLogo, bankAbbr } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -37,7 +36,6 @@ function getBrand(code: string) {
 }
 
 export default function BanksPage() {
-  const t = useTranslations('nav');
   const { locale } = useParams<{ locale: string }>();
 
   const { data, isLoading } = useQuery({
@@ -60,8 +58,7 @@ export default function BanksPage() {
 
   return (
     <>
-      <Topbar title={t('banks')} subtitle="Mavjud banklar va ulanish holati" />
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
 
         {/* ═══ KPI ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -151,12 +148,7 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
       <CardContent className="p-5 relative">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className={cn(
-              "w-14 h-14 rounded-2xl grid place-items-center text-white text-base font-black tracking-tight shadow-md bg-gradient-to-br",
-              brand.gradient,
-            )} style={{ letterSpacing: '-0.05em' }}>
-              {brand.abbr}
-            </div>
+            <BankLogo code={b.code} name={b.name} size={56} rounded="rounded-2xl" />
             <div className="min-w-0">
               <div className="text-[15px] font-bold truncate tracking-tight">{b.name}</div>
               <div className="text-[10px] font-mono text-slate-500">{b.code}</div>
@@ -201,7 +193,7 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
           </div>
         </div>
 
-        <Link href={`/${locale}/credentials`}>
+        <Link href={`/${locale}/setup/credentials`}>
           <Button size="sm" variant="outline" className="w-full h-9 rounded-xl text-xs font-medium gap-1.5 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-700">
             {isWired ? 'Ulanishlarni ko\'rish' : 'Ulanish qo\'shish'}
             <ExternalLink className="h-3 w-3" />
@@ -214,13 +206,11 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
 
 // ─────────── Noaktiv bank — kichik, kulrang ─────────────
 function BankCardMuted({ b }: { b: any }) {
-  const brand = getBrand(b.code);
-  // Faqat abbreviation ko'rinadi, gradient yo'q
   return (
     <Card className="border border-slate-200 shadow-none hover:bg-slate-50/60 transition-colors overflow-hidden bg-slate-50/30 opacity-80 hover:opacity-100">
       <CardContent className="p-3 flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-slate-200 grid place-items-center text-slate-500 text-[11px] font-black tracking-tight" style={{ letterSpacing: '-0.05em' }}>
-          {brand.abbr}
+          {bankAbbr(b.code, b.name)}
         </div>
         <div className="min-w-0 flex-1">
           <div className="text-[12px] font-semibold text-slate-700 truncate">{b.name}</div>

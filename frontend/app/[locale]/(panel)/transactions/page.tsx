@@ -207,7 +207,7 @@ export default function TransactionsPage() {
         </div>
       } />
 
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
 
         {/* ═══ KPI ROW ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

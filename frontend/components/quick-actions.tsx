@@ -58,21 +58,21 @@ export function QuickActions({ accountsCount = 0 }: { accountsCount?: number }) 
       description: 'Yangi bank API qo\'shish',
       icon: KeyRound,
       color: 'from-emerald-500 to-teal-600',
-      href: `/${locale}/credentials`,
+      href: `/${locale}/setup/credentials`,
     },
     {
       label: 'Hisob qo\'shish',
       description: '20-belgili hisob raqami',
       icon: Wallet,
       color: 'from-purple-500 to-fuchsia-600',
-      href: `/${locale}/accounts`,
+      href: `/${locale}/setup/accounts`,
     },
     {
       label: 'Foydalanuvchi',
       description: 'Yangi admin yoki hisobchi',
       icon: UserPlus,
       color: 'from-amber-500 to-orange-600',
-      href: `/${locale}/admin-users`,
+      href: `/${locale}/admin/users`,
     },
   ];
 

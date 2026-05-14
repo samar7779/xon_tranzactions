@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { BankLogo } from '@/components/bank-logo';
 import {
   Dialog, DialogContent,
 } from '@/components/ui/dialog';
@@ -148,7 +149,7 @@ export default function ApiExplorerPage() {
 
   return (
     <>
-      <div className="flex-1 p-6 lg:p-8 space-y-5 max-w-[1500px] mx-auto w-full">
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">API Explorer</div>
@@ -184,24 +185,13 @@ export default function ApiExplorerPage() {
                       key={b.id}
                       onClick={() => selectBank(b.code)}
                       className={cn(
-                        "group inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
+                        "group inline-flex items-center gap-2.5 pl-2 pr-4 py-2 rounded-xl text-sm font-semibold transition-all",
                         selected
                           ? "bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-300 scale-105"
                           : "bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-700 ring-1 ring-emerald-200 hover:ring-emerald-300 hover:shadow-md hover:-translate-y-0.5",
                       )}
                     >
-                      <span className={cn(
-                        "relative flex h-2 w-2",
-                      )}>
-                        <span className={cn(
-                          "absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping",
-                          selected ? "bg-white" : "bg-emerald-400",
-                        )} />
-                        <span className={cn(
-                          "relative inline-flex rounded-full h-2 w-2",
-                          selected ? "bg-white" : "bg-emerald-500",
-                        )} />
-                      </span>
+                      <BankLogo code={b.code} name={b.name} size={28} rounded="rounded-lg" />
                       {b.name}
                       {selected && <Check className="h-3.5 w-3.5" />}
                     </button>

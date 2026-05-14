@@ -5,7 +5,7 @@ import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Wallet, KeyRound, Building2,
+  LayoutDashboard, Building2,
   LogOut, ShieldCheck, BadgeDollarSign,
   Bell, ChevronUp, UserCircle, Settings, ChevronRight,
   AlertCircle, CheckCircle2, Sparkles,
@@ -31,11 +31,9 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
-  { href: '/accounts',     key: 'accounts',     icon: Wallet,           group: 'main',  permission: PERMS.ACCOUNTS_VIEW },
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
 
-  { href: '/banks',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
-  { href: '/credentials',  key: 'credentials',  icon: KeyRound,         group: 'setup', permission: PERMS.CREDENTIALS_VIEW },
+  { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
 
   { href: '/admin',        key: 'adminPanel',   icon: ShieldCheck,      group: 'system', permission: PERMS.USERS_VIEW },
 ];
@@ -126,7 +124,7 @@ export function Sidebar() {
             ) : (
               <div className="max-h-72 overflow-y-auto">
                 {failures.map((l) => (
-                  <Link key={l.id} href={`/${locale}/sync-logs`}>
+                  <Link key={l.id} href={`/${locale}/admin/sync-logs`}>
                     <div className="px-3 py-2 hover:bg-slate-50 cursor-pointer">
                       <div className="flex items-start gap-2">
                         <div className="w-7 h-7 rounded-lg bg-rose-50 grid place-items-center shrink-0">
@@ -142,7 +140,7 @@ export function Sidebar() {
                   </Link>
                 ))}
                 <DropdownMenuSeparator />
-                <Link href={`/${locale}/sync-logs`}>
+                <Link href={`/${locale}/admin/sync-logs`}>
                   <DropdownMenuItem className="justify-center text-indigo-600 font-medium">
                     Barchasini ko'rish
                     <ChevronRight className="h-3.5 w-3.5 ml-1" />
