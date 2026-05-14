@@ -273,57 +273,73 @@ function CredentialCard({
     <Card className="group border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all overflow-hidden bg-white">
       <CardContent className="p-0">
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-          <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={42} />
-          <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{c.label}</div>
-            <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>
-          </div>
-          <span className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0",
-            status === 'ok' && "bg-emerald-100 text-emerald-700",
-            status === 'error' && "bg-rose-100 text-rose-700",
-            status === 'untested' && "bg-slate-100 text-slate-500",
-          )}>
-            <span className="relative flex h-1.5 w-1.5">
-              {status === 'ok' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
-              <span className={cn(
-                "relative inline-flex rounded-full h-1.5 w-1.5",
-                status === 'ok' && "bg-emerald-500",
-                status === 'error' && "bg-rose-500",
-                status === 'untested' && "bg-slate-300",
-              )} />
-            </span>
-            {status === 'ok' ? 'Ulangan' : status === 'error' ? 'Xato' : 'Tekshirilmagan'}
-          </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1 shrink-0">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onTest} disabled={testing}>
-                <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> Ulanishni tekshirish
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onEdit}>
-                <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
-              </DropdownMenuItem>
-              {onReveal && (
-                <DropdownMenuItem onClick={onReveal} className="text-amber-700">
-                  <Eye className="h-4 w-4 mr-2" /> Parolni ko'rsatish
+        <div className="px-4 pt-4 pb-3 space-y-3">
+          <div className="flex items-center gap-3">
+            <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={42} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{c.label}</div>
+              <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1 shrink-0">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={onTest} disabled={testing}>
+                  <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> Ulanishni tekshirish
                 </DropdownMenuItem>
-              )}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="text-rose-600" onClick={onDelete}>
-                <Trash2 className="h-4 w-4 mr-2" /> O'chirish
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <DropdownMenuItem onClick={onEdit}>
+                  <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
+                </DropdownMenuItem>
+                {onReveal && (
+                  <DropdownMenuItem onClick={onReveal} className="text-amber-700">
+                    <Eye className="h-4 w-4 mr-2" /> Parolni ko'rsatish
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-rose-600" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4 mr-2" /> O'chirish
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Status + last verified + test button */}
+          <div className="flex items-center gap-2">
+            <span className={cn(
+              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0",
+              status === 'ok' && "bg-emerald-100 text-emerald-700",
+              status === 'error' && "bg-rose-100 text-rose-700",
+              status === 'untested' && "bg-slate-100 text-slate-500",
+            )}>
+              <span className="relative flex h-1.5 w-1.5">
+                {status === 'ok' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
+                <span className={cn(
+                  "relative inline-flex rounded-full h-1.5 w-1.5",
+                  status === 'ok' && "bg-emerald-500",
+                  status === 'error' && "bg-rose-500",
+                  status === 'untested' && "bg-slate-300",
+                )} />
+              </span>
+              {status === 'ok' ? 'Ulangan' : status === 'error' ? 'Xato' : 'Tekshirilmagan'}
+            </span>
+            <span className="text-[10px] text-slate-400 flex-1 truncate">
+              {c.lastVerifiedAt ? formatDateTime(c.lastVerifiedAt) : 'Hech tekshirilmagan'}
+            </span>
+            <Button
+              size="sm" onClick={onTest} disabled={testing}
+              className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+            >
+              <Wifi className={cn("h-3.5 w-3.5", testing && "animate-pulse")} />
+              {testing ? 'Tekshirilmoqda...' : 'Tekshirish'}
+            </Button>
+          </div>
         </div>
 
         {/* Info grid */}
-        <div className="px-4 pb-3 grid grid-cols-2 gap-2">
+        <div className="px-4 pb-4 grid grid-cols-2 gap-2">
           <InfoTile label="Login"><span className="font-mono">{login || '—'}</span></InfoTile>
           <InfoTile label="MFO"><span className="font-mono">{c.branch || '—'}</span></InfoTile>
           <InfoTile label="Avtorizatsiya">
@@ -341,24 +357,10 @@ function CredentialCard({
         </div>
 
         {c.lastError && (
-          <div className="mx-4 mb-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-2.5 py-2 text-[11px] text-rose-700 line-clamp-2">
+          <div className="mx-4 mb-4 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-2.5 py-2 text-[11px] text-rose-700 line-clamp-2">
             <AlertCircle className="h-3 w-3 inline mr-1 -mt-0.5" /> {c.lastError}
           </div>
         )}
-
-        {/* Footer */}
-        <div className="flex items-center gap-2 px-4 py-2.5 border-t border-slate-100 bg-slate-50/40">
-          <div className="text-[10px] text-slate-400 flex-1 truncate">
-            {c.lastVerifiedAt ? `Tekshirilgan: ${formatDateTime(c.lastVerifiedAt)}` : 'Hech tekshirilmagan'}
-          </div>
-          <Button
-            size="sm" onClick={onTest} disabled={testing}
-            className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
-          >
-            <Wifi className={cn("h-3.5 w-3.5", testing && "animate-pulse")} />
-            {testing ? 'Tekshirilmoqda...' : 'Tekshirish'}
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
@@ -452,7 +454,12 @@ function CredDialog({
                         ✓ Aktiv (API ishlaydi)
                       </div>
                       {banks.filter((b) => b.isActive).map((b) => (
-                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        <SelectItem key={b.id} value={b.id}>
+                          <span className="flex items-center gap-2">
+                            <BankLogo code={b.code || ''} name={b.name} size={20} rounded="rounded-md" />
+                            {b.name}
+                          </span>
+                        </SelectItem>
                       ))}
                     </>
                   )}
@@ -463,7 +470,10 @@ function CredDialog({
                       </div>
                       {banks.filter((b) => !b.isActive).map((b) => (
                         <SelectItem key={b.id} value={b.id} disabled className="opacity-60">
-                          {b.name}
+                          <span className="flex items-center gap-2">
+                            <BankLogo code={b.code || ''} name={b.name} size={20} rounded="rounded-md" />
+                            {b.name}
+                          </span>
                         </SelectItem>
                       ))}
                     </>
