@@ -143,7 +143,7 @@ export default function CredentialsPage() {
                   onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(c.id)}
                   onReveal={isSuperAdmin ? () => revealMut.mutate(c.id) : undefined}
                   onEdit={() => { setEditing(c); setDialogOpen(true); }}
-                  testing={testMut.isPending}
+                  testing={testMut.isPending && testMut.variables === c.id}
                 />
               );
             })}
