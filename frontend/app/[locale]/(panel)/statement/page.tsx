@@ -3,7 +3,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { FileSpreadsheet, Download, Calendar, Building2, Wallet, Loader2 } from 'lucide-react';
+import {
+  FileSpreadsheet, Download, Calendar, Building2, Search, Check,
+  Loader2, Wallet, X, ChevronRight,
+} from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,20 +17,46 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { api, apiDownload } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import { cn, formatMoney, formatDate } from '@/lib/utils';
 
-function firstOfMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
-}
-function today() {
-  const d = new Date();
+function iso(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+function firstOfMonth() {
+  const d = new Date();
+  return iso(new Date(d.getFullYear(), d.getMonth(), 1));
+}
+function today() {
+  return iso(new Date());
+}
+
+const DATE_PRESETS: { label: string; range: () => [string, string] }[] = [
+  { label: 'Bugun', range: () => [today(), today()] },
+  {
+    label: 'Shu hafta',
+    range: () => {
+      const d = new Date();
+      const day = (d.getDay() + 6) % 7; // Mon=0
+      const mon = new Date(d); mon.setDate(d.getDate() - day);
+      return [iso(mon), today()];
+    },
+  },
+  { label: 'Shu oy', range: () => [firstOfMonth(), today()] },
+  {
+    label: "O'tgan oy",
+    range: () => {
+      const d = new Date();
+      const first = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      const last = new Date(d.getFullYear(), d.getMonth(), 0);
+      return [iso(first), iso(last)];
+    },
+  },
+];
 
 export default function StatementPage() {
   const [bankId, setBankId] = useState('');
   const [accountId, setAccountId] = useState('');
+  const [accSearch, setAccSearch] = useState('');
   const [dateFrom, setDateFrom] = useState(firstOfMonth());
   const [dateTo, setDateTo] = useState(today());
   const [downloading, setDownloading] = useState(false);
@@ -41,7 +70,6 @@ export default function StatementPage() {
     queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
   });
 
-  // Aktiv banklar boshida
   const sortedBanks = useMemo(() => {
     return [...(banks?.items || [])].sort((a: any, b: any) => {
       if (a.isActive && !b.isActive) return -1;
@@ -54,9 +82,28 @@ export default function StatementPage() {
     () => (accounts?.items || []).filter((a: any) => a.bankId === bankId),
     [accounts, bankId],
   );
+
+  const filteredAccounts = useMemo(() => {
+    const q = accSearch.trim().toLowerCase();
+    if (!q) return bankAccounts;
+    return bankAccounts.filter((a: any) =>
+      a.accountNo?.toLowerCase().includes(q) ||
+      a.ownerName?.toLowerCase().includes(q) ||
+      a.branch?.includes(q),
+    );
+  }, [bankAccounts, accSearch]);
+
   const selectedAccount = useMemo(
     () => bankAccounts.find((a: any) => a.id === accountId),
     [bankAccounts, accountId],
+  );
+
+  const activePreset = useMemo(
+    () => DATE_PRESETS.find((p) => {
+      const [f, t] = p.range();
+      return f === dateFrom && t === dateTo;
+    })?.label,
+    [dateFrom, dateTo],
   );
 
   const canDownload = bankId && accountId && dateFrom && dateTo && !downloading;
@@ -82,31 +129,16 @@ export default function StatementPage() {
       <Topbar title="Vipiska" subtitle="Bank hisobi bo'yicha tranzaksiyalarni Excel formatida yuklab olish" />
 
       <div className="flex-1 p-6 lg:p-8 w-full">
-        <div className="max-w-2xl mx-auto">
-          <Card className="border-0 shadow-soft overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-6 py-5 text-white">
-              <div className="flex items-center gap-1.5 mb-1.5 text-white/80">
-                <FileSpreadsheet className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Выписка лицевых счетов</span>
-              </div>
-              <div className="text-lg font-bold tracking-tight">Bank vipiskasi</div>
-              <div className="text-white/75 text-xs mt-0.5">
-                Bank → hisob raqami → sana oralig'ini tanlang, Excel fayl yuklab oling
-              </div>
-            </div>
+        <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
 
-            <CardContent className="p-6 space-y-5">
-              {/* 1. Bank */}
-              <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 flex items-center gap-1.5">
-                  <Building2 className="h-3 w-3" /> Bank
-                </Label>
-                <Select
-                  value={bankId}
-                  onValueChange={(v) => { setBankId(v); setAccountId(''); }}
-                >
-                  <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
+          {/* ═══ LEFT — sozlamalar ═══ */}
+          <div className="xl:col-span-4 space-y-5">
+            {/* Step 1 — Bank */}
+            <Card className="border-0 shadow-soft">
+              <CardContent className="p-5 space-y-3">
+                <StepLabel n={1} icon={Building2} text="Bankni tanlang" />
+                <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); setAccSearch(''); }}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Bank" /></SelectTrigger>
                   <SelectContent>
                     {sortedBanks.filter((b: any) => b.isActive).map((b: any) => (
                       <SelectItem key={b.id} value={b.id}>
@@ -122,95 +154,198 @@ export default function StatementPage() {
                       </div>
                     )}
                     {sortedBanks.filter((b: any) => !b.isActive).map((b: any) => (
-                      <SelectItem key={b.id} value={b.id} disabled className="opacity-60">
-                        {b.name}
-                      </SelectItem>
+                      <SelectItem key={b.id} value={b.id} disabled className="opacity-60">{b.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </CardContent>
+            </Card>
 
-              {/* 2. Hisob raqami */}
-              <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 flex items-center gap-1.5">
-                  <Wallet className="h-3 w-3" /> Hisob raqami
-                </Label>
-                <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {bankAccounts.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-slate-500">Bu bankda hisob yo'q</div>
-                    ) : (
-                      bankAccounts.map((a: any) => (
-                        <SelectItem key={a.id} value={a.id}>
-                          <span className="flex flex-col text-left">
-                            <span className="font-mono text-xs">{a.accountNo}</span>
-                            <span className="text-[10px] text-slate-500">{a.ownerName || '—'}</span>
-                          </span>
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* 3. Sana oralig'i */}
-              <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 flex items-center gap-1.5">
-                  <Calendar className="h-3 w-3" /> Sana oralig'i
-                </Label>
+            {/* Step 3 — Sana */}
+            <Card className="border-0 shadow-soft">
+              <CardContent className="p-5 space-y-3">
+                <StepLabel n={3} icon={Calendar} text="Sana oralig'ini tanlang" />
+                <div className="flex flex-wrap gap-1.5">
+                  {DATE_PRESETS.map((p) => {
+                    const active = activePreset === p.label;
+                    return (
+                      <button
+                        key={p.label}
+                        onClick={() => { const [f, t] = p.range(); setDateFrom(f); setDateTo(t); }}
+                        className={cn(
+                          'px-2.5 h-7 rounded-lg text-[11px] font-medium transition-colors',
+                          active
+                            ? 'bg-indigo-600 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+                        )}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    max={dateTo || undefined}
-                    onChange={(e) => setDateFrom(e.target.value)}
-                  />
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    min={dateFrom || undefined}
-                    max={today()}
-                    onChange={(e) => setDateTo(e.target.value)}
-                  />
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Dan</Label>
+                    <Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Gacha</Label>
+                    <Input type="date" value={dateTo} min={dateFrom || undefined} max={today()} onChange={(e) => setDateTo(e.target.value)} />
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Summary + download */}
+            <Card className="border-0 shadow-soft overflow-hidden">
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-5 py-4 text-white">
+                <div className="flex items-center gap-1.5 mb-1 text-white/80">
+                  <FileSpreadsheet className="h-3.5 w-3.5" />
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Выписка лицевых счетов</span>
+                </div>
+                <div className="text-sm font-bold">Yuklab olishga tayyor</div>
               </div>
-
-              {/* Tanlangan hisob — qisqa ko'rinish */}
-              {selectedAccount && (
-                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-100 px-4 py-3 flex items-center gap-3">
-                  <BankLogo code={selectedAccount.bank?.code || ''} name={selectedAccount.bank?.name} size={36} />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold truncate">{selectedAccount.ownerName || '—'}</div>
-                    <div className="font-mono text-[11px] text-slate-500">{selectedAccount.accountNo}</div>
+              <CardContent className="p-5 space-y-3">
+                {selectedAccount ? (
+                  <div className="flex items-center gap-3">
+                    <BankLogo code={selectedAccount.bank?.code || ''} name={selectedAccount.bank?.name} size={38} />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-semibold truncate">{selectedAccount.ownerName || '—'}</div>
+                      <div className="font-mono text-[11px] text-slate-500">{selectedAccount.accountNo}</div>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-slate-400 text-right">
-                    MFO {selectedAccount.branch}<br />{selectedAccount.currency}
-                  </div>
-                </div>
-              )}
-
-              {/* Yuklab olish */}
-              <Button
-                onClick={handleDownload}
-                disabled={!canDownload}
-                className={cn(
-                  'w-full h-11 rounded-xl font-semibold gap-2',
-                  'bg-emerald-600 hover:bg-emerald-700 text-white',
-                )}
-              >
-                {downloading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Tayyorlanmoqda...</>
                 ) : (
-                  <><Download className="h-4 w-4" /> Excel vipiskani yuklab olish</>
+                  <div className="text-xs text-slate-400">Hisob tanlanmagan</div>
                 )}
-              </Button>
-            </CardContent>
-          </Card>
+                <div className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-3 py-2">
+                  <span className="text-slate-500">Davr</span>
+                  <span className="font-medium text-slate-700 tabular-nums">
+                    {formatDate(dateFrom)} — {formatDate(dateTo)}
+                  </span>
+                </div>
+                <Button
+                  onClick={handleDownload}
+                  disabled={!canDownload}
+                  className="w-full h-11 rounded-xl font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {downloading ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Tayyorlanmoqda...</>
+                  ) : (
+                    <><Download className="h-4 w-4" /> Excel yuklab olish</>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* ═══ RIGHT — hisob tanlash ═══ */}
+          <div className="xl:col-span-8">
+            <Card className="border-0 shadow-soft">
+              <CardContent className="p-0">
+                {/* Header + search */}
+                <div className="px-5 py-4 border-b border-slate-100">
+                  <StepLabel n={2} icon={Wallet} text="Hisob raqamini tanlang" />
+                  <div className="relative mt-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    <Input
+                      className="pl-9 h-10 rounded-xl bg-slate-50/60"
+                      placeholder="Hisob raqami, egasi yoki MFO bo'yicha qidirish..."
+                      value={accSearch}
+                      onChange={(e) => setAccSearch(e.target.value)}
+                      disabled={!bankId}
+                    />
+                    {accSearch && (
+                      <button
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        onClick={() => setAccSearch('')}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {bankId && (
+                    <div className="text-[11px] text-slate-400 mt-2">
+                      {filteredAccounts.length} / {bankAccounts.length} ta hisob
+                    </div>
+                  )}
+                </div>
+
+                {/* List */}
+                <div className="max-h-[calc(100vh-340px)] min-h-[320px] overflow-y-auto">
+                  {!bankId ? (
+                    <EmptyHint icon={Building2} text="Avval chap tomondan bankni tanlang" />
+                  ) : filteredAccounts.length === 0 ? (
+                    <EmptyHint icon={Search} text={accSearch ? 'Qidiruv bo\'yicha hisob topilmadi' : 'Bu bankda hisob yo\'q'} />
+                  ) : (
+                    <div className="divide-y divide-slate-50">
+                      {filteredAccounts.map((a: any) => {
+                        const selected = a.id === accountId;
+                        return (
+                          <button
+                            key={a.id}
+                            onClick={() => setAccountId(a.id)}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-5 py-3 text-left transition-colors',
+                              selected ? 'bg-indigo-50/70' : 'hover:bg-slate-50',
+                            )}
+                          >
+                            <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={38} />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-mono text-[13px] font-semibold text-slate-800 truncate">
+                                {a.accountNo}
+                              </div>
+                              <div className="text-[11px] text-slate-500 truncate">
+                                {a.ownerName || '—'} · MFO {a.branch}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <div className="text-[13px] font-bold tabular-nums text-slate-800">
+                                {formatMoney(Number(a.balance || 0))}
+                              </div>
+                              <div className="text-[10px] text-slate-400">{a.currency}</div>
+                            </div>
+                            <div className={cn(
+                              'w-6 h-6 rounded-full grid place-items-center shrink-0 transition-colors',
+                              selected ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-transparent',
+                            )}>
+                              {selected ? <Check className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-300" />}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
         </div>
       </div>
     </>
+  );
+}
+
+function StepLabel({ n, icon: Icon, text }: { n: number; icon: any; text: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-5 h-5 rounded-md bg-indigo-100 text-indigo-700 text-[11px] font-bold grid place-items-center">
+        {n}
+      </span>
+      <Icon className="h-3.5 w-3.5 text-slate-400" />
+      <span className="text-[12px] font-semibold text-slate-700">{text}</span>
+    </div>
+  );
+}
+
+function EmptyHint({ icon: Icon, text }: { icon: any; text: string }) {
+  return (
+    <div className="grid place-items-center py-20 text-center">
+      <div className="w-12 h-12 rounded-2xl bg-slate-50 grid place-items-center mb-3">
+        <Icon className="h-5 w-5 text-slate-300" />
+      </div>
+      <div className="text-sm text-slate-400">{text}</div>
+    </div>
   );
 }
