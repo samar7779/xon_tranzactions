@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Wifi, AlertCircle, CheckCircle2, KeyRound, MoreVertical,
-  Activity, RefreshCw, Lock, Shield, Globe, Eye, EyeOff, Copy, Check,
+  Activity, RefreshCw, Lock, Shield, Globe, Eye, EyeOff, Copy, Check, Pencil,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -44,6 +44,8 @@ export default function CredentialsPage() {
   const me = useAuth((s) => s.user);
   const isSuperAdmin = me?.role === 'SUPERADMIN';
   const [revealed, setRevealed] = useState<any>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<any>(null);
 
   const { data: creds, isLoading } = useQuery({
     queryKey: ['bank-credentials'],
@@ -94,7 +96,13 @@ export default function CredentialsPage() {
             <div className="text-lg font-bold tracking-tight">Bank ulanishlari</div>
             <div className="text-xs text-slate-500">Banklar API uchun login/parol — har bir ulanish bir nechta hisobni o'z ichiga oladi</div>
           </div>
-          <CreateCredDialog banks={banks?.items || []} />
+          <Button
+            size="sm"
+            onClick={() => { setEditing(null); setDialogOpen(true); }}
+            className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" />{t('add')}
+          </Button>
         </div>
 
         {/* ═══ KPI ═══ */}
@@ -134,6 +142,7 @@ export default function CredentialsPage() {
                   onTest={() => testMut.mutate(c.id)}
                   onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(c.id)}
                   onReveal={isSuperAdmin ? () => revealMut.mutate(c.id) : undefined}
+                  onEdit={() => { setEditing(c); setDialogOpen(true); }}
                   testing={testMut.isPending}
                 />
               );
@@ -141,6 +150,14 @@ export default function CredentialsPage() {
           </div>
         )}
       </div>
+
+      {/* Qo'shish / Tahrirlash modali */}
+      <CredDialog
+        banks={banks?.items || []}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editing={editing}
+      />
 
       {/* Parolni ko'rsatish modali */}
       <RevealPasswordDialog data={revealed} onClose={() => setRevealed(null)} />
@@ -252,7 +269,7 @@ function KpiTile({
 }
 
 function CredentialCard({
-  cred: c, color, status, onTest, onDelete, onReveal, testing,
+  cred: c, color, status, onTest, onDelete, onReveal, onEdit, testing,
 }: {
   cred: any;
   color: { from: string; to: string };
@@ -260,6 +277,7 @@ function CredentialCard({
   onTest: () => void;
   onDelete: () => void;
   onReveal?: () => void;
+  onEdit: () => void;
   testing: boolean;
 }) {
   return (
@@ -284,6 +302,9 @@ function CredentialCard({
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={onTest} disabled={testing}>
                 <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> Ulanishni tekshirish
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onEdit}>
+                <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
               </DropdownMenuItem>
               {onReveal && (
                 <DropdownMenuItem onClick={onReveal} className="text-amber-700">
@@ -369,36 +390,63 @@ function CredentialCard({
   );
 }
 
-function CreateCredDialog({ banks }: { banks: any[] }) {
+const EMPTY_FORM = {
+  bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST', useProxy: true,
+};
+
+function CredDialog({
+  banks, open, onOpenChange, editing,
+}: {
+  banks: any[];
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  editing: any;
+}) {
   const t = useTranslations('credentials');
   const tc = useTranslations('common');
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST', useProxy: true,
-  });
+  const isEdit = !!editing;
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  useEffect(() => {
+    if (!open) return;
+    if (editing) {
+      setForm({
+        bankId: editing.bankId || '',
+        label: editing.label || '',
+        loginPrefix: editing.loginPrefix || '',
+        loginName: editing.loginName || '',
+        password: '',
+        branch: editing.branch || '',
+        authMode: editing.authMode || 'IP_WHITELIST',
+        useProxy: editing.useProxy ?? true,
+      });
+    } else {
+      setForm(EMPTY_FORM);
+    }
+  }, [open, editing]);
 
   const mut = useMutation({
-    mutationFn: () => api.post('/bank-credentials', form),
+    mutationFn: () => {
+      const payload: any = { ...form };
+      if (isEdit && !payload.password) delete payload.password;
+      return isEdit
+        ? api.patch(`/bank-credentials/${editing.id}`, payload)
+        : api.post('/bank-credentials', payload);
+    },
     onSuccess: () => {
       toast.success(tc('success'));
       qc.invalidateQueries({ queryKey: ['bank-credentials'] });
-      setOpen(false);
-      setForm({ bankId: '', label: '', loginPrefix: 'IB#', loginName: '', password: '', branch: '', authMode: 'IP_WHITELIST', useProxy: true });
+      onOpenChange(false);
     },
     onError: (e: any) => toast.error(e?.message),
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button size="sm" className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm">
-          <Plus className="h-3.5 w-3.5 mr-1.5" />{t('add')}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>{t('add')}</DialogTitle>
+          <DialogTitle>{isEdit ? 'Ulanishni tahrirlash' : t('add')}</DialogTitle>
           <DialogDescription>{t('subtitle')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -462,7 +510,15 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
           </div>
           <div className="space-y-2">
             <Label>{t('password')}</Label>
-            <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              placeholder={isEdit ? "Bo'sh qoldirsangiz o'zgartirilmaydi" : ''}
+            />
+            {isEdit && (
+              <div className="text-[10px] text-slate-500">Parolni o'zgartirish uchun yangi parolni kiriting</div>
+            )}
           </div>
           <div className="space-y-2">
             <Label>{t('branch')}</Label>
@@ -499,7 +555,7 @@ function CreateCredDialog({ banks }: { banks: any[] }) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>{tc('cancel')}</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending}>{tc('save')}</Button>
         </DialogFooter>
       </DialogContent>
