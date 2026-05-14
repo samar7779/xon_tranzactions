@@ -484,7 +484,7 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
   const [form, setForm] = useState({ credentialId: '', branch: '', accountNo: '', ownerName: '', currency: 'UZS' });
 
   const mut = useMutation({
-    mutationFn: () => api.post('/bank-accounts', form),
+    mutationFn: () => api.post('/bank-accounts', { ...form, branch: form.branch.padStart(5, '0') }),
     onSuccess: () => {
       toast.success(tc('success'));
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
@@ -523,12 +523,26 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>MFO</Label>
-              <Input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })} placeholder="00974" />
+              <Label>MFO <span className="text-rose-500">*</span></Label>
+              <Input
+                value={form.branch}
+                onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+                placeholder="00974"
+                maxLength={5}
+                className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
+              />
+              <div className="text-[10px] text-slate-500">5 xonalik MFO kod — majburiy</div>
             </div>
             <div className="space-y-2">
-              <Label>Valyuta</Label>
-              <Input value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })} />
+              <Label>Valyuta <span className="text-rose-500">*</span></Label>
+              <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UZS">UZS</SelectItem>
+                  <SelectItem value="RUB">RUB</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <div className="space-y-2">
@@ -636,7 +650,14 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Valyuta</Label>
-              <Input value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))} className="font-mono" maxLength={3} />
+              <Select value={currency} onValueChange={setCurrency}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="UZS">UZS</SelectItem>
+                  <SelectItem value="RUB">RUB</SelectItem>
+                  <SelectItem value="USD">USD</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Tahlil</Label>
