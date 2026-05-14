@@ -428,7 +428,7 @@ function CredDialog({
 
   const mut = useMutation({
     mutationFn: () => {
-      const payload: any = { ...form };
+      const payload: any = { ...form, branch: form.branch.padStart(5, '0') };
       if (isEdit && !payload.password) delete payload.password;
       return isEdit
         ? api.patch(`/bank-credentials/${editing.id}`, payload)
@@ -521,9 +521,15 @@ function CredDialog({
             )}
           </div>
           <div className="space-y-2">
-            <Label>{t('branch')}</Label>
-            <Input value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="00974" maxLength={5} />
-            <div className="text-[10px] text-slate-500">5 xonalik MFO kod</div>
+            <Label>{t('branch')} <span className="text-rose-500">*</span></Label>
+            <Input
+              value={form.branch}
+              onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
+              placeholder="00974"
+              maxLength={5}
+              className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
+            />
+            <div className="text-[10px] text-slate-500">5 xonalik MFO kod — majburiy</div>
           </div>
 
           {/* ahost proxy toggle */}
@@ -556,7 +562,12 @@ function CredDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
-          <Button onClick={() => mut.mutate()} disabled={mut.isPending}>{tc('save')}</Button>
+          <Button
+            onClick={() => mut.mutate()}
+            disabled={mut.isPending || !form.bankId || !form.branch || !form.loginName}
+          >
+            {tc('save')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
