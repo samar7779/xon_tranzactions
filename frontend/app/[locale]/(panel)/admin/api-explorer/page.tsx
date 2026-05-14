@@ -25,9 +25,9 @@ import { cn } from '@/lib/utils';
 
 // Valyuta kodini normallashtirish — bank ISO raqam yoki harf qaytarishi mumkin
 function normCurrency(val?: string): string {
-  if (!val) return 'UZS';
+  if (val === undefined || val === null || val === '') return 'UZS';
   const v = String(val).toUpperCase().trim();
-  if (['UZS', '860', '000'].includes(v)) return 'UZS';
+  if (['UZS', '860', '000', '00', '0'].includes(v)) return 'UZS';
   if (['USD', '840'].includes(v)) return 'USD';
   if (['RUB', '643'].includes(v)) return 'RUB';
   if (['EUR', '978'].includes(v)) return 'EUR';
@@ -502,13 +502,30 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
   const result = data?.result;
   const summary = data?.summary;
 
-  // Bankdan kelgan barcha hisoblar (flat)
-  const allAccs = useMemo(
-    () => (result?.clients || []).flatMap((c: any) =>
-      (c.accounts || []).map((a: any) => ({ ...a, clientName: c.name, clientInn: c.inn })),
-    ),
-    [result],
-  );
+  // Bankdan kelgan barcha hisoblar (flat) — oylik transit hisoblar ham
+  const allAccs = useMemo(() => {
+    const out: any[] = [];
+    for (const c of result?.clients || []) {
+      for (const a of c.accounts || []) {
+        out.push({ ...a, clientName: c.name, clientInn: c.inn });
+      }
+      // Oylik (ZP) transit hisoblari — bank alohida arraylarda qaytaradi ({branch, account})
+      // bu hisoblardan faqat oylik chiqariladi, kirim bo'lmaydi
+      const zp = [...(c.zp_accs || []), ...(c.zp_humo_accs || []), ...(c.zp_upi_accs || [])];
+      for (const z of zp) {
+        if ((c.accounts || []).some((a: any) => a.account === z.account)) continue; // takror emas
+        out.push({
+          ...z,
+          clientName: c.name,
+          clientInn: c.inn,
+          name: c.name,
+          val: 'UZS',
+          __salary: true,
+        });
+      }
+    }
+    return out;
+  }, [result]);
 
   // Bazada bor hisoblar to'plami
   const dbSet = useMemo(
@@ -521,7 +538,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
     const byCur = new Map<string, Map<string, any[]>>();
     for (const a of allAccs) {
       const cur = normCurrency(a.val);
-      const type = accTypeLabel(a.account);
+      const type = a.__salary ? 'Oylik (ZP) hisob' : accTypeLabel(a.account);
       if (!byCur.has(cur)) byCur.set(cur, new Map());
       const byType = byCur.get(cur)!;
       if (!byType.has(type)) byType.set(type, []);
@@ -580,14 +597,25 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                   <span className="text-[11px] text-slate-500">· {g.count} ta hisob</span>
                 </summary>
 
-                {g.types.map((t) => (
+                {g.types.map((t) => {
+                  const isSalary = t.type.includes('Oylik');
+                  return (
                   <div key={t.type}>
-                    <div className="px-6 py-1.5 bg-white flex items-center gap-1.5 border-t border-slate-50">
-                      <Layers className="h-3 w-3 text-slate-300" />
-                      <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400">
+                    <div className={cn(
+                      "px-6 py-1.5 flex items-center gap-1.5 border-t border-slate-50",
+                      isSalary ? "bg-amber-50/70" : "bg-white",
+                    )}>
+                      <Layers className={cn("h-3 w-3", isSalary ? "text-amber-500" : "text-slate-300")} />
+                      <span className={cn(
+                        "text-[10px] uppercase tracking-wider font-semibold",
+                        isSalary ? "text-amber-700" : "text-slate-400",
+                      )}>
                         {t.type}
                       </span>
-                      <span className="text-[10px] text-slate-300">· {t.accs.length}</span>
+                      <span className={cn("text-[10px]", isSalary ? "text-amber-400" : "text-slate-300")}>· {t.accs.length}</span>
+                      {isSalary && (
+                        <span className="text-[10px] text-amber-600/80 ml-1">— faqat oylik chiqariladi, kirim bo'lmaydi</span>
+                      )}
                     </div>
                     {t.accs.map((a: any, i: number) => {
                       const inDb = dbSet.has(a.account);
@@ -626,7 +654,8 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                       );
                     })}
                   </div>
-                ))}
+                  );
+                })}
               </details>
             ))}
           </div>
