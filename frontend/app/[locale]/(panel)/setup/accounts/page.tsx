@@ -179,17 +179,17 @@ export default function AccountsPage() {
                 )}
               </div>
 
-              {/* Barchasiga sync + Excel yuklab olish */}
+              {/* Barchasiga sync + Excel yuklab olish — faqat ikonka */}
               {canManage && (
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => syncAllMut.mutate()}
                   disabled={syncAllMut.isPending}
-                  className="h-10 rounded-xl gap-1.5 font-medium"
+                  title="Barcha hisoblarni sync qilish"
+                  className="h-10 w-10 p-0 rounded-xl shrink-0"
                 >
-                  <RefreshCw className={cn('h-3.5 w-3.5', syncAllMut.isPending && 'animate-spin')} />
-                  Barchasiga sync
+                  <RefreshCw className={cn('h-4 w-4', syncAllMut.isPending && 'animate-spin')} />
                 </Button>
               )}
               <Button
@@ -197,10 +197,10 @@ export default function AccountsPage() {
                 variant="outline"
                 onClick={exportAll}
                 disabled={exporting}
-                className="h-10 rounded-xl gap-1.5 font-medium"
+                title="Barcha hisoblarni Excel qilib yuklab olish"
+                className="h-10 w-10 p-0 rounded-xl shrink-0"
               >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Excel yuklab olish
+                {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
               </Button>
 
               <Select value={bankFilter} onValueChange={setBankFilter}>

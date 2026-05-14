@@ -23,6 +23,7 @@ export class BankAccountsService {
       { header: 'Bank nomi', key: 'bankName', width: 24 },
       { header: 'MFO', key: 'branch', width: 10 },
       { header: 'Hisob nomi', key: 'ownerName', width: 44 },
+      { header: 'Sync', key: 'sync', width: 14 },
     ];
     const headRow = ws.getRow(1);
     headRow.font = { bold: true, size: 11 };
@@ -40,6 +41,7 @@ export class BankAccountsService {
         bankName: a.bank?.name || '',
         branch: a.branch,
         ownerName: a.ownerName || '',
+        sync: a.syncEnabled ? 'Yoqilgan' : "O'chirilgan",
       });
       row.eachCell((c) => {
         c.font = { size: 10 };
