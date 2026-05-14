@@ -45,7 +45,7 @@ export class UpdateBankDto {
   @IsOptional() @IsBoolean()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ description: 'Sync intervali (daqiqa)', minimum: 1, maximum: 1440 })
-  @IsOptional() @IsInt() @Min(1) @Max(1440)
+  @ApiPropertyOptional({ description: 'Sync intervali (daqiqa). 0 = sync o\'chirilgan', minimum: 0, maximum: 1440 })
+  @IsOptional() @IsInt() @Min(0) @Max(1440)
   syncIntervalMinutes?: number;
 }

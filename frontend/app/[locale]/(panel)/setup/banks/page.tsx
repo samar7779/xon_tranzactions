@@ -1,25 +1,22 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Building2, Check, KeyRound, Wallet, Plus, ExternalLink,
-  Globe, Shield, Sparkles, MoreVertical, Timer,
+  Globe, Shield, Sparkles, MoreVertical, Timer, Power,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select';
 import { BankLogo, bankAbbr } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-
-const SYNC_INTERVALS = [5, 10, 15, 30, 60];
 
 // Bank brand mapping
 const BANK_BRAND: Record<string, { color: string; gradient: string; abbr: string; name?: string }> = {
@@ -147,6 +144,14 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
   const brand = getBrand(b.code);
   const isWired = (b._count?.credentials || 0) > 0;
   const qc = useQueryClient();
+  const serverInterval = b.syncIntervalMinutes ?? 5;
+  const syncOff = serverInterval === 0;
+  const [intervalVal, setIntervalVal] = useState(String(serverInterval || 5));
+  // Server qiymati o'zgarsa (invalidate'dan keyin) input ham yangilansin
+  useEffect(() => {
+    if (serverInterval > 0) setIntervalVal(String(serverInterval));
+  }, [serverInterval]);
+
   const intervalMut = useMutation({
     mutationFn: (minutes: number) => api.patch(`/banks/${b.id}`, { syncIntervalMinutes: minutes }),
     onSuccess: () => {
@@ -155,6 +160,12 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
+
+  function saveInterval() {
+    const n = Math.min(1440, Math.max(1, Math.round(Number(intervalVal) || 5)));
+    setIntervalVal(String(n));
+    if (n !== serverInterval) intervalMut.mutate(n);
+  }
   return (
     <Card className="group relative border-0 shadow-soft card-hover overflow-hidden">
       <div className={cn("h-1.5 bg-gradient-to-r", brand.gradient)} />
@@ -191,22 +202,41 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
               </span>
             </div>
           )}
-          {/* Sync intervali — bank bo'yicha sozlanadi */}
+          {/* Sync intervali — bank bo'yicha sozlanadi (istalgan daqiqa yoki o'chirilgan) */}
           <div className="flex items-center justify-between text-[11px] gap-2 pt-1.5 border-t border-slate-100">
             <span className="text-slate-500 flex items-center gap-1.5 shrink-0"><Timer className="h-3 w-3" /> Sync vaqti</span>
-            <Select
-              value={String(b.syncIntervalMinutes ?? 5)}
-              onValueChange={(v) => intervalMut.mutate(Number(v))}
-            >
-              <SelectTrigger className="h-7 w-[110px] text-[11px] font-mono rounded-lg">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SYNC_INTERVALS.map((m) => (
-                  <SelectItem key={m} value={String(m)}>{m} daqiqa</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {syncOff ? (
+              <button
+                onClick={() => intervalMut.mutate(Number(intervalVal) || 5)}
+                disabled={intervalMut.isPending}
+                className="inline-flex items-center gap-1 px-2 h-7 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+              >
+                <Power className="h-3 w-3" /> O'chiq · yoqish
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                <Input
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={intervalVal}
+                  onChange={(e) => setIntervalVal(e.target.value)}
+                  onBlur={saveInterval}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                  disabled={intervalMut.isPending}
+                  className="h-7 w-14 text-[11px] text-center font-mono rounded-lg"
+                />
+                <span className="text-slate-400">daqiqa</span>
+                <button
+                  onClick={() => intervalMut.mutate(0)}
+                  disabled={intervalMut.isPending}
+                  title="Avtomatik sync'ni o'chirish"
+                  className="ml-0.5 grid place-items-center h-7 w-7 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                >
+                  <Power className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
