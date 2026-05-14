@@ -58,8 +58,6 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
   }
 
   const h = hover;
-  const lastIn = inPts[n - 1];
-  const lastOut = outPts[n - 1];
 
   return (
     <div className={cn('w-full', className)}>
@@ -98,33 +96,18 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
               />
             );
           })}
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full overflow-visible">
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="w-full h-full">
             <defs>
               <linearGradient id={`${id}-in`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity="0.45" />
-                <stop offset="55%" stopColor="#10b981" stopOpacity="0.12" />
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.38" />
+                <stop offset="60%" stopColor="#10b981" stopOpacity="0.09" />
                 <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
               </linearGradient>
               <linearGradient id={`${id}-out`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.38" />
-                <stop offset="55%" stopColor="#f43f5e" stopOpacity="0.10" />
+                <stop offset="0%" stopColor="#f43f5e" stopOpacity="0.30" />
+                <stop offset="60%" stopColor="#f43f5e" stopOpacity="0.07" />
                 <stop offset="100%" stopColor="#f43f5e" stopOpacity="0" />
               </linearGradient>
-              <linearGradient id={`${id}-in-stroke`} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#34d399" />
-                <stop offset="100%" stopColor="#10b981" />
-              </linearGradient>
-              <linearGradient id={`${id}-out-stroke`} x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stopColor="#fb7185" />
-                <stop offset="100%" stopColor="#f43f5e" />
-              </linearGradient>
-              <filter id={`${id}-glow`} x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="4" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
             </defs>
 
             {/* Grid */}
@@ -142,64 +125,30 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
               />
             ))}
 
-            {/* Maydonlar — fade-in */}
-            <path d={outArea} fill={`url(#${id}-out)`} opacity="0">
-              <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="0.3s" fill="freeze" />
-            </path>
-            <path d={inArea} fill={`url(#${id}-in)`} opacity="0">
-              <animate attributeName="opacity" from="0" to="1" dur="0.8s" begin="0.4s" fill="freeze" />
-            </path>
+            {/* Maydonlar */}
+            <path d={outArea} fill={`url(#${id}-out)`} />
+            <path d={inArea} fill={`url(#${id}-in)`} />
 
-            {/* Chiziqlar — glow + chizilish animatsiyasi */}
+            {/* Chiziqlar — toza, aniq */}
             <path
               d={outLine}
               fill="none"
-              stroke={`url(#${id}-out-stroke)`}
-              strokeWidth="2.5"
+              stroke="#f43f5e"
+              strokeWidth="2"
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              filter={`url(#${id}-glow)`}
-              pathLength={1}
-              strokeDasharray="1"
-              strokeDashoffset="1"
-            >
-              <animate attributeName="stroke-dashoffset" from="1" to="0" dur="1.1s" fill="freeze"
-                calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1" />
-            </path>
+            />
             <path
               d={inLine}
               fill="none"
-              stroke={`url(#${id}-in-stroke)`}
-              strokeWidth="2.5"
+              stroke="#10b981"
+              strokeWidth="2"
               strokeLinejoin="round"
               strokeLinecap="round"
               vectorEffect="non-scaling-stroke"
-              filter={`url(#${id}-glow)`}
-              pathLength={1}
-              strokeDasharray="1"
-              strokeDashoffset="1"
-            >
-              <animate attributeName="stroke-dashoffset" from="1" to="0" dur="1.1s" begin="0.15s" fill="freeze"
-                calcMode="spline" keySplines="0.22 1 0.36 1" keyTimes="0;1" />
-            </path>
+            />
           </svg>
-
-          {/* Oxirgi nuqtalar — pulsing */}
-          <div
-            className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ left: '100%', top: `${(lastOut[1] / H) * 100}%` }}
-          >
-            <span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-60" />
-            <span className="absolute inset-[3px] rounded-full bg-rose-500 ring-2 ring-white" />
-          </div>
-          <div
-            className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ left: '100%', top: `${(lastIn[1] / H) * 100}%` }}
-          >
-            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
-            <span className="absolute inset-[3px] rounded-full bg-emerald-500 ring-2 ring-white" />
-          </div>
 
           {/* Hover qatlami */}
           {h !== null && (
