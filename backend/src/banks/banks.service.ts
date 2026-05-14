@@ -57,13 +57,12 @@ export class BanksService implements OnModuleInit {
         await this.prisma.bank.create({ data: b });
         added++;
         this.logger.log(`✓ Bank qo'shildi: ${b.name}`);
-      } else if (existing.isActive !== b.isActive && existing._count === undefined) {
-        // Aktivlik holatini tekshiramiz (faqat credentiallar yo'q bo'lsa yangilaymiz)
-        const withCount = await this.prisma.bank.findUnique({
-          where: { code: b.code },
-          include: { _count: { select: { credentials: true } } },
+      } else if (existing.isActive !== b.isActive) {
+        // Aktivlik holatini yangilash — faqat credentiallar yo'q bo'lsa
+        const credCount = await this.prisma.bankCredential.count({
+          where: { bankId: existing.id },
         });
-        if (withCount && withCount._count.credentials === 0) {
+        if (credCount === 0) {
           await this.prisma.bank.update({
             where: { code: b.code },
             data: { isActive: b.isActive },
