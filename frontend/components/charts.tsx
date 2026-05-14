@@ -464,6 +464,125 @@ export function BarChart({ data, height = 180, className }: BarChartProps) {
   );
 }
 
+// ─────────────── Daily grouped bar chart (kirim / chiqim / tranzaksiya soni) ───────────────
+interface DailyBarChartProps {
+  data: { label: string; inflow: number; outflow: number; count: number }[];
+  height?: number;
+  className?: string;
+}
+
+/**
+ * Kunma-kun 3 ta ustun: kirim (yashil), chiqim (qizil), tranzaksiya soni (ko'k).
+ * Pul chap o'qda, soni o'ng o'qda (ikki xil masshtab).
+ */
+export function DailyBarChart({ data, height = 260, className }: DailyBarChartProps) {
+  const [hover, setHover] = useState<number | null>(null);
+
+  if (data.length === 0) {
+    return (
+      <div className={cn('grid place-items-center text-xs text-slate-400', className)} style={{ height }}>
+        Ma'lumot yo'q
+      </div>
+    );
+  }
+
+  const maxMoney = Math.max(...data.map((d) => Math.max(d.inflow, d.outflow)), 1);
+  const maxCount = Math.max(...data.map((d) => d.count), 1);
+  const plotH = height - 28;
+  const step = Math.max(1, Math.ceil(data.length / 14));
+  const moneyTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => formatShort(maxMoney * p));
+  const countTicks = [1, 0.75, 0.5, 0.25, 0].map((p) => Math.round(maxCount * p).toString());
+
+  return (
+    <div className={cn('w-full', className)}>
+      <div className="flex" style={{ height: plotH }}>
+        {/* Chap o'q — pul */}
+        <div className="w-14 shrink-0 relative">
+          {moneyTicks.map((t, i) => (
+            <div key={i} className="absolute right-2 text-[10px] text-slate-400 tabular-nums -translate-y-1/2"
+              style={{ top: `${(i / 4) * 100}%` }}>{t}</div>
+          ))}
+        </div>
+
+        {/* Plot */}
+        <div className="flex-1 relative" onMouseLeave={() => setHover(null)}>
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+            <div key={i} className="absolute left-0 right-0 border-t border-slate-100" style={{ top: `${p * 100}%` }} />
+          ))}
+          <div className="absolute inset-0 flex items-end gap-1">
+            {data.map((d, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'flex-1 h-full flex items-end justify-center gap-[2px] min-w-0 relative rounded-sm transition-colors',
+                  hover === i && 'bg-slate-50',
+                )}
+                onMouseEnter={() => setHover(i)}
+              >
+                <div className="w-full max-w-[9px] rounded-t-sm bg-emerald-500" style={{ height: `${(d.inflow / maxMoney) * 100}%` }} />
+                <div className="w-full max-w-[9px] rounded-t-sm bg-rose-500" style={{ height: `${(d.outflow / maxMoney) * 100}%` }} />
+                <div className="w-full max-w-[9px] rounded-t-sm bg-blue-500" style={{ height: `${(d.count / maxCount) * 100}%` }} />
+
+                {hover === i && (
+                  <div className="absolute z-10 bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-white rounded-xl
+                                  shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 overflow-hidden">
+                    <div className="bg-slate-900 text-white text-[11px] font-bold tabular-nums px-3 py-1.5">{d.label}</div>
+                    <div className="px-3 py-2 space-y-1">
+                      <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
+                        <span className="w-2 h-2 rounded-sm bg-emerald-500" />
+                        <span className="text-slate-500">Kirim</span>
+                        <span className="ml-auto font-bold text-emerald-700 tabular-nums">{formatFull(d.inflow)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
+                        <span className="w-2 h-2 rounded-sm bg-rose-500" />
+                        <span className="text-slate-500">Chiqim</span>
+                        <span className="ml-auto font-bold text-rose-700 tabular-nums">{formatFull(d.outflow)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100">
+                        <span className="w-2 h-2 rounded-sm bg-blue-500" />
+                        <span className="text-slate-500">Tranzaksiya</span>
+                        <span className="ml-auto font-bold text-blue-700 tabular-nums">{d.count} ta</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* O'ng o'q — soni */}
+        <div className="w-10 shrink-0 relative">
+          {countTicks.map((t, i) => (
+            <div key={i} className="absolute left-1.5 text-[10px] text-blue-400 tabular-nums -translate-y-1/2"
+              style={{ top: `${(i / 4) * 100}%` }}>{t}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* X o'qi belgilari */}
+      <div className="flex mt-1.5">
+        <div className="w-14 shrink-0" />
+        <div className="flex-1 flex gap-1">
+          {data.map((d, i) => (
+            <div key={i} className="flex-1 text-[9px] text-slate-400 text-center truncate">
+              {i % step === 0 || i === data.length - 1 ? d.label : ''}
+            </div>
+          ))}
+        </div>
+        <div className="w-10 shrink-0" />
+      </div>
+
+      {/* Legenda */}
+      <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-500">
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kirim</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" /> Chiqim</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500" /> Tranzaksiya soni</span>
+      </div>
+    </div>
+  );
+}
+
 // ─────────────── Helpers ───────────────
 function smoothPath(pts: [number, number][]) {
   if (pts.length === 0) return '';
