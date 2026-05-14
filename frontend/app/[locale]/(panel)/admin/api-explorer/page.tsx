@@ -664,8 +664,13 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
 
       <AddBankAccountDialog account={addTarget} creds={creds?.items || []} onClose={() => setAddTarget(null)} />
 
-      {/* Raw JSON */}
-      <JsonViewer title="To'liq raw javob" json={result} />
+      {/* Raw JSON — yopiq holatda, bosilganda ochiladi */}
+      <details className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+          <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
+        </summary>
+        <JsonViewer title="" json={result} />
+      </details>
     </>
   );
 }
