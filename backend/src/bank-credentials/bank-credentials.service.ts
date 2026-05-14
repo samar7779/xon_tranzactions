@@ -68,6 +68,7 @@ export class BankCredentialsService {
     const exists = await this.prisma.bankCredential.findUnique({ where: { id } });
     if (!exists) throw new NotFoundException('Credential topilmadi');
     const data: any = {};
+    if (dto.bankId !== undefined) data.bankId = dto.bankId;
     if (dto.label !== undefined) data.label = dto.label;
     if (dto.loginPrefix !== undefined) data.loginPrefix = dto.loginPrefix;
     if (dto.loginName !== undefined) data.loginName = dto.loginName;

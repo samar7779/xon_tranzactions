@@ -50,6 +50,10 @@ export class CreateCredentialDto {
 
 export class UpdateCredentialDto {
   @ApiPropertyOptional()
+  @IsOptional() @IsString()
+  bankId?: string;
+
+  @ApiPropertyOptional()
   @IsOptional() @IsString() @MaxLength(128)
   label?: string;
 
