@@ -87,7 +87,10 @@ export class SyncService {
 
     const now = Date.now();
     for (const c of creds) {
-      const intervalMs = Math.max(1, c.bank.syncIntervalMinutes || 5) * 60_000;
+      const intervalMin = c.bank.syncIntervalMinutes ?? 5;
+      // intervalMin === 0 → bank uchun avtomatik sync o'chirilgan (force bo'lsa baribir sync qilamiz)
+      if (!force && intervalMin === 0) continue;
+      const intervalMs = Math.max(1, intervalMin) * 60_000;
       for (const acc of c.accounts) {
         // Bank intervaliga qarab — vaqti kelmagan hisobni o'tkazib yuboramiz
         if (!force && acc.lastSyncedAt) {
