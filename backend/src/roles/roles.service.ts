@@ -77,7 +77,8 @@ export class RolesService {
       include: { _count: { select: { users: true } } },
     });
     if (!exists) throw new NotFoundException('Rol topilmadi');
-    if (exists.isSystem) throw new BadRequestException('Tizim rolini o\'chirib bo\'lmaydi');
+    // Yagona himoya: rolga foydalanuvchi bog'langan bo'lsa o'chirib bo'lmaydi
+    // (admin o'zini tizimdan qulflab qo'ymasligi uchun). isSystem cheklovi yo'q.
     if (exists._count.users > 0) {
       throw new BadRequestException(`Bu rolga ${exists._count.users} foydalanuvchi bog'langan — avval ularni boshqa rolga o'tkazing`);
     }

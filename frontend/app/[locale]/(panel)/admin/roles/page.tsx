@@ -121,14 +121,10 @@ export default function RolesPage() {
                             <DropdownMenuItem onClick={() => openEdit(r)}>
                               <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
                             </DropdownMenuItem>
-                            {!r.isSystem && (
-                              <>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(r.id)}>
-                                  <Trash2 className="h-4 w-4 mr-2" /> O'chirish
-                                </DropdownMenuItem>
-                              </>
-                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(r.id)}>
+                              <Trash2 className="h-4 w-4 mr-2" /> O'chirish
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}
@@ -245,8 +241,6 @@ function RoleDialog({
     });
   }
 
-  const isSystem = editing?.isSystem === true;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
@@ -259,9 +253,7 @@ function RoleDialog({
                 {editing ? `${editing.label}` : 'Yangi rol yaratish'}
               </DialogTitle>
               <DialogDescription className="text-white/80">
-                {isSystem
-                  ? "Tizim roli — ruxsatlarini o'zgartirib bo'lmaydi, lekin nomi va tavsifini almashtirish mumkin"
-                  : "Rolga nom bering va kerakli ruxsatlarni belgilang"}
+                Rolga nom bering va kerakli ruxsatlarni belgilang
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -299,12 +291,8 @@ function RoleDialog({
                 return (
                   <div key={g.group} className="p-3 bg-white/60">
                     <button type="button"
-                      disabled={isSystem}
                       onClick={() => toggleGroup(g.items)}
-                      className={cn(
-                        "flex items-center justify-between w-full text-left text-sm font-semibold mb-2 hover:text-indigo-700 transition-colors",
-                        isSystem && "cursor-not-allowed",
-                      )}
+                      className="flex items-center justify-between w-full text-left text-sm font-semibold mb-2 hover:text-indigo-700 transition-colors"
                     >
                       <span className="flex items-center gap-2">
                         <div className={cn(
@@ -327,12 +315,10 @@ function RoleDialog({
                           className={cn(
                             "flex items-start gap-2 px-2 py-1.5 rounded-lg text-sm cursor-pointer hover:bg-slate-50 transition-colors",
                             permissions.has(i.value) && "bg-indigo-50/60",
-                            isSystem && "cursor-not-allowed opacity-70",
                           )}
                         >
                           <input
                             type="checkbox"
-                            disabled={isSystem}
                             checked={permissions.has(i.value)}
                             onChange={() => togglePerm(i.value)}
                             className="mt-0.5 accent-indigo-600 h-3.5 w-3.5 rounded"
