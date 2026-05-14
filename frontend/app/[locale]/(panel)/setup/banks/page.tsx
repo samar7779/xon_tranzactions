@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
-import { BankLogo, bankAbbr } from '@/components/bank-logo';
+import { BankLogo } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -97,12 +97,25 @@ export default function BanksPage() {
 
             {/* Noaktiv banklar — yopiq holatda, bosilganda ochiladi */}
             {inactiveList.length > 0 && (
-              <details className="group mt-6 pt-6 border-t border-slate-200">
-                <summary className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 flex items-center gap-2 cursor-pointer select-none hover:text-slate-700">
-                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                  <Building2 className="h-3.5 w-3.5" /> Kelajakda — {inactiveList.length} ta bank (integratsiya yo'q)
+              <details className="group mt-2">
+                <summary className="list-none cursor-pointer select-none">
+                  <div className="flex items-center gap-3 rounded-2xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 hover:bg-slate-100/80 hover:ring-slate-300 transition-all">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 grid place-items-center text-white shadow-sm shrink-0">
+                      <Building2 className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[13px] font-bold tracking-tight text-slate-700">
+                        Kelajakdagi banklar
+                      </div>
+                      <div className="text-[11px] text-slate-500">API integratsiyasi hali yo'q — ko'rish uchun bosing</div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-full bg-white ring-1 ring-slate-200 text-[11px] font-bold text-slate-600 tabular-nums shrink-0">
+                      {inactiveList.length} ta
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90 shrink-0" />
+                  </div>
                 </summary>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-3">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mt-4">
                   {inactiveList.map((b: any) => (
                     <BankCardMuted key={b.id} b={b} />
                   ))}
@@ -243,14 +256,12 @@ function BankCard({ b, locale }: { b: any; locale: string }) {
   );
 }
 
-// ─────────── Noaktiv bank — kichik, kulrang ─────────────
+// ─────────── Noaktiv bank — kichik, brendlangan logo bilan ─────────────
 function BankCardMuted({ b }: { b: any }) {
   return (
-    <Card className="border border-slate-200 shadow-none hover:bg-slate-50/60 transition-colors overflow-hidden bg-slate-50/30 opacity-80 hover:opacity-100">
+    <Card className="border border-slate-200 shadow-none hover:shadow-sm hover:border-slate-300 transition-all overflow-hidden bg-white">
       <CardContent className="p-3 flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-slate-200 grid place-items-center text-slate-500 text-[11px] font-black tracking-tight" style={{ letterSpacing: '-0.05em' }}>
-          {bankAbbr(b.code, b.name)}
-        </div>
+        <BankLogo code={b.code} name={b.name} size={40} className="grayscale-[0.35] opacity-90" />
         <div className="min-w-0 flex-1">
           <div className="text-[12px] font-semibold text-slate-700 truncate">{b.name}</div>
           <div className="text-[10px] font-mono text-slate-400 truncate">{b.code}</div>
