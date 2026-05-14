@@ -15,7 +15,6 @@ import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/skeleton';
 import { Input } from '@/components/ui/input';
-import { OnboardingCard } from '@/components/onboarding-card';
 import { DualAreaChart } from '@/components/charts';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -118,9 +117,7 @@ export default function DashboardPage() {
   const txnCount = stats?.total ?? (stats?.groups || []).reduce((s: number, g: any) => s + Number(typeof g._count === 'number' ? g._count : g._count?._all || 0), 0);
   const netFlow = inSum - outSum;
 
-  const isEmpty = totalAccounts === 0;
   const banksCount = new Set((accounts?.items || []).map((a: any) => a.bankId)).size;
-  const credentialsCount = new Set((accounts?.items || []).map((a: any) => a.credentialId)).size;
 
   // By-bank breakdown
   const byBank = useMemo(() => {
@@ -166,11 +163,6 @@ export default function DashboardPage() {
           <DataTile label="Chiqim · 30 kun" value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
           <DataTile label="Tranzaksiya · 30 kun" value={String(txnCount)} unit="ta" />
         </div>
-
-        {/* ═══ ONBOARDING for empty state ═══ */}
-        {isEmpty && (
-          <OnboardingCard banksCount={banksCount} credentialsCount={credentialsCount} accountsCount={totalAccounts} />
-        )}
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
         <div className="bg-white border border-slate-200 rounded overflow-hidden">
