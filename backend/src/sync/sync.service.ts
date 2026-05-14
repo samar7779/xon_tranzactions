@@ -24,8 +24,6 @@ const KNOWN_FIELDS = new Set([
 export class SyncService {
   private readonly logger = new Logger(SyncService.name);
   private readonly daysBack: number;
-  private readonly tgToken: string;
-  private readonly tgChat: string;
 
   constructor(
     private prisma: PrismaService,
@@ -35,22 +33,6 @@ export class SyncService {
     config: ConfigService,
   ) {
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
-    this.tgToken = config.get<string>('TG_BOT_TOKEN', '');
-    this.tgChat = config.get<string>('DEPLOY_NOTIFY_CHAT', '');
-  }
-
-  /** Telegram'ga xabar yuborish (sync xatolari uchun) */
-  private async sendTelegram(text: string) {
-    if (!this.tgToken || !this.tgChat) return;
-    try {
-      await fetch(`https://api.telegram.org/bot${this.tgToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: this.tgChat, parse_mode: 'HTML', text }),
-      });
-    } catch (e: any) {
-      this.logger.warn(`Telegram yuborishda xato: ${e?.message}`);
-    }
   }
 
   /**
@@ -101,41 +83,15 @@ export class SyncService {
       return;
     }
 
-    const okList: string[] = [];
-    const failList: { account: string; owner: string; error: string }[] = [];
-    let totalSaved = 0;
-
     for (const c of creds) {
       for (const acc of c.accounts) {
         try {
-          const r = await this.syncAccount(c.id, acc.id);
-          okList.push(acc.accountNo);
-          totalSaved += r.saved || 0;
+          await this.syncAccount(c.id, acc.id);
         } catch (e: any) {
           const errMsg = e?.message?.slice(0, 150) || 'Noma\'lum xato';
           this.logger.warn(`Sync xato (acc ${acc.accountNo}): ${errMsg}`);
-          failList.push({
-            account: acc.accountNo,
-            owner: acc.ownerName || '—',
-            error: errMsg,
-          });
         }
       }
-    }
-
-    // Telegram xulosa — faqat xato bo'lsa yoki yangi tranzaksiya kelsa
-    if (failList.length > 0 || totalSaved > 0) {
-      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-      let msg = `🔄 <b>Sync xulosa</b> — ${okList.length} ✅ / ${failList.length} ❌`;
-      if (totalSaved > 0) msg += `\n💾 ${totalSaved} ta yangi tranzaksiya`;
-      if (failList.length > 0) {
-        msg += `\n\n<b>Xato hisoblar:</b>`;
-        for (const f of failList.slice(0, 15)) {
-          msg += `\n• <code>${f.account}</code> ${esc(f.owner)}\n  ⚠️ ${esc(f.error)}`;
-        }
-        if (failList.length > 15) msg += `\n… va yana ${failList.length - 15} ta`;
-      }
-      await this.sendTelegram(msg);
     }
   }
 

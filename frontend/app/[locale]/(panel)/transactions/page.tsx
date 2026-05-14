@@ -57,6 +57,29 @@ export default function TransactionsPage() {
   const [dateTo, setDateTo] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<any>(null);
+  const [idSearchOpen, setIdSearchOpen] = useState(false);
+  const [idQuery, setIdQuery] = useState('');
+  const [idSearching, setIdSearching] = useState(false);
+
+  async function searchById() {
+    const id = idQuery.trim();
+    if (!id) return;
+    setIdSearching(true);
+    try {
+      const found = await api.get<any>(`/transactions/${encodeURIComponent(id)}`);
+      if (found && found.id) {
+        setDetailRow(found);
+        setIdSearchOpen(false);
+        setIdQuery('');
+      } else {
+        toast.error('Bunday ID bilan tranzaksiya topilmadi');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Qidiruvda xato');
+    } finally {
+      setIdSearching(false);
+    }
+  }
 
   // Active filter count
   const activeFilters = useMemo(() => {
@@ -262,6 +285,15 @@ export default function TransactionsPage() {
                   </button>
                 )}
               </div>
+
+              {/* Tranzaksiya ID orqali qidirish */}
+              <button
+                onClick={() => setIdSearchOpen(true)}
+                title="Tranzaksiya ID orqali qidirish"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 ring-1 ring-slate-200 hover:ring-indigo-200 transition-colors shrink-0"
+              >
+                <Hash className="h-4 w-4" />
+              </button>
 
               <FilterChip
                 active={direction !== 'all'}
@@ -540,6 +572,33 @@ export default function TransactionsPage() {
 
       {/* ═══ DETAIL MODAL ═══ */}
       <TransactionDetailDialog row={detailRow} onClose={() => setDetailRow(null)} />
+
+      {/* ═══ TRANZAKSIYA ID QIDIRUV ═══ */}
+      <Dialog open={idSearchOpen} onOpenChange={setIdSearchOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Hash className="h-4 w-4 text-indigo-600" /> Tranzaksiya ID orqali qidirish
+            </DialogTitle>
+            <DialogDescription>
+              To'liq tranzaksiya ID'ni kiriting — topilsa, tafsilot oynasi ochiladi
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Input
+              autoFocus
+              value={idQuery}
+              onChange={(e) => setIdQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') searchById(); }}
+              placeholder="masalan: 60101234_5_20260514_..."
+              className="font-mono text-xs"
+            />
+            <Button onClick={searchById} disabled={idSearching || !idQuery.trim()} className="shrink-0">
+              {idSearching ? '...' : 'Topish'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
@@ -614,7 +673,7 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col gap-0">
+      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[90vh] flex flex-col gap-0 [&>button]:hidden">
         {/* ─── Header ─── */}
         <div className={cn(
           "relative px-6 py-5 shrink-0",

@@ -53,9 +53,10 @@ export class TransactionsService {
     return { ok: true, total, page, perPage, items };
   }
 
-  async findOne(id: string) {
-    return this.prisma.transaction.findUnique({
-      where: { id },
+  async findOne(idOrExternal: string) {
+    // Ichki id yoki bank bergan kompozit externalId bo'yicha qidiramiz
+    return this.prisma.transaction.findFirst({
+      where: { OR: [{ id: idOrExternal }, { externalId: idOrExternal }] },
       include: {
         bank: true,
         account: true,
