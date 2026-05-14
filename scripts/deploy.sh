@@ -11,6 +11,27 @@ FE_SVC="${DEPLOY_FRONTEND_SERVICE:-xon-tranzactions-frontend}"
 LOG="${DEPLOY_LOG:-/var/log/xon-tranzactions/deploy.log}"
 LOCK="${DEPLOY_LOCK:-/var/run/xon-tranzactions-deploy.lock}"
 
+# Webhook'dan keladigan o'zgaruvchilar — set -u ostida xato bermasligi uchun
+# default qiymat beramiz (qo'lda ishga tushirilganda ham ishlasin).
+DEPLOY_COMMIT="${DEPLOY_COMMIT:-}"
+DEPLOY_PUSHER="${DEPLOY_PUSHER:-}"
+DEPLOY_PUSHED_BRANCH="${DEPLOY_PUSHED_BRANCH:-}"
+DEPLOY_FILES="${DEPLOY_FILES:-}"
+# Qo'lda ishga tushirilganda — joriy git holatidan to'ldiramiz
+if [ -z "$DEPLOY_COMMIT" ]; then
+  DEPLOY_COMMIT="$(git -C "$REPO" rev-parse HEAD 2>/dev/null || echo '')"
+fi
+if [ -z "$DEPLOY_PUSHED_BRANCH" ]; then
+  DEPLOY_PUSHED_BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$BRANCH")"
+fi
+if [ -z "$DEPLOY_PUSHER" ]; then
+  DEPLOY_PUSHER="qo'lda"
+fi
+# Qo'lda ishga tushirilganda — services aniqlanmagan bo'lsa, ikkalasini ham build qilamiz
+if [ -z "$SERVICES" ] && [ -z "${DEPLOY_FROM_WEBHOOK:-}" ]; then
+  SERVICES="${BE_SVC},${FE_SVC}"
+fi
+
 # Telegram fallback
 TG_BOT_TOKEN="${TG_BOT_TOKEN:-8128088490:AAErnIY_BG5rjdcp45S1OcHyVhiJm5WbUO8}"
 DEPLOY_NOTIFY_CHAT="${DEPLOY_NOTIFY_CHAT:--5220625032}"
