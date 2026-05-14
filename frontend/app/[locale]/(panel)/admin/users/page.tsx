@@ -84,6 +84,15 @@ export default function AdminUsersPage() {
     onSuccess: () => { toast.success(tc('success')); qc.invalidateQueries({ queryKey: ['admin-users'] }); },
     onError: (e: any) => toast.error(e?.message),
   });
+  const toggleActiveMut = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.patch(`/admin-users/${id}`, { isActive }),
+    onSuccess: (_d, v) => {
+      toast.success(v.isActive ? 'Foydalanuvchi faollashtirildi' : 'Foydalanuvchi bloklandi');
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+    },
+    onError: (e: any) => toast.error(e?.message),
+  });
 
   function openCreate() { setEditing(null); setOpen(true); }
   function openEdit(u: AdminItem) { setEditing(u); setOpen(true); }
@@ -213,6 +222,11 @@ export default function AdminUsersPage() {
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(u)}>
                               <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => toggleActiveMut.mutate({ id: u.id, isActive: !u.isActive })}>
+                              {u.isActive
+                                ? <><XCircle className="h-4 w-4 mr-2" /> Bloklash</>
+                                : <><CheckCircle2 className="h-4 w-4 mr-2" /> Faollashtirish</>}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(u.id)}>
