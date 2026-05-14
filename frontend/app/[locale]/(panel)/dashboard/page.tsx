@@ -276,6 +276,7 @@ export default function DashboardPage() {
             <DataPanel
               title="Eng katta hisoblar"
               count={totalAccounts}
+              collapsible
               actions={
                 <Link href={`/${locale}/setup/accounts`}>
                   <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
@@ -352,7 +353,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-4 space-y-4">
 
             {/* Sync status */}
-            <DataPanel title="Sync holati" subtitle="oxirgi 10 ta operatsiya">
+            <DataPanel title="Sync holati" subtitle="oxirgi 10 ta operatsiya" collapsible>
               <div className="px-4 py-3 space-y-3">
                 {/* Big % */}
                 <div className="flex items-end justify-between">
@@ -386,7 +387,7 @@ export default function DashboardPage() {
             </DataPanel>
 
             {/* Banks breakdown */}
-            <DataPanel title="Banklar bo'yicha taqsimot" subtitle={`${byBank.length} ta bank`}>
+            <DataPanel title="Banklar bo'yicha taqsimot" subtitle={`${byBank.length} ta bank`} collapsible>
               {byBank.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-500">Banklar yo'q</div>
               ) : (
@@ -441,7 +442,7 @@ export default function DashboardPage() {
             )}
 
             {/* Net flow widget */}
-            <DataPanel title="Sof pul oqimi · 30 kun">
+            <DataPanel title="Sof pul oqimi · 30 kun" collapsible>
               <div className="px-4 py-3">
                 <div className={cn(
                   "text-3xl font-bold tabular-nums tracking-tight",
@@ -502,7 +503,7 @@ function DataTile({
 }
 
 function DataPanel({
-  title, subtitle, count, actions, children, tone,
+  title, subtitle, count, actions, children, tone, collapsible, defaultOpen = false,
 }: {
   title: string;
   subtitle?: string;
@@ -510,23 +511,53 @@ function DataPanel({
   actions?: React.ReactNode;
   children: React.ReactNode;
   tone?: 'warning' | 'danger';
+  collapsible?: boolean;
+  defaultOpen?: boolean;
 }) {
+  const [open, setOpen] = useState(defaultOpen);
   const headBg = tone === 'warning' ? 'bg-amber-50/40 border-amber-200' : tone === 'danger' ? 'bg-rose-50/40 border-rose-200' : 'bg-white border-slate-200';
+
+  const head = (
+    <div className="flex items-center gap-2 min-w-0">
+      {collapsible && (
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform duration-300", open && "rotate-180")} />
+      )}
+      <div className="text-[12px] font-bold text-slate-900 tracking-tight truncate">{title}</div>
+      {count !== undefined && (
+        <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded tabular-nums">
+          {count}
+        </span>
+      )}
+      {subtitle && <div className="text-[10px] text-slate-500 truncate">· {subtitle}</div>}
+    </div>
+  );
+
   return (
     <div className={cn("bg-white border rounded overflow-hidden", headBg)}>
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="text-[12px] font-bold text-slate-900 tracking-tight truncate">{title}</div>
-          {count !== undefined && (
-            <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded tabular-nums">
-              {count}
-            </span>
-          )}
-          {subtitle && <div className="text-[10px] text-slate-500 truncate">· {subtitle}</div>}
-        </div>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setOpen((o) => !o)}
+            className="flex-1 min-w-0 text-left hover:opacity-70 transition-opacity"
+          >
+            {head}
+          </button>
+        ) : head}
         {actions}
       </div>
-      <div className="bg-white">{children}</div>
+      {collapsible ? (
+        <div className={cn(
+          "grid transition-[grid-template-rows] duration-300 ease-out",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}>
+          <div className="overflow-hidden">
+            <div className="bg-white">{children}</div>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white">{children}</div>
+      )}
     </div>
   );
 }
