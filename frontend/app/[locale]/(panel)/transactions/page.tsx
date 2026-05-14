@@ -960,9 +960,48 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
             <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">Tranzaksiya ID (composite)</div>
             <CopyBlock value={row.externalId || row.id} />
           </div>
+
+          {/* Bankdan kelgan to'liq JSON */}
+          {(row.metadata || row.rawExtra) && (
+            <details className="rounded-xl border border-slate-200 overflow-hidden">
+              <summary className="px-4 py-2.5 cursor-pointer text-[10px] font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 uppercase tracking-[0.15em]">
+                <FileText className="h-3.5 w-3.5" /> Bankdan kelgan to'liq JSON
+              </summary>
+              <div className="px-4 py-3 bg-slate-50/60 space-y-3">
+                {row.metadata && <RawJsonBlock label="Raw javob (metadata)" data={row.metadata} />}
+                {row.rawExtra && <RawJsonBlock label="Qo'shimcha fieldlar (rawExtra)" data={row.rawExtra} />}
+              </div>
+            </details>
+          )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function RawJsonBlock({ label, data }: { label: string; data: any }) {
+  const [copied, setCopied] = useState(false);
+  const str = JSON.stringify(data, null, 2);
+  function copy() {
+    navigator.clipboard.writeText(str);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{label}</div>
+        <button
+          onClick={copy}
+          className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-900"
+        >
+          {copied ? <><Check className="h-3 w-3 text-emerald-600" /> Nusxalandi</> : <><Copy className="h-3 w-3" /> Nusxalash</>}
+        </button>
+      </div>
+      <pre className="p-2.5 bg-slate-900 text-slate-100 rounded-lg text-[10px] font-mono leading-relaxed overflow-x-auto max-h-64 overflow-y-auto">
+        {str}
+      </pre>
+    </div>
   );
 }
 
