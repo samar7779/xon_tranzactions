@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -30,10 +31,10 @@ function today() {
   return iso(new Date());
 }
 
-const DATE_PRESETS: { label: string; range: () => [string, string] }[] = [
-  { label: 'Bugun', range: () => [today(), today()] },
+const DATE_PRESETS: { key: 'rangeToday' | 'rangeWeek' | 'rangeMonth' | 'rangeLastMonth'; range: () => [string, string] }[] = [
+  { key: 'rangeToday', range: () => [today(), today()] },
   {
-    label: 'Shu hafta',
+    key: 'rangeWeek',
     range: () => {
       const d = new Date();
       const day = (d.getDay() + 6) % 7; // Mon=0
@@ -41,9 +42,9 @@ const DATE_PRESETS: { label: string; range: () => [string, string] }[] = [
       return [iso(mon), today()];
     },
   },
-  { label: 'Shu oy', range: () => [firstOfMonth(), today()] },
+  { key: 'rangeMonth', range: () => [firstOfMonth(), today()] },
   {
-    label: "O'tgan oy",
+    key: 'rangeLastMonth',
     range: () => {
       const d = new Date();
       const first = new Date(d.getFullYear(), d.getMonth() - 1, 1);
@@ -54,6 +55,9 @@ const DATE_PRESETS: { label: string; range: () => [string, string] }[] = [
 ];
 
 export default function StatementPage() {
+  const t = useTranslations('statement');
+  const tc = useTranslations('common');
+  const td = useTranslations('dashboard');
   const [bankId, setBankId] = useState('');
   const [accountId, setAccountId] = useState('');
   const [accSearch, setAccSearch] = useState('');
@@ -100,9 +104,9 @@ export default function StatementPage() {
 
   const activePreset = useMemo(
     () => DATE_PRESETS.find((p) => {
-      const [f, t] = p.range();
-      return f === dateFrom && t === dateTo;
-    })?.label,
+      const [f, tt] = p.range();
+      return f === dateFrom && tt === dateTo;
+    })?.key,
     [dateFrom, dateTo],
   );
 
@@ -116,9 +120,9 @@ export default function StatementPage() {
         `/transactions/statement?accountId=${accountId}&dateFrom=${dateFrom}&dateTo=${dateTo}`,
         'vipiska.xlsx',
       );
-      toast.success('Vipiska yuklab olindi');
+      toast.success(t('downloadSuccess'));
     } catch (e: any) {
-      toast.error(e?.message || 'Vipiska yuklashda xato');
+      toast.error(e?.message || t('downloadError'));
     } finally {
       setDownloading(false);
     }
@@ -126,7 +130,7 @@ export default function StatementPage() {
 
   return (
     <>
-      <Topbar title="Vipiska" subtitle="Bank hisobi bo'yicha tranzaksiyalarni Excel formatida yuklab olish" />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
 
       <div className="flex-1 p-6 lg:p-8 w-full">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
@@ -167,11 +171,11 @@ export default function StatementPage() {
                 <StepLabel n={3} icon={Calendar} text="Sana oralig'ini tanlang" />
                 <div className="flex flex-wrap gap-1.5">
                   {DATE_PRESETS.map((p) => {
-                    const active = activePreset === p.label;
+                    const active = activePreset === p.key;
                     return (
                       <button
-                        key={p.label}
-                        onClick={() => { const [f, t] = p.range(); setDateFrom(f); setDateTo(t); }}
+                        key={p.key}
+                        onClick={() => { const [f, tt] = p.range(); setDateFrom(f); setDateTo(tt); }}
                         className={cn(
                           'px-2.5 h-7 rounded-lg text-[11px] font-medium transition-colors',
                           active
@@ -179,18 +183,18 @@ export default function StatementPage() {
                             : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
                         )}
                       >
-                        {p.label}
+                        {t(p.key)}
                       </button>
                     );
                   })}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Dan</Label>
+                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{tc('from')}</Label>
                     <Input type="date" value={dateFrom} max={dateTo || undefined} onChange={(e) => setDateFrom(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Gacha</Label>
+                    <Label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{tc('to')}</Label>
                     <Input type="date" value={dateTo} min={dateFrom || undefined} max={today()} onChange={(e) => setDateTo(e.target.value)} />
                   </div>
                 </div>

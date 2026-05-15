@@ -20,7 +20,75 @@
     "customers": "Mijozlar",
     "contracts": "Shartnomalar",
     "payments": "To'lovlar",
-    "billing": "Billing"
+    "billing": "Billing",
+    "profile": "Profilim",
+    "notifications": "Bildirishnomalar",
+    "groupMain": "Asosiy",
+    "groupSetup": "Sozlash",
+    "groupSystem": "Tizim",
+    "home": "Bosh sahifa"
+  },
+  "topbar": {
+    "myProfile": "Profilim",
+    "myAccount": "Mening hisobim",
+    "logout": "Chiqish"
+  },
+  "profile": {
+    "title": "Profilim",
+    "subtitle": "Mening hisobim va ruxsatlarim",
+    "myAccount": "Mening hisobim",
+    "userId": "Foydalanuvchi ID",
+    "role": "Rol",
+    "lastLogin": "Oxirgi kirish",
+    "permissions": "Ruxsatlar",
+    "permissionsTitle": "Sizning rolingiz uchun berilgan ruxsatlar",
+    "permissionsSubtitle": "Tizimning qaysi bo'limlariga kira olasiz va nima qila olasiz",
+    "permissionsCount": "ta ruxsat",
+    "noPermissions": "Sizga hech qanday ruxsat berilmagan",
+    "editTip": "Ma'lumotlarni o'zgartirish?",
+    "editTipBody": "Ism yoki rolni faqat SUPERADMIN tizim adminlari sahifasidan o'zgartira oladi. Parolingizni o'zgartirish kerak bo'lsa, admin bilan bog'laning."
+  },
+  "notifications": {
+    "title": "Bildirishnomalar",
+    "errorsCount": "{count} ta xato",
+    "newCount": "{count} yangi",
+    "allGood": "Hammasi joyida",
+    "noErrors": "Hech qanday xato yo'q",
+    "syncError": "Sync xato",
+    "viewAll": "Barchasini ko'rish"
+  },
+  "admin": {
+    "title": "Admin paneli",
+    "subtitle": "Foydalanuvchilar, rollar, sync va API boshqaruvi",
+    "tabs": {
+      "users": "Adminlar",
+      "roles": "Rollar",
+      "syncLogs": "Sync tarixi",
+      "apiExplorer": "API Explorer",
+      "cleanup": "Tozalash"
+    }
+  },
+  "cleanup": {
+    "title": "Hisob raqami bo'yicha tranzaksiyalarni o'chirish",
+    "subtitle": "Ma'lumotlarni tozalash",
+    "sectionLabel": "Ma'lumotlarni tozalash",
+    "intro": "Berilgan hisob raqami uchun bazadagi barcha tranzaksiyalar va ularga bog'liq Payment yozuvlari o'chiriladi.",
+    "warningTitle": "Bu amal qaytarib bo'lmaydi.",
+    "warningBody": "Tranzaksiyalar bazadan butunlay o'chiriladi. Hisob raqamining o'zi qoladi — keyingi sync'da yana ma'lumot olib keladi (qoldiq tiklanadi). Match qilingan to'lov bog'lanishlari (Payment) ham birga o'chadi.",
+    "accountLabel": "Hisob raqami (20 belgi)",
+    "accountCount": "{n} / 20 raqam",
+    "confirmLabel": "Tasdiqlash — yuqoridagi hisob raqamini qayta yozing",
+    "confirmPlaceholder": "Hisob raqamini takror kiriting",
+    "confirmMismatch": "Tasdiq matni hisob raqamiga teng emas",
+    "confirmDialog": "Rostdan ham {accountNo} hisob raqamiga oid barcha tranzaksiyalarni o'chirasizmi?",
+    "submit": "Tranzaksiyalarni o'chirish",
+    "submitting": "O'chirilmoqda...",
+    "successCount": "✓ {n} ta tranzaksiya o'chirildi",
+    "deniedTitle": "Ruxsat yo'q",
+    "deniedBody": "Bu bo'lim faqat SUPERADMIN uchun. Sizning rolingiz: {role}.",
+    "resultTitle": "Natija",
+    "resultAccount": "Hisob",
+    "resultDeleted": "O'chirilgan"
   },
   "customers": {
     "title": "Mijozlar",
@@ -120,13 +188,55 @@
   },
   "dashboard": {
     "title": "Bosh sahifa",
+    "subtitle": "{accounts} hisob · {banks} bank · oxirgi yangilanish: {lastSync}",
     "totalIn": "Kirim",
     "totalOut": "Chiqim",
     "balance": "Sof oqim",
     "totalTransactions": "Jami tranzaksiyalar",
     "recentTransactions": "So'nggi tranzaksiyalar",
     "byBank": "Banklar bo'yicha",
-    "viewAll": "Hammasini ko'rish"
+    "viewAll": "Hammasini ko'rish",
+    "totalBalance": "Jami qoldiq",
+    "accountsLabel": "Hisoblar",
+    "banksLabel": "Banklar",
+    "inflow30": "Kirim · 30 kun",
+    "outflow30": "Chiqim · 30 kun",
+    "txn30": "Tranzaksiya · 30 kun",
+    "dailyChart": "Kunma-kun kirim/chiqim",
+    "barChart": "Kunma-kun ustunli grafik — kirim / chiqim / tranzaksiya soni",
+    "allBanks": "Hamma banklar",
+    "allAccounts": "Hamma hisoblar",
+    "accountSearch": "Hisob raqami yoki egasi...",
+    "notFound": "Topilmadi",
+    "inactiveBanks": "Aktiv emas",
+    "rangeToday": "Bugun",
+    "range7d": "7 kun",
+    "range30d": "30 kun",
+    "rangeCustom": "Sana",
+    "selectDateRange": "Sana oralig'ini tanlang",
+    "netFlow": "Sof oqim",
+    "topAccounts": "Eng katta hisoblar",
+    "noAccounts": "Hisoblar yo'q",
+    "noBanks": "Banklar yo'q",
+    "bankAccountHeader": "Bank · Hisob raqami",
+    "mfo": "MFO",
+    "balanceHeader": "Qoldiq",
+    "statusHeader": "Status",
+    "lastSyncHeader": "Oxirgi sync",
+    "syncStatus": "Sync holati",
+    "syncLast10": "oxirgi 10 ta operatsiya",
+    "successRate": "Muvaffaqiyat",
+    "details": "Tafsilot",
+    "syncOk": "OK",
+    "syncPartial": "Qisman",
+    "syncError": "Xato",
+    "syncRunning": "Run",
+    "banksBreakdown": "Banklar bo'yicha taqsimot",
+    "banksCount": "{n} ta bank",
+    "accountsShort": "hsb",
+    "attention": "Diqqat",
+    "syncErrors": "{n} ta sync xatosi",
+    "netFlow30": "Sof pul oqimi · 30 kun"
   },
   "transactions": {
     "title": "Tranzaksiyalar",
@@ -149,7 +259,11 @@
     "allTypes": "Hamma turlar",
     "allStatuses": "Hamma holatlar",
     "allDirections": "Kirim/Chiqim",
-    "page": "Sahifa"
+    "page": "Sahifa",
+    "export": "Eksport",
+    "exportXlsx": "Excel (XLSX)",
+    "searchById": "Tranzaksiya ID bo'yicha qidirish",
+    "history": "Tarix"
   },
   "accounts": {
     "title": "Bank hisoblari",
@@ -205,6 +319,20 @@
     "errorMessage": "Xato xabari",
     "noData": "Hali sync amalga oshmagan"
   },
+  "statement": {
+    "title": "Vipiska",
+    "subtitle": "Bank hisobi bo'yicha tranzaksiyalar ko'chirma",
+    "downloadSuccess": "Vipiska yuklab olindi",
+    "downloadError": "Yuklab olinmadi",
+    "rangeToday": "Bugun",
+    "rangeWeek": "Shu hafta",
+    "rangeMonth": "Shu oy",
+    "rangeLastMonth": "O'tgan oy"
+  },
+  "check": {
+    "title": "Sverka",
+    "subtitle": "Bank qoldig'i va tizim hisobi muvofiqligini tekshirish"
+  },
   "common": {
     "save": "Saqlash",
     "cancel": "Bekor qilish",
@@ -227,6 +355,15 @@
     "today": "Bugun",
     "yesterday": "Kecha",
     "thisWeek": "Bu hafta",
-    "thisMonth": "Bu oy"
+    "thisMonth": "Bu oy",
+    "noDash": "—",
+    "edit": "Tahrirlash",
+    "delete": "O'chirish",
+    "close": "Yopish",
+    "refresh": "Yangilash",
+    "syncNow": "Sinxronizatsiya",
+    "download": "Yuklab olish",
+    "export": "Eksport",
+    "details": "Tafsilot"
   }
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Trash2, AlertTriangle, Loader2, Database, ShieldAlert } from 'lucide-react';
@@ -13,6 +14,8 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 export default function CleanupPage() {
+  const t = useTranslations('cleanup');
+  const tc = useTranslations('common');
   const me = useAuth((s) => s.user);
   const isSuperAdmin = me?.role === 'SUPERADMIN';
 
@@ -26,14 +29,14 @@ export default function CleanupPage() {
     onSuccess: (r: any) => {
       setLastResult(r);
       if (r?.ok) {
-        toast.success(`✓ ${r.deleted} ta tranzaksiya o'chirildi`);
+        toast.success(t('successCount', { n: r.deleted }));
         setAccountNo('');
         setConfirm('');
       } else {
-        toast.error(r?.error || 'Xato');
+        toast.error(r?.error || tc('error'));
       }
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   const canSubmit = accountNo.trim().length >= 20 && confirm.trim() === accountNo.trim();
@@ -47,10 +50,15 @@ export default function CleanupPage() {
             <CardContent className="p-6 flex items-start gap-3">
               <ShieldAlert className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <div className="text-base font-bold tracking-tight">Ruxsat yo'q</div>
-                <div className="text-xs text-slate-500 mt-1">
-                  Bu bo'lim faqat <b>SUPERADMIN</b> uchun. Sizning rolingiz: <b>{me?.role}</b>.
-                </div>
+                <div className="text-base font-bold tracking-tight">{t('deniedTitle')}</div>
+                <div
+                  className="text-xs text-slate-500 mt-1"
+                  dangerouslySetInnerHTML={{
+                    __html: t('deniedBody', { role: me?.role || '—' })
+                      .replace('SUPERADMIN', '<b>SUPERADMIN</b>')
+                      .replace(/(:\s)([^.<]+)\.$/, '$1<b>$2</b>.'),
+                  }}
+                />
               </div>
             </CardContent>
           </Card>
@@ -60,12 +68,10 @@ export default function CleanupPage() {
           <div className="bg-gradient-to-br from-rose-500 to-red-600 px-6 py-5 text-white">
             <div className="flex items-center gap-2 mb-1.5 text-white/80">
               <Trash2 className="h-3.5 w-3.5" />
-              <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Ma'lumotlarni tozalash</span>
+              <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('sectionLabel')}</span>
             </div>
-            <div className="text-lg font-bold tracking-tight">Hisob raqami bo'yicha tranzaksiyalarni o'chirish</div>
-            <div className="text-white/80 text-xs mt-0.5">
-              Berilgan hisob raqami uchun bazadagi <b>barcha tranzaksiyalar</b> va ularga bog'liq Payment yozuvlari o'chiriladi.
-            </div>
+            <div className="text-lg font-bold tracking-tight">{t('title')}</div>
+            <div className="text-white/80 text-xs mt-0.5">{t('intro')}</div>
           </div>
 
           <CardContent className="p-6 space-y-4">
@@ -73,15 +79,13 @@ export default function CleanupPage() {
             <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-2.5">
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-[12px] text-amber-900 leading-relaxed">
-                <b>Bu amal qaytarib bo'lmaydi.</b> Tranzaksiyalar bazadan butunlay o'chiriladi.
-                Hisob raqamining o'zi qoladi — keyingi sync'da yana ma'lumot olib keladi (qoldiq tiklanadi).
-                Match qilingan to'lov bog'lanishlari (Payment) ham birga o'chadi.
+                <b>{t('warningTitle')}</b> {t('warningBody')}
               </div>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                Hisob raqami (20 belgi) <span className="text-rose-500">*</span>
+                {t('accountLabel')} <span className="text-rose-500">*</span>
               </Label>
               <Input
                 value={accountNo}
@@ -91,17 +95,17 @@ export default function CleanupPage() {
                 disabled={!isSuperAdmin}
                 className="font-mono"
               />
-              <div className="text-[10px] text-slate-500">{accountNo.length} / 20 raqam</div>
+              <div className="text-[10px] text-slate-500">{t('accountCount', { n: accountNo.length })}</div>
             </div>
 
             <div className="space-y-1.5">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                Tasdiqlash — yuqoridagi hisob raqamini qayta yozing <span className="text-rose-500">*</span>
+                {t('confirmLabel')} <span className="text-rose-500">*</span>
               </Label>
               <Input
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 20))}
-                placeholder="Hisob raqamini takror kiriting"
+                placeholder={t('confirmPlaceholder')}
                 maxLength={20}
                 disabled={!isSuperAdmin || accountNo.trim().length < 20}
                 className={cn(
@@ -111,23 +115,22 @@ export default function CleanupPage() {
                 )}
               />
               {confirm && confirm !== accountNo && (
-                <div className="text-[10px] text-rose-600">Tasdiq matni hisob raqamiga teng emas</div>
+                <div className="text-[10px] text-rose-600">{t('confirmMismatch')}</div>
               )}
             </div>
 
             <Button
               onClick={() => {
-                if (!confirm.startsWith) return;
-                if (!window.confirm(`Rostdan ham ${accountNo} hisob raqamiga oid barcha tranzaksiyalarni o'chirasizmi?`)) return;
+                if (!window.confirm(t('confirmDialog', { accountNo }))) return;
                 mut.mutate();
               }}
               disabled={!isSuperAdmin || !canSubmit || mut.isPending}
               className="w-full h-11 rounded-xl font-semibold gap-2 bg-rose-600 hover:bg-rose-700 text-white"
             >
               {mut.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> O'chirilmoqda...</>
+                <><Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}</>
               ) : (
-                <><Trash2 className="h-4 w-4" /> Tranzaksiyalarni o'chirish</>
+                <><Trash2 className="h-4 w-4" /> {t('submit')}</>
               )}
             </Button>
 
@@ -135,11 +138,11 @@ export default function CleanupPage() {
               <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3">
                 <div className="flex items-center gap-2 text-[12px] font-semibold text-emerald-900">
                   <Database className="h-4 w-4 text-emerald-600" />
-                  Natija
+                  {t('resultTitle')}
                 </div>
                 <div className="text-[11px] text-emerald-800 mt-1.5 space-y-0.5">
-                  <div>• Hisob: <span className="font-mono">{lastResult.account?.accountNo}</span> — {lastResult.account?.ownerName || '—'}</div>
-                  <div>• O'chirilgan: <b>{lastResult.deleted}</b> ta tranzaksiya</div>
+                  <div>• {t('resultAccount')}: <span className="font-mono">{lastResult.account?.accountNo}</span> — {lastResult.account?.ownerName || '—'}</div>
+                  <div>• {t('resultDeleted')}: <b>{lastResult.deleted}</b></div>
                 </div>
               </div>
             )}

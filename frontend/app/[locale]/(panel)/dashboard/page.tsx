@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { useState, useMemo } from 'react';
 import {
@@ -26,6 +27,7 @@ const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06
 
 export default function DashboardPage() {
   const { locale } = useParams<{ locale: string }>();
+  const t = useTranslations('dashboard');
 
   const { data: accounts, isLoading: accLoading } = useQuery({
     queryKey: ['accounts'],
@@ -167,20 +169,24 @@ export default function DashboardPage() {
   return (
     <>
       <Topbar
-        title="Dashboard"
-        subtitle={`${totalAccounts} hisob · ${banksCount} bank · oxirgi yangilanish: ${(accounts?.items?.[0]?.lastSyncedAt) ? formatDateTime(accounts.items[0].lastSyncedAt) : '—'}`}
+        title={t('title')}
+        subtitle={t('subtitle', {
+          accounts: totalAccounts,
+          banks: banksCount,
+          lastSync: (accounts?.items?.[0]?.lastSyncedAt) ? formatDateTime(accounts.items[0].lastSyncedAt) : '—',
+        })}
       />
 
       <div className="flex-1 px-6 py-5 space-y-4 w-full">
 
         {/* ═══ KPI STRIP — Enterprise dense ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <DataTile label="Jami qoldiq" value={formatMoney(totalBalance).replace(' UZS', '')} unit="UZS" tone="primary" loading={accLoading} />
-          <DataTile label="Hisoblar" value={String(totalAccounts)} unit="ta" />
-          <DataTile label="Banklar" value={String(banksCount)} unit="ta" />
-          <DataTile label="Kirim · 30 kun" value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />
-          <DataTile label="Chiqim · 30 kun" value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
-          <DataTile label="Tranzaksiya · 30 kun" value={String(txnCount)} unit="ta" />
+          <DataTile label={t('totalBalance')} value={formatMoney(totalBalance).replace(' UZS', '')} unit="UZS" tone="primary" loading={accLoading} />
+          <DataTile label={t('accountsLabel')} value={String(totalAccounts)} />
+          <DataTile label={t('banksLabel')} value={String(banksCount)} />
+          <DataTile label={t('inflow30')} value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />
+          <DataTile label={t('outflow30')} value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
+          <DataTile label={t('txn30')} value={String(txnCount)} />
         </div>
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
@@ -188,7 +194,7 @@ export default function DashboardPage() {
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Kunma-kun kirim/chiqim</div>
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('dailyChart')}</div>
               <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -198,10 +204,10 @@ export default function DashboardPage() {
                 onValueChange={(v) => { setChartBankId(v); setChartAccountId('all'); }}
               >
                 <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white border-slate-200">
-                  <SelectValue placeholder="Hamma banklar" />
+                  <SelectValue placeholder={t('allBanks')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Hamma banklar</SelectItem>
+                  <SelectItem value="all">{t('allBanks')}</SelectItem>
                   {sortedChartBanks.filter((b: any) => b.isActive).map((b: any) => (
                     <SelectItem key={b.id} value={b.id}>
                       <span className="flex items-center gap-1.5">
@@ -215,7 +221,7 @@ export default function DashboardPage() {
                   ))}
                   {sortedChartBanks.filter((b: any) => !b.isActive).length > 0 && (
                     <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
-                      Aktiv emas
+                      {t('inactiveBanks')}
                     </div>
                   )}
                   {sortedChartBanks.filter((b: any) => !b.isActive).map((b: any) => (
@@ -227,7 +233,7 @@ export default function DashboardPage() {
               {/* Hisob filtri — qidiruv bilan */}
               <Select value={chartAccountId} onValueChange={setChartAccountId}>
                 <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
-                  <SelectValue placeholder="Hamma hisoblar" />
+                  <SelectValue placeholder={t('allAccounts')} />
                 </SelectTrigger>
                 <SelectContent>
                   <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
@@ -235,13 +241,13 @@ export default function DashboardPage() {
                       value={accSearch}
                       onChange={(e) => setAccSearch(e.target.value)}
                       onKeyDown={(e) => e.stopPropagation()}
-                      placeholder="Hisob raqami yoki egasi..."
+                      placeholder={t('accountSearch')}
                       className="h-8 text-[11px]"
                     />
                   </div>
-                  <SelectItem value="all">Hamma hisoblar</SelectItem>
+                  <SelectItem value="all">{t('allAccounts')}</SelectItem>
                   {chartAccounts.length === 0 ? (
-                    <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
+                    <div className="px-3 py-2 text-[11px] text-slate-400">{t('notFound')}</div>
                   ) : (
                     chartAccounts.slice(0, 100).map((a: any) => (
                       <SelectItem key={a.id} value={a.id}>
@@ -254,10 +260,10 @@ export default function DashboardPage() {
 
               {/* Sana oralig'i presetlari */}
               <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
-                <RangeBtn active={range === 'today'} onClick={() => setRange('today')}>Bugun</RangeBtn>
-                <RangeBtn active={range === '7d'} onClick={() => setRange('7d')}>7 kun</RangeBtn>
-                <RangeBtn active={range === '30d'} onClick={() => setRange('30d')}>30 kun</RangeBtn>
-                <RangeBtn active={range === 'custom'} onClick={() => setRange('custom')}>Sana</RangeBtn>
+                <RangeBtn active={range === 'today'} onClick={() => setRange('today')}>{t('rangeToday')}</RangeBtn>
+                <RangeBtn active={range === '7d'} onClick={() => setRange('7d')}>{t('range7d')}</RangeBtn>
+                <RangeBtn active={range === '30d'} onClick={() => setRange('30d')}>{t('range30d')}</RangeBtn>
+                <RangeBtn active={range === 'custom'} onClick={() => setRange('custom')}>{t('rangeCustom')}</RangeBtn>
               </div>
 
               {/* Custom sana oralig'i */}
@@ -287,20 +293,20 @@ export default function DashboardPage() {
             <div className="flex items-center gap-5 mb-3 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Kirim</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalIn')}</span>
                 <span className="text-[13px] font-bold tabular-nums text-emerald-700">
                   {formatMoney(Number(daily?.totalIn || 0)).replace(' UZS', '')}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Chiqim</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOut')}</span>
                 <span className="text-[13px] font-bold tabular-nums text-rose-700">
                   {formatMoney(Number(daily?.totalOut || 0)).replace(' UZS', '')}
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Sof oqim</span>
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlow')}</span>
                 <span className={cn(
                   "text-[13px] font-bold tabular-nums",
                   Number(daily?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700",
@@ -313,7 +319,7 @@ export default function DashboardPage() {
             {/* Grafik */}
             {range === 'custom' && (!customFrom || !customTo) ? (
               <div className="h-[260px] grid place-items-center text-xs text-slate-400">
-                Sana oralig'ini tanlang
+                {t('selectDateRange')}
               </div>
             ) : dailyLoading ? (
               <Skeleton className="h-[260px] w-full" />
@@ -326,7 +332,7 @@ export default function DashboardPage() {
               <details className="group mt-3 pt-3 border-t border-slate-100">
                 <summary className="cursor-pointer select-none flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-slate-900">
                   <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                  Kunma-kun ustunli grafik — kirim / chiqim / tranzaksiya soni
+                  {t('barChart')}
                 </summary>
                 <div className="mt-3">
                   <DailyBarChart data={barData} height={280} />
@@ -344,24 +350,24 @@ export default function DashboardPage() {
 
             {/* Top accounts table */}
             <DataPanel
-              title="Eng katta hisoblar"
+              title={t('topAccounts')}
               count={totalAccounts}
               collapsible
             >
               {accLoading ? (
                 <div className="p-4 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
               ) : totalAccounts === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">Hisoblar yo'q</div>
+                <div className="p-8 text-center text-xs text-slate-500">{t('noAccounts')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
-                        <th className="text-left px-3 py-2">Bank · Hisob raqami</th>
-                        <th className="text-left px-3 py-2 w-24">MFO</th>
-                        <th className="text-right px-3 py-2 w-32">Qoldiq</th>
-                        <th className="text-left px-3 py-2 w-20">Status</th>
-                        <th className="text-left px-3 py-2 w-32">Oxirgi sync</th>
+                        <th className="text-left px-3 py-2">{t('bankAccountHeader')}</th>
+                        <th className="text-left px-3 py-2 w-24">{t('mfo')}</th>
+                        <th className="text-right px-3 py-2 w-32">{t('balanceHeader')}</th>
+                        <th className="text-left px-3 py-2 w-20">{t('statusHeader')}</th>
+                        <th className="text-left px-3 py-2 w-32">{t('lastSyncHeader')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -416,17 +422,17 @@ export default function DashboardPage() {
           <div className="lg:col-span-4 space-y-4">
 
             {/* Sync status */}
-            <DataPanel title="Sync holati" subtitle="oxirgi 10 ta operatsiya" collapsible>
+            <DataPanel title={t('syncStatus')} subtitle={t('syncLast10')} collapsible>
               <div className="px-4 py-3 space-y-3">
                 {/* Big % */}
                 <div className="flex items-end justify-between">
                   <div>
                     <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">{syncStats.successRate}%</div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Muvaffaqiyat</div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('successRate')}</div>
                   </div>
                   <Link href={`/${locale}/admin/sync-logs`}>
                     <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
-                      Tafsilot <ChevronRight className="h-3 w-3" />
+                      {t('details')} <ChevronRight className="h-3 w-3" />
                     </button>
                   </Link>
                 </div>
@@ -441,18 +447,18 @@ export default function DashboardPage() {
 
                 {/* Counts */}
                 <div className="grid grid-cols-4 gap-2 text-center pt-1">
-                  <Mini label="OK" value={syncStats.success} tone="emerald" />
-                  <Mini label="Qisman" value={syncStats.partial} tone="amber" />
-                  <Mini label="Xato" value={syncStats.failed} tone="rose" />
-                  <Mini label="Run" value={syncStats.running} tone="blue" />
+                  <Mini label={t('syncOk')} value={syncStats.success} tone="emerald" />
+                  <Mini label={t('syncPartial')} value={syncStats.partial} tone="amber" />
+                  <Mini label={t('syncError')} value={syncStats.failed} tone="rose" />
+                  <Mini label={t('syncRunning')} value={syncStats.running} tone="blue" />
                 </div>
               </div>
             </DataPanel>
 
             {/* Banks breakdown */}
-            <DataPanel title="Banklar bo'yicha taqsimot" subtitle={`${byBank.length} ta bank`} collapsible>
+            <DataPanel title={t('banksBreakdown')} subtitle={t('banksCount', { n: byBank.length })} collapsible>
               {byBank.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">Banklar yo'q</div>
+                <div className="p-8 text-center text-xs text-slate-500">{t('noBanks')}</div>
               ) : (
                 <div className="divide-y divide-slate-100">
                   {byBank.map((b) => {
@@ -463,7 +469,7 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
                             <span className="text-[12px] font-semibold text-slate-900 truncate">{b.name}</span>
-                            <span className="text-[10px] text-slate-500 shrink-0">{b.accounts} hsb</span>
+                            <span className="text-[10px] text-slate-500 shrink-0">{b.accounts} {t('accountsShort')}</span>
                           </div>
                           <span className="text-[11px] font-bold tabular-nums text-slate-700">{pct.toFixed(1)}%</span>
                         </div>
@@ -484,7 +490,7 @@ export default function DashboardPage() {
 
             {/* Recent failures alerts */}
             {syncStats.failed > 0 && (
-              <DataPanel title="Diqqat" subtitle={`${syncStats.failed} ta sync xatosi`} tone="warning">
+              <DataPanel title={t('attention')} subtitle={t('syncErrors', { n: syncStats.failed })} tone="warning">
                 <div className="divide-y divide-slate-100">
                   {(syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 3).map((l) => (
                     <Link key={l.id} href={`/${locale}/admin/sync-logs`} className="block">
@@ -505,7 +511,7 @@ export default function DashboardPage() {
             )}
 
             {/* Net flow widget */}
-            <DataPanel title="Sof pul oqimi · 30 kun" collapsible>
+            <DataPanel title={t('netFlow30')} collapsible>
               <div className="px-4 py-3">
                 <div className={cn(
                   "text-3xl font-bold tabular-nums tracking-tight",
@@ -516,11 +522,11 @@ export default function DashboardPage() {
                 <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mt-0.5">UZS</div>
                 <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
                   <div className="rounded bg-emerald-50 border border-emerald-200 px-2 py-1.5">
-                    <div className="text-[9px] uppercase tracking-wider text-emerald-700 font-bold">Kirim</div>
+                    <div className="text-[9px] uppercase tracking-wider text-emerald-700 font-bold">{t('totalIn')}</div>
                     <div className="font-semibold tabular-nums text-emerald-900">{formatMoney(inSum).replace(' UZS', '')}</div>
                   </div>
                   <div className="rounded bg-rose-50 border border-rose-200 px-2 py-1.5">
-                    <div className="text-[9px] uppercase tracking-wider text-rose-700 font-bold">Chiqim</div>
+                    <div className="text-[9px] uppercase tracking-wider text-rose-700 font-bold">{t('totalOut')}</div>
                     <div className="font-semibold tabular-nums text-rose-900">{formatMoney(outSum).replace(' UZS', '')}</div>
                   </div>
                 </div>
