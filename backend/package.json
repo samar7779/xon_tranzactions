@@ -38,6 +38,7 @@
     "date-fns": "^3.0.6",
     "exceljs": "^4.4.0",
     "https-proxy-agent": "^7.0.5",
+    "mysql2": "^3.11.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.1.13",

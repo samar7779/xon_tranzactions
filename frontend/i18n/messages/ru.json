@@ -499,7 +499,10 @@
     "installmentMonths": "{n} мес.",
     "balance": "Остаток",
     "rate": "Курс",
-    "schedule36": "График на {n} мес."
+    "schedule36": "График на {n} мес.",
+    "passportIssuedBy": "Кем выдан паспорт",
+    "passportIssuedDate": "Дата выдачи",
+    "passportExpiry": "Срок действия"
   },
   "statement": {
     "title": "Выписка",

@@ -499,7 +499,10 @@
     "installmentMonths": "{n} oy",
     "balance": "Qoldiq",
     "rate": "Kurs",
-    "schedule36": "{n} oyga jadval"
+    "schedule36": "{n} oyga jadval",
+    "passportIssuedBy": "Pasport kim tomonidan",
+    "passportIssuedDate": "Pasport berilgan",
+    "passportExpiry": "Pasport muddati"
   },
   "statement": {
     "title": "Vipiska",

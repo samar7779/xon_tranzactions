@@ -1,12 +1,46 @@
 import { Injectable, Logger } from '@nestjs/common';
+import * as mysql from 'mysql2/promise';
 
 const XONSAROY_BASE_URL = process.env.XONSAROY_API_URL || 'https://app-api.xonsaroy.uz/api/v4/client/order';
 const XONSAROY_KEY = process.env.XONSAROY_API_KEY || 'G0C2kwSk3e3AnEZUMJhq067ZM5s9Wkuc';
 const XONSAROY_SECRET = process.env.XONSAROY_API_SECRET || 'w1qBTE76Y4PKsbLeLjd2gt8UDDSHYJl0';
 
+// XonSaroy MySQL (xonappuz_crm) — bot bilan bir xil baza.
+// To'liq client ma'lumotlari (telefon, pasport, manzil) shu yerdan keladi.
+// Agar ulanish iloji bo'lmasa, faqat API'dan keladigan F.I.O. ko'rsatiladi.
+const MYSQL_HOST = process.env.XONAPP_MYSQL_HOST || 'localhost';
+const MYSQL_PORT = Number(process.env.XONAPP_MYSQL_PORT || 3306);
+const MYSQL_USER = process.env.XONAPP_MYSQL_USER || '';
+const MYSQL_PASSWORD = process.env.XONAPP_MYSQL_PASSWORD || '';
+const MYSQL_DATABASE = process.env.XONAPP_MYSQL_DB || 'xonappuz_crm';
+const MYSQL_ENABLED = !!(MYSQL_USER && MYSQL_PASSWORD);
+
 @Injectable()
 export class CrmService {
   private readonly log = new Logger(CrmService.name);
+  private pool: mysql.Pool | null = null;
+
+  private getPool(): mysql.Pool | null {
+    if (!MYSQL_ENABLED) return null;
+    if (this.pool) return this.pool;
+    try {
+      this.pool = mysql.createPool({
+        host: MYSQL_HOST,
+        port: MYSQL_PORT,
+        user: MYSQL_USER,
+        password: MYSQL_PASSWORD,
+        database: MYSQL_DATABASE,
+        charset: 'utf8mb4',
+        waitForConnections: true,
+        connectionLimit: 5,
+        connectTimeout: 5000,
+      });
+      return this.pool;
+    } catch (e: any) {
+      this.log.warn(`MySQL pool yaratishda xato: ${e?.message}`);
+      return null;
+    }
+  }
 
   private auth() {
     return 'Basic ' + Buffer.from(`${XONSAROY_KEY}:${XONSAROY_SECRET}`).toString('base64');
@@ -48,6 +82,55 @@ export class CrmService {
   }
 
   /**
+   * MySQL'dan to'liq client ma'lumotlarini olish — telefon, pasport, manzil va h.k.
+   * Agar baza ulanmasa yoki yozuv topilmasa — null qaytaradi.
+   */
+  private async fetchClientExtras(contractNumber: string): Promise<Record<string, any> | null> {
+    const pool = this.getPool();
+    if (!pool) return null;
+    try {
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT
+           date_of_birth, passport_series, passport_issued_by,
+           passport_issued_date, passport_expiry_date,
+           address_line, phone_primary, phone_secondary,
+           floor, entrance, apartment_number, object_name,
+           full_name_lotin, full_name_kirill
+         FROM contracts
+         WHERE contract_number = ? LIMIT 1`,
+        [contractNumber],
+      );
+      const row = (rows as any[])[0];
+      if (!row) return null;
+      // null/0000-00-00 sanalarni tozalaymiz
+      const clean = (v: any) => {
+        if (v == null) return undefined;
+        if (typeof v === 'string' && (v.startsWith('0000-00-00') || v.trim() === '')) return undefined;
+        return v;
+      };
+      return {
+        date_of_birth: clean(row.date_of_birth),
+        passport_series: clean(row.passport_series),
+        passport_issued_by: clean(row.passport_issued_by),
+        passport_issued_date: clean(row.passport_issued_date),
+        passport_expiry_date: clean(row.passport_expiry_date),
+        address_line: clean(row.address_line),
+        phone_primary: clean(row.phone_primary),
+        phone_secondary: clean(row.phone_secondary),
+        floor: clean(row.floor),
+        entrance: clean(row.entrance),
+        apartment_number: clean(row.apartment_number),
+        object_name: clean(row.object_name),
+        full_name_lotin: clean(row.full_name_lotin),
+        full_name_kirill: clean(row.full_name_kirill),
+      };
+    } catch (e: any) {
+      this.log.warn(`MySQL fetchClientExtras xato (${contractNumber}): ${e?.message}`);
+      return null;
+    }
+  }
+
+  /**
    * Shartnoma raqami bo'yicha qidiruv — XonSaroy CRM'dan ro'yxat keladi.
    */
   async search(contractNumber: string, perPage = 20) {
@@ -60,6 +143,8 @@ export class CrmService {
 
   /**
    * Bitta shartnoma tafsilotini olish — to'liq schedule + payment history bilan.
+   * Agar MySQL ulanishi bo'lsa, client'ga qo'shimcha ma'lumotlar ham qo'shiladi
+   * (telefon, pasport, manzil va h.k.).
    */
   async show(opts: { contract?: string; id?: string | number }) {
     if (!opts.contract && !opts.id) return { ok: false, error: 'contract yoki id kerak' };
@@ -68,6 +153,16 @@ export class CrmService {
     else body.id = opts.id;
     const r = await this.call('/show', body);
     if (!r.ok) return r;
-    return { ok: true, detail: r.data?.data || null };
+    const detail: any = r.data?.data || null;
+
+    // MySQL'dan qo'shimcha client ma'lumotlarini olishga urinish
+    const contractNo = (opts.contract || detail?.contract || '').toString().trim();
+    if (detail && contractNo) {
+      const extras = await this.fetchClientExtras(contractNo);
+      if (extras) {
+        detail.client = { ...(detail.client || {}), ...extras };
+      }
+    }
+    return { ok: true, detail };
   }
 }
