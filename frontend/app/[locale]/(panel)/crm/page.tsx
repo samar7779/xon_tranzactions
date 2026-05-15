@@ -6,9 +6,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search, Loader2, BookUser, Home, Building2, User, Calendar,
-  Wallet, FileText, CheckCircle2, AlertCircle, Clock, X, History,
+  FileText, CheckCircle2, AlertCircle, Clock, X, History,
   CreditCard, Phone, MapPin, Hash, BookOpen, ChevronRight, ChevronDown,
-  Receipt, Sparkles, Banknote, Tag, ArrowRight, CornerDownLeft,
+  Sparkles, Banknote, Tag, CornerDownLeft,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -809,29 +809,6 @@ function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
       <span className="text-slate-400">{icon}</span>
       {label}
     </span>
-  );
-}
-
-function MoneyTileLight({
-  label, value, gradient, mute,
-}: {
-  label: string;
-  value: string;
-  gradient: string;
-  mute?: boolean;
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className={cn('w-1.5 h-4 rounded-full bg-gradient-to-b', gradient)} />
-        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
-      </div>
-      <div className={cn(
-        'text-lg font-black tabular-nums tracking-tight truncate',
-        mute ? 'text-slate-400' : 'bg-gradient-to-br bg-clip-text text-transparent',
-        !mute && gradient,
-      )}>{value}</div>
-    </div>
   );
 }
 
