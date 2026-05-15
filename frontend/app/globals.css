@@ -320,6 +320,18 @@
     100% { background-position: -200% 50%; }
   }
   .showcase-text-shimmer { animation: showcase-text-shimmer 6s linear infinite; }
+
+  /* Bell shake — qo'ng'iroq bosilganda silkinish */
+  @keyframes showcase-bell-shake {
+    0%, 100% { transform: rotate(0deg); }
+    15%      { transform: rotate(-20deg); }
+    30%      { transform: rotate(18deg); }
+    45%      { transform: rotate(-14deg); }
+    60%      { transform: rotate(10deg); }
+    75%      { transform: rotate(-6deg); }
+    90%      { transform: rotate(3deg); }
+  }
+  .showcase-bell-shake { animation: showcase-bell-shake 0.7s ease-in-out; transform-origin: top center; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
