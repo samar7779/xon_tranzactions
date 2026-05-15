@@ -2,7 +2,6 @@
 
 import Image from 'next/image';
 import { useEffect, useState } from 'react';
-import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
  * Showcase — pro level hero composition.
@@ -46,61 +45,25 @@ export default function ShowcasePage() {
       <BackgroundNetwork />
       <ConstellationBottom />
 
-      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-4 pb-2">
+      {/* Floating Storyset SVG scenes — pastki-chap va pastki-o'ngda dekoratsiya */}
+      <div className="pointer-events-none absolute left-[1%] bottom-[6%] w-[230px] h-[230px] opacity-90 showcase-coin-float"
+           style={{ animationDelay: '0.8s', zIndex: 5 }}>
+        <div className="absolute inset-0 bg-cyan-400/15 blur-3xl rounded-full -z-10" />
+        <Image src="/showcase-tx.svg" alt="" width={230} height={230} className="w-full h-auto drop-shadow-[0_8px_30px_rgba(34,211,238,0.25)]" />
+      </div>
+      <div className="pointer-events-none absolute right-[1%] bottom-[6%] w-[230px] h-[230px] opacity-90 showcase-coin-float"
+           style={{ animationDelay: '1.4s', zIndex: 5 }}>
+        <div className="absolute inset-0 bg-amber-400/15 blur-3xl rounded-full -z-10" />
+        <Image src="/showcase-analytics.svg" alt="" width={230} height={230} className="w-full h-auto drop-shadow-[0_8px_30px_rgba(245,158,11,0.25)]" />
+      </div>
 
-        {/* LIVE pill */}
-        <div className="showcase-fade-up inline-flex items-center gap-2 px-3 py-1 rounded-full
-                        bg-emerald-500/10 ring-1 ring-emerald-400/30 text-emerald-300
-                        text-[10px] font-semibold tracking-[0.2em] uppercase mb-3">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-80" />
-            <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-400" />
-          </span>
-          Live · Real-time sync
-        </div>
-
-        {/* Brand logo — yangi efekt: sonar pulse ringlar + gold mist */}
-        <div className="relative w-[260px] h-[200px] showcase-fade-up" style={{ animationDelay: '0.1s' }}>
-          {/* Sonar pulse ringlar (logo'dan tashqariga tarqaladigan) */}
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                           w-[120px] h-[120px] rounded-full border border-amber-300/50 showcase-sonar pointer-events-none" />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                           w-[120px] h-[120px] rounded-full border border-amber-300/40 showcase-sonar pointer-events-none"
-                style={{ animationDelay: '1s' }} />
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
-                           w-[120px] h-[120px] rounded-full border border-amber-300/30 showcase-sonar pointer-events-none"
-                style={{ animationDelay: '2s' }} />
-
-          {/* Gold breathing glow */}
-          <div className="absolute inset-0 -inset-x-12 bg-amber-400/25 blur-3xl rounded-full -z-10 showcase-breathe pointer-events-none" />
-
-          {/* Logo */}
-          <div className="absolute inset-0 grid place-items-center">
-            <XonSaroyLogo size={220} priority />
-          </div>
-
-          {/* Gold mist particles — yuqoriga uchadi */}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <span
-              key={i}
-              className="absolute rounded-full bg-amber-300/60 showcase-particle pointer-events-none"
-              style={{
-                left: `${20 + (i * 8) % 60}%`,
-                bottom: `${(i * 13) % 20}%`,
-                width: i % 2 === 0 ? 2.5 : 1.5,
-                height: i % 2 === 0 ? 2.5 : 1.5,
-                animationDelay: `${(i * 0.6) % 5}s`,
-                boxShadow: '0 0 8px rgba(251,191,36,0.9)',
-              }}
-            />
-          ))}
-        </div>
+      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-6 pb-2">
 
         {/* Title */}
-        <h1 className="mt-2 text-[34px] sm:text-[44px] lg:text-[52px] font-bold tracking-[-0.025em] text-center leading-[0.95]
+        <h1 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-[-0.025em] text-center leading-[0.95]
                        bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent
                        drop-shadow-[0_2px_14px_rgba(245,158,11,0.5)] showcase-fade-up"
-            style={{ animationDelay: '0.2s' }}>
+            style={{ animationDelay: '0.1s' }}>
           XON SAROY TRANSACTIONS
         </h1>
 
@@ -108,11 +71,11 @@ export default function ShowcasePage() {
         <div className="relative flex-1 w-full max-w-[1200px] mx-auto mt-3"
              style={{ perspective: '1900px' }}>
 
-          {/* Floating coins */}
+          {/* Floating coins (2 ta — logoli) */}
           <Coin sym="€" pos="top-[2%]  left-[34%]"   size="md" bg="from-blue-500 to-blue-800"   delay="1.2s" />
-          <Coin sym="£" pos="top-[12%] left-[22%]"   size="sm" bg="from-amber-300 to-amber-600" delay="2.4s" />
+          <LogoCoin pos="top-[12%] left-[22%]"   size="sm" delay="2.4s" />
           <Coin sym="$" pos="top-[26%] right-[1%]"   size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
-          <Coin sym="£" pos="bottom-[8%] right-[36%]" size="md" bg="from-amber-300 to-amber-600" delay="1.8s" />
+          <LogoCoin pos="bottom-[8%] right-[36%]" size="md" delay="1.8s" />
           <Coin sym="€" pos="bottom-[2%] left-[24%]"  size="sm" bg="from-slate-100 to-slate-300" delay="3s"   gold />
 
           {/* Bank live cards — CHAP TOMON (real-time transaction stream) */}
@@ -170,10 +133,7 @@ export default function ShowcasePage() {
 
                 {/* Topbar */}
                 <div className="flex items-center gap-2 px-5 pt-3.5 pb-3 border-b border-white/5">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center
-                                  shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-2px_rgba(245,158,11,0.5)]">
-                    <span className="text-[10px] font-black text-slate-900">XS</span>
-                  </div>
+                  <LogoDisc size={32} rounded="rounded-xl" />
                   <span className="text-[12px] font-semibold">Dashboard</span>
                   <div className="flex-1" />
                   <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-white/[0.04] ring-1 ring-white/8
@@ -182,7 +142,7 @@ export default function ShowcasePage() {
                   </div>
                   <NotifPill count={3} color="amber" />
                   <NotifPill count={2} color="cyan" />
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 ring-2 ring-white/20" />
+                  <LogoDisc size={32} rounded="rounded-full" />
                 </div>
 
                 <div className="grid grid-cols-12 gap-3 p-4">
@@ -273,8 +233,7 @@ export default function ShowcasePage() {
                                     ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden">
                       <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
                       <div className="relative flex items-center justify-between">
-                        <div className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-400 to-amber-600
-                                        shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]" />
+                        <LogoDisc size={28} rounded="rounded-full" />
                         <div className="text-[11px] font-semibold text-slate-600">Credit</div>
                       </div>
                       <div className="relative mt-3 font-mono text-[13px] tracking-wider text-slate-800">
@@ -320,6 +279,36 @@ function Coin({ sym, pos, size, bg, delay, gold }: {
                        shadow-[0_12px_28px_-4px_rgba(0,0,0,0.7),inset_0_2px_0_rgba(255,255,255,0.4)]`}>
         {sym}
       </div>
+    </div>
+  );
+}
+
+/* ─── Logo coin (XON SAROY logoli dumaloq token) ─── */
+function LogoCoin({ pos, size, delay }: { pos: string; size: 'sm' | 'md'; delay: string }) {
+  return (
+    <div className={`absolute ${pos} showcase-coin-float pointer-events-none z-20`}
+         style={{ animationDelay: delay }}>
+      <div className={`${size === 'sm' ? 'w-11 h-11 p-2' : 'w-14 h-14 p-2.5'}
+                       rounded-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900
+                       grid place-items-center ring-2 ring-amber-400/40
+                       shadow-[0_12px_28px_-4px_rgba(245,158,11,0.5),inset_0_2px_0_rgba(255,255,255,0.15)]`}>
+        <Image src="/xon-saroy-logo.png" alt="" width={48} height={48}
+               className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.7)]" />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Logo disc (mini logo for chip/avatar slots) ─── */
+function LogoDisc({ size, rounded }: { size: number; rounded: string }) {
+  return (
+    <div className={`${rounded} grid place-items-center shrink-0
+                     bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900
+                     ring-1 ring-amber-400/40
+                     shadow-[inset_0_1px_0_rgba(255,255,255,0.15),0_4px_12px_-2px_rgba(245,158,11,0.45)]`}
+         style={{ width: size, height: size, padding: size * 0.18 }}>
+      <Image src="/xon-saroy-logo.png" alt="" width={size} height={size}
+             className="w-full h-full object-contain drop-shadow-[0_0_4px_rgba(245,158,11,0.6)]" />
     </div>
   );
 }
