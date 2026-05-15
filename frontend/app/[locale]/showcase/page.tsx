@@ -1,23 +1,29 @@
 'use client';
 
 import Image from 'next/image';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
- * Showcase — marketing hero (soliqservis uslubida).
- * Chap: matn + CTA. O'ng: haqiqiy 3D rendering ikonalar (3dicons.co) + dotted flow + mouse parallax.
+ * Showcase — soliqservis uslubidagi 3D-style kompozitsiya:
+ * platform + 2 telefon + laptop + markazda XON SAROY seal +
+ * 3 floating cloud card + gold dotted flow lines.
  */
 export default function ShowcasePage() {
-  const [tilt, setTilt] = useState({ x: 0, y: 0 });
+  const [bal, setBal] = useState(0);
 
-  function onMove(e: React.MouseEvent<HTMLDivElement>) {
-    const r = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
-    const y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
-    setTilt({ x, y });
-  }
-  function onLeave() { setTilt({ x: 0, y: 0 }); }
+  useEffect(() => {
+    const target = 12_504_500;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / 2200);
+      setBal(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden text-white
@@ -99,160 +105,317 @@ export default function ShowcasePage() {
           </div>
         </div>
 
-        {/* O'NG — 3D ikonalar kompozitsiyasi */}
-        <div
-          className="relative flex items-center justify-center"
-          onMouseMove={onMove}
-          onMouseLeave={onLeave}
-        >
-          {/* Aylanma glow halo */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full
-                          bg-[radial-gradient(circle,rgba(251,191,36,0.20)_0%,rgba(99,102,241,0.12)_45%,transparent_70%)]
-                          showcase-light-pulse pointer-events-none" />
+        {/* O'NG — soliqservis-uslubidagi kompozitsiya */}
+        <div className="relative flex items-end justify-center pb-6">
+          {/* Cloud cards yuqorida */}
+          <CloudCard pos="top-[2%]  left-[8%]"  icon={<PercentIcon />}  color="amber" delay="0.4s" />
+          <CloudCard pos="top-[-3%] left-[42%]" icon={<ClockIcon />}    color="blue"  delay="0.6s" big />
+          <CloudCard pos="top-[6%]  right-[5%]" icon={<LockPenIcon />}  color="blue"  delay="0.8s" />
 
-          {/* Orbital halqalar */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full
-                          border border-amber-300/15 showcase-orbit-cw pointer-events-none" />
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[460px] h-[460px] rounded-full
-                          border border-white/10 showcase-orbit-ccw pointer-events-none" />
-
-          {/* Dotted gold flow lines */}
+          {/* Dotted gold flow lines — cloud'larni platformaga ulaydi */}
           <FlowLines />
 
-          {/* 3D ikonalar — turli o'lcham, turli pozitsiya, turli kechikish */}
-          <Icon3D src="/3d/moneybag-400.webp" size={220} pos="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" delay="0s"   tilt={tilt} strength={1.0} z={20} />
-          <Icon3D src="/3d/dollar-400.webp"   size={120} pos="top-[6%]  left-[14%]"  delay="0.2s" tilt={tilt} strength={1.4} z={15} />
-          <Icon3D src="/3d/card-400.webp"     size={140} pos="top-[3%]  right-[10%]" delay="0.4s" tilt={tilt} strength={1.3} z={15} />
-          <Icon3D src="/3d/chart-400.webp"    size={130} pos="bottom-[12%] left-[6%]" delay="0.6s" tilt={tilt} strength={1.2} z={15} />
-          <Icon3D src="/3d/shield-400.webp"   size={120} pos="bottom-[6%] right-[14%]" delay="0.8s" tilt={tilt} strength={1.3} z={15} />
-          <Icon3D src="/3d/wallet-400.webp"   size={90}  pos="top-[42%] right-[2%]"  delay="1.0s" tilt={tilt} strength={1.5} z={14} />
-          <Icon3D src="/3d/lock-400.webp"     size={70}  pos="top-[40%] left-[2%]"   delay="1.2s" tilt={tilt} strength={1.5} z={14} />
-          <Icon3D src="/3d/star-400.webp"     size={60}  pos="top-[20%] left-[44%]"  delay="1.4s" tilt={tilt} strength={1.6} z={14} />
-          <Icon3D src="/3d/trophy-400.webp"   size={70}  pos="bottom-[28%] right-[36%]" delay="1.6s" tilt={tilt} strength={1.6} z={14} />
+          {/* Floating yellow arrow (chap) */}
+          <div className="absolute top-[34%] left-[2%] showcase-coin-float pointer-events-none"
+               style={{ animationDelay: '0.5s' }}>
+            <svg width="60" height="80" viewBox="0 0 60 80">
+              <defs>
+                <linearGradient id="arr-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fde68a" />
+                  <stop offset="100%" stopColor="#d97706" />
+                </linearGradient>
+              </defs>
+              <path d="M 20 5 L 50 35 L 35 35 L 35 75 L 5 75 L 5 35 L -10 35 Z"
+                    fill="url(#arr-grad)"
+                    transform="rotate(-30 25 40)"
+                    style={{ filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.4))' }} />
+            </svg>
+          </div>
 
-          {/* UI cards floating — real ma'lumot bilan */}
-          <FloatCard pos="top-[4%] left-[35%]" delay="0.5s">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 grid place-items-center">
-                <TrendUp className="text-white" />
-              </div>
-              <div>
-                <div className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Today</div>
-                <div className="text-[11px] font-bold text-slate-900 tabular-nums">+12.5%</div>
-              </div>
+          {/* Floating gold "0" (o'ng) */}
+          <div className="absolute top-[38%] right-[2%] showcase-coin-float pointer-events-none"
+               style={{ animationDelay: '0.9s' }}>
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-300 to-amber-600
+                            ring-4 ring-amber-200/40
+                            shadow-[0_10px_30px_-4px_rgba(245,158,11,0.7),inset_0_2px_0_rgba(255,255,255,0.5)]
+                            grid place-items-center">
+              <div className="w-7 h-7 rounded-full ring-[3px] ring-amber-900/50" />
             </div>
-          </FloatCard>
+          </div>
 
-          <FloatCard pos="bottom-[2%] left-[26%]" delay="0.9s">
-            <div className="flex items-center gap-2 min-w-[160px]">
-              <div className="w-7 h-7 rounded-lg bg-white grid place-items-center overflow-hidden ring-1 ring-slate-200 shrink-0">
-                <Image src="/banks/kapital.webp" alt="K" width={18} height={18} className="object-contain" />
+          {/* Dot pattern circle (o'ng past) */}
+          <div className="absolute bottom-[18%] right-[-4%] w-24 h-24 opacity-50 pointer-events-none"
+               style={{
+                 backgroundImage: 'radial-gradient(circle, #fbbf24 1.5px, transparent 1.5px)',
+                 backgroundSize: '10px 10px',
+                 maskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
+                 WebkitMaskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
+               }} />
+
+          {/* PLATFORM (markaziy 3D ko'tarilgan asos) */}
+          <div className="relative w-full max-w-[600px] showcase-card-in" style={{ perspective: '1600px' }}>
+            <div className="relative" style={{ transform: 'rotateX(15deg)', transformStyle: 'preserve-3d' }}>
+              {/* Platform yuqori yuzasi */}
+              <div className="relative w-full h-[280px] rounded-[28px]
+                              bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900
+                              ring-1 ring-white/15
+                              shadow-[0_30px_80px_-15px_rgba(0,0,0,0.8)]
+                              overflow-hidden">
+                {/* Inner stars */}
+                <div className="absolute inset-0 opacity-50"
+                     style={{
+                       backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 0.6px, transparent 0.6px)',
+                       backgroundSize: '20px 20px',
+                     }} />
+                {/* Inner glow */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.25)_0%,transparent_70%)]" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-slate-800 truncate">ABU SAHIY MCHJ</div>
-                <div className="text-[8px] text-slate-500 tabular-nums">14:23</div>
-              </div>
-              <div className="text-[10px] font-bold text-emerald-600 tabular-nums">+18.5M</div>
+              {/* Platform yon yuzi (3D ko'tarilgan effekti) */}
+              <div className="absolute -bottom-3 left-2 right-2 h-3 rounded-b-[28px]
+                              bg-gradient-to-b from-slate-950 to-slate-900 ring-1 ring-white/5" />
             </div>
-          </FloatCard>
 
-          <FloatCard pos="bottom-[36%] right-[0%]" delay="1.1s">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center text-amber-900 font-black text-[11px]">$</div>
-              <div>
-                <div className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">USD/UZS</div>
-                <div className="text-[11px] font-bold text-slate-900 tabular-nums">12 478</div>
-              </div>
-              <span className="text-[9px] text-emerald-600 font-bold">+0.3%</span>
+            {/* Markazdagi XON SAROY seal — platforma ustida */}
+            <div className="absolute left-1/2 top-[68%] -translate-x-1/2 -translate-y-1/2 z-30 showcase-fade-up"
+                 style={{ animationDelay: '0.5s' }}>
+              <BrandSeal />
             </div>
-          </FloatCard>
 
-          {/* Particles */}
-          <Particles />
+            {/* Chap telefon */}
+            <div className="absolute left-[8%] bottom-[24%] z-20 showcase-tx-in"
+                 style={{ animationDelay: '0.7s' }}>
+              <PhoneLeft />
+            </div>
+
+            {/* O'ng telefon */}
+            <div className="absolute left-[22%] bottom-[34%] z-25 showcase-tx-in"
+                 style={{ animationDelay: '0.9s' }}>
+              <PhoneRight />
+            </div>
+
+            {/* Laptop o'ngda — ochiq holatda */}
+            <div className="absolute right-[2%] bottom-[10%] z-20 showcase-tx-in"
+                 style={{ animationDelay: '1.1s' }}>
+              <LaptopMock bal={bal} />
+            </div>
+          </div>
         </div>
       </main>
     </div>
   );
 }
 
-/* ─── 3D Icon (Parallax bilan) ─── */
-function Icon3D({
-  src, size, pos, delay, tilt, strength, z,
-}: {
-  src: string;
-  size: number;
-  pos: string;
-  delay: string;
-  tilt: { x: number; y: number };
-  strength: number;
-  z: number;
-}) {
-  const px = tilt.x * 18 * strength;
-  const py = tilt.y * 18 * strength;
+/* ─── XON SAROY seal (markaziy oltin emblem) ─── */
+function BrandSeal() {
   return (
-    <div
-      className={`absolute ${pos} showcase-coin-float pointer-events-none drop-shadow-[0_18px_36px_rgba(0,0,0,0.45)]`}
-      style={{
-        animationDelay: delay,
-        zIndex: z,
-        transform: `translate(${px}px, ${py}px)`,
-        transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
-      }}
-    >
-      <Image
-        src={src}
-        alt=""
-        width={size}
-        height={size}
-        priority
-        className="select-none"
-        draggable={false}
-        style={{ width: size, height: size }}
-      />
+    <div className="relative w-[140px] h-[140px]">
+      <div className="absolute inset-0 rounded-full bg-amber-400/30 blur-2xl -z-10" />
+      {/* Tashqi oltin ring */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200 via-amber-500 to-amber-800
+                      ring-2 ring-amber-300/50
+                      shadow-[0_15px_40px_-8px_rgba(245,158,11,0.8),inset_0_3px_0_rgba(255,255,255,0.5),inset_0_-3px_8px_rgba(0,0,0,0.25)]
+                      grid place-items-center">
+        <div className="w-[108px] h-[108px] rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-amber-500
+                        ring-1 ring-amber-900/20 grid place-items-center">
+          <XonSaroyLogo size={84} />
+        </div>
+      </div>
+      {/* Aylanuvchi yozuv */}
+      <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full showcase-rays-spin">
+        <defs>
+          <path id="seal-text-path" d="M 100 100 m -70 0 a 70 70 0 1 1 140 0 a 70 70 0 1 1 -140 0" />
+        </defs>
+        <text fontFamily="serif" fontSize="10" fontWeight="900" letterSpacing="4" fill="#78350f">
+          <textPath href="#seal-text-path" startOffset="0">
+            · XON SAROY · TREASURY · XON SAROY · TREASURY ·
+          </textPath>
+        </text>
+      </svg>
     </div>
   );
 }
 
-/* ─── Floating UI card ─── */
-function FloatCard({ pos, delay, children }: { pos: string; delay: string; children: React.ReactNode }) {
+/* ─── Cloud Card (3D cloud + icon yuqorida) ─── */
+function CloudCard({
+  pos, icon, color, delay, big,
+}: {
+  pos: string; icon: React.ReactNode; color: 'amber' | 'blue'; delay: string; big?: boolean;
+}) {
+  const w = big ? 140 : 110;
+  const iconBg = color === 'amber'
+    ? 'from-amber-300 to-amber-500'
+    : 'from-blue-400 to-indigo-600';
   return (
-    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none`} style={{ animationDelay: delay }}>
-      <div className="px-3 py-2 rounded-2xl bg-white/95 backdrop-blur ring-1 ring-white/20
-                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)]">
-        {children}
+    <div className={`absolute ${pos} showcase-tx-in pointer-events-none`} style={{ animationDelay: delay }}>
+      <div className="showcase-coin-float" style={{ animationDelay: delay }}>
+        <div className="relative" style={{ width: w, height: w * 0.78 }}>
+          {/* Cloud silhouette — to'q ko'k */}
+          <svg viewBox="0 0 140 110" className="absolute inset-0 w-full h-full">
+            <defs>
+              <linearGradient id={`cl-${color}-${delay}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3b4869" />
+                <stop offset="100%" stopColor="#1e293b" />
+              </linearGradient>
+              <filter id={`sh-${color}-${delay}`}>
+                <feDropShadow dx="0" dy="10" stdDeviation="6" floodColor="rgba(0,0,0,0.5)" />
+              </filter>
+            </defs>
+            <path
+              d="M 35 75 Q 12 75 12 55 Q 12 38 28 36 Q 30 18 48 18 Q 60 8 75 18 Q 90 10 105 22 Q 132 22 132 50 Q 138 60 132 70 Q 132 85 110 85 L 48 85 Q 32 85 35 75 Z"
+              fill={`url(#cl-${color}-${delay})`}
+              stroke="rgba(255,255,255,0.15)"
+              strokeWidth="1.2"
+              filter={`url(#sh-${color}-${delay})`}
+            />
+            {/* Highlight glare on cloud top */}
+            <ellipse cx="65" cy="32" rx="40" ry="10" fill="rgba(255,255,255,0.10)" />
+          </svg>
+          {/* Icon (3D-like bevel) — cloud ichida markazda */}
+          <div className="absolute inset-0 grid place-items-center">
+            <div className={`${big ? 'w-12 h-12' : 'w-10 h-10'} rounded-2xl bg-gradient-to-br ${iconBg} grid place-items-center
+                            shadow-[inset_0_2px_0_rgba(255,255,255,0.5),inset_0_-2px_4px_rgba(0,0,0,0.25),0_8px_20px_-2px_rgba(0,0,0,0.5)]
+                            -mt-2`}>
+              {icon}
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-/* ─── Gold dotted flow lines ─── */
+/* ─── PhoneLeft — login screen with notification overlay ─── */
+function PhoneLeft() {
+  return (
+    <div className="relative w-[140px] h-[260px]">
+      <div className="absolute inset-0 rounded-[24px] bg-gradient-to-b from-slate-300 to-slate-500 p-1.5
+                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.5)]">
+        <div className="w-full h-full rounded-[18px] bg-gradient-to-b from-slate-800 to-slate-950 overflow-hidden relative">
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-2.5 rounded-full bg-black/80" />
+          <div className="pt-4 px-2.5 flex items-center justify-between text-[6px] text-white/60 font-semibold">
+            <span>9:41</span>
+            <span>●●●</span>
+          </div>
+          <div className="px-2 mt-2 space-y-1.5">
+            <div className="h-12 rounded-md bg-white/10 ring-1 ring-white/15" />
+            <div className="h-2.5 rounded-md bg-white/15" />
+            <div className="h-2.5 rounded-md bg-white/10 w-3/4" />
+            <div className="h-6 rounded-md bg-gradient-to-r from-rose-500 to-rose-600 ring-1 ring-white/15" />
+            <div className="h-6 rounded-md bg-gradient-to-r from-emerald-400 to-emerald-600 ring-1 ring-white/15" />
+          </div>
+        </div>
+      </div>
+      {/* Floating notification card */}
+      <div className="absolute -top-3 -right-4 w-[100px] rounded-xl bg-gradient-to-b from-slate-700 to-slate-900 p-2 ring-1 ring-white/10
+                      shadow-[0_15px_30px_-8px_rgba(0,0,0,0.6)] z-10">
+        <div className="flex items-center gap-1.5">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center">
+            <svg className="w-3 h-3 text-slate-900" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 1L4 5v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V5l-8-4z" />
+            </svg>
+          </div>
+          <div className="text-[7px] font-semibold text-white/85">XON SAROY</div>
+        </div>
+        <div className="mt-1 text-[6px] text-white/55 leading-tight">Yangi to'lov</div>
+        <div className="mt-0.5 text-[8px] font-bold text-emerald-400 tabular-nums">+1 250 000</div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── PhoneRight — app dashboard screen ─── */
+function PhoneRight() {
+  return (
+    <div className="relative w-[130px] h-[240px] rotate-[4deg]">
+      <div className="absolute inset-0 rounded-[22px] bg-gradient-to-b from-slate-300 to-slate-500 p-1.5
+                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.5)]">
+        <div className="w-full h-full rounded-[16px] bg-gradient-to-b from-white to-slate-100 overflow-hidden relative">
+          {/* Top bar */}
+          <div className="px-2 pt-2 flex items-center justify-between">
+            <div className="w-3 h-3 rounded-full bg-slate-300" />
+            <span className="text-[6px] font-bold text-slate-700">Korxonalar</span>
+            <div className="w-3 h-3 rounded-full bg-slate-300" />
+          </div>
+          {/* List items */}
+          <div className="mt-2 px-1.5 space-y-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-1 p-1 rounded bg-slate-50 ring-1 ring-slate-200">
+                <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-blue-600" />
+                <div className="flex-1 space-y-0.5">
+                  <div className="h-0.5 rounded-full w-3/4 bg-slate-300" />
+                  <div className="h-0.5 rounded-full w-1/2 bg-slate-200" />
+                </div>
+                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              </div>
+            ))}
+          </div>
+          {/* Bottom CTA */}
+          <div className="absolute bottom-1.5 left-1.5 right-1.5 h-5 rounded-md bg-gradient-to-r from-blue-500 to-indigo-600
+                          grid place-items-center text-white text-[6px] font-bold">
+            Davom etish
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Laptop ─── */
+function LaptopMock({ bal }: { bal: number }) {
+  return (
+    <div className="relative w-[260px]">
+      <div className="relative w-full h-[160px] rounded-t-lg bg-slate-200 p-1
+                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.7)]">
+        <div className="w-full h-full rounded-t-md bg-white overflow-hidden p-2">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-3 rounded bg-gradient-to-br from-amber-400 to-amber-600" />
+              <span className="text-[7px] font-bold text-slate-800">Dashboard</span>
+            </div>
+            <span className="text-[6px] text-slate-400">●●●</span>
+          </div>
+          {/* Balance */}
+          <div className="mt-1.5 rounded-md bg-slate-900 p-1.5">
+            <div className="text-[5px] uppercase tracking-wider text-white/55 font-semibold">Total · UZS</div>
+            <div className="text-[10px] font-bold tabular-nums bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent">
+              {formatBig(bal)}
+            </div>
+          </div>
+          {/* Mini list */}
+          <div className="mt-1.5 space-y-0.5">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-1 p-1 rounded bg-slate-50">
+                <div className="w-3 h-3 rounded bg-slate-300" />
+                <div className="flex-1 space-y-0.5">
+                  <div className="h-0.5 rounded-full w-3/4 bg-slate-400" />
+                </div>
+                <div className="h-1.5 rounded w-5 bg-emerald-500/40" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* Laptop base */}
+      <div className="relative w-[290px] h-2 -ml-[15px] rounded-b-2xl bg-gradient-to-b from-slate-400 to-slate-600
+                      shadow-[0_15px_30px_-5px_rgba(0,0,0,0.5)]">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 rounded-b bg-slate-700" />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Flow lines (cloudlar → platforma) ─── */
 function FlowLines() {
   return (
-    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[680px] h-[600px] pointer-events-none"
-         viewBox="0 0 680 600">
-      <defs>
-        <radialGradient id="flow-dot" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="1" />
-          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
-        </radialGradient>
-      </defs>
-      {/* Dollar → markaz */}
-      <path d="M 130 70  Q 240 220 340 300" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
-            className="showcase-flow" />
-      {/* Card → markaz */}
-      <path d="M 560 60  Q 460 200 360 290" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
-            className="showcase-flow" style={{ animationDelay: '0.3s' }} />
-      {/* Chart → markaz */}
-      <path d="M 80 470  Q 200 400 320 340" stroke="rgba(251,191,36,0.45)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
-            className="showcase-flow" style={{ animationDelay: '0.6s' }} />
-      {/* Shield → markaz */}
-      <path d="M 580 510 Q 460 430 360 350" stroke="rgba(251,191,36,0.45)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
-            className="showcase-flow" style={{ animationDelay: '0.9s' }} />
-
-      {/* Connection dots */}
-      {[[130,70],[560,60],[80,470],[580,510]].map(([x,y], i) => (
-        <circle key={i} cx={x} cy={y} r="4" fill="url(#flow-dot)" className="showcase-twinkle"
-                style={{ transformOrigin: `${x}px ${y}px`, animationDelay: `${i * 0.5}s` }} />
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 600 600" preserveAspectRatio="none">
+      <path d="M 70 70  C 100 200 200 340 280 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
+            strokeDasharray="3 7" fill="none" className="showcase-flow" />
+      <path d="M 310 50 C 310 200 310 320 310 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
+            strokeDasharray="3 7" fill="none" className="showcase-flow" style={{ animationDelay: '0.3s' }} />
+      <path d="M 540 90 C 480 200 380 320 330 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
+            strokeDasharray="3 7" fill="none" className="showcase-flow" style={{ animationDelay: '0.6s' }} />
+      {[[70,70],[310,50],[540,90]].map(([x,y], i) => (
+        <circle key={i} cx={x} cy={y} r="3.5" fill="#fbbf24" />
       ))}
     </svg>
   );
@@ -287,31 +450,6 @@ function Glows() {
   );
 }
 
-function Particles() {
-  const items = Array.from({ length: 10 }, (_, i) => ({
-    left: `${(i * 73) % 100}%`,
-    bottom: `${(i * 31) % 50}%`,
-    delay: `${(i * 0.7) % 8}s`,
-    size: i % 3 === 0 ? 3 : 1.5,
-  }));
-  return (
-    <div className="absolute inset-0 pointer-events-none">
-      {items.map((p, i) => (
-        <span
-          key={i}
-          className="absolute rounded-full bg-amber-300/60 showcase-particle"
-          style={{
-            left: p.left, bottom: p.bottom,
-            width: p.size, height: p.size,
-            animationDelay: p.delay,
-            boxShadow: '0 0 6px rgba(251,191,36,0.8)',
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
 /* ─── Helpers ─── */
 
 function BankPill({ src, name }: { src: string; name: string }) {
@@ -332,10 +470,36 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function TrendUp({ className = '' }: { className?: string }) {
+function formatBig(n: number): string {
+  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+/* ─── Icons ─── */
+function PercentIcon() {
   return (
-    <svg className={`w-3 h-3 ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M3 17l6-6 4 4 8-8M21 7v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="w-5 h-5 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+      <line x1="19" y1="5" x2="5" y2="19" strokeLinecap="round" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
+    </svg>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function LockPenIcon() {
+  return (
+    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
+      <rect x="4" y="11" width="16" height="10" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" strokeLinecap="round" />
+      <path d="M12 15v3" strokeLinecap="round" />
     </svg>
   );
 }
