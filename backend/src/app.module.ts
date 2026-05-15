@@ -19,6 +19,7 @@ import { CustomersModule } from './customers/customers.module';
 import { ContractsModule } from './contracts/contracts.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ApiExplorerModule } from './api-explorer/api-explorer.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ApiExplorerModule } from './api-explorer/api-explorer.module';
     SyncModule,
     DeployModule,
     ApiExplorerModule,
+    CrmModule,
   ],
 })
 export class AppModule {}
