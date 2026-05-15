@@ -18,14 +18,20 @@ import { Skeleton } from '@/components/skeleton';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
+interface ContractTotal {
+  amount?: number;
+  paid?: number;
+  left?: number;
+}
+
 interface ContractDetail {
   contract_date?: string;
   price?: number;
   status?: { key?: string; value?: { name?: Record<string, string> } };
   client?: any;
   info?: any;
-  initial?: { total?: { paid?: number; left?: number }; schedules?: any[] };
-  monthly?: { total?: { paid?: number; left?: number; amount?: number }; schedules?: any[] };
+  initial?: { total?: ContractTotal; schedules?: any[] };
+  monthly?: { total?: ContractTotal; schedules?: any[] };
   payment_histories?: any[];
 }
 
