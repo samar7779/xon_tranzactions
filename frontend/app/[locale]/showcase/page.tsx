@@ -59,56 +59,94 @@ export default function ShowcasePage() {
           Live · Real-time sync
         </div>
 
-        {/* Brand logo */}
-        <div className="relative w-[240px] h-[180px] showcase-fade-up" style={{ animationDelay: '0.1s' }}>
-          <div className="absolute inset-0 showcase-rays-spin pointer-events-none">
-            {Array.from({ length: 18 }).map((_, i) => (
-              <div
-                key={i}
-                className="absolute top-1/2 left-1/2 w-px h-[140px] origin-bottom"
-                style={{
-                  transform: `translate(-50%, -100%) rotate(${i * (360 / 18)}deg)`,
-                  background: `linear-gradient(to top, transparent, rgba(251,191,36,${0.4 + (i % 3) * 0.2}), transparent)`,
-                }}
-              />
-            ))}
-          </div>
-          <div className="absolute inset-0 -inset-x-10 bg-amber-400/30 blur-3xl rounded-full -z-10" />
+        {/* Brand logo — yangi efekt: sonar pulse ringlar + gold mist */}
+        <div className="relative w-[260px] h-[200px] showcase-fade-up" style={{ animationDelay: '0.1s' }}>
+          {/* Sonar pulse ringlar (logo'dan tashqariga tarqaladigan) */}
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                           w-[120px] h-[120px] rounded-full border border-amber-300/50 showcase-sonar pointer-events-none" />
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                           w-[120px] h-[120px] rounded-full border border-amber-300/40 showcase-sonar pointer-events-none"
+                style={{ animationDelay: '1s' }} />
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2
+                           w-[120px] h-[120px] rounded-full border border-amber-300/30 showcase-sonar pointer-events-none"
+                style={{ animationDelay: '2s' }} />
+
+          {/* Gold breathing glow */}
+          <div className="absolute inset-0 -inset-x-12 bg-amber-400/25 blur-3xl rounded-full -z-10 showcase-breathe pointer-events-none" />
+
+          {/* Logo */}
           <div className="absolute inset-0 grid place-items-center">
             <XonSaroyLogo size={220} priority />
           </div>
+
+          {/* Gold mist particles — yuqoriga uchadi */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <span
+              key={i}
+              className="absolute rounded-full bg-amber-300/60 showcase-particle pointer-events-none"
+              style={{
+                left: `${20 + (i * 8) % 60}%`,
+                bottom: `${(i * 13) % 20}%`,
+                width: i % 2 === 0 ? 2.5 : 1.5,
+                height: i % 2 === 0 ? 2.5 : 1.5,
+                animationDelay: `${(i * 0.6) % 5}s`,
+                boxShadow: '0 0 8px rgba(251,191,36,0.9)',
+              }}
+            />
+          ))}
         </div>
 
         {/* Title */}
-        <h1 className="mt-1 text-[34px] sm:text-[44px] lg:text-[52px] font-bold tracking-[-0.025em] text-center leading-[0.95]
+        <h1 className="mt-2 text-[34px] sm:text-[44px] lg:text-[52px] font-bold tracking-[-0.025em] text-center leading-[0.95]
                        bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent
                        drop-shadow-[0_2px_14px_rgba(245,158,11,0.5)] showcase-fade-up"
             style={{ animationDelay: '0.2s' }}>
           XON SAROY TRANSACTIONS
         </h1>
-        <p className="mt-2 text-white/65 text-[13px] sm:text-[14px] text-center showcase-fade-up tracking-wide"
-           style={{ animationDelay: '0.3s' }}>
-          Collect and manage all payments in one place.
-        </p>
 
         {/* 3D dashboard + atrofdagi elementlar */}
         <div className="relative flex-1 w-full max-w-[1200px] mx-auto mt-3"
              style={{ perspective: '1900px' }}>
 
           {/* Floating coins */}
-          <Coin sym="$" pos="top-[8%]  left-[10%]"   size="md" bg="from-blue-400 to-blue-700"   delay="0s"   />
           <Coin sym="€" pos="top-[2%]  left-[34%]"   size="md" bg="from-blue-500 to-blue-800"   delay="1.2s" />
           <Coin sym="£" pos="top-[12%] left-[22%]"   size="sm" bg="from-amber-300 to-amber-600" delay="2.4s" />
           <Coin sym="$" pos="top-[26%] right-[1%]"   size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
           <Coin sym="£" pos="bottom-[8%] right-[36%]" size="md" bg="from-amber-300 to-amber-600" delay="1.8s" />
           <Coin sym="€" pos="bottom-[2%] left-[24%]"  size="sm" bg="from-slate-100 to-slate-300" delay="3s"   gold />
 
+          {/* Bank live cards — CHAP TOMON (real-time transaction stream) */}
+          <BankLiveCard
+            pos="top-[6%] left-[1%]"  bank="kapital" name="Kapitalbank"
+            who="ABU SAHIY MCHJ" amount="+18.5M" dir="in"  delay="0.5s"
+          />
+          <BankLiveCard
+            pos="top-[28%] left-[1%]" bank="ipak"    name="Ipak Yo'li"
+            who="LEVEL UP-STROY"    amount="+5.5M"  dir="in"  delay="1.0s"
+          />
+          <BankLiveCard
+            pos="bottom-[22%] left-[2%]" bank="kapital" name="Kapitalbank"
+            who="Soliq to'lovi"      amount="−4.8M" dir="out" delay="1.5s"
+          />
+
+          {/* Bank status cards — O'NG TOMON (bank ulanish holati) */}
+          <BankStatusCard
+            pos="top-[4%] right-[1%]"  bank="kapital" name="Kapitalbank"
+            count="134 hsb"  active delay="0.7s"
+          />
+          <BankStatusCard
+            pos="top-[42%] right-[1%]" bank="ipak"    name="Ipak Yo'li"
+            count="5 hsb"    active delay="1.2s"
+          />
+
           {/* Floating stat chips */}
-          <StatChip label="Data" value="−13.8%"  dir="up"   pos="top-[18%] right-[6%]"  delay="0.4s" />
-          <StatChip label="Nidt" value="−300.00" dir="up"   pos="top-[24%] right-[8%]"  delay="0.7s" />
-          <StatChip label="Inol" value="3.58%"   dir="up"   pos="top-[30%] right-[5%]"  delay="1.0s" />
-          <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[28%] left-[1%]" delay="1.3s" />
-          <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[22%] left-[3%]" delay="1.6s" />
+          <StatChip label="Data" value="−13.8%"  dir="up"   pos="bottom-[36%] right-[3%]" delay="1.0s" />
+          <StatChip label="Inol" value="3.58%"   dir="up"   pos="bottom-[30%] right-[1%]" delay="1.3s" />
+          <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[28%] left-[1%]"  delay="1.3s" />
+          <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[22%] left-[3%]"  delay="1.6s" />
+
+          {/* Sof oqim hisoblagich — past markazda */}
+          <NetFlowChip pos="bottom-[2%] right-[6%]" delay="1.8s" />
 
           {/* 3D dashboard */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
@@ -299,6 +337,87 @@ function StatChip({ label, value, dir, pos, delay }: {
         </span>
         <span className="text-white/55">{label}</span>
         <span className="font-semibold tabular-nums">{value}</span>
+      </div>
+    </div>
+  );
+}
+
+function BankLiveCard({ pos, bank, name, who, amount, dir, delay }: {
+  pos: string; bank: 'kapital' | 'ipak'; name: string; who: string;
+  amount: string; dir: 'in' | 'out'; delay: string;
+}) {
+  const src = bank === 'kapital' ? '/banks/kapital.webp' : '/banks/ipak.svg';
+  return (
+    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none w-[200px]`}
+         style={{ animationDelay: delay }}>
+      <div className="px-3 py-2 rounded-2xl bg-[rgba(18,28,52,0.85)] backdrop-blur ring-1 ring-white/10
+                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.6)] showcase-coin-float"
+           style={{ animationDelay: delay }}>
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-white grid place-items-center shrink-0 overflow-hidden ring-1 ring-white/20">
+            <Image src={src} alt={name} width={20} height={20} className="object-contain" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-semibold text-white/90 truncate">{name}</div>
+            <div className="text-[9px] text-white/45 truncate">{who}</div>
+          </div>
+          <div className={`text-[11px] font-bold tabular-nums whitespace-nowrap ${dir === 'in' ? 'text-emerald-300' : 'text-rose-300'}`}>
+            {amount}
+          </div>
+        </div>
+        {/* Live pulse strip */}
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+            <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-400" />
+          </span>
+          <span className="text-[8px] uppercase tracking-wider text-emerald-300/70 font-semibold">Live · just now</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BankStatusCard({ pos, bank, name, count, active, delay }: {
+  pos: string; bank: 'kapital' | 'ipak'; name: string; count: string; active?: boolean; delay: string;
+}) {
+  const src = bank === 'kapital' ? '/banks/kapital.webp' : '/banks/ipak.svg';
+  return (
+    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none w-[170px]`}
+         style={{ animationDelay: delay }}>
+      <div className="px-3 py-2.5 rounded-2xl bg-[rgba(18,28,52,0.85)] backdrop-blur ring-1 ring-white/10
+                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.6)] showcase-coin-float"
+           style={{ animationDelay: delay }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-10 h-10 rounded-xl bg-white grid place-items-center shrink-0 overflow-hidden ring-1 ring-white/20
+                          shadow-[0_4px_12px_-2px_rgba(0,0,0,0.4)]">
+            <Image src={src} alt={name} width={26} height={26} className="object-contain" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[11px] font-semibold text-white/90 truncate">{name}</div>
+            <div className="text-[9px] text-white/50 tabular-nums">{count}</div>
+          </div>
+          {active && (
+            <span className="relative flex h-2 w-2 shrink-0">
+              <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NetFlowChip({ pos, delay }: { pos: string; delay: string }) {
+  return (
+    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none w-[180px]`}
+         style={{ animationDelay: delay }}>
+      <div className="px-3 py-2.5 rounded-2xl bg-[rgba(18,28,52,0.85)] backdrop-blur ring-1 ring-white/10
+                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.6)]">
+        <div className="text-[8px] uppercase tracking-[0.22em] text-white/45 font-semibold">Net flow · 24h</div>
+        <div className="text-[16px] font-bold tabular-nums text-emerald-300 mt-0.5">+25 500 000</div>
+        <div className="text-[9px] text-white/45 mt-0.5">UZS · all banks</div>
       </div>
     </div>
   );

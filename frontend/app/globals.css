@@ -299,6 +299,20 @@
     to   { opacity: 1; transform: translateX(0); }
   }
   .showcase-tx-in { animation: showcase-tx-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+  /* Sonar pulse — logo'dan tarqaladigan ring */
+  @keyframes showcase-sonar {
+    0%   { transform: translate(-50%, -50%) scale(0.6); opacity: 0.85; }
+    100% { transform: translate(-50%, -50%) scale(2.4); opacity: 0; }
+  }
+  .showcase-sonar { animation: showcase-sonar 3s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+
+  /* Breathe — glow halo nafas oladi */
+  @keyframes showcase-breathe {
+    0%, 100% { opacity: 0.6; transform: scale(1); }
+    50%      { opacity: 1;   transform: scale(1.08); }
+  }
+  .showcase-breathe { animation: showcase-breathe 4.5s ease-in-out infinite; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
