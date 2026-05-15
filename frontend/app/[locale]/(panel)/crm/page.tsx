@@ -519,7 +519,7 @@ export default function CrmPage() {
                   meta={overdueSum > 0 ? `${t('overdue')}: ${formatMoney(overdueSum, 'UZS')}` : `${t('paid')}: ${formatMoney(totalPaid, 'UZS')}`}
                   metaTone={overdueSum > 0 ? 'rose' : 'emerald'}
                   pct={paidPct}
-                  gradient="from-indigo-500 to-violet-600"
+                  icon={<Building2 className="h-[18px] w-[18px]" strokeWidth={2.4} />}
                 />
                 <KpiCard
                   label={t('initialFee')}
@@ -527,7 +527,7 @@ export default function CrmPage() {
                   meta={`${t('balance')}: ${formatMoney(initialLeft, 'UZS')}`}
                   metaTone={initialLeft === 0 ? 'emerald' : 'amber'}
                   pct={initialPct}
-                  gradient="from-violet-500 to-purple-600"
+                  icon={<Sparkles className="h-[18px] w-[18px]" strokeWidth={2.4} />}
                 />
                 <KpiCard
                   label={`${t('installment')} (${t('installmentMonths', { n: monthsCount })})`}
@@ -535,7 +535,7 @@ export default function CrmPage() {
                   meta={`${t('balance')}: ${formatMoney(monthlyLeft, 'UZS')}`}
                   metaTone={monthlyLeft === 0 ? 'emerald' : 'amber'}
                   pct={monthlyPct}
-                  gradient="from-blue-500 to-indigo-600"
+                  icon={<Banknote className="h-[18px] w-[18px]" strokeWidth={2.4} />}
                 />
               </div>
 
@@ -733,14 +733,14 @@ export default function CrmPage() {
 // ────────────────────────── helpers ──────────────────────────
 
 function KpiCard({
-  label, value, meta, metaTone, pct, gradient,
+  label, value, meta, metaTone, pct, icon,
 }: {
   label: string;
   value: string;
   meta?: string;
   metaTone?: 'emerald' | 'amber' | 'rose';
   pct: number;
-  gradient: string;
+  icon?: React.ReactNode;
 }) {
   const metaMap = {
     emerald: 'text-emerald-700',
@@ -748,23 +748,35 @@ function KpiCard({
     rose:    'text-rose-700',
   } as const;
   return (
-    <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-lg transition-shadow">
-      <div className={cn('h-1 bg-gradient-to-r', gradient)} />
+    <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-md transition-all">
       <CardContent className="p-5">
-        <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
-        <div className="mt-1 text-2xl lg:text-[26px] font-black tabular-nums tracking-tight text-slate-900 truncate" title={value}>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div className="text-[13px] font-bold text-violet-600 truncate flex-1">{label}</div>
+          {icon && (
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 via-violet-600 to-purple-600 grid place-items-center text-white shadow-md shadow-violet-500/25 shrink-0 group-hover:scale-110 transition-transform">
+              {icon}
+            </div>
+          )}
+        </div>
+        <div className="text-[28px] lg:text-[30px] font-black tabular-nums tracking-tight text-slate-900 truncate leading-tight" title={value}>
           {value}
         </div>
         {meta && (
-          <div className={cn('text-[11px] font-semibold tabular-nums mt-1 truncate', metaTone ? metaMap[metaTone] : 'text-slate-500')}>
+          <div className={cn(
+            'text-[12px] font-medium tabular-nums mt-1 truncate',
+            metaTone ? metaMap[metaTone] : 'text-slate-500',
+          )}>
             {meta}
           </div>
         )}
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-4 flex items-center gap-3">
           <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', gradient)} style={{ width: `${pct}%` }} />
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-600 transition-all duration-700"
+              style={{ width: `${pct}%` }}
+            />
           </div>
-          <div className="text-[11px] font-bold tabular-nums text-slate-600 w-12 text-right">{pct.toFixed(1)}%</div>
+          <div className="text-[12px] font-bold tabular-nums text-slate-500 shrink-0">{pct.toFixed(1)} %</div>
         </div>
       </CardContent>
     </Card>
