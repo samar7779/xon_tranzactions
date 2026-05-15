@@ -208,6 +208,7 @@ export default function CrmPage() {
   const [openHistMonth, setOpenHistMonth] = useState(false);
   const [openSchedInit, setOpenSchedInit] = useState(false);
   const [openSchedMonth, setOpenSchedMonth] = useState(false);
+  const [openClient, setOpenClient] = useState(false);
 
   const overdueSum = useMemo(() => {
     if (!detail) return 0;
@@ -538,6 +539,68 @@ export default function CrmPage() {
                 />
               </div>
 
+              {/* ═══ Client info — collapsible, ABOVE payment list ═══ */}
+              <Card className="border-0 shadow-soft overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setOpenClient((o) => !o)}
+                  className={cn(
+                    'w-full px-5 py-4 flex items-center justify-between gap-3 transition-colors text-left',
+                    openClient ? 'bg-emerald-50/40' : 'hover:bg-slate-50',
+                  )}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-md shadow-emerald-500/20 shrink-0">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-base font-bold tracking-tight text-slate-800">{t('openClient')}</div>
+                      <div className="text-[12px] text-slate-500 truncate">{fullName || '—'}</div>
+                    </div>
+                  </div>
+                  <ChevronDown className={cn(
+                    'h-5 w-5 text-slate-400 transition-transform duration-200 shrink-0',
+                    openClient ? 'rotate-0' : '-rotate-90',
+                  )} />
+                </button>
+                <div className={cn(
+                  'grid transition-[grid-template-rows] duration-300 ease-out',
+                  openClient ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+                )}>
+                  <div className="overflow-hidden">
+                    <div className="border-t border-slate-100 p-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+                        <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
+                        {(client.phone_primary || client.phone) && (
+                          <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone_primary || client.phone)} mono />
+                        )}
+                        {client.phone_secondary && (
+                          <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={`${t('phone')} 2`} value={String(client.phone_secondary)} mono />
+                        )}
+                        {(client.date_of_birth || client.birth_date) && (
+                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.date_of_birth || client.birth_date)} />
+                        )}
+                        {client.passport_series && (
+                          <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passport')} value={String(client.passport_series)} mono />
+                        )}
+                        {client.passport_issued_by && (
+                          <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passportIssuedBy')} value={String(client.passport_issued_by)} />
+                        )}
+                        {client.passport_issued_date && (
+                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportIssuedDate')} value={fmtDate(client.passport_issued_date)} />
+                        )}
+                        {client.passport_expiry_date && (
+                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportExpiry')} value={fmtDate(client.passport_expiry_date)} />
+                        )}
+                        {(client.address_line || client.address) && (
+                          <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address_line || client.address)} />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               {/* ═══ Payment list (history) — accordion ═══ */}
               <Card className="border-0 shadow-soft overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
@@ -659,34 +722,6 @@ export default function CrmPage() {
                 </CardContent>
               </Card>
 
-              {/* ═══ Client info — bottom strip ═══ */}
-              {(fullName || client.phone || client.birth_date || client.passport_series || client.address) && (
-                <Card className="border-0 shadow-soft overflow-hidden">
-                  <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-md shadow-emerald-500/20">
-                      <User className="h-4 w-4" />
-                    </div>
-                    <div className="text-base font-bold tracking-tight text-slate-800">{t('openClient')}</div>
-                  </div>
-                  <CardContent className="p-5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
-                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
-                      {client.phone && (
-                        <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone)} mono />
-                      )}
-                      {client.birth_date && (
-                        <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.birth_date)} />
-                      )}
-                      {client.passport_series && (
-                        <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passport')} value={String(client.passport_series)} mono />
-                      )}
-                      {client.address && (
-                        <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address)} />
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </>
           )}
         </div>
