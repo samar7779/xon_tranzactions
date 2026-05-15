@@ -6,6 +6,8 @@ import { StatementService } from './statement.service';
 import { ReconcileService } from './reconcile.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 
 @ApiTags('transactions')
 @ApiBearerAuth()
@@ -93,5 +95,17 @@ export class TransactionsController {
   @ApiOperation({ summary: 'Bitta tranzaksiya tafsilot' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
+  }
+
+  @Post('cleanup-by-account')
+  @UseGuards(RolesGuard)
+  @Roles('SUPERADMIN')
+  @ApiOperation({ summary: 'Hisob raqami bo\'yicha barcha tranzaksiyalarni o\'chirish (faqat SUPERADMIN)' })
+  async cleanupByAccount(@Body() body: { accountNo: string; confirm: string }) {
+    if (!body?.accountNo) return { ok: false, error: 'accountNo kerak' };
+    if (body?.confirm !== body?.accountNo) {
+      return { ok: false, error: 'Tasdiq matni hisob raqamiga teng emas' };
+    }
+    return this.svc.deleteByAccountNo(body.accountNo);
   }
 }
