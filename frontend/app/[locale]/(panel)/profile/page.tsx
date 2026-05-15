@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import {
   UserCircle, Mail, Shield, ShieldCheck, KeyRound, Clock, Hash,
   CheckCircle2, Sparkles,
@@ -22,30 +23,40 @@ interface MeResponse {
   lastLoginAt?: string | null;
 }
 
-const PERM_GROUP_LABEL: Record<string, { label: string; color: string }> = {
-  dashboard:   { label: 'Boshqaruv paneli', color: 'from-indigo-500 to-blue-600' },
-  transactions:{ label: 'Tranzaksiyalar',   color: 'from-emerald-500 to-teal-600' },
-  accounts:    { label: 'Hisoblar',         color: 'from-cyan-500 to-sky-600' },
-  credentials: { label: 'Bank ulanishlari', color: 'from-violet-500 to-purple-600' },
-  banks:       { label: 'Banklar',          color: 'from-blue-500 to-indigo-600' },
-  sync:        { label: 'Sinxronlash',      color: 'from-amber-500 to-orange-600' },
-  users:       { label: 'Adminlar',         color: 'from-rose-500 to-pink-600' },
-  roles:       { label: 'Rollar',           color: 'from-fuchsia-500 to-purple-600' },
-  system:      { label: 'Tizim',            color: 'from-slate-600 to-slate-800' },
-  customers:   { label: 'Mijozlar',         color: 'from-lime-500 to-emerald-600' },
-  contracts:   { label: 'Shartnomalar',     color: 'from-orange-500 to-rose-600' },
-  payments:    { label: "To'lovlar",        color: 'from-green-500 to-emerald-600' },
+const PERM_GROUP_LABEL: Record<string, { key: string; color: string }> = {
+  dashboard:   { key: 'dashboard',   color: 'from-indigo-500 to-blue-600' },
+  transactions:{ key: 'transactions',color: 'from-emerald-500 to-teal-600' },
+  accounts:    { key: 'accounts',    color: 'from-cyan-500 to-sky-600' },
+  credentials: { key: 'credentials', color: 'from-violet-500 to-purple-600' },
+  banks:       { key: 'banks',       color: 'from-blue-500 to-indigo-600' },
+  sync:        { key: 'syncLogs',    color: 'from-amber-500 to-orange-600' },
+  users:       { key: 'adminUsers',  color: 'from-rose-500 to-pink-600' },
+  roles:       { key: 'roles',       color: 'from-fuchsia-500 to-purple-600' },
+  system:      { key: 'adminPanel',  color: 'from-slate-600 to-slate-800' },
+  customers:   { key: 'customers',   color: 'from-lime-500 to-emerald-600' },
+  contracts:   { key: 'contracts',   color: 'from-orange-500 to-rose-600' },
+  payments:    { key: 'payments',    color: 'from-green-500 to-emerald-600' },
 };
 
-const ACTION_LABEL: Record<string, string> = {
-  view: "Ko'rish",
-  manage: 'Boshqaruv',
+const ACTION_KEY: Record<string, string> = {
+  view: 'view',
+  manage: 'manage',
+  test: 'test',
+  run: 'run',
+  deploy: 'deploy',
+};
+
+const ACTION_LABEL_FALLBACK: Record<string, string> = {
+  view: 'View',
+  manage: 'Manage',
   test: 'Test',
-  run: 'Ishga tushirish',
+  run: 'Run',
   deploy: 'Deploy',
 };
 
 export default function ProfilePage() {
+  const t = useTranslations('profile');
+  const tNav = useTranslations('nav');
   const cachedUser = useAuth((s) => s.user);
 
   const { data: me } = useQuery({
@@ -68,7 +79,7 @@ export default function ProfilePage() {
 
   return (
     <>
-      <Topbar title="Profilim" subtitle="Mening hisobim va ruxsatlarim" />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
 
       <div className="flex-1 p-6 lg:p-8 w-full">
         <div className="max-w-5xl mx-auto space-y-6">
@@ -92,7 +103,7 @@ export default function ProfilePage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1 text-white/80 text-[11px] uppercase tracking-[0.18em] font-bold">
                     <Sparkles className="h-3 w-3" />
-                    Mening hisobim
+                    {t('myAccount')}
                   </div>
                   <div className="text-3xl font-black tracking-tight truncate">
                     {user?.fullName || user?.email || '—'}
@@ -115,20 +126,20 @@ export default function ProfilePage() {
             <StatCard
               icon={<Hash className="h-4 w-4" />}
               gradient="from-slate-500 to-slate-700"
-              label="Foydalanuvchi ID"
+              label={t('userId')}
               value={user?.id ? user.id.slice(0, 8) + '…' : '—'}
               mono
             />
             <StatCard
               icon={<Shield className="h-4 w-4" />}
               gradient="from-violet-500 to-purple-600"
-              label="Rol"
+              label={t('role')}
               value={user?.roleLabel || user?.role || '—'}
             />
             <StatCard
               icon={<Clock className="h-4 w-4" />}
               gradient="from-emerald-500 to-teal-600"
-              label="Oxirgi kirish"
+              label={t('lastLogin')}
               value={user?.lastLoginAt ? formatDateTime(user.lastLoginAt) : '—'}
               small
             />
@@ -139,22 +150,22 @@ export default function ProfilePage() {
             <div className="bg-gradient-to-br from-slate-50 to-white px-6 py-5 border-b border-slate-100">
               <div className="flex items-center gap-2 mb-1 text-slate-500">
                 <KeyRound className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Ruxsatlar</span>
+                <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('permissions')}</span>
               </div>
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <div className="text-lg font-bold tracking-tight text-slate-800">
-                    Sizning rolingiz uchun berilgan ruxsatlar
+                    {t('permissionsTitle')}
                   </div>
                   <div className="text-xs text-slate-500 mt-0.5">
-                    Tizimning qaysi bo'limlariga kira olasiz va nima qila olasiz
+                    {t('permissionsSubtitle')}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-3xl font-black tracking-tight bg-gradient-to-br from-indigo-600 to-violet-600 bg-clip-text text-transparent leading-none">
                     {permissions.length}
                   </div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mt-1">ta ruxsat</div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-bold mt-1">{t('permissionsCount')}</div>
                 </div>
               </div>
             </div>
@@ -162,12 +173,14 @@ export default function ProfilePage() {
             <CardContent className="p-6">
               {permissions.length === 0 ? (
                 <div className="text-center py-10 text-sm text-slate-500">
-                  Sizga hech qanday ruxsat berilmagan
+                  {t('noPermissions')}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {Object.entries(grouped).map(([resource, actions]) => {
-                    const meta = PERM_GROUP_LABEL[resource] || { label: resource, color: 'from-slate-400 to-slate-600' };
+                    const meta = PERM_GROUP_LABEL[resource] || { key: '', color: 'from-slate-400 to-slate-600' };
+                    let label = resource;
+                    try { if (meta.key) label = tNav(meta.key); } catch { /* missing key — fallback */ }
                     return (
                       <div
                         key={resource}
@@ -178,7 +191,7 @@ export default function ProfilePage() {
                           <div className="text-[11px] uppercase tracking-wider font-bold text-slate-400 mb-1">
                             {resource}
                           </div>
-                          <div className="text-sm font-bold text-slate-800 mb-2.5 truncate">{meta.label}</div>
+                          <div className="text-sm font-bold text-slate-800 mb-2.5 truncate">{label}</div>
                           <div className="flex flex-wrap gap-1">
                             {actions.map((a) => (
                               <span
@@ -186,7 +199,7 @@ export default function ProfilePage() {
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-600 text-[10px] font-semibold ring-1 ring-slate-200"
                               >
                                 <CheckCircle2 className="h-2.5 w-2.5 text-emerald-500" />
-                                {ACTION_LABEL[a] || a}
+                                {ACTION_LABEL_FALLBACK[a] || a}
                               </span>
                             ))}
                           </div>
@@ -203,8 +216,7 @@ export default function ProfilePage() {
           <div className="rounded-xl bg-indigo-50/60 ring-1 ring-indigo-100 px-4 py-3 flex items-start gap-2.5">
             <UserCircle className="h-4 w-4 text-indigo-600 shrink-0 mt-0.5" />
             <div className="text-[12px] text-indigo-900 leading-relaxed">
-              <b>Ma'lumotlarni o'zgartirish?</b> Ism yoki rolni faqat <b>SUPERADMIN</b> tizim adminlari sahifasidan o'zgartira oladi.
-              Parolingizni o'zgartirish kerak bo'lsa, admin bilan bog'laning.
+              <b>{t('editTip')}</b> {t('editTipBody')}
             </div>
           </div>
         </div>

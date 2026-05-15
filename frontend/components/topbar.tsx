@@ -18,6 +18,7 @@ interface TopbarProps {
 
 export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const t = useTranslations('nav');
+  const tb = useTranslations('topbar');
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
@@ -63,7 +64,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => router.push(`/${locale}/profile`)} className="cursor-pointer">
-                  <UserCircle className="h-4 w-4 mr-2" /> Profilim
+                  <UserCircle className="h-4 w-4 mr-2" /> {tb('myProfile')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={logout}>

@@ -20,7 +20,75 @@
     "customers": "Customers",
     "contracts": "Contracts",
     "payments": "Payments",
-    "billing": "Billing"
+    "billing": "Billing",
+    "profile": "Profile",
+    "notifications": "Notifications",
+    "groupMain": "Main",
+    "groupSetup": "Setup",
+    "groupSystem": "System",
+    "home": "Home"
+  },
+  "topbar": {
+    "myProfile": "My profile",
+    "myAccount": "My account",
+    "logout": "Sign out"
+  },
+  "profile": {
+    "title": "My profile",
+    "subtitle": "My account and permissions",
+    "myAccount": "My account",
+    "userId": "User ID",
+    "role": "Role",
+    "lastLogin": "Last sign-in",
+    "permissions": "Permissions",
+    "permissionsTitle": "Permissions granted to your role",
+    "permissionsSubtitle": "Which sections you can access and what you can do",
+    "permissionsCount": "permissions",
+    "noPermissions": "You have no permissions",
+    "editTip": "Want to change your details?",
+    "editTipBody": "Only a SUPERADMIN can change your name or role from the admin users page. Contact an admin to change your password."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "errorsCount": "{count} errors",
+    "newCount": "{count} new",
+    "allGood": "All good",
+    "noErrors": "No errors",
+    "syncError": "Sync error",
+    "viewAll": "View all"
+  },
+  "admin": {
+    "title": "Admin panel",
+    "subtitle": "Users, roles, sync and API management",
+    "tabs": {
+      "users": "Admins",
+      "roles": "Roles",
+      "syncLogs": "Sync logs",
+      "apiExplorer": "API Explorer",
+      "cleanup": "Cleanup"
+    }
+  },
+  "cleanup": {
+    "title": "Delete transactions by account number",
+    "subtitle": "Data cleanup",
+    "sectionLabel": "Data cleanup",
+    "intro": "All transactions for the given account number and their linked Payment records will be deleted from the database.",
+    "warningTitle": "This action cannot be undone.",
+    "warningBody": "Transactions will be permanently deleted. The account itself stays — the next sync will reload data (balance will recover). Matched payment links (Payment) are also removed.",
+    "accountLabel": "Account number (20 digits)",
+    "accountCount": "{n} / 20 digits",
+    "confirmLabel": "Confirm — retype the account number above",
+    "confirmPlaceholder": "Retype the account number",
+    "confirmMismatch": "Confirmation does not match the account number",
+    "confirmDialog": "Really delete all transactions for account {accountNo}?",
+    "submit": "Delete transactions",
+    "submitting": "Deleting...",
+    "successCount": "✓ {n} transactions deleted",
+    "deniedTitle": "Access denied",
+    "deniedBody": "This section is for SUPERADMIN only. Your role: {role}.",
+    "resultTitle": "Result",
+    "resultAccount": "Account",
+    "resultDeleted": "Deleted"
   },
   "customers": {
     "title": "Customers",
@@ -120,13 +188,55 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "subtitle": "{accounts} accounts · {banks} banks · last update: {lastSync}",
     "totalIn": "Inflow",
     "totalOut": "Outflow",
     "balance": "Net flow",
     "totalTransactions": "Total transactions",
     "recentTransactions": "Recent transactions",
     "byBank": "By bank",
-    "viewAll": "View all"
+    "viewAll": "View all",
+    "totalBalance": "Total balance",
+    "accountsLabel": "Accounts",
+    "banksLabel": "Banks",
+    "inflow30": "Inflow · 30 days",
+    "outflow30": "Outflow · 30 days",
+    "txn30": "Transactions · 30 days",
+    "dailyChart": "Daily inflow/outflow",
+    "barChart": "Daily bar chart — inflow / outflow / transaction count",
+    "allBanks": "All banks",
+    "allAccounts": "All accounts",
+    "accountSearch": "Account number or owner...",
+    "notFound": "Not found",
+    "inactiveBanks": "Inactive",
+    "rangeToday": "Today",
+    "range7d": "7d",
+    "range30d": "30d",
+    "rangeCustom": "Date",
+    "selectDateRange": "Select a date range",
+    "netFlow": "Net flow",
+    "topAccounts": "Top accounts",
+    "noAccounts": "No accounts",
+    "noBanks": "No banks",
+    "bankAccountHeader": "Bank · Account number",
+    "mfo": "MFO",
+    "balanceHeader": "Balance",
+    "statusHeader": "Status",
+    "lastSyncHeader": "Last sync",
+    "syncStatus": "Sync status",
+    "syncLast10": "last 10 operations",
+    "successRate": "Success rate",
+    "details": "Details",
+    "syncOk": "OK",
+    "syncPartial": "Partial",
+    "syncError": "Failed",
+    "syncRunning": "Run",
+    "banksBreakdown": "Banks breakdown",
+    "banksCount": "{n} banks",
+    "accountsShort": "acc",
+    "attention": "Attention",
+    "syncErrors": "{n} sync errors",
+    "netFlow30": "Net flow · 30 days"
   },
   "transactions": {
     "title": "Transactions",
@@ -149,7 +259,11 @@
     "allTypes": "All types",
     "allStatuses": "All statuses",
     "allDirections": "In/Out",
-    "page": "Page"
+    "page": "Page",
+    "export": "Export",
+    "exportXlsx": "Excel (XLSX)",
+    "searchById": "Search by transaction ID",
+    "history": "History"
   },
   "accounts": {
     "title": "Bank accounts",
@@ -205,6 +319,20 @@
     "errorMessage": "Error",
     "noData": "No syncs yet"
   },
+  "statement": {
+    "title": "Statement",
+    "subtitle": "Bank account statement of transactions",
+    "downloadSuccess": "Statement downloaded",
+    "downloadError": "Download failed",
+    "rangeToday": "Today",
+    "rangeWeek": "This week",
+    "rangeMonth": "This month",
+    "rangeLastMonth": "Last month"
+  },
+  "check": {
+    "title": "Reconciliation",
+    "subtitle": "Match bank balance against system records"
+  },
   "common": {
     "save": "Save",
     "cancel": "Cancel",
@@ -227,6 +355,15 @@
     "today": "Today",
     "yesterday": "Yesterday",
     "thisWeek": "This week",
-    "thisMonth": "This month"
+    "thisMonth": "This month",
+    "noDash": "—",
+    "edit": "Edit",
+    "delete": "Delete",
+    "close": "Close",
+    "refresh": "Refresh",
+    "syncNow": "Sync",
+    "download": "Download",
+    "export": "Export",
+    "details": "Details"
   }
 }

@@ -2,27 +2,29 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Users, ShieldCheck, History, Zap, Trash2 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { key: 'users',        label: 'Adminlar',     icon: Users },
-  { key: 'roles',        label: 'Rollar',       icon: ShieldCheck },
-  { key: 'sync-logs',    label: 'Sync tarixi',  icon: History },
-  { key: 'api-explorer', label: 'API Explorer', icon: Zap },
-  { key: 'cleanup',      label: 'Tozalash',     icon: Trash2 },
+  { key: 'users',        tKey: 'users',        icon: Users },
+  { key: 'roles',        tKey: 'roles',        icon: ShieldCheck },
+  { key: 'sync-logs',    tKey: 'syncLogs',     icon: History },
+  { key: 'api-explorer', tKey: 'apiExplorer',  icon: Zap },
+  { key: 'cleanup',      tKey: 'cleanup',      icon: Trash2 },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
+  const t = useTranslations('admin');
 
-  const activeTab = TABS.find((t) => pathname.includes(`/admin/${t.key}`))?.key || 'users';
+  const activeTab = TABS.find((tab) => pathname.includes(`/admin/${tab.key}`))?.key || 'users';
 
   return (
     <>
-      <Topbar title="Admin paneli" subtitle="Foydalanuvchilar, rollar, sync va API boshqaruvi" />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
 
       {/* Tab bar */}
       <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200">
@@ -43,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {tab.label}
+                  {t(`tabs.${tab.tKey}`)}
                 </Link>
               );
             })}

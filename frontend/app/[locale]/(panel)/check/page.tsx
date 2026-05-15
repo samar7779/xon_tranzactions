@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -31,6 +32,7 @@ function todayIso() {
 }
 
 export default function CheckPage() {
+  const t = useTranslations('check');
   const [dateFrom, setDateFrom] = useState(monthStartIso());
   const [dateTo, setDateTo] = useState(todayIso());
   const [q, setQ] = useState('');
@@ -91,8 +93,8 @@ export default function CheckPage() {
   return (
     <>
       <Topbar
-        title="Sverka"
-        subtitle="Bank qoldig'i va oborotini bizning bazadagi tranzaksiyalar bilan solishtirish"
+        title={t('title')}
+        subtitle={t('subtitle')}
       />
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">

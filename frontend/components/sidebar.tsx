@@ -37,14 +37,15 @@ const NAV: NavItem[] = [
   { href: '/admin',        key: 'adminPanel',   icon: ShieldCheck,      group: 'system', permission: PERMS.USERS_VIEW },
 ];
 
-const GROUP_LABEL: Record<string, string> = {
-  main: 'Asosiy',
-  setup: 'Sozlash',
-  system: 'Tizim',
+const GROUP_KEY: Record<string, string> = {
+  main: 'groupMain',
+  setup: 'groupSetup',
+  system: 'groupSystem',
 };
 
 export function Sidebar() {
   const t = useTranslations('nav');
+  const tn = useTranslations('notifications');
   const pathname = usePathname();
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
@@ -75,7 +76,7 @@ export function Sidebar() {
       <div className="px-5 pt-5 pb-3">
         <Link
           href={`/${locale}/dashboard`}
-          aria-label="Bosh sahifa"
+          aria-label={t('home')}
           className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-shadow"
         >
           <BrandLogo className="w-6 h-6" />
@@ -95,16 +96,16 @@ export function Sidebar() {
                   </span>
                 )}
               </div>
-              <span className="text-sm font-medium flex-1 text-left">Bildirishnomalar</span>
+              <span className="text-sm font-medium flex-1 text-left">{tn('title')}</span>
               {notifCount > 0 && (
-                <span className="text-[10px] text-rose-600 font-bold">{notifCount} yangi</span>
+                <span className="text-[10px] text-rose-600 font-bold">{tn('newCount', { count: notifCount })}</span>
               )}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" side="right" className="w-80">
             <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-500 flex items-center justify-between">
-              <span>Bildirishnomalar</span>
-              {notifCount > 0 && <span className="text-rose-600">{notifCount} ta xato</span>}
+              <span>{tn('title')}</span>
+              {notifCount > 0 && <span className="text-rose-600">{tn('errorsCount', { count: notifCount })}</span>}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             {failures.length === 0 ? (
@@ -112,8 +113,8 @@ export function Sidebar() {
                 <div className="w-10 h-10 rounded-full bg-emerald-50 grid place-items-center mx-auto mb-2">
                   <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                 </div>
-                <div className="text-xs font-medium text-slate-700">Hammasi joyida</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">Hech qanday xato yo'q</div>
+                <div className="text-xs font-medium text-slate-700">{tn('allGood')}</div>
+                <div className="text-[11px] text-slate-500 mt-0.5">{tn('noErrors')}</div>
               </div>
             ) : (
               <div className="max-h-72 overflow-y-auto">
@@ -128,7 +129,7 @@ export function Sidebar() {
                         <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[12px] font-semibold text-slate-700">Sync xato</div>
+                        <div className="text-[12px] font-semibold text-slate-700">{tn('syncError')}</div>
                         <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
                         <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
                       </div>
@@ -140,7 +141,7 @@ export function Sidebar() {
                   onClick={() => router.push(`/${locale}/admin/sync-logs`)}
                   className="justify-center text-indigo-600 font-medium cursor-pointer"
                 >
-                  Barchasini ko'rish
+                  {tn('viewAll')}
                   <ChevronRight className="h-3.5 w-3.5 ml-1" />
                 </DropdownMenuItem>
               </div>
@@ -157,7 +158,7 @@ export function Sidebar() {
           return (
             <div key={g}>
               <div className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-400">
-                {GROUP_LABEL[g] || g}
+                {GROUP_KEY[g] ? t(GROUP_KEY[g]) : g}
               </div>
               <div className="space-y-0.5">
                 {items.map((item) => {

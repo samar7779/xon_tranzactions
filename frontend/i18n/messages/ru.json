@@ -20,7 +20,75 @@
     "customers": "Клиенты",
     "contracts": "Договоры",
     "payments": "Платежи",
-    "billing": "Биллинг"
+    "billing": "Биллинг",
+    "profile": "Профиль",
+    "notifications": "Уведомления",
+    "groupMain": "Основное",
+    "groupSetup": "Настройка",
+    "groupSystem": "Система",
+    "home": "Главная"
+  },
+  "topbar": {
+    "myProfile": "Мой профиль",
+    "myAccount": "Мой аккаунт",
+    "logout": "Выйти"
+  },
+  "profile": {
+    "title": "Мой профиль",
+    "subtitle": "Аккаунт и права доступа",
+    "myAccount": "Мой аккаунт",
+    "userId": "ID пользователя",
+    "role": "Роль",
+    "lastLogin": "Последний вход",
+    "permissions": "Права доступа",
+    "permissionsTitle": "Права, выданные вашей роли",
+    "permissionsSubtitle": "К каким разделам вы имеете доступ и что можете делать",
+    "permissionsCount": "прав",
+    "noPermissions": "Вам не выдано ни одного права",
+    "editTip": "Изменить данные?",
+    "editTipBody": "Имя и роль может изменять только SUPERADMIN на странице администраторов. Для смены пароля обратитесь к администратору."
+  },
+  "notifications": {
+    "title": "Уведомления",
+    "errorsCount": "{count} ошибок",
+    "newCount": "{count} новых",
+    "allGood": "Всё в порядке",
+    "noErrors": "Ошибок нет",
+    "syncError": "Ошибка sync",
+    "viewAll": "Посмотреть все"
+  },
+  "admin": {
+    "title": "Админ панель",
+    "subtitle": "Пользователи, роли, sync и управление API",
+    "tabs": {
+      "users": "Администраторы",
+      "roles": "Роли",
+      "syncLogs": "История sync",
+      "apiExplorer": "API Explorer",
+      "cleanup": "Очистка"
+    }
+  },
+  "cleanup": {
+    "title": "Удаление транзакций по номеру счёта",
+    "subtitle": "Очистка данных",
+    "sectionLabel": "Очистка данных",
+    "intro": "Для указанного номера счёта в базе будут удалены все транзакции и связанные с ними записи Payment.",
+    "warningTitle": "Это действие необратимо.",
+    "warningBody": "Транзакции будут полностью удалены из базы. Сам счёт останется — при следующем sync данные подгрузятся заново (баланс восстановится). Привязки платежей (Payment) тоже будут удалены.",
+    "accountLabel": "Номер счёта (20 знаков)",
+    "accountCount": "{n} / 20 цифр",
+    "confirmLabel": "Подтверждение — введите номер счёта ещё раз",
+    "confirmPlaceholder": "Повторите номер счёта",
+    "confirmMismatch": "Подтверждение не совпадает с номером счёта",
+    "confirmDialog": "Действительно удалить все транзакции по счёту {accountNo}?",
+    "submit": "Удалить транзакции",
+    "submitting": "Удаление...",
+    "successCount": "✓ Удалено {n} транзакций",
+    "deniedTitle": "Нет доступа",
+    "deniedBody": "Этот раздел только для SUPERADMIN. Ваша роль: {role}.",
+    "resultTitle": "Результат",
+    "resultAccount": "Счёт",
+    "resultDeleted": "Удалено"
   },
   "customers": {
     "title": "Клиенты",
@@ -120,13 +188,55 @@
   },
   "dashboard": {
     "title": "Главная",
+    "subtitle": "{accounts} счетов · {banks} банков · последнее обновление: {lastSync}",
     "totalIn": "Приход",
     "totalOut": "Расход",
     "balance": "Чистый поток",
     "totalTransactions": "Всего транзакций",
     "recentTransactions": "Последние транзакции",
     "byBank": "По банкам",
-    "viewAll": "Смотреть все"
+    "viewAll": "Смотреть все",
+    "totalBalance": "Общий баланс",
+    "accountsLabel": "Счета",
+    "banksLabel": "Банки",
+    "inflow30": "Приход · 30 дней",
+    "outflow30": "Расход · 30 дней",
+    "txn30": "Транзакций · 30 дней",
+    "dailyChart": "Приход/расход по дням",
+    "barChart": "Гистограмма по дням — приход / расход / кол-во транзакций",
+    "allBanks": "Все банки",
+    "allAccounts": "Все счета",
+    "accountSearch": "Номер счёта или владелец...",
+    "notFound": "Не найдено",
+    "inactiveBanks": "Неактивные",
+    "rangeToday": "Сегодня",
+    "range7d": "7 дней",
+    "range30d": "30 дней",
+    "rangeCustom": "Дата",
+    "selectDateRange": "Выберите диапазон дат",
+    "netFlow": "Чистый поток",
+    "topAccounts": "Крупнейшие счета",
+    "noAccounts": "Счетов нет",
+    "noBanks": "Банков нет",
+    "bankAccountHeader": "Банк · Номер счёта",
+    "mfo": "МФО",
+    "balanceHeader": "Баланс",
+    "statusHeader": "Статус",
+    "lastSyncHeader": "Последний sync",
+    "syncStatus": "Состояние sync",
+    "syncLast10": "последние 10 операций",
+    "successRate": "Успешность",
+    "details": "Подробнее",
+    "syncOk": "OK",
+    "syncPartial": "Частично",
+    "syncError": "Ошибка",
+    "syncRunning": "Run",
+    "banksBreakdown": "Распределение по банкам",
+    "banksCount": "{n} банков",
+    "accountsShort": "сч",
+    "attention": "Внимание",
+    "syncErrors": "{n} ошибок sync",
+    "netFlow30": "Чистый поток · 30 дней"
   },
   "transactions": {
     "title": "Транзакции",
@@ -149,7 +259,11 @@
     "allTypes": "Все типы",
     "allStatuses": "Все статусы",
     "allDirections": "Приход/Расход",
-    "page": "Страница"
+    "page": "Страница",
+    "export": "Экспорт",
+    "exportXlsx": "Excel (XLSX)",
+    "searchById": "Поиск по ID транзакции",
+    "history": "История"
   },
   "accounts": {
     "title": "Банковские счета",
@@ -205,6 +319,20 @@
     "errorMessage": "Сообщение об ошибке",
     "noData": "Синхронизаций ещё не было"
   },
+  "statement": {
+    "title": "Выписка",
+    "subtitle": "Выписка по банковскому счёту",
+    "downloadSuccess": "Выписка загружена",
+    "downloadError": "Не удалось загрузить",
+    "rangeToday": "Сегодня",
+    "rangeWeek": "Эта неделя",
+    "rangeMonth": "Этот месяц",
+    "rangeLastMonth": "Прошлый месяц"
+  },
+  "check": {
+    "title": "Сверка",
+    "subtitle": "Сверка остатка банка и баланса в системе"
+  },
   "common": {
     "save": "Сохранить",
     "cancel": "Отмена",
@@ -227,6 +355,15 @@
     "today": "Сегодня",
     "yesterday": "Вчера",
     "thisWeek": "На этой неделе",
-    "thisMonth": "В этом месяце"
+    "thisMonth": "В этом месяце",
+    "noDash": "—",
+    "edit": "Редактировать",
+    "delete": "Удалить",
+    "close": "Закрыть",
+    "refresh": "Обновить",
+    "syncNow": "Синхронизировать",
+    "download": "Скачать",
+    "export": "Экспорт",
+    "details": "Подробнее"
   }
 }
