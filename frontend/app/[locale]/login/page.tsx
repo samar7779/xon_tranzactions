@@ -5,11 +5,12 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
-  Loader2, ArrowRight, Eye, EyeOff, AlertCircle,
+  Loader2, ArrowRight, Eye, EyeOff, AlertCircle, X, LogIn,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { ShowcaseStage } from '@/components/showcase-stage';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -20,6 +21,7 @@ export default function LoginPage() {
   const token = useAuth((s) => s.token);
   const hasHydrated = useAuth((s) => s.hasHydrated);
 
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -29,7 +31,6 @@ export default function LoginPage() {
   const [clock, setClock] = useState('00:00:00');
 
   useEffect(() => {
-    // localStorage o'qilgandan keyingina yo'naltiramiz
     if (hasHydrated && token) router.replace(`/${locale}/dashboard`);
   }, [hasHydrated, token, router, locale]);
 
@@ -44,6 +45,15 @@ export default function LoginPage() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // ESC orqali yopish
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   async function onSubmit(e: React.FormEvent) {
@@ -64,15 +74,25 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden font-mono
-                    bg-[radial-gradient(ellipse_at_center,#0a1929_0%,#020618_70%,#000816_100%)]
-                    text-cyan-100 selection:bg-cyan-400/30">
+    <div className="relative w-screen h-screen overflow-hidden font-sans text-white">
+      {/* Background: showcase animatsiyasi */}
+      <div className={`absolute inset-0 transition-all duration-700 ${open ? 'scale-[0.97] brightness-50 blur-sm' : 'scale-100'}`}>
+        <ShowcaseStage />
+      </div>
 
-      {/* ─── HUD: dekorativ qatlamlar ─── */}
-      <BackgroundHUD />
+      {/* Top-right: clock + language */}
+      <div className="absolute top-5 right-5 z-30 flex items-center gap-4">
+        <div className="text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
+          <div className="tabular-nums text-cyan-200">{clock}</div>
+          <div className="text-cyan-400/40">TASHKENT</div>
+        </div>
+        <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
+          <LanguageSwitcher />
+        </div>
+      </div>
 
-      {/* ─── Yuqori chap: tizim readout ─── */}
-      <div className="absolute top-5 left-5 sm:top-7 sm:left-7 z-30 text-[10px] tracking-[0.2em] text-cyan-400/60 uppercase">
+      {/* Top-left: system online */}
+      <div className="absolute top-5 left-5 z-30 text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
         <div className="flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
@@ -83,196 +103,172 @@ export default function LoginPage() {
         <div className="mt-1 text-cyan-400/40">{tApp('title').toUpperCase()}</div>
       </div>
 
-      {/* ─── Yuqori o'ng: soat + til ─── */}
-      <div className="absolute top-5 right-5 sm:top-7 sm:right-7 z-30 flex items-center gap-4">
-        <div className="text-[10px] tracking-[0.2em] text-cyan-400/60 uppercase text-right">
-          <div className="tabular-nums text-cyan-300">{clock}</div>
-          <div className="text-cyan-400/40">TASHKENT</div>
-        </div>
-        <div className="border border-cyan-400/20 rounded-full p-0.5 bg-cyan-500/5">
-          <LanguageSwitcher />
+      {/* Kirish CTA — markazda pastda, faqat panel yopiq bo'lganda ko'rinadi */}
+      <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
+        open ? 'opacity-0 translate-y-8 pointer-events-none' : 'opacity-100 translate-y-0'
+      }`}>
+        <button
+          onClick={() => setOpen(true)}
+          className="group relative px-8 h-14 rounded-full overflow-hidden
+                     bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
+                     ring-2 ring-amber-200/60
+                     shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
+                     hover:shadow-[0_20px_70px_-10px_rgba(245,158,11,0.9)]
+                     hover:scale-105 active:scale-95
+                     transition-all duration-300"
+        >
+          {/* Sweep glow */}
+          <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
+                           bg-gradient-to-r from-transparent via-white/40 to-transparent
+                           transition-transform duration-1000 ease-out" />
+          {/* Sonar pulse */}
+          <span className="absolute inset-0 rounded-full ring-2 ring-amber-300/60 animate-ping" style={{ animationDuration: '2s' }} />
+          <span className="relative flex items-center gap-3 text-slate-900 font-bold tracking-[0.18em] uppercase text-[13px]">
+            <LogIn className="h-4 w-4" />
+            {t('submit')}
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </span>
+        </button>
+      </div>
+
+      {/* Right-side slide-in login panel */}
+      <div className={`fixed top-0 right-0 h-full w-[420px] max-w-[92vw] z-50
+                       transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
+                       ${open ? 'translate-x-0' : 'translate-x-full'}`}>
+
+        {/* Backdrop blur edge */}
+        <div className="absolute inset-y-0 -left-12 w-12 bg-gradient-to-r from-transparent to-[rgba(6,14,29,0.85)] pointer-events-none" />
+
+        <div className="relative h-full bg-[rgba(6,14,29,0.92)] backdrop-blur-xl
+                        border-l border-cyan-400/30
+                        shadow-[-20px_0_60px_-10px_rgba(0,0,0,0.7),inset_4px_0_30px_-15px_rgba(34,211,238,0.2)]
+                        p-8 sm:p-10 flex flex-col">
+
+          {/* Vertical accent line */}
+          <div className="absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-cyan-400 to-transparent" />
+
+          {/* Close button */}
+          <button
+            onClick={() => setOpen(false)}
+            className="absolute top-5 right-5 w-9 h-9 rounded-full grid place-items-center
+                       bg-white/5 ring-1 ring-white/10 text-cyan-200/70
+                       hover:bg-rose-500/20 hover:ring-rose-400/40 hover:text-rose-200
+                       transition-all duration-200">
+            <X className="h-4 w-4" />
+          </button>
+
+          {/* Sarlavha */}
+          <div className="mt-6 mb-8">
+            <div className="text-[10px] tracking-[0.3em] uppercase text-cyan-400/70 font-mono mb-2">· ID · 0001 ·</div>
+            <h1 className="text-[24px] font-bold tracking-[0.06em] uppercase text-cyan-50">
+              {t('loginTitle')}
+            </h1>
+            <div className="mt-2 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60 font-mono">
+              <span className="w-8 h-px bg-cyan-400/40" />
+              <span>Identity verify</span>
+            </div>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={onSubmit} className="space-y-5 flex-1" noValidate>
+            <HudField
+              id="email"
+              label="EMAIL"
+              type="email"
+              value={email}
+              onChange={(v) => { setEmail(v); setErrorMsg(null); }}
+              autoFocus={open}
+              placeholder="admin@xon.local"
+            />
+
+            <HudField
+              id="password"
+              label="PASSWORD"
+              type={showPwd ? 'text' : 'password'}
+              value={password}
+              onChange={(v) => { setPassword(v); setErrorMsg(null); }}
+              onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+              placeholder="••••••••"
+              right={
+                <button
+                  type="button"
+                  onClick={() => setShowPwd((s) => !s)}
+                  className="text-cyan-400/50 hover:text-cyan-300 transition"
+                  tabIndex={-1}
+                  aria-label={showPwd ? 'Hide' : 'Show'}
+                >
+                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              }
+            />
+
+            {capsOn && (
+              <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
+                <AlertCircle className="h-3 w-3" />
+                Caps Lock · ON
+              </div>
+            )}
+
+            {errorMsg && (
+              <div className="flex items-start gap-2 px-3 py-2 border border-rose-400/30 bg-rose-500/10 text-[12px] text-rose-200 rounded-sm">
+                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                <span className="tracking-wider">{errorMsg}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="relative w-full h-12 mt-4 group overflow-hidden rounded-sm
+                         bg-gradient-to-r from-cyan-500/30 via-cyan-400/40 to-cyan-500/30
+                         border border-cyan-400/60
+                         text-cyan-50 font-semibold tracking-[0.25em] uppercase text-[12px]
+                         shadow-[0_0_30px_-5px_rgba(34,211,238,0.5),inset_0_0_20px_-10px_rgba(34,211,238,0.4)]
+                         hover:bg-cyan-400/40 hover:shadow-[0_0_40px_-5px_rgba(34,211,238,0.9)]
+                         hover:border-cyan-300
+                         active:scale-[0.99]
+                         disabled:opacity-60
+                         transition-all duration-200
+                         flex items-center justify-center gap-3"
+            >
+              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
+                               bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent
+                               transition-transform duration-1000 ease-out" />
+              {busy ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="relative">PROCESSING</span>
+                </>
+              ) : (
+                <>
+                  <span className="relative">{t('submit')}</span>
+                  <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Status liniya */}
+          <div className="mt-6 pt-4 border-t border-cyan-400/15 flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
+              Encrypted
+            </span>
+            <span>AES-256</span>
+          </div>
         </div>
       </div>
 
-      {/* ─── 4 burchak HUD ramkasi ─── */}
-      <CornerBrackets />
-
-      {/* ─── Markaz: forma + aylanuvchi halqalar ─── */}
-      <main className="relative z-10 min-h-screen flex items-center justify-center px-4">
-        <div className="relative">
-          {/* Aylanuvchi konsentrik halqalar */}
-          <RotatingRings />
-
-          {/* Forma paneli */}
-          <div className="relative z-20 w-[400px] max-w-[92vw] p-8 sm:p-10
-                          bg-[rgba(6,14,29,0.7)] backdrop-blur-md
-                          border border-cyan-400/20 rounded-sm
-                          shadow-[0_0_60px_-10px_rgba(34,211,238,0.25),inset_0_0_30px_-15px_rgba(34,211,238,0.15)]
-                          animate-boot">
-
-            {/* Yuqori chiziq */}
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
-
-            {/* Yuqori chap belgisi */}
-            <div className="absolute -top-2 left-6 px-2 bg-[#020618] text-[9px] tracking-[0.3em] uppercase text-cyan-400">
-              · ID · 0001 ·
-            </div>
-
-            <div className="font-sans">
-              {/* Sarlavha */}
-              <div className="mb-6 text-center">
-                <h1 className="text-[22px] font-semibold tracking-[0.15em] uppercase text-cyan-50">
-                  {t('loginTitle')}
-                </h1>
-                <div className="mt-2 flex items-center justify-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60">
-                  <span className="w-8 h-px bg-cyan-400/30" />
-                  <span>Identity verify</span>
-                  <span className="w-8 h-px bg-cyan-400/30" />
-                </div>
-              </div>
-
-              {/* Forma */}
-              <form onSubmit={onSubmit} className="space-y-5" noValidate>
-                <HudField
-                  id="email"
-                  label="EMAIL"
-                  type="email"
-                  value={email}
-                  onChange={(v) => { setEmail(v); setErrorMsg(null); }}
-                  autoFocus
-                  placeholder="admin@xon.local"
-                />
-
-                <HudField
-                  id="password"
-                  label="PASSWORD"
-                  type={showPwd ? 'text' : 'password'}
-                  value={password}
-                  onChange={(v) => { setPassword(v); setErrorMsg(null); }}
-                  onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                  placeholder="••••••••"
-                  right={
-                    <button
-                      type="button"
-                      onClick={() => setShowPwd((s) => !s)}
-                      className="text-cyan-400/50 hover:text-cyan-300 transition"
-                      tabIndex={-1}
-                      aria-label={showPwd ? 'Hide' : 'Show'}
-                    >
-                      {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  }
-                />
-
-                {capsOn && (
-                  <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Caps Lock · ON
-                  </div>
-                )}
-
-                {errorMsg && (
-                  <div className="flex items-start gap-2 px-3 py-2 border border-rose-400/30 bg-rose-500/10 text-[12px] text-rose-200 animate-fade-up">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                    <span className="tracking-wider">{errorMsg}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={busy}
-                  className="relative w-full h-12 mt-4 group overflow-hidden
-                             bg-gradient-to-r from-cyan-500/20 via-cyan-400/30 to-cyan-500/20
-                             border border-cyan-400/50
-                             text-cyan-100 font-semibold tracking-[0.25em] uppercase text-[12px]
-                             shadow-[0_0_30px_-5px_rgba(34,211,238,0.5),inset_0_0_20px_-10px_rgba(34,211,238,0.3)]
-                             hover:bg-cyan-400/30 hover:shadow-[0_0_40px_-5px_rgba(34,211,238,0.8)]
-                             hover:border-cyan-300
-                             active:scale-[0.99]
-                             disabled:opacity-60
-                             transition-all duration-200
-                             flex items-center justify-center gap-3"
-                >
-                  {/* Sweep animation */}
-                  <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                                   bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent
-                                   transition-transform duration-1000 ease-out" />
-                  {busy ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="relative">PROCESSING</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="relative">{t('submit')}</span>
-                      <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Pastki status liniya */}
-              <div className="mt-7 pt-4 border-t border-cyan-400/15 flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40">
-                <span className="flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
-                  Encrypted
-                </span>
-                <span>AES-256</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* ─── Pastki readout chiziq ─── */}
-      <div className="absolute bottom-5 left-5 right-5 sm:bottom-7 sm:left-7 sm:right-7 z-30
-                      flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40">
+      {/* Pastki readout */}
+      <div className="absolute bottom-5 left-5 right-5 z-30
+                      flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none">
         <span>· AUTHENTICATION REQUIRED ·</span>
         <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
       </div>
-
-      <style jsx>{`
-        @keyframes boot {
-          0%   { opacity: 0; transform: scale(0.96); filter: brightness(0); }
-          40%  { opacity: 1; filter: brightness(2); }
-          100% { opacity: 1; transform: scale(1); filter: brightness(1); }
-        }
-        :global(.animate-boot) {
-          animation: boot 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
-        }
-
-        @keyframes spin-cw { to { transform: rotate(360deg); } }
-        @keyframes spin-ccw { to { transform: rotate(-360deg); } }
-        :global(.spin-cw)  { animation: spin-cw  20s linear infinite; }
-        :global(.spin-ccw) { animation: spin-ccw 30s linear infinite; }
-        :global(.spin-fast){ animation: spin-cw  10s linear infinite; }
-
-        @keyframes scan-v {
-          0%   { transform: translateY(-100%); opacity: 0; }
-          10%  { opacity: 1; }
-          90%  { opacity: 1; }
-          100% { transform: translateY(100vh); opacity: 0; }
-        }
-        :global(.animate-scan-v) { animation: scan-v 6s linear infinite; }
-
-        @keyframes pulse-ring {
-          0%, 100% { opacity: 0.3; }
-          50%      { opacity: 0.8; }
-        }
-        :global(.animate-pulse-ring) { animation: pulse-ring 2.5s ease-in-out infinite; }
-
-        @keyframes grid-pan {
-          0%   { background-position: 0 0; }
-          100% { background-position: 60px 60px; }
-        }
-        :global(.animate-grid-pan) { animation: grid-pan 20s linear infinite; }
-      `}</style>
     </div>
   );
 }
 
-/* ─── HUD field: futuristic input ─── */
 function HudField(props: {
   id: string;
   label: string;
@@ -286,11 +282,10 @@ function HudField(props: {
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={props.id} className="block text-[10px] tracking-[0.3em] uppercase text-cyan-400/60 font-mono">
+      <label htmlFor={props.id} className="block text-[10px] tracking-[0.3em] uppercase text-cyan-400/70 font-mono">
         » {props.label}
       </label>
       <div className="relative group">
-        {/* Burchak bracketlar */}
         <span className="absolute -top-px -left-px w-2 h-2 border-l border-t border-cyan-400/60 group-focus-within:border-cyan-300" />
         <span className="absolute -top-px -right-px w-2 h-2 border-r border-t border-cyan-400/60 group-focus-within:border-cyan-300" />
         <span className="absolute -bottom-px -left-px w-2 h-2 border-l border-b border-cyan-400/60 group-focus-within:border-cyan-300" />
@@ -312,97 +307,12 @@ function HudField(props: {
                      text-cyan-50 placeholder:text-cyan-400/25
                      focus:outline-none focus:border-cyan-400/60 focus:bg-cyan-500/[0.08]
                      focus:shadow-[inset_0_0_15px_-5px_rgba(34,211,238,0.4)]
-                     transition-all"
+                     transition-all rounded-sm"
         />
         {props.right && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">{props.right}</div>
         )}
       </div>
     </div>
-  );
-}
-
-/* ─── 4 burchak HUD bracketlari ─── */
-function CornerBrackets() {
-  const brackets = [
-    'top-4 left-4 border-t border-l',
-    'top-4 right-4 border-t border-r',
-    'bottom-4 left-4 border-b border-l',
-    'bottom-4 right-4 border-b border-r',
-  ];
-  return (
-    <>
-      {brackets.map((c, i) => (
-        <span key={i} className={`absolute ${c} w-8 h-8 border-cyan-400/40 pointer-events-none z-20`} />
-      ))}
-    </>
-  );
-}
-
-/* ─── Aylanuvchi konsentrik halqalar (Arc Reactor effekti) ─── */
-function RotatingRings() {
-  return (
-    <div className="absolute inset-0 grid place-items-center pointer-events-none z-0">
-      {/* Eng katta halqa — sekin, dashed */}
-      <div className="absolute w-[680px] h-[680px] rounded-full border border-dashed border-cyan-400/15 spin-cw" />
-      {/* O'rta halqa — qarama-qarshi yo'nalish */}
-      <div className="absolute w-[560px] h-[560px] rounded-full border border-cyan-400/20 spin-ccw" />
-      {/* Halqa belgilari bilan */}
-      <svg className="absolute w-[480px] h-[480px] spin-cw" viewBox="0 0 480 480">
-        <circle cx="240" cy="240" r="200" fill="none" stroke="rgba(34,211,238,0.25)" strokeWidth="1" strokeDasharray="2 6" />
-        <circle cx="240" cy="40" r="3" fill="rgba(34,211,238,0.8)" />
-        <circle cx="440" cy="240" r="2" fill="rgba(34,211,238,0.5)" />
-        <circle cx="240" cy="440" r="2" fill="rgba(34,211,238,0.5)" />
-        <circle cx="40" cy="240" r="2" fill="rgba(34,211,238,0.5)" />
-      </svg>
-      {/* Eng ichki halqa — tez */}
-      <svg className="absolute w-[420px] h-[420px] spin-fast" viewBox="0 0 420 420">
-        <defs>
-          <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"  stopColor="rgba(34,211,238,0)" />
-            <stop offset="50%" stopColor="rgba(34,211,238,0.7)" />
-            <stop offset="100%" stopColor="rgba(34,211,238,0)" />
-          </linearGradient>
-        </defs>
-        <circle cx="210" cy="210" r="190" fill="none" stroke="url(#ring-grad)" strokeWidth="2" strokeDasharray="40 80" />
-      </svg>
-
-      {/* Glow nuqta markazda */}
-      <div className="absolute w-[440px] h-[440px] rounded-full bg-cyan-400/5 blur-3xl animate-pulse-ring" />
-    </div>
-  );
-}
-
-/* ─── Fon: grid + scan + starfield ─── */
-function BackgroundHUD() {
-  return (
-    <>
-      {/* Animated grid */}
-      <div className="absolute inset-0 opacity-[0.15] animate-grid-pan pointer-events-none"
-           style={{
-             backgroundImage:
-               'linear-gradient(to right, rgba(34,211,238,0.15) 1px, transparent 1px), linear-gradient(to bottom, rgba(34,211,238,0.15) 1px, transparent 1px)',
-             backgroundSize: '60px 60px',
-             maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 30%, transparent 75%)',
-             WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 30%, transparent 75%)',
-           }} />
-
-      {/* Cyan center glow */}
-      <div className="absolute inset-0 pointer-events-none"
-           style={{ background: 'radial-gradient(ellipse 50% 60% at 50% 50%, rgba(34,211,238,0.12), transparent 70%)' }} />
-
-      {/* Scan line — vertical */}
-      <div className="absolute inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent
-                      shadow-[0_0_20px_rgba(34,211,238,0.7)] animate-scan-v pointer-events-none" />
-
-      {/* Star particles */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none"
-           style={{
-             backgroundImage: 'radial-gradient(circle, rgba(165,243,252,0.6) 0.8px, transparent 1px)',
-             backgroundSize: '80px 80px',
-             maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 20%, transparent 80%)',
-             WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, #000 20%, transparent 80%)',
-           }} />
-    </>
   );
 }
