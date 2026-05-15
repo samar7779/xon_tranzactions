@@ -97,6 +97,14 @@ export class TransactionsController {
     return this.svc.findOne(id);
   }
 
+  @Get('count-by-account/:accountNo')
+  @UseGuards(RolesGuard)
+  @Roles('SUPERADMIN')
+  @ApiOperation({ summary: 'Hisob raqami bo\'yicha tranzaksiyalar soni (cleanup oldidan tasdiq uchun)' })
+  countByAccount(@Param('accountNo') accountNo: string) {
+    return this.svc.countByAccountNo(accountNo);
+  }
+
   @Post('cleanup-by-account')
   @UseGuards(RolesGuard)
   @Roles('SUPERADMIN')

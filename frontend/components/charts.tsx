@@ -41,8 +41,8 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
   const inPts = data.map((d, i) => [X(i), Y(d.inflow)] as [number, number]);
   const outPts = data.map((d, i) => [X(i), Y(d.outflow)] as [number, number]);
 
-  const inLine = smoothPath(inPts);
-  const outLine = smoothPath(outPts);
+  const inLine = monotonePath(inPts);
+  const outLine = monotonePath(outPts);
   const inArea = `${inLine} L${inPts[n - 1][0]},${H} L${inPts[0][0]},${H} Z`;
   const outArea = `${outLine} L${outPts[n - 1][0]},${H} L${outPts[0][0]},${H} Z`;
 
@@ -637,15 +637,70 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
 }
 
 // ─────────────── Helpers ───────────────
+// Catmull-Rom -> cubic Bezier smoother. Yengilroq, ortiqcha sakrash yo'q.
 function smoothPath(pts: [number, number][]) {
   if (pts.length === 0) return '';
   if (pts.length === 1) return `M${pts[0][0]},${pts[0][1]}`;
+  const tension = 0.5;
   let d = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 1; i < pts.length; i++) {
-    const [x1, y1] = pts[i - 1];
-    const [x2, y2] = pts[i];
-    const mx = (x1 + x2) / 2;
-    d += ` Q${x1},${y1} ${mx},${(y1 + y2) / 2} T${x2},${y2}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1[0] + ((p2[0] - p0[0]) / 6) * tension;
+    const c1y = p1[1] + ((p2[1] - p0[1]) / 6) * tension;
+    const c2x = p2[0] - ((p3[0] - p1[0]) / 6) * tension;
+    const c2y = p2[1] - ((p3[1] - p1[1]) / 6) * tension;
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
+
+/**
+ * Monoton kubik interpolatsiya — pul oqimi grafiklari uchun ideal:
+ * - Hech qachon ma'lumotdan tashqari "sakrab chiqmaydi" (overshoot bo'lmaydi).
+ * - Cho'ziq nol qator + bitta spike + yana nol kabi naqshlarni "tomchi" shaklida silliq chizadi.
+ * Shuning uchun fintech dashboardlarida shu uslub afzal.
+ */
+function monotonePath(pts: [number, number][]) {
+  const n = pts.length;
+  if (n === 0) return '';
+  if (n === 1) return `M${pts[0][0]},${pts[0][1]}`;
+  if (n === 2) return `M${pts[0][0]},${pts[0][1]} L${pts[1][0]},${pts[1][1]}`;
+
+  // Segmentlar bo'yicha qiyaliklar
+  const dx: number[] = [];
+  const dy: number[] = [];
+  const m: number[] = []; // segment qiyaligi
+  for (let i = 0; i < n - 1; i++) {
+    dx[i] = pts[i + 1][0] - pts[i][0];
+    dy[i] = pts[i + 1][1] - pts[i][1];
+    m[i] = dy[i] / (dx[i] || 1e-9);
+  }
+
+  // Tangenslar — Fritsch–Carlson algoritmi
+  const t: number[] = new Array(n).fill(0);
+  t[0] = m[0];
+  t[n - 1] = m[n - 2];
+  for (let i = 1; i < n - 1; i++) {
+    if (m[i - 1] * m[i] <= 0) {
+      t[i] = 0; // ekstremumlarda yassi — yumshoq cho'qqi
+    } else {
+      const w1 = 2 * dx[i] + dx[i - 1];
+      const w2 = dx[i] + 2 * dx[i - 1];
+      t[i] = (w1 + w2) / (w1 / m[i - 1] + w2 / m[i]);
+    }
+  }
+
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const h = dx[i];
+    const c1x = pts[i][0] + h / 3;
+    const c1y = pts[i][1] + (t[i] * h) / 3;
+    const c2x = pts[i + 1][0] - h / 3;
+    const c2y = pts[i + 1][1] - (t[i + 1] * h) / 3;
+    d += ` C${c1x},${c1y} ${c2x},${c2y} ${pts[i + 1][0]},${pts[i + 1][1]}`;
   }
   return d;
 }

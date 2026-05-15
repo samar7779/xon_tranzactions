@@ -4,14 +4,34 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Trash2, AlertTriangle, Loader2, Database, ShieldAlert, Info, ListChecks } from 'lucide-react';
+import {
+  Trash2, AlertTriangle, Loader2, Database, ShieldAlert, Info, ListChecks,
+  Building2, User, Wallet, Calendar, X, Receipt,
+} from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { cn } from '@/lib/utils';
+import { cn, formatDate, formatMoney } from '@/lib/utils';
+
+interface CountResp {
+  ok: boolean;
+  error?: string;
+  account?: {
+    id: string; accountNo: string; ownerName?: string | null;
+    branch?: string | null; balance?: any; currency?: string;
+    bank?: { id: string; code: string; name: string } | null;
+  };
+  count?: number;
+  paymentsCount?: number;
+  firstTxnDate?: string | null;
+  lastTxnDate?: string | null;
+}
 
 export default function CleanupPage() {
   const t = useTranslations('cleanup');
@@ -22,16 +42,33 @@ export default function CleanupPage() {
   const [accountNo, setAccountNo] = useState('');
   const [confirm, setConfirm] = useState('');
   const [lastResult, setLastResult] = useState<any>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [countInfo, setCountInfo] = useState<CountResp | null>(null);
+
+  const countMut = useMutation({
+    mutationFn: () => api.get<CountResp>(`/transactions/count-by-account/${encodeURIComponent(accountNo.trim())}`),
+    onSuccess: (r) => {
+      if (!r.ok) {
+        toast.error(r.error || tc('error'));
+        return;
+      }
+      setCountInfo(r);
+      setConfirmOpen(true);
+    },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+  });
 
   const mut = useMutation({
     mutationFn: () =>
       api.post<any>('/transactions/cleanup-by-account', { accountNo: accountNo.trim(), confirm: confirm.trim() }),
     onSuccess: (r: any) => {
       setLastResult(r);
+      setConfirmOpen(false);
       if (r?.ok) {
         toast.success(t('successCount', { n: r.deleted }));
         setAccountNo('');
         setConfirm('');
+        setCountInfo(null);
       } else {
         toast.error(r?.error || tc('error'));
       }
@@ -197,14 +234,13 @@ export default function CleanupPage() {
                 </div>
 
                 <Button
-                  onClick={() => {
-                    if (!window.confirm(t('confirmDialog', { accountNo }))) return;
-                    mut.mutate();
-                  }}
-                  disabled={!isSuperAdmin || !canSubmit || mut.isPending}
+                  onClick={() => countMut.mutate()}
+                  disabled={!isSuperAdmin || !canSubmit || mut.isPending || countMut.isPending}
                   className="w-full h-12 rounded-xl font-semibold gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/20 disabled:shadow-none"
                 >
-                  {mut.isPending ? (
+                  {countMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> {t('loadingCount')}</>
+                  ) : mut.isPending ? (
                     <><Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}</>
                   ) : (
                     <><Trash2 className="h-4 w-4" /> {t('submit')}</>
@@ -227,6 +263,167 @@ export default function CleanupPage() {
             </Card>
           </div>
         </div>
+      </div>
+
+      {/* ─── Modern confirmation dialog ─── */}
+      <Dialog open={confirmOpen} onOpenChange={(o) => { if (!mut.isPending) setConfirmOpen(o); }}>
+        <DialogContent className="max-w-lg p-0 overflow-hidden gap-0 [&>button]:hidden">
+          {/* Header */}
+          <div className="relative bg-gradient-to-br from-rose-500 via-red-500 to-rose-700 px-6 py-5 text-white overflow-hidden">
+            <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
+            <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            <div className="relative flex items-start gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur-md grid place-items-center shrink-0">
+                <AlertTriangle className="h-6 w-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <DialogHeader>
+                  <DialogTitle className="text-xl font-black tracking-tight text-white">{t('confirmTitle')}</DialogTitle>
+                  <DialogDescription className="text-white/85 text-[12px] mt-1">{t('confirmDesc')}</DialogDescription>
+                </DialogHeader>
+              </div>
+              <button
+                onClick={() => setConfirmOpen(false)}
+                disabled={mut.isPending}
+                className="text-white/70 hover:text-white shrink-0 p-1 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="px-6 py-5 space-y-4 bg-white">
+            {/* Account card */}
+            {countInfo?.account && (
+              <div className="rounded-xl ring-1 ring-slate-200 px-4 py-3 bg-slate-50/60 space-y-2">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500">
+                  <Building2 className="h-3 w-3" />
+                  {countInfo.account.bank?.name || '—'}
+                  {countInfo.account.branch && (
+                    <span className="ml-auto font-mono text-[10px] text-slate-400">MFO {countInfo.account.branch}</span>
+                  )}
+                </div>
+                <div className="font-mono text-sm font-bold tracking-wider text-slate-900">{countInfo.account.accountNo}</div>
+                {countInfo.account.ownerName && (
+                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600">
+                    <User className="h-3 w-3 text-slate-400" />
+                    {countInfo.account.ownerName}
+                  </div>
+                )}
+                {countInfo.account.balance != null && (
+                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600 pt-1 border-t border-slate-100">
+                    <Wallet className="h-3 w-3 text-slate-400" />
+                    <span className="font-semibold tabular-nums">
+                      {formatMoney(Number(countInfo.account.balance), countInfo.account.currency || 'UZS')}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <StatBox
+                icon={<Database className="h-4 w-4" />}
+                gradient="from-rose-500 to-red-600"
+                label={t('txnCount')}
+                value={String(countInfo?.count ?? 0)}
+                emphasize
+              />
+              <StatBox
+                icon={<Receipt className="h-4 w-4" />}
+                gradient="from-violet-500 to-purple-600"
+                label={t('linkedPayments')}
+                value={String(countInfo?.paymentsCount ?? 0)}
+              />
+              <StatBox
+                icon={<Calendar className="h-4 w-4" />}
+                gradient="from-slate-500 to-slate-700"
+                label={t('firstTxn')}
+                value={countInfo?.firstTxnDate ? formatDate(countInfo.firstTxnDate) : '—'}
+                small
+              />
+              <StatBox
+                icon={<Calendar className="h-4 w-4" />}
+                gradient="from-slate-500 to-slate-700"
+                label={t('lastTxn')}
+                value={countInfo?.lastTxnDate ? formatDate(countInfo.lastTxnDate) : '—'}
+                small
+              />
+            </div>
+
+            {/* Empty hint or warning */}
+            {countInfo && (countInfo.count ?? 0) === 0 ? (
+              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-slate-600">{t('nothingToDelete')}</div>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-amber-900 leading-relaxed">
+                  <b>{t('warningTitle')}</b> {t('warningBody')}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-1">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmOpen(false)}
+                disabled={mut.isPending}
+                className="flex-1 h-11 rounded-xl"
+              >
+                {tc('cancel')}
+              </Button>
+              <Button
+                onClick={() => mut.mutate()}
+                disabled={mut.isPending || !countInfo?.ok || (countInfo?.count ?? 0) === 0}
+                className="flex-1 h-11 rounded-xl font-semibold gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/20"
+              >
+                {mut.isPending ? (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {t('deleting')}</>
+                ) : (
+                  <><Trash2 className="h-4 w-4" /> {t('confirmDelete')}</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function StatBox({
+  icon, gradient, label, value, emphasize, small,
+}: {
+  icon: React.ReactNode;
+  gradient: string;
+  label: string;
+  value: string;
+  emphasize?: boolean;
+  small?: boolean;
+}) {
+  return (
+    <div className={cn(
+      'rounded-xl ring-1 px-3 py-2.5 transition-colors',
+      emphasize ? 'bg-rose-50 ring-rose-200' : 'bg-white ring-slate-200',
+    )}>
+      <div className="flex items-center gap-2 mb-1">
+        <div className={cn('w-6 h-6 rounded-lg bg-gradient-to-br grid place-items-center text-white shrink-0', gradient)}>
+          {icon}
+        </div>
+        <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-500 truncate">{label}</div>
+      </div>
+      <div className={cn(
+        'font-black tabular-nums tracking-tight truncate',
+        small ? 'text-sm' : 'text-2xl',
+        emphasize ? 'text-rose-700' : 'text-slate-800',
+      )}>
+        {value}
       </div>
     </div>
   );
