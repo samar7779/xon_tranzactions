@@ -490,7 +490,16 @@
     "expand": "Tafsilot",
     "collapse": "Yopish",
     "boshlangich": "Boshlang'ich",
-    "oylik": "Oylik"
+    "oylik": "Oylik",
+    "paymentList": "To'lovlar ro'yxati",
+    "totalPaidLabel": "Jami to'langan",
+    "contractSum": "Shartnoma summasi",
+    "initialFee": "Boshlang'ich to'lov",
+    "installment": "Rassrochka",
+    "installmentMonths": "{n} oy",
+    "balance": "Qoldiq",
+    "rate": "Kurs",
+    "schedule36": "{n} oyga jadval"
   },
   "statement": {
     "title": "Vipiska",

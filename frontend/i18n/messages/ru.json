@@ -489,8 +489,17 @@
     "noPurpose": "Назначение не указано",
     "expand": "Подробнее",
     "collapse": "Свернуть",
-    "boshlangich": "Первонач.",
-    "oylik": "Ежемес."
+    "boshlangich": "Первоначальный",
+    "oylik": "Ежемесячно",
+    "paymentList": "Список оплат",
+    "totalPaidLabel": "Общий оплачено",
+    "contractSum": "Сумма договора",
+    "initialFee": "Первоначальный взнос",
+    "installment": "Рассрочка",
+    "installmentMonths": "{n} мес.",
+    "balance": "Остаток",
+    "rate": "Курс",
+    "schedule36": "График на {n} мес."
   },
   "statement": {
     "title": "Выписка",
