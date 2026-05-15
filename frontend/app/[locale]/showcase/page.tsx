@@ -106,19 +106,19 @@ export default function ShowcasePage() {
         </div>
 
         {/* O'NG — soliqservis-uslubidagi kompozitsiya */}
-        <div className="relative flex items-end justify-center pb-6">
-          {/* Cloud cards yuqorida */}
-          <CloudCard pos="top-[2%]  left-[8%]"  icon={<PercentIcon />}  color="amber" delay="0.4s" />
-          <CloudCard pos="top-[-3%] left-[42%]" icon={<ClockIcon />}    color="blue"  delay="0.6s" big />
-          <CloudCard pos="top-[6%]  right-[5%]" icon={<LockPenIcon />}  color="blue"  delay="0.8s" />
+        <div className="relative h-full">
+          {/* Cloud cards — yuqorida */}
+          <CloudCard pos="top-[4%]  left-[10%]"  icon={<PercentIcon />}  color="amber" delay="0.4s" />
+          <CloudCard pos="top-[0%]  left-[42%]"  icon={<ClockIcon />}    color="blue"  delay="0.6s" big />
+          <CloudCard pos="top-[6%]  right-[6%]"  icon={<LockPenIcon />}  color="blue"  delay="0.8s" />
 
-          {/* Dotted gold flow lines — cloud'larni platformaga ulaydi */}
+          {/* Dotted flow lines (cloud → platforma) */}
           <FlowLines />
 
-          {/* Floating yellow arrow (chap) */}
-          <div className="absolute top-[34%] left-[2%] showcase-coin-float pointer-events-none"
+          {/* Floating yellow arrow */}
+          <div className="absolute top-[36%] left-[6%] showcase-coin-float pointer-events-none z-10"
                style={{ animationDelay: '0.5s' }}>
-            <svg width="60" height="80" viewBox="0 0 60 80">
+            <svg width="70" height="90" viewBox="0 0 60 80">
               <defs>
                 <linearGradient id="arr-grad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#fde68a" />
@@ -127,76 +127,75 @@ export default function ShowcasePage() {
               </defs>
               <path d="M 20 5 L 50 35 L 35 35 L 35 75 L 5 75 L 5 35 L -10 35 Z"
                     fill="url(#arr-grad)"
-                    transform="rotate(-30 25 40)"
-                    style={{ filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.4))' }} />
+                    transform="rotate(-25 25 40)"
+                    style={{ filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.5))' }} />
             </svg>
           </div>
 
-          {/* Floating gold "0" (o'ng) */}
-          <div className="absolute top-[38%] right-[2%] showcase-coin-float pointer-events-none"
+          {/* Floating gold ring "0" */}
+          <div className="absolute top-[40%] right-[2%] showcase-coin-float pointer-events-none z-10"
                style={{ animationDelay: '0.9s' }}>
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-300 to-amber-600
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-300 to-amber-600
                             ring-4 ring-amber-200/40
-                            shadow-[0_10px_30px_-4px_rgba(245,158,11,0.7),inset_0_2px_0_rgba(255,255,255,0.5)]
+                            shadow-[0_12px_30px_-4px_rgba(245,158,11,0.7),inset_0_2px_0_rgba(255,255,255,0.5)]
                             grid place-items-center">
-              <div className="w-7 h-7 rounded-full ring-[3px] ring-amber-900/50" />
+              <div className="w-8 h-8 rounded-full ring-[4px] ring-amber-900/40" />
             </div>
           </div>
 
-          {/* Dot pattern circle (o'ng past) */}
-          <div className="absolute bottom-[18%] right-[-4%] w-24 h-24 opacity-50 pointer-events-none"
+          {/* Dot pattern circle */}
+          <div className="absolute bottom-[6%] right-[-3%] w-28 h-28 opacity-50 pointer-events-none"
                style={{
                  backgroundImage: 'radial-gradient(circle, #fbbf24 1.5px, transparent 1.5px)',
-                 backgroundSize: '10px 10px',
+                 backgroundSize: '11px 11px',
                  maskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
                  WebkitMaskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
                }} />
 
-          {/* PLATFORM (markaziy 3D ko'tarilgan asos) */}
-          <div className="relative w-full max-w-[600px] showcase-card-in" style={{ perspective: '1600px' }}>
-            <div className="relative" style={{ transform: 'rotateX(15deg)', transformStyle: 'preserve-3d' }}>
-              {/* Platform yuqori yuzasi */}
-              <div className="relative w-full h-[280px] rounded-[28px]
-                              bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900
-                              ring-1 ring-white/15
-                              shadow-[0_30px_80px_-15px_rgba(0,0,0,0.8)]
-                              overflow-hidden">
-                {/* Inner stars */}
-                <div className="absolute inset-0 opacity-50"
-                     style={{
-                       backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 0.6px, transparent 0.6px)',
-                       backgroundSize: '20px 20px',
-                     }} />
-                {/* Inner glow */}
-                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.25)_0%,transparent_70%)]" />
+          {/* ASOSIY KOMPOZITSIYA — markazda */}
+          <div className="absolute inset-x-0 bottom-[5%] flex items-end justify-center"
+               style={{ perspective: '1800px' }}>
+            <div className="relative w-full max-w-[720px] showcase-card-in">
+              {/* Platform — 3D tilt */}
+              <div className="relative" style={{ transform: 'rotateX(14deg)', transformStyle: 'preserve-3d' }}>
+                <div className="relative w-full h-[60px] rounded-[28px]
+                                bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900
+                                ring-1 ring-white/15
+                                shadow-[0_30px_80px_-15px_rgba(0,0,0,0.8)]
+                                overflow-hidden">
+                  <div className="absolute inset-0 opacity-50"
+                       style={{
+                         backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 0.6px, transparent 0.6px)',
+                         backgroundSize: '20px 20px',
+                       }} />
+                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.30)_0%,transparent_70%)]" />
+                </div>
+                <div className="absolute -bottom-3 left-2 right-2 h-3 rounded-b-[28px]
+                                bg-gradient-to-b from-slate-950 to-slate-900 ring-1 ring-white/5" />
               </div>
-              {/* Platform yon yuzi (3D ko'tarilgan effekti) */}
-              <div className="absolute -bottom-3 left-2 right-2 h-3 rounded-b-[28px]
-                              bg-gradient-to-b from-slate-950 to-slate-900 ring-1 ring-white/5" />
-            </div>
 
-            {/* Markazdagi XON SAROY seal — platforma ustida */}
-            <div className="absolute left-1/2 top-[68%] -translate-x-1/2 -translate-y-1/2 z-30 showcase-fade-up"
-                 style={{ animationDelay: '0.5s' }}>
-              <BrandSeal />
-            </div>
+              {/* Platforma ustidagi elementlar — markazda guruhlangan */}
+              <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-4 px-8 pb-4">
+                {/* Chap telefon */}
+                <div className="showcase-tx-in" style={{ animationDelay: '0.7s' }}>
+                  <PhoneLeft />
+                </div>
 
-            {/* Chap telefon */}
-            <div className="absolute left-[8%] bottom-[24%] z-20 showcase-tx-in"
-                 style={{ animationDelay: '0.7s' }}>
-              <PhoneLeft />
-            </div>
+                {/* Markazdagi XON SAROY seal (yuqoriroq) */}
+                <div className="self-end -mb-6 z-20 showcase-fade-up" style={{ animationDelay: '0.5s' }}>
+                  <BrandSeal />
+                </div>
 
-            {/* O'ng telefon */}
-            <div className="absolute left-[22%] bottom-[34%] z-25 showcase-tx-in"
-                 style={{ animationDelay: '0.9s' }}>
-              <PhoneRight />
-            </div>
+                {/* O'ng telefon */}
+                <div className="showcase-tx-in" style={{ animationDelay: '0.9s' }}>
+                  <PhoneRight />
+                </div>
 
-            {/* Laptop o'ngda — ochiq holatda */}
-            <div className="absolute right-[2%] bottom-[10%] z-20 showcase-tx-in"
-                 style={{ animationDelay: '1.1s' }}>
-              <LaptopMock bal={bal} />
+                {/* Laptop */}
+                <div className="showcase-tx-in self-end" style={{ animationDelay: '1.1s' }}>
+                  <LaptopMock bal={bal} />
+                </div>
+              </div>
             </div>
           </div>
         </div>
