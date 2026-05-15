@@ -67,6 +67,42 @@ export class TransactionsService {
   }
 
   /**
+   * Hisob raqami bo'yicha tranzaksiyalar sonini olish (cleanup oldidan ko'rsatish uchun).
+   */
+  async countByAccountNo(accountNo: string) {
+    const acc = await this.prisma.bankAccount.findFirst({
+      where: { accountNo },
+      select: {
+        id: true, accountNo: true, ownerName: true, branch: true, balance: true, currency: true,
+        bank: { select: { id: true, code: true, name: true } },
+      },
+    });
+    if (!acc) return { ok: false, error: 'Bunday hisob raqami topilmadi' };
+    const [count, payments, lastTxn, firstTxn] = await Promise.all([
+      this.prisma.transaction.count({ where: { accountId: acc.id } }),
+      this.prisma.payment.count({ where: { transaction: { accountId: acc.id } } }),
+      this.prisma.transaction.findFirst({
+        where: { accountId: acc.id },
+        orderBy: { txnDate: 'desc' },
+        select: { txnDate: true },
+      }),
+      this.prisma.transaction.findFirst({
+        where: { accountId: acc.id },
+        orderBy: { txnDate: 'asc' },
+        select: { txnDate: true },
+      }),
+    ]);
+    return {
+      ok: true,
+      account: acc,
+      count,
+      paymentsCount: payments,
+      firstTxnDate: firstTxn?.txnDate || null,
+      lastTxnDate: lastTxn?.txnDate || null,
+    };
+  }
+
+  /**
    * Hisob raqami bo'yicha barcha tranzaksiyalarni o'chirish.
    * Bog'liq Payment yozuvlarini ham birga o'chiradi (avval).
    * Hisob raqamining o'zi DB'dan o'chmaydi — faqat tranzaksiyalar.
