@@ -9,6 +9,7 @@ import {
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
   Hash, Receipt, Link2, History, Loader2, AlertCircle,
+  Wrench, Printer,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { BankLogo } from '@/components/bank-logo';
@@ -267,66 +268,104 @@ export default function TransactionsPage() {
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 lg:p-5">
             <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              {/* Qidiruv — fokuslanganda animatsion gradient halqa + glow */}
+              <div className="relative flex-1 min-w-[240px] group/search">
+                {/* Tashqi gradient halqa — fokuslanganda paydo bo'ladi */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -inset-px rounded-xl opacity-0 transition-opacity duration-300 group-focus-within/search:opacity-100"
+                  style={{
+                    background: 'conic-gradient(from var(--angle, 0deg), #6366f1, #06b6d4, #10b981, #6366f1)',
+                    filter: 'blur(0.5px)',
+                    animation: 'searchRing 6s linear infinite',
+                  }}
+                />
+                <Search className={cn(
+                  'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors duration-300 z-10',
+                  q ? 'text-indigo-500' : 'text-slate-400 group-focus-within/search:text-indigo-500',
+                )} />
                 <Input
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
+                  className={cn(
+                    'relative pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200',
+                    'transition-all duration-300',
+                    'focus-visible:bg-white focus-visible:ring-0 focus-visible:ring-offset-0',
+                    'focus-visible:shadow-[0_0_0_3px_rgba(99,102,241,0.12),0_8px_24px_-8px_rgba(99,102,241,0.35)]',
+                    'focus-visible:border-indigo-300',
+                    'hover:border-slate-300',
+                  )}
                   placeholder="Yuboruvchi, qabul qiluvchi, STIR, izoh..."
                   value={q}
                   onChange={(e) => { setQ(e.target.value); setPage(1); }}
                 />
                 {q && (
-                  <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
-                    <X className="h-3.5 w-3.5" />
+                  <button
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:text-white hover:bg-rose-500 transition-colors z-10"
+                    onClick={() => setQ('')}
+                    aria-label={tc('reset')}
+                  >
+                    <X className="h-3 w-3" />
                   </button>
                 )}
+                <style jsx>{`
+                  @keyframes searchRing {
+                    to { --angle: 360deg; }
+                  }
+                  @property --angle {
+                    syntax: '<angle>';
+                    initial-value: 0deg;
+                    inherits: false;
+                  }
+                `}</style>
               </div>
 
-              {/* Asboblar — tarix, ID, eksport — bitta guruh */}
-              <div className="inline-flex h-10 rounded-xl bg-slate-50 ring-1 ring-slate-200 overflow-hidden shrink-0">
-                <button
-                  onClick={() => setBackfillOpen(true)}
-                  title="Eski tarixni yuklash — sana oralig'i bo'yicha"
-                  className="px-2.5 grid place-items-center text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-r border-slate-200"
-                >
-                  <History className="h-4 w-4" />
-                </button>
-                <button
-                  onClick={() => setIdSearchOpen(true)}
-                  title="Tranzaksiya ID orqali qidirish"
-                  className="px-2.5 grid place-items-center text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-r border-slate-200"
-                >
-                  <Hash className="h-4 w-4" />
-                </button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      title="Eksport"
-                      className="px-2.5 grid place-items-center text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filtr bo'yicha (hammasi)</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={exportExcel}>
-                      <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
-                    <DropdownMenuItem onClick={exportCsv}>
-                      <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" /> CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={exportJson}>
-                      <FileText className="h-4 w-4 mr-2 text-blue-600" /> JSON
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={exportPrint}>
-                      <FileText className="h-4 w-4 mr-2 text-slate-600" /> Chop etish / PDF
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+              {/* Asboblar — bitta dropdown ichida: Tarix, ID, Eksport */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Asboblar — tarix, ID, eksport"
+                    className={cn(
+                      'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
+                      'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
+                      'shadow-sm hover:shadow-lg hover:shadow-indigo-500/30',
+                      'transition-all duration-200 hover:scale-105 active:scale-95',
+                      'ring-1 ring-indigo-400/30',
+                    )}
+                  >
+                    <Wrench className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-60">
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Asboblar</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
+                    <History className="h-4 w-4 mr-2 text-indigo-600" />
+                    <span className="flex-1">Eski tarixni yuklash</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
+                    <Hash className="h-4 w-4 mr-2 text-violet-600" />
+                    <span className="flex-1">ID orqali qidirish</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Eksport — filtr bo'yicha</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                    <span className="flex-1">Excel (hammasi)</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
+                    <span className="flex-1">CSV</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportJson} className="cursor-pointer">
+                    <FileText className="h-4 w-4 mr-2 text-blue-600" />
+                    <span className="flex-1">JSON</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
+                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
+                    <span className="flex-1">Chop etish / PDF</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <FilterChip
                 active={direction !== 'all'}
