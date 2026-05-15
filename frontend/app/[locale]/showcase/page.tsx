@@ -150,8 +150,9 @@ export default function ShowcasePage() {
                     {/* TOTAL BALANCE — hero element */}
                     <div className="group rounded-2xl bg-gradient-to-br from-slate-900/85 to-slate-800/55 ring-1 ring-white/10 p-4 relative overflow-hidden
                                     transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/50 hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.35)]
-                                    hover:[transform:translateZ(40px)_scale(1.025)]">
+                                    hover:ring-amber-400/70 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.5)]
+                                    hover:[transform:translateZ(70px)_scale(1.05)]
+                                    active:[transform:translateZ(40px)_scale(1.02)] active:duration-100">
                       <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-amber-400/15 blur-3xl" />
                       <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full bg-cyan-400/12 blur-3xl" />
                       <div className="relative flex items-start justify-between gap-3">
@@ -179,9 +180,10 @@ export default function ShowcasePage() {
                     {/* Payment analytics */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
                                     transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-cyan-400/50 hover:shadow-[0_30px_60px_-10px_rgba(34,211,238,0.35)]
-                                    hover:bg-white/[0.045]
-                                    hover:[transform:translateZ(40px)_scale(1.025)]">
+                                    hover:ring-cyan-400/70 hover:shadow-[0_40px_80px_-10px_rgba(34,211,238,0.5)]
+                                    hover:bg-white/[0.06]
+                                    hover:[transform:translateZ(70px)_scale(1.05)]
+                                    active:[transform:translateZ(40px)_scale(1.02)] active:duration-100">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Payment analytics</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Auraeoce ▾</span>
@@ -210,9 +212,10 @@ export default function ShowcasePage() {
                     {/* Transaction finance bars */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
                                     transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/50 hover:shadow-[0_30px_60px_-10px_rgba(245,158,11,0.35)]
-                                    hover:bg-white/[0.045]
-                                    hover:[transform:translateZ(40px)_scale(1.03)]">
+                                    hover:ring-amber-400/70 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.5)]
+                                    hover:bg-white/[0.06]
+                                    hover:[transform:translateZ(70px)_scale(1.06)]
+                                    active:[transform:translateZ(40px)_scale(1.03)] active:duration-100">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Transaction finance</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Aqvdcoin ▾</span>
@@ -226,9 +229,10 @@ export default function ShowcasePage() {
                     {/* Secure Banking */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3 flex items-center gap-2.5
                                     transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-emerald-400/50 hover:shadow-[0_30px_60px_-10px_rgba(52,211,153,0.35)]
-                                    hover:bg-white/[0.045]
-                                    hover:[transform:translateZ(40px)_scale(1.03)]">
+                                    hover:ring-emerald-400/70 hover:shadow-[0_40px_80px_-10px_rgba(52,211,153,0.5)]
+                                    hover:bg-white/[0.06]
+                                    hover:[transform:translateZ(70px)_scale(1.06)]
+                                    active:[transform:translateZ(40px)_scale(1.03)] active:duration-100">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
                                       shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-2px_rgba(245,158,11,0.5)]">
                         <ShieldIcon />
@@ -246,8 +250,9 @@ export default function ShowcasePage() {
                     <div className="relative rounded-2xl p-3.5 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 text-slate-900
                                     ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden
                                     transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/70 hover:shadow-[0_30px_70px_-10px_rgba(245,158,11,0.55)]
-                                    hover:[transform:translateZ(50px)_scale(1.04)]">
+                                    hover:ring-amber-400 hover:shadow-[0_45px_90px_-10px_rgba(245,158,11,0.7)]
+                                    hover:[transform:translateZ(85px)_scale(1.08)_rotateZ(-1deg)]
+                                    active:[transform:translateZ(50px)_scale(1.04)] active:duration-100">
                       <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
                       <div className="relative flex items-center justify-between">
                         <LogoDisc size={28} rounded="rounded-full" />
@@ -665,18 +670,27 @@ function TrendUp() {
 }
 
 function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' }) {
+  const [ringing, setRinging] = useState(false);
   const cls = color === 'amber'
-    ? 'bg-amber-400/15 text-amber-300 ring-amber-400/25'
-    : 'bg-cyan-400/15 text-cyan-300 ring-cyan-400/25';
+    ? 'bg-amber-400/15 text-amber-300 ring-amber-400/25 hover:bg-amber-400/30 hover:ring-amber-400/60 hover:shadow-[0_0_20px_rgba(245,158,11,0.6)]'
+    : 'bg-cyan-400/15 text-cyan-300 ring-cyan-400/25 hover:bg-cyan-400/30 hover:ring-cyan-400/60 hover:shadow-[0_0_20px_rgba(34,211,238,0.6)]';
   return (
-    <div className={`relative w-8 h-8 rounded-full grid place-items-center ring-1 ${cls}`}>
-      <span className="absolute -top-1 -right-1 min-w-[13px] h-[13px] rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center px-1">
+    <button
+      type="button"
+      onClick={() => { setRinging(true); setTimeout(() => setRinging(false), 700); }}
+      className={`relative w-8 h-8 rounded-full grid place-items-center ring-1 transition-all duration-200
+                  hover:scale-110 active:scale-90 ${cls}`}>
+      <span className="absolute -top-1 -right-1 min-w-[13px] h-[13px] rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center px-1
+                       shadow-[0_0_8px_rgba(244,63,94,0.7)]">
         {count}
       </span>
-      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      {ringing && (
+        <span className="absolute inset-[-6px] rounded-full ring-2 ring-current animate-ping pointer-events-none" />
+      )}
+      <svg className={`w-3.5 h-3.5 ${ringing ? 'showcase-bell-shake' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
         <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" />
       </svg>
-    </div>
+    </button>
   );
 }
