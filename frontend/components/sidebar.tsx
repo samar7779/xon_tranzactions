@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -39,7 +40,6 @@ const GROUP_KEY: Record<string, string> = {
 
 export function Sidebar() {
   const t = useTranslations('nav');
-  const tApp = useTranslations('app');
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
@@ -62,18 +62,18 @@ export function Sidebar() {
         className="group relative block px-5 pt-6 pb-5 border-b border-slate-100"
       >
         <div className="relative flex items-center gap-3">
-          {/* Monogram tile */}
-          <span className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 grid place-items-center text-white shadow-lg shadow-indigo-500/30 group-hover:shadow-indigo-500/50 transition-shadow overflow-hidden shrink-0">
-            {/* Inner glossy overlay */}
-            <span className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent" />
-            {/* Crossing arrows monogram — in/out flow */}
-            <svg viewBox="0 0 32 32" className="relative w-6 h-6" aria-hidden>
-              <path d="M11 7 V21 M6 16 L11 21 L16 16"
-                stroke="#a7f3d0" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              <path d="M21 25 V11 M16 16 L21 11 L26 16"
-                stroke="#fda4af" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            </svg>
-            {/* Pulsing dot */}
+          {/* XON SAROY logo */}
+          <span className="relative w-12 h-12 shrink-0 grid place-items-center">
+            <span className="absolute inset-0 bg-amber-400/20 blur-xl rounded-full" />
+            <Image
+              src="/xon-saroy-logo.png"
+              alt="Xon Saroy"
+              width={48}
+              height={48}
+              priority
+              className="relative w-full h-full object-contain drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]"
+            />
+            {/* Live dot */}
             <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
               <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
             </span>
@@ -81,25 +81,22 @@ export function Sidebar() {
 
           {/* Wordmark */}
           <div className="min-w-0 flex-1">
-            <div className="flex items-baseline gap-1">
-              <span className="text-[17px] font-black tracking-tight bg-gradient-to-br from-slate-900 via-indigo-700 to-violet-700 bg-clip-text text-transparent leading-none">
-                XON
-              </span>
-              <span className="text-[12px] font-bold text-slate-400 tracking-tight leading-none">
-                TX
-              </span>
+            <div className="text-[15px] font-black tracking-[0.05em] uppercase
+                            bg-gradient-to-br from-amber-600 via-amber-700 to-amber-800
+                            bg-clip-text text-transparent leading-none">
+              XON SAROY
             </div>
             <div className="mt-1 flex items-center gap-1.5">
-              <span className="inline-block w-1 h-1 rounded-full bg-indigo-500" />
-              <span className="text-[9px] font-bold tracking-[0.18em] uppercase text-slate-500">
-                {tApp('title').replace(/Xon\s*/i, '').trim() || 'Treasury'}
+              <span className="inline-block w-1 h-1 rounded-full bg-amber-500" />
+              <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-slate-500">
+                Transactions
               </span>
             </div>
           </div>
         </div>
 
         {/* Animated underline accent */}
-        <span className="absolute left-5 right-5 bottom-0 h-px bg-gradient-to-r from-transparent via-indigo-300/60 to-transparent" />
+        <span className="absolute left-5 right-5 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
       </Link>
 
       {/* Nav */}
