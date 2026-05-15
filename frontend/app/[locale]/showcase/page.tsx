@@ -45,46 +45,40 @@ export default function ShowcasePage() {
       <BackgroundNetwork />
       <ConstellationBottom />
 
-      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-2">
+      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-4 pb-2">
+
+        {/* Title — dashboard ustida shimmer effect bilan */}
+        <div className="text-center showcase-fade-up pointer-events-none"
+             style={{ animationDelay: '0.1s' }}>
+          <h1 className="text-[26px] sm:text-[32px] lg:text-[40px] font-bold tracking-[0.04em] leading-[0.95]
+                         bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
+                         drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
+                         showcase-text-shimmer"
+              style={{ backgroundSize: '200% 100%' }}>
+            XON SAROY TRANSACTIONS
+          </h1>
+          <div className="mx-auto mt-1 h-px w-[55%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+          <div className="text-[9px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-1">
+            real-time banking platform
+          </div>
+        </div>
 
         {/* 3D dashboard + atrofdagi elementlar */}
-        <div className="relative flex-1 w-full max-w-[1200px] mx-auto"
+        <div className="relative flex-1 w-full max-w-[1200px] mx-auto mt-2"
              style={{ perspective: '1900px' }}>
 
-          {/* Title — dashboard tepasida shimmer effect bilan */}
-          <div className="absolute top-[2%] left-1/2 -translate-x-1/2 z-30 showcase-fade-up text-center pointer-events-none"
-               style={{ animationDelay: '0.1s' }}>
-            <div className="relative">
-              <h1 className="relative text-[24px] sm:text-[30px] lg:text-[36px] font-bold tracking-[0.04em] leading-[0.95]
-                             bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
-                             drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
-                             showcase-text-shimmer"
-                  style={{ backgroundSize: '200% 100%' }}>
-                XON SAROY TRANSACTIONS
-              </h1>
-              <div className="mx-auto mt-1 h-px w-[60%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
-              <div className="text-[9px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-1">
-                real-time banking platform
-              </div>
-            </div>
-          </div>
-
           {/* Storyset SVG scenes — dashboard yonida kichik dekoratsiya */}
-          <SvgScene src="/showcase-tx.svg"        pos="top-[6%]   left-[22%]"  size={110} glow="cyan"  delay="0.8s" />
-          <SvgScene src="/showcase-analytics.svg" pos="bottom-[6%] right-[22%]" size={110} glow="amber" delay="1.4s" />
+          <SvgScene src="/showcase-tx.svg"        pos="top-[2%]    left-[22%]"  size={100} glow="cyan"  delay="0.8s" />
+          <SvgScene src="/showcase-analytics.svg" pos="bottom-[2%] right-[22%]" size={100} glow="amber" delay="1.4s" />
 
-          {/* Floating coins — qarish $ € va logoli tokenlar */}
-          <Coin sym="€" pos="top-[2%]   left-[42%]"   size="md" bg="from-blue-500 to-blue-800"   delay="1.2s" />
-          <Coin sym="$" pos="top-[26%]  right-[1%]"   size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
-          <Coin sym="€" pos="bottom-[2%] left-[40%]"   size="sm" bg="from-slate-100 to-slate-300" delay="3.0s" gold />
+          {/* Floating coins — qarish $ € */}
+          <Coin sym="$" pos="top-[12%]  right-[42%]"  size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
+          <Coin sym="€" pos="bottom-[12%] left-[42%]" size="sm" bg="from-blue-500 to-blue-800"   delay="3.0s" />
 
-          {/* Logoli tokenlar — sichqonchadan qochadi */}
-          <LogoCoin pos="top-[10%]   left-[12%]"   size="sm" delay="2.4s" />
-          <LogoCoin pos="top-[42%]   left-[16%]"   size="md" delay="0.4s" />
-          <LogoCoin pos="bottom-[12%] left-[34%]"  size="sm" delay="1.0s" />
-          <LogoCoin pos="bottom-[8%]  right-[40%]" size="md" delay="1.8s" />
-          <LogoCoin pos="top-[40%]   right-[12%]" size="sm" delay="2.0s" />
-          <LogoCoin pos="bottom-[28%] right-[18%]" size="sm" delay="0.7s" />
+          {/* Logoli tokenlar — sichqonchadan qochadi (bank kartalar bilan ust-ma-ust kelmaydigan joylar) */}
+          <LogoCoin pos="top-[4%]    left-[42%]"   size="sm" delay="2.4s" />
+          <LogoCoin pos="bottom-[14%] right-[40%]" size="md" delay="1.8s" />
+          <LogoCoin pos="bottom-[2%]  left-[28%]"  size="sm" delay="0.7s" />
 
           {/* Bank live cards — CHAP TOMON (real-time transaction stream) */}
           <BankLiveCard
