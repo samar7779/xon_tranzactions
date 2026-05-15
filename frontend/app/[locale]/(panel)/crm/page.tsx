@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslations, useLocale } from 'next-intl';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Search, Loader2, Briefcase, Home, Building2, User, Calendar,
+  Search, Loader2, BookUser, Home, Building2, User, Calendar,
   Wallet, FileText, CheckCircle2, AlertCircle, Clock, X, History,
   CreditCard, Phone, MapPin, Hash, BookOpen, ChevronRight, ChevronDown,
-  Receipt, Sparkles, Banknote, Tag,
+  Receipt, Sparkles, Banknote, Tag, ArrowRight, CornerDownLeft,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -46,9 +46,13 @@ export default function CrmPage() {
   const apiLang: 'uz' | 'ru' = locale === 'ru' ? 'ru' : 'uz';
 
   const [q, setQ] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
   const [detail, setDetail] = useState<ContractDetail | null>(null);
   const [activeContract, setActiveContract] = useState<string>('');
   const [recent, setRecent] = useState<string[]>([]);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -56,6 +60,36 @@ export default function CrmPage() {
       if (raw) setRecent(JSON.parse(raw));
     } catch { /* ignore */ }
   }, []);
+
+  // Debounce input — 250ms
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQ(q.trim()), 250);
+    return () => clearTimeout(id);
+  }, [q]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setFocused(false);
+      }
+    }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  // Live autocomplete — searches as user types
+  const { data: suggData, isFetching: suggesting } = useQuery({
+    queryKey: ['crm-search', debouncedQ],
+    queryFn: () =>
+      api.get<{ ok: boolean; items?: any[]; error?: string }>(
+        `/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=10`,
+      ),
+    enabled: debouncedQ.length >= 3 && focused,
+    staleTime: 30_000,
+  });
+  const suggestions = (suggData?.items || []) as Array<any>;
+  const showDropdown = focused && debouncedQ.length >= 3;
 
   function pushRecent(contract: string) {
     const next = [contract, ...recent.filter((x) => x !== contract)].slice(0, 8);
@@ -88,7 +122,34 @@ export default function CrmPage() {
     const c = (value ?? q).trim();
     if (!c) return;
     setQ(c);
+    setFocused(false);
+    setHighlight(-1);
     showMut.mutate(c);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showDropdown || suggestions.length === 0) {
+      if (e.key === 'Enter') runSearch();
+      return;
+    }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlight((h) => Math.min(suggestions.length - 1, h + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlight((h) => Math.max(-1, h - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlight >= 0 && suggestions[highlight]) {
+        const s = suggestions[highlight];
+        runSearch(s.contract || s.contract_number);
+      } else {
+        runSearch();
+      }
+    } else if (e.key === 'Escape') {
+      setFocused(false);
+      setHighlight(-1);
+    }
   }
 
   function clearRecent() {
@@ -142,45 +203,73 @@ export default function CrmPage() {
       <div className="flex-1 p-6 lg:p-8 w-full">
         <div className="w-full space-y-6">
 
-          {/* ═══ Search hero ═══ */}
-          <Card className="border-0 shadow-soft overflow-hidden">
-            <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 lg:px-8 py-7 overflow-hidden">
-              <div className="absolute inset-0 bg-dots opacity-10 pointer-events-none" />
-              <div className="absolute -top-20 -right-20 w-72 h-72 rounded-full bg-fuchsia-400/15 blur-3xl pointer-events-none" />
-              <div className="absolute -bottom-20 -left-10 w-72 h-72 rounded-full bg-cyan-400/15 blur-3xl pointer-events-none" />
-
-              <div className="relative flex flex-col lg:flex-row items-start lg:items-center gap-5">
-                <div className="flex items-center gap-4 shrink-0">
-                  <div className="w-14 h-14 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur-md grid place-items-center text-white">
-                    <Briefcase className="h-7 w-7" />
+          {/* ═══ Search bar — clean elevated card with autocomplete ═══ */}
+          <Card className="border-0 shadow-soft overflow-visible">
+            <div className="relative px-5 py-5 bg-white">
+              <div className="flex items-center gap-4">
+                {/* Compact icon */}
+                <div className="relative shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-indigo-500/30">
+                    <BookUser className="h-6 w-6" />
                   </div>
-                  <div className="lg:hidden">
-                    <div className="text-white/80 text-[10px] uppercase tracking-[0.2em] font-bold">XonSaroy CRM</div>
-                    <div className="text-white text-lg font-bold">{t('searchHint')}</div>
-                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white">
+                    <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />
+                  </span>
                 </div>
 
-                <div className="flex-1 w-full lg:max-w-2xl">
-                  <div className="hidden lg:block text-white/80 text-[10px] uppercase tracking-[0.2em] font-bold mb-1.5">
-                    XonSaroy CRM
+                {/* Search input with dropdown */}
+                <div className="flex-1 min-w-0" ref={searchRef}>
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 mb-1.5">
+                    <span>XonSaroy CRM</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300" />
+                    <span className="text-slate-400 normal-case tracking-normal font-medium">{t('exampleHint')}</span>
                   </div>
-                  <div className="relative group/search">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400 z-10" />
+
+                  <div className="relative">
+                    {/* Glow ring when focused (animated conic gradient) */}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'pointer-events-none absolute -inset-px rounded-2xl transition-opacity duration-300',
+                        focused ? 'opacity-100' : 'opacity-0',
+                      )}
+                      style={{
+                        background: 'conic-gradient(from var(--crm-angle, 0deg), #6366f1, #a855f7, #ec4899, #6366f1)',
+                        filter: 'blur(0.5px)',
+                        animation: 'crmRing 6s linear infinite',
+                      }}
+                    />
+                    <style jsx>{`
+                      @keyframes crmRing { to { --crm-angle: 360deg; } }
+                      @property --crm-angle {
+                        syntax: '<angle>';
+                        initial-value: 0deg;
+                        inherits: false;
+                      }
+                    `}</style>
+
+                    <Search className={cn(
+                      'absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors z-10',
+                      q || focused ? 'text-indigo-500' : 'text-slate-400',
+                    )} />
                     <Input
                       value={q}
-                      onChange={(e) => setQ(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') runSearch(); }}
+                      onChange={(e) => { setQ(e.target.value); setHighlight(-1); }}
+                      onFocus={() => setFocused(true)}
+                      onKeyDown={onKeyDown}
                       placeholder={t('searchPlaceholder')}
                       className={cn(
-                        'pl-12 pr-32 h-14 text-base rounded-2xl bg-white border-0',
-                        'shadow-[0_8px_30px_-8px_rgba(0,0,0,0.25)]',
-                        'focus-visible:ring-4 focus-visible:ring-white/40 focus-visible:ring-offset-0',
+                        'relative pl-12 pr-32 h-12 text-base rounded-2xl',
+                        'bg-slate-50/70 border-slate-200',
+                        'focus-visible:bg-white focus-visible:ring-0 focus-visible:ring-offset-0',
+                        'focus-visible:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]',
+                        'focus-visible:border-indigo-300',
                       )}
                     />
                     {q && !showMut.isPending && (
                       <button
-                        onClick={() => { setQ(''); setDetail(null); setActiveContract(''); }}
-                        className="absolute right-28 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                        onClick={() => { setQ(''); setDebouncedQ(''); setDetail(null); setActiveContract(''); setHighlight(-1); }}
+                        className="absolute right-[110px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors z-10"
                         aria-label={tc('reset')}
                       >
                         <X className="h-4 w-4" />
@@ -189,16 +278,52 @@ export default function CrmPage() {
                     <Button
                       onClick={() => runSearch()}
                       disabled={!q.trim() || showMut.isPending}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 h-11 px-4 rounded-xl gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold shadow-md"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 h-9 px-3.5 rounded-xl gap-1.5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white font-semibold text-[12px] shadow-md z-10"
                     >
                       {showMut.isPending ? (
-                        <><Loader2 className="h-4 w-4 animate-spin" /> {t('searching')}</>
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('searching')}</>
                       ) : (
-                        <><Search className="h-4 w-4" /> {t('searchBtn')}</>
+                        <><Search className="h-3.5 w-3.5" /> {t('searchBtn')}</>
                       )}
                     </Button>
+
+                    {/* Autocomplete dropdown */}
+                    {showDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 z-30 rounded-2xl bg-white ring-1 ring-slate-200 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.35)] overflow-hidden">
+                        {suggesting && suggestions.length === 0 ? (
+                          <div className="px-4 py-3 text-[12px] text-slate-500 flex items-center gap-2">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('searching')}
+                          </div>
+                        ) : suggestions.length === 0 ? (
+                          <div className="px-4 py-6 text-[12px] text-slate-500 text-center">
+                            <Search className="h-6 w-6 text-slate-300 mx-auto mb-1.5" />
+                            {t('notFound')}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="px-4 py-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-400 bg-slate-50/70 flex items-center justify-between">
+                              <span>{suggestions.length} {suggestions.length === 1 ? '' : ''}</span>
+                              <span className="flex items-center gap-1 text-slate-400 normal-case tracking-normal font-medium">
+                                <CornerDownLeft className="h-2.5 w-2.5" /> Enter
+                              </span>
+                            </div>
+                            <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-50">
+                              {suggestions.map((s, i) => (
+                                <SuggestionRow
+                                  key={s.id || s.contract || i}
+                                  item={s}
+                                  active={highlight === i}
+                                  onPick={() => runSearch(s.contract || s.contract_number)}
+                                  onHover={() => setHighlight(i)}
+                                  apiLang={apiLang}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-white/70 text-xs mt-2 ml-1">{t('exampleHint')}</div>
                 </div>
               </div>
             </div>
@@ -265,34 +390,47 @@ export default function CrmPage() {
           {/* ═══ Contract details ═══ */}
           {!showMut.isPending && detail && (
             <>
-              {/* Hero card: object + apartment + client + status */}
+              {/* Hero card — light, modern fintech */}
               <Card className="border-0 shadow-soft overflow-hidden">
-                <div className="relative bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 overflow-hidden">
-                  <div className="absolute inset-0 bg-dots opacity-10 pointer-events-none" />
-                  <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full bg-indigo-400/15 blur-3xl pointer-events-none" />
-                  <div className="absolute -bottom-32 -left-10 w-80 h-80 rounded-full bg-fuchsia-400/15 blur-3xl pointer-events-none" />
+                <div className="relative bg-white">
+                  {/* Top accent bar */}
+                  <div className={cn(
+                    'h-1 bg-gradient-to-r',
+                    statusKey === 'paid' ? 'from-emerald-500 via-teal-500 to-cyan-500'
+                    : statusKey === 'overdue' ? 'from-rose-500 via-red-500 to-amber-500'
+                    : statusKey === 'sold' ? 'from-indigo-500 via-violet-500 to-fuchsia-500'
+                    : 'from-indigo-500 via-blue-500 to-cyan-500',
+                  )} />
 
-                  <div className="relative px-6 lg:px-8 py-7 text-white">
+                  <div className="px-6 lg:px-8 py-6">
                     <div className="flex items-start justify-between gap-4 flex-wrap">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1.5 text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold">
-                          <Building2 className="h-3 w-3" />
-                          {t('object')}
+                      {/* Left: object + client */}
+                      <div className="min-w-0 flex-1 flex items-start gap-4">
+                        {/* Object icon tile */}
+                        <div className="hidden sm:grid w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 place-items-center text-white shadow-lg shadow-indigo-500/25 shrink-0">
+                          <Building2 className="h-7 w-7" />
                         </div>
-                        <div className="text-3xl lg:text-4xl font-black tracking-tight truncate">
-                          {info.object || '—'}
-                        </div>
-                        <div className="mt-2 flex items-center gap-2 text-white/90 text-sm">
-                          <User className="h-4 w-4" />
-                          <span className="truncate">{fullName || '—'}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] uppercase tracking-[0.18em] font-bold">
+                            <Sparkles className="h-3 w-3 text-indigo-500" />
+                            {t('object')}
+                          </div>
+                          <div className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900 truncate">
+                            {info.object || '—'}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-slate-600 text-sm">
+                            <User className="h-4 w-4 text-slate-400" />
+                            <span className="font-semibold truncate">{fullName || '—'}</span>
+                          </div>
                         </div>
                       </div>
 
+                      {/* Right: contract number + status */}
                       <div className="text-right shrink-0">
-                        <div className="text-white/70 text-[10px] uppercase tracking-[0.2em] font-bold mb-1">
+                        <div className="text-slate-500 text-[10px] uppercase tracking-[0.18em] font-bold mb-1">
                           {t('contractNumber')}
                         </div>
-                        <div className="text-2xl font-black font-mono tracking-tight">
+                        <div className="text-2xl font-black font-mono tracking-tight bg-gradient-to-br from-indigo-700 via-violet-700 to-fuchsia-700 bg-clip-text text-transparent">
                           {activeContract}
                         </div>
                         <span className={cn(
@@ -331,39 +469,40 @@ export default function CrmPage() {
                     </div>
                   </div>
 
-                  {/* Money strip */}
-                  <div className="relative bg-black/30 backdrop-blur-sm border-t border-white/10 px-6 lg:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-4 text-white">
-                    <MoneyTile
+                  {/* Money strip — light bg with colored accents */}
+                  <div className="border-t border-slate-100 bg-gradient-to-br from-slate-50/60 to-white px-6 lg:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <MoneyTileLight
                       label={t('price')}
                       value={formatMoney(totalPrice, 'UZS')}
-                      tone="white"
+                      gradient="from-indigo-500 to-violet-600"
                     />
-                    <MoneyTile
+                    <MoneyTileLight
                       label={t('paid')}
                       value={formatMoney(totalPaid, 'UZS')}
-                      tone="emerald"
+                      gradient="from-emerald-500 to-teal-600"
                     />
-                    <MoneyTile
+                    <MoneyTileLight
                       label={t('remaining')}
                       value={formatMoney(totalLeft, 'UZS')}
-                      tone="amber"
+                      gradient="from-amber-500 to-orange-600"
                     />
-                    <MoneyTile
+                    <MoneyTileLight
                       label={t('overdue')}
                       value={overdueSum > 0 ? formatMoney(overdueSum, 'UZS') : '—'}
-                      tone={overdueSum > 0 ? 'rose' : 'mute'}
+                      gradient={overdueSum > 0 ? 'from-rose-500 to-red-600' : 'from-slate-400 to-slate-500'}
+                      mute={overdueSum === 0}
                     />
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="relative px-6 lg:px-8 pb-5">
-                    <div className="flex items-center justify-between text-[11px] text-white/80 mb-1.5">
-                      <span className="uppercase tracking-wider font-bold">{t('paid')}</span>
-                      <span className="tabular-nums font-bold">{paidPct.toFixed(1)}%</span>
+                  {/* Progress */}
+                  <div className="px-6 lg:px-8 pb-5 bg-gradient-to-br from-slate-50/60 to-white">
+                    <div className="flex items-center justify-between text-[11px] mb-1.5">
+                      <span className="uppercase tracking-wider font-bold text-slate-500">{t('paid')}</span>
+                      <span className="tabular-nums font-black text-slate-800 text-base">{paidPct.toFixed(1)}%</span>
                     </div>
-                    <div className="h-2.5 rounded-full bg-white/15 overflow-hidden">
+                    <div className="h-2.5 rounded-full bg-slate-200/60 overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 rounded-full transition-all duration-700"
+                        className="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 rounded-full transition-all duration-700 shadow-sm"
                         style={{ width: `${paidPct}%` }}
                       />
                     </div>
@@ -515,32 +654,108 @@ export default function CrmPage() {
 
 function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 ring-1 ring-white/20 backdrop-blur-sm text-[11px] font-semibold text-white">
-      {icon}
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 ring-1 ring-slate-200 text-[11px] font-semibold text-slate-700 transition-colors">
+      <span className="text-slate-400">{icon}</span>
       {label}
     </span>
   );
 }
 
-function MoneyTile({
-  label, value, tone,
+function MoneyTileLight({
+  label, value, gradient, mute,
 }: {
   label: string;
   value: string;
-  tone: 'white' | 'emerald' | 'amber' | 'rose' | 'mute';
+  gradient: string;
+  mute?: boolean;
 }) {
-  const map = {
-    white:   'text-white',
-    emerald: 'text-emerald-300',
-    amber:   'text-amber-300',
-    rose:    'text-rose-300',
-    mute:    'text-white/60',
-  } as const;
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/70 truncate">{label}</div>
-      <div className={cn('text-lg font-black tabular-nums tracking-tight truncate mt-0.5', map[tone])}>{value}</div>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className={cn('w-1.5 h-4 rounded-full bg-gradient-to-b', gradient)} />
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
+      </div>
+      <div className={cn(
+        'text-lg font-black tabular-nums tracking-tight truncate',
+        mute ? 'text-slate-400' : 'bg-gradient-to-br bg-clip-text text-transparent',
+        !mute && gradient,
+      )}>{value}</div>
     </div>
+  );
+}
+
+function SuggestionRow({
+  item, active, onPick, onHover, apiLang,
+}: {
+  item: any;
+  active: boolean;
+  onPick: () => void;
+  onHover: () => void;
+  apiLang: 'uz' | 'ru';
+}) {
+  const contract = item.contract || item.contract_number || '—';
+  const obj = item.object || item.info?.object || item.object_name || '';
+  const ownerRaw = item.client || item.client_name || '';
+  const clientName = useMemo(() => {
+    if (!ownerRaw) return '';
+    if (typeof ownerRaw === 'string') return ownerRaw;
+    // {first_name: {lotin, kirill}, ...}
+    const f = (v: any) => {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      return v.lotin || v.kirill || '';
+    };
+    return [f(ownerRaw.last_name), f(ownerRaw.first_name), f(ownerRaw.middle_name)].filter(Boolean).join(' ').trim();
+  }, [ownerRaw]);
+  const status = item.status?.value?.name?.[apiLang] || item.status?.key || '';
+  const statusKey = item.status?.key || '';
+  const tone = STATUS_TONE[statusKey] || STATUS_TONE.waiting;
+  const price = Number(item.price || item.total_price || 0);
+
+  return (
+    <button
+      type="button"
+      onMouseDown={(e) => { e.preventDefault(); onPick(); }}
+      onMouseEnter={onHover}
+      className={cn(
+        'w-full px-4 py-2.5 text-left transition-colors flex items-center gap-3',
+        active ? 'bg-indigo-50' : 'hover:bg-slate-50',
+      )}
+    >
+      <div className={cn(
+        'w-9 h-9 rounded-xl grid place-items-center shrink-0',
+        active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500',
+      )}>
+        <FileText className="h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className={cn('font-mono text-[13px] font-bold truncate', active ? 'text-indigo-700' : 'text-slate-800')}>
+            {contract}
+          </span>
+          {status && (
+            <span className={cn(
+              'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset',
+              tone.cls,
+            )}>
+              <span className={cn('w-1 h-1 rounded-full', tone.dot)} />
+              {status}
+            </span>
+          )}
+        </div>
+        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+          {obj}
+          {obj && clientName && <span className="text-slate-300 mx-1">·</span>}
+          {clientName}
+        </div>
+      </div>
+      {price > 0 && (
+        <div className="text-right shrink-0">
+          <div className="text-[11px] font-bold tabular-nums text-slate-700">{formatMoney(price, 'UZS')}</div>
+        </div>
+      )}
+      <ChevronRight className={cn('h-4 w-4 shrink-0', active ? 'text-indigo-500' : 'text-slate-300')} />
+    </button>
   );
 }
 
