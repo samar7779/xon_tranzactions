@@ -313,6 +313,13 @@
     50%      { opacity: 1;   transform: scale(1.08); }
   }
   .showcase-breathe { animation: showcase-breathe 4.5s ease-in-out infinite; }
+
+  /* Title shimmer — sariq gradient yorug'lik chap-o'ngga harakat qiladi */
+  @keyframes showcase-text-shimmer {
+    0%   { background-position: 200% 50%; }
+    100% { background-position: -200% 50%; }
+  }
+  .showcase-text-shimmer { animation: showcase-text-shimmer 6s linear infinite; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }

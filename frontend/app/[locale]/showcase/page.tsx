@@ -45,19 +45,29 @@ export default function ShowcasePage() {
       <BackgroundNetwork />
       <ConstellationBottom />
 
-      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-6 pb-2">
-
-        {/* Title */}
-        <h1 className="text-[28px] sm:text-[36px] lg:text-[44px] font-bold tracking-[-0.025em] text-center leading-[0.95]
-                       bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent
-                       drop-shadow-[0_2px_14px_rgba(245,158,11,0.5)] showcase-fade-up"
-            style={{ animationDelay: '0.1s' }}>
-          XON SAROY TRANSACTIONS
-        </h1>
+      <div className="relative z-10 h-full flex flex-col items-center justify-center px-4 py-2">
 
         {/* 3D dashboard + atrofdagi elementlar */}
-        <div className="relative flex-1 w-full max-w-[1200px] mx-auto mt-3"
+        <div className="relative flex-1 w-full max-w-[1200px] mx-auto"
              style={{ perspective: '1900px' }}>
+
+          {/* Title — dashboard tepasida shimmer effect bilan */}
+          <div className="absolute top-[2%] left-1/2 -translate-x-1/2 z-30 showcase-fade-up text-center pointer-events-none"
+               style={{ animationDelay: '0.1s' }}>
+            <div className="relative">
+              <h1 className="relative text-[24px] sm:text-[30px] lg:text-[36px] font-bold tracking-[0.04em] leading-[0.95]
+                             bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
+                             drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
+                             showcase-text-shimmer"
+                  style={{ backgroundSize: '200% 100%' }}>
+                XON SAROY TRANSACTIONS
+              </h1>
+              <div className="mx-auto mt-1 h-px w-[60%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+              <div className="text-[9px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-1">
+                real-time banking platform
+              </div>
+            </div>
+          </div>
 
           {/* Storyset SVG scenes — dashboard yonida kichik dekoratsiya */}
           <SvgScene src="/showcase-tx.svg"        pos="top-[6%]   left-[22%]"  size={110} glow="cyan"  delay="0.8s" />
@@ -105,9 +115,6 @@ export default function ShowcasePage() {
           <StatChip label="Inol" value="3.58%"   dir="up"   pos="bottom-[30%] right-[1%]" delay="1.3s" />
           <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[28%] left-[1%]"  delay="1.3s" />
           <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[22%] left-[3%]"  delay="1.6s" />
-
-          {/* Sof oqim hisoblagich — past markazda */}
-          <NetFlowChip pos="bottom-[2%] right-[6%]" delay="1.8s" />
 
           {/* 3D dashboard */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
@@ -328,6 +335,8 @@ function LogoCoin({ pos, size, delay }: { pos: string; size: 'sm' | 'md'; delay:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const active = off.ring > 0;
+
   return (
     <div ref={wrapRef} className={`absolute ${pos} pointer-events-none z-20`}>
       <div style={{
@@ -337,20 +346,25 @@ function LogoCoin({ pos, size, delay }: { pos: string; size: 'sm' | 'md'; delay:
         <div className="showcase-coin-float" style={{ animationDelay: delay }}>
           <div className={`${size === 'sm' ? 'w-11 h-11 p-2' : 'w-14 h-14 p-2.5'}
                            relative rounded-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900
-                           grid place-items-center ring-2 ring-amber-400/40
-                           shadow-[0_12px_28px_-4px_rgba(245,158,11,0.5),inset_0_2px_0_rgba(255,255,255,0.15)]
-                           transition-all duration-300`}
+                           grid place-items-center transition-all duration-300`}
                style={{
-                 boxShadow: off.ring > 0
+                 // Tinch holat: faqat juda zaif neytral ring + soya, sariq yoq
+                 boxShadow: active
                    ? `0 12px 28px -4px rgba(245,158,11,${0.5 + off.ring * 0.4}),inset 0 2px 0 rgba(255,255,255,0.15),0 0 ${20 + off.ring * 30}px rgba(245,158,11,${off.ring * 0.6})`
-                   : undefined,
+                   : '0 6px 14px -4px rgba(0,0,0,0.5),inset 0 1px 0 rgba(255,255,255,0.08)',
+                 outline: active
+                   ? `2px solid rgba(251,191,36,${0.4 + off.ring * 0.5})`
+                   : '1px solid rgba(255,255,255,0.10)',
+                 outlineOffset: '-1px',
                }}>
             {/* qochish paytida shock ring */}
-            {off.ring > 0 && (
+            {active && (
               <span className="absolute inset-[-6px] rounded-full ring-2 ring-amber-300/60 animate-ping pointer-events-none" />
             )}
             <Image src="/xon-saroy-logo.png" alt="" width={48} height={48}
-                   className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(245,158,11,0.7)]" />
+                   className={`w-full h-full object-contain transition-all duration-300 ${
+                     active ? 'drop-shadow-[0_0_8px_rgba(245,158,11,0.7)] opacity-100' : 'opacity-70'
+                   }`} />
           </div>
         </div>
       </div>
@@ -469,20 +483,6 @@ function BankStatusCard({ pos, bank, name, count, active, delay }: {
             </span>
           )}
         </div>
-      </div>
-    </div>
-  );
-}
-
-function NetFlowChip({ pos, delay }: { pos: string; delay: string }) {
-  return (
-    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none w-[180px]`}
-         style={{ animationDelay: delay }}>
-      <div className="px-3 py-2.5 rounded-2xl bg-[rgba(18,28,52,0.85)] backdrop-blur ring-1 ring-white/10
-                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.6)]">
-        <div className="text-[8px] uppercase tracking-[0.22em] text-white/45 font-semibold">Net flow · 24h</div>
-        <div className="text-[16px] font-bold tabular-nums text-emerald-300 mt-0.5">+25 500 000</div>
-        <div className="text-[9px] text-white/45 mt-0.5">UZS · all banks</div>
       </div>
     </div>
   );
