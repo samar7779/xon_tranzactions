@@ -166,10 +166,42 @@ export default function CrmPage() {
 
   const initialTotal = detail?.initial?.total || {};
   const monthlyTotal = detail?.monthly?.total || {};
-  const totalPaid = Number(initialTotal.paid || 0) + Number(monthlyTotal.paid || 0);
-  const totalLeft = Number(initialTotal.left || 0) + Number(monthlyTotal.left || 0);
+  const initialPrice = Number(initialTotal.amount || 0);
+  const initialPaid = Number(initialTotal.paid || 0);
+  const initialLeft = Number(initialTotal.left || 0);
+  const monthlyPrice = Number(monthlyTotal.amount || 0);
+  const monthlyPaid = Number(monthlyTotal.paid || 0);
+  const monthlyLeft = Number(monthlyTotal.left || 0);
+  const totalPaid = initialPaid + monthlyPaid;
+  const totalLeft = initialLeft + monthlyLeft;
   const totalPrice = Number(detail?.price || 0);
   const paidPct = totalPrice > 0 ? Math.min(100, (totalPaid / totalPrice) * 100) : 0;
+  const initialPct = initialPrice > 0 ? Math.min(100, (initialPaid / initialPrice) * 100) : 0;
+  const monthlyPct = monthlyPrice > 0 ? Math.min(100, (monthlyPaid / monthlyPrice) * 100) : 0;
+  const monthsCount = (detail?.monthly?.schedules || []).length;
+
+  // Group payment histories by kind (initial / monthly)
+  const histGroups = useMemo(() => {
+    const initial: any[] = [];
+    const monthly: any[] = [];
+    for (const h of (detail?.payment_histories || [])) {
+      const k = String(h?.type?.key || '').toLowerCase();
+      if (k.includes('init') || k.includes('boshlang') || k.includes('перво')) initial.push(h);
+      else monthly.push(h);
+    }
+    const sum = (arr: any[]) => arr.reduce((s, x) => s + Number(x?.amount || 0), 0);
+    return {
+      initial, monthly,
+      initialSum: sum(initial),
+      monthlySum: sum(monthly),
+    };
+  }, [detail]);
+
+  // Collapsible group state (default: all closed, like the reference screenshot)
+  const [openHistInit, setOpenHistInit] = useState(false);
+  const [openHistMonth, setOpenHistMonth] = useState(false);
+  const [openSchedInit, setOpenSchedInit] = useState(false);
+  const [openSchedMonth, setOpenSchedMonth] = useState(false);
 
   const overdueSum = useMemo(() => {
     if (!detail) return 0;
@@ -469,139 +501,173 @@ export default function CrmPage() {
                     </div>
                   </div>
 
-                  {/* Money strip — light bg with colored accents */}
-                  <div className="border-t border-slate-100 bg-gradient-to-br from-slate-50/60 to-white px-6 lg:px-8 py-5 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <MoneyTileLight
-                      label={t('price')}
-                      value={formatMoney(totalPrice, 'UZS')}
-                      gradient="from-indigo-500 to-violet-600"
-                    />
-                    <MoneyTileLight
-                      label={t('paid')}
-                      value={formatMoney(totalPaid, 'UZS')}
-                      gradient="from-emerald-500 to-teal-600"
-                    />
-                    <MoneyTileLight
-                      label={t('remaining')}
-                      value={formatMoney(totalLeft, 'UZS')}
-                      gradient="from-amber-500 to-orange-600"
-                    />
-                    <MoneyTileLight
-                      label={t('overdue')}
-                      value={overdueSum > 0 ? formatMoney(overdueSum, 'UZS') : '—'}
-                      gradient={overdueSum > 0 ? 'from-rose-500 to-red-600' : 'from-slate-400 to-slate-500'}
-                      mute={overdueSum === 0}
-                    />
-                  </div>
-
-                  {/* Progress */}
-                  <div className="px-6 lg:px-8 pb-5 bg-gradient-to-br from-slate-50/60 to-white">
-                    <div className="flex items-center justify-between text-[11px] mb-1.5">
-                      <span className="uppercase tracking-wider font-bold text-slate-500">{t('paid')}</span>
-                      <span className="tabular-nums font-black text-slate-800 text-base">{paidPct.toFixed(1)}%</span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-200/60 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-500 rounded-full transition-all duration-700 shadow-sm"
-                        style={{ width: `${paidPct}%` }}
-                      />
-                    </div>
-                  </div>
                 </div>
               </Card>
 
-              {/* Two columns: schedule + history */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              {/* ═══ 3 KPI cards ═══ */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <KpiCard
+                  label={t('contractSum')}
+                  value={formatMoney(totalPrice, 'UZS')}
+                  meta={overdueSum > 0 ? `${t('overdue')}: ${formatMoney(overdueSum, 'UZS')}` : `${t('paid')}: ${formatMoney(totalPaid, 'UZS')}`}
+                  metaTone={overdueSum > 0 ? 'rose' : 'emerald'}
+                  pct={paidPct}
+                  gradient="from-indigo-500 to-violet-600"
+                />
+                <KpiCard
+                  label={t('initialFee')}
+                  value={formatMoney(initialPrice, 'UZS')}
+                  meta={`${t('balance')}: ${formatMoney(initialLeft, 'UZS')}`}
+                  metaTone={initialLeft === 0 ? 'emerald' : 'amber'}
+                  pct={initialPct}
+                  gradient="from-violet-500 to-purple-600"
+                />
+                <KpiCard
+                  label={`${t('installment')} (${t('installmentMonths', { n: monthsCount })})`}
+                  value={formatMoney(monthlyPrice, 'UZS')}
+                  meta={`${t('balance')}: ${formatMoney(monthlyLeft, 'UZS')}`}
+                  metaTone={monthlyLeft === 0 ? 'emerald' : 'amber'}
+                  pct={monthlyPct}
+                  gradient="from-blue-500 to-indigo-600"
+                />
+              </div>
 
-                {/* Schedule */}
-                <div className="lg:col-span-7 space-y-5">
-                  <Card className="border-0 shadow-soft overflow-hidden">
-                    <div className="bg-gradient-to-r from-indigo-50 via-violet-50 to-fuchsia-50 px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white">
-                        <Calendar className="h-4 w-4" />
-                      </div>
-                      <div className="text-base font-bold tracking-tight text-slate-800">{t('scheduleTitle')}</div>
+              {/* ═══ Payment list (history) — accordion ═══ */}
+              <Card className="border-0 shadow-soft overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shadow-md shadow-amber-500/20">
+                      <CreditCard className="h-4 w-4" />
                     </div>
-                    <CardContent className="p-5 space-y-4">
-
-                      {/* Initial */}
-                      {(detail.initial?.schedules || []).length > 0 && (
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5 pl-1">
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[10px] uppercase tracking-[0.15em] font-bold shadow-sm">
-                              <Sparkles className="h-3 w-3" />
-                              {t('initial')}
-                            </div>
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 ring-1 ring-violet-200 text-[10px] font-bold text-violet-700 tabular-nums">
-                              {detail.initial!.schedules!.length}
-                            </div>
-                          </div>
-                          <div className="space-y-1.5">
-                            {detail.initial!.schedules!.map((s: any, i: number) => (
-                              <ScheduleRow key={`init-${i}`} item={s} idx={i + 1} kind="initial" t={t} />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Monthly */}
-                      {(detail.monthly?.schedules || []).length > 0 ? (
-                        <div>
-                          <div className="flex items-center justify-between mb-2.5 pl-1">
-                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-[10px] uppercase tracking-[0.15em] font-bold shadow-sm">
-                              <Banknote className="h-3 w-3" />
-                              {t('monthly')}
-                            </div>
-                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 ring-1 ring-blue-200 text-[10px] font-bold text-blue-700 tabular-nums">
-                              {detail.monthly!.schedules!.length}
-                            </div>
-                          </div>
-                          <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
-                            {detail.monthly!.schedules!.map((s: any, i: number) => (
-                              <ScheduleRow key={`m-${i}`} item={s} idx={i + 1} kind="monthly" t={t} />
-                            ))}
-                          </div>
-                        </div>
-                      ) : (detail.initial?.schedules || []).length === 0 && (
-                        <div className="text-center py-10 text-xs text-slate-500">
-                          {t('noSchedule')}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                    <div>
+                      <div className="text-base font-bold tracking-tight text-slate-800">{t('paymentList')}</div>
+                      <div className="text-[11px] text-slate-500">
+                        <span className="text-slate-400">{t('totalPaidLabel')}: </span>
+                        <span className="font-bold tabular-nums text-emerald-700">{formatMoney(totalPaid, 'UZS')}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-
-                {/* History + client */}
-                <div className="lg:col-span-5 space-y-5">
-
-                  {/* Client info */}
-                  <Card className="border-0 shadow-soft overflow-hidden">
-                    <div className="relative bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600 px-5 py-5 text-white overflow-hidden">
-                      <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
-                      <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/15 blur-3xl pointer-events-none" />
-                      <div className="relative flex items-center gap-3">
-                        <div className="relative shrink-0">
-                          <div className="w-14 h-14 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur-md grid place-items-center text-white text-xl font-black">
-                            {(fullName || '?').charAt(0).toUpperCase()}
+                <CardContent className="p-4 space-y-2">
+                  {(detail.payment_histories || []).length === 0 ? (
+                    <div className="px-5 py-10 text-center text-xs text-slate-500">{t('noHistory')}</div>
+                  ) : (
+                    <>
+                      {histGroups.initial.length > 0 && (
+                        <GroupRow
+                          kind="initial"
+                          label={t('boshlangich')}
+                          count={histGroups.initial.length}
+                          amount={histGroups.initialSum}
+                          open={openHistInit}
+                          onToggle={() => setOpenHistInit((o) => !o)}
+                        >
+                          <div className="divide-y divide-slate-100">
+                            {histGroups.initial.map((h: any, i: number) => (
+                              <HistoryRow key={`hi-${i}`} h={h} idx={i + 1} apiLang={apiLang} t={t} />
+                            ))}
                           </div>
-                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
-                            <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                        </GroupRow>
+                      )}
+                      {histGroups.monthly.length > 0 && (
+                        <GroupRow
+                          kind="monthly"
+                          label={t('oylik')}
+                          count={histGroups.monthly.length}
+                          amount={histGroups.monthlySum}
+                          open={openHistMonth}
+                          onToggle={() => setOpenHistMonth((o) => !o)}
+                        >
+                          <div className="divide-y divide-slate-100">
+                            {histGroups.monthly.map((h: any, i: number) => (
+                              <HistoryRow key={`hm-${i}`} h={h} idx={i + 1} apiLang={apiLang} t={t} />
+                            ))}
+                          </div>
+                        </GroupRow>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ═══ Schedule — accordion ═══ */}
+              <Card className="border-0 shadow-soft overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md shadow-indigo-500/20">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="text-base font-bold tracking-tight text-slate-800">
+                        {t('scheduleTitle')}
+                        {monthsCount > 0 && (
+                          <span className="ml-2 text-[12px] font-medium text-slate-400">
+                            ({t('installmentMonths', { n: monthsCount })})
                           </span>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/80 flex items-center gap-1">
-                            <User className="h-3 w-3" /> {t('openClient')}
-                          </div>
-                          <div className="text-lg font-black tracking-tight truncate">{fullName || '—'}</div>
-                          {client.phone && (
-                            <div className="text-[12px] text-white/85 font-mono flex items-center gap-1 mt-0.5">
-                              <Phone className="h-3 w-3" /> {String(client.phone)}
-                            </div>
-                          )}
-                        </div>
+                        )}
                       </div>
                     </div>
-                    <CardContent className="p-5 space-y-1">
+                  </div>
+                </div>
+                <CardContent className="p-4 space-y-2">
+                  {(detail.initial?.schedules || []).length === 0 && (detail.monthly?.schedules || []).length === 0 ? (
+                    <div className="text-center py-10 text-xs text-slate-500">{t('noSchedule')}</div>
+                  ) : (
+                    <>
+                      {(detail.initial?.schedules || []).length > 0 && (
+                        <GroupRow
+                          kind="initial"
+                          label={t('boshlangich')}
+                          count={detail.initial!.schedules!.length}
+                          amount={initialPaid}
+                          amountTotal={initialPrice}
+                          open={openSchedInit}
+                          onToggle={() => setOpenSchedInit((o) => !o)}
+                        >
+                          <div className="p-3 space-y-1.5">
+                            {detail.initial!.schedules!.map((s: any, i: number) => (
+                              <ScheduleRow key={`si-${i}`} item={s} idx={i + 1} kind="initial" t={t} />
+                            ))}
+                          </div>
+                        </GroupRow>
+                      )}
+                      {(detail.monthly?.schedules || []).length > 0 && (
+                        <GroupRow
+                          kind="monthly"
+                          label={t('oylik')}
+                          count={detail.monthly!.schedules!.length}
+                          amount={monthlyPaid}
+                          amountTotal={monthlyPrice}
+                          open={openSchedMonth}
+                          onToggle={() => setOpenSchedMonth((o) => !o)}
+                        >
+                          <div className="p-3 space-y-1.5 max-h-[600px] overflow-y-auto">
+                            {detail.monthly!.schedules!.map((s: any, i: number) => (
+                              <ScheduleRow key={`sm-${i}`} item={s} idx={i + 1} kind="monthly" t={t} />
+                            ))}
+                          </div>
+                        </GroupRow>
+                      )}
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* ═══ Client info — bottom strip ═══ */}
+              {(fullName || client.phone || client.birth_date || client.passport_series || client.address) && (
+                <Card className="border-0 shadow-soft overflow-hidden">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-md shadow-emerald-500/20">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div className="text-base font-bold tracking-tight text-slate-800">{t('openClient')}</div>
+                  </div>
+                  <CardContent className="p-5">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
+                      {client.phone && (
+                        <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone)} mono />
+                      )}
                       {client.birth_date && (
                         <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.birth_date)} />
                       )}
@@ -611,37 +677,10 @@ export default function CrmPage() {
                       {client.address && (
                         <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address)} />
                       )}
-                      {!client.birth_date && !client.passport_series && !client.address && (
-                        <div className="text-center py-2 text-[11px] text-slate-400">—</div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Payment history */}
-                  <Card className="border-0 shadow-soft overflow-hidden">
-                    <div className="bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white">
-                        <CreditCard className="h-4 w-4" />
-                      </div>
-                      <div className="text-base font-bold tracking-tight text-slate-800 flex-1">{t('historyTitle')}</div>
-                      <div className="text-[11px] text-slate-500 tabular-nums">
-                        {(detail.payment_histories || []).length}
-                      </div>
                     </div>
-                    <CardContent className="p-0">
-                      {(detail.payment_histories || []).length === 0 ? (
-                        <div className="px-5 py-10 text-center text-xs text-slate-500">{t('noHistory')}</div>
-                      ) : (
-                        <div className="max-h-[640px] overflow-y-auto divide-y divide-slate-100">
-                          {detail.payment_histories!.map((h: any, i: number) => (
-                            <HistoryRow key={i} h={h} idx={i + 1} apiLang={apiLang} t={t} />
-                          ))}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
+                  </CardContent>
+                </Card>
+              )}
             </>
           )}
         </div>
@@ -651,6 +690,118 @@ export default function CrmPage() {
 }
 
 // ────────────────────────── helpers ──────────────────────────
+
+function KpiCard({
+  label, value, meta, metaTone, pct, gradient,
+}: {
+  label: string;
+  value: string;
+  meta?: string;
+  metaTone?: 'emerald' | 'amber' | 'rose';
+  pct: number;
+  gradient: string;
+}) {
+  const metaMap = {
+    emerald: 'text-emerald-700',
+    amber:   'text-amber-700',
+    rose:    'text-rose-700',
+  } as const;
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-lg transition-shadow">
+      <div className={cn('h-1 bg-gradient-to-r', gradient)} />
+      <CardContent className="p-5">
+        <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
+        <div className="mt-1 text-2xl lg:text-[26px] font-black tabular-nums tracking-tight text-slate-900 truncate" title={value}>
+          {value}
+        </div>
+        {meta && (
+          <div className={cn('text-[11px] font-semibold tabular-nums mt-1 truncate', metaTone ? metaMap[metaTone] : 'text-slate-500')}>
+            {meta}
+          </div>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', gradient)} style={{ width: `${pct}%` }} />
+          </div>
+          <div className="text-[11px] font-bold tabular-nums text-slate-600 w-12 text-right">{pct.toFixed(1)}%</div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function GroupRow({
+  kind, label, count, amount, amountTotal, open, onToggle, children,
+}: {
+  kind: 'initial' | 'monthly';
+  label: string;
+  count: number;
+  amount: number;
+  amountTotal?: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  const style = KIND_STYLE[kind];
+  return (
+    <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden bg-white">
+      <button
+        type="button"
+        onClick={onToggle}
+        className={cn(
+          'w-full px-4 py-3 flex items-center gap-3 transition-colors text-left',
+          open ? style.bg : 'hover:bg-slate-50',
+        )}
+      >
+        {/* Arrow */}
+        <ChevronDown className={cn(
+          'h-4 w-4 transition-transform duration-200 shrink-0',
+          style.text,
+          open ? 'rotate-0' : '-rotate-90',
+        )} />
+
+        {/* Kind icon */}
+        <div className={cn(
+          'w-8 h-8 rounded-lg grid place-items-center text-white shrink-0 shadow-sm bg-gradient-to-br',
+          style.bar,
+        )}>
+          {kind === 'initial' ? <Sparkles className="h-4 w-4" /> : <Banknote className="h-4 w-4" />}
+        </div>
+
+        {/* Label + count */}
+        <div className="min-w-0 flex-1 flex items-center gap-2">
+          <span className={cn('text-[13px] font-bold', style.text)}>{label}</span>
+          <span className={cn(
+            'inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md text-[10px] font-bold tabular-nums ring-1',
+            style.bg, style.text, style.ring,
+          )}>
+            {count}
+          </span>
+        </div>
+
+        {/* Amount */}
+        <div className="text-right shrink-0 tabular-nums">
+          <div className="text-sm font-bold text-slate-800">
+            {formatMoney(amount, 'UZS')}
+            {amountTotal != null && amountTotal !== amount && (
+              <span className="text-slate-400 font-normal"> / {formatMoney(amountTotal, 'UZS')}</span>
+            )}
+          </div>
+        </div>
+      </button>
+      <div className={cn(
+        'grid transition-[grid-template-rows] duration-300 ease-out',
+        open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+      )}>
+        <div className="overflow-hidden">
+          <div className="border-t border-slate-100 bg-slate-50/30">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (

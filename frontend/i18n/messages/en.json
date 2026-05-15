@@ -490,7 +490,16 @@
     "expand": "Details",
     "collapse": "Collapse",
     "boshlangich": "Initial",
-    "oylik": "Monthly"
+    "oylik": "Monthly",
+    "paymentList": "Payments list",
+    "totalPaidLabel": "Total paid",
+    "contractSum": "Contract value",
+    "initialFee": "Initial fee",
+    "installment": "Installment",
+    "installmentMonths": "{n} months",
+    "balance": "Balance",
+    "rate": "Rate",
+    "schedule36": "{n}-month schedule"
   },
   "statement": {
     "title": "Statement",
