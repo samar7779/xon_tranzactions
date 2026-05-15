@@ -5,26 +5,23 @@ import { useState } from 'react';
 import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
- * Showcase — marketing hero (Storyset SVG variant).
- * Chap: matn + CTA. O'ng: Storyset illustration + atrofidagi subtle animatsiyalar.
- * Yuqori navda Plan / Risk switcher orqali illustration almashtiriladi.
+ * Showcase — marketing hero (soliqservis uslubida).
+ * Chap: matn + CTA. O'ng: haqiqiy 3D rendering ikonalar (3dicons.co) + dotted flow + mouse parallax.
  */
 export default function ShowcasePage() {
-  const [variant, setVariant] = useState<'plan' | 'risk'>('plan');
-  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const [tilt, setTilt] = useState({ x: 0, y: 0 });
 
   function onMove(e: React.MouseEvent<HTMLDivElement>) {
     const r = e.currentTarget.getBoundingClientRect();
     const x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
     const y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
-    setTilt({ rx: -y * 4, ry: x * 4 });
+    setTilt({ x, y });
   }
-  function onLeave() { setTilt({ rx: 0, ry: 0 }); }
+  function onLeave() { setTilt({ x: 0, y: 0 }); }
 
   return (
     <div className="relative w-screen h-screen overflow-hidden text-white
                     bg-[linear-gradient(135deg,#1e40af_0%,#2563eb_55%,#1e3a8a_100%)]">
-
       <Stars />
       <Glows />
 
@@ -44,14 +41,10 @@ export default function ShowcasePage() {
           <a className="hover:text-white transition-colors cursor-pointer">Tariflar</a>
           <a className="hover:text-white transition-colors cursor-pointer">Yangiliklar</a>
         </nav>
-        <div className="flex items-center gap-3 showcase-fade-up" style={{ animationDelay: '0.2s' }}>
-          {/* Illustration variant switcher */}
-          <div className="hidden md:flex items-center gap-1 p-0.5 rounded-full bg-white/10 ring-1 ring-white/15">
-            <SwitchBtn active={variant === 'plan'} onClick={() => setVariant('plan')}>Plan</SwitchBtn>
-            <SwitchBtn active={variant === 'risk'} onClick={() => setVariant('risk')}>Risk</SwitchBtn>
-          </div>
-          <span className="text-[13px] text-amber-300 font-semibold tabular-nums">+998 71 202-3282</span>
-        </div>
+        <span className="text-[13px] text-amber-300 font-semibold tabular-nums showcase-fade-up"
+              style={{ animationDelay: '0.2s' }}>
+          +998 71 202-3282
+        </span>
       </header>
 
       {/* Hero */}
@@ -106,107 +99,75 @@ export default function ShowcasePage() {
           </div>
         </div>
 
-        {/* O'NG — Illustration */}
+        {/* O'NG — 3D ikonalar kompozitsiyasi */}
         <div
           className="relative flex items-center justify-center"
-          style={{ perspective: '1800px' }}
           onMouseMove={onMove}
           onMouseLeave={onLeave}
         >
           {/* Aylanma glow halo */}
           <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full
-                          bg-[radial-gradient(circle,rgba(251,191,36,0.18)_0%,rgba(99,102,241,0.10)_45%,transparent_70%)]
+                          bg-[radial-gradient(circle,rgba(251,191,36,0.20)_0%,rgba(99,102,241,0.12)_45%,transparent_70%)]
                           showcase-light-pulse pointer-events-none" />
 
-          {/* Subtle ring */}
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[560px] h-[560px] rounded-full
-                          border border-white/8 showcase-orbit-cw pointer-events-none" />
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[440px] h-[440px] rounded-full
-                          border border-amber-300/15 showcase-orbit-ccw pointer-events-none" />
+          {/* Orbital halqalar */}
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full
+                          border border-amber-300/15 showcase-orbit-cw pointer-events-none" />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[460px] h-[460px] rounded-full
+                          border border-white/10 showcase-orbit-ccw pointer-events-none" />
 
-          {/* Illustration (3D tilt with mouse) */}
-          <div
-            className="relative z-10 w-full max-w-[560px] showcase-card-in"
-            style={{
-              transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
-              transformStyle: 'preserve-3d',
-              transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
-            }}
-          >
-            <Image
-              src={variant === 'plan' ? '/showcase-plan.svg' : '/showcase-risk.svg'}
-              alt="Xon Saroy"
-              width={560}
-              height={560}
-              priority
-              className="w-full h-auto drop-shadow-[0_20px_40px_rgba(0,0,0,0.4)] select-none"
-              draggable={false}
-            />
-          </div>
+          {/* Dotted gold flow lines */}
+          <FlowLines />
 
-          {/* Floating badge — yuqori-o'ngda */}
-          <div className="absolute top-[8%] right-[2%] z-20 showcase-coin-float pointer-events-none"
-               style={{ animationDelay: '0.5s' }}>
-            <div className="px-3 py-2 rounded-2xl bg-white/95 ring-1 ring-white/20 backdrop-blur
-                            shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)] flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 grid place-items-center">
+          {/* 3D ikonalar — turli o'lcham, turli pozitsiya, turli kechikish */}
+          <Icon3D src="/3d/moneybag-400.webp" size={220} pos="left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2" delay="0s"   tilt={tilt} strength={1.0} z={20} />
+          <Icon3D src="/3d/dollar-400.webp"   size={120} pos="top-[6%]  left-[14%]"  delay="0.2s" tilt={tilt} strength={1.4} z={15} />
+          <Icon3D src="/3d/card-400.webp"     size={140} pos="top-[3%]  right-[10%]" delay="0.4s" tilt={tilt} strength={1.3} z={15} />
+          <Icon3D src="/3d/chart-400.webp"    size={130} pos="bottom-[12%] left-[6%]" delay="0.6s" tilt={tilt} strength={1.2} z={15} />
+          <Icon3D src="/3d/shield-400.webp"   size={120} pos="bottom-[6%] right-[14%]" delay="0.8s" tilt={tilt} strength={1.3} z={15} />
+          <Icon3D src="/3d/wallet-400.webp"   size={90}  pos="top-[42%] right-[2%]"  delay="1.0s" tilt={tilt} strength={1.5} z={14} />
+          <Icon3D src="/3d/lock-400.webp"     size={70}  pos="top-[40%] left-[2%]"   delay="1.2s" tilt={tilt} strength={1.5} z={14} />
+          <Icon3D src="/3d/star-400.webp"     size={60}  pos="top-[20%] left-[44%]"  delay="1.4s" tilt={tilt} strength={1.6} z={14} />
+          <Icon3D src="/3d/trophy-400.webp"   size={70}  pos="bottom-[28%] right-[36%]" delay="1.6s" tilt={tilt} strength={1.6} z={14} />
+
+          {/* UI cards floating — real ma'lumot bilan */}
+          <FloatCard pos="top-[4%] left-[35%]" delay="0.5s">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 grid place-items-center">
                 <TrendUp className="text-white" />
               </div>
               <div>
                 <div className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">Today</div>
-                <div className="text-[12px] font-bold text-slate-900 tabular-nums">+12.5%</div>
+                <div className="text-[11px] font-bold text-slate-900 tabular-nums">+12.5%</div>
               </div>
             </div>
-          </div>
+          </FloatCard>
 
-          {/* Floating tx card — chap-yuqorida */}
-          <div className="absolute top-[12%] left-[0%] z-20 showcase-tx-in pointer-events-none"
-               style={{ animationDelay: '0.7s' }}>
-            <div className="px-3 py-2 rounded-2xl bg-white/95 ring-1 ring-white/20 backdrop-blur
-                            shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)] flex items-center gap-2 min-w-[200px]">
-              <div className="w-7 h-7 rounded-lg bg-white grid place-items-center overflow-hidden ring-1 ring-slate-200">
+          <FloatCard pos="bottom-[2%] left-[26%]" delay="0.9s">
+            <div className="flex items-center gap-2 min-w-[160px]">
+              <div className="w-7 h-7 rounded-lg bg-white grid place-items-center overflow-hidden ring-1 ring-slate-200 shrink-0">
                 <Image src="/banks/kapital.webp" alt="K" width={18} height={18} className="object-contain" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] font-semibold text-slate-800 truncate">ABU SAHIY MCHJ</div>
-                <div className="text-[8px] text-slate-500 tabular-nums">14:23 · Kapitalbank</div>
+                <div className="text-[8px] text-slate-500 tabular-nums">14:23</div>
               </div>
               <div className="text-[10px] font-bold text-emerald-600 tabular-nums">+18.5M</div>
             </div>
-          </div>
+          </FloatCard>
 
-          {/* Floating tx card — past-chapda */}
-          <div className="absolute bottom-[16%] left-[2%] z-20 showcase-tx-in pointer-events-none"
-               style={{ animationDelay: '0.9s' }}>
-            <div className="px-3 py-2 rounded-2xl bg-white/95 ring-1 ring-white/20 backdrop-blur
-                            shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)] flex items-center gap-2 min-w-[180px]">
-              <div className="w-7 h-7 rounded-lg bg-white grid place-items-center overflow-hidden ring-1 ring-slate-200">
-                <Image src="/banks/ipak.svg" alt="I" width={18} height={18} className="object-contain" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-semibold text-slate-800 truncate">Soliq to'lovi</div>
-                <div className="text-[8px] text-slate-500 tabular-nums">12:05 · Ipak Yo'li</div>
-              </div>
-              <div className="text-[10px] font-bold text-rose-600 tabular-nums">−4.8M</div>
-            </div>
-          </div>
-
-          {/* Floating FX rate — past-o'ngda */}
-          <div className="absolute bottom-[18%] right-[0%] z-20 showcase-coin-float pointer-events-none"
-               style={{ animationDelay: '1.1s' }}>
-            <div className="px-3 py-2 rounded-2xl bg-white/95 ring-1 ring-white/20 backdrop-blur
-                            shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)] flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center
-                              text-amber-900 font-black text-[10px]">$</div>
+          <FloatCard pos="bottom-[36%] right-[0%]" delay="1.1s">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center text-amber-900 font-black text-[11px]">$</div>
               <div>
                 <div className="text-[8px] uppercase tracking-wider text-slate-500 font-semibold">USD/UZS</div>
-                <div className="text-[12px] font-bold text-slate-900 tabular-nums">12 478</div>
+                <div className="text-[11px] font-bold text-slate-900 tabular-nums">12 478</div>
               </div>
               <span className="text-[9px] text-emerald-600 font-bold">+0.3%</span>
             </div>
-          </div>
+          </FloatCard>
 
-          {/* Yumshoq particles */}
+          {/* Particles */}
           <Particles />
         </div>
       </main>
@@ -214,39 +175,90 @@ export default function ShowcasePage() {
   );
 }
 
-/* ─── Yordamchi komponentlar ─── */
-
-function SwitchBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+/* ─── 3D Icon (Parallax bilan) ─── */
+function Icon3D({
+  src, size, pos, delay, tilt, strength, z,
+}: {
+  src: string;
+  size: number;
+  pos: string;
+  delay: string;
+  tilt: { x: number; y: number };
+  strength: number;
+  z: number;
+}) {
+  const px = tilt.x * 18 * strength;
+  const py = tilt.y * 18 * strength;
   return (
-    <button
-      onClick={onClick}
-      className={`px-3 h-7 rounded-full text-[11px] font-semibold transition-all ${
-        active ? 'bg-amber-400 text-slate-900 shadow' : 'text-white/70 hover:text-white'
-      }`}
+    <div
+      className={`absolute ${pos} showcase-coin-float pointer-events-none drop-shadow-[0_18px_36px_rgba(0,0,0,0.45)]`}
+      style={{
+        animationDelay: delay,
+        zIndex: z,
+        transform: `translate(${px}px, ${py}px)`,
+        transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+      }}
     >
-      {children}
-    </button>
-  );
-}
-
-function BankPill({ src, name }: { src: string; name: string }) {
-  return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white ring-1 ring-white/20">
-      <Image src={src} alt={name} width={14} height={14} className="object-contain" />
-      <span className="text-[10px] font-semibold text-slate-800 whitespace-nowrap">{name}</span>
+      <Image
+        src={src}
+        alt=""
+        width={size}
+        height={size}
+        priority
+        className="select-none"
+        draggable={false}
+        style={{ width: size, height: size }}
+      />
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+/* ─── Floating UI card ─── */
+function FloatCard({ pos, delay, children }: { pos: string; delay: string; children: React.ReactNode }) {
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.18em] text-white/40 font-semibold">{label}</div>
-      <div className="text-[18px] font-bold tabular-nums text-white mt-0.5">{value}</div>
+    <div className={`absolute ${pos} z-30 showcase-tx-in pointer-events-none`} style={{ animationDelay: delay }}>
+      <div className="px-3 py-2 rounded-2xl bg-white/95 backdrop-blur ring-1 ring-white/20
+                      shadow-[0_15px_40px_-10px_rgba(0,0,0,0.5)]">
+        {children}
+      </div>
     </div>
   );
 }
 
+/* ─── Gold dotted flow lines ─── */
+function FlowLines() {
+  return (
+    <svg className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[680px] h-[600px] pointer-events-none"
+         viewBox="0 0 680 600">
+      <defs>
+        <radialGradient id="flow-dot" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="1" />
+          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      {/* Dollar → markaz */}
+      <path d="M 130 70  Q 240 220 340 300" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
+            className="showcase-flow" />
+      {/* Card → markaz */}
+      <path d="M 560 60  Q 460 200 360 290" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
+            className="showcase-flow" style={{ animationDelay: '0.3s' }} />
+      {/* Chart → markaz */}
+      <path d="M 80 470  Q 200 400 320 340" stroke="rgba(251,191,36,0.45)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
+            className="showcase-flow" style={{ animationDelay: '0.6s' }} />
+      {/* Shield → markaz */}
+      <path d="M 580 510 Q 460 430 360 350" stroke="rgba(251,191,36,0.45)" strokeWidth="1.5" strokeDasharray="3 7" fill="none"
+            className="showcase-flow" style={{ animationDelay: '0.9s' }} />
+
+      {/* Connection dots */}
+      {[[130,70],[560,60],[80,470],[580,510]].map(([x,y], i) => (
+        <circle key={i} cx={x} cy={y} r="4" fill="url(#flow-dot)" className="showcase-twinkle"
+                style={{ transformOrigin: `${x}px ${y}px`, animationDelay: `${i * 0.5}s` }} />
+      ))}
+    </svg>
+  );
+}
+
+/* ─── Background ─── */
 function Stars() {
   const items = Array.from({ length: 30 }, (_, i) => ({
     left: `${(i * 37) % 100}%`,
@@ -296,6 +308,26 @@ function Particles() {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+/* ─── Helpers ─── */
+
+function BankPill({ src, name }: { src: string; name: string }) {
+  return (
+    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white ring-1 ring-white/20">
+      <Image src={src} alt={name} width={14} height={14} className="object-contain" />
+      <span className="text-[10px] font-semibold text-slate-800 whitespace-nowrap">{name}</span>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-white/40 font-semibold">{label}</div>
+      <div className="text-[18px] font-bold tabular-nums text-white mt-0.5">{value}</div>
     </div>
   );
 }
