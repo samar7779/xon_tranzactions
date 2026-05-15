@@ -1,18 +1,19 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
- * Showcase — TZ/1.jpeg dagi marketing layout asosida.
+ * Showcase — Xon Saroy brand + 3D dashboard.
  * Bitta ekranga sig'adi, scroll yo'q. Pro xususiyatlar:
  * mouse parallax, animated counter, floating particles, holographic shimmer.
  */
 export default function ShowcasePage() {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [tilt, setTilt] = useState({ rx: 8, ry: -12 });
+  const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
   const [bal, setBal] = useState(0);
 
-  // ─── Balansni animatsion sanash (0 → target) ───
+  // ─── Balansni animatsion sanash ───
   useEffect(() => {
     const target = 12_504_500.0;
     const start = performance.now();
@@ -28,17 +29,15 @@ export default function ShowcasePage() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // ─── Mouse parallax: karta sichqonchani kuzatadi ───
+  // ─── Mouse parallax ───
   function onMove(e: React.MouseEvent<HTMLDivElement>) {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const x = (e.clientX - w / 2) / (w / 2); // -1..1
+    const x = (e.clientX - w / 2) / (w / 2);
     const y = (e.clientY - h / 2) / (h / 2);
-    setTilt({ rx: 8 - y * 5, ry: -12 - x * 6 });
+    setTilt({ rx: 8 - y * 4, ry: -10 - x * 5 });
   }
-  function onLeave() {
-    setTilt({ rx: 8, ry: -12 });
-  }
+  function onLeave() { setTilt({ rx: 8, ry: -10 }); }
 
   return (
     <div
@@ -50,90 +49,81 @@ export default function ShowcasePage() {
       <Backdrop />
       <Particles />
 
-      <div className="relative z-10 h-full flex flex-col items-center px-6 py-4">
-        {/* ─── Brand block ─── */}
-        <div className="flex flex-col items-center showcase-fade-up">
-          <GoldLogo />
-          <h1 className="mt-4 text-[28px] sm:text-[36px] lg:text-[42px] font-bold tracking-[-0.02em] text-center leading-none
-                         bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent
-                         drop-shadow-[0_2px_10px_rgba(245,158,11,0.35)]">
-            XON SAROY TRANSACTIONS
-          </h1>
-          <p className="mt-1.5 text-white/65 text-[12px] sm:text-[13px] text-center">
-            Collect and manage all payments in one place.
-          </p>
-        </div>
+      <div className="relative z-10 h-full flex flex-col items-center px-8 pt-8 pb-6">
+        {/* ─── Brand logo (rasm + nurlar) ─── */}
+        <BrandHero />
 
-        {/* ─── Dashboard + atrofidagi elementlar ─── */}
-        <div className="relative flex-1 w-full max-w-[960px] mx-auto mt-4"
-             style={{ perspective: '1800px' }}>
+        {/* ─── 3D Dashboard + floating elementlar ─── */}
+        <div className="relative flex-1 w-full max-w-[1040px] mx-auto mt-2"
+             style={{ perspective: '1900px' }}>
 
-          {/* Floating coins */}
-          <Coin sym="$" pos="top-[6%]  left-[2%]"   size="md" bg="from-blue-400 to-blue-600"    delay="0s" />
-          <Coin sym="€" pos="top-[2%]  left-[34%]"  size="md" bg="from-blue-500 to-blue-700"    delay="1.2s" />
-          <Coin sym="£" pos="top-[0%]  left-[18%]"  size="sm" bg="from-amber-300 to-amber-500"  delay="2.4s" />
-          <Coin sym="$" pos="top-[22%] right-[-1%]" size="md" bg="from-slate-100 to-slate-300"  delay="0.6s" gold />
-          <Coin sym="£" pos="bottom-[12%] right-[38%]" size="md" bg="from-amber-300 to-amber-500" delay="1.8s" />
-          <Coin sym="€" pos="bottom-[2%] left-[26%]" size="sm" bg="from-slate-100 to-slate-300" delay="3s" gold />
+          {/* Floating coins — kamroq, nafis joylashgan */}
+          <Coin sym="€" pos="top-[4%] left-[8%]"   size="md" bg="from-blue-500 to-blue-700"    delay="0s" />
+          <Coin sym="£" pos="top-[2%] left-[26%]"  size="sm" bg="from-amber-300 to-amber-500"  delay="1.2s" />
+          <Coin sym="$" pos="top-[20%] right-[1%]" size="md" bg="from-slate-100 to-slate-300"  delay="0.6s" gold />
+          <Coin sym="£" pos="bottom-[8%] right-[28%]" size="md" bg="from-amber-300 to-amber-500" delay="1.8s" />
+          <Coin sym="€" pos="bottom-[-2%] left-[22%]" size="sm" bg="from-slate-100 to-slate-300" delay="2.6s" gold />
 
-          {/* Stat chiplari */}
-          <StatChip label="Data" value="−13.8%"  dir="up"   pos="top-[18%] right-[4%]"  delay="0.5s" />
-          <StatChip label="Nidt" value="−300.00" dir="up"   pos="top-[26%] right-[6%]"  delay="0.8s" />
-          <StatChip label="Inol" value="3.58%"   dir="up"   pos="top-[34%] right-[2%]"  delay="1.1s" />
-          <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[20%] left-[1%]" delay="1.4s" />
+          {/* Refined stat chiplari — 3 ta */}
+          <StatChip label="Data" value="−13.8%" dir="up"   pos="top-[14%] right-[8%]"  delay="0.4s" />
+          <StatChip label="Nidt" value="−300.00" dir="up"  pos="top-[22%] right-[10%]" delay="0.7s" />
+          <StatChip label="USD"  value="−4.7%"  dir="down" pos="bottom-[24%] left-[2%]" delay="1.0s" />
 
           {/* 3D Dashboard */}
-          <div
-            ref={cardRef}
-            className="absolute inset-0 grid place-items-center showcase-card-in"
-          >
+          <div className="absolute inset-0 grid place-items-center showcase-card-in">
             <div
-              className="relative w-full max-w-[860px]"
+              ref={cardRef}
+              className="relative w-full max-w-[880px]"
               style={{
                 transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
                 transformStyle: 'preserve-3d',
-                transition: 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
+                transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
-              <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/15 blur-3xl -z-10" />
+              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-cyan-400/20 via-blue-500/15 to-amber-400/15 blur-3xl -z-10" />
 
-              <div className="relative rounded-3xl border border-white/10
+              <div className="relative rounded-[24px] border border-white/10
                               bg-[rgba(18,28,52,0.55)] backdrop-blur-xl
-                              shadow-[0_40px_100px_-20px_rgba(0,0,0,0.85)]
+                              shadow-[0_50px_120px_-20px_rgba(0,0,0,0.85)]
                               overflow-hidden">
-                {/* Yuqori chiziq */}
-                <div className="absolute inset-x-12 -top-px h-px bg-gradient-to-r from-transparent via-amber-300/60 to-transparent" />
+                <div className="absolute inset-x-16 -top-px h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+                <div className="absolute inset-x-16 -bottom-px h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent" />
 
                 {/* Topbar */}
                 <div className="flex items-center gap-3 px-5 pt-4 pb-3 border-b border-white/5">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center text-[9px] font-black text-slate-900">XS</div>
-                  <span className="text-[12px] font-semibold">Dashboard</span>
+                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center
+                                  shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-2px_rgba(245,158,11,0.5)]">
+                    <span className="text-[10px] font-black text-slate-900">XS</span>
+                  </div>
+                  <span className="text-[12px] font-semibold tracking-tight">Dashboard</span>
                   <div className="flex-1" />
-                  <div className="hidden sm:flex items-center gap-2 h-7 px-3 rounded-full bg-white/5 ring-1 ring-white/10 text-[11px] text-white/40 min-w-[180px]">
-                    <SearchIcon /> Search...
+                  <div className="hidden sm:flex items-center gap-2 h-7 px-3 rounded-full bg-white/[0.04] ring-1 ring-white/8
+                                  text-[11px] text-white/40 min-w-[200px]">
+                    <SearchIcon /> Search transactions...
                   </div>
                   <NotifPill count={3} color="amber" />
                   <NotifPill count={2} color="cyan" />
-                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 ring-2 ring-white/20" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 ring-2 ring-white/20" />
                 </div>
 
                 <div className="grid grid-cols-12 gap-3 p-4">
-                  {/* Chap: Total balance + Payment analytics */}
+                  {/* Chap: total balance + analytics */}
                   <div className="col-span-7 space-y-3">
-                    {/* Total balance — animated counter */}
+                    {/* Total balance */}
                     <div className="rounded-2xl bg-gradient-to-br from-slate-900/80 to-slate-800/60 ring-1 ring-white/10 p-4 relative overflow-hidden">
-                      <div className="absolute -right-6 -top-6 w-32 h-32 rounded-full bg-amber-400/10 blur-2xl" />
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-white/45 font-semibold">Total Balance</div>
-                      <div className="mt-1 text-[26px] font-bold tabular-nums tracking-tight
+                      <div className="absolute -right-8 -top-8 w-36 h-36 rounded-full bg-amber-400/15 blur-3xl" />
+                      <div className="text-[10px] uppercase tracking-[0.2em] text-white/45 font-semibold">Total Balance</div>
+                      <div className="mt-1 text-[28px] font-bold tabular-nums tracking-tight
                                       bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500 bg-clip-text text-transparent">
                         ${formatMoney(bal)}
                       </div>
-                      <div className="mt-2 flex items-center gap-3">
-                        <button className="px-3 h-7 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 text-[10px] font-bold flex items-center gap-1 shadow-lg shadow-amber-500/30">
-                          Send in now →
+                      <div className="mt-2.5 flex items-center gap-3">
+                        <button className="px-3.5 h-8 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 text-[11px] font-bold
+                                            flex items-center gap-1 shadow-lg shadow-amber-500/30 hover:brightness-110 transition">
+                          Send in now <ArrowRight />
                         </button>
-                        <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
-                          ▲ 12.5% <span className="text-white/40 font-normal">vs last month</span>
+                        <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                          <TrendUp /> 12.5% <span className="text-white/40 font-normal">vs last month</span>
                         </span>
                       </div>
                     </div>
@@ -142,7 +132,7 @@ export default function ShowcasePage() {
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Payment analytics</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-medium">Auraeoce ▾</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-medium ring-1 ring-amber-400/20">Auraeoce ▾</span>
                       </div>
                       <MiniLineChart />
                       <div className="flex justify-between mt-1 text-[9px] text-white/40 px-1">
@@ -151,15 +141,14 @@ export default function ShowcasePage() {
                     </div>
                   </div>
 
-                  {/* O'ng: bars + secure + card */}
+                  {/* O'ng: bars, secure, card */}
                   <div className="col-span-5 space-y-3 relative">
                     <ConnectionLines />
 
-                    {/* Bar chart */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Transaction finance</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-medium">Aqvdcoin ▾</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 font-medium ring-1 ring-amber-400/20">Aqvdcoin ▾</span>
                       </div>
                       <MiniBars />
                       <div className="flex justify-between mt-1 text-[9px] text-white/40 px-1">
@@ -167,33 +156,34 @@ export default function ShowcasePage() {
                       </div>
                     </div>
 
-                    {/* Secure Banking */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3 flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
-                                      shadow-[inset_0_1px_0_rgba(255,255,255,0.3)]">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
+                                      shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_-2px_rgba(245,158,11,0.4)]">
                         <ShieldIcon />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] font-semibold">Secure Banking</div>
                         <div className="text-[9px] text-white/50">End-to-end encrypted</div>
                         <div className="mt-1 h-0.5 rounded-full bg-white/5 overflow-hidden">
-                          <div className="h-full w-[78%] bg-gradient-to-r from-amber-400 to-amber-300" />
+                          <div className="h-full w-[82%] bg-gradient-to-r from-amber-400 to-amber-300" />
                         </div>
                       </div>
                     </div>
 
                     {/* Credit card — holographic */}
-                    <div className="relative rounded-2xl p-3.5 bg-gradient-to-br from-slate-200 via-slate-300 to-slate-100 text-slate-900
-                                    ring-1 ring-white/15 shadow-[0_10px_30px_-8px_rgba(0,0,0,0.5)] overflow-hidden">
-                      {/* Holographic shimmer */}
-                      <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent showcase-hologram pointer-events-none" />
+                    <div className="relative rounded-2xl p-3.5 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 text-slate-900
+                                    ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden">
+                      <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
                       <div className="relative flex items-center justify-between">
-                        <div className="w-9 h-7 rounded-md bg-gradient-to-br from-amber-400 to-amber-600" />
+                        <div className="w-9 h-7 rounded-md bg-gradient-to-br from-amber-400 to-amber-600
+                                        shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]" />
                         <div className="text-[11px] font-semibold text-slate-600">Credit</div>
                       </div>
-                      <div className="relative mt-3 font-mono text-[12px] tracking-wider">1234 5034 5678 3058</div>
+                      <div className="relative mt-3 font-mono text-[12px] tracking-wider text-slate-800">
+                        1234 5034 5678 3058
+                      </div>
                       <div className="relative mt-2 flex items-center justify-between">
-                        <div className="text-[8px] text-slate-500 uppercase tracking-wider">Xon Saroy</div>
+                        <div className="text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
                         <div className="flex gap-0.5">
                           <span className="w-4 h-4 rounded-full bg-rose-500/80" />
                           <span className="w-4 h-4 rounded-full bg-amber-400/80 -ml-1.5" />
@@ -211,73 +201,41 @@ export default function ShowcasePage() {
   );
 }
 
-/* ─── Yordamchi komponentlar ─── */
-
-function GoldLogo() {
+/* ─── Brand hero ─── */
+function BrandHero() {
   return (
-    <div className="relative w-[150px] h-[110px]">
-      <div className="absolute inset-0 -inset-x-6 bg-amber-400/25 blur-3xl rounded-full -z-10" />
-      <div className="absolute inset-0 -z-10 showcase-rays-spin">
-        {Array.from({ length: 12 }).map((_, i) => (
+    <div className="relative showcase-fade-up">
+      {/* Aylanuvchi nurlar */}
+      <div className="absolute inset-0 -z-10 showcase-rays-spin pointer-events-none">
+        {Array.from({ length: 14 }).map((_, i) => (
           <div
             key={i}
-            className="absolute top-1/2 left-1/2 w-px h-20 origin-bottom"
+            className="absolute top-1/2 left-1/2 w-px h-[110px] origin-bottom"
             style={{
-              transform: `translate(-50%, -100%) rotate(${i * 30}deg)`,
-              background: 'linear-gradient(to top, transparent, rgba(251,191,36,0.5), transparent)',
+              transform: `translate(-50%, -100%) rotate(${i * (360 / 14)}deg)`,
+              background: 'linear-gradient(to top, transparent, rgba(251,191,36,0.55), transparent)',
             }}
           />
         ))}
       </div>
-      <svg viewBox="0 0 240 180" className="w-full h-full">
-        <defs>
-          <linearGradient id="lg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#fde68a" />
-            <stop offset="40%" stopColor="#fbbf24" />
-            <stop offset="100%" stopColor="#92400e" />
-          </linearGradient>
-        </defs>
-        {/* Ornament chiziqlar */}
-        <g stroke="url(#lg)" strokeWidth="2.5" fill="none" strokeLinecap="round">
-          <line x1="120" y1="30" x2="120" y2="150" />
-          <line x1="40"  y1="90"  x2="200" y2="90" />
-          <line x1="75"  y1="50" x2="165" y2="130" />
-          <line x1="165" y1="50" x2="75"  y2="130" />
-          {/* Buyuk ornament — kichik teppe-tirnoqli teglar */}
-          <path d="M 120 30 L 110 20 M 120 30 L 130 20" />
-          <path d="M 120 150 L 110 160 M 120 150 L 130 160" />
-          <path d="M 40 90 L 30 80 M 40 90 L 30 100" />
-          <path d="M 200 90 L 210 80 M 200 90 L 210 100" />
-        </g>
-        <g fill="url(#lg)">
-          <polygon points="120,42 130,72 120,58 110,72" />
-          <polygon points="120,138 130,108 120,122 110,108" />
-        </g>
-        <text x="120" y="108" textAnchor="middle"
-              fontSize="18" fontWeight="900" letterSpacing="2.2"
-              fill="url(#lg)" fontFamily="serif">
-          XON SAROY
-        </text>
-      </svg>
-      {/* Reflection */}
-      <div className="absolute left-0 right-0 -bottom-7 h-7 opacity-25 scale-y-[-1]"
-           style={{ maskImage: 'linear-gradient(to bottom, black, transparent)',
-                    WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)' }}>
-        <svg viewBox="0 0 240 60" className="w-full h-full">
-          <text x="120" y="40" textAnchor="middle"
-                fontSize="18" fontWeight="900" letterSpacing="2.2"
-                fill="#fbbf24" fontFamily="serif">
-            XON SAROY
-          </text>
-        </svg>
+
+      <XonSaroyLogo size={220} glow priority />
+
+      {/* Mirror reflection */}
+      <div className="absolute left-0 right-0 -bottom-2 h-8 opacity-25 scale-y-[-1] pointer-events-none"
+           style={{
+             maskImage: 'linear-gradient(to bottom, black, transparent)',
+             WebkitMaskImage: 'linear-gradient(to bottom, black, transparent)',
+           }}>
+        <XonSaroyLogo size={220} />
       </div>
     </div>
   );
 }
 
-function Coin({
-  sym, pos, size, bg, delay, gold,
-}: {
+/* ─── Yordamchi komponentlar ─── */
+
+function Coin({ sym, pos, size, bg, delay, gold }: {
   sym: string; pos: string; size: 'sm' | 'md'; bg: string; delay: string; gold?: boolean;
 }) {
   return (
@@ -287,22 +245,21 @@ function Coin({
                        rounded-full bg-gradient-to-br ${bg} grid place-items-center font-bold
                        ${gold ? 'text-amber-700' : 'text-white'}
                        ring-2 ring-white/15
-                       shadow-[0_8px_22px_-4px_rgba(0,0,0,0.7),inset_0_2px_0_rgba(255,255,255,0.35)]`}>
+                       shadow-[0_8px_24px_-4px_rgba(0,0,0,0.7),inset_0_2px_0_rgba(255,255,255,0.35)]`}>
         {sym}
       </div>
     </div>
   );
 }
 
-function StatChip({
-  label, value, dir, pos, delay,
-}: {
+function StatChip({ label, value, dir, pos, delay }: {
   label: string; value: string; dir: 'up' | 'down'; pos: string; delay: string;
 }) {
   return (
     <div className={`absolute ${pos} showcase-coin-float pointer-events-none z-20 text-[11px] whitespace-nowrap`}
          style={{ animationDelay: delay }}>
-      <div className="flex items-center gap-1.5 text-white/85">
+      <div className="flex items-center gap-1.5 text-white/85 px-2.5 py-1 rounded-full
+                      bg-white/[0.04] backdrop-blur-md ring-1 ring-white/10">
         <span className={dir === 'up' ? 'text-emerald-400 text-[9px]' : 'text-rose-400 text-[9px]'}>
           {dir === 'up' ? '▲' : '▼'}
         </span>
@@ -318,7 +275,7 @@ function MiniLineChart() {
     <svg viewBox="0 0 360 90" className="w-full h-[80px]">
       <defs>
         <linearGradient id="lc-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.40" />
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="lc-stroke" x1="0" y1="0" x2="1" y2="0">
@@ -326,12 +283,9 @@ function MiniLineChart() {
           <stop offset="100%" stopColor="#f59e0b" />
         </linearGradient>
       </defs>
-      <path d="M 0 65 Q 30 55 60 50 T 120 35 T 180 55 T 240 18 T 300 30 T 360 25 L 360 90 L 0 90 Z"
-            fill="url(#lc-fill)" />
+      <path d="M 0 65 Q 30 55 60 50 T 120 35 T 180 55 T 240 18 T 300 30 T 360 25 L 360 90 L 0 90 Z" fill="url(#lc-fill)" />
       <path d="M 0 65 Q 30 55 60 50 T 120 35 T 180 55 T 240 18 T 300 30 T 360 25"
-            fill="none" stroke="url(#lc-stroke)" strokeWidth="2" strokeLinecap="round"
-            className="showcase-draw" />
-      {/* Hover indicator */}
+            fill="none" stroke="url(#lc-stroke)" strokeWidth="2" strokeLinecap="round" className="showcase-draw" />
       <circle cx="240" cy="18" r="4" fill="#fde68a" />
       <circle cx="240" cy="18" r="9" fill="#fbbf24" opacity="0.3">
         <animate attributeName="r" values="6;14;6" dur="2.5s" repeatCount="indefinite" />
@@ -384,20 +338,17 @@ function ConnectionLines() {
 function Backdrop() {
   return (
     <>
-      {/* Diagonal yorug'lik */}
-      <div className="absolute top-0 right-0 w-[400px] h-full
+      <div className="absolute top-0 right-0 w-[420px] h-full
                       bg-gradient-to-bl from-cyan-300/15 via-transparent to-transparent
                       showcase-light-pulse pointer-events-none" />
-      {/* Tarmoq nuqtalari */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none"
+      <div className="absolute inset-0 opacity-25 pointer-events-none"
            style={{
              backgroundImage: 'radial-gradient(circle, rgba(96,165,250,0.5) 1px, transparent 1px)',
-             backgroundSize: '36px 36px',
+             backgroundSize: '38px 38px',
              maskImage: 'radial-gradient(ellipse 90% 90% at 50% 45%, #000 30%, transparent 80%)',
              WebkitMaskImage: 'radial-gradient(ellipse 90% 90% at 50% 45%, #000 30%, transparent 80%)',
            }} />
-      {/* Pastdagi constellation */}
-      <div className="absolute bottom-0 left-0 right-0 h-[280px] opacity-30 pointer-events-none">
+      <div className="absolute bottom-0 left-0 right-0 h-[260px] opacity-25 pointer-events-none">
         <ConstellationSvg />
       </div>
     </>
@@ -405,7 +356,6 @@ function Backdrop() {
 }
 
 function ConstellationSvg() {
-  // Deterministik nuqtalar — har xil joylarda yulduzlar
   const pts = [
     [60, 200], [140, 240], [220, 180], [310, 220], [380, 160], [450, 230],
     [520, 200], [610, 240], [700, 180], [780, 220], [860, 200], [950, 230],
@@ -434,7 +384,6 @@ function ConstellationSvg() {
 }
 
 function Particles() {
-  // 14 ta zarracha — turli joylarda, turli kechikishlar
   const items = Array.from({ length: 14 }, (_, i) => ({
     left: `${(i * 73) % 100}%`,
     bottom: `${(i * 31) % 40}%`,
@@ -448,10 +397,8 @@ function Particles() {
           key={i}
           className="absolute rounded-full bg-amber-300/60 showcase-particle"
           style={{
-            left: p.left,
-            bottom: p.bottom,
-            width: p.size,
-            height: p.size,
+            left: p.left, bottom: p.bottom,
+            width: p.size, height: p.size,
             animationDelay: p.delay,
             boxShadow: '0 0 6px rgba(251,191,36,0.8)',
           }}
@@ -461,6 +408,7 @@ function Particles() {
   );
 }
 
+/* ─── Inline ikonalar ─── */
 function SearchIcon() {
   return (
     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -469,7 +417,6 @@ function SearchIcon() {
     </svg>
   );
 }
-
 function ShieldIcon() {
   return (
     <svg className="w-4 h-4 text-slate-900" viewBox="0 0 24 24" fill="currentColor">
@@ -477,13 +424,27 @@ function ShieldIcon() {
     </svg>
   );
 }
+function ArrowRight() {
+  return (
+    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M5 12h14M13 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function TrendUp() {
+  return (
+    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M3 17l6-6 4 4 8-8M21 7v6h-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' }) {
   const cls = color === 'amber'
-    ? 'bg-amber-400/20 text-amber-300 ring-amber-400/30'
-    : 'bg-cyan-400/20 text-cyan-300 ring-cyan-400/30';
+    ? 'bg-amber-400/15 text-amber-300 ring-amber-400/25'
+    : 'bg-cyan-400/15 text-cyan-300 ring-cyan-400/25';
   return (
-    <div className={`relative w-7 h-7 rounded-full grid place-items-center ring-1 ${cls}`}>
+    <div className={`relative w-8 h-8 rounded-full grid place-items-center ring-1 ${cls}`}>
       <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-1">
         {count}
       </span>
@@ -495,7 +456,6 @@ function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' })
   );
 }
 
-/** Mingliklarni probel bilan ajratish: 1234567.89 → "1 234 567.89" */
 function formatMoney(n: number): string {
   const [int, dec] = n.toFixed(2).split('.');
   return int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + dec;
