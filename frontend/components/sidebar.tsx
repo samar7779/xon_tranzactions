@@ -5,16 +5,13 @@ import { useParams, usePathname, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
-  LayoutDashboard, Building2,
-  LogOut, ShieldCheck, BadgeDollarSign,
-  Bell, ChevronUp, UserCircle, Settings, ChevronRight,
-  AlertCircle, CheckCircle2, FileSpreadsheet, Scale,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign,
+  Bell, ChevronRight, AlertCircle, CheckCircle2, FileSpreadsheet, Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { api } from '@/lib/api';
-import { Button } from './ui/button';
 import { BrandLogo } from './brand-logo';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -48,12 +45,10 @@ const GROUP_LABEL: Record<string, string> = {
 
 export function Sidebar() {
   const t = useTranslations('nav');
-  const tApp = useTranslations('app');
   const pathname = usePathname();
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
-  const logout = useAuth((s) => s.logout);
 
   const can = (perm?: string) => {
     if (!perm) return true;
@@ -76,17 +71,14 @@ export function Sidebar() {
 
   return (
     <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white border-r border-slate-200/80 relative">
-      {/* Brand */}
-      <div className="px-6 pt-6 pb-4">
-        <Link href={`/${locale}/dashboard`} className="flex items-center gap-3 group">
-          <div className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center shadow-lg shadow-indigo-500/20">
-            <BrandLogo className="w-6 h-6" />
-            <span className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-indigo-400 to-blue-500 blur-md opacity-30 group-hover:opacity-50 transition-opacity -z-10" />
-          </div>
-          <div className="min-w-0">
-            <div className="text-[15px] font-semibold tracking-tight truncate">{tApp('title')}</div>
-            <div className="text-[11px] text-slate-500 truncate">Xon Saroy · treasury</div>
-          </div>
+      {/* Compact brand mark */}
+      <div className="px-5 pt-5 pb-3">
+        <Link
+          href={`/${locale}/dashboard`}
+          aria-label="Bosh sahifa"
+          className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-shadow"
+        >
+          <BrandLogo className="w-6 h-6" />
         </Link>
       </div>
 
@@ -196,44 +188,6 @@ export function Sidebar() {
           );
         })}
       </nav>
-
-      {/* User dropdown */}
-      <div className="border-t border-slate-100 p-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 px-2 py-2 rounded-xl bg-slate-50/50 hover:bg-slate-100 transition-colors group">
-              <div className="relative w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 grid place-items-center text-white text-sm font-semibold shrink-0 shadow-md shadow-indigo-500/20">
-                {(user?.fullName || user?.email || '?').charAt(0).toUpperCase()}
-                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white">
-                  <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-75" />
-                </span>
-              </div>
-              <div className="min-w-0 flex-1 text-left">
-                <div className="text-[13px] font-semibold truncate">{user?.fullName || user?.email}</div>
-                <div className="text-[10px] text-slate-500 truncate">{user?.roleLabel || user?.role}</div>
-              </div>
-              <ChevronUp className="h-4 w-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="top" className="w-60">
-            <DropdownMenuLabel className="font-normal">
-              <div className="text-[13px] font-semibold truncate">{user?.fullName || '—'}</div>
-              <div className="text-[11px] text-slate-500 truncate font-normal">{user?.email}</div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <UserCircle className="h-4 w-4 mr-2" /> Profilim
-            </DropdownMenuItem>
-            <DropdownMenuItem>
-              <Settings className="h-4 w-4 mr-2" /> Sozlamalar
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-rose-600" onClick={logout}>
-              <LogOut className="h-4 w-4 mr-2" /> {t('logout')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
     </aside>
   );
 }
