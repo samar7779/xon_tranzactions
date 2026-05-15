@@ -45,26 +45,10 @@ export default function ShowcasePage() {
       <BackgroundNetwork />
       <ConstellationBottom />
 
-      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-4 pb-2">
-
-        {/* Title — dashboard ustida shimmer effect bilan */}
-        <div className="text-center showcase-fade-up pointer-events-none"
-             style={{ animationDelay: '0.1s' }}>
-          <h1 className="text-[26px] sm:text-[32px] lg:text-[40px] font-bold tracking-[0.04em] leading-[0.95]
-                         bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
-                         drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
-                         showcase-text-shimmer"
-              style={{ backgroundSize: '200% 100%' }}>
-            XON SAROY TRANSACTIONS
-          </h1>
-          <div className="mx-auto mt-1 h-px w-[55%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
-          <div className="text-[9px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-1">
-            real-time banking platform
-          </div>
-        </div>
+      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-2 pb-2">
 
         {/* 3D dashboard + atrofdagi elementlar */}
-        <div className="relative flex-1 w-full max-w-[1200px] mx-auto mt-2"
+        <div className="relative flex-1 w-full max-w-[1200px] mx-auto"
              style={{ perspective: '1900px' }}>
 
           {/* Storyset SVG scenes — dashboard yonida kichik dekoratsiya */}
@@ -121,6 +105,22 @@ export default function ShowcasePage() {
               }}
             >
               <div className="absolute -inset-3 rounded-3xl bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/20 blur-3xl -z-10" />
+
+              {/* Title — dashboard yuqorisida, panel bilan birga 3D'da egiladi */}
+              <div className="relative text-center mb-2 showcase-fade-up pointer-events-none"
+                   style={{ animationDelay: '0.1s' }}>
+                <h1 className="text-[22px] sm:text-[28px] lg:text-[32px] font-bold tracking-[0.05em] leading-[0.95]
+                               bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
+                               drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
+                               showcase-text-shimmer"
+                    style={{ backgroundSize: '200% 100%' }}>
+                  XON SAROY TRANSACTIONS
+                </h1>
+                <div className="mx-auto mt-1 h-px w-[38%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+                <div className="text-[8px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-0.5">
+                  real-time banking platform
+                </div>
+              </div>
 
               <div className="relative rounded-[24px] border border-white/10
                               bg-[rgba(18,28,52,0.6)] backdrop-blur-xl
