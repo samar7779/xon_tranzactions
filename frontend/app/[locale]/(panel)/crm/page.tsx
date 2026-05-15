@@ -429,85 +429,36 @@ export default function CrmPage() {
           {/* ═══ Contract details ═══ */}
           {!showMut.isPending && detail && (
             <>
-              {/* Hero card — light, modern fintech */}
+              {/* Compact contract header — single slim strip */}
               <Card className="border-0 shadow-soft overflow-hidden">
-                <div className="relative bg-white">
-                  {/* Top accent bar */}
-                  <div className={cn(
-                    'h-1 bg-gradient-to-r',
-                    statusKey === 'paid' ? 'from-emerald-500 via-teal-500 to-cyan-500'
-                    : statusKey === 'overdue' ? 'from-rose-500 via-red-500 to-amber-500'
-                    : statusKey === 'sold' ? 'from-indigo-500 via-violet-500 to-fuchsia-500'
-                    : 'from-indigo-500 via-blue-500 to-cyan-500',
-                  )} />
-
-                  <div className="px-6 lg:px-8 py-6">
-                    <div className="flex items-start justify-between gap-4 flex-wrap">
-                      {/* Left: object + client */}
-                      <div className="min-w-0 flex-1 flex items-start gap-4">
-                        {/* Object icon tile */}
-                        <div className="hidden sm:grid w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 place-items-center text-white shadow-lg shadow-indigo-500/25 shrink-0">
-                          <Building2 className="h-7 w-7" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 mb-1 text-slate-500 text-[10px] uppercase tracking-[0.18em] font-bold">
-                            <Sparkles className="h-3 w-3 text-indigo-500" />
-                            {t('object')}
-                          </div>
-                          <div className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900 truncate">
-                            {info.object || '—'}
-                          </div>
-                          <div className="mt-2 flex items-center gap-2 text-slate-600 text-sm">
-                            <User className="h-4 w-4 text-slate-400" />
-                            <span className="font-semibold truncate">{fullName || '—'}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Right: contract number + status */}
-                      <div className="text-right shrink-0">
-                        <div className="text-slate-500 text-[10px] uppercase tracking-[0.18em] font-bold mb-1">
-                          {t('contractNumber')}
-                        </div>
-                        <div className="text-2xl font-black font-mono tracking-tight bg-gradient-to-br from-indigo-700 via-violet-700 to-fuchsia-700 bg-clip-text text-transparent">
-                          {activeContract}
-                        </div>
-                        <span className={cn(
-                          'inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset',
-                          statusTone.cls,
-                        )}>
-                          <span className={cn('w-1.5 h-1.5 rounded-full', statusTone.dot)} />
-                          {statusName}
-                        </span>
-                      </div>
+                <div className="px-5 py-3.5 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-violet-500 via-violet-600 to-purple-600 grid place-items-center text-white shadow-md shadow-violet-500/25 shrink-0">
+                      <Building2 className="h-5 w-5" />
                     </div>
-
-                    {/* Apartment chips */}
-                    <div className="mt-5 flex items-center gap-2 flex-wrap">
-                      {info.number && (
-                        <Chip icon={<Home className="h-3 w-3" />} label={`№ ${info.number}`} />
-                      )}
-                      {info.rooms != null && (
-                        <Chip icon={<Hash className="h-3 w-3" />} label={`${info.rooms} ${t('rooms').toLowerCase()}`} />
-                      )}
-                      {info.area && (
-                        <Chip icon={<Hash className="h-3 w-3" />} label={`${info.area} m²`} />
-                      )}
-                      {info.building && (
-                        <Chip icon={<Building2 className="h-3 w-3" />} label={String(info.building)} />
-                      )}
-                      {info.block && (
-                        <Chip icon={<Hash className="h-3 w-3" />} label={`${t('block')} ${info.block}`} />
-                      )}
-                      {info.floor != null && (
-                        <Chip icon={<Hash className="h-3 w-3" />} label={`${t('floor')} ${info.floor}`} />
-                      )}
-                      {detail.contract_date && (
-                        <Chip icon={<Calendar className="h-3 w-3" />} label={fmtDate(detail.contract_date)} />
-                      )}
+                    <div className="min-w-0">
+                      <div className="text-lg lg:text-xl font-black tracking-tight text-slate-900 truncate leading-tight">
+                        {info.object || '—'}
+                      </div>
+                      <div className="text-[12px] text-slate-500 truncate flex items-center gap-1.5">
+                        <User className="h-3 w-3" />
+                        {fullName || '—'}
+                      </div>
                     </div>
                   </div>
-
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-right">
+                      <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-slate-400">{t('contractNumber')}</div>
+                      <div className="font-mono text-base font-bold tabular-nums text-violet-700">{activeContract}</div>
+                    </div>
+                    <span className={cn(
+                      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset',
+                      statusTone.cls,
+                    )}>
+                      <span className={cn('w-1.5 h-1.5 rounded-full', statusTone.dot)} />
+                      {statusName}
+                    </span>
+                  </div>
                 </div>
               </Card>
 
@@ -539,7 +490,7 @@ export default function CrmPage() {
                 />
               </div>
 
-              {/* ═══ Client info — collapsible, ABOVE payment list ═══ */}
+              {/* ═══ Details — collapsible: apartment + client info ═══ */}
               <Card className="border-0 shadow-soft overflow-hidden">
                 <button
                   type="button"
@@ -568,34 +519,74 @@ export default function CrmPage() {
                   openClient ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}>
                   <div className="overflow-hidden">
-                    <div className="border-t border-slate-100 p-5">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
-                        <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
-                        {(client.phone_primary || client.phone) && (
-                          <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone_primary || client.phone)} mono />
-                        )}
-                        {client.phone_secondary && (
-                          <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={`${t('phone')} 2`} value={String(client.phone_secondary)} mono />
-                        )}
-                        {(client.date_of_birth || client.birth_date) && (
-                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.date_of_birth || client.birth_date)} />
-                        )}
-                        {client.passport_series && (
-                          <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passport')} value={String(client.passport_series)} mono />
-                        )}
-                        {client.passport_issued_by && (
-                          <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passportIssuedBy')} value={String(client.passport_issued_by)} />
-                        )}
-                        {client.passport_issued_date && (
-                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportIssuedDate')} value={fmtDate(client.passport_issued_date)} />
-                        )}
-                        {client.passport_expiry_date && (
-                          <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportExpiry')} value={fmtDate(client.passport_expiry_date)} />
-                        )}
-                        {(client.address_line || client.address) && (
-                          <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address_line || client.address)} />
-                        )}
+                    <div className="border-t border-slate-100 p-5 space-y-5">
+
+                      {/* ─── Apartment / object details (moved here from hero) ─── */}
+                      <div>
+                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                          <Building2 className="h-3 w-3 text-violet-500" />
+                          {t('object')}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {info.number && (
+                            <Chip icon={<Home className="h-3 w-3" />} label={`№ ${info.number}`} />
+                          )}
+                          {info.rooms != null && (
+                            <Chip icon={<Hash className="h-3 w-3" />} label={`${info.rooms} ${t('rooms').toLowerCase()}`} />
+                          )}
+                          {info.area && (
+                            <Chip icon={<Hash className="h-3 w-3" />} label={`${info.area} m²`} />
+                          )}
+                          {info.building && (
+                            <Chip icon={<Building2 className="h-3 w-3" />} label={String(info.building)} />
+                          )}
+                          {info.block && (
+                            <Chip icon={<Hash className="h-3 w-3" />} label={`${t('block')} ${info.block}`} />
+                          )}
+                          {info.floor != null && (
+                            <Chip icon={<Hash className="h-3 w-3" />} label={`${t('floor')} ${info.floor}`} />
+                          )}
+                          {detail.contract_date && (
+                            <Chip icon={<Calendar className="h-3 w-3" />} label={fmtDate(detail.contract_date)} />
+                          )}
+                        </div>
                       </div>
+
+                      {/* ─── Client info ─── */}
+                      <div>
+                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-emerald-500" />
+                          {t('openClient')}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
+                          <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
+                          {(client.phone_primary || client.phone) && (
+                            <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone_primary || client.phone)} mono />
+                          )}
+                          {client.phone_secondary && (
+                            <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={`${t('phone')} 2`} value={String(client.phone_secondary)} mono />
+                          )}
+                          {(client.date_of_birth || client.birth_date) && (
+                            <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.date_of_birth || client.birth_date)} />
+                          )}
+                          {client.passport_series && (
+                            <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passport')} value={String(client.passport_series)} mono />
+                          )}
+                          {client.passport_issued_by && (
+                            <InfoRow icon={<FileText className="h-3.5 w-3.5" />} label={t('passportIssuedBy')} value={String(client.passport_issued_by)} />
+                          )}
+                          {client.passport_issued_date && (
+                            <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportIssuedDate')} value={fmtDate(client.passport_issued_date)} />
+                          )}
+                          {client.passport_expiry_date && (
+                            <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('passportExpiry')} value={fmtDate(client.passport_expiry_date)} />
+                          )}
+                          {(client.address_line || client.address) && (
+                            <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address_line || client.address)} />
+                          )}
+                        </div>
+                      </div>
+
                     </div>
                   </div>
                 </div>
