@@ -227,35 +227,7 @@ export default function TransactionsPage() {
 
   return (
     <>
-      <Topbar title={t('title')} subtitle={t('subtitle')} actions={
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="secondary" size="sm" className="bg-white/15 hover:bg-white/25 text-white border-0 rounded-full backdrop-blur-sm">
-                <Download className="h-3.5 w-3.5 mr-1.5" /> Eksport
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filtr bo'yicha (hammasi)</DropdownMenuLabel>
-              <DropdownMenuItem onClick={exportExcel}>
-                <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
-              <DropdownMenuItem onClick={exportCsv}>
-                <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" /> CSV
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={exportJson}>
-                <FileText className="h-4 w-4 mr-2 text-blue-600" /> JSON
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={exportPrint}>
-                <FileText className="h-4 w-4 mr-2 text-slate-600" /> Chop etish / PDF
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      } />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
 
@@ -310,23 +282,51 @@ export default function TransactionsPage() {
                 )}
               </div>
 
-              {/* Eski tarixni yuklash (backfill) */}
-              <button
-                onClick={() => setBackfillOpen(true)}
-                title="Eski tarixni yuklash — sana oralig'i bo'yicha"
-                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 ring-1 ring-slate-200 hover:ring-indigo-200 transition-colors shrink-0"
-              >
-                <History className="h-4 w-4" />
-              </button>
-
-              {/* Tranzaksiya ID orqali qidirish */}
-              <button
-                onClick={() => setIdSearchOpen(true)}
-                title="Tranzaksiya ID orqali qidirish"
-                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 hover:bg-indigo-50 hover:text-indigo-700 text-slate-600 ring-1 ring-slate-200 hover:ring-indigo-200 transition-colors shrink-0"
-              >
-                <Hash className="h-4 w-4" />
-              </button>
+              {/* Asboblar — tarix, ID, eksport — bitta guruh */}
+              <div className="inline-flex h-10 rounded-xl bg-slate-50 ring-1 ring-slate-200 overflow-hidden shrink-0">
+                <button
+                  onClick={() => setBackfillOpen(true)}
+                  title="Eski tarixni yuklash — sana oralig'i bo'yicha"
+                  className="px-2.5 grid place-items-center text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-r border-slate-200"
+                >
+                  <History className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setIdSearchOpen(true)}
+                  title="Tranzaksiya ID orqali qidirish"
+                  className="px-2.5 grid place-items-center text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-r border-slate-200"
+                >
+                  <Hash className="h-4 w-4" />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title="Eksport"
+                      className="px-2.5 grid place-items-center text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filtr bo'yicha (hammasi)</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={exportExcel}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" /> Excel
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={exportCsv}>
+                      <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" /> CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportJson}>
+                      <FileText className="h-4 w-4 mr-2 text-blue-600" /> JSON
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={exportPrint}>
+                      <FileText className="h-4 w-4 mr-2 text-slate-600" /> Chop etish / PDF
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
 
               <FilterChip
                 active={direction !== 'all'}
