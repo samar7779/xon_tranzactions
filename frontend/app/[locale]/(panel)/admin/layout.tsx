@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { Users, ShieldCheck, History, Zap } from 'lucide-react';
+import { Users, ShieldCheck, History, Zap, Trash2 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
@@ -11,6 +11,7 @@ const TABS = [
   { key: 'roles',        label: 'Rollar',       icon: ShieldCheck },
   { key: 'sync-logs',    label: 'Sync tarixi',  icon: History },
   { key: 'api-explorer', label: 'API Explorer', icon: Zap },
+  { key: 'cleanup',      label: 'Tozalash',     icon: Trash2 },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

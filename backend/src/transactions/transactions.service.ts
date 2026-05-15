@@ -66,6 +66,37 @@ export class TransactionsService {
     return { ok: true, total, page, perPage, items };
   }
 
+  /**
+   * Hisob raqami bo'yicha barcha tranzaksiyalarni o'chirish.
+   * Bog'liq Payment yozuvlarini ham birga o'chiradi (avval).
+   * Hisob raqamining o'zi DB'dan o'chmaydi — faqat tranzaksiyalar.
+   */
+  async deleteByAccountNo(accountNo: string) {
+    const acc = await this.prisma.bankAccount.findFirst({
+      where: { accountNo },
+      select: { id: true, accountNo: true, ownerName: true, branch: true },
+    });
+    if (!acc) return { ok: false, error: 'Bunday hisob raqami topilmadi' };
+
+    // Bog'liq payment'larni avval o'chiramiz (FK cascade'siz)
+    const txnIds = await this.prisma.transaction.findMany({
+      where: { accountId: acc.id },
+      select: { id: true },
+    });
+    const ids = txnIds.map((t) => t.id);
+    if (ids.length === 0) {
+      return { ok: true, deleted: 0, account: acc };
+    }
+    await this.prisma.payment.deleteMany({ where: { transactionId: { in: ids } } });
+    const res = await this.prisma.transaction.deleteMany({ where: { accountId: acc.id } });
+    // Hisob qoldig'ini tiklash (foydalanuvchi keyingi sync'da o'qiydi)
+    await this.prisma.bankAccount.update({
+      where: { id: acc.id },
+      data: { balance: null, lastSyncedAt: null },
+    });
+    return { ok: true, deleted: res.count, account: acc };
+  }
+
   async findOne(idOrExternal: string) {
     // Ichki id yoki bank bergan kompozit externalId bo'yicha qidiramiz
     return this.prisma.transaction.findFirst({
