@@ -1,23 +1,21 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useState } from 'react';
 import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
- * Showcase — soliqservis uslubidagi 3D-style kompozitsiya:
- * platform + 2 telefon + laptop + markazda XON SAROY seal +
- * 3 floating cloud card + gold dotted flow lines.
+ * Showcase — tz/1.jpeg asosida: markazda logo + sarlavha + 3D dashboard
+ * + atrofida floating coins, stat chips, cyan flow lines, constellation.
  */
 export default function ShowcasePage() {
   const [bal, setBal] = useState(0);
 
   useEffect(() => {
-    const target = 12_504_500;
+    const target = 1_000.0;
     const start = performance.now();
     let raf = 0;
     const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / 2200);
+      const p = Math.min(1, (t - start) / 1500);
       setBal(target * (1 - Math.pow(1 - p, 3)));
       if (p < 1) raf = requestAnimationFrame(tick);
     };
@@ -27,487 +25,386 @@ export default function ShowcasePage() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden text-white
-                    bg-[linear-gradient(135deg,#1e40af_0%,#2563eb_55%,#1e3a8a_100%)]">
-      <Stars />
-      <Glows />
+                    bg-[radial-gradient(ellipse_at_center,#1a2d63_0%,#0a1428_50%,#040810_100%)]">
+      <BackgroundNetwork />
+      <ConstellationBottom />
 
-      {/* Top nav */}
-      <header className="relative z-30 px-8 lg:px-12 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3 showcase-fade-up">
-          <XonSaroyLogo size={42} />
-          <div>
-            <div className="text-[14px] font-bold tracking-tight leading-none">Xon Saroy</div>
-            <div className="text-[10px] text-white/55 uppercase tracking-[0.18em] mt-0.5">Treasury</div>
-          </div>
-        </div>
-        <nav className="hidden md:flex items-center gap-6 text-[13px] text-white/75 showcase-fade-up"
-             style={{ animationDelay: '0.1s' }}>
-          <a className="hover:text-white transition-colors cursor-pointer">Imkoniyatlar</a>
-          <a className="hover:text-white transition-colors cursor-pointer">Banklar</a>
-          <a className="hover:text-white transition-colors cursor-pointer">Tariflar</a>
-          <a className="hover:text-white transition-colors cursor-pointer">Yangiliklar</a>
-        </nav>
-        <span className="text-[13px] text-amber-300 font-semibold tabular-nums showcase-fade-up"
-              style={{ animationDelay: '0.2s' }}>
-          +998 71 202-3282
-        </span>
-      </header>
-
-      {/* Hero */}
-      <main className="relative z-10 px-8 lg:px-12 grid grid-cols-1 lg:grid-cols-[1fr_1.15fr] gap-8 h-[calc(100vh-72px)]">
-        {/* CHAP */}
-        <div className="flex flex-col justify-center showcase-fade-up" style={{ animationDelay: '0.15s' }}>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 ring-1 ring-white/15 backdrop-blur
-                          text-[10px] uppercase tracking-[0.2em] font-semibold text-amber-300 w-fit mb-5">
-            <span className="relative flex h-1.5 w-1.5">
-              <span className="animate-ping absolute inset-0 rounded-full bg-amber-300 opacity-75" />
-              <span className="relative rounded-full h-1.5 w-1.5 bg-amber-300" />
-            </span>
-            Live · Banks integrated
-          </div>
-
-          <h1 className="text-[34px] sm:text-[42px] lg:text-[48px] font-bold leading-[1.05] tracking-[-0.025em] max-w-[560px]">
-            <span className="bg-gradient-to-r from-amber-200 via-amber-300 to-amber-500 bg-clip-text text-transparent">
-              "Xon Saroy"
-            </span>{' '}
-            <span className="text-white">bank tranzaksiyalarini boshqarish — bir joyda.</span>
-          </h1>
-          <p className="mt-4 text-[14px] sm:text-[15px] text-white/65 max-w-[480px] leading-relaxed">
-            Kapitalbank, Ipak Yo'li va boshqa banklar bilan integratsiya. Real-time sync,
-            avto sverka, kirim/chiqim analitika va shifrlangan saqlash.
-          </p>
-
-          <div className="mt-7 flex items-center gap-3 flex-wrap">
-            <button className="px-5 h-11 rounded-full bg-gradient-to-r from-amber-400 to-amber-500 text-slate-900 text-[13px] font-bold
-                                flex items-center gap-2 shadow-[0_10px_30px_-8px_rgba(245,158,11,0.6)]
-                                hover:brightness-110 active:scale-[0.98] transition-all">
-              <ArrowInBox /> Kirish
-            </button>
-            <button className="px-5 h-11 rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur text-white text-[13px] font-semibold
-                                hover:bg-white/15 transition-colors">
-              Ro'yxatdan o'tish
-            </button>
-          </div>
-
-          <div className="mt-8 flex items-center gap-5">
-            <span className="text-[10px] uppercase tracking-[0.2em] text-white/40 font-semibold">Integrated banks</span>
-            <div className="flex items-center gap-2">
-              <BankPill src="/banks/kapital.webp" name="Kapitalbank" />
-              <BankPill src="/banks/ipak.svg" name="Ipak Yo'li" />
+      {/* Markaz kompozitsiya */}
+      <div className="relative z-10 h-full flex flex-col items-center px-4 pt-6 pb-2">
+        {/* Brand block — yuqorida */}
+        <div className="flex flex-col items-center showcase-fade-up">
+          {/* Logo rays */}
+          <div className="relative w-[210px] h-[160px]">
+            {/* Aylanuvchi nurlar */}
+            <div className="absolute inset-0 showcase-rays-spin pointer-events-none">
+              {Array.from({ length: 14 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute top-1/2 left-1/2 w-px h-[120px] origin-bottom"
+                  style={{
+                    transform: `translate(-50%, -100%) rotate(${i * (360 / 14)}deg)`,
+                    background: 'linear-gradient(to top, transparent, rgba(251,191,36,0.5), transparent)',
+                  }}
+                />
+              ))}
             </div>
-          </div>
-
-          <div className="mt-6 grid grid-cols-3 max-w-[440px] gap-1 pt-5 border-t border-white/10 showcase-fade-up"
-               style={{ animationDelay: '0.3s' }}>
-            <Metric label="Tranzaksiya" value="6 762" />
-            <Metric label="Banklar" value="2" />
-            <Metric label="Hisoblar" value="139" />
+            {/* Glow halo */}
+            <div className="absolute inset-0 -inset-x-8 bg-amber-400/25 blur-3xl rounded-full -z-10" />
+            {/* Logo */}
+            <div className="absolute inset-0 grid place-items-center">
+              <XonSaroyLogo size={180} priority />
+            </div>
           </div>
         </div>
 
-        {/* O'NG — soliqservis-uslubidagi kompozitsiya */}
-        <div className="relative h-full">
-          {/* Cloud cards — yuqorida */}
-          <CloudCard pos="top-[4%]  left-[10%]"  icon={<PercentIcon />}  color="amber" delay="0.4s" />
-          <CloudCard pos="top-[0%]  left-[42%]"  icon={<ClockIcon />}    color="blue"  delay="0.6s" big />
-          <CloudCard pos="top-[6%]  right-[6%]"  icon={<LockPenIcon />}  color="blue"  delay="0.8s" />
+        {/* Title */}
+        <h1 className="mt-1 text-[32px] sm:text-[40px] lg:text-[46px] font-bold tracking-[-0.025em] text-center leading-none
+                       bg-gradient-to-b from-amber-100 via-amber-300 to-amber-600 bg-clip-text text-transparent
+                       drop-shadow-[0_2px_12px_rgba(245,158,11,0.4)] showcase-fade-up"
+            style={{ animationDelay: '0.1s' }}>
+          XON SAROY TRANSACTIONS
+        </h1>
+        <p className="mt-2 text-white/65 text-[13px] sm:text-[14px] text-center showcase-fade-up"
+           style={{ animationDelay: '0.2s' }}>
+          Collect and manage all payments in one place.
+        </p>
 
-          {/* Dotted flow lines (cloud → platforma) */}
-          <FlowLines />
+        {/* 3D dashboard + atrofdagi elementlar */}
+        <div className="relative flex-1 w-full max-w-[1100px] mx-auto mt-4"
+             style={{ perspective: '1800px' }}>
 
-          {/* Floating yellow arrow */}
-          <div className="absolute top-[36%] left-[6%] showcase-coin-float pointer-events-none z-10"
-               style={{ animationDelay: '0.5s' }}>
-            <svg width="70" height="90" viewBox="0 0 60 80">
-              <defs>
-                <linearGradient id="arr-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#fde68a" />
-                  <stop offset="100%" stopColor="#d97706" />
-                </linearGradient>
-              </defs>
-              <path d="M 20 5 L 50 35 L 35 35 L 35 75 L 5 75 L 5 35 L -10 35 Z"
-                    fill="url(#arr-grad)"
-                    transform="rotate(-25 25 40)"
-                    style={{ filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.5))' }} />
-            </svg>
-          </div>
+          {/* Floating coins */}
+          <Coin sym="$" pos="top-[8%]  left-[12%]"  size="md" bg="from-blue-400 to-blue-600"   delay="0s"    />
+          <Coin sym="€" pos="top-[2%]  left-[36%]"  size="md" bg="from-blue-500 to-blue-700"   delay="1.2s"  />
+          <Coin sym="£" pos="top-[12%] left-[22%]"  size="sm" bg="from-amber-300 to-amber-500" delay="2.4s"  />
+          <Coin sym="$" pos="top-[28%] right-[2%]"  size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
+          <Coin sym="£" pos="bottom-[6%] right-[36%]" size="md" bg="from-amber-300 to-amber-500" delay="1.8s" />
+          <Coin sym="€" pos="bottom-[2%] left-[26%]" size="sm" bg="from-slate-100 to-slate-300" delay="3s"   gold />
 
-          {/* Floating gold ring "0" */}
-          <div className="absolute top-[40%] right-[2%] showcase-coin-float pointer-events-none z-10"
-               style={{ animationDelay: '0.9s' }}>
-            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-300 to-amber-600
-                            ring-4 ring-amber-200/40
-                            shadow-[0_12px_30px_-4px_rgba(245,158,11,0.7),inset_0_2px_0_rgba(255,255,255,0.5)]
-                            grid place-items-center">
-              <div className="w-8 h-8 rounded-full ring-[4px] ring-amber-900/40" />
-            </div>
-          </div>
+          {/* Floating stat chips (o'ng tomon) */}
+          <StatChip label="Data" value="−13.8%"  dir="up"   pos="top-[20%] right-[6%]"  delay="0.4s" />
+          <StatChip label="Nidt" value="−300.00" dir="up"   pos="top-[26%] right-[8%]"  delay="0.7s" />
+          <StatChip label="Inol" value="3.58%"   dir="up"   pos="top-[32%] right-[5%]"  delay="1.0s" />
+          {/* Chap-pastda */}
+          <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[26%] left-[2%]" delay="1.3s" />
+          <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[20%] left-[4%]" delay="1.6s" />
 
-          {/* Dot pattern circle */}
-          <div className="absolute bottom-[6%] right-[-3%] w-28 h-28 opacity-50 pointer-events-none"
-               style={{
-                 backgroundImage: 'radial-gradient(circle, #fbbf24 1.5px, transparent 1.5px)',
-                 backgroundSize: '11px 11px',
-                 maskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
-                 WebkitMaskImage: 'radial-gradient(circle, black 60%, transparent 100%)',
-               }} />
+          {/* 3D dashboard */}
+          <div className="absolute inset-0 grid place-items-center showcase-card-in">
+            <div
+              className="relative w-full max-w-[760px]"
+              style={{
+                transform: 'rotateX(8deg) rotateY(-10deg)',
+                transformStyle: 'preserve-3d',
+              }}
+            >
+              {/* Karta atrofidagi glow */}
+              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/15 blur-3xl -z-10" />
 
-          {/* ASOSIY KOMPOZITSIYA — markazda */}
-          <div className="absolute inset-x-0 bottom-[5%] flex items-end justify-center"
-               style={{ perspective: '1800px' }}>
-            <div className="relative w-full max-w-[720px] showcase-card-in">
-              {/* Platform — 3D tilt */}
-              <div className="relative" style={{ transform: 'rotateX(14deg)', transformStyle: 'preserve-3d' }}>
-                <div className="relative w-full h-[60px] rounded-[28px]
-                                bg-gradient-to-b from-slate-900 via-slate-950 to-slate-900
-                                ring-1 ring-white/15
-                                shadow-[0_30px_80px_-15px_rgba(0,0,0,0.8)]
-                                overflow-hidden">
-                  <div className="absolute inset-0 opacity-50"
-                       style={{
-                         backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 0.6px, transparent 0.6px)',
-                         backgroundSize: '20px 20px',
-                       }} />
-                  <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.30)_0%,transparent_70%)]" />
+              <div className="relative rounded-[22px] border border-white/10
+                              bg-[rgba(18,28,52,0.6)] backdrop-blur-xl
+                              shadow-[0_50px_120px_-20px_rgba(0,0,0,0.85)]
+                              overflow-hidden">
+                <div className="absolute inset-x-16 -top-px h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+
+                {/* Topbar */}
+                <div className="flex items-center gap-2 px-4 pt-3 pb-2.5 border-b border-white/5">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center
+                                  shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_-2px_rgba(245,158,11,0.4)]">
+                    <span className="text-[9px] font-black text-slate-900">XS</span>
+                  </div>
+                  <span className="text-[11px] font-semibold">Dashboard</span>
+                  <div className="flex-1" />
+                  <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-white/[0.04] ring-1 ring-white/8
+                                  text-[10px] text-white/40 min-w-[180px]">
+                    <SearchIcon /> Search...
+                  </div>
+                  <NotifPill count={3} color="amber" />
+                  <NotifPill count={2} color="cyan" />
+                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-300 to-amber-500 ring-2 ring-white/20" />
                 </div>
-                <div className="absolute -bottom-3 left-2 right-2 h-3 rounded-b-[28px]
-                                bg-gradient-to-b from-slate-950 to-slate-900 ring-1 ring-white/5" />
+
+                <div className="grid grid-cols-12 gap-3 p-4">
+                  {/* Chap: 2 ta chart */}
+                  <div className="col-span-7 space-y-3">
+                    {/* Payment analytics */}
+                    <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/10 p-3.5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold">Payment analytics</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Auraeoce ▾</span>
+                      </div>
+                      <PaymentLineChart value={bal} />
+                      <div className="flex justify-between mt-1 text-[9px] text-white/40 px-1">
+                        {['Jan','Feb','Mar','Apr','Rel','Jun','Dec'].map((m) => <span key={m}>{m}</span>)}
+                      </div>
+                    </div>
+
+                    {/* Transaction finance */}
+                    <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/10 p-3.5">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-semibold">Transaction finance</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Aqvdcoin ▾</span>
+                      </div>
+                      <TransactionBars />
+                      <div className="flex justify-between mt-1 text-[9px] text-white/40 px-1">
+                        {['Mar','Tue','Wed','Thu','Fri','Sat','Sup'].map((m) => <span key={m}>{m}</span>)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* O'ng: secure + card + connection lines */}
+                  <div className="col-span-5 space-y-3 relative">
+                    {/* Connection lines (cyan dotted, chart'dan kelyapti) */}
+                    <ConnectionLines />
+
+                    {/* "▲ $50.00" badge — chartdan chiqyapti */}
+                    <div className="absolute -left-12 top-4 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
+                         style={{ animationDelay: '1.4s' }}>
+                      <span className="text-emerald-400">▲</span> $50.00
+                    </div>
+                    <div className="absolute -left-12 bottom-12 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
+                         style={{ animationDelay: '1.6s' }}>
+                      <span className="text-emerald-400">▲</span> $75.00
+                    </div>
+
+                    {/* Secure Banking */}
+                    <div className="rounded-2xl bg-white/[0.03] ring-1 ring-white/10 p-3 flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
+                                      shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_10px_-2px_rgba(245,158,11,0.4)]">
+                        <ShieldIcon />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[12px] font-semibold">Secure Banking</div>
+                        <div className="text-[9px] text-white/50">All transactions encrypted</div>
+                        <div className="mt-1 h-0.5 rounded-full bg-white/5 overflow-hidden">
+                          <div className="h-full w-[78%] bg-gradient-to-r from-amber-400 to-amber-300" />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Credit card */}
+                    <div className="relative rounded-2xl p-4 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 text-slate-900
+                                    ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden">
+                      <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
+                      <div className="relative flex items-center justify-between">
+                        <div className="w-10 h-7 rounded-md bg-gradient-to-br from-amber-400 to-amber-600
+                                        shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]" />
+                        <div className="text-[11px] font-semibold text-slate-600">Credit</div>
+                      </div>
+                      <div className="relative mt-4 font-mono text-[13px] tracking-wider text-slate-800">
+                        1234 5034 5678 3058
+                      </div>
+                      <div className="relative mt-2 flex items-center justify-between">
+                        <div className="text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
+                        <div className="flex gap-0.5">
+                          <span className="w-5 h-5 rounded-full bg-rose-500/80" />
+                          <span className="w-5 h-5 rounded-full bg-amber-400/80 -ml-2" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-
-              {/* Platforma ustidagi elementlar — markazda guruhlangan */}
-              <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-4 px-8 pb-4">
-                {/* Chap telefon */}
-                <div className="showcase-tx-in" style={{ animationDelay: '0.7s' }}>
-                  <PhoneLeft />
-                </div>
-
-                {/* Markazdagi XON SAROY seal (yuqoriroq) */}
-                <div className="self-end -mb-6 z-20 showcase-fade-up" style={{ animationDelay: '0.5s' }}>
-                  <BrandSeal />
-                </div>
-
-                {/* O'ng telefon */}
-                <div className="showcase-tx-in" style={{ animationDelay: '0.9s' }}>
-                  <PhoneRight />
-                </div>
-
-                {/* Laptop */}
-                <div className="showcase-tx-in self-end" style={{ animationDelay: '1.1s' }}>
-                  <LaptopMock bal={bal} />
-                </div>
-              </div>
             </div>
           </div>
-        </div>
-      </main>
-    </div>
-  );
-}
-
-/* ─── XON SAROY seal (markaziy oltin emblem) ─── */
-function BrandSeal() {
-  return (
-    <div className="relative w-[140px] h-[140px]">
-      <div className="absolute inset-0 rounded-full bg-amber-400/30 blur-2xl -z-10" />
-      {/* Tashqi oltin ring */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200 via-amber-500 to-amber-800
-                      ring-2 ring-amber-300/50
-                      shadow-[0_15px_40px_-8px_rgba(245,158,11,0.8),inset_0_3px_0_rgba(255,255,255,0.5),inset_0_-3px_8px_rgba(0,0,0,0.25)]
-                      grid place-items-center">
-        <div className="w-[108px] h-[108px] rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-amber-500
-                        ring-1 ring-amber-900/20 grid place-items-center">
-          <XonSaroyLogo size={84} />
         </div>
       </div>
-      {/* Aylanuvchi yozuv */}
-      <svg viewBox="0 0 200 200" className="absolute inset-0 w-full h-full showcase-rays-spin">
-        <defs>
-          <path id="seal-text-path" d="M 100 100 m -70 0 a 70 70 0 1 1 140 0 a 70 70 0 1 1 -140 0" />
-        </defs>
-        <text fontFamily="serif" fontSize="10" fontWeight="900" letterSpacing="4" fill="#78350f">
-          <textPath href="#seal-text-path" startOffset="0">
-            · XON SAROY · TREASURY · XON SAROY · TREASURY ·
-          </textPath>
-        </text>
-      </svg>
     </div>
   );
 }
 
-/* ─── Cloud Card (3D cloud + icon yuqorida) ─── */
-function CloudCard({
-  pos, icon, color, delay, big,
-}: {
-  pos: string; icon: React.ReactNode; color: 'amber' | 'blue'; delay: string; big?: boolean;
+/* ─── Floating coin ─── */
+function Coin({ sym, pos, size, bg, delay, gold }: {
+  sym: string; pos: string; size: 'sm' | 'md'; bg: string; delay: string; gold?: boolean;
 }) {
-  const w = big ? 140 : 110;
-  const iconBg = color === 'amber'
-    ? 'from-amber-300 to-amber-500'
-    : 'from-blue-400 to-indigo-600';
   return (
-    <div className={`absolute ${pos} showcase-tx-in pointer-events-none`} style={{ animationDelay: delay }}>
-      <div className="showcase-coin-float" style={{ animationDelay: delay }}>
-        <div className="relative" style={{ width: w, height: w * 0.78 }}>
-          {/* Cloud silhouette — to'q ko'k */}
-          <svg viewBox="0 0 140 110" className="absolute inset-0 w-full h-full">
-            <defs>
-              <linearGradient id={`cl-${color}-${delay}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3b4869" />
-                <stop offset="100%" stopColor="#1e293b" />
-              </linearGradient>
-              <filter id={`sh-${color}-${delay}`}>
-                <feDropShadow dx="0" dy="10" stdDeviation="6" floodColor="rgba(0,0,0,0.5)" />
-              </filter>
-            </defs>
-            <path
-              d="M 35 75 Q 12 75 12 55 Q 12 38 28 36 Q 30 18 48 18 Q 60 8 75 18 Q 90 10 105 22 Q 132 22 132 50 Q 138 60 132 70 Q 132 85 110 85 L 48 85 Q 32 85 35 75 Z"
-              fill={`url(#cl-${color}-${delay})`}
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="1.2"
-              filter={`url(#sh-${color}-${delay})`}
-            />
-            {/* Highlight glare on cloud top */}
-            <ellipse cx="65" cy="32" rx="40" ry="10" fill="rgba(255,255,255,0.10)" />
-          </svg>
-          {/* Icon (3D-like bevel) — cloud ichida markazda */}
-          <div className="absolute inset-0 grid place-items-center">
-            <div className={`${big ? 'w-12 h-12' : 'w-10 h-10'} rounded-2xl bg-gradient-to-br ${iconBg} grid place-items-center
-                            shadow-[inset_0_2px_0_rgba(255,255,255,0.5),inset_0_-2px_4px_rgba(0,0,0,0.25),0_8px_20px_-2px_rgba(0,0,0,0.5)]
-                            -mt-2`}>
-              {icon}
-            </div>
-          </div>
-        </div>
+    <div className={`absolute ${pos} showcase-coin-float pointer-events-none z-20`}
+         style={{ animationDelay: delay }}>
+      <div className={`${size === 'sm' ? 'w-10 h-10 text-base' : 'w-14 h-14 text-2xl'}
+                       rounded-full bg-gradient-to-br ${bg} grid place-items-center font-bold
+                       ${gold ? 'text-amber-700' : 'text-white'}
+                       ring-2 ring-white/15
+                       shadow-[0_10px_28px_-4px_rgba(0,0,0,0.7),inset_0_2px_0_rgba(255,255,255,0.4)]`}>
+        {sym}
       </div>
     </div>
   );
 }
 
-/* ─── PhoneLeft — login screen with notification overlay ─── */
-function PhoneLeft() {
+/* ─── Floating stat chip ─── */
+function StatChip({ label, value, dir, pos, delay }: {
+  label: string; value: string; dir: 'up' | 'down'; pos: string; delay: string;
+}) {
   return (
-    <div className="relative w-[140px] h-[260px]">
-      <div className="absolute inset-0 rounded-[24px] bg-gradient-to-b from-slate-300 to-slate-500 p-1.5
-                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.5)]">
-        <div className="w-full h-full rounded-[18px] bg-gradient-to-b from-slate-800 to-slate-950 overflow-hidden relative">
-          <div className="absolute top-1 left-1/2 -translate-x-1/2 w-10 h-2.5 rounded-full bg-black/80" />
-          <div className="pt-4 px-2.5 flex items-center justify-between text-[6px] text-white/60 font-semibold">
-            <span>9:41</span>
-            <span>●●●</span>
-          </div>
-          <div className="px-2 mt-2 space-y-1.5">
-            <div className="h-12 rounded-md bg-white/10 ring-1 ring-white/15" />
-            <div className="h-2.5 rounded-md bg-white/15" />
-            <div className="h-2.5 rounded-md bg-white/10 w-3/4" />
-            <div className="h-6 rounded-md bg-gradient-to-r from-rose-500 to-rose-600 ring-1 ring-white/15" />
-            <div className="h-6 rounded-md bg-gradient-to-r from-emerald-400 to-emerald-600 ring-1 ring-white/15" />
-          </div>
-        </div>
-      </div>
-      {/* Floating notification card */}
-      <div className="absolute -top-3 -right-4 w-[100px] rounded-xl bg-gradient-to-b from-slate-700 to-slate-900 p-2 ring-1 ring-white/10
-                      shadow-[0_15px_30px_-8px_rgba(0,0,0,0.6)] z-10">
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center">
-            <svg className="w-3 h-3 text-slate-900" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 1L4 5v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V5l-8-4z" />
-            </svg>
-          </div>
-          <div className="text-[7px] font-semibold text-white/85">XON SAROY</div>
-        </div>
-        <div className="mt-1 text-[6px] text-white/55 leading-tight">Yangi to'lov</div>
-        <div className="mt-0.5 text-[8px] font-bold text-emerald-400 tabular-nums">+1 250 000</div>
+    <div className={`absolute ${pos} showcase-coin-float pointer-events-none z-20 text-[11px] whitespace-nowrap`}
+         style={{ animationDelay: delay }}>
+      <div className="flex items-center gap-1.5 text-white/85">
+        <span className={dir === 'up' ? 'text-emerald-400 text-[10px]' : 'text-rose-400 text-[10px]'}>
+          {dir === 'up' ? '▲' : '▼'}
+        </span>
+        <span className="text-white/55">{label}</span>
+        <span className="font-semibold tabular-nums">{value}</span>
       </div>
     </div>
   );
 }
 
-/* ─── PhoneRight — app dashboard screen ─── */
-function PhoneRight() {
+/* ─── Payment line chart with tooltip ─── */
+function PaymentLineChart({ value }: { value: number }) {
+  const v = value.toFixed(2);
   return (
-    <div className="relative w-[130px] h-[240px] rotate-[4deg]">
-      <div className="absolute inset-0 rounded-[22px] bg-gradient-to-b from-slate-300 to-slate-500 p-1.5
-                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.5)]">
-        <div className="w-full h-full rounded-[16px] bg-gradient-to-b from-white to-slate-100 overflow-hidden relative">
-          {/* Top bar */}
-          <div className="px-2 pt-2 flex items-center justify-between">
-            <div className="w-3 h-3 rounded-full bg-slate-300" />
-            <span className="text-[6px] font-bold text-slate-700">Korxonalar</span>
-            <div className="w-3 h-3 rounded-full bg-slate-300" />
-          </div>
-          {/* List items */}
-          <div className="mt-2 px-1.5 space-y-1">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-1 p-1 rounded bg-slate-50 ring-1 ring-slate-200">
-                <div className="w-4 h-4 rounded bg-gradient-to-br from-blue-400 to-blue-600" />
-                <div className="flex-1 space-y-0.5">
-                  <div className="h-0.5 rounded-full w-3/4 bg-slate-300" />
-                  <div className="h-0.5 rounded-full w-1/2 bg-slate-200" />
-                </div>
-                <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              </div>
-            ))}
-          </div>
-          {/* Bottom CTA */}
-          <div className="absolute bottom-1.5 left-1.5 right-1.5 h-5 rounded-md bg-gradient-to-r from-blue-500 to-indigo-600
-                          grid place-items-center text-white text-[6px] font-bold">
-            Davom etish
-          </div>
-        </div>
-      </div>
-    </div>
+    <svg viewBox="0 0 380 100" className="w-full h-[100px]">
+      <defs>
+        <linearGradient id="pl-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="pl-stroke" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#fde68a" />
+          <stop offset="100%" stopColor="#f59e0b" />
+        </linearGradient>
+      </defs>
+      <path d="M 0 75 Q 30 60 60 55 T 120 40 T 180 60 T 240 18 T 300 35 T 380 28 L 380 100 L 0 100 Z"
+            fill="url(#pl-fill)" />
+      <path d="M 0 75 Q 30 60 60 55 T 120 40 T 180 60 T 240 18 T 300 35 T 380 28"
+            fill="none" stroke="url(#pl-stroke)" strokeWidth="2.2" strokeLinecap="round" className="showcase-draw" />
+      <circle cx="240" cy="18" r="4" fill="#fde68a" />
+      <circle cx="240" cy="18" r="9" fill="#fbbf24" opacity="0.3">
+        <animate attributeName="r" values="6;14;6" dur="2.5s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.45;0;0.45" dur="2.5s" repeatCount="indefinite" />
+      </circle>
+      <g transform="translate(240, 18)">
+        <rect x="-32" y="-32" width="70" height="20" rx="4" fill="#0f172a" stroke="#fbbf24" strokeWidth="1" />
+        <text x="3" y="-18" fontSize="9" fill="#fde68a" textAnchor="middle" fontWeight="700" fontFamily="monospace">
+          ▲ {v}
+        </text>
+      </g>
+      {[25, 50, 75].map((y) => <line key={y} x1="0" y1={y} x2="380" y2={y} stroke="#ffffff10" />)}
+    </svg>
   );
 }
 
-/* ─── Laptop ─── */
-function LaptopMock({ bal }: { bal: number }) {
+function TransactionBars() {
+  const values = [55, 75, 90, 60, 85, 65, 80];
   return (
-    <div className="relative w-[260px]">
-      <div className="relative w-full h-[160px] rounded-t-lg bg-slate-200 p-1
-                      shadow-[0_30px_60px_-15px_rgba(0,0,0,0.7)]">
-        <div className="w-full h-full rounded-t-md bg-white overflow-hidden p-2">
-          <div className="flex items-center justify-between pb-1.5 border-b border-slate-200">
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-3 rounded bg-gradient-to-br from-amber-400 to-amber-600" />
-              <span className="text-[7px] font-bold text-slate-800">Dashboard</span>
-            </div>
-            <span className="text-[6px] text-slate-400">●●●</span>
-          </div>
-          {/* Balance */}
-          <div className="mt-1.5 rounded-md bg-slate-900 p-1.5">
-            <div className="text-[5px] uppercase tracking-wider text-white/55 font-semibold">Total · UZS</div>
-            <div className="text-[10px] font-bold tabular-nums bg-gradient-to-r from-amber-200 to-amber-400 bg-clip-text text-transparent">
-              {formatBig(bal)}
-            </div>
-          </div>
-          {/* Mini list */}
-          <div className="mt-1.5 space-y-0.5">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-1 p-1 rounded bg-slate-50">
-                <div className="w-3 h-3 rounded bg-slate-300" />
-                <div className="flex-1 space-y-0.5">
-                  <div className="h-0.5 rounded-full w-3/4 bg-slate-400" />
-                </div>
-                <div className="h-1.5 rounded w-5 bg-emerald-500/40" />
-              </div>
-            ))}
-          </div>
+    <div className="flex items-end gap-2 h-[80px]">
+      {values.map((v, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center">
+          <div className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-amber-700 to-amber-300 showcase-bar"
+               style={{ height: `${v}%`, animationDelay: `${0.4 + i * 0.07}s` }} />
         </div>
-      </div>
-      {/* Laptop base */}
-      <div className="relative w-[290px] h-2 -ml-[15px] rounded-b-2xl bg-gradient-to-b from-slate-400 to-slate-600
-                      shadow-[0_15px_30px_-5px_rgba(0,0,0,0.5)]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-10 h-0.5 rounded-b bg-slate-700" />
-      </div>
-    </div>
-  );
-}
-
-/* ─── Flow lines (cloudlar → platforma) ─── */
-function FlowLines() {
-  return (
-    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 600 600" preserveAspectRatio="none">
-      <path d="M 70 70  C 100 200 200 340 280 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
-            strokeDasharray="3 7" fill="none" className="showcase-flow" />
-      <path d="M 310 50 C 310 200 310 320 310 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
-            strokeDasharray="3 7" fill="none" className="showcase-flow" style={{ animationDelay: '0.3s' }} />
-      <path d="M 540 90 C 480 200 380 320 330 400" stroke="rgba(251,191,36,0.55)" strokeWidth="1.5"
-            strokeDasharray="3 7" fill="none" className="showcase-flow" style={{ animationDelay: '0.6s' }} />
-      {[[70,70],[310,50],[540,90]].map(([x,y], i) => (
-        <circle key={i} cx={x} cy={y} r="3.5" fill="#fbbf24" />
       ))}
+    </div>
+  );
+}
+
+function ConnectionLines() {
+  return (
+    <svg viewBox="0 0 200 280" className="absolute -left-32 top-0 w-[200px] h-full pointer-events-none -z-0">
+      <defs>
+        <linearGradient id="cl-flow" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="rgba(34,211,238,0)" />
+          <stop offset="50%" stopColor="rgba(34,211,238,0.7)" />
+          <stop offset="100%" stopColor="rgba(34,211,238,1)" />
+        </linearGradient>
+      </defs>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const y1 = 30 + i * 50;
+        const y2 = 30 + i * 45;
+        return (
+          <g key={i}>
+            <path d={`M 0 ${y1} Q 100 ${y1 - 10} 200 ${y2}`}
+                  fill="none" stroke="url(#cl-flow)" strokeWidth="1.5"
+                  strokeDasharray="4 8"
+                  className="showcase-flow"
+                  style={{ animationDelay: `${i * 0.2}s` }} />
+            <circle cx="200" cy={y2} r="3" fill="#22d3ee" />
+          </g>
+        );
+      })}
     </svg>
   );
 }
 
 /* ─── Background ─── */
-function Stars() {
-  const items = Array.from({ length: 30 }, (_, i) => ({
-    left: `${(i * 37) % 100}%`,
-    top: `${(i * 23) % 100}%`,
-    size: i % 4 === 0 ? 2 : 1,
-    delay: `${(i * 0.4) % 4}s`,
-  }));
-  return (
-    <div className="absolute inset-0 pointer-events-none">
-      {items.map((p, i) => (
-        <span key={i}
-              className="absolute rounded-full bg-white/60 showcase-twinkle"
-              style={{ left: p.left, top: p.top, width: p.size, height: p.size, animationDelay: p.delay }} />
-      ))}
-    </div>
-  );
-}
-
-function Glows() {
+function BackgroundNetwork() {
   return (
     <>
-      <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-amber-400/12 blur-[120px] showcase-light-pulse" />
-      <div className="absolute -bottom-40 -right-40 w-[700px] h-[700px] rounded-full bg-indigo-400/12 blur-[120px] showcase-light-pulse"
-           style={{ animationDelay: '3s' }} />
+      <div className="absolute top-0 right-0 w-[400px] h-full
+                      bg-gradient-to-bl from-cyan-300/15 via-transparent to-transparent
+                      showcase-light-pulse pointer-events-none" />
+      <div className="absolute inset-0 opacity-25 pointer-events-none"
+           style={{
+             backgroundImage: 'radial-gradient(circle, rgba(96,165,250,0.5) 1px, transparent 1px)',
+             backgroundSize: '38px 38px',
+             maskImage: 'radial-gradient(ellipse 90% 90% at 50% 45%, #000 30%, transparent 80%)',
+             WebkitMaskImage: 'radial-gradient(ellipse 90% 90% at 50% 45%, #000 30%, transparent 80%)',
+           }} />
     </>
   );
 }
 
-/* ─── Helpers ─── */
-
-function BankPill({ src, name }: { src: string; name: string }) {
+function ConstellationBottom() {
+  const pts = [
+    [60, 200], [140, 240], [220, 180], [310, 220], [380, 160], [450, 230],
+    [520, 200], [610, 240], [700, 180], [780, 220], [860, 200], [950, 230],
+    [180, 90], [260, 50], [380, 80], [500, 60], [620, 90], [740, 70], [860, 100],
+    [40, 80], [120, 30], [820, 30], [920, 80],
+  ];
   return (
-    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white ring-1 ring-white/20">
-      <Image src={src} alt={name} width={14} height={14} className="object-contain" />
-      <span className="text-[10px] font-semibold text-slate-800 whitespace-nowrap">{name}</span>
+    <div className="absolute bottom-0 left-0 right-0 h-[260px] opacity-30 pointer-events-none">
+      <svg viewBox="0 0 1000 280" className="w-full h-full" preserveAspectRatio="none">
+        {pts.map(([x, y], i) =>
+          pts.slice(i + 1).map(([x2, y2], j) => {
+            const d = Math.hypot(x - x2, y - y2);
+            if (d > 140) return null;
+            return (
+              <line key={`${i}-${j}`} x1={x} y1={y} x2={x2} y2={y2}
+                    stroke="rgba(56,189,248,0.6)" strokeWidth="0.5" opacity="0.5" />
+            );
+          }),
+        )}
+        {pts.map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r="1.8" fill="rgba(125,211,252,0.9)"
+                  className="showcase-twinkle"
+                  style={{ animationDelay: `${(i * 0.31) % 3}s` }} />
+        ))}
+      </svg>
     </div>
   );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.18em] text-white/40 font-semibold">{label}</div>
-      <div className="text-[18px] font-bold tabular-nums text-white mt-0.5">{value}</div>
-    </div>
-  );
-}
-
-function formatBig(n: number): string {
-  return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
 
 /* ─── Icons ─── */
-function PercentIcon() {
+function SearchIcon() {
   return (
-    <svg className="w-5 h-5 text-slate-900" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
-      <line x1="19" y1="5" x2="5" y2="19" strokeLinecap="round" />
-      <circle cx="6.5" cy="6.5" r="2.5" />
-      <circle cx="17.5" cy="17.5" r="2.5" />
+    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m21 21-4-4" strokeLinecap="round" />
     </svg>
   );
 }
 
-function ClockIcon() {
+function ShieldIcon() {
   return (
-    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 7v5l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className="w-5 h-5 text-slate-900" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 1L4 5v6c0 5.5 3.8 10.7 8 12 4.2-1.3 8-6.5 8-12V5l-8-4zM10 17l-4-4 1.4-1.4L10 14.2l6.6-6.6L18 9l-8 8z" />
     </svg>
   );
 }
 
-function LockPenIcon() {
+function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' }) {
+  const cls = color === 'amber'
+    ? 'bg-amber-400/15 text-amber-300 ring-amber-400/25'
+    : 'bg-cyan-400/15 text-cyan-300 ring-cyan-400/25';
   return (
-    <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6">
-      <rect x="4" y="11" width="16" height="10" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" strokeLinecap="round" />
-      <path d="M12 15v3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ArrowInBox() {
-  return (
-    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-      <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M10 17l5-5-5-5M15 12H3" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
+    <div className={`relative w-7 h-7 rounded-full grid place-items-center ring-1 ${cls}`}>
+      <span className="absolute -top-1 -right-1 min-w-[13px] h-[13px] rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center px-1">
+        {count}
+      </span>
+      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" />
+      </svg>
+    </div>
   );
 }
