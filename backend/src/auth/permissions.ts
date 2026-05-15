@@ -45,6 +45,9 @@ export const PERMISSIONS = {
   CONTRACTS_MANAGE: 'contracts:manage',
   PAYMENTS_VIEW: 'payments:view',
   PAYMENTS_MANAGE: 'payments:manage',
+
+  // ─── CRM (XonSaroy) ───
+  CRM_VIEW: 'crm:view',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -128,6 +131,12 @@ export const PERMISSION_GROUPS: { group: string; items: { value: Permission; lab
     ],
   },
   {
+    group: 'CRM',
+    items: [
+      { value: PERMISSIONS.CRM_VIEW, label: 'CRM\'dan shartnoma qidirish va ko\'rish' },
+    ],
+  },
+  {
     group: 'Tizim',
     items: [{ value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' }],
   },
@@ -157,6 +166,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_MANAGE,
       PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
+      PERMISSIONS.CRM_VIEW,
     ],
   },
   {
@@ -171,6 +181,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_MANAGE,
       PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
+      PERMISSIONS.CRM_VIEW,
     ],
   },
   {
@@ -187,6 +198,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CUSTOMERS_VIEW,
       PERMISSIONS.CONTRACTS_VIEW,
       PERMISSIONS.PAYMENTS_VIEW,
+      PERMISSIONS.CRM_VIEW,
     ],
   },
 ];

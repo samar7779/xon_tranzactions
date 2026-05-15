@@ -21,29 +21,39 @@ const ALL_PERMS = [
   'customers:view', 'customers:manage',
   'contracts:view', 'contracts:manage',
   'payments:view', 'payments:manage',
+  'crm:view',
 ];
 
 async function main() {
   // 1. Bootstrap roli — birinchi admin tizimga kira olishi uchun shart.
   //    Boshqa rollar admin panel orqali qo'lda yaratiladi.
   //    Bu rolning ruxsatlari ham UI orqali tahrirlanishi mumkin.
-  await prisma.role.upsert({
-    where: { name: 'SUPERADMIN' },
-    update: {
-      label: 'Bosh administrator',
-      description: 'Barcha ruxsatlarga ega — birinchi admin uchun bootstrap roli',
-      // Faqat YANGI bo'lganida to'liq ruxsat beriladi; mavjud bo'lsa tegmaymiz,
-      // chunki admin uni UI orqali o'zgartirgan bo'lishi mumkin.
-    },
-    create: {
-      name: 'SUPERADMIN',
-      label: 'Bosh administrator',
-      description: 'Barcha ruxsatlarga ega — birinchi admin uchun bootstrap roli',
-      permissions: ALL_PERMS,
-      isSystem: true,
-    },
-  });
-  console.log('✓ Bootstrap roli (SUPERADMIN) tayyor');
+  const superExisting = await prisma.role.findUnique({ where: { name: 'SUPERADMIN' } });
+  if (!superExisting) {
+    await prisma.role.create({
+      data: {
+        name: 'SUPERADMIN',
+        label: 'Bosh administrator',
+        description: 'Barcha ruxsatlarga ega — birinchi admin uchun bootstrap roli',
+        permissions: ALL_PERMS,
+        isSystem: true,
+      },
+    });
+    console.log('✓ Bootstrap roli (SUPERADMIN) yaratildi');
+  } else {
+    // Mavjud SUPERADMIN'ga yangi tizim permissionlarini qo'shamiz (eski ruxsatlar saqlanadi).
+    const have = new Set(superExisting.permissions || []);
+    const missing = ALL_PERMS.filter((p) => !have.has(p));
+    if (missing.length > 0) {
+      await prisma.role.update({
+        where: { id: superExisting.id },
+        data: { permissions: [...(superExisting.permissions || []), ...missing] },
+      });
+      console.log(`✓ SUPERADMIN ga yangi ruxsatlar qo'shildi: ${missing.join(', ')}`);
+    } else {
+      console.log('✓ SUPERADMIN ruxsatlari to\'liq');
+    }
+  }
 
   // 2. Birinchi admin (SUPERADMIN role bilan)
   const email = (process.env.SEED_ADMIN_EMAIL || 'admin@xon.local').toLowerCase();
