@@ -482,7 +482,15 @@
     "openHistory": "Payment history",
     "recentSearches": "Recent searches",
     "clearRecent": "Clear",
-    "exampleHint": "e.g. 7331MSO26KK, 5012MSO25..."
+    "exampleHint": "e.g. 7331MSO26KK, 5012MSO25...",
+    "purpose": "Payment purpose",
+    "comment": "Comment",
+    "paymentId": "Payment ID",
+    "noPurpose": "No purpose specified",
+    "expand": "Details",
+    "collapse": "Collapse",
+    "boshlangich": "Initial",
+    "oylik": "Monthly"
   },
   "statement": {
     "title": "Statement",
