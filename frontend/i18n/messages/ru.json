@@ -482,7 +482,15 @@
     "openHistory": "История платежей",
     "recentSearches": "Недавние поиски",
     "clearRecent": "Очистить",
-    "exampleHint": "Пример: 7331MSO26KK, 5012MSO25..."
+    "exampleHint": "Пример: 7331MSO26KK, 5012MSO25...",
+    "purpose": "Назначение платежа",
+    "comment": "Комментарий",
+    "paymentId": "ID платежа",
+    "noPurpose": "Назначение не указано",
+    "expand": "Подробнее",
+    "collapse": "Свернуть",
+    "boshlangich": "Первонач.",
+    "oylik": "Ежемес."
   },
   "statement": {
     "title": "Выписка",

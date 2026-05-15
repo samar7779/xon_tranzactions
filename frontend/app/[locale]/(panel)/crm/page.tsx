@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, Briefcase, Home, Building2, User, Calendar,
   Wallet, FileText, CheckCircle2, AlertCircle, Clock, X, History,
-  CreditCard, Phone, MapPin, Hash, BookOpen, ChevronRight,
+  CreditCard, Phone, MapPin, Hash, BookOpen, ChevronRight, ChevronDown,
+  Receipt, Sparkles, Banknote, Tag,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -387,12 +388,18 @@ export default function CrmPage() {
                       {/* Initial */}
                       {(detail.initial?.schedules || []).length > 0 && (
                         <div>
-                          <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2">
-                            {t('initial')}
+                          <div className="flex items-center justify-between mb-2.5 pl-1">
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gradient-to-r from-violet-500 to-purple-600 text-white text-[10px] uppercase tracking-[0.15em] font-bold shadow-sm">
+                              <Sparkles className="h-3 w-3" />
+                              {t('initial')}
+                            </div>
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-50 ring-1 ring-violet-200 text-[10px] font-bold text-violet-700 tabular-nums">
+                              {detail.initial!.schedules!.length}
+                            </div>
                           </div>
                           <div className="space-y-1.5">
                             {detail.initial!.schedules!.map((s: any, i: number) => (
-                              <ScheduleRow key={`init-${i}`} item={s} t={t} />
+                              <ScheduleRow key={`init-${i}`} item={s} idx={i + 1} kind="initial" t={t} />
                             ))}
                           </div>
                         </div>
@@ -401,22 +408,23 @@ export default function CrmPage() {
                       {/* Monthly */}
                       {(detail.monthly?.schedules || []).length > 0 ? (
                         <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500">
+                          <div className="flex items-center justify-between mb-2.5 pl-1">
+                            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white text-[10px] uppercase tracking-[0.15em] font-bold shadow-sm">
+                              <Banknote className="h-3 w-3" />
                               {t('monthly')}
                             </div>
-                            <div className="text-[11px] text-slate-500 tabular-nums">
+                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 ring-1 ring-blue-200 text-[10px] font-bold text-blue-700 tabular-nums">
                               {detail.monthly!.schedules!.length}
                             </div>
                           </div>
-                          <div className="space-y-1.5 max-h-[480px] overflow-y-auto pr-1">
+                          <div className="space-y-1.5 max-h-[560px] overflow-y-auto pr-1">
                             {detail.monthly!.schedules!.map((s: any, i: number) => (
-                              <ScheduleRow key={`m-${i}`} item={s} idx={i + 1} t={t} />
+                              <ScheduleRow key={`m-${i}`} item={s} idx={i + 1} kind="monthly" t={t} />
                             ))}
                           </div>
                         </div>
                       ) : (detail.initial?.schedules || []).length === 0 && (
-                        <div className="text-center py-8 text-xs text-slate-500">
+                        <div className="text-center py-10 text-xs text-slate-500">
                           {t('noSchedule')}
                         </div>
                       )}
@@ -429,17 +437,32 @@ export default function CrmPage() {
 
                   {/* Client info */}
                   <Card className="border-0 shadow-soft overflow-hidden">
-                    <div className="bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 px-5 py-4 border-b border-slate-100 flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white">
-                        <User className="h-4 w-4" />
+                    <div className="relative bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-600 px-5 py-5 text-white overflow-hidden">
+                      <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
+                      <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/15 blur-3xl pointer-events-none" />
+                      <div className="relative flex items-center gap-3">
+                        <div className="relative shrink-0">
+                          <div className="w-14 h-14 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur-md grid place-items-center text-white text-xl font-black">
+                            {(fullName || '?').charAt(0).toUpperCase()}
+                          </div>
+                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
+                            <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                          </span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-[10px] uppercase tracking-[0.18em] font-bold text-white/80 flex items-center gap-1">
+                            <User className="h-3 w-3" /> {t('openClient')}
+                          </div>
+                          <div className="text-lg font-black tracking-tight truncate">{fullName || '—'}</div>
+                          {client.phone && (
+                            <div className="text-[12px] text-white/85 font-mono flex items-center gap-1 mt-0.5">
+                              <Phone className="h-3 w-3" /> {String(client.phone)}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="text-base font-bold tracking-tight text-slate-800">{t('openClient')}</div>
                     </div>
                     <CardContent className="p-5 space-y-1">
-                      <InfoRow icon={<User className="h-3.5 w-3.5" />} label={t('client')} value={fullName || '—'} />
-                      {client.phone && (
-                        <InfoRow icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={String(client.phone)} mono />
-                      )}
                       {client.birth_date && (
                         <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label={t('birthDate')} value={fmtDate(client.birth_date)} />
                       )}
@@ -448,6 +471,9 @@ export default function CrmPage() {
                       )}
                       {client.address && (
                         <InfoRow icon={<MapPin className="h-3.5 w-3.5" />} label={t('address')} value={String(client.address)} />
+                      )}
+                      {!client.birth_date && !client.passport_series && !client.address && (
+                        <div className="text-center py-2 text-[11px] text-slate-400">—</div>
                       )}
                     </CardContent>
                   </Card>
@@ -467,9 +493,9 @@ export default function CrmPage() {
                       {(detail.payment_histories || []).length === 0 ? (
                         <div className="px-5 py-10 text-center text-xs text-slate-500">{t('noHistory')}</div>
                       ) : (
-                        <div className="max-h-[480px] overflow-y-auto divide-y divide-slate-100">
+                        <div className="max-h-[640px] overflow-y-auto divide-y divide-slate-100">
                           {detail.payment_histories!.map((h: any, i: number) => (
-                            <HistoryRow key={i} h={h} apiLang={apiLang} />
+                            <HistoryRow key={i} h={h} idx={i + 1} apiLang={apiLang} t={t} />
                           ))}
                         </div>
                       )}
@@ -518,59 +544,255 @@ function MoneyTile({
   );
 }
 
-function ScheduleRow({ item, idx, t }: { item: any; idx?: number; t: any }) {
+// Toifa (kind) uchun ranglar — Boshlang'ich vs Oylik
+const KIND_STYLE: Record<string, { bg: string; text: string; ring: string; bar: string; chipBg: string; chipText: string }> = {
+  initial: {
+    bg: 'bg-violet-50/60',
+    text: 'text-violet-700',
+    ring: 'ring-violet-200',
+    bar: 'from-violet-500 to-purple-600',
+    chipBg: 'bg-gradient-to-r from-violet-500 to-purple-600',
+    chipText: 'text-white',
+  },
+  monthly: {
+    bg: 'bg-blue-50/60',
+    text: 'text-blue-700',
+    ring: 'ring-blue-200',
+    bar: 'from-blue-500 to-indigo-600',
+    chipBg: 'bg-gradient-to-r from-blue-500 to-indigo-600',
+    chipText: 'text-white',
+  },
+  other: {
+    bg: 'bg-slate-50/60',
+    text: 'text-slate-600',
+    ring: 'ring-slate-200',
+    bar: 'from-slate-400 to-slate-600',
+    chipBg: 'bg-slate-200',
+    chipText: 'text-slate-700',
+  },
+};
+
+function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: 'initial' | 'monthly'; t: any }) {
+  const [open, setOpen] = useState(false);
   const key = item?.status?.key || 'waiting';
   const tone = STATUS_TONE[key] || STATUS_TONE.waiting;
   const Icon = key === 'paid' ? CheckCircle2 : key === 'overdue' ? AlertCircle : Clock;
   const amount = Number(item?.amount || 0);
   const paid = Number(item?.amount_paid || 0);
   const left = Number(item?.left || 0);
+  const purpose = item?.purpose || item?.description || item?.comment || '';
+  const kindStyle = KIND_STYLE[kind || 'other'] || KIND_STYLE.other;
+
   return (
-    <div className="rounded-xl ring-1 ring-slate-200 px-3 py-2.5 flex items-center gap-3 transition-colors hover:bg-slate-50">
-      <div className={cn('w-8 h-8 rounded-lg grid place-items-center shrink-0 ring-1', tone.cls)}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          {idx != null && (
-            <span className="text-[10px] font-bold text-slate-400 tabular-nums">#{idx}</span>
-          )}
-          <span className="text-[12px] font-semibold tabular-nums text-slate-700">
-            {fmtDate(item?.date_payment)}
-          </span>
+    <div className={cn(
+      'group relative rounded-xl ring-1 ring-slate-200 bg-white hover:ring-indigo-300 hover:shadow-md transition-all overflow-hidden',
+    )}>
+      {/* Left status bar */}
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b', kindStyle.bar)} />
+
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full pl-4 pr-3 py-2.5 flex items-center gap-3 text-left"
+      >
+        <div className={cn('w-9 h-9 rounded-xl grid place-items-center shrink-0 ring-1 shadow-sm', tone.cls)}>
+          <Icon className="h-4 w-4" />
         </div>
-        {paid > 0 && left > 0 && (
-          <div className="text-[10px] text-slate-500 mt-0.5">
-            <span className="text-emerald-600 font-semibold tabular-nums">{formatMoney(paid, 'UZS')}</span>
-            <span className="mx-1">/</span>
-            <span className="text-amber-600 font-semibold tabular-nums">{formatMoney(left, 'UZS')}</span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            {idx != null && (
+              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 tabular-nums">
+                #{idx}
+              </span>
+            )}
+            <span className="text-[13px] font-bold tabular-nums text-slate-800">
+              {fmtDate(item?.date_payment)}
+            </span>
           </div>
-        )}
-      </div>
-      <div className="text-right shrink-0">
-        <div className="text-sm font-bold tabular-nums text-slate-800">{formatMoney(amount, 'UZS')}</div>
+          {paid > 0 && left > 0 && (
+            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+              <span className="inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                <span className="text-emerald-700 font-bold tabular-nums">{formatMoney(paid, 'UZS')}</span>
+              </span>
+              <span className="text-slate-300">·</span>
+              <span className="inline-flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                <span className="text-amber-700 font-bold tabular-nums">{formatMoney(left, 'UZS')}</span>
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="text-right shrink-0 flex items-center gap-2">
+          <div>
+            <div className="text-sm font-black tabular-nums text-slate-900">{formatMoney(amount, 'UZS')}</div>
+          </div>
+          <ChevronDown className={cn(
+            'h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0',
+            open && 'rotate-180',
+          )} />
+        </div>
+      </button>
+
+      {/* Expanded details */}
+      <div className={cn(
+        'grid transition-[grid-template-rows] duration-300 ease-out',
+        open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+      )}>
+        <div className="overflow-hidden">
+          <div className="pl-4 pr-4 pb-3 pt-1 space-y-2 border-t border-slate-100 mt-1">
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <DetailMini label={t('amount')} value={formatMoney(amount, 'UZS')} tone="slate" />
+              <DetailMini
+                label={tone.cls.includes('emerald') ? t('paid') : t('status')}
+                value={item?.status?.value?.name?.uz || item?.status?.key || '—'}
+                tone={key === 'paid' ? 'emerald' : key === 'overdue' ? 'rose' : 'slate'}
+              />
+              {paid > 0 && <DetailMini label={t('schedulePaid')} value={formatMoney(paid, 'UZS')} tone="emerald" />}
+              {left > 0 && <DetailMini label={t('scheduleLeft')} value={formatMoney(left, 'UZS')} tone="amber" />}
+            </div>
+            <div className="rounded-lg bg-slate-50 ring-1 ring-slate-100 px-3 py-2 flex items-start gap-2">
+              <Tag className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-slate-700 leading-relaxed">
+                {purpose || <span className="text-slate-400 italic">{t('noPurpose')}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function HistoryRow({ h, apiLang }: { h: any; apiLang: 'uz' | 'ru' }) {
-  const methodKey = h?.method?.key || '';
+function HistoryRow({ h, idx, apiLang, t }: { h: any; idx: number; apiLang: 'uz' | 'ru'; t: any }) {
+  const [open, setOpen] = useState(false);
+  const methodKey = String(h?.method?.key || '').toLowerCase();
   const methodName = h?.method?.value?.[apiLang] || methodKey || '—';
-  const typeName = h?.type?.value?.[apiLang] || h?.type?.key || '';
+  const typeKey = String(h?.type?.key || '').toLowerCase();
+  const typeName = h?.type?.value?.[apiLang] || typeKey || '';
+  const statusKey = h?.status?.key || '';
+  const statusTone = STATUS_TONE[statusKey] || STATUS_TONE.paid;
+
+  // Toifa — boshlang'ich yoki oylik
+  const kind: 'initial' | 'monthly' | 'other' =
+    typeKey.includes('init') || typeKey.includes('boshlang') || typeKey.includes('перво')
+      ? 'initial'
+      : typeKey.includes('month') || typeKey.includes('oyl') || typeKey.includes('ежемес')
+        ? 'monthly'
+        : 'other';
+  const kindStyle = KIND_STYLE[kind];
+  const kindLabel = kind === 'initial' ? t('boshlangich') : kind === 'monthly' ? t('oylik') : (typeName || '—');
+
+  const purpose = h?.purpose || h?.description || h?.comment || h?.note || '';
+  const paymentId = h?.id || h?.payment_id || '';
+
   return (
-    <div className="px-5 py-3 hover:bg-slate-50 transition-colors">
-      <div className="flex items-center justify-between gap-2">
-        <div className="text-sm font-bold tabular-nums text-slate-800">
-          {formatMoney(Number(h?.amount || 0), 'UZS')}
+    <div className="relative group">
+      {/* Left kind bar */}
+      <div className={cn('absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b', kindStyle.bar)} />
+
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full pl-4 pr-5 py-3 text-left hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 tabular-nums">
+              #{idx}
+            </span>
+            <div className="text-sm font-black tabular-nums text-slate-900 truncate">
+              {formatMoney(Number(h?.amount || 0), 'UZS')}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="text-[11px] text-slate-500 tabular-nums">{fmtDate(h?.date_paid)}</div>
+            <ChevronDown className={cn(
+              'h-3.5 w-3.5 text-slate-400 transition-transform duration-200',
+              open && 'rotate-180',
+            )} />
+          </div>
         </div>
-        <div className="text-[11px] text-slate-500 tabular-nums">{fmtDate(h?.date_paid)}</div>
+
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+          {/* Toifa chip */}
+          <span className={cn(
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold tracking-wider uppercase',
+            kindStyle.chipBg, kindStyle.chipText,
+          )}>
+            {kind === 'initial' ? <Sparkles className="h-2.5 w-2.5" /> : <Banknote className="h-2.5 w-2.5" />}
+            {kindLabel}
+          </span>
+          {/* Method */}
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-700">
+            <CreditCard className="h-2.5 w-2.5" />
+            <span className="capitalize">{methodName}</span>
+          </span>
+          {/* Status */}
+          {statusKey && (
+            <span className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ring-1 ring-inset',
+              statusTone.cls,
+            )}>
+              <span className={cn('w-1 h-1 rounded-full', statusTone.dot)} />
+              {h?.status?.value?.[apiLang] || statusKey}
+            </span>
+          )}
+        </div>
+      </button>
+
+      <div className={cn(
+        'grid transition-[grid-template-rows] duration-300 ease-out',
+        open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+      )}>
+        <div className="overflow-hidden">
+          <div className="pl-4 pr-5 pb-3 pt-1 space-y-2 border-t border-slate-100">
+            {/* Purpose */}
+            <div className="rounded-lg bg-gradient-to-br from-indigo-50/60 to-violet-50/30 ring-1 ring-indigo-100 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] font-bold text-indigo-600 mb-1">
+                <Tag className="h-3 w-3" />
+                {t('purpose')}
+              </div>
+              <div className="text-[12px] text-slate-700 leading-relaxed">
+                {purpose || <span className="text-slate-400 italic">{t('noPurpose')}</span>}
+              </div>
+            </div>
+
+            {/* Mini grid */}
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              {typeName && <DetailMini label={t('type')} value={typeName} tone="slate" />}
+              {methodName !== '—' && <DetailMini label={t('method')} value={methodName} tone="slate" />}
+              {h?.date_paid && <DetailMini label={t('datePaid')} value={fmtDate(h.date_paid)} tone="slate" />}
+              {paymentId && <DetailMini label={t('paymentId')} value={String(paymentId)} tone="slate" mono />}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
-        <CreditCard className="h-3 w-3" />
-        <span className="capitalize">{methodName}</span>
-        {typeName && <span className="text-slate-300">•</span>}
-        {typeName && <span>{typeName}</span>}
+    </div>
+  );
+}
+
+function DetailMini({
+  label, value, tone, mono,
+}: {
+  label: string;
+  value: string;
+  tone: 'slate' | 'emerald' | 'amber' | 'rose';
+  mono?: boolean;
+}) {
+  const map = {
+    slate:   'bg-slate-50 text-slate-800 ring-slate-200',
+    emerald: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
+    amber:   'bg-amber-50 text-amber-800 ring-amber-200',
+    rose:    'bg-rose-50 text-rose-800 ring-rose-200',
+  } as const;
+  return (
+    <div className={cn('rounded-lg ring-1 px-2.5 py-1.5', map[tone])}>
+      <div className="text-[9px] uppercase tracking-wider font-bold opacity-60">{label}</div>
+      <div className={cn('text-[12px] font-bold tabular-nums truncate mt-0.5', mono && 'font-mono')} title={value}>
+        {value}
       </div>
     </div>
   );
