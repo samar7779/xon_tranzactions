@@ -76,9 +76,14 @@ export default function LoginPage() {
   return (
     <div className="relative w-screen h-screen overflow-hidden font-sans text-white">
       {/* Background: showcase animatsiyasi */}
-      <div className={`absolute inset-0 transition-all duration-700 ${open ? 'scale-[0.97] brightness-50 blur-sm' : 'scale-100'}`}>
+      <div className={`absolute inset-0 transition-all duration-700 ease-out
+                       ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
         <ShowcaseStage />
       </div>
+      {/* Vignette overlay — panel ochilganda chap tomon biroz qoraytadi */}
+      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-700
+                       ${open ? 'opacity-100' : 'opacity-0'}`}
+           style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
       {/* Top-right: clock + language */}
       <div className="absolute top-5 right-5 z-30 flex items-center gap-4">
@@ -132,75 +137,113 @@ export default function LoginPage() {
       </div>
 
       {/* Right-side slide-in login panel */}
-      <div className={`fixed top-0 right-0 h-full w-[420px] max-w-[92vw] z-50
+      <div className={`fixed top-0 right-0 h-full w-[460px] max-w-[92vw] z-50
                        transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                        ${open ? 'translate-x-0' : 'translate-x-full'}`}>
 
-        {/* Backdrop blur edge */}
-        <div className="absolute inset-y-0 -left-12 w-12 bg-gradient-to-r from-transparent to-[rgba(6,14,29,0.85)] pointer-events-none" />
+        {/* Soft fade edge to the left of panel */}
+        <div className="absolute inset-y-0 -left-16 w-16 bg-gradient-to-r from-transparent to-[rgba(6,14,29,0.6)] pointer-events-none" />
 
-        <div className="relative h-full bg-[rgba(6,14,29,0.92)] backdrop-blur-xl
+        <div className="relative h-full overflow-hidden
+                        bg-[linear-gradient(180deg,rgba(8,18,38,0.95)_0%,rgba(6,14,29,0.97)_100%)]
+                        backdrop-blur-xl
                         border-l border-cyan-400/30
-                        shadow-[-20px_0_60px_-10px_rgba(0,0,0,0.7),inset_4px_0_30px_-15px_rgba(34,211,238,0.2)]
-                        p-8 sm:p-10 flex flex-col">
+                        shadow-[-30px_0_80px_-10px_rgba(0,0,0,0.7),inset_4px_0_30px_-15px_rgba(34,211,238,0.25)]
+                        p-9 sm:p-11 flex flex-col">
+
+          {/* HUD background — subtle scan grid */}
+          <div className="absolute inset-0 opacity-[0.06] pointer-events-none"
+               style={{
+                 backgroundImage:
+                   'linear-gradient(rgba(34,211,238,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.6) 1px, transparent 1px)',
+                 backgroundSize: '40px 40px',
+                 maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 30%, transparent 80%)',
+                 WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 30%, transparent 80%)',
+               }} />
+
+          {/* Top scan beam — yuqoridan pastga sirpanadi */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent
+                          shadow-[0_0_15px_rgba(34,211,238,0.7)] login-scan-v pointer-events-none" />
 
           {/* Vertical accent line */}
-          <div className="absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-cyan-400 to-transparent" />
+          <div className="absolute inset-y-8 left-0 w-px bg-gradient-to-b from-transparent via-cyan-400/80 to-transparent" />
+
+          {/* 4 HUD corner brackets */}
+          <span className="absolute top-3 left-3 w-3 h-3 border-l border-t border-cyan-400/60 pointer-events-none" />
+          <span className="absolute top-3 right-3 w-3 h-3 border-r border-t border-cyan-400/60 pointer-events-none" />
+          <span className="absolute bottom-3 left-3 w-3 h-3 border-l border-b border-cyan-400/60 pointer-events-none" />
+          <span className="absolute bottom-3 right-3 w-3 h-3 border-r border-b border-cyan-400/60 pointer-events-none" />
+
+          {/* Title glow halo */}
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 w-64 h-32 bg-cyan-400/15 blur-3xl pointer-events-none rounded-full" />
 
           {/* Close button */}
           <button
             onClick={() => setOpen(false)}
-            className="absolute top-5 right-5 w-9 h-9 rounded-full grid place-items-center
+            className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full grid place-items-center
                        bg-white/5 ring-1 ring-white/10 text-cyan-200/70
                        hover:bg-rose-500/20 hover:ring-rose-400/40 hover:text-rose-200
-                       transition-all duration-200">
+                       hover:rotate-90
+                       transition-all duration-300">
             <X className="h-4 w-4" />
           </button>
 
           {/* Sarlavha */}
-          <div className="mt-6 mb-8">
-            <div className="text-[10px] tracking-[0.3em] uppercase text-cyan-400/70 font-mono mb-2">· ID · 0001 ·</div>
-            <h1 className="text-[24px] font-bold tracking-[0.06em] uppercase text-cyan-50">
+          <div className="relative mt-6 mb-8" style={{ animation: open ? 'login-stagger 0.6s 0.15s both' : 'none' }}>
+            <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase text-cyan-400/80 font-mono mb-2">
+              <span className="w-4 h-px bg-cyan-400/60" />
+              <span>· ID · 0001 ·</span>
+              <span className="flex-1 h-px bg-gradient-to-r from-cyan-400/30 to-transparent" />
+            </div>
+            <h1 className="text-[26px] font-bold tracking-[0.06em] uppercase text-cyan-50
+                           drop-shadow-[0_0_18px_rgba(34,211,238,0.5)]">
               {t('loginTitle')}
             </h1>
-            <div className="mt-2 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60 font-mono">
-              <span className="w-8 h-px bg-cyan-400/40" />
+            <div className="mt-2 flex items-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/70 font-mono">
+              <span className="relative flex h-1 w-1">
+                <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative rounded-full h-1 w-1 bg-cyan-400" />
+              </span>
               <span>Identity verify</span>
             </div>
           </div>
 
           {/* Form */}
-          <form onSubmit={onSubmit} className="space-y-5 flex-1" noValidate>
-            <HudField
-              id="email"
-              label="EMAIL"
-              type="email"
-              value={email}
-              onChange={(v) => { setEmail(v); setErrorMsg(null); }}
-              autoFocus={open}
-              placeholder="admin@xon.local"
-            />
+          <form onSubmit={onSubmit} className="relative space-y-5 flex-1" noValidate>
+            <div style={{ animation: open ? 'login-stagger 0.6s 0.25s both' : 'none' }}>
+              <HudField
+                id="email"
+                label="EMAIL"
+                type="email"
+                value={email}
+                onChange={(v) => { setEmail(v); setErrorMsg(null); }}
+                autoFocus={open}
+                placeholder="admin@xon.local"
+              />
+            </div>
 
-            <HudField
-              id="password"
-              label="PASSWORD"
-              type={showPwd ? 'text' : 'password'}
-              value={password}
-              onChange={(v) => { setPassword(v); setErrorMsg(null); }}
-              onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-              placeholder="••••••••"
-              right={
-                <button
-                  type="button"
-                  onClick={() => setShowPwd((s) => !s)}
-                  className="text-cyan-400/50 hover:text-cyan-300 transition"
-                  tabIndex={-1}
-                  aria-label={showPwd ? 'Hide' : 'Show'}
-                >
-                  {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              }
-            />
+            <div style={{ animation: open ? 'login-stagger 0.6s 0.35s both' : 'none' }}>
+              <HudField
+                id="password"
+                label="PASSWORD"
+                type={showPwd ? 'text' : 'password'}
+                value={password}
+                onChange={(v) => { setPassword(v); setErrorMsg(null); }}
+                onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                placeholder="••••••••"
+                right={
+                  <button
+                    type="button"
+                    onClick={() => setShowPwd((s) => !s)}
+                    className="text-cyan-400/50 hover:text-cyan-300 transition"
+                    tabIndex={-1}
+                    aria-label={showPwd ? 'Hide' : 'Show'}
+                  >
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                }
+              />
+            </div>
 
             {capsOn && (
               <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
@@ -210,54 +253,86 @@ export default function LoginPage() {
             )}
 
             {errorMsg && (
-              <div className="flex items-start gap-2 px-3 py-2 border border-rose-400/30 bg-rose-500/10 text-[12px] text-rose-200 rounded-sm">
+              <div className="flex items-start gap-2 px-3 py-2 border border-rose-400/40 bg-rose-500/10
+                              text-[12px] text-rose-200 rounded-sm
+                              shadow-[0_0_20px_-5px_rgba(244,63,94,0.5)]">
                 <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
                 <span className="tracking-wider">{errorMsg}</span>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={busy}
-              className="relative w-full h-12 mt-4 group overflow-hidden rounded-sm
-                         bg-gradient-to-r from-cyan-500/30 via-cyan-400/40 to-cyan-500/30
-                         border border-cyan-400/60
-                         text-cyan-50 font-semibold tracking-[0.25em] uppercase text-[12px]
-                         shadow-[0_0_30px_-5px_rgba(34,211,238,0.5),inset_0_0_20px_-10px_rgba(34,211,238,0.4)]
-                         hover:bg-cyan-400/40 hover:shadow-[0_0_40px_-5px_rgba(34,211,238,0.9)]
-                         hover:border-cyan-300
-                         active:scale-[0.99]
-                         disabled:opacity-60
-                         transition-all duration-200
-                         flex items-center justify-center gap-3"
-            >
-              <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                               bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent
-                               transition-transform duration-1000 ease-out" />
-              {busy ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="relative">PROCESSING</span>
-                </>
-              ) : (
-                <>
-                  <span className="relative">{t('submit')}</span>
-                  <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
-                </>
-              )}
-            </button>
+            <div style={{ animation: open ? 'login-stagger 0.6s 0.45s both' : 'none' }}>
+              <button
+                type="submit"
+                disabled={busy}
+                className="relative w-full h-13 mt-4 group overflow-hidden rounded-sm
+                           bg-gradient-to-r from-cyan-500/30 via-cyan-400/50 to-cyan-500/30
+                           border border-cyan-400/70
+                           text-cyan-50 font-semibold tracking-[0.28em] uppercase text-[12px]
+                           shadow-[0_0_35px_-5px_rgba(34,211,238,0.6),inset_0_0_20px_-10px_rgba(34,211,238,0.5)]
+                           hover:bg-cyan-400/40 hover:shadow-[0_0_50px_-5px_rgba(34,211,238,1)]
+                           hover:border-cyan-200
+                           active:scale-[0.99]
+                           disabled:opacity-60
+                           transition-all duration-200
+                           flex items-center justify-center gap-3 h-12"
+              >
+                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
+                                 bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent
+                                 transition-transform duration-1000 ease-out" />
+                {/* Corner accents on button */}
+                <span className="absolute top-0 left-0 w-2 h-2 border-l border-t border-cyan-200" />
+                <span className="absolute top-0 right-0 w-2 h-2 border-r border-t border-cyan-200" />
+                <span className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-cyan-200" />
+                <span className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-cyan-200" />
+                {busy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="relative">PROCESSING</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="relative">{t('submit')}</span>
+                    <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
+                  </>
+                )}
+              </button>
+
+              {/* ESC hint */}
+              <div className="text-center mt-3 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
+                Press <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> to close
+              </div>
+            </div>
           </form>
 
           {/* Status liniya */}
-          <div className="mt-6 pt-4 border-t border-cyan-400/15 flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono">
+          <div className="relative mt-6 pt-4 border-t border-cyan-400/15 flex items-center justify-between
+                          text-[9px] tracking-[0.25em] uppercase text-cyan-400/50 font-mono">
             <span className="flex items-center gap-1.5">
               <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
               Encrypted
             </span>
+            <span className="tabular-nums text-cyan-300/70">{clock}</span>
             <span>AES-256</span>
           </div>
         </div>
       </div>
+
+      <style jsx>{`
+        @keyframes login-stagger {
+          from { opacity: 0; transform: translateX(20px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes login-scan-v {
+          0%   { transform: translateY(0); opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
+        }
+        :global(.login-scan-v) {
+          animation: login-scan-v 5s linear infinite;
+        }
+      `}</style>
 
       {/* Pastki readout */}
       <div className="absolute bottom-5 left-5 right-5 z-30
