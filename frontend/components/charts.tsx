@@ -30,19 +30,29 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
 
   const W = 800;
   const H = height;
+  // Y-o'qi paddinglari — chiziq SVG kanvasining eng yuqori/pastki chetiga to'g'ri kelsa,
+  // strokeWidth (2.6px) yarmi `overflow-hidden` ostida kesilib qoladi va past
+  // qiymatlarda chiziq ko'rinmay qoladi. Shuning uchun chiziqni 4/8 px ichkariga olib o'tdik.
+  const padT = 4;
+  const padB = 8;
+  const plotH = H - padT - padB;
   const n = data.length;
   const max = Math.max(...data.map((d) => Math.max(d.inflow, d.outflow)), 1);
 
   const xFrac = (i: number) => (n === 1 ? 0.5 : i / (n - 1));
   const yFrac = (v: number) => v / max;
   const X = (i: number) => xFrac(i) * W;
-  const Y = (v: number) => (1 - yFrac(v)) * H;
+  const Y = (v: number) => padT + (1 - yFrac(v)) * plotH;
+  // Plot div'i tashqarida joylashtirilgan nuqtalar uchun foiz koordinatasi —
+  // chiziq va dotlarning bir xil joyda turishini ta'minlaydi.
+  const yTop = (v: number) => (Y(v) / H) * 100;
 
   const inPts = data.map((d, i) => [X(i), Y(d.inflow)] as [number, number]);
   const outPts = data.map((d, i) => [X(i), Y(d.outflow)] as [number, number]);
 
   const inLine = monotonePath(inPts);
   const outLine = monotonePath(outPts);
+  // Maydon — chiziqdan SVG'ning haqiqiy pastiga qadar to'ldiriladi
   const inArea = `${inLine} L${inPts[n - 1][0]},${H} L${inPts[0][0]},${H} Z`;
   const outArea = `${outLine} L${outPts[n - 1][0]},${H} L${outPts[0][0]},${H} Z`;
 
@@ -188,14 +198,14 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             <>
               <div
                 className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ left: '100%', top: `${(1 - yFrac(data[n - 1].outflow)) * 100}%` }}
+                style={{ left: '100%', top: `${yTop(data[n - 1].outflow)}%` }}
               >
                 <span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-70" />
                 <span className="absolute inset-[3px] rounded-full bg-rose-500 ring-2 ring-white" />
               </div>
               <div
                 className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ left: '100%', top: `${(1 - yFrac(data[n - 1].inflow)) * 100}%` }}
+                style={{ left: '100%', top: `${yTop(data[n - 1].inflow)}%` }}
               >
                 <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />
                 <span className="absolute inset-[3px] rounded-full bg-emerald-500 ring-2 ring-white" />
@@ -208,11 +218,11 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             <div key={`pt-${i}`}>
               <div
                 className="absolute w-[7px] h-[7px] rounded-full bg-emerald-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${xFrac(i) * 100}%`, top: `${(1 - yFrac(d.inflow)) * 100}%` }}
+                style={{ left: `${xFrac(i) * 100}%`, top: `${yTop(d.inflow)}%` }}
               />
               <div
                 className="absolute w-[7px] h-[7px] rounded-full bg-rose-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${xFrac(i) * 100}%`, top: `${(1 - yFrac(d.outflow)) * 100}%` }}
+                style={{ left: `${xFrac(i) * 100}%`, top: `${yTop(d.outflow)}%` }}
               />
             </div>
           ))}
@@ -227,11 +237,11 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
               />
               <div
                 className="absolute w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].inflow)) * 100}%` }}
+                style={{ left: `${xFrac(h) * 100}%`, top: `${yTop(data[h].inflow)}%` }}
               />
               <div
                 className="absolute w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
-                style={{ left: `${xFrac(h) * 100}%`, top: `${(1 - yFrac(data[h].outflow)) * 100}%` }}
+                style={{ left: `${xFrac(h) * 100}%`, top: `${yTop(data[h].outflow)}%` }}
               />
               {/* Tooltip */}
               <div
