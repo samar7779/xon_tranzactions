@@ -1,22 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign,
-  Bell, ChevronRight, AlertCircle, CheckCircle2, FileSpreadsheet, Scale,
+  FileSpreadsheet, Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
-import { api } from '@/lib/api';
-import { BrandLogo } from './brand-logo';
-import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator,
-} from './ui/dropdown-menu';
 
 interface NavItem {
   href: string;
@@ -45,9 +38,8 @@ const GROUP_KEY: Record<string, string> = {
 
 export function Sidebar() {
   const t = useTranslations('nav');
-  const tn = useTranslations('notifications');
+  const tApp = useTranslations('app');
   const pathname = usePathname();
-  const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
 
@@ -60,98 +52,57 @@ export function Sidebar() {
   const visibleItems = NAV.filter((n) => can(n.permission));
   const groups = Array.from(new Set(visibleItems.map((i) => i.group || 'main')));
 
-  // Live notification count: recent sync failures
-  const { data: syncLogs } = useQuery({
-    queryKey: ['sidebar-sync-failures'],
-    queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=20'),
-    refetchInterval: 30_000,
-    enabled: can(PERMS.SYNC_VIEW),
-  });
-  const failures = (syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 5);
-  const notifCount = failures.length;
-
   return (
     <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white border-r border-slate-200/80 relative">
-      {/* Compact brand mark */}
-      <div className="px-5 pt-5 pb-3">
-        <Link
-          href={`/${locale}/dashboard`}
-          aria-label={t('home')}
-          className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-shadow"
-        >
-          <BrandLogo className="w-6 h-6" />
-        </Link>
-      </div>
+      {/* Brand — premium wordmark */}
+      <Link
+        href={`/${locale}/dashboard`}
+        aria-label={t('home')}
+        className="group relative block px-5 pt-6 pb-5 border-b border-slate-100"
+      >
+        <div className="relative flex items-center gap-3">
+          {/* Monogram tile */}
+          <span className="relative w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 grid place-items-center text-white shadow-lg shadow-indigo-500/30 group-hover:shadow-indigo-500/50 transition-shadow overflow-hidden shrink-0">
+            {/* Inner glossy overlay */}
+            <span className="absolute inset-0 bg-gradient-to-b from-white/25 to-transparent" />
+            {/* Crossing arrows monogram — in/out flow */}
+            <svg viewBox="0 0 32 32" className="relative w-6 h-6" aria-hidden>
+              <path d="M11 7 V21 M6 16 L11 21 L16 16"
+                stroke="#a7f3d0" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              <path d="M21 25 V11 M16 16 L21 11 L26 16"
+                stroke="#fda4af" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            {/* Pulsing dot */}
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
+              <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
+            </span>
+          </span>
 
-      {/* Notifications bell */}
-      <div className="px-3 mb-3">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors group">
-              <div className="relative">
-                <Bell className="h-[18px] w-[18px] text-slate-400 group-hover:text-slate-600 transition-colors" />
-                {notifCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-1 ring-2 ring-white">
-                    {notifCount > 9 ? '9+' : notifCount}
-                  </span>
-                )}
-              </div>
-              <span className="text-sm font-medium flex-1 text-left">{tn('title')}</span>
-              {notifCount > 0 && (
-                <span className="text-[10px] text-rose-600 font-bold">{tn('newCount', { count: notifCount })}</span>
-              )}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right" className="w-80">
-            <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-500 flex items-center justify-between">
-              <span>{tn('title')}</span>
-              {notifCount > 0 && <span className="text-rose-600">{tn('errorsCount', { count: notifCount })}</span>}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {failures.length === 0 ? (
-              <div className="px-3 py-6 text-center">
-                <div className="w-10 h-10 rounded-full bg-emerald-50 grid place-items-center mx-auto mb-2">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div className="text-xs font-medium text-slate-700">{tn('allGood')}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{tn('noErrors')}</div>
-              </div>
-            ) : (
-              <div className="max-h-72 overflow-y-auto">
-                {failures.map((l) => (
-                  <DropdownMenuItem
-                    key={l.id}
-                    onClick={() => router.push(`/${locale}/admin/sync-logs`)}
-                    className="px-3 py-2 cursor-pointer"
-                  >
-                    <div className="flex items-start gap-2 w-full">
-                      <div className="w-7 h-7 rounded-lg bg-rose-50 grid place-items-center shrink-0">
-                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[12px] font-semibold text-slate-700">{tn('syncError')}</div>
-                        <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
-                      </div>
-                    </div>
-                  </DropdownMenuItem>
-                ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => router.push(`/${locale}/admin/sync-logs`)}
-                  className="justify-center text-indigo-600 font-medium cursor-pointer"
-                >
-                  {tn('viewAll')}
-                  <ChevronRight className="h-3.5 w-3.5 ml-1" />
-                </DropdownMenuItem>
-              </div>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          {/* Wordmark */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1">
+              <span className="text-[17px] font-black tracking-tight bg-gradient-to-br from-slate-900 via-indigo-700 to-violet-700 bg-clip-text text-transparent leading-none">
+                XON
+              </span>
+              <span className="text-[12px] font-bold text-slate-400 tracking-tight leading-none">
+                TX
+              </span>
+            </div>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className="inline-block w-1 h-1 rounded-full bg-indigo-500" />
+              <span className="text-[9px] font-bold tracking-[0.18em] uppercase text-slate-500">
+                {tApp('title').replace(/Xon\s*/i, '').trim() || 'Treasury'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Animated underline accent */}
+        <span className="absolute left-5 right-5 bottom-0 h-px bg-gradient-to-r from-transparent via-indigo-300/60 to-transparent" />
+      </Link>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 pb-4 space-y-5 overflow-y-auto">
+      <nav className="flex-1 px-3 pt-4 pb-4 space-y-5 overflow-y-auto">
         {groups.map((g) => {
           const items = visibleItems.filter((i) => (i.group || 'main') === g);
           if (items.length === 0) return null;

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Trash2, AlertTriangle, Loader2, Database, ShieldAlert } from 'lucide-react';
+import { Trash2, AlertTriangle, Loader2, Database, ShieldAlert, Info, ListChecks } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +43,7 @@ export default function CleanupPage() {
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full">
-      <div className="max-w-2xl mx-auto space-y-5">
+      <div className="w-full space-y-5">
         {!isSuperAdmin && (
           <Card className="border-0 shadow-soft overflow-hidden">
             <div className="h-1.5 bg-gradient-to-r from-rose-500 to-red-600" />
@@ -64,90 +64,169 @@ export default function CleanupPage() {
           </Card>
         )}
 
+        {/* Hero — full width */}
         <Card className="border-0 shadow-soft overflow-hidden">
-          <div className="bg-gradient-to-br from-rose-500 to-red-600 px-6 py-5 text-white">
-            <div className="flex items-center gap-2 mb-1.5 text-white/80">
-              <Trash2 className="h-3.5 w-3.5" />
-              <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('sectionLabel')}</span>
+          <div className="relative bg-gradient-to-br from-rose-500 via-red-500 to-rose-700 px-8 py-7 text-white overflow-hidden">
+            <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
+            <div className="absolute -top-16 -right-16 w-72 h-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-10 w-72 h-72 rounded-full bg-rose-300/15 blur-3xl pointer-events-none" />
+
+            <div className="relative flex items-center gap-5">
+              <div className="w-16 h-16 rounded-2xl bg-white/15 ring-2 ring-white/30 backdrop-blur-md grid place-items-center shrink-0">
+                <Trash2 className="h-8 w-8" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1.5 text-white/80">
+                  <span className="text-[10px] uppercase tracking-[0.18em] font-bold">{t('sectionLabel')}</span>
+                </div>
+                <div className="text-2xl lg:text-3xl font-black tracking-tight">{t('title')}</div>
+                <div className="text-white/85 text-sm mt-1 max-w-3xl">{t('intro')}</div>
+              </div>
             </div>
-            <div className="text-lg font-bold tracking-tight">{t('title')}</div>
-            <div className="text-white/80 text-xs mt-0.5">{t('intro')}</div>
+          </div>
+        </Card>
+
+        {/* Two-column grid: left = info & warning, right = form */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+          {/* LEFT — info panel */}
+          <div className="lg:col-span-5 space-y-4">
+            <Card className="border-0 shadow-soft overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
+              <CardContent className="p-5">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 ring-1 ring-amber-200 grid place-items-center shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold tracking-tight text-amber-900">{t('warningTitle')}</div>
+                    <div className="text-[12px] text-amber-800 mt-1 leading-relaxed">{t('warningBody')}</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-soft overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-slate-400 to-slate-600" />
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3 text-slate-500">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('whatDeleted')}</span>
+                </div>
+                <ul className="space-y-2 text-[12px] text-slate-700">
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                    <span>{t('item1')}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
+                    <span>{t('item2')}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <span dangerouslySetInnerHTML={{ __html: t.raw('item3Keep') as string }} />
+                  </li>
+                </ul>
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 shadow-soft overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500" />
+              <CardContent className="p-5 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 ring-1 ring-indigo-200 grid place-items-center shrink-0">
+                  <Info className="h-4 w-4 text-indigo-600" />
+                </div>
+                <div
+                  className="text-[12px] text-slate-600 leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: t.raw('safetyTip') as string }}
+                />
+              </CardContent>
+            </Card>
           </div>
 
-          <CardContent className="p-6 space-y-4">
-            {/* Ogohlantirish */}
-            <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-2.5">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <div className="text-[12px] text-amber-900 leading-relaxed">
-                <b>{t('warningTitle')}</b> {t('warningBody')}
-              </div>
-            </div>
+          {/* RIGHT — form */}
+          <div className="lg:col-span-7">
+            <Card className="border-0 shadow-soft overflow-hidden">
+              <div className="h-1 bg-gradient-to-r from-rose-500 to-red-600" />
+              <CardContent className="p-6 space-y-5">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                    {t('accountLabel')} <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    value={accountNo}
+                    onChange={(e) => setAccountNo(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                    placeholder="20208000…"
+                    maxLength={20}
+                    disabled={!isSuperAdmin}
+                    className="font-mono h-12 text-base tracking-wider"
+                  />
+                  <div className="flex items-center justify-between">
+                    <div className="text-[10px] text-slate-500">{t('accountCount', { n: accountNo.length })}</div>
+                    <div className="h-1 w-32 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          'h-full rounded-full transition-all',
+                          accountNo.length === 20 ? 'bg-emerald-500' : 'bg-rose-400',
+                        )}
+                        style={{ width: `${(accountNo.length / 20) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                {t('accountLabel')} <span className="text-rose-500">*</span>
-              </Label>
-              <Input
-                value={accountNo}
-                onChange={(e) => setAccountNo(e.target.value.replace(/\D/g, '').slice(0, 20))}
-                placeholder="20208000…"
-                maxLength={20}
-                disabled={!isSuperAdmin}
-                className="font-mono"
-              />
-              <div className="text-[10px] text-slate-500">{t('accountCount', { n: accountNo.length })}</div>
-            </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                    {t('confirmLabel')} <span className="text-rose-500">*</span>
+                  </Label>
+                  <Input
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 20))}
+                    placeholder={t('confirmPlaceholder')}
+                    maxLength={20}
+                    disabled={!isSuperAdmin || accountNo.trim().length < 20}
+                    className={cn(
+                      'font-mono h-12 text-base tracking-wider',
+                      confirm && confirm !== accountNo && 'ring-2 ring-rose-300',
+                      confirm && confirm === accountNo && 'ring-2 ring-emerald-300',
+                    )}
+                  />
+                  {confirm && confirm !== accountNo && (
+                    <div className="text-[10px] text-rose-600">{t('confirmMismatch')}</div>
+                  )}
+                </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                {t('confirmLabel')} <span className="text-rose-500">*</span>
-              </Label>
-              <Input
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value.replace(/\D/g, '').slice(0, 20))}
-                placeholder={t('confirmPlaceholder')}
-                maxLength={20}
-                disabled={!isSuperAdmin || accountNo.trim().length < 20}
-                className={cn(
-                  'font-mono',
-                  confirm && confirm !== accountNo && 'ring-2 ring-rose-300',
-                  confirm && confirm === accountNo && 'ring-2 ring-emerald-300',
+                <Button
+                  onClick={() => {
+                    if (!window.confirm(t('confirmDialog', { accountNo }))) return;
+                    mut.mutate();
+                  }}
+                  disabled={!isSuperAdmin || !canSubmit || mut.isPending}
+                  className="w-full h-12 rounded-xl font-semibold gap-2 bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/20 disabled:shadow-none"
+                >
+                  {mut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}</>
+                  ) : (
+                    <><Trash2 className="h-4 w-4" /> {t('submit')}</>
+                  )}
+                </Button>
+
+                {lastResult && lastResult.ok && (
+                  <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-5 py-4">
+                    <div className="flex items-center gap-2 text-[12px] font-bold text-emerald-900 uppercase tracking-wider">
+                      <Database className="h-4 w-4 text-emerald-600" />
+                      {t('resultTitle')}
+                    </div>
+                    <div className="text-[12px] text-emerald-800 mt-2 space-y-1">
+                      <div>• {t('resultAccount')}: <span className="font-mono">{lastResult.account?.accountNo}</span> — {lastResult.account?.ownerName || '—'}</div>
+                      <div>• {t('resultDeleted')}: <b className="text-base">{lastResult.deleted}</b></div>
+                    </div>
+                  </div>
                 )}
-              />
-              {confirm && confirm !== accountNo && (
-                <div className="text-[10px] text-rose-600">{t('confirmMismatch')}</div>
-              )}
-            </div>
-
-            <Button
-              onClick={() => {
-                if (!window.confirm(t('confirmDialog', { accountNo }))) return;
-                mut.mutate();
-              }}
-              disabled={!isSuperAdmin || !canSubmit || mut.isPending}
-              className="w-full h-11 rounded-xl font-semibold gap-2 bg-rose-600 hover:bg-rose-700 text-white"
-            >
-              {mut.isPending ? (
-                <><Loader2 className="h-4 w-4 animate-spin" /> {t('submitting')}</>
-              ) : (
-                <><Trash2 className="h-4 w-4" /> {t('submit')}</>
-              )}
-            </Button>
-
-            {lastResult && lastResult.ok && (
-              <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3">
-                <div className="flex items-center gap-2 text-[12px] font-semibold text-emerald-900">
-                  <Database className="h-4 w-4 text-emerald-600" />
-                  {t('resultTitle')}
-                </div>
-                <div className="text-[11px] text-emerald-800 mt-1.5 space-y-0.5">
-                  <div>• {t('resultAccount')}: <span className="font-mono">{lastResult.account?.accountNo}</span> — {lastResult.account?.ownerName || '—'}</div>
-                  <div>• {t('resultDeleted')}: <b>{lastResult.deleted}</b></div>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );

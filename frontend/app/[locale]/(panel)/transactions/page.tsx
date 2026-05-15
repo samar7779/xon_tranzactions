@@ -33,17 +33,25 @@ import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
 
-const MATCH_CONFIG: Record<string, { label: string; cls: string }> = {
-  AUTO:      { label: 'Avto',          cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-  MANUAL:    { label: 'Qo\'lda',        cls: 'bg-blue-50 text-blue-700 ring-blue-200' },
-  PARTIAL:   { label: 'Qisman',        cls: 'bg-amber-50 text-amber-700 ring-amber-200' },
-  IGNORED:   { label: 'E\'tiborsiz',    cls: 'bg-slate-50 text-slate-500 ring-slate-200' },
-  UNMATCHED: { label: 'Bog\'lanmagan',  cls: 'bg-rose-50 text-rose-700 ring-rose-200' },
+const MATCH_CLS: Record<string, string> = {
+  AUTO:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  MANUAL:    'bg-blue-50 text-blue-700 ring-blue-200',
+  PARTIAL:   'bg-amber-50 text-amber-700 ring-amber-200',
+  IGNORED:   'bg-slate-50 text-slate-500 ring-slate-200',
+  UNMATCHED: 'bg-rose-50 text-rose-700 ring-rose-200',
+};
+const MATCH_KEYS: Record<string, string> = {
+  AUTO:      'matchStatusAUTO',
+  MANUAL:    'matchStatusMANUAL',
+  PARTIAL:   'matchStatusPARTIAL',
+  IGNORED:   'matchStatusIGNORED',
+  UNMATCHED: 'matchStatusUNMATCHED',
 };
 
 export default function TransactionsPage() {
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
+  const tp = useTranslations('payments');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
@@ -74,10 +82,10 @@ export default function TransactionsPage() {
         setIdSearchOpen(false);
         setIdQuery('');
       } else {
-        toast.error('Bunday ID bilan tranzaksiya topilmadi');
+        toast.error(t('idNotFound'));
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Qidiruvda xato');
+      toast.error(e?.message || t('searchError'));
     } finally {
       setIdSearching(false);
     }
@@ -126,8 +134,8 @@ export default function TransactionsPage() {
   const autoMatchMut = useMutation({
     mutationFn: (id: string) => api.post(`/payments/auto-match/${id}`),
     onSuccess: (r: any) => {
-      if (r.ok) toast.success(`Bog'landi: ${r.customer.name}`);
-      else toast.message(r.error || "Bog'lanmadi");
+      if (r.ok) toast.success(t('matchedToast', { name: r.customer.name }));
+      else toast.message(r.error || t('matchFailed'));
       qc.invalidateQueries({ queryKey: ['transactions'] });
     },
     onError: (e: any) => toast.error(e?.message),
@@ -166,16 +174,16 @@ export default function TransactionsPage() {
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo) p.set('dateTo', dateTo);
     try {
-      toast.loading('Excel tayyorlanmoqda...', { id: 'tx-export' });
+      toast.loading(t('excelPreparing'), { id: 'tx-export' });
       await apiDownload(`/transactions/export?${p}`, `tranzaksiyalar-${new Date().toISOString().slice(0, 10)}.xlsx`);
-      toast.success('Excel yuklab olindi', { id: 'tx-export' });
+      toast.success(t('excelDownloaded'), { id: 'tx-export' });
     } catch (e: any) {
-      toast.error(e?.message || 'Eksportda xato', { id: 'tx-export' });
+      toast.error(e?.message || t('exportError'), { id: 'tx-export' });
     }
   }
 
   function exportCsv() {
-    if (!data?.items?.length) return toast.error("Eksport uchun ma'lumot yo'q");
+    if (!data?.items?.length) return toast.error(t('noDataExport'));
     const rows = [
       ['Sana', 'Yo\'nalish', 'Bank', 'Yuboruvchi', 'STIR', 'Qabul qiluvchi', 'Hisob', 'Summa', 'Valyuta', 'Match', 'Tavsif'],
       ...data.items.map((it) => [
@@ -188,7 +196,7 @@ export default function TransactionsPage() {
         it.toAccount || '',
         it.amount,
         it.currency,
-        MATCH_CONFIG[it.matchStatus || 'UNMATCHED']?.label || '',
+        tp(MATCH_KEYS[it.matchStatus || 'UNMATCHED']),
         it.description || '',
       ]),
     ];
@@ -202,11 +210,11 @@ export default function TransactionsPage() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast.success('CSV eksport tayyor');
+    toast.success(t('csvReady'));
   }
 
   function exportJson() {
-    if (!data?.items?.length) return toast.error("Eksport uchun ma'lumot yo'q");
+    if (!data?.items?.length) return toast.error(t('noDataExport'));
     const blob = new Blob([JSON.stringify(data.items, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -214,7 +222,7 @@ export default function TransactionsPage() {
     a.download = `transactions-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('JSON eksport tayyor');
+    toast.success(t('jsonReady'));
   }
 
   function exportPrint() {
@@ -235,28 +243,28 @@ export default function TransactionsPage() {
         {/* ═══ KPI ROW ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
-            label="Kirim · 30 kun"
+            label={t('kpiIn30')}
             value={formatMoney(inSum)}
             icon={ArrowDownLeft}
             color="emerald"
             spark={spark(1.2)}
           />
           <StatCard
-            label="Chiqim · 30 kun"
+            label={t('kpiOut30')}
             value={formatMoney(outSum)}
             icon={ArrowUpRight}
             color="rose"
             spark={spark(0.9)}
           />
           <StatCard
-            label="Sof oqim"
+            label={t('kpiNet')}
             value={(net >= 0 ? '+' : '') + formatMoney(net)}
             icon={TrendingUp}
             color={net >= 0 ? 'indigo' : 'rose'}
             spark={spark(1)}
           />
           <StatCard
-            label="Tranzaksiya soni"
+            label={t('kpiCount')}
             value={String(txnCount)}
             icon={Wallet}
             color="amber"
@@ -293,7 +301,7 @@ export default function TransactionsPage() {
                     'focus-visible:border-indigo-300',
                     'hover:border-slate-300',
                   )}
-                  placeholder="Yuboruvchi, qabul qiluvchi, STIR, izoh..."
+                  placeholder={t('searchPlaceholder')}
                   value={q}
                   onChange={(e) => { setQ(e.target.value); setPage(1); }}
                 />
@@ -322,7 +330,7 @@ export default function TransactionsPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title="Asboblar — tarix, ID, eksport"
+                    title={t('toolsTitle')}
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
                       'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
@@ -335,23 +343,23 @@ export default function TransactionsPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Asboblar</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('tools')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
                     <History className="h-4 w-4 mr-2 text-indigo-600" />
-                    <span className="flex-1">Eski tarixni yuklash</span>
+                    <span className="flex-1">{t('toolBackfill')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
                     <Hash className="h-4 w-4 mr-2 text-violet-600" />
-                    <span className="flex-1">ID orqali qidirish</span>
+                    <span className="flex-1">{t('toolIdSearch')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Eksport — filtr bo'yicha</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('exportByFilter')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="flex-1">Excel (hammasi)</span>
+                    <span className="flex-1">{t('exportExcelAll')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Joriy sahifa</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('currentPage')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
                     <span className="flex-1">CSV</span>
@@ -362,30 +370,30 @@ export default function TransactionsPage() {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
                     <Printer className="h-4 w-4 mr-2 text-slate-600" />
-                    <span className="flex-1">Chop etish / PDF</span>
+                    <span className="flex-1">{t('exportPrint')}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
               <FilterChip
                 active={direction !== 'all'}
-                label={direction === 'IN' ? 'Kirim' : direction === 'OUT' ? 'Chiqim' : 'Yo\'nalish'}
+                label={direction === 'IN' ? t('dirIn') : direction === 'OUT' ? t('dirOut') : t('directionAll')}
                 value={direction}
                 onChange={(v) => { setDirection(v); setPage(1); }}
                 options={[
-                  { value: 'all', label: 'Barchasi' },
-                  { value: 'IN', label: 'Kirim' },
-                  { value: 'OUT', label: 'Chiqim' },
+                  { value: 'all', label: tc('all') },
+                  { value: 'IN', label: t('dirIn') },
+                  { value: 'OUT', label: t('dirOut') },
                 ]}
               />
 
               <FilterChip
                 active={bankId !== 'all'}
-                label={bankId === 'all' ? 'Bank' : (banks?.items.find((b: any) => b.id === bankId)?.name || 'Bank')}
+                label={bankId === 'all' ? t('bankAll') : (banks?.items.find((b: any) => b.id === bankId)?.name || t('bankAll'))}
                 value={bankId}
                 onChange={(v) => { setBankId(v); setPage(1); }}
                 options={[
-                  { value: 'all', label: 'Barcha banklar' },
+                  { value: 'all', label: tc('all') },
                   // Aktiv banklar boshida
                   ...[...(banks?.items || [])]
                     .sort((a: any, b: any) => {
@@ -399,16 +407,16 @@ export default function TransactionsPage() {
 
               <FilterChip
                 active={matchStatus !== 'all'}
-                label={matchStatus === 'all' ? 'Bog\'lanish' : MATCH_CONFIG[matchStatus]?.label}
+                label={matchStatus === 'all' ? t('matchAll') : tp(MATCH_KEYS[matchStatus])}
                 value={matchStatus}
                 onChange={(v) => { setMatchStatus(v); setPage(1); }}
                 options={[
-                  { value: 'all', label: 'Barchasi' },
-                  { value: 'AUTO', label: 'Avto' },
-                  { value: 'MANUAL', label: 'Qo\'lda' },
-                  { value: 'PARTIAL', label: 'Qisman' },
-                  { value: 'UNMATCHED', label: 'Bog\'lanmagan' },
-                  { value: 'IGNORED', label: 'E\'tiborsiz' },
+                  { value: 'all', label: tc('all') },
+                  { value: 'AUTO', label: tp('matchStatusAUTO') },
+                  { value: 'MANUAL', label: tp('matchStatusMANUAL') },
+                  { value: 'PARTIAL', label: tp('matchStatusPARTIAL') },
+                  { value: 'UNMATCHED', label: tp('matchStatusUNMATCHED') },
+                  { value: 'IGNORED', label: tp('matchStatusIGNORED') },
                 ]}
               />
 
@@ -421,22 +429,22 @@ export default function TransactionsPage() {
                       : "bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200",
                   )}>
                     <Calendar className="h-4 w-4" />
-                    {dateFrom || dateTo ? `${dateFrom || '...'} → ${dateTo || '...'}` : 'Sana oralig\'i'}
+                    {dateFrom || dateTo ? `${dateFrom || '...'} → ${dateTo || '...'}` : t('dateRange')}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="p-3 w-72">
                   <div className="space-y-2">
                     <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Dan</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{tc('from')}</div>
                       <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9" />
                     </div>
                     <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">Gacha</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{tc('to')}</div>
                       <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-9" />
                     </div>
                     <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setDateFrom(''); setDateTo(''); }}>Tozalash</Button>
-                      <Button size="sm" className="flex-1" onClick={() => setFilterOpen(false)}>Qo'llash</Button>
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setDateFrom(''); setDateTo(''); }}>{tc('reset')}</Button>
+                      <Button size="sm" className="flex-1" onClick={() => setFilterOpen(false)}>{t('apply')}</Button>
                     </div>
                   </div>
                 </DropdownMenuContent>
@@ -444,7 +452,7 @@ export default function TransactionsPage() {
 
               {(activeFilters > 0 || q) && (
                 <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-rose-600 font-medium flex items-center gap-1">
-                  <X className="h-3.5 w-3.5" /> Tozalash ({activeFilters + (q ? 1 : 0)})
+                  <X className="h-3.5 w-3.5" /> {t('clearN')} ({activeFilters + (q ? 1 : 0)})
                 </button>
               )}
             </div>
@@ -461,26 +469,27 @@ export default function TransactionsPage() {
             ) : (filtered?.length ?? 0) === 0 ? (
               <EmptyState
                 icon={Wallet}
-                title="Tranzaksiya topilmadi"
-                description={q || activeFilters > 0 ? "Filtrlarni o'zgartirib ko'ring" : "Hozircha hech qanday tranzaksiya yo'q. Sync ishga tushishi bilan ko'rinadi."}
+                title={t('notFoundTitle')}
+                description={q || activeFilters > 0 ? t('noDataChangeFilters') : t('noDataYet')}
               />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <th className="text-left px-4 py-3 w-40">Sana / Vaqt</th>
-                      <th className="text-left px-4 py-3">Yo'nalish</th>
-                      <th className="text-left px-4 py-3">Kontragent</th>
-                      <th className="text-left px-4 py-3">Bank · Hisob</th>
-                      <th className="text-left px-4 py-3">Holat</th>
-                      <th className="text-right px-4 py-3">Summa</th>
+                      <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
+                      <th className="text-left px-4 py-3">{t('directionHeader')}</th>
+                      <th className="text-left px-4 py-3">{t('counterpartyHeader')}</th>
+                      <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
+                      <th className="text-left px-4 py-3">{t('statusHeader')}</th>
+                      <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filtered!.map((it: any) => {
-                      const match = MATCH_CONFIG[it.matchStatus || 'UNMATCHED'];
+                      const matchKey = it.matchStatus || 'UNMATCHED';
+                      const match = { label: tp(MATCH_KEYS[matchKey]), cls: MATCH_CLS[matchKey] };
                       const counterparty = it.direction === 'IN'
                         ? { name: it.fromName || '—', meta: it.fromInn || '' }
                         : { name: it.toName || '—', meta: it.toAccount || '' };
@@ -510,8 +519,8 @@ export default function TransactionsPage() {
                                 : "bg-rose-50 text-rose-700 ring-rose-200",
                             )}>
                               {it.direction === 'IN'
-                                ? <><ArrowDownLeft className="h-3 w-3" /> Kirim</>
-                                : <><ArrowUpRight className="h-3 w-3" /> Chiqim</>}
+                                ? <><ArrowDownLeft className="h-3 w-3" /> {t('dirIn')}</>
+                                : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
                             </span>
                           </td>
                           <td className="px-4 py-3 max-w-[280px]">
@@ -568,22 +577,22 @@ export default function TransactionsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => setDetailRow(it)}>
-                                    <Eye className="h-4 w-4 mr-2" /> Tafsilot
+                                    <Eye className="h-4 w-4 mr-2" /> {t('openDetail')}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   {it.matchStatus !== 'AUTO' && it.matchStatus !== 'MANUAL' && (
                                     <DropdownMenuItem onClick={() => autoMatchMut.mutate(it.id)}>
-                                      <Wand2 className="h-4 w-4 mr-2" /> Avto-match (INN)
+                                      <Wand2 className="h-4 w-4 mr-2" /> {t('autoMatchInn')}
                                     </DropdownMenuItem>
                                   )}
                                   {(it.matchStatus === 'AUTO' || it.matchStatus === 'MANUAL' || it.matchStatus === 'PARTIAL') && (
                                     <DropdownMenuItem onClick={() => unlinkMut.mutate(it.id)}>
-                                      <Link2Off className="h-4 w-4 mr-2" /> Bog'lanishni olib tashlash
+                                      <Link2Off className="h-4 w-4 mr-2" /> {t('unlinkAction')}
                                     </DropdownMenuItem>
                                   )}
                                   {it.matchStatus !== 'IGNORED' && (
                                     <DropdownMenuItem onClick={() => ignoreMut.mutate(it.id)}>
-                                      <EyeOff className="h-4 w-4 mr-2" /> E'tiborsiz qoldirish
+                                      <EyeOff className="h-4 w-4 mr-2" /> {t('ignoreAction')}
                                     </DropdownMenuItem>
                                   )}
                                 </DropdownMenuContent>
@@ -608,7 +617,7 @@ export default function TransactionsPage() {
         {data && data.total > 0 && (
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-700 tabular-nums">{((page - 1) * perPage) + 1}–{Math.min(page * perPage, data.total)}</span> / {data.total} ta tranzaksiya
+              <span className="font-semibold text-slate-700 tabular-nums">{((page - 1) * perPage) + 1}–{Math.min(page * perPage, data.total)}</span> / {t('ofTotal', { n: data.total })}
             </div>
             <div className="flex items-center gap-3">
               <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
@@ -616,10 +625,10 @@ export default function TransactionsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">10/sahifa</SelectItem>
-                  <SelectItem value="25">25/sahifa</SelectItem>
-                  <SelectItem value="50">50/sahifa</SelectItem>
-                  <SelectItem value="100">100/sahifa</SelectItem>
+                  <SelectItem value="10">{t('perPage', { n: 10 })}</SelectItem>
+                  <SelectItem value="25">{t('perPage', { n: 25 })}</SelectItem>
+                  <SelectItem value="50">{t('perPage', { n: 50 })}</SelectItem>
+                  <SelectItem value="100">{t('perPage', { n: 100 })}</SelectItem>
                 </SelectContent>
               </Select>
               <div className="flex items-center gap-1">
@@ -653,10 +662,10 @@ export default function TransactionsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Hash className="h-4 w-4 text-indigo-600" /> Tranzaksiya ID orqali qidirish
+              <Hash className="h-4 w-4 text-indigo-600" /> {t('idDialogTitle')}
             </DialogTitle>
             <DialogDescription>
-              To'liq tranzaksiya ID'ni kiriting — topilsa, tafsilot oynasi ochiladi
+              {t('idDialogDesc')}
             </DialogDescription>
           </DialogHeader>
           <div className="flex items-center gap-2">
@@ -665,11 +674,11 @@ export default function TransactionsPage() {
               value={idQuery}
               onChange={(e) => setIdQuery(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') searchById(); }}
-              placeholder="masalan: 60101234_5_20260514_..."
+              placeholder={t('idDialogPlaceholder')}
               className="font-mono text-xs"
             />
             <Button onClick={searchById} disabled={idSearching || !idQuery.trim()} className="shrink-0">
-              {idSearching ? '...' : 'Topish'}
+              {idSearching ? '...' : t('findBtn')}
             </Button>
           </div>
         </DialogContent>
@@ -1074,9 +1083,12 @@ function FilterChip({
 }
 
 function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => void }) {
+  const t = useTranslations('transactions');
+  const tp = useTranslations('payments');
   if (!row) return null;
   const isIn = row.direction === 'IN';
-  const match = MATCH_CONFIG[row.matchStatus || 'UNMATCHED'];
+  const matchKey = row.matchStatus || 'UNMATCHED';
+  const match = { label: tp(MATCH_KEYS[matchKey]), cls: MATCH_CLS[matchKey] };
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
@@ -1092,7 +1104,7 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
                   {isIn ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
-                  {isIn ? 'KIRIM' : 'CHIQIM'}
+                  {isIn ? t('detailIncoming') : t('detailOutgoing')}
                 </span>
                 <span className="text-[11px] text-white/80 tabular-nums">
                   {formatDate(row.txnDate)}{row.operationTime ? ` · ${row.operationTime}` : ''}
@@ -1134,30 +1146,30 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
           </div>
 
           {/* Yuboruvchi */}
-          <DetailSection title="Yuboruvchi" icon={ArrowUpRight} highlighted={!isIn} tone="rose">
-            <CopyRow label="Nomi" value={row.fromName || '—'} />
-            <CopyRow label="STIR" value={row.fromInn} mono copyable />
-            <CopyRow label="Hisob raqami" value={row.fromAccount} mono copyable />
-            <CopyRow label="Bank MFO" value={row.fromMfo} mono />
+          <DetailSection title={t('detailSender')} icon={ArrowUpRight} highlighted={!isIn} tone="rose">
+            <CopyRow label={t('detailFieldName')} value={row.fromName || '—'} />
+            <CopyRow label={t('detailFieldInn')} value={row.fromInn} mono copyable />
+            <CopyRow label={t('detailFieldAccount')} value={row.fromAccount} mono copyable />
+            <CopyRow label={t('detailFieldMfo')} value={row.fromMfo} mono />
           </DetailSection>
 
           {/* Qabul qiluvchi */}
-          <DetailSection title="Qabul qiluvchi" icon={ArrowDownLeft} highlighted={isIn} tone="emerald">
-            <CopyRow label="Nomi" value={row.toName || '—'} />
-            <CopyRow label="STIR" value={row.toInn} mono copyable />
-            <CopyRow label="Hisob raqami" value={row.toAccount} mono copyable />
-            <CopyRow label="Bank MFO" value={row.toMfo} mono />
+          <DetailSection title={t('detailReceiver')} icon={ArrowDownLeft} highlighted={isIn} tone="emerald">
+            <CopyRow label={t('detailFieldName')} value={row.toName || '—'} />
+            <CopyRow label={t('detailFieldInn')} value={row.toInn} mono copyable />
+            <CopyRow label={t('detailFieldAccount')} value={row.toAccount} mono copyable />
+            <CopyRow label={t('detailFieldMfo')} value={row.toMfo} mono />
           </DetailSection>
 
           {/* To'lov maqsadi */}
           {row.description && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">To'lov maqsadi</div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{t('detailPaymentPurpose')}</div>
               <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
                 <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap">{row.description.trim()}</div>
                 {row.purposeCode && (
                   <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
-                    Maqsad kodi: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
+                    {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
                   </div>
                 )}
               </div>
@@ -1165,33 +1177,33 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
           )}
 
           {/* Vaqt ma'lumotlari */}
-          <DetailSection title="Vaqt ma'lumotlari" icon={Calendar}>
-            <CopyRow label="Hujjat sanasi" value={formatDate(row.txnDate)} />
-            <CopyRow label="Operatsiya vaqti" value={row.operationTime} mono />
+          <DetailSection title={t('detailTime')} icon={Calendar}>
+            <CopyRow label={t('detailDocDate')} value={formatDate(row.txnDate)} />
+            <CopyRow label={t('detailOpTime')} value={row.operationTime} mono />
             <CopyRow
-              label="Value date"
+              label={t('detailValueDate')}
               value={row.valueDate ? formatDate(row.valueDate) : undefined}
             />
-            <CopyRow label="Settlement vaqti" value={row.settlementTime} mono />
+            <CopyRow label={t('detailSettlement')} value={row.settlementTime} mono />
             <CopyRow
-              label="Kiritilgan"
+              label={t('detailInput')}
               value={row.inputAt ? formatDateTime(row.inputAt) : undefined}
             />
           </DetailSection>
 
           {/* Tizim ma'lumotlari */}
-          <DetailSection title="Tizim ma'lumotlari" icon={Hash}>
-            <CopyRow label="Bank" value={row.account?.bank?.name || '—'} />
-            <CopyRow label="Mahalliy hisob" value={row.account?.accountNo} mono copyable />
-            <CopyRow label="B2 ID" value={row.bankB2Id} mono copyable />
-            <CopyRow label="Global ID (NCI)" value={row.bankGeneralId} mono copyable />
-            {row.bankClientId && <CopyRow label="Klient ID" value={row.bankClientId} mono />}
-            {row.docType && <CopyRow label="Hujjat turi" value={row.docType} mono />}
+          <DetailSection title={t('detailSystem')} icon={Hash}>
+            <CopyRow label={t('bank')} value={row.account?.bank?.name || '—'} />
+            <CopyRow label={t('detailLocalAccount')} value={row.account?.accountNo} mono copyable />
+            <CopyRow label={t('detailB2')} value={row.bankB2Id} mono copyable />
+            <CopyRow label={t('detailGlobalId')} value={row.bankGeneralId} mono copyable />
+            {row.bankClientId && <CopyRow label={t('detailClientId')} value={row.bankClientId} mono />}
+            {row.docType && <CopyRow label={t('detailDocType')} value={row.docType} mono />}
           </DetailSection>
 
           {/* Tranzaksiya ID — to'liq, alohida blok */}
           <div>
-            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">Tranzaksiya ID (composite)</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{t('detailComposite')}</div>
             <CopyBlock value={row.externalId || row.id} />
           </div>
 
@@ -1199,11 +1211,11 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
           {(row.metadata || row.rawExtra) && (
             <details className="rounded-xl border border-slate-200 overflow-hidden">
               <summary className="px-4 py-2.5 cursor-pointer text-[10px] font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 uppercase tracking-[0.15em]">
-                <FileText className="h-3.5 w-3.5" /> Bankdan kelgan to'liq JSON
+                <FileText className="h-3.5 w-3.5" /> {t('detailFullJson')}
               </summary>
               <div className="px-4 py-3 bg-slate-50/60 space-y-3">
-                {row.metadata && <RawJsonBlock label="Raw javob (metadata)" data={row.metadata} />}
-                {row.rawExtra && <RawJsonBlock label="Qo'shimcha fieldlar (rawExtra)" data={row.rawExtra} />}
+                {row.metadata && <RawJsonBlock label={t('detailRawMeta')} data={row.metadata} />}
+                {row.rawExtra && <RawJsonBlock label={t('detailRawExtra')} data={row.rawExtra} />}
               </div>
             </details>
           )}
@@ -1214,6 +1226,7 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
 }
 
 function RawJsonBlock({ label, data }: { label: string; data: any }) {
+  const t = useTranslations('transactions');
   const [copied, setCopied] = useState(false);
   const str = JSON.stringify(data, null, 2);
   function copy() {
@@ -1229,7 +1242,7 @@ function RawJsonBlock({ label, data }: { label: string; data: any }) {
           onClick={copy}
           className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-900"
         >
-          {copied ? <><Check className="h-3 w-3 text-emerald-600" /> Nusxalandi</> : <><Copy className="h-3 w-3" /> Nusxalash</>}
+          {copied ? <><Check className="h-3 w-3 text-emerald-600" /> {t('copied')}</> : <><Copy className="h-3 w-3" /> {t('copy')}</>}
         </button>
       </div>
       <pre className="p-2.5 bg-slate-900 text-slate-100 rounded-lg text-[10px] font-mono leading-relaxed overflow-x-auto max-h-64 overflow-y-auto">
@@ -1248,6 +1261,7 @@ function DetailSection({
   tone?: 'rose' | 'emerald';
   children: React.ReactNode;
 }) {
+  const t = useTranslations('transactions');
   const ring = highlighted
     ? tone === 'emerald' ? 'ring-emerald-200 bg-emerald-50/50' : 'ring-rose-200 bg-rose-50/50'
     : 'ring-slate-200 bg-slate-50/60';
@@ -1255,7 +1269,7 @@ function DetailSection({
     <div>
       <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
         <Icon className="h-3 w-3" /> {title}
-        {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· SIZ</span>}
+        {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· {t('detailYou')}</span>}
       </div>
       <div className={cn("rounded-xl ring-1 px-4 py-2.5 divide-y divide-slate-100/80", ring)}>
         {children}
@@ -1265,6 +1279,7 @@ function DetailSection({
 }
 
 function CopyRow({ label, value, mono, copyable }: { label: string; value?: string; mono?: boolean; copyable?: boolean }) {
+  const t = useTranslations('transactions');
   const [copied, setCopied] = useState(false);
   const isEmpty = !value || value === '—';
 
@@ -1272,7 +1287,7 @@ function CopyRow({ label, value, mono, copyable }: { label: string; value?: stri
     if (isEmpty) return;
     navigator.clipboard.writeText(value!);
     setCopied(true);
-    toast.success(`${label} nusxalandi`);
+    toast.success(t('labelCopied', { label }));
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -1285,13 +1300,13 @@ function CopyRow({ label, value, mono, copyable }: { label: string; value?: stri
           mono && 'font-mono text-[12px]',
           isEmpty && 'text-slate-400 italic',
         )}>
-          {isEmpty ? "bo'sh" : value}
+          {isEmpty ? t('empty') : value}
         </div>
         {copyable && !isEmpty && (
           <button
             onClick={copy}
             className="shrink-0 p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all"
-            title="Nusxalash"
+            title={t('copy')}
           >
             {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
@@ -1303,11 +1318,12 @@ function CopyRow({ label, value, mono, copyable }: { label: string; value?: stri
 
 // To'liq qiymat — wrap qilingan, copy tugmasi bilan (uzun ID lar uchun)
 function CopyBlock({ value }: { value: string }) {
+  const t = useTranslations('transactions');
   const [copied, setCopied] = useState(false);
   function copy() {
     navigator.clipboard.writeText(value);
     setCopied(true);
-    toast.success('Tranzaksiya ID nusxalandi');
+    toast.success(t('txIdCopied'));
     setTimeout(() => setCopied(false), 1500);
   }
   return (
@@ -1318,7 +1334,7 @@ function CopyBlock({ value }: { value: string }) {
       <button
         onClick={copy}
         className="shrink-0 p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors"
-        title="Nusxalash"
+        title={t('copy')}
       >
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
