@@ -5,8 +5,9 @@ import { useState } from 'react';
 import { XonSaroyLogo } from '@/components/xon-saroy-logo';
 
 /**
- * Showcase — marketing hero.
+ * Showcase — marketing hero (Storyset SVG variant).
  * Chap: matn + CTA. O'ng: Storyset illustration + atrofidagi subtle animatsiyalar.
+ * Yuqori navda Plan / Risk switcher orqali illustration almashtiriladi.
  */
 export default function ShowcasePage() {
   const [variant, setVariant] = useState<'plan' | 'risk'>('plan');
