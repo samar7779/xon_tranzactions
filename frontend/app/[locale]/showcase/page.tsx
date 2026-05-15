@@ -11,6 +11,8 @@ import { useEffect, useRef, useState } from 'react';
 export default function ShowcasePage() {
   const [bal, setBal] = useState(0);
   const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
+  const [dashHover, setDashHover] = useState(false);
+  const [dashPress, setDashPress] = useState(false);
 
   // Balance counter — 0 dan target gacha
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function ShowcasePage() {
   return (
     <div
       className="relative w-screen h-screen overflow-hidden text-white
-                 bg-[radial-gradient(ellipse_at_center,#1a2d63_0%,#0a1428_50%,#040810_100%)]"
+                 bg-[radial-gradient(ellipse_at_center,#2d4a8a_0%,#162a55_45%,#0a162e_100%)]"
       onMouseMove={onMove}
       onMouseLeave={onLeave}
     >
@@ -97,11 +99,24 @@ export default function ShowcasePage() {
           {/* 3D dashboard */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
             <div
-              className="relative w-full max-w-[820px]"
+              className="relative w-full max-w-[820px] cursor-pointer"
+              onMouseEnter={() => setDashHover(true)}
+              onMouseLeave={() => { setDashHover(false); setDashPress(false); }}
+              onMouseDown={() => setDashPress(true)}
+              onMouseUp={() => setDashPress(false)}
               style={{
-                transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+                transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) ${
+                  dashPress ? 'translateZ(70px) scale(1.04)'
+                  : dashHover ? 'translateZ(110px) scale(1.06)'
+                  : 'translateZ(0) scale(1)'
+                }`,
                 transformStyle: 'preserve-3d',
-                transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+                transition: dashPress
+                  ? 'transform 0.12s ease-out'
+                  : 'transform 0.45s cubic-bezier(0.22, 1, 0.36, 1)',
+                filter: dashHover
+                  ? 'drop-shadow(0 60px 80px rgba(0,0,0,0.5)) drop-shadow(0 0 60px rgba(245,158,11,0.25))'
+                  : 'drop-shadow(0 0 0 rgba(0,0,0,0))',
               }}
             >
               <div className="absolute -inset-3 rounded-3xl bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/20 blur-3xl -z-10" />
@@ -148,11 +163,7 @@ export default function ShowcasePage() {
                   {/* Chap: balance + 2 chart */}
                   <div className="col-span-7 space-y-3" style={{ transformStyle: 'preserve-3d' }}>
                     {/* TOTAL BALANCE — hero element */}
-                    <div className="group rounded-2xl bg-gradient-to-br from-slate-900/85 to-slate-800/55 ring-1 ring-white/10 p-4 relative overflow-hidden
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/70 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.5)]
-                                    hover:[transform:translateZ(70px)_scale(1.05)]
-                                    active:[transform:translateZ(40px)_scale(1.02)] active:duration-100">
+                    <div className="rounded-2xl bg-gradient-to-br from-slate-900/85 to-slate-800/55 ring-1 ring-white/10 p-4 relative overflow-hidden">
                       <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-amber-400/15 blur-3xl" />
                       <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full bg-cyan-400/12 blur-3xl" />
                       <div className="relative flex items-start justify-between gap-3">
@@ -178,12 +189,7 @@ export default function ShowcasePage() {
                     </div>
 
                     {/* Payment analytics */}
-                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-cyan-400/70 hover:shadow-[0_40px_80px_-10px_rgba(34,211,238,0.5)]
-                                    hover:bg-white/[0.06]
-                                    hover:[transform:translateZ(70px)_scale(1.05)]
-                                    active:[transform:translateZ(40px)_scale(1.02)] active:duration-100">
+                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Payment analytics</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Auraeoce ▾</span>
@@ -210,12 +216,7 @@ export default function ShowcasePage() {
                     </div>
 
                     {/* Transaction finance bars */}
-                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/70 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.5)]
-                                    hover:bg-white/[0.06]
-                                    hover:[transform:translateZ(70px)_scale(1.06)]
-                                    active:[transform:translateZ(40px)_scale(1.03)] active:duration-100">
+                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-[11px] font-semibold">Transaction finance</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Aqvdcoin ▾</span>
@@ -227,12 +228,7 @@ export default function ShowcasePage() {
                     </div>
 
                     {/* Secure Banking */}
-                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3 flex items-center gap-2.5
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-emerald-400/70 hover:shadow-[0_40px_80px_-10px_rgba(52,211,153,0.5)]
-                                    hover:bg-white/[0.06]
-                                    hover:[transform:translateZ(70px)_scale(1.06)]
-                                    active:[transform:translateZ(40px)_scale(1.03)] active:duration-100">
+                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3 flex items-center gap-2.5">
                       <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
                                       shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-2px_rgba(245,158,11,0.5)]">
                         <ShieldIcon />
@@ -248,11 +244,7 @@ export default function ShowcasePage() {
 
                     {/* Credit card — holographic */}
                     <div className="relative rounded-2xl p-3.5 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 text-slate-900
-                                    ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400 hover:shadow-[0_45px_90px_-10px_rgba(245,158,11,0.7)]
-                                    hover:[transform:translateZ(85px)_scale(1.08)_rotateZ(-1deg)]
-                                    active:[transform:translateZ(50px)_scale(1.04)] active:duration-100">
+                                    ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden">
                       <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
                       <div className="relative flex items-center justify-between">
                         <LogoDisc size={28} rounded="rounded-full" />
