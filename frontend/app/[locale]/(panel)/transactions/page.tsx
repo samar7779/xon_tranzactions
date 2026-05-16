@@ -2140,93 +2140,144 @@ function CategoryEditDialog({
   onSave: (categoryId: string | null, subcategoryId: string | null) => void;
   saving: boolean;
 }) {
+  // Daraxt ko'rinishida: bitta marta bosish — TOP yoki SUB tanlanadi
+  // Parent <-> child bog'lanishi avtomatik (sub tanlansa, top auto)
   const [selectedTopId, setSelectedTopId] = useState<string | null>(null);
   const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const [filter, setFilter] = useState('');
 
   useEffect(() => {
     if (row) {
       setSelectedTopId(row.categoryId || null);
       setSelectedSubId(row.subcategoryId || null);
+      setFilter('');
     }
   }, [row?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!row) return null;
-  const selectedTop = tree.find((t) => t.id === selectedTopId);
-  const subs = selectedTop?.children || [];
+
+  const filterLower = filter.trim().toLowerCase();
+  // Tree'ni filter bo'yicha kesib chiqamiz — parent yoki child mos kelsa parent qoladi
+  const visible = filterLower
+    ? tree
+        .map((t) => {
+          const matchTop = t.name.toLowerCase().includes(filterLower);
+          const matchedChildren = (t.children || []).filter((s: any) => s.name.toLowerCase().includes(filterLower));
+          if (matchTop) return t; // hammasi ko'rinadi
+          if (matchedChildren.length > 0) return { ...t, children: matchedChildren };
+          return null;
+        })
+        .filter(Boolean)
+    : tree;
+
+  function pickTop(t: any) {
+    // Top'ni tanlash → sub null bo'ladi (top alohida holatda)
+    setSelectedTopId(t.id);
+    setSelectedSubId(null);
+  }
+  function pickSub(t: any, s: any) {
+    // Sub'ni tanlash → top avtomatik parent'idan
+    setSelectedTopId(t.id);
+    setSelectedSubId(s.id);
+  }
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Wand2 className="h-4 w-4 text-indigo-600" /> Kategoriya tanlash
           </DialogTitle>
           <DialogDescription>
-            Tranzaksiya: <span className="font-mono text-[11px]">{row.id?.slice(0, 8)}…</span>
+            Bevosita subkategoriyani tanlasangiz, ota-kategoriya avtomatik belgilanadi
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2 block">
-              Top kategoriya
-            </label>
-            <div className="grid grid-cols-2 gap-1.5">
-              {tree.map((c) => {
-                const selected = selectedTopId === c.id;
-                const color = c.color || '#64748b';
-                return (
-                  <button
-                    key={c.id}
-                    onClick={() => { setSelectedTopId(c.id); setSelectedSubId(null); }}
-                    className={cn(
-                      'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
-                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300',
-                    )}
-                    style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
-                  >
-                    {c.name}
-                  </button>
-                );
-              })}
-            </div>
+        <div className="space-y-3">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Qidirish... (masalan: vznosy, ndfl, salary)"
+              className="pl-9 h-9"
+            />
           </div>
 
-          {selectedTop && subs.length > 0 && (
-            <div>
-              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2 block">
-                Subkategoriya (ixtiyoriy)
-              </label>
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  onClick={() => setSelectedSubId(null)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                    !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
-                  )}
-                >
-                  — yo'q —
-                </button>
-                {subs.map((s: any) => {
-                  const selected = selectedSubId === s.id;
-                  const color = selectedTop.color || '#64748b';
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => setSelectedSubId(s.id)}
-                      className={cn(
-                        'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                        selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300',
-                      )}
-                      style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
-                    >
-                      {s.name}
-                    </button>
-                  );
-                })}
+          {/* Tree */}
+          <div className="max-h-[400px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+            {visible.length === 0 && (
+              <div className="px-4 py-6 text-center text-[11px] text-slate-400 italic">
+                Hech narsa topilmadi
               </div>
-            </div>
-          )}
+            )}
+            {visible.map((t: any) => {
+              const topSelected = selectedTopId === t.id && !selectedSubId;
+              const color = t.color || '#64748b';
+              const hasChildren = (t.children || []).length > 0;
+              return (
+                <div key={t.id}>
+                  {/* Top kategoriya */}
+                  <button
+                    onClick={() => pickTop(t)}
+                    className={cn(
+                      'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors',
+                      topSelected && 'bg-indigo-50',
+                    )}
+                    style={topSelected ? { backgroundColor: `${color}12` } : {}}
+                  >
+                    <span className="font-semibold text-[12px]" style={{ color: topSelected ? color : undefined }}>
+                      {t.name}
+                    </span>
+                    {topSelected && <CheckCircle2 className="h-3.5 w-3.5" style={{ color }} />}
+                    {!hasChildren && !topSelected && (
+                      <span className="text-[9px] text-slate-400 uppercase tracking-wider">tanlash</span>
+                    )}
+                  </button>
+                  {/* Subkategoriyalar */}
+                  {hasChildren && (t.children || []).map((s: any) => {
+                    const subSelected = selectedSubId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => pickSub(t, s)}
+                        className={cn(
+                          'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 transition-colors',
+                          subSelected && 'bg-indigo-50',
+                        )}
+                        style={subSelected ? { backgroundColor: `${color}12` } : {}}
+                      >
+                        <span className="text-slate-700" style={subSelected ? { color, fontWeight: 600 } : {}}>
+                          ↳ {s.name}
+                        </span>
+                        {subSelected && <CheckCircle2 className="h-3 w-3" style={{ color }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Selected preview */}
+          {(selectedTopId || selectedSubId) && (() => {
+            const top = tree.find((t) => t.id === selectedTopId);
+            const sub = top?.children?.find((s: any) => s.id === selectedSubId);
+            const color = top?.color || '#64748b';
+            return (
+              <div className="rounded-lg p-2 ring-1 ring-indigo-200 bg-indigo-50/50 text-[11px]">
+                <span className="text-slate-500">Tanlangan: </span>
+                <span className="font-semibold" style={{ color }}>{top?.name}</span>
+                {sub && (
+                  <>
+                    <span className="text-slate-400 mx-1">/</span>
+                    <span className="font-semibold" style={{ color }}>{sub.name}</span>
+                  </>
+                )}
+              </div>
+            );
+          })()}
 
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <button
