@@ -4,6 +4,7 @@ import { Response } from 'express';
 import { TransactionsService } from './transactions.service';
 import { StatementService } from './statement.service';
 import { ReconcileService } from './reconcile.service';
+import { InspectorService } from './inspector.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -18,7 +19,14 @@ export class TransactionsController {
     private readonly svc: TransactionsService,
     private readonly statementSvc: StatementService,
     private readonly reconcileSvc: ReconcileService,
+    private readonly inspectorSvc: InspectorService,
   ) {}
+
+  @Post('inspect-id')
+  @ApiOperation({ summary: "Composite ID'ni parse qilib, bankdan o'sha tranzaksiyani so'raydi (DB tekshirilmaydi)" })
+  inspectId(@Body() body: { id: string }) {
+    return this.inspectorSvc.lookupFromBank(body?.id);
+  }
 
   @Get()
   @ApiOperation({ summary: "Tranzaksiyalar ro'yxati (filter + pagination)" })
