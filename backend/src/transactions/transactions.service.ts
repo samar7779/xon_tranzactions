@@ -101,14 +101,24 @@ export class TransactionsService {
     }
 
     // contractStatuses / contractNumbers — shartnoma raqamlari (vergul bilan)
-    // __NONE__ alohida ko'rib chiqiladi (NULL contractNumber)
+    // Maxsus qiymatlar:
+    //   __NONE__ — NULL contractNumber (shartnomasi yo'q)
+    //   __XATO__ — contractNumber bor lekin CrmContract'da topilmagan (xato)
     const csList = this.parseList(contractStatuses);
     if (csList) {
       const includeNone = csList.includes('__NONE__');
-      const nums = csList.filter((s) => s !== '__NONE__');
+      const includeXato = csList.includes('__XATO__');
+      const nums = csList.filter((s) => s !== '__NONE__' && s !== '__XATO__');
       const conds: any[] = [];
       if (nums.length > 0) conds.push({ contractNumber: { in: nums } });
       if (includeNone) conds.push({ contractNumber: null });
+      // __XATO__ — Prisma'da to'g'ridan-to'g'ri JOIN yo'q, shuning uchun Set yondashuvi:
+      // Bu yerda faqat 'contractNumber not null' qo'shamiz, post-filter qilamiz
+      // (haqiqiy aniq emas, lekin verifiedSet ham yetishishi mumkin emas list endpoint'da)
+      // Yaxshiroq: maxsus marker'ni keyin (this.list ichida) qayta ishlaymiz
+      if (includeXato) {
+        (where as any).__xato_requested = true;
+      }
       if (conds.length > 0) {
         if (where.OR) where.AND = [{ OR: where.OR }, { OR: conds }];
         else where.OR = conds;
@@ -118,9 +128,39 @@ export class TransactionsService {
     return where;
   }
 
+  /**
+   * __xato_requested marker bo'lsa, verified contractNumber'larni topib OR shartiga qo'shamiz.
+   * (buildWhere'da JOIN qilolmaymiz, shuning uchun bu yerda alohida ishlaymiz)
+   */
+  private async applyXatoFilter(where: any): Promise<any> {
+    if (!where.__xato_requested) return where;
+    delete where.__xato_requested;
+    // Verified shartnomalar ro'yxati
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedList = verified.map((c) => c.contractNumber);
+    // Xato shart: contractNumber bor + verified ro'yxatda yo'q
+    const xatoCond = {
+      AND: [{ contractNumber: { not: null } }, { contractNumber: { notIn: verifiedList } }],
+    };
+    // Mavjud OR'ga qo'shamiz
+    if (where.OR) {
+      where.OR.push(xatoCond);
+    } else if (where.AND) {
+      // AND ichida OR bo'lishi mumkin — kerak bo'lsa qayta yig'amiz
+      where.OR = [xatoCond];
+    } else {
+      where.OR = [xatoCond];
+    }
+    return where;
+  }
+
   async list(query: ListTransactionsDto) {
     const { page = 1, perPage = 50 } = query;
-    const where = this.buildWhere(query);
+    let where = this.buildWhere(query);
+    where = await this.applyXatoFilter(where);
 
     const [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),
@@ -232,8 +272,9 @@ export class TransactionsService {
   /**
    * Ustun bo'yicha distinct qiymatlar — Google Sheets stilida filter uchun.
    * Boshqa filterlar (dateFrom/To, q, va h.k.) inobatga olinadi.
+   * @param search — qisman matn bo'yicha qidirish (limit'dan tashqarisini topish uchun)
    */
-  async distinctValues(column: string, query: ListTransactionsDto): Promise<{ ok: true; values: Array<{ id: string; name: string }> }> {
+  async distinctValues(column: string, query: ListTransactionsDto, search?: string): Promise<{ ok: true; values: Array<{ id: string; name: string }> }> {
     const where = this.buildWhere({ ...query, [`${column}Ids`]: undefined }); // o'zining filterini olib tashlash
 
     switch (column) {
@@ -276,35 +317,56 @@ export class TransactionsService {
       }
       case 'contractStatus':
       case 'contractNumber': {
-        // Distinct shartnoma raqamlari + CRM holati (xato/verified)
+        // Faqat VERIFIED shartnomalar individual ko'rsatiladi (mijoz bergan xato raqamlar emas)
+        // Xato bo'lganlar bitta "__XATO__" entry'siga guruhlanadi
+        // search bo'lsa, filter qilamiz (limit 500 dan ortig'ini ham topadi)
+
+        // 1) Verified shartnomalar — CrmContract found=true bo'lgan
+        const verifiedRows = await this.prisma.crmContract.findMany({
+          where: { found: true },
+          select: { contractNumber: true, customerName: true },
+        });
+        const verifiedSet = new Set(verifiedRows.map((c) => c.contractNumber));
+
+        // 2) Tranzaksiyalardagi distinct contractNumber'lar (search bilan filter)
+        const txWhere: any = { ...where, contractNumber: { not: null } };
+        if (search) {
+          // Search — case-insensitive contains
+          txWhere.contractNumber = { not: null, contains: search.toUpperCase(), mode: 'insensitive' };
+        }
         const txs = await this.prisma.transaction.findMany({
-          where: { ...where, contractNumber: { not: null } },
+          where: txWhere,
           distinct: ['contractNumber'],
           select: { contractNumber: true },
           orderBy: { contractNumber: 'asc' },
-          take: 500,
+          take: search ? 100 : 500,
         });
-        const contracts = txs.map((t) => t.contractNumber!).filter(Boolean);
-        // CRM kesh — verified/xato statusi
-        const crmRows = contracts.length > 0
-          ? await this.prisma.crmContract.findMany({
-              where: { contractNumber: { in: contracts } },
-              select: { contractNumber: true, found: true },
-            })
-          : [];
-        const crmMap = new Map(crmRows.map((c) => [c.contractNumber, c.found]));
-        const values = contracts.map((c) => {
-          const found = crmMap.get(c);
-          // found=false → xato; found=true → verified; map'da yo'q → noma'lum
-          const tag = found === false ? ' (xato)' : '';
-          return { id: c, name: `${c}${tag}` };
+        const allUsedContracts = txs.map((t) => t.contractNumber!).filter(Boolean);
+
+        // Tranzaksiyalarda ishlatilgan verified shartnomalar (mijoz nomi bilan)
+        const usedVerified = allUsedContracts.filter((c) => verifiedSet.has(c));
+        const customerMap = new Map(verifiedRows.map((c) => [c.contractNumber, c.customerName]));
+        const values: Array<{ id: string; name: string }> = usedVerified.map((c) => {
+          const cust = customerMap.get(c);
+          return { id: c, name: cust ? `${c} — ${cust.slice(0, 40)}` : c };
         });
-        // (Bo'sh — shartnomasi yo'q)
-        const anyEmpty = await this.prisma.transaction.findFirst({
-          where: { ...where, contractNumber: null },
-          select: { id: true },
-        });
-        if (anyEmpty) values.unshift({ id: '__NONE__', name: "— Shartnoma yo'q" });
+
+        // 3) Xato (unverified) bo'lganlar — bittagina entry
+        const hasUnverified = allUsedContracts.some((c) => !verifiedSet.has(c));
+        if (hasUnverified && !search) {
+          const unverifiedCount = allUsedContracts.filter((c) => !verifiedSet.has(c)).length;
+          values.unshift({ id: '__XATO__', name: `⚠ Xato (CRM tasdiqlamagan, ${unverifiedCount} ta)` });
+        }
+
+        // 4) Bo'sh (shartnomasi yo'q)
+        if (!search) {
+          const anyEmpty = await this.prisma.transaction.findFirst({
+            where: { ...where, contractNumber: null },
+            select: { id: true },
+          });
+          if (anyEmpty) values.unshift({ id: '__NONE__', name: "— Shartnoma yo'q" });
+        }
+
         return { ok: true, values };
       }
       case 'hisobNomi': {

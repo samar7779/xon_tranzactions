@@ -28,8 +28,12 @@ export class TransactionsController {
 
   @Get('distinct')
   @ApiOperation({ summary: "Ustun bo'yicha distinct qiymatlar (Google Sheets filter uchun)" })
-  distinct(@Query('column') column: string, @Query() q: ListTransactionsDto) {
-    return this.svc.distinctValues(column, q);
+  distinct(
+    @Query('column') column: string,
+    @Query('search') search: string | undefined,
+    @Query() q: ListTransactionsDto,
+  ) {
+    return this.svc.distinctValues(column, q, search);
   }
 
   @Get('stats')
