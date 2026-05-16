@@ -1901,11 +1901,21 @@ function ColumnFilterPopover({
   });
   const distinctList = distinctQuery.data?.values || [];
 
+  // Normalize: pastki harflar + O/0 + I/1 + S/5 + B/8 → bir xil ko'rinish
+  // (shartnoma raqamlarida foydalanuvchi 'O' yozsa ham '0' bo'lgan raqamni topa olsin)
+  function normalizeForSearch(s: string): string {
+    return s.toLowerCase()
+      .replace(/o/g, '0')
+      .replace(/i/g, '1')
+      .replace(/s/g, '5')
+      .replace(/b/g, '8');
+  }
+
   const allValues = useMemo(() => {
     const arr = distinctList.map((d) => ({ id: d.id, name: d.name }));
     if (!search.trim()) return arr;
-    const q = search.toLowerCase();
-    return arr.filter((v) => v.name.toLowerCase().includes(q));
+    const q = normalizeForSearch(search.trim());
+    return arr.filter((v) => normalizeForSearch(v.name).includes(q));
   }, [distinctList, search]);
 
   const allSelected = allValues.length > 0 && allValues.every((v) => localSelected.has(v.id));
@@ -1925,28 +1935,23 @@ function ColumnFilterPopover({
     setLocalSelected(next);
   }
 
-  // Klick tashqarida YOKI scroll bo'lsa — yopish
+  // Faqat tashqi click'da yopish — scroll'da yopilmasin (popover ichida ham scroll qilinadi)
   useEffect(() => {
     function handler(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (!target.closest('[data-col-filter]')) onClose();
     }
-    function onScroll() { onClose(); }
-    const t = setTimeout(() => {
-      document.addEventListener('mousedown', handler);
-      window.addEventListener('scroll', onScroll, true);
-    }, 0);
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 0);
     return () => {
       clearTimeout(t);
       document.removeEventListener('mousedown', handler);
-      window.removeEventListener('scroll', onScroll, true);
     };
   }, [onClose]);
 
   return (
     <div
       data-col-filter
-      className="absolute left-0 top-full mt-1 z-50 w-72 rounded-xl bg-white ring-1 ring-slate-200 shadow-xl normal-case tracking-normal font-normal"
+      className="absolute left-0 top-full mt-1 z-50 w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal"
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -1973,7 +1978,7 @@ function ColumnFilterPopover({
             className="pl-8 h-8 text-[12px]"
           />
         </div>
-        <div className="max-h-[220px] overflow-y-auto rounded-lg ring-1 ring-slate-100 divide-y divide-slate-50">
+        <div className="max-h-[340px] overflow-y-auto rounded-lg ring-1 ring-slate-100 divide-y divide-slate-50">
           {distinctQuery.isLoading ? (
             <div className="px-3 py-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-2">
               <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
