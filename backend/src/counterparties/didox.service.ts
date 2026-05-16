@@ -1,10 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-const DIDOX_BASE = process.env.DIDOX_BASE_URL || 'https://api.didox.uz';
-const DIDOX_LOGIN_INN = process.env.DIDOX_LOGIN_INN || '';
-const DIDOX_LOGIN_PASSWORD = process.env.DIDOX_LOGIN_PASSWORD || '';
-const DIDOX_PARTNER_AUTH = process.env.DIDOX_PARTNER_AUTH || '';
 const DIDOX_LOCALE = 'ru';
+
+// Env har chaqiruvda qaytadan o'qiladi — bir marta module yuklanganda
+// emas (deploy paytida .env keyin to'ldirilsa, restart kerak bo'lmasligi uchun).
+function env() {
+  return {
+    base: process.env.DIDOX_BASE_URL || 'https://api.didox.uz',
+    inn: process.env.DIDOX_LOGIN_INN || '',
+    password: process.env.DIDOX_LOGIN_PASSWORD || '',
+    partner: process.env.DIDOX_PARTNER_AUTH || '',
+  };
+}
 
 // User-key (UUID) 6 soat amal qiladi; xotirada keshlaymiz, 401'da qayta login.
 interface CachedToken { token: string; expiresAt: number }
@@ -15,7 +22,8 @@ export class DidoxService {
   private cached: CachedToken | null = null;
 
   isConfigured(): boolean {
-    return !!(DIDOX_LOGIN_INN && DIDOX_LOGIN_PASSWORD && DIDOX_PARTNER_AUTH);
+    const e = env();
+    return !!(e.inn && e.password && e.partner);
   }
 
   /** Mavjud token amal qilsa qaytaradi, aks holda qayta login qilib oladi */
@@ -23,14 +31,15 @@ export class DidoxService {
     if (!force && this.cached && this.cached.expiresAt > Date.now() + 60_000) {
       return this.cached.token;
     }
-    if (!this.isConfigured()) {
+    const e = env();
+    if (!e.inn || !e.password || !e.partner) {
       throw new Error('DIDOX env vars not configured (DIDOX_LOGIN_INN, DIDOX_LOGIN_PASSWORD, DIDOX_PARTNER_AUTH)');
     }
-    const url = `${DIDOX_BASE}/v1/auth/${encodeURIComponent(DIDOX_LOGIN_INN)}/password/${DIDOX_LOCALE}`;
+    const url = `${e.base}/v1/auth/${encodeURIComponent(e.inn)}/password/${DIDOX_LOCALE}`;
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({ password: DIDOX_LOGIN_PASSWORD }),
+      body: JSON.stringify({ password: e.password }),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -47,11 +56,12 @@ export class DidoxService {
   /** Auth header'lar bilan GET; 401'da qayta login qilib bir marta urinib ko'radi */
   private async authedGet(path: string, retried = false): Promise<any> {
     const token = await this.getToken();
-    const url = `${DIDOX_BASE}${path}`;
+    const e = env();
+    const url = `${e.base}${path}`;
     const res = await fetch(url, {
       headers: {
         'user-key': token,
-        'Partner-Authorization': DIDOX_PARTNER_AUTH,
+        'Partner-Authorization': e.partner,
         'Accept': 'application/json',
       },
     });
