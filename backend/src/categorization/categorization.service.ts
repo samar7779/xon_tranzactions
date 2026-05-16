@@ -480,12 +480,11 @@ export class CategorizationService {
       return this.ownAccountsCache.numbers;
     }
     const accs = await this.prisma.bankAccount.findMany({
-      where: { isActive: true },
-      select: { accountNumber: true },
+      select: { accountNo: true },
     });
     const set = new Set<string>();
     for (const a of accs) {
-      if (a.accountNumber) set.add(a.accountNumber.trim());
+      if (a.accountNo) set.add(a.accountNo.trim());
     }
     this.ownAccountsCache = { numbers: set, loadedAt: now };
     return set;
