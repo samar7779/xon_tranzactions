@@ -119,6 +119,7 @@ export default function CounterpartiesPage() {
       return api.get<{
         ok: boolean; total: number; page: number; perPage: number;
         items: Counterparty[]; didoxConfigured: boolean;
+        stats?: { total: number; activeVat: number; avgRating: number | null; ratedCount: number; lastFetchedAt: string | null };
       }>(`/counterparties?${p}`);
     },
   });
@@ -215,18 +216,15 @@ export default function CounterpartiesPage() {
   const didoxOk = listQuery.data?.didoxConfigured ?? true;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  // KPI
-  const kpis = useMemo(() => {
-    const activeVat = items.filter((i) => /активн|faol|active/i.test(i.vatStatus || '')).length;
-    const ratings = items.map((i) => i.rating).filter((r): r is number => typeof r === 'number');
-    const avgRating = ratings.length ? Math.round(ratings.reduce((a, b) => a + b, 0) / ratings.length) : 0;
-    const lastRefresh = items.reduce<string | null>((acc, it) => {
-      if (!it.lastFetchedAt) return acc;
-      if (!acc || it.lastFetchedAt > acc) return it.lastFetchedAt;
-      return acc;
-    }, null);
-    return { activeVat, avgRating, lastRefresh };
-  }, [items]);
+  // KPI — backend'dan global stats (butun DB bo'yicha, sahifa emas)
+  const stats = listQuery.data?.stats;
+  const kpis = {
+    total: stats?.total ?? total,
+    activeVat: stats?.activeVat ?? 0,
+    avgRating: stats?.avgRating ?? null,
+    ratedCount: stats?.ratedCount ?? 0,
+    lastRefresh: stats?.lastFetchedAt || null,
+  };
 
   // Bir soat ichida keyingi cron vaqti
   const nextCronText = useMemo(() => {
@@ -257,40 +255,27 @@ export default function CounterpartiesPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {canManage && (
                   <>
-                    <Button
-                      onClick={() => setAddOpen(true)}
-                      className="bg-white text-indigo-700 hover:bg-white/90 font-semibold gap-1.5 h-9"
-                    >
-                      <Plus className="h-4 w-4" /> {t('add')}
-                    </Button>
-                    <Button
-                      onClick={() => setImportOpen(true)}
-                      variant="outline"
-                      className="bg-white/15 hover:bg-white/25 text-white border-white/30 gap-1.5 h-9"
-                    >
-                      <Upload className="h-4 w-4" /> {t('import')}
-                    </Button>
+                    <IconBtn title={t('add')} onClick={() => setAddOpen(true)} primary>
+                      <Plus className="h-5 w-5" />
+                    </IconBtn>
+                    <IconBtn title={t('import')} onClick={() => setImportOpen(true)}>
+                      <Upload className="h-5 w-5" />
+                    </IconBtn>
                   </>
                 )}
-                <Button
-                  onClick={onExport}
-                  variant="outline"
-                  className="bg-white/15 hover:bg-white/25 text-white border-white/30 gap-1.5 h-9"
-                >
-                  <Download className="h-4 w-4" /> {t('export')}
-                </Button>
+                <IconBtn title={t('export')} onClick={onExport}>
+                  <Download className="h-5 w-5" />
+                </IconBtn>
                 {canManage && (
-                  <Button
+                  <IconBtn
+                    title={t('refreshAll')}
                     onClick={() => refreshAllMut.mutate()}
                     disabled={refreshAllMut.isPending}
-                    variant="outline"
-                    className="bg-white/15 hover:bg-white/25 text-white border-white/30 gap-1.5 h-9"
                   >
                     {refreshAllMut.isPending
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : <RefreshCw className="h-4 w-4" />}
-                    {t('refreshAll')}
-                  </Button>
+                      ? <Loader2 className="h-5 w-5 animate-spin" />
+                      : <RefreshCw className="h-5 w-5" />}
+                  </IconBtn>
                 )}
               </div>
             </div>
@@ -311,28 +296,34 @@ export default function CounterpartiesPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KpiTile
             label={t('kpiTotal')}
-            value={String(total)}
-            icon={<Briefcase className="h-4 w-4" />}
-            gradient="from-indigo-500 to-violet-600"
+            value={String(kpis.total)}
+            icon={<Building2 className="h-5 w-5" strokeWidth={2.4} />}
+            gradient="from-indigo-500 via-violet-500 to-violet-600"
+            shadow="shadow-violet-500/30"
           />
           <KpiTile
             label={t('kpiActiveVat')}
             value={String(kpis.activeVat)}
-            icon={<CheckCircle2 className="h-4 w-4" />}
-            gradient="from-emerald-500 to-teal-600"
+            sub={kpis.total ? `${Math.round((kpis.activeVat / kpis.total) * 100)}% jami'dan` : undefined}
+            icon={<CheckCircle2 className="h-5 w-5" strokeWidth={2.4} />}
+            gradient="from-emerald-500 via-emerald-500 to-teal-600"
+            shadow="shadow-emerald-500/30"
           />
           <KpiTile
             label={t('kpiAvgRating')}
-            value={kpis.avgRating ? String(kpis.avgRating) : '—'}
-            icon={<Star className="h-4 w-4" />}
-            gradient="from-amber-500 to-orange-600"
+            value={kpis.avgRating != null ? String(kpis.avgRating) : '—'}
+            sub={kpis.ratedCount ? `${kpis.ratedCount} ta reytingli` : 'reyting yo\'q'}
+            icon={<Star className="h-5 w-5 fill-current" strokeWidth={2.4} />}
+            gradient="from-amber-400 via-orange-500 to-rose-500"
+            shadow="shadow-amber-500/30"
           />
           <KpiTile
             label={t('lastRefreshed')}
             value={kpis.lastRefresh ? formatDateTime(kpis.lastRefresh) : t('neverRefreshed')}
             sub={t('nextRefresh').replace('{n}', nextCronText)}
-            icon={<Clock className="h-4 w-4" />}
-            gradient="from-slate-500 to-slate-700"
+            icon={<RefreshCw className="h-5 w-5" strokeWidth={2.4} />}
+            gradient="from-blue-500 via-cyan-500 to-sky-600"
+            shadow="shadow-cyan-500/30"
             small
           />
         </div>
@@ -668,30 +659,74 @@ export default function CounterpartiesPage() {
 // ────────────── helpers ──────────────
 
 function KpiTile({
-  label, value, sub, icon, gradient, small,
+  label, value, sub, icon, gradient, shadow, small,
 }: {
   label: string;
   value: string;
   sub?: string;
   icon: React.ReactNode;
   gradient: string;
+  shadow?: string;
   small?: boolean;
 }) {
   return (
-    <Card className="border-0 shadow-soft overflow-hidden">
-      <CardContent className="p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <div className={cn('w-8 h-8 rounded-xl bg-gradient-to-br grid place-items-center text-white shadow-md', gradient)}>
-            {icon}
+    <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <CardContent className="p-4 relative">
+        {/* Subtle gradient corner accent */}
+        <div className={cn(
+          'absolute -top-4 -right-4 w-24 h-24 rounded-full bg-gradient-to-br opacity-[0.08] blur-xl pointer-events-none transition-opacity group-hover:opacity-[0.15]',
+          gradient,
+        )} />
+        <div className="relative">
+          <div className="flex items-center gap-2 mb-2">
+            <div className={cn(
+              'w-10 h-10 rounded-2xl bg-gradient-to-br grid place-items-center text-white shadow-lg group-hover:scale-110 transition-transform',
+              gradient, shadow,
+            )}>
+              {icon}
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
           </div>
-          <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
+          <div className={cn(
+            'font-black tabular-nums tracking-tight text-slate-900 truncate',
+            small ? 'text-sm' : 'text-3xl',
+          )} title={value}>
+            {value}
+          </div>
+          {sub && <div className="text-[10px] text-slate-500 mt-1 truncate">{sub}</div>}
         </div>
-        <div className={cn('font-black tabular-nums tracking-tight text-slate-900 truncate', small ? 'text-sm' : 'text-2xl')} title={value}>
-          {value}
-        </div>
-        {sub && <div className="text-[10px] text-slate-500 mt-1 truncate">{sub}</div>}
       </CardContent>
     </Card>
+  );
+}
+
+function IconBtn({
+  title, onClick, disabled, primary, children,
+}: {
+  title: string;
+  onClick: () => void;
+  disabled?: boolean;
+  primary?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      aria-label={title}
+      className={cn(
+        'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all shrink-0',
+        'hover:scale-105 active:scale-95',
+        primary
+          ? 'bg-white text-indigo-700 hover:bg-white shadow-lg shadow-black/10'
+          : 'bg-white/15 hover:bg-white/30 text-white ring-1 ring-white/20 backdrop-blur-sm',
+        disabled && 'opacity-60 cursor-not-allowed pointer-events-none',
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
