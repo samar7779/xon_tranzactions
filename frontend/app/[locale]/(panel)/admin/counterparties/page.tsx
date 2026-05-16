@@ -446,12 +446,7 @@ export default function CounterpartiesPage() {
                       <span className="font-medium">{t('add')}</span>
                     </DropdownMenuItem>
                   )}
-                  {canManage && (
-                    <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer">
-                      <Upload className="h-4 w-4 mr-2 text-emerald-600" />
-                      <span className="font-medium">{t('import')}</span>
-                    </DropdownMenuItem>
-                  )}
+                  {/* Import endi alohida sahifaga ko'chirildi: /admin/import → Kontragentlar tab */}
                   <DropdownMenuItem onClick={onExport} className="cursor-pointer">
                     <Download className="h-4 w-4 mr-2 text-blue-600" />
                     <span className="font-medium">{t('export')}</span>
