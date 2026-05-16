@@ -271,11 +271,26 @@ export class TransactionsService {
 
   /**
    * Ustun bo'yicha distinct qiymatlar — Google Sheets stilida filter uchun.
-   * Boshqa filterlar (dateFrom/To, q, va h.k.) inobatga olinadi.
+   * MUHIM: boshqa aktiv filterlar (dateFrom/To, q, boshqa ustun filterlari) inobatga olinadi.
+   * Faqat O'Z filteri istisno qilinadi — shunda foydalanuvchi qaytadan tanlash imkoniga ega.
    * @param search — qisman matn bo'yicha qidirish (limit'dan tashqarisini topish uchun)
    */
   async distinctValues(column: string, query: ListTransactionsDto, search?: string): Promise<{ ok: true; values: Array<{ id: string; name: string }> }> {
-    const where = this.buildWhere({ ...query, [`${column}Ids`]: undefined }); // o'zining filterini olib tashlash
+    // Ustun nomidan tegishli filter paramini chiqarib tashlash (self-exclusion)
+    const COLUMN_TO_PARAM: Record<string, string> = {
+      bank: 'bankIds',
+      kontragent: 'categoryIds',
+      kategoriya: 'subcategoryIds',
+      direction: 'directions',
+      contractStatus: 'contractStatuses',
+      contractNumber: 'contractStatuses',
+      hisobNomi: 'hisobNomi',
+    };
+    const selfParam = COLUMN_TO_PARAM[column];
+    const queryExcludingSelf: any = { ...query };
+    if (selfParam) delete queryExcludingSelf[selfParam];
+    let where = this.buildWhere(queryExcludingSelf);
+    where = await this.applyXatoFilter(where);
 
     switch (column) {
       case 'bank': {
@@ -292,18 +307,29 @@ export class TransactionsService {
         return { ok: true, values: banks.map((b) => ({ id: b.id, name: b.name })) };
       }
       case 'kontragent': {
-        // Top kategoriyalar — barcha bo'lishi mumkin
+        // Aktiv filter'lar ostida tranzaksiyalarda mavjud top kategoriyalar
+        const txs = await this.prisma.transaction.findMany({
+          where: { ...where, categoryId: { not: null } },
+          distinct: ['categoryId'], select: { categoryId: true }, take: 100,
+        });
+        const ids = txs.map((t) => t.categoryId!).filter(Boolean);
+        if (ids.length === 0) return { ok: true, values: [] };
         const cats = await this.prisma.category.findMany({
-          where: { parentId: null },
+          where: { id: { in: ids } },
           select: { id: true, name: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
         return { ok: true, values: cats.map((c) => ({ id: c.id, name: c.name })) };
       }
       case 'kategoriya': {
-        // Subkategoriyalar — har biri parent nomi bilan
+        const txs = await this.prisma.transaction.findMany({
+          where: { ...where, subcategoryId: { not: null } },
+          distinct: ['subcategoryId'], select: { subcategoryId: true }, take: 200,
+        });
+        const ids = txs.map((t) => t.subcategoryId!).filter(Boolean);
+        if (ids.length === 0) return { ok: true, values: [] };
         const subs = await this.prisma.category.findMany({
-          where: { parentId: { not: null } },
+          where: { id: { in: ids } },
           select: { id: true, name: true, parent: { select: { name: true } }, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
@@ -313,7 +339,15 @@ export class TransactionsService {
         };
       }
       case 'direction': {
-        return { ok: true, values: [{ id: 'IN', name: 'Kirim' }, { id: 'OUT', name: 'Chiqim' }] };
+        // Aktiv filter'lar ostida qaysi yo'nalishlar mavjud
+        const txs = await this.prisma.transaction.findMany({
+          where, distinct: ['direction'], select: { direction: true }, take: 10,
+        });
+        const set = new Set(txs.map((t) => t.direction));
+        const values: Array<{ id: string; name: string }> = [];
+        if (set.has('IN' as any)) values.push({ id: 'IN', name: 'Kirim' });
+        if (set.has('OUT' as any)) values.push({ id: 'OUT', name: 'Chiqim' });
+        return { ok: true, values };
       }
       case 'contractStatus':
       case 'contractNumber': {

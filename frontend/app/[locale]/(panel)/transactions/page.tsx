@@ -117,10 +117,26 @@ export default function TransactionsPage() {
         for (const k of Object.keys(obj)) {
           if (Array.isArray(obj[k]) && obj[k].length > 0) restored[k] = new Set(obj[k]);
         }
-        if (Object.keys(restored).length > 0) setColumnFilters(restored);
+        if (Object.keys(restored).length > 0) {
+          setColumnFilters(restored);
+          // Agar column filter bor bo'lsa — filter mode'ni avtomatik ON qilamiz
+          // (foydalanuvchi ularni ko'rishi va olib tashlay olishi uchun)
+          setColumnFilterMode(true);
+        }
       }
+      // Filter mode toggle holati
+      const rawMode = localStorage.getItem('tx-filter-mode-v1');
+      if (rawMode === '1') setColumnFilterMode(true);
     } catch { /* ignore */ }
   }, []);
+
+  // Filter mode toggle holatini saqlash
+  useEffect(() => {
+    try {
+      if (columnFilterMode) localStorage.setItem('tx-filter-mode-v1', '1');
+      else localStorage.removeItem('tx-filter-mode-v1');
+    } catch { /* ignore */ }
+  }, [columnFilterMode]);
 
   // Asosiy filterlarni localStorage'ga yozish
   useEffect(() => {
@@ -234,6 +250,22 @@ export default function TransactionsPage() {
   const columnFiltersKey = JSON.stringify(
     Object.fromEntries(Object.entries(columnFilters).map(([k, v]) => [k, Array.from(v).sort()])),
   );
+
+  // Aktiv filterlar URL params (distinct endpoint chaqirig'i uchun)
+  // Self-exclusion popover ichida buildWhere helper'da amalga oshiriladi
+  const activeFilterParams = (() => {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (direction !== 'all') p.set('direction', direction);
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo) p.set('dateTo', dateTo);
+    if (bankId !== 'all') p.set('bankId', bankId);
+    for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+      const set = columnFilters[col];
+      if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+    }
+    return p.toString();
+  })();
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey],
@@ -592,13 +624,13 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
-                      <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
-                      <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
-                      <ColumnTh label="Kontragent" column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
-                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} alignRight />
-                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} alignRight />
+                      <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
+                      <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
+                      <ColumnTh label="Kontragent" column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
+                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
+                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -1833,7 +1865,7 @@ function CopyBlock({ value }: { value: string }) {
 // ═══ COLUMN TH — filter icon bilan ustun headeri (Google Sheets stilida)
 function ColumnTh({
   label, column, widthClass, filterMode, columnFilters, setColumnFilters,
-  openFilterColumn, setOpenFilterColumn, alignRight,
+  openFilterColumn, setOpenFilterColumn, alignRight, activeFilterParams,
 }: {
   label: string;
   column: string;
@@ -1844,6 +1876,7 @@ function ColumnTh({
   openFilterColumn: string | null;
   setOpenFilterColumn: (col: string | null) => void;
   alignRight?: boolean;
+  activeFilterParams: string;
 }) {
   const active = (columnFilters[column]?.size || 0) > 0;
   const isOpen = openFilterColumn === column;
@@ -1874,6 +1907,7 @@ function ColumnTh({
           selected={columnFilters[column] || new Set()}
           alignRight={alignRight}
           triggerRef={btnRef}
+          activeFilterParams={activeFilterParams}
           onClose={() => setOpenFilterColumn(null)}
           onApply={(set) => {
             setColumnFilters((prev) => ({ ...prev, [column]: set }));
@@ -1887,7 +1921,7 @@ function ColumnTh({
 
 // ═══ COLUMN FILTER POPOVER — Portal orqali document.body'ga render
 function ColumnFilterPopover({
-  column, selected, onClose, onApply, alignRight, triggerRef,
+  column, selected, onClose, onApply, alignRight, triggerRef, activeFilterParams,
 }: {
   column: string;
   selected: Set<string>;
@@ -1895,22 +1929,22 @@ function ColumnFilterPopover({
   onApply: (set: Set<string>) => void;
   alignRight?: boolean;
   triggerRef: React.RefObject<HTMLElement>;
+  activeFilterParams: string; // boshqa aktiv filterlar URLSearchParams string sifatida
 }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
 
-  // Debounce — server'ga ko'p so'rov yubormaslik uchun
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Backend'dan distinct qiymatlar (search bo'lsa server ham filterlasin — limit'dan tashqari uchun)
+  // Backend'dan distinct qiymatlar (aktiv filterlar bilan)
   const distinctQuery = useQuery({
-    queryKey: ['tx-distinct', column, debouncedSearch],
+    queryKey: ['tx-distinct', column, debouncedSearch, activeFilterParams],
     queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(
-      `/transactions/distinct?column=${encodeURIComponent(column)}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}`,
+      `/transactions/distinct?column=${encodeURIComponent(column)}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${activeFilterParams ? `&${activeFilterParams}` : ''}`,
     ),
     staleTime: 30_000,
   });
