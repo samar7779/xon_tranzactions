@@ -137,7 +137,7 @@ export default function CounterpartiesPage() {
       return api.get<{
         ok: boolean; total: number; page: number; perPage: number;
         items: Counterparty[]; didoxConfigured: boolean;
-        stats?: { total: number; activeVat: number; avgRating: number | null; ratedCount: number; lastFetchedAt: string | null };
+        stats?: { total: number; enrichedCount: number; enrichedPct: number; avgRating: number | null; ratedCount: number; lastFetchedAt: string | null };
       }>(`/counterparties?${p}`);
     },
   });
@@ -237,7 +237,8 @@ export default function CounterpartiesPage() {
   const stats = listQuery.data?.stats;
   const kpis = {
     total: stats?.total ?? total,
-    activeVat: stats?.activeVat ?? 0,
+    enrichedCount: stats?.enrichedCount ?? 0,
+    enrichedPct: stats?.enrichedPct ?? 0,
     avgRating: stats?.avgRating ?? null,
     ratedCount: stats?.ratedCount ?? 0,
     lastRefresh: stats?.lastFetchedAt || null,
@@ -319,9 +320,10 @@ export default function CounterpartiesPage() {
             shadow="shadow-violet-500/30"
           />
           <KpiTile
-            label={t('kpiActiveVat')}
-            value={String(kpis.activeVat)}
-            sub={kpis.total ? `${Math.round((kpis.activeVat / kpis.total) * 100)}% jami'dan` : undefined}
+            label="Boyitilgan"
+            value={`${kpis.enrichedPct}%`}
+            sub={`${kpis.enrichedCount} / ${kpis.total} qator`}
+            progress={kpis.enrichedPct}
             icon={<CheckCircle2 className="h-5 w-5" strokeWidth={2.4} />}
             gradient="from-emerald-500 via-emerald-500 to-teal-600"
             shadow="shadow-emerald-500/30"
@@ -807,7 +809,7 @@ export default function CounterpartiesPage() {
 // ────────────── helpers ──────────────
 
 function KpiTile({
-  label, value, sub, icon, gradient, shadow, small,
+  label, value, sub, icon, gradient, shadow, small, progress,
 }: {
   label: string;
   value: string;
@@ -816,6 +818,7 @@ function KpiTile({
   gradient: string;
   shadow?: string;
   small?: boolean;
+  progress?: number; // 0-100
 }) {
   return (
     <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all">
@@ -842,6 +845,14 @@ function KpiTile({
             {value}
           </div>
           {sub && <div className="text-[10px] text-slate-500 mt-1 truncate">{sub}</div>}
+          {progress != null && (
+            <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', gradient)}
+                style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+              />
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

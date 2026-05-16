@@ -260,7 +260,7 @@ export class CounterpartiesService {
 
     const sortBy = q.sortBy || 'addedAt';
     const sortDir = q.sortDir || 'desc';
-    const [total, items, activeVat, ratingAgg] = await Promise.all([
+    const [total, items, enrichedCount, ratingAgg] = await Promise.all([
       this.prisma.counterparty.count({ where }),
       this.prisma.counterparty.findMany({
         where,
@@ -268,15 +268,14 @@ export class CounterpartiesService {
         skip: (page - 1) * perPage,
         take: perPage,
       }),
-      // Global stats — barcha kontragentlar bo'yicha (filtr emas)
+      // Global stats — DIDOX/Chamber'dan to'liq ma'lumot olingan qatorlar soni
+      // (standart INN, oxirgi yangilash bor, xato yo'q)
       this.prisma.counterparty.count({
         where: {
           isActive: true,
-          OR: [
-            { vatStatus: { contains: 'Активн', mode: 'insensitive' } },
-            { vatStatus: { contains: 'faol', mode: 'insensitive' } },
-            { vatStatus: { contains: 'active', mode: 'insensitive' } },
-          ],
+          isManual: false,
+          lastFetchedAt: { not: null },
+          lastFetchError: null,
         },
       }),
       this.prisma.counterparty.aggregate({
@@ -310,7 +309,8 @@ export class CounterpartiesService {
       didoxConfigured: this.didox.isConfigured(),
       stats: {
         total: grandTotal,
-        activeVat,
+        enrichedCount,
+        enrichedPct: grandTotal > 0 ? Math.round((enrichedCount / grandTotal) * 100) : 0,
         avgRating: ratingAgg._avg.rating != null ? Math.round(Number(ratingAgg._avg.rating)) : null,
         ratedCount: ratingAgg._count.rating,
         lastFetchedAt: ratingAgg._max.lastFetchedAt,
