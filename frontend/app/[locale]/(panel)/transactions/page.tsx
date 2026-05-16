@@ -2469,8 +2469,8 @@ function CombinedEditDialog({
             </div>
           )}
 
-          {/* ═══ STEP 3: SHARTNOMA — har qanday kategoriyada qo'shish mumkin ═══ */}
-          {selectedTop && (
+          {/* ═══ STEP 3: SHARTNOMA — faqat CLIENT yoki TRANSFER (Переброска) uchun ═══ */}
+          {selectedTop && (selectedTop.code === 'CLIENT' || selectedTop.code === 'TRANSFER') && (
             <div className="pt-4 border-t border-indigo-200">
               <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">3</span>
