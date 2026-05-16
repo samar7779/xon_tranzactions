@@ -113,8 +113,18 @@ model Transaction {
   bank          Bank?        @relation(fields: [bankId], references: [id])
   accountId     String?      @map("account_id")
   account       BankAccount? @relation(fields: [accountId], references: [id])
+
+  // Kategoriya — 2 darajali (F va G ustunlar Sheets'dagi). Bor bo'lsa, qayta yozilmaydi.
   categoryId    String?      @map("category_id")
-  category      Category?    @relation(fields: [categoryId], references: [id])
+  category      Category?    @relation("TxnCategory", fields: [categoryId], references: [id])
+  subcategoryId String?      @map("subcategory_id")
+  subcategory   Category?    @relation("TxnSubcategory", fields: [subcategoryId], references: [id])
+  // Topilgan shartnoma raqami (description'dan ajratilgan + CRM bilan tasdiqlangan)
+  contractNumber String?     @map("contract_number") @db.VarChar(32)
+  // Kategoriya qachon va kim tomonidan qo'yilgan (auto/manual/cron/import)
+  categorizedAt   DateTime?  @map("categorized_at")
+  categorizedBy   String?    @map("categorized_by") @db.VarChar(20)
+  categorizedById String?    @map("categorized_by_id")
 
   // Billing: avto-match orqali mijozga bog'lanadi (INN orqali)
   customerId    String?     @map("customer_id")
@@ -142,6 +152,9 @@ model Transaction {
   @@index([bankB2Id])
   @@index([bankGeneralId])
   @@index([valueDate])
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([contractNumber])
   @@map("transactions")
 }
 
@@ -275,20 +288,46 @@ model BankAccount {
 // ─────────────────────────────────────────────────────────────────
 model Category {
   id           String        @id @default(cuid())
-  code         String        @unique @db.VarChar(32)
+  code         String        @unique @db.VarChar(64)
   name         String        @db.VarChar(128)
   parentId     String?       @map("parent_id")
   parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children     Category[]    @relation("CategoryHierarchy")
   color        String?       @db.VarChar(16)   // UI uchun hex rang
   icon         String?       @db.VarChar(64)
+  isSystem     Boolean       @default(false) @map("is_system")  // seed kategoriyalar — o'chirilmaydi
+  sortOrder    Int           @default(0) @map("sort_order")
 
-  transactions Transaction[]
+  transactions   Transaction[] @relation("TxnCategory")
+  subTransactions Transaction[] @relation("TxnSubcategory")
 
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
+  @@index([parentId])
   @@map("categories")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CRM CONTRACT CACHE — XonSaroy CRM'dan olingan shartnomalar keshi
+// Har tranzaksiyada CRM'ga so'rov yubormaslik uchun.
+// ─────────────────────────────────────────────────────────────────
+model CrmContract {
+  contractNumber  String   @id @map("contract_number") @db.VarChar(32)
+  customerName    String?  @map("customer_name") @db.VarChar(255)
+  status          String?  @db.VarChar(64)              // CRM'dan kelgan status (active/реинвестиция/фиктивный)
+  objectName      String?  @map("object_name") @db.VarChar(128)  // VATAN RESIDENCE va h.k.
+  apartmentNumber String?  @map("apartment_number") @db.VarChar(32)
+  phone           String?  @db.VarChar(32)
+  rawSnapshot     Json?    @map("raw_snapshot")          // CRM javobining qisqartmasi
+  found           Boolean  @default(true)                // false → CRM'da topilmadi, kelajakda yana urinma
+  firstSeenAt     DateTime @default(now()) @map("first_seen_at")
+  lastVerifiedAt  DateTime @default(now()) @map("last_verified_at")
+  lastError       String?  @map("last_error") @db.Text
+
+  @@index([lastVerifiedAt])
+  @@index([status])
+  @@map("crm_contracts")
 }
 
 // ─────────────────────────────────────────────────────────────────

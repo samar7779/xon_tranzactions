@@ -113,6 +113,123 @@ async function main() {
       console.log(`⚠ ${b.name} mavjud`);
     }
   }
+
+  // 4. Kategoriyalar — 2 darajali daraxt (legacy Google Sheets F/G ustunlar logikasi)
+  await seedCategories();
+}
+
+interface CategoryNode {
+  code: string;
+  name: string;
+  color: string;
+  icon: string;
+  children?: { code: string; name: string }[];
+}
+
+const CATEGORY_TREE: CategoryNode[] = [
+  {
+    code: 'CLIENT', name: 'Клиент / Физ.Л / Юр.Л', color: '#6366f1', icon: 'Users',
+    children: [
+      { code: 'CLIENT_VZNOS_KV',     name: 'Взносы за квартиры' },
+      { code: 'CLIENT_VZNOS_AVTO',   name: 'Взносы за автостоянку' },
+      { code: 'CLIENT_VOZVRAT',      name: 'Возврат взносов за кв.' },
+      { code: 'CLIENT_SCHETCHIK',    name: 'За счетчик' },
+      { code: 'CLIENT_PEREOFORM',    name: 'Переоформление (приход)' },
+    ],
+  },
+  {
+    code: 'BANK', name: 'Банк', color: '#0ea5e9', icon: 'Building2',
+    children: [
+      { code: 'BANK_USLUGI', name: 'Услуги банка' },
+    ],
+  },
+  {
+    code: 'SALARY', name: 'Зарплата', color: '#10b981', icon: 'Wallet',
+  },
+  {
+    code: 'TRANSFER', name: 'Переброска', color: '#8b5cf6', icon: 'Repeat',
+  },
+  {
+    code: 'MINFIN', name: 'Молия Вазирлиги', color: '#f59e0b', icon: 'Landmark',
+    children: [
+      { code: 'MINFIN_NDS',         name: 'НДС' },
+      { code: 'MINFIN_NDFL',        name: 'НДФЛ' },
+      { code: 'MINFIN_NDFL_DIV',    name: 'НДФЛ с дивиденда' },
+      { code: 'MINFIN_WATER',       name: 'Водоснабжение' },
+      { code: 'MINFIN_ESP',         name: 'ЕСП' },
+      { code: 'MINFIN_WATER_RES',   name: 'За пользование водными ресурсами' },
+      { code: 'MINFIN_LAND',        name: 'Налог на землю' },
+      { code: 'MINFIN_PROPERTY',    name: 'Налог на имущество' },
+      { code: 'MINFIN_PENALTY',     name: 'Штрафы и пеня' },
+      { code: 'MINFIN_PROFIT',      name: 'Налог на прибыль' },
+    ],
+  },
+  {
+    code: 'LOAN', name: 'Финансовый займ', color: '#14b8a6', icon: 'HandCoins',
+    children: [
+      { code: 'LOAN_VYDACHA', name: 'фин.займ выдача' },
+    ],
+  },
+  {
+    code: 'COUNTERPARTY_RETURN', name: 'Возврат от контрагентов', color: '#f43f5e', icon: 'Undo2',
+  },
+  {
+    code: 'COUNTERPARTY', name: 'Контрагент', color: '#64748b', icon: 'Briefcase',
+  },
+];
+
+async function seedCategories() {
+  let createdTop = 0, createdSub = 0, updated = 0;
+
+  for (let i = 0; i < CATEGORY_TREE.length; i++) {
+    const top = CATEGORY_TREE[i];
+    const existingTop = await prisma.category.findUnique({ where: { code: top.code } });
+    let topId: string;
+
+    if (!existingTop) {
+      const created = await prisma.category.create({
+        data: {
+          code: top.code, name: top.name, color: top.color, icon: top.icon,
+          isSystem: true, sortOrder: i * 10,
+        },
+      });
+      topId = created.id;
+      createdTop++;
+    } else {
+      topId = existingTop.id;
+      // Yangilik: agar isSystem/color/icon yo'q bo'lsa — to'ldiramiz (eskini buzmaymiz)
+      if (!existingTop.isSystem || !existingTop.color) {
+        await prisma.category.update({
+          where: { id: topId },
+          data: { color: top.color, icon: top.icon, isSystem: true, sortOrder: i * 10 },
+        });
+        updated++;
+      }
+    }
+
+    if (!top.children) continue;
+    for (let j = 0; j < top.children.length; j++) {
+      const sub = top.children[j];
+      const existingSub = await prisma.category.findUnique({ where: { code: sub.code } });
+      if (!existingSub) {
+        await prisma.category.create({
+          data: {
+            code: sub.code, name: sub.name, parentId: topId,
+            color: top.color, icon: top.icon,
+            isSystem: true, sortOrder: i * 10 + j,
+          },
+        });
+        createdSub++;
+      } else if (!existingSub.parentId || existingSub.parentId !== topId) {
+        await prisma.category.update({
+          where: { id: existingSub.id },
+          data: { parentId: topId, color: top.color, isSystem: true, sortOrder: i * 10 + j },
+        });
+        updated++;
+      }
+    }
+  }
+  console.log(`✓ Kategoriyalar: +${createdTop} top, +${createdSub} sub, ${updated} yangilandi`);
 }
 
 async function backfillCounterpartyManual() {
