@@ -58,6 +58,39 @@ function tashkentNowHour(): number {
   return new Date(Date.now() + TASHKENT_TZ_OFFSET_MS).getUTCHours();
 }
 
+// Tadbirkorlik sub'ektining barqarorlik reytingi shkalasi
+//   96-100 AAA · 91-95 AA · 86-90 A    → Yuqori
+//   76-85 BBB · 66-75 BB · 56-65 B    → O'rta
+//   51-55 CCC · 36-50 CC · 26-35 C    → Qoniqarli
+//   ≤25 D                              → Quyi
+type RatingGrade = {
+  letter: string;
+  level: 'Yuqori' | "O'rta" | 'Qoniqarli' | 'Quyi';
+  tone: 'emerald' | 'blue' | 'amber' | 'rose';
+  chip: string;
+};
+function ratingGrade(rating: number | null | undefined): RatingGrade | null {
+  if (rating == null) return null;
+  const r = Math.round(rating);
+  const make = (letter: string, level: RatingGrade['level'], tone: RatingGrade['tone'], chip: string) => ({
+    letter, level, tone, chip,
+  });
+  if (r >= 96) return make('AAA', 'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
+  if (r >= 91) return make('AA',  'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
+  if (r >= 86) return make('A',   'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
+  if (r >= 76) return make('BBB', "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
+  if (r >= 66) return make('BB',  "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
+  if (r >= 56) return make('B',   "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
+  if (r >= 51) return make('CCC', 'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
+  if (r >= 36) return make('CC',  'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
+  if (r >= 26) return make('C',   'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
+  return make('D',   'Quyi',      'rose',    'bg-rose-50 text-rose-700 ring-rose-200');
+}
+
+function isStandardInn(inn: string): boolean {
+  return /^\d{9}$|^\d{14}$/.test(inn);
+}
+
 export default function CounterpartiesPage() {
   const t = useTranslations('counterparties');
   const tc = useTranslations('common');
@@ -354,14 +387,23 @@ export default function CounterpartiesPage() {
                   <tbody className="divide-y divide-slate-100">
                     {items.map((it) => {
                       const isRefreshing = refreshingInn === it.inn;
-                      const ratingTone = it.rating == null
-                        ? 'bg-slate-50 text-slate-500 ring-slate-200'
-                        : it.rating >= 60 ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                        : it.rating >= 30 ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                        : 'bg-rose-50 text-rose-700 ring-rose-200';
+                      const grade = ratingGrade(it.rating ?? null);
+                      const manual = !isStandardInn(it.inn);
                       return (
                         <tr key={it.inn} className="group hover:bg-slate-50/60 transition-colors cursor-pointer" onClick={() => setDetailRow(it)}>
-                          <td className="px-4 py-3 font-mono text-[12px] font-bold text-slate-900">{it.inn}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[12px] font-bold text-slate-900">{it.inn}</span>
+                              {manual && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-bold uppercase tracking-wider"
+                                  title="Nostandart INN — qo'lda kiritilgan, avto-yangilanmaydi"
+                                >
+                                  Qo'lda
+                                </span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 max-w-[280px]">
                             <div className="font-semibold text-slate-900 truncate" title={it.name}>{it.name}</div>
                             {it.fullName && it.fullName !== it.name && (
@@ -372,12 +414,24 @@ export default function CounterpartiesPage() {
                             <div className="text-[12px] truncate" title={it.director || ''}>{it.director || '—'}</div>
                           </td>
                           <td className="px-4 py-3">
-                            <span className={cn(
-                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ring-1 ring-inset tabular-nums',
-                              ratingTone,
-                            )}>
-                              {it.rating != null ? it.rating : '—'}
-                            </span>
+                            {grade ? (
+                              <div className="inline-flex items-center gap-1">
+                                <span className={cn(
+                                  'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[11px] font-bold ring-1 ring-inset tabular-nums',
+                                  grade.chip,
+                                )}>
+                                  {it.rating}
+                                </span>
+                                <span className={cn(
+                                  'inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-black ring-1 ring-inset',
+                                  grade.chip,
+                                )} title={grade.level}>
+                                  {grade.letter}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-[11px]">—</span>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">{it.phone || '—'}</td>
                           <td className="px-4 py-3 text-[11px] text-slate-600 truncate max-w-[200px]" title={it.vatStatus || ''}>
@@ -649,6 +703,17 @@ function ImportStat({ label, value, tone }: { label: string; value: number; tone
 }
 
 function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
+  const grade = ratingGrade(row.rating ?? null);
+  const manual = !isStandardInn(row.inn);
+
+  // History data
+  const historyQuery = useQuery({
+    queryKey: ['counterparty-history', row.inn],
+    queryFn: () => api.get<{ items: any[] }>(`/counterparties/${row.inn}/history?limit=50`),
+    staleTime: 10_000,
+  });
+  const history = historyQuery.data?.items || [];
+
   return (
     <div className="space-y-4">
       <DialogHeader>
@@ -656,20 +721,34 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
           <Briefcase className="h-5 w-5 text-indigo-600" />
           {row.name}
         </DialogTitle>
-        <DialogDescription className="font-mono">{row.inn}</DialogDescription>
+        <DialogDescription className="flex items-center gap-2">
+          <span className="font-mono">{row.inn}</span>
+          {manual && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-bold uppercase tracking-wider">
+              Qo'lda kiritilgan
+            </span>
+          )}
+        </DialogDescription>
       </DialogHeader>
 
-      {/* Rating */}
-      {row.rating != null && (
-        <div className="rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200 px-4 py-3 flex items-center gap-3">
-          <Star className="h-5 w-5 text-amber-600" />
+      {/* Rating with grade letter + level */}
+      {grade && (
+        <div className={cn(
+          'rounded-xl ring-1 px-4 py-3 flex items-center gap-3',
+          grade.chip,
+        )}>
+          <Star className="h-5 w-5 shrink-0" />
           <div className="flex-1">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">{t('rating')}</div>
-            <div className="text-2xl font-black tabular-nums text-amber-900">{row.rating}</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold opacity-80">{t('rating')}</div>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <div className="text-2xl font-black tabular-nums">{row.rating}</div>
+              <div className="text-xl font-black tracking-tight">{grade.letter}</div>
+            </div>
           </div>
-          {row.ratingTitle && (
-            <div className="text-[11px] text-amber-700 text-right max-w-[160px]">{row.ratingTitle}</div>
-          )}
+          <div className="text-right">
+            <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">Daraja</div>
+            <div className="text-sm font-bold mt-0.5">{grade.level}</div>
+          </div>
         </div>
       )}
 
@@ -722,6 +801,57 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
           {t('lastFetched')}: <b className="text-slate-700">{row.lastFetchedAt ? formatDateTime(row.lastFetchedAt) : '—'}</b>
         </div>
       </div>
+
+      {/* History (audit log) */}
+      <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+        <div className="bg-slate-50 px-4 py-2 flex items-center gap-2 border-b border-slate-200">
+          <Clock className="h-3.5 w-3.5 text-slate-500" />
+          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">Tarix</div>
+          <span className="text-[10px] text-slate-500 ml-1">{history.length}</span>
+        </div>
+        {historyQuery.isLoading ? (
+          <div className="px-4 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
+            <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda…
+          </div>
+        ) : history.length === 0 ? (
+          <div className="px-4 py-3 text-[11px] text-slate-400">Hozircha yozuv yo'q</div>
+        ) : (
+          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+            {history.map((h) => (
+              <HistoryRow key={h.id} h={h} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryRow({ h }: { h: any }) {
+  const actionMeta: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+    created:      { label: 'Qo\'shildi',         cls: 'bg-emerald-100 text-emerald-700', icon: <Plus className="h-3 w-3" /> },
+    imported:     { label: 'Import',             cls: 'bg-blue-100 text-blue-700',       icon: <Upload className="h-3 w-3" /> },
+    manual_edit:  { label: 'Tahrir',             cls: 'bg-violet-100 text-violet-700',   icon: <FileText className="h-3 w-3" /> },
+    refreshed:    { label: 'Yangilash',          cls: 'bg-indigo-100 text-indigo-700',   icon: <RefreshCw className="h-3 w-3" /> },
+    cron_refresh: { label: 'Avto-yangilash',     cls: 'bg-slate-100 text-slate-700',     icon: <Clock className="h-3 w-3" /> },
+    deleted:      { label: 'O\'chirildi',        cls: 'bg-rose-100 text-rose-700',       icon: <Trash2 className="h-3 w-3" /> },
+  };
+  const m = actionMeta[h.action] || { label: h.action, cls: 'bg-slate-100 text-slate-700', icon: null };
+  return (
+    <div className="px-4 py-2 flex items-start gap-2 hover:bg-slate-50/40">
+      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0', m.cls)}>
+        {m.icon} {m.label}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="text-[11px] text-slate-700">
+          <b>{h.actorName || '—'}</b>
+          {h.source && h.source !== 'none' && (
+            <span className="ml-1 text-slate-500">· {h.source}</span>
+          )}
+        </div>
+        {h.note && <div className="text-[10px] text-slate-500 truncate" title={h.note}>{h.note}</div>}
+      </div>
+      <div className="text-[10px] text-slate-400 tabular-nums shrink-0">{formatDateTime(h.createdAt)}</div>
     </div>
   );
 }

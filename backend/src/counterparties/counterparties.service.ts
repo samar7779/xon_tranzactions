@@ -36,6 +36,61 @@ export class CounterpartiesService {
     private chamber: ChamberService,
   ) {}
 
+  // ────────────────────────── audit log ──────────────────────────
+
+  /**
+   * Audit yozuvi — har bir o'zgarish shu yerda saqlanadi.
+   * Hech qachon xato chiqarmaydi (log yozish biznes-logika to'xtatmaydi).
+   */
+  private async logHistory(input: {
+    inn: string;
+    action: 'created' | 'manual_edit' | 'refreshed' | 'cron_refresh' | 'imported' | 'deleted';
+    actorType: 'user' | 'cron' | 'system';
+    actorId?: string | null;
+    source?: string | null;
+    fieldsChanged?: string[];
+    note?: string;
+  }): Promise<void> {
+    try {
+      let actorName: string | null = null;
+      if (input.actorId) {
+        const u = await this.prisma.adminUser.findUnique({
+          where: { id: input.actorId },
+          select: { fullName: true, email: true },
+        });
+        actorName = u?.fullName || u?.email || null;
+      } else if (input.actorType === 'cron') {
+        actorName = 'Avto-yangilash (cron)';
+      } else if (input.actorType === 'system') {
+        actorName = 'Tizim';
+      }
+      await this.prisma.counterpartyHistory.create({
+        data: {
+          inn: input.inn,
+          action: input.action,
+          actorType: input.actorType,
+          actorId: input.actorId || null,
+          actorName,
+          source: input.source || null,
+          fieldsChanged: input.fieldsChanged || [],
+          note: input.note || null,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`History log xato (${input.inn} / ${input.action}): ${e?.message}`);
+    }
+  }
+
+  /** Bitta kontragent tarixi — eng yangilari boshida */
+  async getHistory(inn: string, limit = 50) {
+    const items = await this.prisma.counterpartyHistory.findMany({
+      where: { inn },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(200, Math.max(1, limit)),
+    });
+    return { ok: true, items };
+  }
+
   // ────────────────────────── helpers ──────────────────────────
 
   private mapToRecord(
@@ -218,23 +273,27 @@ export class CounterpartiesService {
     const name = String(dto.name || '').trim();
     if (!inn) throw new BadRequestException('INN kerak');
     if (!name) throw new BadRequestException('Kontragent nomi kerak');
-    if (!/^\d{9}$|^\d{14}$/.test(inn)) {
-      throw new BadRequestException("INN 9 yoki 14 raqamli bo'lishi kerak");
+    if (inn.length > 20) {
+      throw new BadRequestException("INN 20 belgidan oshmasligi kerak");
     }
 
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (existing) throw new ConflictException(`INN ${inn} allaqachon mavjud`);
 
-    // DIDOX (yoki Chamber fallback) bilan boyitish
+    // DIDOX (yoki Chamber fallback) bilan boyitish — faqat standart INN'lar uchun
     let data: Record<string, any> = {};
     let fetchError: string | null = null;
-    try {
-      const { company, chamber, bank, source } = await this.fetchEnrichment(inn);
-      data = this.mapToRecord(company, chamber, bank);
-      this.log.log(`Create ${inn}: enrichment manbasi = ${source}`);
-    } catch (e: any) {
-      fetchError = humanizeEnrichmentError(e, inn);
-      this.log.warn(`Create ${inn}: enrichment xatosi — saqlaymiz: ${fetchError}`);
+    if (/^\d{9}$|^\d{14}$/.test(inn)) {
+      try {
+        const { company, chamber, bank, source } = await this.fetchEnrichment(inn);
+        data = this.mapToRecord(company, chamber, bank);
+        this.log.log(`Create ${inn}: enrichment manbasi = ${source}`);
+      } catch (e: any) {
+        fetchError = humanizeEnrichmentError(e, inn);
+        this.log.warn(`Create ${inn}: enrichment xatosi — saqlaymiz: ${fetchError}`);
+      }
+    } else {
+      fetchError = "Nostandart INN (9 yoki 14 raqamli emas) — DIDOX/Chamber bu formatni qo'llab-quvvatlamaydi. Ma'lumotni qo'lda kiriting.";
     }
 
     const created = await this.prisma.counterparty.create({
@@ -246,6 +305,11 @@ export class CounterpartiesService {
         lastFetchError: fetchError,
       },
     });
+    await this.logHistory({
+      inn, action: 'created', actorType: 'user', actorId: addedBy,
+      source: fetchError ? 'none' : (data.rawDidoxBrief?.chamber ? 'chamber' : 'didox'),
+      note: fetchError ? `Saqlandi, enrichment xatosi: ${fetchError.slice(0, 100)}` : `Kontragent qo'shildi`,
+    });
     return { ok: true, counterparty: created, didoxFetched: !fetchError };
   }
 
@@ -253,9 +317,19 @@ export class CounterpartiesService {
    * Bitta kontragentni yangilash (DIDOX/Chamber'dan qaytadan olish).
    * Name tegilmaydi.
    */
-  async refresh(inn: string) {
+  async refresh(inn: string, actorId?: string) {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
+
+    // Nostandart INN — DIDOX/Chamber'ga so'rov yubormaymiz
+    if (!isStandardInn(inn)) {
+      const friendly = 'Nostandart INN — qo\'lda kiritilgan. Avto-yangilash mumkin emas, "Tahrirlash" tugmasidan foydalaning.';
+      const updated = await this.prisma.counterparty.update({
+        where: { inn },
+        data: { lastFetchError: friendly, lastFetchedAt: new Date() },
+      });
+      return { ok: false, counterparty: updated, source: 'none' as const, error: friendly };
+    }
 
     try {
       const { company, chamber, bank, source } = await this.fetchEnrichment(inn);
@@ -264,15 +338,21 @@ export class CounterpartiesService {
         data: this.mapToRecord(company, chamber, bank, existing.bankAccounts as any[] | null),
       });
       this.log.log(`Refresh ${inn}: enrichment manbasi = ${source}`);
+      await this.logHistory({
+        inn, action: 'refreshed', actorType: 'user', actorId, source,
+        note: `Qo'lda yangilash (${source})`,
+      });
       return { ok: true, counterparty: updated, source };
     } catch (e: any) {
-      // Hech bir manbada ma'lumot topilmadi — bu xato emas, faqat eslatma
       const friendly = humanizeEnrichmentError(e, inn);
       const updated = await this.prisma.counterparty.update({
         where: { inn },
         data: { lastFetchError: friendly, lastFetchedAt: new Date() },
       });
-      // 404 qaytarmaymiz — UI chiroyli message bilan ko'rsatadi
+      await this.logHistory({
+        inn, action: 'refreshed', actorType: 'user', actorId, source: 'none',
+        note: `Qo'lda yangilash — xato: ${friendly.slice(0, 150)}`,
+      });
       return { ok: false, counterparty: updated, source: 'none' as const, error: friendly };
     }
   }
@@ -296,7 +376,7 @@ export class CounterpartiesService {
     bankAccounts: Array<{ account: string; mfo?: string | null }>;
     notes: string;
     isActive: boolean;
-  }>) {
+  }>, actorId?: string) {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
     const data: any = {};
@@ -322,13 +402,22 @@ export class CounterpartiesService {
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.isActive !== undefined) data.isActive = !!dto.isActive;
     const updated = await this.prisma.counterparty.update({ where: { inn }, data });
+    await this.logHistory({
+      inn, action: 'manual_edit', actorType: 'user', actorId, source: 'manual',
+      fieldsChanged: Object.keys(data),
+      note: `Qo'lda tahrirlandi: ${Object.keys(data).join(', ')}`,
+    });
     return { ok: true, counterparty: updated };
   }
 
-  async remove(inn: string) {
+  async remove(inn: string, actorId?: string) {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
     await this.prisma.counterparty.delete({ where: { inn } });
+    await this.logHistory({
+      inn, action: 'deleted', actorType: 'user', actorId,
+      note: `Kontragent o'chirildi: ${existing.name}`,
+    });
     return { ok: true, deleted: inn };
   }
 
@@ -343,9 +432,8 @@ export class CounterpartiesService {
    * Foydalanuvchi 504 timeout kutmaydi: 100 ta kontragent = 5+ daqiqa ish.
    * Cron ham xuddi shu metodni chaqiradi.
    */
-  refreshAll(): { ok: true; started: true; message: string } {
-    // Fire-and-forget — sahifa response'ni darrov qaytaradi
-    this.runRefreshAllInBackground().catch((e) => {
+  refreshAll(actorId?: string): { ok: true; started: true; message: string } {
+    this.runRefreshAllInBackground(actorId).catch((e) => {
       this.log.error(`refreshAll background xato: ${e?.message || e}`);
     });
     return {
@@ -355,33 +443,51 @@ export class CounterpartiesService {
     };
   }
 
-  private async runRefreshAllInBackground(): Promise<void> {
+  private async runRefreshAllInBackground(actorId?: string): Promise<void> {
+    // Faqat standart 9/14 raqamli INN'larga so'rov yuboramiz —
+    // "kod0088", "null0004" kabi qo'lda kiritilgan kontragentlarga tegmaymiz.
     const all = await this.prisma.counterparty.findMany({
       where: { isActive: true },
       select: { inn: true, bankAccounts: true },
     });
+    const standard = all.filter((cp) => isStandardInn(cp.inn));
+    const skippedManual = all.length - standard.length;
+
     let updated = 0, failed = 0;
-    for (const cp of all) {
+    const actorType: 'user' | 'cron' = actorId ? 'user' : 'cron';
+    const noteAction: 'refreshed' | 'cron_refresh' = actorId ? 'refreshed' : 'cron_refresh';
+
+    for (const cp of standard) {
       try {
-        const { company, chamber, bank } = await this.fetchEnrichment(cp.inn);
+        const { company, chamber, bank, source } = await this.fetchEnrichment(cp.inn);
         await this.prisma.counterparty.update({
           where: { inn: cp.inn },
           data: this.mapToRecord(company, chamber, bank, cp.bankAccounts as any[] | null),
         });
+        await this.logHistory({
+          inn: cp.inn, action: noteAction, actorType, actorId,
+          source, note: actorId ? `Hammasini yangilash (${source})` : `Avto-yangilash (${source})`,
+        });
         updated++;
       } catch (e: any) {
         failed++;
+        const friendly = humanizeEnrichmentError(e, cp.inn);
         try {
           await this.prisma.counterparty.update({
             where: { inn: cp.inn },
-            data: { lastFetchError: humanizeEnrichmentError(e, cp.inn), lastFetchedAt: new Date() },
+            data: { lastFetchError: friendly, lastFetchedAt: new Date() },
+          });
+          await this.logHistory({
+            inn: cp.inn, action: noteAction, actorType, actorId,
+            source: 'none', note: `Yangilash xato: ${friendly.slice(0, 120)}`,
           });
         } catch { /* ignore */ }
       }
-      // Yengil zaxira — rate limit'ga tushmaslik uchun
       await new Promise((r) => setTimeout(r, 200));
     }
-    this.log.log(`refreshAll tugadi: ${updated} yangilandi, ${failed} xato (jami ${all.length})`);
+    this.log.log(
+      `refreshAll tugadi: ${updated} yangilandi, ${failed} xato, ${skippedManual} qo'lda (jami ${all.length})`,
+    );
   }
 
   // ────────────────────────── Import / Export ──────────────────────────
@@ -422,15 +528,18 @@ export class CounterpartiesService {
 
     if (rowsToProcess.length === 0) return result;
 
-    // 1) Validate va format'siz INN'larni alohida ajratamiz
-    const validRows: Array<{ inn: string; name: string }> = [];
+    // 1) Validate — har qanday non-empty (max 20 belgi) qabul qilamiz.
+    //    Legacy INN'lar (null0004, kod0088, 528369 va h.k.) ham saqlanadi —
+    //    faqat avto-yangilanish 9/14 raqamli standart INN'lar uchun ishlaydi.
+    const validRows: Array<{ inn: string; name: string; isStandard: boolean }> = [];
     for (const r of rowsToProcess) {
-      if (!/^\d{9}$|^\d{14}$/.test(r.inn)) {
+      if (r.inn.length > 20) {
         result.failed++;
-        result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: 'INN noto\'g\'ri (9 yoki 14 raqam)' });
+        result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: '20 belgidan oshib ketdi' });
         continue;
       }
-      validRows.push({ inn: r.inn, name: r.name || `INN ${r.inn}` });
+      const isStandard = /^\d{9}$|^\d{14}$/.test(r.inn);
+      validRows.push({ inn: r.inn, name: r.name || `INN ${r.inn}`, isStandard });
     }
 
     // 2) Dublikatlarni bitta query bilan tekshiramiz (1 ta SELECT)
@@ -452,11 +561,14 @@ export class CounterpartiesService {
           inn: r.inn,
           name: r.name,
           addedBy,
-          lastFetchError: 'Avto-yangilanish kutilmoqda (cron 08:00–22:00)',
+          lastFetchError: r.isStandard
+            ? 'Avto-yangilanish kutilmoqda (cron 08:00–22:00)'
+            : 'Nostandart INN — qo\'lda tahrirlash kerak',
         });
       }
     }
 
+    const successfullyInserted: string[] = [];
     if (toInsert.length > 0) {
       try {
         const inserted = await this.prisma.counterparty.createMany({
@@ -464,22 +576,43 @@ export class CounterpartiesService {
           skipDuplicates: true,
         });
         result.added = inserted.count;
-        // Hammasini "added" sifatida qaytaramiz (createMany batch'da bo'lganlar)
         for (const r of toInsert) {
           result.rows.push({ inn: r.inn, name: r.name, status: 'added' });
+          successfullyInserted.push(r.inn);
         }
       } catch (e: any) {
-        // Bulk fail bo'lsa — har birini alohida sinab ko'ramiz
         this.log.warn(`Bulk insert xato: ${e?.message} — har birini alohida sinaymiz`);
         for (const r of toInsert) {
           try {
             await this.prisma.counterparty.create({ data: r });
             result.added++;
             result.rows.push({ inn: r.inn, name: r.name, status: 'added' });
+            successfullyInserted.push(r.inn);
           } catch (ee: any) {
             result.failed++;
             result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: ee?.message || 'xato' });
           }
+        }
+      }
+
+      // History — har bir saqlangan kontragent uchun bitta yozuv
+      // (bulk insert qilamiz ko'p qator log uchun ham)
+      if (successfullyInserted.length > 0) {
+        try {
+          let actorName: string | null = null;
+          const u = await this.prisma.adminUser.findUnique({
+            where: { id: addedBy }, select: { fullName: true, email: true },
+          });
+          actorName = u?.fullName || u?.email || null;
+          await this.prisma.counterpartyHistory.createMany({
+            data: successfullyInserted.map((inn) => ({
+              inn, action: 'imported', actorType: 'user', actorId: addedBy, actorName,
+              source: null, fieldsChanged: [],
+              note: 'Excel import orqali qo\'shildi',
+            })),
+          });
+        } catch (e: any) {
+          this.log.warn(`Import history yozish xato: ${e?.message}`);
         }
       }
     }
@@ -565,6 +698,11 @@ export class CounterpartiesService {
 
 // __ Re-export VAT status map ___ (foydali bo'lishi mumkin)
 export { VAT_STATUS_MAP };
+
+/** Standart INN — 9 yoki 14 raqamli. Aks holda "qo'lda kiritilgan". */
+export function isStandardInn(inn: string): boolean {
+  return /^\d{9}$|^\d{14}$/.test(inn);
+}
 
 /**
  * DIDOX/Chamber xato xabarlarini foydalanuvchiga tushunarli matnga aylantiradi.

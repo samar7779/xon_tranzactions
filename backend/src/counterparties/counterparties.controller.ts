@@ -46,6 +46,13 @@ export class CounterpartiesController {
     return this.svc.getOne(inn);
   }
 
+  @Get(':inn/history')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Kontragent tarixi — kim qachon qo\'shgan/tahrirlagan' })
+  history(@Param('inn') inn: string, @Query('limit') limit?: string) {
+    return this.svc.getHistory(inn, limit ? Number(limit) : 50);
+  }
+
   @Post()
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
   @ApiOperation({ summary: 'Yangi kontragent (INN + Name; qolgani DIDOX\'dan)' })
@@ -56,22 +63,22 @@ export class CounterpartiesController {
   @Post(':inn/refresh')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
   @ApiOperation({ summary: 'DIDOX\'dan qaytadan olib yangilash (name tegilmaydi)' })
-  refresh(@Param('inn') inn: string) {
-    return this.svc.refresh(inn);
+  refresh(@Param('inn') inn: string, @CurrentUser('id') userId: string) {
+    return this.svc.refresh(inn, userId);
   }
 
   @Patch(':inn')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
   @ApiOperation({ summary: 'Qo\'lda tahrirlash — barcha maydonlar (PINFL/qo\'lda yozilgan kontragentlar uchun)' })
-  update(@Param('inn') inn: string, @Body() body: any) {
-    return this.svc.update(inn, body);
+  update(@Param('inn') inn: string, @Body() body: any, @CurrentUser('id') userId: string) {
+    return this.svc.update(inn, body, userId);
   }
 
   @Delete(':inn')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
   @ApiOperation({ summary: 'O\'chirish' })
-  remove(@Param('inn') inn: string) {
-    return this.svc.remove(inn);
+  remove(@Param('inn') inn: string, @CurrentUser('id') userId: string) {
+    return this.svc.remove(inn, userId);
   }
 
   @Post('import')
