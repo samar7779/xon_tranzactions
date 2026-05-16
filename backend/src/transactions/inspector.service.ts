@@ -240,18 +240,10 @@ export class InspectorService {
       }
     }
 
-    // ─── getDocDetails (payment_state_name uchun) — 4 ta variant sinab ko'ramiz ───
-    const docDetails = await this.tryGetDocDetails({
-      baseUrl: bank.apiBaseUrl!,
-      login,
-      password,
-      useProxy: cred.useProxy === true,
-      branch: account.branch,
-      account: account.accountNo,
-      bank_day: parsed.ddate,
-      doc_id: parsed.generalId,
-      sign: parsed.sign,
-    });
+    // getDocDetails 403 qaytaradi (auth turli xil bo'lishi mumkin) — chaqirilmaydi.
+    // Har bir chaqiruv +APILogin = 2 ta qo'shimcha bank so'rovi va 5-10s sekinlik,
+    // bulk rejimda bu rate limit'ga olib keladi. Verdikt va parsed yetarli.
+    const docDetails = { result: null, error: null, triedVariants: [] as string[] };
 
     return {
       ok: true,

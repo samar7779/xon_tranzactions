@@ -40,7 +40,7 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
   const [bulkProgress, setBulkProgress] = useState(0);
 
   const mut = useMutation({
-    mutationFn: (rawId: string) => api.post<any>('/transactions/inspect-id', { id: rawId }),
+    mutationFn: (rawId: string) => api.post<any>('/transactions/inspect-id', { id: rawId }, { timeout: 30_000 }),
     onSuccess: (r: any) => { setResult(r); setError(null); },
     onError: (e: any) => { setError(e?.message || 'Xato'); setResult(null); },
   });
@@ -102,13 +102,18 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
       updated[i] = { ...updated[i], status: 'loading' };
       setRows([...updated]);
       try {
-        const r = await api.post<any>('/transactions/inspect-id', { id: updated[i].id });
+        // Timeout 60s — bank javobi 5-15s, ba'zan sekinroq
+        const r = await api.post<any>('/transactions/inspect-id', { id: updated[i].id }, { timeout: 60_000 });
         updated[i] = { ...updated[i], status: 'done', result: r };
       } catch (e: any) {
         updated[i] = { ...updated[i], status: 'error', error: e?.message || 'xato' };
       }
       setRows([...updated]);
       setBulkProgress(i + 1);
+      // Bankni urmaslik uchun IDlar orasida qisqa pauza
+      if (i < updated.length - 1) {
+        await new Promise((res) => setTimeout(res, 250));
+      }
     }
     setBulkRunning(false);
   }
