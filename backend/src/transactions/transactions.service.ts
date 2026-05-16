@@ -3,6 +3,12 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 
+// YYYY-MM-DD ko'rinishidagi sana — Tashkent kunining boshi/oxiri (UTC+5)
+// Filtrlash bu yerda bo'lishi shart, aks holda foydalanuvchi tanlagan sana
+// UTC sifatida talqin qilinib, kun 5 soatga "siljiydi".
+const parseDayStartTashkent = (d: string) => new Date(`${d}T00:00:00+05:00`);
+const parseDayEndTashkent   = (d: string) => new Date(`${d}T23:59:59.999+05:00`);
+
 export interface ExportFilters {
   q?: string;
   direction?: string;
@@ -29,8 +35,8 @@ export class TransactionsService {
     if (accountId) where.accountId = accountId;
     if (dateFrom || dateTo) {
       where.txnDate = {};
-      if (dateFrom) where.txnDate.gte = new Date(dateFrom);
-      if (dateTo) where.txnDate.lte = new Date(dateTo);
+      if (dateFrom) where.txnDate.gte = parseDayStartTashkent(dateFrom);
+      if (dateTo) where.txnDate.lte = parseDayEndTashkent(dateTo);
     }
     if (q) {
       where.OR = [
@@ -151,15 +157,21 @@ export class TransactionsService {
    * Har bir kun to'ldiriladi (tranzaksiyasiz kunlar ham 0 bilan), grafik uzluksiz bo'lishi uchun.
    */
   async daily(from?: string, to?: string, bankId?: string, accountId?: string) {
-    const toDate = to ? new Date(to) : new Date();
-    const fromDate = from
-      ? new Date(from)
-      : (() => { const d = new Date(toDate); d.setDate(d.getDate() - 29); return d; })();
+    // Tashkent kuni asosida ishlaymiz — backend serveri qaysi TZ'da bo'lishidan qat'i nazar
+    const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // UTC+5
+    const tashkentToday = (() => {
+      const d = new Date(Date.now() + TZ_OFFSET_MS);
+      return d.toISOString().slice(0, 10);
+    })();
+    const endStr = to || tashkentToday;
+    const startStr = from || (() => {
+      const d = new Date(`${endStr}T00:00:00+05:00`);
+      d.setUTCDate(d.getUTCDate() - 29);
+      return d.toISOString().slice(0, 10);
+    })();
 
-    const startStr = fromDate.toISOString().slice(0, 10);
-    const endStr = toDate.toISOString().slice(0, 10);
-    const start = new Date(`${startStr}T00:00:00.000Z`);
-    const end = new Date(`${endStr}T23:59:59.999Z`);
+    const start = new Date(`${startStr}T00:00:00+05:00`);
+    const end   = new Date(`${endStr}T23:59:59.999+05:00`);
 
     const where: any = { txnDate: { gte: start, lte: end } };
     if (bankId) where.bankId = bankId;
@@ -170,9 +182,12 @@ export class TransactionsService {
       select: { txnDate: true, direction: true, amount: true },
     });
 
+    // Bucket key — Tashkent kun (YYYY-MM-DD), UTC emas
+    const toTashkentKey = (d: Date) => new Date(d.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10);
+
     const map = new Map<string, { inflow: number; outflow: number; count: number }>();
     for (const t of txns) {
-      const key = t.txnDate.toISOString().slice(0, 10);
+      const key = toTashkentKey(t.txnDate);
       const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
       const amt = Number(t.amount);
       if (t.direction === 'IN') e.inflow += amt;
@@ -182,12 +197,13 @@ export class TransactionsService {
     }
 
     const days: { date: string; inflow: number; outflow: number; net: number; count: number }[] = [];
-    const cursor = new Date(start);
-    while (cursor <= end) {
-      const key = cursor.toISOString().slice(0, 10);
+    let cursor = new Date(`${startStr}T00:00:00+05:00`);
+    const limit = new Date(`${endStr}T00:00:00+05:00`);
+    while (cursor <= limit) {
+      const key = toTashkentKey(cursor);
       const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
       days.push({ date: key, inflow: e.inflow, outflow: e.outflow, net: e.inflow - e.outflow, count: e.count });
-      cursor.setUTCDate(cursor.getUTCDate() + 1);
+      cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
     }
 
     const totalIn = days.reduce((s, d) => s + d.inflow, 0);
@@ -209,8 +225,8 @@ export class TransactionsService {
     if (filters.matchStatus) where.matchStatus = filters.matchStatus;
     if (filters.dateFrom || filters.dateTo) {
       where.txnDate = {};
-      if (filters.dateFrom) where.txnDate.gte = new Date(filters.dateFrom);
-      if (filters.dateTo) where.txnDate.lte = new Date(filters.dateTo);
+      if (filters.dateFrom) where.txnDate.gte = parseDayStartTashkent(filters.dateFrom);
+      if (filters.dateTo) where.txnDate.lte = parseDayEndTashkent(filters.dateTo);
     }
     if (filters.q) {
       where.OR = [
@@ -296,8 +312,8 @@ export class TransactionsService {
     const where: any = {};
     if (dateFrom || dateTo) {
       where.txnDate = {};
-      if (dateFrom) where.txnDate.gte = new Date(dateFrom);
-      if (dateTo) where.txnDate.lte = new Date(dateTo);
+      if (dateFrom) where.txnDate.gte = parseDayStartTashkent(dateFrom);
+      if (dateTo) where.txnDate.lte = parseDayEndTashkent(dateTo);
     }
     const [grouped, total, byBank] = await Promise.all([
       this.prisma.transaction.groupBy({

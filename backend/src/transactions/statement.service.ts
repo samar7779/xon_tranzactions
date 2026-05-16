@@ -38,10 +38,9 @@ export class StatementService {
       throw new BadRequestException('Bank API manzili sozlanmagan');
     }
 
-    const from = new Date(dateFrom);
-    const to = new Date(dateTo);
-    from.setHours(0, 0, 0, 0);
-    to.setHours(0, 0, 0, 0);
+    // YYYY-MM-DD stringlari Tashkent kunlari sifatida talqin qilinadi (UTC+5)
+    const from = new Date(`${dateFrom}T00:00:00+05:00`);
+    const to   = new Date(`${dateTo}T00:00:00+05:00`);
     const days = Math.floor((to.getTime() - from.getTime()) / DAY_MS) + 1;
     if (days < 1) throw new BadRequestException("dateFrom dateTo dan keyin bo'lmasligi kerak");
     if (days > MAX_DAYS) {
