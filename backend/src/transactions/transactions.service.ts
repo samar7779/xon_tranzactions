@@ -100,20 +100,15 @@ export class TransactionsService {
       if (amountMax != null) where.amount.lte = amountMax;
     }
 
-    // contractStatus — DB'da yo'q, lekin contractNumber + crm_contracts orqali aniqlanadi
-    // Filter qiladigan variantlar: 'verified', 'unverified', 'none'
+    // contractStatuses / contractNumbers — shartnoma raqamlari (vergul bilan)
+    // __NONE__ alohida ko'rib chiqiladi (NULL contractNumber)
     const csList = this.parseList(contractStatuses);
     if (csList) {
+      const includeNone = csList.includes('__NONE__');
+      const nums = csList.filter((s) => s !== '__NONE__');
       const conds: any[] = [];
-      if (csList.includes('none')) conds.push({ contractNumber: null });
-      // verified/unverified — contractNumber bor + CrmContract.found bo'yicha
-      // Bu murakkab JOIN, oddiy AND/OR bilan qila olmaymiz. Soddalashtirish uchun:
-      // verified = contractNumber bor (lokal tekshirib chiqamiz keyin)
-      // unverified = contractNumber bor (lokal tekshirib chiqamiz keyin)
-      // Bu yerda faqat "none" filteri ishlaydi, qolganlari list'da post-filter qilinadi
-      if (csList.includes('verified') || csList.includes('unverified')) {
-        conds.push({ contractNumber: { not: null } });
-      }
+      if (nums.length > 0) conds.push({ contractNumber: { in: nums } });
+      if (includeNone) conds.push({ contractNumber: null });
       if (conds.length > 0) {
         if (where.OR) where.AND = [{ OR: where.OR }, { OR: conds }];
         else where.OR = conds;
@@ -279,15 +274,24 @@ export class TransactionsService {
       case 'direction': {
         return { ok: true, values: [{ id: 'IN', name: 'Kirim' }, { id: 'OUT', name: 'Chiqim' }] };
       }
-      case 'contractStatus': {
-        return {
-          ok: true,
-          values: [
-            { id: 'verified', name: '✓ CRM tasdiqlagan' },
-            { id: 'unverified', name: '⚠ CRM topmagan (xato)' },
-            { id: 'none', name: '— Shartnoma yo\'q' },
-          ],
-        };
+      case 'contractStatus':
+      case 'contractNumber': {
+        // Distinct shartnoma raqamlari (jadval ichida mavjud, limit 500)
+        const txs = await this.prisma.transaction.findMany({
+          where: { ...where, contractNumber: { not: null } },
+          distinct: ['contractNumber'],
+          select: { contractNumber: true },
+          orderBy: { contractNumber: 'asc' },
+          take: 500,
+        });
+        const values = txs.map((t) => ({ id: t.contractNumber!, name: t.contractNumber! }));
+        // (Bo'sh — shartnomasi yo'q) yozuvini ham qo'shamiz
+        const anyEmpty = await this.prisma.transaction.findFirst({
+          where: { ...where, contractNumber: null },
+          select: { id: true },
+        });
+        if (anyEmpty) values.unshift({ id: '__NONE__', name: "— Shartnoma yo'q" });
+        return { ok: true, values };
       }
       case 'hisobNomi': {
         // Yuboruvchi va Qabul qiluvchi nomlari — distinct (limit 500)
