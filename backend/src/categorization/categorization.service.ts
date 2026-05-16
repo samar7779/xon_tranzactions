@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from './crm-contract-cache.service';
 import { extractContractNumber } from './contract-parser';
