@@ -465,31 +465,29 @@ export default function TransactionsPage() {
               ? <ChevronRight className="h-4 w-4" />
               : <ChevronLeft className="h-4 w-4" />}
           </button>
-        </div>
 
-        {/* ═══ TOP ACTIONS — KPI ostida (Backfill + Recategorize) ═══ */}
-        <div className="flex items-center justify-end gap-2">
-          <button
-            onClick={() => setBackfillOpen(true)}
-            title={t('toolBackfill')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-slate-700 bg-white ring-1 ring-slate-200 hover:bg-indigo-50 hover:ring-indigo-300 hover:text-indigo-700 transition-all shadow-sm"
-          >
-            <History className="h-3.5 w-3.5" />
-            {t('toolBackfill')}
-          </button>
-          {canManageCategories && (
+          {/* Action icons — KPI o'ng yuqori qismida kichik square tugmalar */}
+          <div className="absolute -top-3 right-12 flex items-center gap-1.5 z-10">
             <button
-              onClick={() => recategorizeAllMut.mutate()}
-              disabled={recategorizeAllMut.isPending}
-              title="Barcha tranzaksiyalarni qayta kategoriyalash"
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 transition-all shadow-sm hover:shadow-md disabled:opacity-60"
+              onClick={() => setBackfillOpen(true)}
+              title={t('toolBackfill')}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-300 shadow-sm hover:shadow transition-all"
             >
-              {recategorizeAllMut.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Wand2 className="h-3.5 w-3.5" />}
-              Kategoriyalash
+              <History className="h-3.5 w-3.5" />
             </button>
-          )}
+            {canManageCategories && (
+              <button
+                onClick={() => recategorizeAllMut.mutate()}
+                disabled={recategorizeAllMut.isPending}
+                title="Barcha tranzaksiyalarni qayta kategoriyalash"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm hover:shadow-md hover:shadow-amber-500/40 transition-all disabled:opacity-60"
+              >
+                {recategorizeAllMut.isPending
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Wand2 className="h-3.5 w-3.5" />}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ═══ FILTER BAR ═══ */}
