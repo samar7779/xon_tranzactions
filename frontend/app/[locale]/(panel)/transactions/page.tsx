@@ -1924,6 +1924,10 @@ function CombinedEditDialog({
   });
   const crmItems = searchQuery.data?.items || [];
 
+  // Kontragent picker'dan yashiriladigan kategoriyalar (qo'lda tanlash uchun emas)
+  const HIDDEN_KONTRAGENTS = ['COUNTERPARTY_RETURN', 'COUNTERPARTY'];
+  const visibleTree = tree.filter((t: any) => !HIDDEN_KONTRAGENTS.includes(t.code));
+
   const selectedTop = tree.find((t) => t.id === selectedTopId);
   const subs = selectedTop?.children || [];
   const isClient = selectedTop?.code === 'CLIENT';
@@ -1961,7 +1965,7 @@ function CombinedEditDialog({
               Kontragent
             </label>
             <div className="grid grid-cols-2 gap-1.5">
-              {tree.map((t: any) => {
+              {visibleTree.map((t: any) => {
                 const selected = selectedTopId === t.id;
                 const color = t.color || '#64748b';
                 return (
