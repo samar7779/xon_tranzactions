@@ -203,7 +203,7 @@ export class CrmService {
       return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || null;
     };
 
-    // 3) Har bir natijaga customerName qo'shamiz
+    // 3) Har bir natijaga customerName qo'shamiz — FAQAT F.I.O. (object/residence emas)
     const enriched = items.map((it) => {
       const num = String(it.contract || it.id || '').trim().toUpperCase();
       const customerName = cacheMap.get(num)
@@ -212,9 +212,8 @@ export class CrmService {
         || it.full_name
         || it.full_name_kirill
         || it.full_name_lotin
-        || it.object
-        || it.object_name
         || null;
+      // it.object / it.object_name ATAYLAB tashlab ketildi — bu OBYEKT nomi, mijoz emas
       return { ...it, customerName };
     });
 
@@ -240,18 +239,14 @@ export class CrmService {
         const res = showResults[i];
         if (res.status === 'fulfilled' && (res.value as any)?.detail) {
           const detail: any = (res.value as any).detail;
-          // Barcha mumkin bo'lgan nom maydonlari (CRM turli versiyalarda boshqacha keladi)
-          const name = detail.client?.full_name_kirill
-            || detail.client?.full_name_lotin
-            || detail.client?.full_name
-            || detail.client?.name
-            || detail.client?.fio
+          // Avval extractClientName helper bilan (object → last+first+middle)
+          // Keyin oddiy maydonlar (object nomi YO'Q — F.I.O. emas)
+          const name = extractClientName(detail)
             || detail.fio
             || detail.full_name_kirill
             || detail.full_name_lotin
             || detail.full_name
             || detail.client_name
-            || detail.name
             || null;
           if (name) {
             const num = String(missingName[i].contract || missingName[i].id || '').trim().toUpperCase();

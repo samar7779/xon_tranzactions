@@ -89,11 +89,20 @@ export class CrmContractCacheService {
         const res = await this.crm.show({ contract: v });
         const detail: any = (res as any)?.detail;
         if ((res as any)?.ok && detail) {
-          const customerName = detail.client?.full_name_kirill
-            || detail.client?.full_name_lotin
-            || detail.client?.full_name
-            || detail.client?.name
-            || null;
+          // XonSaroy client object'dan F.I.O. yig'ish (last + first + middle)
+          const buildName = (c: any): string | null => {
+            if (!c) return null;
+            if (typeof c === 'string') return c.trim() || null;
+            const f = (v: any): string => {
+              if (!v) return '';
+              if (typeof v === 'string') return v;
+              return v.kirill || v.lotin || '';
+            };
+            const name = [f(c.last_name), f(c.first_name), f(c.middle_name)].filter(Boolean).join(' ').trim();
+            if (name) return name;
+            return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || null;
+          };
+          const customerName = buildName(detail.client) || detail.fio || null;
           const status = String(detail.status || detail.contract_status || '').toLowerCase() || null;
           const objectName = detail.object_name || detail.client?.object_name || null;
           const apartmentNumber = detail.apartment_number || detail.client?.apartment_number || null;
