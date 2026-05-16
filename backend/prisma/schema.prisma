@@ -473,7 +473,7 @@ enum PaymentSource {
 // ─────────────────────────────────────────────────────────────────
 model Counterparty {
   id                String    @id @default(cuid())
-  inn               String    @unique @db.VarChar(14)        // 9 yoki 14 raqam (INN/PINFL)
+  inn               String    @unique @db.VarChar(20)        // 9/14 raqam standart, lekin legacy kodlar uchun (null0004, kod0088, va h.k.) ruxsat etilgan
   name              String    @db.VarChar(255)               // foydalanuvchi kiritgan — refresh'da o'zgarmaydi
 
   // — DIDOX briefData'dan keladigan maydonlar (cron yangilaydi) —
@@ -524,4 +524,28 @@ model Counterparty {
   @@index([addedBy])
   @@index([lastFetchedAt])
   @@map("counterparties")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// COUNTERPARTY_HISTORY — audit log
+// Har bir o'zgarish (qo'shildi, tahrirlandi, yangilandi, o'chirildi)
+// shu yerda saqlanadi: kim, qachon, qaysi manbadan.
+// ─────────────────────────────────────────────────────────────────
+model CounterpartyHistory {
+  id              String   @id @default(cuid())
+  inn             String   @db.VarChar(20)               // kontragent INN — easy filter
+  action          String   @db.VarChar(20)               // created | manual_edit | refreshed | cron_refresh | imported | deleted
+  actorType       String   @map("actor_type") @db.VarChar(10)  // user | cron | system
+  actorId         String?  @map("actor_id") @db.VarChar(50)    // AdminUser.id (cron uchun null)
+  actorName       String?  @map("actor_name") @db.VarChar(190) // log uchun shu paytdagi nom (admin keyin o'chirilsa ham qoladi)
+  source          String?  @db.VarChar(30)               // didox | chamber | didox+chamber | manual | none
+  fieldsChanged   String[] @map("fields_changed") @default([])   // qaysi maydonlar o'zgardi
+  note            String?  @db.Text                      // qisqacha izoh
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([inn, createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
+  @@map("counterparty_history")
 }
