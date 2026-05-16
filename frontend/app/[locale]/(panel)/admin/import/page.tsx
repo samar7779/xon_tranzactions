@@ -33,7 +33,7 @@ interface KindDef {
 
 const KINDS: KindDef[] = [
   { key: 'transactions',   label: 'Tranzaksiyalar',  icon: Wallet,         description: "Bank vipiskasi formatiga moslangan Excel", available: true },
-  { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va nom bo\'yicha (kelajakda)',        available: false },
+  { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va Nom bo\'yicha (dublikat skip)',     available: true },
   { key: 'customers',      label: 'Mijozlar',        icon: Users,          description: 'CRM mijozlarini import (kelajakda)',       available: false },
   { key: 'contracts',      label: 'Shartnomalar',    icon: FileSignature,  description: 'Shartnomalar tarixi (kelajakda)',          available: false },
 ];
@@ -107,6 +107,7 @@ export default function ImportPage() {
 
       {/* ─── Active panel ─── */}
       {activeKind === 'transactions' && <TransactionsImportPanel />}
+      {activeKind === 'counterparties' && <CounterpartiesImportPanel />}
     </div>
   );
 }
@@ -281,17 +282,190 @@ function TransactionsImportPanel() {
   );
 }
 
-function Stat({ label, value, color }: { label: string; value: number; color: 'slate' | 'emerald' | 'amber' | 'rose' }) {
+function Stat({ label, value, color }: { label: string; value: number; color: 'slate' | 'emerald' | 'amber' | 'rose' | 'indigo' }) {
   const colorMap = {
     slate:   'bg-slate-50 ring-slate-100 text-slate-700',
     emerald: 'bg-emerald-50 ring-emerald-100 text-emerald-700',
     amber:   'bg-amber-50 ring-amber-100 text-amber-700',
     rose:    'bg-rose-50 ring-rose-100 text-rose-700',
+    indigo:  'bg-indigo-50 ring-indigo-100 text-indigo-700',
   };
   return (
     <div className={cn('rounded-xl ring-1 px-4 py-3', colorMap[color])}>
       <div className="text-[10px] uppercase tracking-wider font-bold opacity-75">{label}</div>
       <div className="text-2xl font-bold tabular-nums mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// KONTRAGENTLAR import paneli — /counterparties/import
+// Excel: A=INN, B=Nom
+// ═══════════════════════════════════════════════════════════════════════
+interface CounterpartyImportResult {
+  total: number;
+  added: number;
+  updated: number;
+  skipped: number;
+  failed: number;
+  rows: Array<{ inn: string; name?: string; status: 'added' | 'updated' | 'skipped' | 'failed'; reason?: string }>;
+}
+
+const CP_COLUMNS: Array<{ letter: string; header: string; description: string; required?: boolean }> = [
+  { letter: 'A', header: 'INN', description: 'Kontragent INN (9 yoki 14 raqam)', required: true },
+  { letter: 'B', header: 'Nom', description: 'Tashkilot nomi (DIDOX cron orqali avto-yangilanadi)' },
+];
+
+function CounterpartiesImportPanel() {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const [result, setResult] = useState<CounterpartyImportResult | null>(null);
+  const [failedOpen, setFailedOpen] = useState(false);
+
+  const mut = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.postForm<CounterpartyImportResult>('/counterparties/import', fd, { timeout: 300_000 });
+    },
+    onSuccess: (r) => {
+      setResult(r);
+      if (r.failed === 0) {
+        toast.success(`${r.added} qo'shildi, ${r.updated} yangilandi`);
+      } else {
+        toast(`Tugadi: ${r.added + r.updated} ishlandi, ${r.failed} xato`, {
+          icon: '⚠️',
+          style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' },
+        });
+      }
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || 'Import xato');
+    },
+  });
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setFileName(file.name);
+    setResult(null);
+    mut.mutate(file);
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
+  const failedRows = result?.rows?.filter((r) => r.status === 'failed') || [];
+
+  return (
+    <div className="space-y-5">
+      <Card className="border-0 shadow-soft">
+        <CardContent className="p-6 space-y-5">
+          <div className="flex items-center gap-2 pb-1">
+            <Briefcase className="h-4 w-4 text-indigo-600" />
+            <div className="text-sm font-semibold text-slate-800">Kontragentlarni Excel'dan import qilish</div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={mut.isPending}
+              className="h-12 px-5 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold"
+            >
+              {mut.isPending ? (
+                <><Loader2 className="h-5 w-5 animate-spin" /> Yuklanmoqda...</>
+              ) : (
+                <><Upload className="h-5 w-5" /> Excel yuklash (.xlsx)</>
+              )}
+            </Button>
+            {fileName && !mut.isPending && (
+              <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
+              </div>
+            )}
+          </div>
+
+          {result && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <Stat label="Jami"        value={result.total}   color="slate" />
+                <Stat label="Qo'shildi"   value={result.added}   color="emerald" />
+                <Stat label="Yangilandi"  value={result.updated} color="indigo" />
+                <Stat label="Skip"        value={result.skipped} color="amber" />
+                <Stat label="Xato"        value={result.failed}  color="rose" />
+              </div>
+              {result.failed > 0 && (
+                <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+                  <button
+                    onClick={() => setFailedOpen((o) => !o)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <AlertTriangle className="h-4 w-4" />
+                      {result.failed} ta xato qatorlar
+                    </span>
+                    {failedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                  {failedOpen && (
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
+                      {failedRows.map((r, i) => (
+                        <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
+                          <span className="font-mono text-rose-700 shrink-0">INN {r.inn}:</span>
+                          <span className="text-slate-700">{r.reason || '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Format guide */}
+      <Card className="border-0 shadow-soft">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Info className="h-4 w-4 text-indigo-600" />
+            <div className="text-sm font-semibold text-slate-800">Excel format</div>
+          </div>
+          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <table className="w-full text-[11px]">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
+                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {CP_COLUMNS.map((c) => (
+                  <tr key={c.letter} className="hover:bg-slate-50/50">
+                    <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
+                    <td className="px-3 py-2 font-mono text-slate-800">
+                      {c.header}
+                      {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+            <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
+            <div>• <b>INN majburiy</b> — bo'sh qatorlar o'tkazib yuboriladi</div>
+            <div>• <b>Dublikat:</b> INN allaqachon DB'da bo'lsa, nomi yangilanadi (skip emas)</div>
+            <div>• <b>Nom bo'sh bo'lsa</b> — DIDOX cron orqali fon rejimida to'ldiriladi</div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
