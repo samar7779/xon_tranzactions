@@ -9,6 +9,7 @@ import {
   Loader2, Wallet, X, ChevronRight,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { TransactionsTabs } from '@/components/transactions-tabs';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -131,6 +132,7 @@ export default function StatementPage() {
   return (
     <>
       <Topbar title={t('title')} subtitle={t('subtitle')} />
+      <TransactionsTabs />
 
       <div className="flex-1 p-6 lg:p-8 w-full">
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
