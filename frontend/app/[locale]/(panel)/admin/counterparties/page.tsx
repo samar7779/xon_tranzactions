@@ -101,6 +101,9 @@ export default function CounterpartiesPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
+  // Filter chips
+  const [ratingTier, setRatingTier] = useState<'' | 'high' | 'mid' | 'ok' | 'low' | 'none'>('');
+  const [statusFilter, setStatusFilter] = useState<'' | 'manual' | 'error' | 'never' | 'enriched'>('');
   const [addOpen, setAddOpen] = useState(false);
   const [addInn, setAddInn] = useState('');
   const [addName, setAddName] = useState('');
@@ -111,11 +114,20 @@ export default function CounterpartiesPage() {
   const [refreshingInn, setRefreshingInn] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  function buildQueryParams(): URLSearchParams {
+    const p = new URLSearchParams();
+    if (q) p.set('q', q);
+    if (ratingTier) p.set('ratingTier', ratingTier);
+    if (statusFilter) p.set('status', statusFilter);
+    return p;
+  }
+
   const listQuery = useQuery({
-    queryKey: ['counterparties', page, perPage, q],
+    queryKey: ['counterparties', page, perPage, q, ratingTier, statusFilter],
     queryFn: () => {
-      const p = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-      if (q) p.set('q', q);
+      const p = buildQueryParams();
+      p.set('page', String(page));
+      p.set('perPage', String(perPage));
       return api.get<{
         ok: boolean; total: number; page: number; perPage: number;
         items: Counterparty[]; didoxConfigured: boolean;
@@ -203,8 +215,7 @@ export default function CounterpartiesPage() {
 
   async function onExport() {
     try {
-      const p = new URLSearchParams();
-      if (q) p.set('q', q);
+      const p = buildQueryParams();
       await apiDownload(`/counterparties/export?${p}`, `kontragentlar-${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (e: any) {
       toast.error(e?.message || tc('error'));
@@ -328,25 +339,77 @@ export default function CounterpartiesPage() {
           />
         </div>
 
-        {/* Search bar */}
+        {/* Search + filter chips */}
         <Card className="border-0 shadow-soft overflow-visible">
-          <CardContent className="p-4 flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[260px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                value={q}
-                onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                placeholder={t('search')}
-                className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
-              />
-              {q && (
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Search */}
+              <div className="relative flex-1 min-w-[260px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  value={q}
+                  onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                  placeholder={t('search')}
+                  className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
+                />
+                {q && (
+                  <button
+                    onClick={() => { setQ(''); setPage(1); }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Aktiv filtrlarni tozalash */}
+              {(ratingTier || statusFilter || q) && (
                 <button
-                  onClick={() => { setQ(''); setPage(1); }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  onClick={() => { setQ(''); setRatingTier(''); setStatusFilter(''); setPage(1); }}
+                  className="text-[12px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1 px-2 h-10"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="h-3.5 w-3.5" /> {t('filterReset')}
                 </button>
               )}
+            </div>
+
+            {/* Filter chips — 2 ta qator: Reyting + Holat */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mr-1">{t('rating')}:</span>
+              {[
+                { v: '',     label: 'Hammasi',     tone: 'slate' as const },
+                { v: 'high', label: 'Yuqori',      tone: 'emerald' as const },
+                { v: 'mid',  label: "O'rta",       tone: 'blue' as const },
+                { v: 'ok',   label: 'Qoniqarli',   tone: 'amber' as const },
+                { v: 'low',  label: 'Quyi',        tone: 'rose' as const },
+                { v: 'none', label: 'Reyting yo\'q', tone: 'slate' as const },
+              ].map((opt) => (
+                <FilterChip
+                  key={opt.v}
+                  label={opt.label}
+                  active={ratingTier === opt.v}
+                  tone={opt.tone}
+                  onClick={() => { setRatingTier(opt.v as any); setPage(1); }}
+                />
+              ))}
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mr-1">Holat:</span>
+              {[
+                { v: '',         label: 'Hammasi',          tone: 'slate' as const },
+                { v: 'enriched', label: 'To\'liq ma\'lumot', tone: 'emerald' as const },
+                { v: 'manual',   label: 'Qo\'lda',          tone: 'violet' as const },
+                { v: 'never',    label: 'Yangilanmagan',    tone: 'amber' as const },
+                { v: 'error',    label: 'Xato',             tone: 'rose' as const },
+              ].map((opt) => (
+                <FilterChip
+                  key={opt.v}
+                  label={opt.label}
+                  active={statusFilter === opt.v}
+                  tone={opt.tone}
+                  onClick={() => { setStatusFilter(opt.v as any); setPage(1); }}
+                />
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -697,6 +760,37 @@ function KpiTile({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function FilterChip({
+  label, active, tone, onClick,
+}: {
+  label: string;
+  active: boolean;
+  tone: 'slate' | 'emerald' | 'blue' | 'amber' | 'rose' | 'violet';
+  onClick: () => void;
+}) {
+  const inactiveCls = 'bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100';
+  const activeMap: Record<string, string> = {
+    slate:   'bg-slate-700 text-white ring-slate-700',
+    emerald: 'bg-emerald-600 text-white ring-emerald-600',
+    blue:    'bg-blue-600 text-white ring-blue-600',
+    amber:   'bg-amber-500 text-white ring-amber-500',
+    rose:    'bg-rose-600 text-white ring-rose-600',
+    violet:  'bg-violet-600 text-white ring-violet-600',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 transition-colors',
+        active ? activeMap[tone] : inactiveCls,
+      )}
+    >
+      {label}
+    </button>
   );
 }
 

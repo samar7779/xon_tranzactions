@@ -15,6 +15,9 @@ const VAT_STATUS_MAP: Record<number, string> = {
   60: 'Жисмоний шахс',
 };
 
+export type RatingTier = 'high' | 'mid' | 'ok' | 'low' | 'none';
+export type StatusFilter = 'manual' | 'error' | 'never' | 'enriched';
+
 export interface ListQuery {
   page?: number;
   perPage?: number;
@@ -22,8 +25,51 @@ export interface ListQuery {
   vatStatus?: string;
   minRating?: number;
   maxRating?: number;
+  /** Reyting kategoriyasi — Yuqori (≥86), O'rta (56-85), Qoniqarli (26-55), Quyi (≤25), Reyting yo'q (null) */
+  ratingTier?: RatingTier;
+  /** Holat: qo'lda kiritilgan / xato berganlar / hech yangilanmagan / muvaffaqiyatli boyitilgan */
+  status?: StatusFilter;
   sortBy?: 'addedAt' | 'name' | 'rating' | 'lastFetchedAt';
   sortDir?: 'asc' | 'desc';
+}
+
+/** ListQuery'dan Prisma where shartini quradi (ham list, ham export ishlatadi) */
+function buildWhere(q: ListQuery): any {
+  const where: any = {};
+  if (q.q) {
+    where.OR = [
+      { inn: { contains: q.q } },
+      { name: { contains: q.q, mode: 'insensitive' } },
+      { director: { contains: q.q, mode: 'insensitive' } },
+      { phone: { contains: q.q } },
+    ];
+  }
+  if (q.vatStatus) where.vatStatus = { contains: q.vatStatus };
+
+  // Reyting kategoriyasi
+  if (q.ratingTier) {
+    if (q.ratingTier === 'none') where.rating = null;
+    else if (q.ratingTier === 'high') where.rating = { gte: 86 };
+    else if (q.ratingTier === 'mid')  where.rating = { gte: 56, lte: 85 };
+    else if (q.ratingTier === 'ok')   where.rating = { gte: 26, lte: 55 };
+    else if (q.ratingTier === 'low')  where.rating = { gte: 0,  lte: 25 };
+  } else if (q.minRating != null || q.maxRating != null) {
+    where.rating = {};
+    if (q.minRating != null) where.rating.gte = Number(q.minRating);
+    if (q.maxRating != null) where.rating.lte = Number(q.maxRating);
+  }
+
+  // Holat filtri
+  if (q.status === 'manual')   where.isManual = true;
+  if (q.status === 'error')    where.lastFetchError = { not: null };
+  if (q.status === 'never')    where.lastFetchedAt = null;
+  if (q.status === 'enriched') {
+    where.isManual = false;
+    where.lastFetchedAt = { not: null };
+    where.lastFetchError = null;
+  }
+
+  return where;
 }
 
 @Injectable()
@@ -209,21 +255,7 @@ export class CounterpartiesService {
   async list(q: ListQuery) {
     const page = Math.max(1, Number(q.page || 1));
     const perPage = Math.min(200, Math.max(1, Number(q.perPage || 50)));
-    const where: any = {};
-    if (q.q) {
-      where.OR = [
-        { inn: { contains: q.q } },
-        { name: { contains: q.q, mode: 'insensitive' } },
-        { director: { contains: q.q, mode: 'insensitive' } },
-        { phone: { contains: q.q } },
-      ];
-    }
-    if (q.vatStatus) where.vatStatus = { contains: q.vatStatus };
-    if (q.minRating != null || q.maxRating != null) {
-      where.rating = {};
-      if (q.minRating != null) where.rating.gte = Number(q.minRating);
-      if (q.maxRating != null) where.rating.lte = Number(q.maxRating);
-    }
+    const where = buildWhere(q);
 
     const sortBy = q.sortBy || 'addedAt';
     const sortDir = q.sortDir || 'desc';
@@ -328,6 +360,7 @@ export class CounterpartiesService {
         inn,
         name, // foydalanuvchi kiritgani — refresh'da o'zgarmaydi
         addedBy,
+        isManual: !isStandardInn(inn),
         ...data,
         lastFetchError: fetchError,
       },
@@ -604,7 +637,7 @@ export class CounterpartiesService {
     const uniqRows = [...uniqMap.values()];
 
     // 4) Yangi va mavjudlarni ajratamiz
-    const toInsert: Array<{ inn: string; name: string; addedBy: string; lastFetchError: string }> = [];
+    const toInsert: Array<{ inn: string; name: string; addedBy: string; isManual: boolean; lastFetchError: string }> = [];
     const toUpdate: Array<{ inn: string; name: string }> = [];
     for (const r of uniqRows) {
       const existingName = existingMap.get(r.inn);
@@ -613,6 +646,7 @@ export class CounterpartiesService {
           inn: r.inn,
           name: r.name,
           addedBy,
+          isManual: !r.isStandard,
           lastFetchError: r.isStandard
             ? 'Avto-yangilanish kutilmoqda (cron 08:00–22:00)'
             : 'Nostandart INN — qo\'lda tahrirlash kerak',
@@ -715,17 +749,9 @@ export class CounterpartiesService {
     return result;
   }
 
-  /** Excel eksport — filtr bo'yicha barcha kontragentlar */
+  /** Excel eksport — list bilan bir xil filter mantig'ini ishlatadi */
   async exportExcel(q: ListQuery): Promise<{ buffer: Buffer; filename: string; count: number }> {
-    const where: any = {};
-    if (q.q) {
-      where.OR = [
-        { inn: { contains: q.q } },
-        { name: { contains: q.q, mode: 'insensitive' } },
-        { director: { contains: q.q, mode: 'insensitive' } },
-      ];
-    }
-    if (q.vatStatus) where.vatStatus = { contains: q.vatStatus };
+    const where = buildWhere(q);
 
     const items = await this.prisma.counterparty.findMany({
       where,

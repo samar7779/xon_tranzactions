@@ -115,6 +115,27 @@ async function main() {
   }
 }
 
+async function backfillCounterpartyManual() {
+  // isManual ustuni yangi qo'shildi — eski qatorlarga to'g'ri qiymat berib chiqamiz.
+  // Standart INN = 9 yoki 14 raqamli. Aks holda isManual=true.
+  try {
+    const updated = await prisma.$executeRawUnsafe(`
+      UPDATE counterparties
+      SET is_manual = NOT (inn ~ '^[0-9]{9}$' OR inn ~ '^[0-9]{14}$')
+      WHERE is_manual IS NULL OR is_manual = false
+    `);
+    if (typeof updated === 'number' && updated > 0) {
+      console.log(`✓ counterparties.is_manual backfilled: ${updated} qator`);
+    }
+  } catch (e: any) {
+    // Jadval hali yo'q bo'lishi mumkin (birinchi deploy) — jim qoldiramiz
+    if (!/does not exist/i.test(e?.message || '')) {
+      console.log(`⚠ is_manual backfill xato: ${e?.message}`);
+    }
+  }
+}
+
 main()
+  .then(() => backfillCounterpartyManual())
   .catch((e) => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
