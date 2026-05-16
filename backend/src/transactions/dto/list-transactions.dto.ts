@@ -63,4 +63,37 @@ export class ListTransactionsDto {
   @ApiPropertyOptional({ description: 'Qidiruv (description, name, ref)' })
   @IsOptional() @IsString()
   q?: string;
+
+  // ─── Google Sheets stilida per-column filterlar (vergul bilan ajratilgan) ───
+  @ApiPropertyOptional({ description: "Bank ID'lari (vergul bilan)" })
+  @IsOptional() @IsString()
+  bankIds?: string;
+
+  @ApiPropertyOptional({ description: "Top kategoriya ID'lari (vergul bilan)" })
+  @IsOptional() @IsString()
+  categoryIds?: string;
+
+  @ApiPropertyOptional({ description: "Subkategoriya ID'lari (vergul bilan)" })
+  @IsOptional() @IsString()
+  subcategoryIds?: string;
+
+  @ApiPropertyOptional({ description: "Yo'nalish (vergul bilan: IN,OUT)" })
+  @IsOptional() @IsString()
+  directions?: string;
+
+  @ApiPropertyOptional({ description: 'Shartnoma holati (vergul bilan: verified,unverified,none)' })
+  @IsOptional() @IsString()
+  contractStatuses?: string;
+
+  @ApiPropertyOptional({ description: 'Summa pastki chegara' })
+  @IsOptional() @Type(() => Number)
+  amountMin?: number;
+
+  @ApiPropertyOptional({ description: 'Summa yuqori chegara' })
+  @IsOptional() @Type(() => Number)
+  amountMax?: number;
+
+  @ApiPropertyOptional({ description: "Hisob nomi (Yuboruvchi/Qabul qiluvchi, ko'p qiymat vergul bilan)" })
+  @IsOptional() @IsString()
+  hisobNomi?: string;
 }

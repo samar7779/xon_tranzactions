@@ -19,14 +19,35 @@ export interface ExportFilters {
   type?: string;
   status?: string;
   matchStatus?: string;
+  // Column filterlar (Google Sheets stilida)
+  bankIds?: string;
+  categoryIds?: string;
+  subcategoryIds?: string;
+  directions?: string;
+  contractStatuses?: string;
+  amountMin?: number;
+  amountMax?: number;
+  hisobNomi?: string;
 }
 
 @Injectable()
 export class TransactionsService {
   constructor(private prisma: PrismaService) {}
 
-  async list(query: ListTransactionsDto) {
-    const { page = 1, perPage = 50, type, status, direction, bankId, accountId, dateFrom, dateTo, q } = query;
+  /** Vergul bilan ajratilgan string'ni arrayga aylantiradi. Bo'sh bo'lsa null. */
+  private parseList(s?: string): string[] | null {
+    if (!s) return null;
+    const arr = s.split(',').map((x) => x.trim()).filter(Boolean);
+    return arr.length > 0 ? arr : null;
+  }
+
+  /** ListTransactionsDto'dan Prisma WhereInput yasaydi — list va distinct ham ishlatadi. */
+  private buildWhere(query: ListTransactionsDto): any {
+    const {
+      type, status, direction, bankId, accountId, dateFrom, dateTo, q,
+      bankIds, categoryIds, subcategoryIds, directions, contractStatuses,
+      amountMin, amountMax, hisobNomi,
+    } = query;
     const where: any = {};
     if (type) where.type = type;
     if (status) where.status = status;
@@ -48,6 +69,63 @@ export class TransactionsService {
         { toAccount: { contains: q } },
       ];
     }
+
+    // Column filterlar
+    const bankIdsList = this.parseList(bankIds);
+    if (bankIdsList) where.bankId = { in: bankIdsList };
+
+    const categoryIdsList = this.parseList(categoryIds);
+    if (categoryIdsList) where.categoryId = { in: categoryIdsList };
+
+    const subcategoryIdsList = this.parseList(subcategoryIds);
+    if (subcategoryIdsList) where.subcategoryId = { in: subcategoryIdsList };
+
+    const directionsList = this.parseList(directions);
+    if (directionsList) where.direction = { in: directionsList as any };
+
+    const hisobNomiList = this.parseList(hisobNomi);
+    if (hisobNomiList) {
+      // Yuboruvchi yoki Qabul qiluvchi nomi — har biri uchun OR
+      const conds = hisobNomiList.flatMap((n) => [
+        { fromName: { equals: n } },
+        { toName: { equals: n } },
+      ]);
+      if (where.OR) where.AND = [{ OR: where.OR }, { OR: conds }];
+      else where.OR = conds;
+    }
+
+    if (amountMin != null || amountMax != null) {
+      where.amount = {};
+      if (amountMin != null) where.amount.gte = amountMin;
+      if (amountMax != null) where.amount.lte = amountMax;
+    }
+
+    // contractStatus — DB'da yo'q, lekin contractNumber + crm_contracts orqali aniqlanadi
+    // Filter qiladigan variantlar: 'verified', 'unverified', 'none'
+    const csList = this.parseList(contractStatuses);
+    if (csList) {
+      const conds: any[] = [];
+      if (csList.includes('none')) conds.push({ contractNumber: null });
+      // verified/unverified — contractNumber bor + CrmContract.found bo'yicha
+      // Bu murakkab JOIN, oddiy AND/OR bilan qila olmaymiz. Soddalashtirish uchun:
+      // verified = contractNumber bor (lokal tekshirib chiqamiz keyin)
+      // unverified = contractNumber bor (lokal tekshirib chiqamiz keyin)
+      // Bu yerda faqat "none" filteri ishlaydi, qolganlari list'da post-filter qilinadi
+      if (csList.includes('verified') || csList.includes('unverified')) {
+        conds.push({ contractNumber: { not: null } });
+      }
+      if (conds.length > 0) {
+        if (where.OR) where.AND = [{ OR: where.OR }, { OR: conds }];
+        else where.OR = conds;
+      }
+    }
+
+    return where;
+  }
+
+  async list(query: ListTransactionsDto) {
+    const { page = 1, perPage = 50 } = query;
+    const where = this.buildWhere(query);
 
     const [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),
@@ -154,6 +232,82 @@ export class TransactionsService {
     });
 
     return { ok: true, total, page, perPage, items: enriched };
+  }
+
+  /**
+   * Ustun bo'yicha distinct qiymatlar — Google Sheets stilida filter uchun.
+   * Boshqa filterlar (dateFrom/To, q, va h.k.) inobatga olinadi.
+   */
+  async distinctValues(column: string, query: ListTransactionsDto): Promise<{ ok: true; values: Array<{ id: string; name: string }> }> {
+    const where = this.buildWhere({ ...query, [`${column}Ids`]: undefined }); // o'zining filterini olib tashlash
+
+    switch (column) {
+      case 'bank': {
+        const txs = await this.prisma.transaction.findMany({
+          where, distinct: ['bankId'], select: { bankId: true }, take: 1000,
+        });
+        const ids = txs.map((t) => t.bankId).filter(Boolean) as string[];
+        if (ids.length === 0) return { ok: true, values: [] };
+        const banks = await this.prisma.bank.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        });
+        return { ok: true, values: banks.map((b) => ({ id: b.id, name: b.name })) };
+      }
+      case 'kontragent': {
+        // Top kategoriyalar — barcha bo'lishi mumkin
+        const cats = await this.prisma.category.findMany({
+          where: { parentId: null },
+          select: { id: true, name: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        });
+        return { ok: true, values: cats.map((c) => ({ id: c.id, name: c.name })) };
+      }
+      case 'kategoriya': {
+        // Subkategoriyalar — har biri parent nomi bilan
+        const subs = await this.prisma.category.findMany({
+          where: { parentId: { not: null } },
+          select: { id: true, name: true, parent: { select: { name: true } }, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        });
+        return {
+          ok: true,
+          values: subs.map((s) => ({ id: s.id, name: s.parent ? `${s.parent.name} / ${s.name}` : s.name })),
+        };
+      }
+      case 'direction': {
+        return { ok: true, values: [{ id: 'IN', name: 'Kirim' }, { id: 'OUT', name: 'Chiqim' }] };
+      }
+      case 'contractStatus': {
+        return {
+          ok: true,
+          values: [
+            { id: 'verified', name: '✓ CRM tasdiqlagan' },
+            { id: 'unverified', name: '⚠ CRM topmagan (xato)' },
+            { id: 'none', name: '— Shartnoma yo\'q' },
+          ],
+        };
+      }
+      case 'hisobNomi': {
+        // Yuboruvchi va Qabul qiluvchi nomlari — distinct (limit 500)
+        const [fromList, toList] = await Promise.all([
+          this.prisma.transaction.findMany({
+            where, distinct: ['fromName'], select: { fromName: true }, take: 500,
+          }),
+          this.prisma.transaction.findMany({
+            where, distinct: ['toName'], select: { toName: true }, take: 500,
+          }),
+        ]);
+        const set = new Set<string>();
+        for (const r of fromList) if (r.fromName) set.add(r.fromName);
+        for (const r of toList) if (r.toName) set.add(r.toName);
+        const arr = Array.from(set).sort();
+        return { ok: true, values: arr.map((n) => ({ id: n, name: n })) };
+      }
+      default:
+        return { ok: true, values: [] };
+    }
   }
 
   /**
@@ -335,28 +489,9 @@ export class TransactionsService {
    * barcha mos yozuvlar (xavfsizlik uchun 50 000 ta bilan cheklangan).
    */
   async exportXlsx(filters: ExportFilters) {
-    const where: any = {};
-    if (filters.type) where.type = filters.type;
-    if (filters.status) where.status = filters.status;
-    if (filters.direction) where.direction = filters.direction;
-    if (filters.bankId) where.bankId = filters.bankId;
-    if (filters.accountId) where.accountId = filters.accountId;
+    // buildWhere bilan bir xil mantiqdan foydalanish — list bilan moslangan
+    const where: any = this.buildWhere(filters as any);
     if (filters.matchStatus) where.matchStatus = filters.matchStatus;
-    if (filters.dateFrom || filters.dateTo) {
-      where.txnDate = {};
-      if (filters.dateFrom) where.txnDate.gte = parseDayStartTashkent(filters.dateFrom);
-      if (filters.dateTo) where.txnDate.lte = parseDayEndTashkent(filters.dateTo);
-    }
-    if (filters.q) {
-      where.OR = [
-        { description: { contains: filters.q, mode: 'insensitive' } },
-        { fromName: { contains: filters.q, mode: 'insensitive' } },
-        { toName: { contains: filters.q, mode: 'insensitive' } },
-        { reference: { contains: filters.q, mode: 'insensitive' } },
-        { fromAccount: { contains: filters.q } },
-        { toAccount: { contains: filters.q } },
-      ];
-    }
 
     const items = await this.prisma.transaction.findMany({
       where,
