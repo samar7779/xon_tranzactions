@@ -625,9 +625,22 @@ export default function TransactionsPage() {
                           {/* Shartnoma */}
                           <td className="px-4 py-3">
                             {it.contractNumber ? (
-                              <code className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded ring-1 ring-indigo-200">
-                                {it.contractNumber}
-                              </code>
+                              <div className="flex flex-col gap-0.5">
+                                <code
+                                  className={cn(
+                                    "inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1",
+                                    it.contractStatus === 'unverified'
+                                      ? 'text-rose-700 bg-rose-50 ring-rose-200'
+                                      : 'text-indigo-700 bg-indigo-50 ring-indigo-200',
+                                  )}
+                                  title={it.contractStatus === 'unverified' ? 'CRM\'da topilmadi (xato)' : it.contractCustomer || ''}
+                                >
+                                  {it.contractNumber}
+                                </code>
+                                {it.contractStatus === 'unverified' && (
+                                  <span className="text-[9px] text-rose-600 font-semibold uppercase tracking-wider">xato</span>
+                                )}
+                              </div>
                             ) : (
                               <span className="text-[10px] text-slate-300">—</span>
                             )}
@@ -1279,49 +1292,45 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                   <FileSignature className="h-3 w-3" /> Shartnoma
                 </div>
                 {row.contractNumber ? (
-                  <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
-                    {row.contractNumber}
-                  </code>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
+                      {row.contractNumber}
+                    </code>
+                    {row.contractStatus === 'verified' && row.contractCustomer && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={row.contractCustomer}>
+                        ✓ {row.contractCustomer}
+                      </span>
+                    )}
+                    {row.contractStatus === 'unverified' && (
+                      <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded ring-1 ring-rose-200 font-semibold">
+                        xato — CRM'da topilmadi
+                      </span>
+                    )}
+                  </div>
                 ) : (
                   <div className="text-[12px] text-slate-400 italic">Topilmadi</div>
                 )}
               </div>
             </div>
 
-            {/* Avto-kategoriyalash tugma + natija */}
-            {canManage && (
+            {/* Avto-kategoriyalash tugma + natija — faqat kategoriya YO'Q bo'lganda */}
+            {canManage && !row.category && (
               <div className="pt-3 border-t border-indigo-200/60">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
-                    {row.category
-                      ? <span className="text-amber-700">Kategoriya bor — qayta hisoblash uchun "Majburiy" tugma</span>
-                      : <span>Qoidalar bo'yicha avto-aniqlash</span>}
+                    Qoidalar bo'yicha avto-aniqlash
                   </div>
                   <div className="flex items-center gap-2">
-                    {!row.category && (
-                      <button
-                        onClick={() => categorizeMut.mutate(false)}
-                        disabled={categorizeMut.isPending}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                      >
-                        {categorizeMut.isPending
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : <Wand2 className="h-3 w-3" />}
-                        Avto-kategoriyalash
-                      </button>
-                    )}
-                    {row.category && (
-                      <button
-                        onClick={() => categorizeMut.mutate(true)}
-                        disabled={categorizeMut.isPending}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700 disabled:opacity-50 transition-colors"
-                      >
-                        {categorizeMut.isPending
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : <Wand2 className="h-3 w-3" />}
-                        Majburiy qayta hisoblash
-                      </button>
-                    )}
+                    <button
+                      onClick={() => categorizeMut.mutate(false)}
+                      disabled={categorizeMut.isPending}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                    >
+                      {categorizeMut.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Wand2 className="h-3 w-3" />}
+                      Avto-kategoriyalash
+                    </button>
                   </div>
                 </div>
 

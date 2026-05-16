@@ -70,18 +70,20 @@ export class TransactionsService {
       }),
     ]);
 
-    // ── Enrichment: counterpartyDisplay (firma nomi)
-    // 1) Boshqa tomon INN/account'larini yig'amiz
+    // ── Enrichment: counterpartyDisplay (firma nomi) + contractStatus
+    // 1) Boshqa tomon INN/account/shartnomalarini yig'amiz
     const otherInns = new Set<string>();
     const otherAccs = new Set<string>();
+    const contractNums = new Set<string>();
     for (const tx of items) {
       const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
       const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
       if (inn) otherInns.add(inn);
       if (acc) otherAccs.add(acc);
+      if (tx.contractNumber) contractNums.add(tx.contractNumber);
     }
-    // 2) Counterparty + BankAccount jadvallaridan bir martalik yig'ib olamiz
-    const [counterparties, ownAccs] = await Promise.all([
+    // 2) Counterparty + BankAccount + CrmContract jadvallaridan bir martalik yig'ib olamiz
+    const [counterparties, ownAccs, crmContracts] = await Promise.all([
       otherInns.size > 0
         ? this.prisma.counterparty.findMany({
             where: { inn: { in: Array.from(otherInns) } },
@@ -94,9 +96,16 @@ export class TransactionsService {
             select: { accountNo: true, ownerName: true },
           })
         : Promise.resolve([]),
+      contractNums.size > 0
+        ? this.prisma.crmContract.findMany({
+            where: { contractNumber: { in: Array.from(contractNums) } },
+            select: { contractNumber: true, found: true, customerName: true, objectName: true },
+          })
+        : Promise.resolve([]),
     ]);
     const cpByInn = new Map(counterparties.map((c) => [c.inn, c.name]));
     const accByNo = new Map(ownAccs.map((a) => [a.accountNo, a.ownerName]));
+    const crmByContract = new Map(crmContracts.map((c) => [c.contractNumber, c]));
 
     // 3) Har bir tx'ga counterpartyDisplay maydonini qo'shamiz
     // Logika:
@@ -118,7 +127,21 @@ export class TransactionsService {
         // CLIENT/BANK/MINFIN/SALARY/LOAN/COUNTERPARTY_RETURN — kategoriya nomi
         counterpartyDisplay = tx.category.name;
       }
-      return { ...tx, counterpartyDisplay };
+
+      // Shartnoma holati: 'verified' (CRM topdi) | 'unverified' (xato) | null
+      let contractStatus: 'verified' | 'unverified' | null = null;
+      let contractCustomer: string | null = null;
+      if (tx.contractNumber) {
+        const crm = crmByContract.get(tx.contractNumber);
+        if (crm) {
+          contractStatus = crm.found ? 'verified' : 'unverified';
+          contractCustomer = crm.customerName || null;
+        } else {
+          // CrmContract jadvalida yo'q — hali CRM'ga so'rov yuborilmagan
+          contractStatus = 'unverified';
+        }
+      }
+      return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
     });
 
     return { ok: true, total, page, perPage, items: enriched };
