@@ -81,4 +81,11 @@ export class CategorizationController {
   status() {
     return this.svc.getStatus();
   }
+
+  @Get('transactions/:id/history')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
+  @ApiOperation({ summary: 'Tranzaksiya kategoriya tarixi — kim qachon nimani o\'zgartirdi' })
+  history(@Param('id') id: string, @Query('limit') limit?: string) {
+    return this.svc.getHistory(id, limit ? Number(limit) : 50);
+  }
 }

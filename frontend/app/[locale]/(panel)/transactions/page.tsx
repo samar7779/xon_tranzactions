@@ -603,22 +603,22 @@ export default function TransactionsPage() {
                                 : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
                             </span>
                           </td>
-                          {/* Kontragent (firma nomi yoki kategoriya placeholder) */}
+                          {/* Kontragent — faqat ko'rinish, edit Tafsilot ichidan */}
                           <td className="px-4 py-3 max-w-[160px]">
                             <KontragentChip
                               display={it.counterpartyDisplay}
                               category={it.category}
-                              onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
-                              canEdit={canManageCategories}
+                              onClick={() => {}}
+                              canEdit={false}
                             />
                           </td>
-                          {/* Kategoriya (subkategoriya yoki TRANSFER/SALARY kabilarda top nomi) */}
+                          {/* Kategoriya — faqat ko'rinish */}
                           <td className="px-4 py-3 max-w-[160px]">
                             <CategoryChip
                               category={it.subcategory || it.category}
                               parentColor={it.category?.color}
-                              onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
-                              canEdit={canManageCategories && !!it.category}
+                              onClick={() => {}}
+                              canEdit={false}
                               placeholder={it.category ? '—' : ''}
                             />
                           </td>
@@ -639,27 +639,9 @@ export default function TransactionsPage() {
                             {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            {canManageCategories ? (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => setDetailRow(it)}>
-                                    <Eye className="h-4 w-4 mr-2" /> {t('openDetail')}
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setCategoryEditRow(it)}>
-                                    <Wand2 className="h-4 w-4 mr-2 text-indigo-600" /> Kategoriya
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            ) : (
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => setDetailRow(it)}>
-                                <Eye className="h-3.5 w-3.5" />
-                              </Button>
-                            )}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                              <CopyIdButton value={it.externalId || it.id} />
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1462,6 +1444,9 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             {row.docType && <CopyRow label={t('detailDocType')} value={row.docType} mono />}
           </DetailSection>
 
+          {/* Tarix (Audit log) */}
+          <CategoryHistorySection txId={row.id} />
+
           {/* Tranzaksiya ID — faqat copy icon */}
           <div className="flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
             <span className="uppercase tracking-wider font-semibold">{t('detailComposite')}</span>
@@ -1615,6 +1600,101 @@ function CopyBlock({ value }: { value: string }) {
       >
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
+    </div>
+  );
+}
+
+// ═══ TARIX — kategoriya o'zgarish tarixi (kim qachon nima qildi)
+function CategoryHistorySection({ txId }: { txId: string }) {
+  const [open, setOpen] = useState(false);
+  const q = useQuery({
+    queryKey: ['tx-category-history', txId],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>(`/categorization/transactions/${txId}/history`),
+    enabled: open && !!txId,
+    staleTime: 30_000,
+  });
+  const items = q.data?.items || [];
+
+  return (
+    <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+      >
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+          <History className="h-3 w-3" /> Tarix
+          {open && items.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[9px] font-bold normal-case tracking-normal">
+              {items.length}
+            </span>
+          )}
+        </div>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 transition-transform shrink-0', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="px-4 pb-3 pt-1 border-t border-slate-100">
+          {q.isLoading ? (
+            <div className="py-3 text-[11px] text-slate-500 flex items-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="py-3 text-[11px] text-slate-400 italic">Tarix yo'q — hali hech kim kategoriyalamagan</div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {items.map((h: any) => (
+                <CategoryHistoryItem key={h.id} h={h} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryHistoryItem({ h }: { h: any }) {
+  const actorLabel = h.actorName || h.action;
+  const actionColor: Record<string, string> = {
+    manual: 'bg-indigo-100 text-indigo-700',
+    sync:   'bg-emerald-100 text-emerald-700',
+    auto:   'bg-violet-100 text-violet-700',
+    cron:   'bg-amber-100 text-amber-700',
+  };
+  const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
+  const renderCat = (name: string | null, sub: string | null) => {
+    if (!name && !sub) return <span className="text-slate-400 italic">bo'sh</span>;
+    return (
+      <span className="font-semibold">
+        {name || '—'}{sub && <span className="text-slate-500 font-normal"> / {sub}</span>}
+      </span>
+    );
+  };
+  return (
+    <div className="rounded-lg ring-1 ring-slate-100 bg-slate-50/50 px-3 py-2 text-[11px] space-y-1">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className={cn('px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider', cls)}>
+            {h.action}
+          </span>
+          <span className="font-medium text-slate-700">{actorLabel}</span>
+        </div>
+        <span className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(h.createdAt)}</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-[11px]">
+        <span className="line-through text-rose-600/80">
+          {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
+        </span>
+        <span className="text-slate-400">→</span>
+        <span className="text-emerald-700">
+          {renderCat(h.newCategoryName, h.newSubcategoryName)}
+        </span>
+      </div>
+      {h.reason && (
+        <div className="text-[10px] text-slate-500 italic">{h.reason}</div>
+      )}
+      {h.contractNumber && (
+        <div className="text-[10px] font-mono text-indigo-600">{h.contractNumber}</div>
+      )}
     </div>
   );
 }

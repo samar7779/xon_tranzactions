@@ -309,6 +309,33 @@ model Category {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TRANSACTION CATEGORY HISTORY — tranzaksiya kategoriyasi audit logi
+// Kim, qachon, qaysi kategoriyani qo'ydi/o'zgartirdi — to'liq tarix.
+// ─────────────────────────────────────────────────────────────────
+model TransactionCategoryHistory {
+  id               String   @id @default(cuid())
+  txId             String   @map("tx_id")
+  action           String   @db.VarChar(20)            // 'sync' | 'auto' | 'manual' | 'cron' | 'force'
+  actorId          String?  @map("actor_id")            // user id (manual uchun)
+  actorName        String?  @map("actor_name") @db.VarChar(128)  // email / 'cron' / 'sync'
+  oldCategoryId    String?  @map("old_category_id")
+  oldCategoryName  String?  @map("old_category_name") @db.VarChar(128)
+  oldSubcategoryId String?  @map("old_subcategory_id")
+  oldSubcategoryName String? @map("old_subcategory_name") @db.VarChar(128)
+  newCategoryId    String?  @map("new_category_id")
+  newCategoryName  String?  @map("new_category_name") @db.VarChar(128)
+  newSubcategoryId String?  @map("new_subcategory_id")
+  newSubcategoryName String? @map("new_subcategory_name") @db.VarChar(128)
+  contractNumber   String?  @map("contract_number") @db.VarChar(32)
+  reason           String?  @db.Text                    // 'CRM topdi: ...' / 'qo'lda o'zgartirildi'
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([txId, createdAt])
+  @@index([actorId])
+  @@map("transaction_category_history")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // CRM CONTRACT CACHE — XonSaroy CRM'dan olingan shartnomalar keshi
 // Har tranzaksiyada CRM'ga so'rov yubormaslik uchun.
 // ─────────────────────────────────────────────────────────────────
