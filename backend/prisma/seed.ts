@@ -163,6 +163,7 @@ const CATEGORY_TREE: CategoryNode[] = [
       { code: 'MINFIN_PROPERTY',    name: 'Налог на имущество' },
       { code: 'MINFIN_PENALTY',     name: 'Штрафы и пеня' },
       { code: 'MINFIN_PROFIT',      name: 'Налог на прибыль' },
+      { code: 'MINFIN_PENSION',     name: 'Пенсия бадали (101)' },
     ],
   },
   {

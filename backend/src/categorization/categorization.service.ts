@@ -58,6 +58,7 @@ interface CategoryRefs {
   MINFIN_PROPERTY: string;
   MINFIN_PENALTY: string;
   MINFIN_PROFIT: string;
+  MINFIN_PENSION: string;
   LOAN_VYDACHA: string;
 }
 
@@ -122,6 +123,14 @@ const TAX_KEYWORDS: Array<[string, keyof CategoryRefs]> = [
   ['АЙЛАНМАДАН',    'MINFIN_PROFIT'],
   ['ФОЙДА СОЛИ',    'MINFIN_PROFIT'],
   ['НАЛОГ НА ПРИБЫЛЬ', 'MINFIN_PROFIT'],
+  // Pensiya badali (101) — fuqarolarning jamg'arib boriladigan pensiya badali
+  ['101 ФУҚАРО',                    'MINFIN_PENSION'],
+  ['101 ФУКАРО',                    'MINFIN_PENSION'],
+  ['ЖАМҒАРИБ БОРИЛАДИГАН ПЕНСИЯ',  'MINFIN_PENSION'],
+  ['ЖАМГАРИБ БОРИЛАДИГАН ПЕНСИЯ',  'MINFIN_PENSION'],
+  ['ПЕНСИЯ БАДАЛ',                  'MINFIN_PENSION'],
+  ['НАКОПИТЕЛЬНОЙ ПЕНСИИ',          'MINFIN_PENSION'],
+  ['НАКОПИТЕЛЬНАЯ ПЕНСИЯ',          'MINFIN_PENSION'],
 ];
 
 export interface CategorizeResult {
@@ -609,6 +618,7 @@ export class CategorizationService {
       'BANK_USLUGI',
       'MINFIN_NDS', 'MINFIN_NDFL', 'MINFIN_NDFL_DIV', 'MINFIN_WATER', 'MINFIN_ESP',
       'MINFIN_WATER_RES', 'MINFIN_LAND', 'MINFIN_PROPERTY', 'MINFIN_PENALTY', 'MINFIN_PROFIT',
+      'MINFIN_PENSION',
       'LOAN_VYDACHA',
     ];
     const refs = {} as CategoryRefs;
