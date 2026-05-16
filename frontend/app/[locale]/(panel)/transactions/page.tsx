@@ -467,6 +467,31 @@ export default function TransactionsPage() {
           </button>
         </div>
 
+        {/* ═══ TOP ACTIONS — KPI ostida (Backfill + Recategorize) ═══ */}
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => setBackfillOpen(true)}
+            title={t('toolBackfill')}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-slate-700 bg-white ring-1 ring-slate-200 hover:bg-indigo-50 hover:ring-indigo-300 hover:text-indigo-700 transition-all shadow-sm"
+          >
+            <History className="h-3.5 w-3.5" />
+            {t('toolBackfill')}
+          </button>
+          {canManageCategories && (
+            <button
+              onClick={() => recategorizeAllMut.mutate()}
+              disabled={recategorizeAllMut.isPending}
+              title="Barcha tranzaksiyalarni qayta kategoriyalash"
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[12px] font-semibold text-white bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 transition-all shadow-sm hover:shadow-md disabled:opacity-60"
+            >
+              {recategorizeAllMut.isPending
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <Wand2 className="h-3.5 w-3.5" />}
+              Kategoriyalash
+            </button>
+          )}
+        </div>
+
         {/* ═══ FILTER BAR ═══ */}
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 lg:p-5">
@@ -521,11 +546,11 @@ export default function TransactionsPage() {
                 `}</style>
               </div>
 
-              {/* Asboblar — bitta dropdown ichida: Tarix, ID, Eksport */}
+              {/* Yuklab olish — Download icon (Tarix/Recategorize endi KPI yonida) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title={t('toolsTitle')}
+                    title="Yuklab olish"
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
                       'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
@@ -534,28 +559,10 @@ export default function TransactionsPage() {
                       'ring-1 ring-indigo-400/30',
                     )}
                   >
-                    <Wrench className="h-4 w-4" />
+                    <Download className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('tools')}</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
-                    <History className="h-4 w-4 mr-2 text-indigo-600" />
-                    <span className="flex-1">{t('toolBackfill')}</span>
-                  </DropdownMenuItem>
-                  {canManageCategories && (
-                    <DropdownMenuItem
-                      onClick={() => recategorizeAllMut.mutate()}
-                      disabled={recategorizeAllMut.isPending}
-                      className="cursor-pointer"
-                    >
-                      {recategorizeAllMut.isPending
-                        ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
-                        : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
-                      <span className="flex-1">Kategoriyalarni qayta hisoblash</span>
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('exportByFilter')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
                     <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
