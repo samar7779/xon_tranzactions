@@ -82,7 +82,21 @@ export default function TransactionsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  // localStorage'dan filter o'qish (mount paytida, client-only)
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [detailRow, setDetailRow] = useState<any>(null);
+  const [idSearchOpen, setIdSearchOpen] = useState(false);
+  const [idQuery, setIdQuery] = useState('');
+  const [idSearching, setIdSearching] = useState(false);
+  const [backfillOpen, setBackfillOpen] = useState(false);
+  const [categoryEditRow, setCategoryEditRow] = useState<any>(null);
+  const [lookupContract, setLookupContract] = useState<{ contract: string; description: string | null } | null>(null);
+
+  // Google Sheets'ga o'xshash per-ustun filterlash
+  const [columnFilterMode, setColumnFilterMode] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+
+  // ─── localStorage persistance — mount paytida o'qish ───
   useEffect(() => {
     try {
       const raw = localStorage.getItem('tx-filters-v1');
@@ -95,7 +109,6 @@ export default function TransactionsPage() {
         if (typeof f?.dateFrom === 'string') setDateFrom(f.dateFrom);
         if (typeof f?.dateTo === 'string') setDateTo(f.dateTo);
       }
-      // Column filterlar
       const rawCol = localStorage.getItem('tx-column-filters-v1');
       if (rawCol) {
         const obj = JSON.parse(rawCol);
@@ -108,7 +121,17 @@ export default function TransactionsPage() {
     } catch { /* ignore */ }
   }, []);
 
-  // Column filterlar saqlash
+  // Asosiy filterlarni localStorage'ga yozish
+  useEffect(() => {
+    try {
+      const filters = { q, direction, matchStatus, bankId, dateFrom, dateTo };
+      const hasAny = q || direction !== 'all' || matchStatus !== 'all' || bankId !== 'all' || dateFrom || dateTo;
+      if (hasAny) localStorage.setItem('tx-filters-v1', JSON.stringify(filters));
+      else localStorage.removeItem('tx-filters-v1');
+    } catch { /* ignore */ }
+  }, [q, direction, matchStatus, bankId, dateFrom, dateTo]);
+
+  // Column filterlarni localStorage'ga yozish
   useEffect(() => {
     try {
       const obj: Record<string, string[]> = {};
@@ -119,31 +142,6 @@ export default function TransactionsPage() {
       else localStorage.removeItem('tx-column-filters-v1');
     } catch { /* ignore */ }
   }, [columnFilters]);
-
-  // Filter o'zgarishlarini localStorage'ga saqlash
-  useEffect(() => {
-    try {
-      const filters = { q, direction, matchStatus, bankId, dateFrom, dateTo };
-      const hasAny = q || direction !== 'all' || matchStatus !== 'all' || bankId !== 'all' || dateFrom || dateTo;
-      if (hasAny) localStorage.setItem('tx-filters-v1', JSON.stringify(filters));
-      else localStorage.removeItem('tx-filters-v1');
-    } catch { /* ignore */ }
-  }, [q, direction, matchStatus, bankId, dateFrom, dateTo]);
-  const [filterOpen, setFilterOpen] = useState(false);
-  const [detailRow, setDetailRow] = useState<any>(null);
-  const [idSearchOpen, setIdSearchOpen] = useState(false);
-  const [idQuery, setIdQuery] = useState('');
-  const [idSearching, setIdSearching] = useState(false);
-  const [backfillOpen, setBackfillOpen] = useState(false);
-  const [categoryEditRow, setCategoryEditRow] = useState<any>(null);
-  const [lookupContract, setLookupContract] = useState<{ contract: string; description: string | null } | null>(null);
-
-  // Google Sheets'ga o'xshash per-ustun filterlash
-  const [columnFilterMode, setColumnFilterMode] = useState(false);
-  // Har ustun uchun tanlangan qiymatlar to'plami
-  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
-  // Hozir ochilgan filter popover (ustun nomi)
-  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
 
   // Kategoriyalar daraxti (1 marta yuklanadi)
   const categoriesQuery = useQuery({
