@@ -117,7 +117,6 @@ async function main() {
 
 async function backfillCounterpartyManual() {
   // isManual ustuni yangi qo'shildi — eski qatorlarga to'g'ri qiymat berib chiqamiz.
-  // Standart INN = 9 yoki 14 raqamli. Aks holda isManual=true.
   try {
     const updated = await prisma.$executeRawUnsafe(`
       UPDATE counterparties
@@ -128,14 +127,36 @@ async function backfillCounterpartyManual() {
       console.log(`✓ counterparties.is_manual backfilled: ${updated} qator`);
     }
   } catch (e: any) {
-    // Jadval hali yo'q bo'lishi mumkin (birinchi deploy) — jim qoldiramiz
     if (!/does not exist/i.test(e?.message || '')) {
       console.log(`⚠ is_manual backfill xato: ${e?.message}`);
     }
   }
 }
 
+async function backfillHistoryActorEmail() {
+  // counterparty_history.actor_name — avval fullName saqlanardi.
+  // Endi email (login) saqlaymiz. Eski qatorlarni admin_users'dan email bilan yangilab chiqamiz.
+  try {
+    const updated = await prisma.$executeRawUnsafe(`
+      UPDATE counterparty_history h
+      SET actor_name = u.email
+      FROM admin_users u
+      WHERE h.actor_id = u.id
+        AND u.email IS NOT NULL
+        AND (h.actor_name IS NULL OR h.actor_name <> u.email)
+    `);
+    if (typeof updated === 'number' && updated > 0) {
+      console.log(`✓ counterparty_history.actor_name backfilled (email): ${updated} qator`);
+    }
+  } catch (e: any) {
+    if (!/does not exist/i.test(e?.message || '')) {
+      console.log(`⚠ actor_name backfill xato: ${e?.message}`);
+    }
+  }
+}
+
 main()
   .then(() => backfillCounterpartyManual())
+  .then(() => backfillHistoryActorEmail())
   .catch((e) => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
