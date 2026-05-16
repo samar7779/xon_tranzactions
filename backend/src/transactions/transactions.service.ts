@@ -166,7 +166,13 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany({
         where,
-        orderBy: { txnDate: 'desc' },
+        // Sana → vaqt → ID bo'yicha kamayish: eng yangi tepada
+        orderBy: [
+          { txnDate: 'desc' },
+          { inputAt: 'desc' },
+          { operationTime: 'desc' },
+          { createdAt: 'desc' },
+        ],
         skip: (page - 1) * perPage,
         take: perPage,
         include: {
@@ -609,7 +615,12 @@ export class TransactionsService {
 
     const items = await this.prisma.transaction.findMany({
       where,
-      orderBy: { txnDate: 'desc' },
+      orderBy: [
+        { txnDate: 'desc' },
+        { inputAt: 'desc' },
+        { operationTime: 'desc' },
+        { createdAt: 'desc' },
+      ],
       take: 50000,
       include: {
         bank: { select: { name: true } },
