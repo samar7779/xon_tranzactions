@@ -142,9 +142,9 @@ export default function StatementPage() {
             {/* Step 1 — Bank */}
             <Card className="border-0 shadow-soft">
               <CardContent className="p-5 space-y-3">
-                <StepLabel n={1} icon={Building2} text="Bankni tanlang" />
+                <StepLabel n={1} icon={Building2} text={t('step1Bank')} />
                 <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); setAccSearch(''); }}>
-                  <SelectTrigger className="h-11"><SelectValue placeholder="Bank" /></SelectTrigger>
+                  <SelectTrigger className="h-11"><SelectValue placeholder={t('bankPlaceholder')} /></SelectTrigger>
                   <SelectContent>
                     {sortedBanks.filter((b: any) => b.isActive).map((b: any) => (
                       <SelectItem key={b.id} value={b.id}>
@@ -156,7 +156,7 @@ export default function StatementPage() {
                     ))}
                     {sortedBanks.filter((b: any) => !b.isActive).length > 0 && (
                       <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
-                        Aktiv emas
+                        {t('inactiveBanks')}
                       </div>
                     )}
                     {sortedBanks.filter((b: any) => !b.isActive).map((b: any) => (
@@ -170,7 +170,7 @@ export default function StatementPage() {
             {/* Step 3 — Sana */}
             <Card className="border-0 shadow-soft">
               <CardContent className="p-5 space-y-3">
-                <StepLabel n={3} icon={Calendar} text="Sana oralig'ini tanlang" />
+                <StepLabel n={3} icon={Calendar} text={t('step3Date')} />
                 <div className="flex flex-wrap gap-1.5">
                   {DATE_PRESETS.map((p) => {
                     const active = activePreset === p.key;
@@ -208,9 +208,9 @@ export default function StatementPage() {
               <div className="bg-gradient-to-br from-emerald-500 to-teal-600 px-5 py-4 text-white">
                 <div className="flex items-center gap-1.5 mb-1 text-white/80">
                   <FileSpreadsheet className="h-3.5 w-3.5" />
-                  <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Выписка лицевых счетов</span>
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('downloadCardTitle')}</span>
                 </div>
-                <div className="text-sm font-bold">Yuklab olishga tayyor</div>
+                <div className="text-sm font-bold">{t('readyToDownload')}</div>
               </div>
               <CardContent className="p-5 space-y-3">
                 {selectedAccount ? (
@@ -222,10 +222,10 @@ export default function StatementPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-400">Hisob tanlanmagan</div>
+                  <div className="text-xs text-slate-400">{t('noAccountSelected')}</div>
                 )}
                 <div className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-3 py-2">
-                  <span className="text-slate-500">Davr</span>
+                  <span className="text-slate-500">{t('period')}</span>
                   <span className="font-medium text-slate-700 tabular-nums">
                     {formatDate(dateFrom)} — {formatDate(dateTo)}
                   </span>
