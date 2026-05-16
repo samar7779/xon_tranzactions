@@ -76,6 +76,12 @@ function buildWhere(q: ListQuery): any {
 export class CounterpartiesService {
   private readonly log = new Logger(CounterpartiesService.name);
 
+  // refreshAll bir vaqtning o'zida faqat bitta ishlasin —
+  // cron eskisi tugamasdan ikkinchi marta ishga tushsa, DIDOX'ga ikki baravar bosim tushadi.
+  private refreshAllRunning = false;
+  private refreshAllStartedAt: Date | null = null;
+  private refreshAllProgress: { done: number; total: number } | null = null;
+
   constructor(
     private prisma: PrismaService,
     private didox: DidoxService,
@@ -511,7 +517,22 @@ export class CounterpartiesService {
    * Foydalanuvchi 504 timeout kutmaydi: 100 ta kontragent = 5+ daqiqa ish.
    * Cron ham xuddi shu metodni chaqiradi.
    */
-  refreshAll(actorId?: string): { ok: true; started: true; message: string } {
+  refreshAll(actorId?: string): { ok: true; started: boolean; message: string; runningSince?: string; progress?: { done: number; total: number } } {
+    if (this.refreshAllRunning) {
+      const since = this.refreshAllStartedAt;
+      const mins = since ? Math.floor((Date.now() - since.getTime()) / 60000) : 0;
+      const progressStr = this.refreshAllProgress
+        ? ` (${this.refreshAllProgress.done}/${this.refreshAllProgress.total})`
+        : '';
+      this.log.warn(`refreshAll allaqachon ishlamoqda (${mins} daqiqadan beri)${progressStr} — yangi chaqiruv rad etildi`);
+      return {
+        ok: true,
+        started: false,
+        message: `Yangilash allaqachon ishlamoqda${progressStr} — ${mins} daqiqadan beri. Tugashini kuting.`,
+        runningSince: since?.toISOString(),
+        progress: this.refreshAllProgress || undefined,
+      };
+    }
     this.runRefreshAllInBackground(actorId).catch((e) => {
       this.log.error(`refreshAll background xato: ${e?.message || e}`);
     });
@@ -522,51 +543,79 @@ export class CounterpartiesService {
     };
   }
 
+  /** Joriy refreshAll holatini qaytaradi — UI badge uchun. */
+  getRefreshAllStatus(): { running: boolean; startedAt: string | null; progress: { done: number; total: number } | null } {
+    return {
+      running: this.refreshAllRunning,
+      startedAt: this.refreshAllStartedAt?.toISOString() || null,
+      progress: this.refreshAllProgress,
+    };
+  }
+
   private async runRefreshAllInBackground(actorId?: string): Promise<void> {
-    // Faqat standart 9/14 raqamli INN'larga so'rov yuboramiz —
-    // "kod0088", "null0004" kabi qo'lda kiritilgan kontragentlarga tegmaymiz.
-    const all = await this.prisma.counterparty.findMany({
-      where: { isActive: true },
-      select: { inn: true, bankAccounts: true },
-    });
-    const standard = all.filter((cp) => isStandardInn(cp.inn));
-    const skippedManual = all.length - standard.length;
+    // Lock — bir vaqtning o'zida faqat bitta run bo'lsin.
+    if (this.refreshAllRunning) {
+      this.log.warn('runRefreshAllInBackground: allaqachon ishlamoqda, o\'tkazib yuborildi');
+      return;
+    }
+    this.refreshAllRunning = true;
+    this.refreshAllStartedAt = new Date();
+    this.refreshAllProgress = { done: 0, total: 0 };
 
-    let updated = 0, failed = 0;
-    const actorType: 'user' | 'cron' = actorId ? 'user' : 'cron';
-    const noteAction: 'refreshed' | 'cron_refresh' = actorId ? 'refreshed' : 'cron_refresh';
+    try {
+      // Faqat standart 9/14 raqamli INN'larga so'rov yuboramiz —
+      // "kod0088", "null0004" kabi qo'lda kiritilgan kontragentlarga tegmaymiz.
+      const all = await this.prisma.counterparty.findMany({
+        where: { isActive: true },
+        select: { inn: true, bankAccounts: true },
+      });
+      const standard = all.filter((cp) => isStandardInn(cp.inn));
+      const skippedManual = all.length - standard.length;
+      this.refreshAllProgress = { done: 0, total: standard.length };
 
-    for (const cp of standard) {
-      try {
-        const { company, chamber, bank, source } = await this.fetchEnrichment(cp.inn);
-        await this.prisma.counterparty.update({
-          where: { inn: cp.inn },
-          data: this.mapToRecord(company, chamber, bank, cp.bankAccounts as any[] | null),
-        });
-        await this.logHistory({
-          inn: cp.inn, action: noteAction, actorType, actorId,
-          source, note: actorId ? `Hammasini yangilash (${source})` : `Avto-yangilash (${source})`,
-        });
-        updated++;
-      } catch (e: any) {
-        failed++;
-        const friendly = humanizeEnrichmentError(e, cp.inn);
+      let updated = 0, failed = 0;
+      const actorType: 'user' | 'cron' = actorId ? 'user' : 'cron';
+      const noteAction: 'refreshed' | 'cron_refresh' = actorId ? 'refreshed' : 'cron_refresh';
+
+      for (const cp of standard) {
         try {
+          const { company, chamber, bank, source } = await this.fetchEnrichment(cp.inn);
           await this.prisma.counterparty.update({
             where: { inn: cp.inn },
-            data: { lastFetchError: friendly, lastFetchedAt: new Date() },
+            data: this.mapToRecord(company, chamber, bank, cp.bankAccounts as any[] | null),
           });
           await this.logHistory({
             inn: cp.inn, action: noteAction, actorType, actorId,
-            source: 'none', note: `Yangilash xato: ${friendly.slice(0, 120)}`,
+            source, note: actorId ? `Hammasini yangilash (${source})` : `Avto-yangilash (${source})`,
           });
-        } catch { /* ignore */ }
+          updated++;
+        } catch (e: any) {
+          failed++;
+          const friendly = humanizeEnrichmentError(e, cp.inn);
+          try {
+            await this.prisma.counterparty.update({
+              where: { inn: cp.inn },
+              data: { lastFetchError: friendly, lastFetchedAt: new Date() },
+            });
+            await this.logHistory({
+              inn: cp.inn, action: noteAction, actorType, actorId,
+              source: 'none', note: `Yangilash xato: ${friendly.slice(0, 120)}`,
+            });
+          } catch { /* ignore */ }
+        }
+        this.refreshAllProgress = { done: updated + failed, total: standard.length };
+        await new Promise((r) => setTimeout(r, 200));
       }
-      await new Promise((r) => setTimeout(r, 200));
+      const durSec = Math.round((Date.now() - (this.refreshAllStartedAt?.getTime() || Date.now())) / 1000);
+      this.log.log(
+        `refreshAll tugadi: ${updated} yangilandi, ${failed} xato, ${skippedManual} qo'lda (jami ${all.length}, ${durSec}s)`,
+      );
+    } finally {
+      // Lock'ni doim ozod qilamiz — exception bo'lsa ham keyingi cron ishlasin.
+      this.refreshAllRunning = false;
+      this.refreshAllStartedAt = null;
+      this.refreshAllProgress = null;
     }
-    this.log.log(
-      `refreshAll tugadi: ${updated} yangilandi, ${failed} xato, ${skippedManual} qo'lda (jami ${all.length})`,
-    );
   }
 
   // ────────────────────────── Import / Export ──────────────────────────
