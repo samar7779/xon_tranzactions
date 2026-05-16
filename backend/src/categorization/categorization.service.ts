@@ -276,24 +276,30 @@ export class CategorizationService {
   }
 
   /**
-   * Shartnoma raqamini qo'lda o'zgartirish — CRM'da tekshiriladi va CrmContract keshiga yoziladi.
+   * Shartnoma raqamini qo'lda o'zgartirish — CRM'da tasdiqlanmasa rad etadi.
+   * Faqat verified shartnomalarni qabul qiladi (yoki null — o'chirish).
    */
   async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; verified: boolean; customerName: string | null }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
       select: { contractNumber: true, categoryId: true, subcategoryId: true },
     });
-    if (!old) throw new Error('Tranzaksiya topilmadi');
+    if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
     const newContract = contractNumber?.trim().toUpperCase() || null;
     let verified = false;
     let customerName: string | null = null;
 
-    // CRM'da tekshirish
+    // CRM'da tekshirish — manual saqlashda majburiy
     if (newContract) {
       const cached = await this.crmCache.lookup(newContract);
       verified = !!cached?.found;
       customerName = cached?.customerName || null;
+      if (!verified) {
+        throw new BadRequestException(
+          `Shartnoma "${newContract}" CRM'da topilmadi. Qayta tekshiring yoki Tozalash bilan o'chiring.`,
+        );
+      }
     }
 
     await this.prisma.transaction.update({
