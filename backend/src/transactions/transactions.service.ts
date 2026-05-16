@@ -664,7 +664,8 @@ export class TransactionsService {
       { header: 'Bank nomi', key: 'bank', width: 22 },
       { header: 'Hisob raqami', key: 'accountNo', width: 26 },
       { header: 'Hisob nomi', key: 'accountName', width: 32 },
-      { header: 'Sana / Vaqt', key: 'dateTime', width: 18 },
+      { header: 'Sana', key: 'date', width: 12 },
+      { header: 'Vaqt', key: 'time', width: 10 },
       { header: 'Yuboruvchi nomi', key: 'fromName', width: 32 },
       { header: "Yo'nalish", key: 'direction', width: 12 },
       { header: 'Kontragent', key: 'kontragent', width: 28 },
@@ -699,16 +700,25 @@ export class TransactionsService {
       else if (it.category?.name) kontragent = it.category.name;
       // Kategoriya = subcategory.name yoki category.name (TRANSFER/SALARY uchun)
       const kategoriya = it.subcategory?.name || it.category?.name || '';
-      // Sana + vaqt
-      const dateStr = it.txnDate ? new Date(it.txnDate).toLocaleDateString('uz-UZ') : '';
-      const timeStr = it.operationTime ? it.operationTime.slice(0, 5) : '';
-      const dateTime = dateStr + (timeStr ? ` ${timeStr}` : '');
+      // Sana — dd.MM.yyyy (Tashkent kuni asosida), Vaqt — alohida ustun (HH:mm)
+      let date = '';
+      if (it.txnDate) {
+        const d = new Date(it.txnDate);
+        // Tashkent (UTC+5) kuni — server TZ'dan qat'i nazar
+        const tz = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+        const dd = String(tz.getUTCDate()).padStart(2, '0');
+        const mm = String(tz.getUTCMonth() + 1).padStart(2, '0');
+        const yyyy = tz.getUTCFullYear();
+        date = `${dd}.${mm}.${yyyy}`;
+      }
+      const time = it.operationTime ? it.operationTime.slice(0, 5) : '';
 
       const row = ws.addRow({
         bank: it.bank?.name || it.account?.bank?.name || '',
         accountNo: it.account?.accountNo || '',
         accountName: it.account?.ownerName || '',
-        dateTime,
+        date,
+        time,
         fromName: it.fromName || '',
         direction: it.direction === 'IN' ? 'Kirim' : 'Chiqim',
         kontragent,
@@ -724,6 +734,13 @@ export class TransactionsService {
         size: 9,
         color: { argb: it.direction === 'IN' ? 'FF047857' : 'FFBE123C' },
       };
+      // Sana va Vaqt — Excel auto-format'siz (text), markazlashtirilgan
+      const dateCell = row.getCell('date');
+      dateCell.numFmt = '@';
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      const timeCell = row.getCell('time');
+      timeCell.numFmt = '@';
+      timeCell.alignment = { horizontal: 'center', vertical: 'middle' };
       // Shartnoma — monospace ko'rinish uchun
       if (it.contractNumber) {
         row.getCell('shartnoma').font = { name: 'Consolas', size: 9, bold: true };
