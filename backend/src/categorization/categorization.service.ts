@@ -373,13 +373,25 @@ export class CategorizationService {
       contractNumber = extractContractNumber(tx.description);
     }
 
-    // ── 2) Klient/Физ.Л/Юр.Л — shartnoma raqami CRM'da mavjud bo'lsa
+    // ── 2) Klient/Физ.Л/Юр.Л — shartnoma raqami description'da topilsa, CLIENT
+    // CRM tasdiqlasa — subkategoriya CRM ma'lumoti bo'yicha (parking/kvartira)
+    // CRM topa olmasa ("xato" hol — legacy 1h-cloumn.py) — baribir CLIENT, default VZNOS_KV
     if (contractNumber) {
       const cached = await this.crmCache.lookup(contractNumber);
-      if (cached?.found && !this.isExcludedClientStatus(cached.status)) {
-        categoryId = refs.CLIENT;
-        subcategoryId = this.pickClientSubcategory(desc, direction, cached, refs);
-        reason = `CRM topdi: ${cached.customerName || cached.contractNumber}`;
+      const inCrm = cached?.found && !this.isExcludedClientStatus(cached.status);
+      if (inCrm || cached) {
+        // Status excluded bo'lsa — CLIENT emas (reinvestiция / фиктивный)
+        if (cached?.found && this.isExcludedClientStatus(cached.status)) {
+          // skip — CLIENT emas, boshqa qoidalarga o'tamiz
+        } else {
+          categoryId = refs.CLIENT;
+          subcategoryId = inCrm
+            ? this.pickClientSubcategory(desc, direction, cached!, refs)
+            : this.pickClientSubcategory(desc, direction, { objectName: null, apartmentNumber: null }, refs);
+          reason = inCrm
+            ? `CRM topdi: ${cached!.customerName || cached!.contractNumber}`
+            : `Shartnoma topildi (${contractNumber}) — CRM'da tasdiqlanmagan`;
+        }
       }
     }
 
