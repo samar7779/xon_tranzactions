@@ -100,7 +100,7 @@ export default function TransactionsPage() {
   const [idSearching, setIdSearching] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [categoryEditRow, setCategoryEditRow] = useState<any>(null);
-  const [lookupContract, setLookupContract] = useState<string | null>(null);
+  const [lookupContract, setLookupContract] = useState<{ contract: string; description: string | null } | null>(null);
 
   // Kategoriyalar daraxti (1 marta yuklanadi)
   const categoriesQuery = useQuery({
@@ -665,11 +665,11 @@ export default function TransactionsPage() {
                                     <AlertCircle className="h-3 w-3" /> xato
                                   </span>
                                   <button
-                                    onClick={(e) => { e.stopPropagation(); setLookupContract(it.contractNumber); }}
-                                    title="CRM'dan o'xshash shartnomalarni ko'rish"
-                                    className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-500 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); setLookupContract({ contract: it.contractNumber, description: it.description }); }}
+                                    title="AI yordamida o'xshash shartnomalarni topish"
+                                    className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                                   >
-                                    <Search className="h-3 w-3" />
+                                    <Wand2 className="h-3 w-3" />
                                   </button>
                                 </div>
                               ) : (
@@ -765,10 +765,11 @@ export default function TransactionsPage() {
         saving={setCategoryMut.isPending}
       />
 
-      {/* ═══ SHARTNOMA LOOKUP — xato shartnomalar uchun ma'lumot ═══ */}
+      {/* ═══ AI SHARTNOMA LOOKUP — xato shartnomalar uchun ma'lumot + nom ═══ */}
       {lookupContract && (
         <ContractLookupDialog
-          contractNumber={lookupContract}
+          contractNumber={lookupContract.contract}
+          description={lookupContract.description}
           onClose={() => setLookupContract(null)}
         />
       )}
@@ -1204,6 +1205,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
+  const [lookupContractDetail, setLookupContractDetail] = useState<{ contract: string; description: string | null } | null>(null);
 
   // Tafsilot uchun jonli ma'lumot — categorize/setManual'dan keyin yangilanadi
   const liveQuery = useQuery({
@@ -1408,21 +1410,33 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                   <FileSignature className="h-3 w-3" /> Shartnoma
                 </div>
                 {liveRow.contractNumber ? (
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
-                      {liveRow.contractNumber}
-                    </code>
-                    {liveRow.contractStatus === 'verified' && liveRow.contractCustomer && (
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={liveRow.contractCustomer}>
-                        ✓ {liveRow.contractCustomer}
+                  liveRow.contractStatus === 'unverified' ? (
+                    // XATO — raqam yashirin, faqat badge + AI lookup tugma
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
+                        <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
                       </span>
-                    )}
-                    {liveRow.contractStatus === 'unverified' && (
-                      <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded ring-1 ring-rose-200 font-semibold">
-                        xato — CRM'da topilmadi
-                      </span>
-                    )}
-                  </div>
+                      <button
+                        onClick={() => setLookupContractDetail({ contract: liveRow.contractNumber, description: liveRow.description })}
+                        title="AI yordamida o'xshash shartnomalarni topish"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
+                      >
+                        <Wand2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    // VERIFIED — raqam + mijoz nomi
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
+                        {liveRow.contractNumber}
+                      </code>
+                      {liveRow.contractCustomer && (
+                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={liveRow.contractCustomer}>
+                          ✓ {liveRow.contractCustomer}
+                        </span>
+                      )}
+                    </div>
+                  )
                 ) : (
                   <div className="text-[12px] text-slate-400 italic">Topilmadi</div>
                 )}
@@ -1625,6 +1639,15 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           savingContract={setContractMut.isPending}
         />
       )}
+
+      {/* AI Lookup — xato shartnoma uchun mos variantlarni topish (description'dan nom ham olib) */}
+      {lookupContractDetail && (
+        <ContractLookupDialog
+          contractNumber={lookupContractDetail.contract}
+          description={lookupContractDetail.description}
+          onClose={() => setLookupContractDetail(null)}
+        />
+      )}
     </Dialog>
   );
 }
@@ -1762,21 +1785,40 @@ function CopyBlock({ value }: { value: string }) {
   );
 }
 
-// ═══ SHARTNOMA LOOKUP — xato shartnoma uchun CRM'dan o'xshashlarni ko'rish (info only)
-function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: string; onClose: () => void }) {
-  // Avtomatik qidirish — qisqartirilgan prefiks bilan (oxirgi 3 ta belgini tashlaymiz)
-  // Misol: "2490MSOP26EH" → prefix "2490MSOP" (8 belgi)
-  // Topilmasa, qisqaroq prefix bilan retry
+// ═══ AI SHARTNOMA LOOKUP — xato shartnoma uchun CRM'dan o'xshashlarni ko'rish (info only)
+// Description'dan mijoz nomini ham ajratib oladi va shu nom bilan ham mos kelishini tekshiradi
+function ContractLookupDialog({ contractNumber, description, onClose }: {
+  contractNumber: string;
+  description: string | null;
+  onClose: () => void;
+}) {
+  // Description'dan mijoz F.I.O. ajratish — "на имя XYZ" yoki tushgan F.I.O. paterni
+  const extractedName = useMemo(() => {
+    if (!description) return null;
+    // Russian: "на имя XYZ", "от XYZ", "на XYZ оглы/кызы"
+    // Uzbek: "XYZ oglu", "XYZ qizi"
+    const patterns = [
+      /на\s+имя\s+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`]{4,80}?)(?:\s*,|\s+адрес|\s+от\s|\s+с\s|\s+за|$)/i,
+      /F\.I\.O\.[:\s]+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`]{4,80}?)(?:\s*,|\s+адрес|$)/i,
+      /([A-ZА-ЯЁ]{3,}\s+[A-ZА-ЯЁ]{3,}\s+(?:O[GʻG'`]LI|QIZI|ОГЛЫ|КЫЗЫ|УГЛИ|ЎҒЛИ|ҚИЗИ))/i,
+    ];
+    for (const p of patterns) {
+      const m = description.match(p);
+      if (m && m[1]) return m[1].trim().replace(/\s+/g, ' ');
+    }
+    return null;
+  }, [description]);
+
+  // Avtomatik prefix qidirish — qisqartirilgan variantlarda
   const tryPrefixes = useMemo(() => {
     const c = contractNumber.trim();
     const result: string[] = [];
-    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 8))); // birinchi 8
-    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 6))); // birinchi 6
-    if (c.length >= 4) result.push(c.slice(0, 4));                       // birinchi 4
-    return [...new Set(result)]; // dublikatlarni olib tashlash
+    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 8)));
+    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 6)));
+    if (c.length >= 4) result.push(c.slice(0, 4));
+    return [...new Set(result)];
   }, [contractNumber]);
 
-  // Birinchi prefix bilan qidiramiz, agar 0 ta topilsa keyingisini
   const [currentPrefixIndex, setCurrentPrefixIndex] = useState(0);
   const currentPrefix = tryPrefixes[currentPrefixIndex] || '';
 
@@ -1788,40 +1830,62 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
   });
   const items = searchQuery.data?.items || [];
 
-  // Agar joriy prefix bilan 0 ta topilsa, qisqaroq prefix bilan urinish
+  // Topilmasa qisqaroq prefix bilan
   useEffect(() => {
     if (!searchQuery.isFetching && items.length === 0 && currentPrefixIndex < tryPrefixes.length - 1) {
       setCurrentPrefixIndex((i) => i + 1);
     }
   }, [searchQuery.isFetching, items.length, currentPrefixIndex, tryPrefixes.length]);
 
+  // Natijalarni nom bilan moslik bo'yicha tartiblash (extractedName bo'lsa)
+  const sortedItems = useMemo(() => {
+    if (!extractedName || items.length === 0) return items;
+    const nameLower = extractedName.toLowerCase();
+    const nameWords = nameLower.split(/\s+/).filter((w) => w.length >= 3);
+    return [...items].sort((a, b) => {
+      const aName = (a.customerName || a.client?.full_name_kirill || a.client?.full_name_lotin || '').toLowerCase();
+      const bName = (b.customerName || b.client?.full_name_kirill || b.client?.full_name_lotin || '').toLowerCase();
+      const aScore = nameWords.filter((w) => aName.includes(w)).length;
+      const bScore = nameWords.filter((w) => bName.includes(w)).length;
+      return bScore - aScore;
+    });
+  }, [items, extractedName]);
+
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Search className="h-4 w-4 text-indigo-600" /> O'xshash shartnomalar
+            <Wand2 className="h-4 w-4 text-fuchsia-600" /> AI shartnoma topish
           </DialogTitle>
           <DialogDescription>
-            CRM'da topilmagan shartnoma uchun o'xshash variantlar (faqat ma'lumot uchun)
+            CRM'da topilmagan shartnoma uchun AI tomonidan tahlil qilingan variantlar
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Mijoz bergan shartnoma */}
-          <div className="rounded-lg p-3 bg-rose-50 ring-1 ring-rose-200">
+          {/* Mijoz bergan shartnoma + topilgan F.I.O. */}
+          <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 ring-1 ring-rose-200">
             <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 mb-1">
-              Mijoz to'lov maqsadida bergan:
+              Tolov maqsadida kelgan:
             </div>
-            <code className="font-mono text-[14px] font-bold text-rose-900 select-all">
+            <code className="font-mono text-[14px] font-bold text-rose-900 select-all block">
               {contractNumber}
             </code>
-            <div className="text-[10px] text-rose-600 mt-1">
-              CRM'da topilmadi
-            </div>
+            {extractedName && (
+              <div className="mt-2 pt-2 border-t border-rose-200">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 mb-1 flex items-center gap-1">
+                  <Wand2 className="h-2.5 w-2.5" /> AI ajratdi (F.I.O.):
+                </div>
+                <div className="text-[12px] font-semibold text-rose-900 select-all">
+                  {extractedName}
+                </div>
+              </div>
+            )}
+            <div className="text-[10px] text-rose-600 mt-1">CRM'da topilmadi</div>
           </div>
 
-          {/* CRM natijalari — search inputsiz, avto-yuklanadi */}
+          {/* CRM natijalari */}
           <div>
             <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600 mb-1.5 flex items-center justify-between">
               <span>O'xshash shartnomalar (prefix: <code className="font-mono text-indigo-700">{currentPrefix}</code>)</span>
@@ -1833,18 +1897,39 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
                   Hech qanday o'xshash shartnoma topilmadi
                 </div>
               )}
-              {items.map((it: any) => {
+              {sortedItems.map((it: any, idx: number) => {
                 const fullName = it.customerName
                   || it.client?.full_name_kirill
                   || it.client?.full_name_lotin
                   || it.client?.name
                   || it.object_name
                   || null;
+                // Nom moslik darajasi
+                let nameMatch = false;
+                if (extractedName && fullName) {
+                  const nameWords = extractedName.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+                  const fullLower = fullName.toLowerCase();
+                  const matchedWords = nameWords.filter((w) => fullLower.includes(w));
+                  if (matchedWords.length >= 2) nameMatch = true;
+                }
                 return (
-                  <div key={it.contract || it.id} className="px-3 py-2 hover:bg-slate-50">
-                    <code className="font-mono text-[12px] font-bold text-indigo-700">
-                      {it.contract}
-                    </code>
+                  <div
+                    key={it.contract || it.id}
+                    className={cn(
+                      'px-3 py-2',
+                      nameMatch ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'hover:bg-slate-50',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <code className={cn('font-mono text-[12px] font-bold', nameMatch ? 'text-emerald-700' : 'text-indigo-700')}>
+                        {it.contract}
+                      </code>
+                      {nameMatch && (
+                        <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                          <Wand2 className="h-2.5 w-2.5" /> nom mos keldi
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-slate-700 mt-0.5 font-medium">
                       {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
                     </div>
@@ -1852,9 +1937,9 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
                 );
               })}
             </div>
-            {items.length > 0 && (
+            {sortedItems.length > 0 && (
               <div className="text-[10px] text-slate-500 mt-2 text-center italic">
-                Mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalanishi mumkin
+                Mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalaning
               </div>
             )}
           </div>
