@@ -1235,6 +1235,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     setOpenSections(new Set());
   }, [row?.id]);
 
+  const [purposeHighlight, setPurposeHighlight] = useState(false);
   const categorizeMut = useMutation({
     mutationFn: (force: boolean) =>
       api.post<any>(`/categorization/transactions/${row.id}/categorize${force ? '?force=true' : ''}`),
@@ -1242,8 +1243,13 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
       setCategorizeLog(r);
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
-      // Tafsilotni qayta yuklash — Kategoriya/Shartnoma darrov ko'rinadi
       liveQuery.refetch();
+      // Qoida topilmadi → to'lov maqsadi avto-ochiladi + highlight efekt
+      if (!r?.categoryCode || r.categoryCode === null) {
+        setOpenSections((prev) => new Set(prev).add('purpose'));
+        setPurposeHighlight(true);
+        setTimeout(() => setPurposeHighlight(false), 2500);
+      }
     },
     onError: (e: any) => setCategorizeLog({ ok: false, error: e?.message || 'Xato' }),
   });
@@ -1485,19 +1491,31 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             <CopyRow label={t('detailFieldMfo')} value={row.toMfo} mono />
           </DetailSection>
 
-          {/* To'lov maqsadi — collapsible */}
+          {/* To'lov maqsadi — collapsible (qoida topilmaganda highlight bilan ochiladi) */}
           {row.description && (
-            <DetailSection
-              id="purpose" open={openSections.has('purpose')} onToggle={() => toggleOne('purpose')}
-              title={t('detailPaymentPurpose')} icon={FileText}
-            >
-              <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap py-2">{row.description.trim()}</div>
-              {row.purposeCode && (
-                <div className="mt-1 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
-                  {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
-                </div>
+            <div
+              ref={(el) => {
+                if (el && purposeHighlight) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }}
+              className={cn(
+                'transition-all duration-500',
+                purposeHighlight && 'ring-4 ring-amber-300/60 rounded-xl shadow-lg shadow-amber-200/40 scale-[1.01]',
               )}
-            </DetailSection>
+            >
+              <DetailSection
+                id="purpose" open={openSections.has('purpose')} onToggle={() => toggleOne('purpose')}
+                title={t('detailPaymentPurpose')} icon={FileText}
+              >
+                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap py-2">{row.description.trim()}</div>
+                {row.purposeCode && (
+                  <div className="mt-1 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+                    {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
+                  </div>
+                )}
+              </DetailSection>
+            </div>
           )}
 
           {/* Vaqt ma'lumotlari */}
