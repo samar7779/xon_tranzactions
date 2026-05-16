@@ -39,6 +39,15 @@ interface GetAcc1CParams extends BaseAuthParams {
   sid?: string;
 }
 
+interface GetDocDetailsParams extends BaseAuthParams {
+  sid: string;             // /is_paynet/api/getDocDetails — sid majburiy
+  branch: string;
+  account: string;
+  bank_day: string;        // dd.MM.yyyy
+  doc_id: string;          // general_id (BankId/PaymentId/...)
+  doc_type: number;        // 0/1/2 — kelgan / yuborilgan / ichki
+}
+
 /**
  * KapitalBank OpenAPI v3 klient.
  * Boevoy URL: https://m.bank24.uz:2713/Mobile.svc
@@ -235,5 +244,77 @@ export class KapitalbankClient {
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
     const resp = await this.post<KbAccount[]>(url, body, authHeader, undefined, params.useProxy);
     return this.ensureNoError(resp, this.bankNameFromUrl(url));
+  }
+
+  /**
+   * GET /is_paynet/api/getDocDetails — bitta hujjat tafsiloti
+   * (payment_state_name, parent_payment_id, proved_date, plat_purpose va h.k.)
+   *
+   * Bu /Mobile.svc EMAS — alohida path. baseUrl odatda
+   *   https://m.bank24.uz:2713/Mobile.svc — undan /Mobile.svc'ni kesib tashlaymiz.
+   *
+   * doc_type: 0 = kelgan, 1 = yuborilgan, 2 = ichki (chap–o'ng)
+   */
+  async getDocDetails(params: GetDocDetailsParams): Promise<any> {
+    // Mobile.svc'ni kesib, /is_paynet/api/getDocDetails ga ulaymiz
+    const base = params.baseUrl.replace(/\/Mobile\.svc\/?$/i, '');
+    const url = `${base}/is_paynet/api/getDocDetails`;
+    const q = new URLSearchParams({
+      sid: params.sid,
+      branch: params.branch,
+      account: params.account,
+      bank_day: params.bank_day,
+      doc_id: params.doc_id,
+      doc_type: String(params.doc_type),
+    });
+    const fullUrl = `${url}?${q.toString()}`;
+
+    if (params.useProxy && this.forwarderUrl && this.forwarderSecret) {
+      return this.getViaForwarder(fullUrl);
+    }
+    try {
+      const resp = await firstValueFrom(
+        this.http.get(fullUrl, {
+          timeout: this.timeoutMs,
+          httpsAgent: params.useProxy ? this.proxyAgent : undefined,
+          proxy: params.useProxy && this.proxyAgent ? false : undefined,
+        }),
+      );
+      return resp.data;
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data || e?.message;
+      this.logger.warn(`getDocDetails ${fullUrl} → ${status}: ${JSON.stringify(detail).slice(0, 300)}`);
+      throw new Error(`getDocDetails xato (${status || 'network'}): ${typeof detail === 'string' ? detail : detail?.message || JSON.stringify(detail).slice(0, 200)}`);
+    }
+  }
+
+  private async getViaForwarder(targetUrl: string): Promise<any> {
+    try {
+      const resp = await firstValueFrom(
+        this.http.post(
+          this.forwarderUrl!,
+          {
+            url: targetUrl,
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            body: '',
+            timeout: Math.floor(this.timeoutMs / 1000),
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Proxy-Secret': this.forwarderSecret!,
+            },
+            timeout: this.timeoutMs + 5000,
+          },
+        ),
+      );
+      return resp.data;
+    } catch (e: any) {
+      const status = e?.response?.status;
+      const detail = e?.response?.data || e?.message;
+      throw new Error(`Forwarder GET xato (${status || 'network'}): ${detail?.message || JSON.stringify(detail).slice(0, 200)}`);
+    }
   }
 }
