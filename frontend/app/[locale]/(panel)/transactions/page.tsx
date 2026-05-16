@@ -11,6 +11,7 @@ import {
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
   Hash, Receipt, Link2, History, Loader2, AlertCircle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
+  Filter as FilterIcon,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -49,6 +50,18 @@ const MATCH_KEYS: Record<string, string> = {
   IGNORED:   'matchStatusIGNORED',
   UNMATCHED: 'matchStatusUNMATCHED',
 };
+
+// Ustun nomidan tranzaksiya field'iga string qiymat — filter uchun
+function columnValueFor(it: any, col: string): string | null {
+  switch (col) {
+    case 'direction':   return it.direction === 'IN' ? 'Kirim' : 'Chiqim';
+    case 'bank':        return it.account?.bank?.name || it.bank?.name || null;
+    case 'hisobNomi':   return (it.direction === 'IN' ? it.fromName : it.toName) || null;
+    case 'kontragent':  return it.counterpartyDisplay || it.category?.name || null;
+    case 'kategoriya':  return it.subcategory?.name || it.category?.name || null;
+    default:            return null;
+  }
+}
 
 export default function TransactionsPage() {
   const t = useTranslations('transactions');
@@ -101,6 +114,13 @@ export default function TransactionsPage() {
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [categoryEditRow, setCategoryEditRow] = useState<any>(null);
   const [lookupContract, setLookupContract] = useState<{ contract: string; description: string | null } | null>(null);
+
+  // Google Sheets'ga o'xshash per-ustun filterlash
+  const [columnFilterMode, setColumnFilterMode] = useState(false);
+  // Har ustun uchun tanlangan qiymatlar to'plami
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+  // Hozir ochilgan filter popover (ustun nomi)
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
 
   // Kategoriyalar daraxti (1 marta yuklanadi)
   const categoriesQuery = useQuery({
@@ -157,12 +177,14 @@ export default function TransactionsPage() {
   const activeFilters = useMemo(() => {
     let c = 0;
     if (direction !== 'all') c++;
-    if (matchStatus !== 'all') c++;
     if (bankId !== 'all') c++;
     if (dateFrom) c++;
     if (dateTo) c++;
+    for (const k of Object.keys(columnFilters)) {
+      if (columnFilters[k]?.size > 0) c++;
+    }
     return c;
-  }, [direction, matchStatus, bankId, dateFrom, dateTo]);
+  }, [direction, bankId, dateFrom, dateTo, columnFilters]);
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
   if (q) params.set('q', q);
@@ -188,10 +210,39 @@ export default function TransactionsPage() {
     },
   });
 
-  // Client-side match filter (server doesn't support it yet)
-  const filtered = matchStatus === 'all'
-    ? data?.items
-    : data?.items.filter((it) => (it.matchStatus || 'UNMATCHED') === matchStatus);
+  // Client-side per-column filter (Google Sheets stilida)
+  // Har ustun uchun columnFilters[col] Set bo'lsa, faqat shu qiymatlarni qoldiramiz
+  const filtered = useMemo(() => {
+    let arr = data?.items || [];
+    // Eski matchStatus filter — yo'q endi, lekin barqarorlik uchun qoldiramiz
+    if (matchStatus !== 'all') {
+      arr = arr.filter((it) => (it.matchStatus || 'UNMATCHED') === matchStatus);
+    }
+    // Per-column filterlar
+    for (const col of Object.keys(columnFilters)) {
+      const set = columnFilters[col];
+      if (!set || set.size === 0) continue;
+      arr = arr.filter((it: any) => {
+        const val = columnValueFor(it, col);
+        return set.has(val ?? '(bo\'sh)');
+      });
+    }
+    return arr;
+  }, [data?.items, matchStatus, columnFilters]);
+
+  // Har ustun uchun distinct qiymatlar (joriy sahifa'dagilar)
+  const columnDistinctValues = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    const cols = ['direction', 'kontragent', 'kategoriya', 'bank', 'hisobNomi'];
+    for (const col of cols) map[col] = new Set<string>();
+    for (const it of (data?.items || [])) {
+      for (const col of cols) {
+        const val = columnValueFor(it, col);
+        map[col].add(val ?? '(bo\'sh)');
+      }
+    }
+    return map;
+  }, [data?.items]);
 
   const autoMatchMut = useMutation({
     mutationFn: (id: string) => api.post(`/payments/auto-match/${id}`),
@@ -480,20 +531,20 @@ export default function TransactionsPage() {
                 ]}
               />
 
-              <FilterChip
-                active={matchStatus !== 'all'}
-                label={matchStatus === 'all' ? t('matchAll') : tp(MATCH_KEYS[matchStatus])}
-                value={matchStatus}
-                onChange={(v) => { setMatchStatus(v); setPage(1); }}
-                options={[
-                  { value: 'all', label: tc('all') },
-                  { value: 'AUTO', label: tp('matchStatusAUTO') },
-                  { value: 'MANUAL', label: tp('matchStatusMANUAL') },
-                  { value: 'PARTIAL', label: tp('matchStatusPARTIAL') },
-                  { value: 'UNMATCHED', label: tp('matchStatusUNMATCHED') },
-                  { value: 'IGNORED', label: tp('matchStatusIGNORED') },
-                ]}
-              />
+              {/* Filter mode toggle — har ustun header'iga filtr icon qo'shadi (Google Sheets stilida) */}
+              <button
+                onClick={() => setColumnFilterMode((v) => !v)}
+                title={columnFilterMode ? "Filter rejimini o'chirish" : "Har ustunga filter qo'yish"}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-sm font-medium transition-all",
+                  columnFilterMode
+                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+                )}
+              >
+                <FilterIcon className="h-4 w-4" />
+                Filter {columnFilterMode && '✓'}
+              </button>
 
               <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
                 <DropdownMenuTrigger asChild>
@@ -557,12 +608,60 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
+                      <ColumnTh
+                        label={t('bankAccountHeader')}
+                        column="bank"
+                        filterMode={columnFilterMode}
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                        distinctValues={columnDistinctValues.bank}
+                      />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
-                      <th className="text-left px-4 py-3">Hisob nomi</th>
-                      <th className="text-left px-4 py-3 w-24">{t('directionHeader')}</th>
-                      <th className="text-left px-4 py-3 w-40">Kontragent</th>
-                      <th className="text-left px-4 py-3 w-40">Kategoriya</th>
+                      <ColumnTh
+                        label="Hisob nomi"
+                        column="hisobNomi"
+                        filterMode={columnFilterMode}
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                        distinctValues={columnDistinctValues.hisobNomi}
+                      />
+                      <ColumnTh
+                        label={t('directionHeader')}
+                        column="direction"
+                        widthClass="w-24"
+                        filterMode={columnFilterMode}
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                        distinctValues={columnDistinctValues.direction}
+                      />
+                      <ColumnTh
+                        label="Kontragent"
+                        column="kontragent"
+                        widthClass="w-40"
+                        filterMode={columnFilterMode}
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                        distinctValues={columnDistinctValues.kontragent}
+                      />
+                      <ColumnTh
+                        label="Kategoriya"
+                        column="kategoriya"
+                        widthClass="w-40"
+                        filterMode={columnFilterMode}
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                        distinctValues={columnDistinctValues.kategoriya}
+                      />
                       <th className="text-left px-4 py-3 w-32">Shartnoma</th>
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
@@ -1781,6 +1880,180 @@ function CopyBlock({ value }: { value: string }) {
       >
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
+    </div>
+  );
+}
+
+// ═══ COLUMN TH — filter icon bilan ustun headeri (Google Sheets stilida)
+function ColumnTh({
+  label, column, widthClass, filterMode, columnFilters, setColumnFilters,
+  openFilterColumn, setOpenFilterColumn, distinctValues,
+}: {
+  label: string;
+  column: string;
+  widthClass?: string;
+  filterMode: boolean;
+  columnFilters: Record<string, Set<string>>;
+  setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
+  openFilterColumn: string | null;
+  setOpenFilterColumn: (col: string | null) => void;
+  distinctValues: Set<string>;
+}) {
+  const active = (columnFilters[column]?.size || 0) > 0;
+  const isOpen = openFilterColumn === column;
+  return (
+    <th className={cn('text-left px-4 py-3 relative', widthClass)}>
+      <div className="flex items-center gap-1.5">
+        <span>{label}</span>
+        {filterMode && (
+          <button
+            onClick={() => setOpenFilterColumn(isOpen ? null : column)}
+            className={cn(
+              'inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+              active
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-400 hover:text-indigo-700 hover:bg-indigo-100',
+            )}
+            title={active ? `${columnFilters[column].size} qiymat tanlangan` : 'Filter'}
+          >
+            <FilterIcon className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <ColumnFilterPopover
+          column={column}
+          distinctValues={distinctValues}
+          selected={columnFilters[column] || new Set()}
+          onClose={() => setOpenFilterColumn(null)}
+          onApply={(set) => {
+            setColumnFilters((prev) => ({ ...prev, [column]: set }));
+            setOpenFilterColumn(null);
+          }}
+        />
+      )}
+    </th>
+  );
+}
+
+// ═══ COLUMN FILTER POPOVER — Google Sheets'ga o'xshash (search + checkboxes + OK/Cancel)
+function ColumnFilterPopover({
+  column, distinctValues, selected, onClose, onApply,
+}: {
+  column: string;
+  distinctValues: Set<string>;
+  selected: Set<string>;
+  onClose: () => void;
+  onApply: (set: Set<string>) => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
+
+  const allValues = useMemo(() => {
+    const arr = Array.from(distinctValues).sort();
+    if (!search.trim()) return arr;
+    const q = search.toLowerCase();
+    return arr.filter((v) => v.toLowerCase().includes(q));
+  }, [distinctValues, search]);
+
+  const allSelected = allValues.every((v) => localSelected.has(v));
+
+  function toggleAll() {
+    if (allSelected) {
+      const next = new Set(localSelected);
+      for (const v of allValues) next.delete(v);
+      setLocalSelected(next);
+    } else {
+      const next = new Set(localSelected);
+      for (const v of allValues) next.add(v);
+      setLocalSelected(next);
+    }
+  }
+  function toggleOne(v: string) {
+    const next = new Set(localSelected);
+    if (next.has(v)) next.delete(v); else next.add(v);
+    setLocalSelected(next);
+  }
+
+  // Klick tashqarida → yopish
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-col-filter]')) onClose();
+    }
+    setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [onClose]);
+
+  return (
+    <div
+      data-col-filter
+      className="absolute left-0 top-full mt-1 z-50 w-72 rounded-xl bg-white ring-1 ring-slate-200 shadow-xl normal-case tracking-normal font-normal"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => setLocalSelected(new Set(allValues))}
+            className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            Hammasini tanlash ({distinctValues.size})
+          </button>
+          <button
+            onClick={() => setLocalSelected(new Set())}
+            className="text-[11px] text-slate-500 hover:text-rose-600 font-medium"
+          >
+            Tozalash
+          </button>
+        </div>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Qidirish..."
+            className="pl-8 h-8 text-[12px]"
+          />
+        </div>
+        <div className="max-h-[220px] overflow-y-auto rounded-lg ring-1 ring-slate-100 divide-y divide-slate-50">
+          {allValues.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[11px] text-slate-400 italic">Topilmadi</div>
+          ) : (
+            <>
+              <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  className="w-3.5 h-3.5 rounded"
+                />
+                <span className="text-[11px] font-semibold text-slate-700">
+                  {allSelected ? 'Hammasini olib tashlash' : 'Hammasini belgilash'}
+                </span>
+              </label>
+              {allValues.map((v) => (
+                <label key={v} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={localSelected.has(v)}
+                    onChange={() => toggleOne(v)}
+                    className="w-3.5 h-3.5 rounded"
+                  />
+                  <span className="text-[11px] text-slate-700 truncate">{v}</span>
+                </label>
+              ))}
+            </>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-100">
+        <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-[11px]">
+          Bekor
+        </Button>
+        <Button size="sm" onClick={() => onApply(localSelected)} className="h-7 text-[11px]">
+          OK
+        </Button>
+      </div>
     </div>
   );
 }
