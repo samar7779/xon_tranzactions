@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -17,6 +17,9 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
@@ -626,12 +629,33 @@ export default function CounterpartiesPage() {
                 {((page - 1) * perPage) + 1}–{Math.min(page * perPage, total)}
               </span> / {t('ofTotal', { n: total })}
             </div>
-            <div className="flex items-center gap-1">
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)} className="h-9 w-9 p-0 rounded-full">«</Button>
-              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-9 w-9 p-0 rounded-full">‹</Button>
-              <div className="text-xs font-semibold tabular-nums px-3">{page} / {totalPages}</div>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="h-9 w-9 p-0 rounded-full">›</Button>
-              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)} className="h-9 w-9 p-0 rounded-full">»</Button>
+
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Har sahifada nechta */}
+              <div className="flex items-center gap-2 text-xs text-slate-600">
+                <span>{t('perPageLabel')}</span>
+                <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
+                  <SelectTrigger className="h-9 w-[78px] rounded-full text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 25, 50, 100, 200].map((n) => (
+                      <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Sahifaga sakrash */}
+              <PageJumper page={page} totalPages={totalPages} onJump={setPage} label={t('goToPage')} />
+
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)} className="h-9 w-9 p-0 rounded-full">«</Button>
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-9 w-9 p-0 rounded-full">‹</Button>
+                <div className="text-xs font-semibold tabular-nums px-3">{page} / {totalPages}</div>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="h-9 w-9 p-0 rounded-full">›</Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)} className="h-9 w-9 p-0 rounded-full">»</Button>
+              </div>
             </div>
           </div>
         )}
@@ -1406,6 +1430,39 @@ function DetailField({
       <div className={cn('text-[13px] text-slate-800 break-words', mono && 'font-mono text-[12px]', !value && 'text-slate-400 italic')}>
         {value || '—'}
       </div>
+    </div>
+  );
+}
+
+function PageJumper({
+  page, totalPages, onJump, label,
+}: { page: number; totalPages: number; onJump: (n: number) => void; label: string }) {
+  const [val, setVal] = useState(String(page));
+
+  // Tashqi page o'zgarsa input ham yangilansin
+  useEffect(() => { setVal(String(page)); }, [page]);
+
+  function commit() {
+    const n = parseInt(val, 10);
+    if (!Number.isFinite(n)) { setVal(String(page)); return; }
+    const clamped = Math.max(1, Math.min(totalPages, n));
+    if (clamped !== page) onJump(clamped);
+    setVal(String(clamped));
+  }
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-slate-600">
+      <span>{label}</span>
+      <Input
+        type="number"
+        min={1}
+        max={totalPages}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+        className="h-9 w-[68px] text-center tabular-nums font-semibold text-xs"
+      />
     </div>
   );
 }

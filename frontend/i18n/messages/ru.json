@@ -498,6 +498,8 @@
     "accountant": "Главный бухгалтер",
     "syncing": "Обновление...",
     "perPage": "{n}/стр",
+    "perPageLabel": "На странице:",
+    "goToPage": "Страница:",
     "ofTotal": "{n} контрагентов",
     "filterReset": "Сбросить"
   },

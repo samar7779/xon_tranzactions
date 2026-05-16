@@ -498,6 +498,8 @@
     "accountant": "Bosh hisobchi",
     "syncing": "Yangilanmoqda...",
     "perPage": "{n}/sahifa",
+    "perPageLabel": "Har sahifada:",
+    "goToPage": "Sahifa:",
     "ofTotal": "{n} ta kontragent",
     "filterReset": "Tozalash"
   },
