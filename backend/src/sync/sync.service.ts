@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -6,6 +6,7 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 import { KbDoc1CItem } from '../integrations/kapitalbank/types';
 import { PaymentsService } from '../payments/payments.service';
+import { CategorizationService } from '../categorization/categorization.service';
 import { TxnDirection, TxnStatus, TxnType, Prisma } from '@prisma/client';
 import { format, parse, subDays } from 'date-fns';
 
@@ -30,6 +31,7 @@ export class SyncService {
     private crypto: CryptoService,
     private kb: KapitalbankClient,
     private payments: PaymentsService,
+    @Optional() private categorization: CategorizationService | null,
     config: ConfigService,
   ) {
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
@@ -423,6 +425,15 @@ export class SyncService {
         this.logger.warn(`Auto-match xato (${created.id}): ${e?.message}`);
       }
     }
+
+    // Avto-kategoriyalash — yangi tranzaksiyaga qoidalarni qo'llaymiz
+    // (sync ni sekinlashtirmaslik uchun fire-and-forget)
+    if (this.categorization) {
+      this.categorization
+        .categorizeOne(created.id, { actor: 'sync' })
+        .catch((e: any) => this.logger.warn(`Avto-kategoriyalash xato (${created.id}): ${e?.message}`));
+    }
+
     return true;
   }
 

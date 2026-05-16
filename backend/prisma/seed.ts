@@ -23,6 +23,7 @@ const ALL_PERMS = [
   'payments:view', 'payments:manage',
   'crm:view',
   'counterparties:view', 'counterparties:manage',
+  'categories:view', 'categories:manage',
 ];
 
 async function main() {

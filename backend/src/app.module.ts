@@ -21,6 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ApiExplorerModule } from './api-explorer/api-explorer.module';
 import { CrmModule } from './crm/crm.module';
 import { CounterpartiesModule } from './counterparties/counterparties.module';
+import { CategorizationModule } from './categorization/categorization.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import { CounterpartiesModule } from './counterparties/counterparties.module';
     ApiExplorerModule,
     CrmModule,
     CounterpartiesModule,
+    CategorizationModule,
   ],
 })
 export class AppModule {}

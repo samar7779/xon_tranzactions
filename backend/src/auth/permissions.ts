@@ -52,6 +52,10 @@ export const PERMISSIONS = {
   // ─── Kontragentlar (DIDOX) ───
   COUNTERPARTIES_VIEW: 'counterparties:view',
   COUNTERPARTIES_MANAGE: 'counterparties:manage',
+
+  // ─── Kategoriyalar ───
+  CATEGORIES_VIEW: 'categories:view',
+  CATEGORIES_MANAGE: 'categories:manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -148,6 +152,13 @@ export const PERMISSION_GROUPS: { group: string; items: { value: Permission; lab
     ],
   },
   {
+    group: 'Kategoriyalar',
+    items: [
+      { value: PERMISSIONS.CATEGORIES_VIEW, label: 'Kategoriyalarni ko\'rish' },
+      { value: PERMISSIONS.CATEGORIES_MANAGE, label: 'Tranzaksiya kategoriyasini o\'zgartirish va qayta hisoblash' },
+    ],
+  },
+  {
     group: 'Tizim',
     items: [{ value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' }],
   },
@@ -179,6 +190,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
+      PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.CATEGORIES_MANAGE,
     ],
   },
   {
@@ -195,6 +207,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
+      PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.CATEGORIES_MANAGE,
     ],
   },
   {
@@ -213,6 +226,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.PAYMENTS_VIEW,
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW,
+      PERMISSIONS.CATEGORIES_VIEW,
     ],
   },
 ];
