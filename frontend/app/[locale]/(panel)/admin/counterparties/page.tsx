@@ -404,10 +404,13 @@ export default function CounterpartiesPage() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 max-w-[280px]">
+                          <td className="px-4 py-3 max-w-[300px]">
                             <div className="font-semibold text-slate-900 truncate" title={it.name}>{it.name}</div>
-                            {it.fullName && it.fullName !== it.name && (
-                              <div className="text-[10px] text-slate-500 truncate" title={it.fullName}>{it.fullName}</div>
+                            {it.oked && (
+                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5" title={it.oked}>
+                                <Building2 className="h-2.5 w-2.5 text-slate-400" />
+                                {String(it.oked).replace(/^\d+\s*-\s*/, '')}
+                              </div>
                             )}
                           </td>
                           <td className="px-4 py-3 max-w-[220px]">
@@ -752,14 +755,36 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
         </div>
       )}
 
+      {/* Faoliyat turi (Chamber'dan OKED) — prominent */}
+      {row.oked && (
+        <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-200 px-4 py-3 flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shrink-0">
+            <Building2 className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 mb-0.5">Faoliyat turi (OKED)</div>
+            {(() => {
+              const m = String(row.oked).match(/^(\d+)\s*-\s*(.+)$/);
+              return m ? (
+                <>
+                  <div className="text-sm font-bold text-slate-800 leading-snug">{m[2]}</div>
+                  <div className="text-[10px] text-indigo-700 font-mono mt-0.5">Kod: {m[1]}</div>
+                </>
+              ) : (
+                <div className="text-sm font-bold text-slate-800">{row.oked}</div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <DetailField icon={<User className="h-3.5 w-3.5" />} label={t('director')} value={row.director} />
         <DetailField icon={<User className="h-3.5 w-3.5" />} label={t('accountant')} value={row.accountant} />
         <DetailField icon={<Phone className="h-3.5 w-3.5" />} label={t('phone')} value={row.phone} mono />
         <DetailField icon={<Tag className="h-3.5 w-3.5" />} label={t('email')} value={row.email} />
-        <DetailField icon={<Tag className="h-3.5 w-3.5" />} label={t('vatStatus')} value={row.vatStatus} />
+        <DetailField icon={<Tag className="h-3.5 w-3.5" />} label={t('vatStatus')} value={row.vatStatus} fullWidth />
         <DetailField icon={<Receipt className="h-3.5 w-3.5" />} label={t('vatNumber')} value={row.vatNumber} mono />
-        <DetailField icon={<Building2 className="h-3.5 w-3.5" />} label={t('oked')} value={row.oked} fullWidth />
       </div>
 
       {row.address && (
