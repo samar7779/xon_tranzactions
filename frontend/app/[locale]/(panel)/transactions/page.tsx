@@ -1439,80 +1439,50 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
 
           {/* ═══ KONTRAGENT + KATEGORIYA + SHARTNOMA — asosiy info ═══ */}
-          <div className="rounded-xl ring-1 ring-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/40 p-4 space-y-3">
-            {/* Kontragent — haqiqiy entity nomi (CRM mijoz / firma) */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Kontragent</div>
-                {liveRow.counterpartyDisplay ? (
-                  <>
-                    <div className="text-[14px] font-semibold text-slate-900 truncate">{liveRow.counterpartyDisplay}</div>
-                    <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={counterpartyName || ''}>
-                      {counterpartyName}{counterpartyInn ? ` · ${counterpartyInn}` : ''}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="text-[14px] font-semibold text-slate-700 truncate">{counterpartyName || '—'}</div>
-                    {counterpartyInn && (
-                      <div className="font-mono text-[11px] text-slate-500 mt-0.5">STIR: {counterpartyInn}</div>
-                    )}
-                  </>
-                )}
-              </div>
-              {row.docNumber && (
-                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-white text-slate-600 ring-1 ring-slate-200 shrink-0">
-                  <Receipt className="h-3 w-3" /> #{row.docNumber}
-                </span>
-              )}
-            </div>
+          <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+            {/* ─── Asosiy info — har bir maydon alohida qator + tozalash tugmasi ─── */}
+            {/* Kontragent qatori */}
+            <InfoRow
+              icon={<Briefcase className="h-3.5 w-3.5" />}
+              label="Kontragent"
+              value={liveRow.counterpartyDisplay || counterpartyName}
+              subValue={
+                liveRow.counterpartyDisplay
+                  ? `${counterpartyName || '—'}${counterpartyInn ? ` · STIR ${counterpartyInn}` : ''}`
+                  : counterpartyInn ? `STIR ${counterpartyInn}` : null
+              }
+              docNumber={row.docNumber}
+              showClear={canManage && !!liveRow.category}
+              onClear={() => setCategoryMut.mutate({ categoryId: null, subcategoryId: null })}
+            />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-indigo-200/60">
-              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label */}
-              <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                  <Tag className="h-3 w-3" /> Kategoriya
-                </div>
-                {liveRow.category ? (
-                  <div className="space-y-1">
-                    <div
-                      className="inline-flex items-center px-2 py-1 rounded-md text-[12px] font-semibold ring-1 ring-inset"
-                      style={{
-                        backgroundColor: `${(liveRow.category.color || '#6366f1')}18`,
-                        color: (liveRow.category.color || '#6366f1'),
-                        borderColor: `${(liveRow.category.color || '#6366f1')}40`,
-                      }}
-                    >
-                      {liveRow.subcategory?.name || liveRow.category.name}
-                    </div>
-                    {liveRow.subcategory && (
-                      <div className="text-[10px] text-slate-500">
-                        {liveRow.category.name}
-                      </div>
-                    )}
-                    {liveRow.categorizedBy && (
-                      <div className="text-[10px] text-slate-400">
-                        {liveRow.categorizedBy === 'auto' && 'avto'}
-                        {liveRow.categorizedBy === 'sync' && 'sync paytida'}
-                        {liveRow.categorizedBy === 'manual' && "qo'lda"}
-                        {liveRow.categorizedBy === 'cron' && 'cron'}
-                        {liveRow.categorizedAt && ` · ${formatDateTime(liveRow.categorizedAt)}`}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-[12px] text-slate-400 italic">Tayinlanmagan</div>
-                )}
-              </div>
+            {/* Kategoriya qatori */}
+            <InfoRow
+              icon={<Tag className="h-3.5 w-3.5" />}
+              label="Kategoriya"
+              chip={
+                liveRow.category ? {
+                  text: liveRow.subcategory?.name || liveRow.category.name,
+                  color: liveRow.category.color || '#6366f1',
+                } : null
+              }
+              subValue={
+                liveRow.category && liveRow.subcategory
+                  ? `${liveRow.category.name}${liveRow.categorizedBy ? ` · ${liveRow.categorizedBy === 'manual' ? "qo'lda" : liveRow.categorizedBy} ${liveRow.categorizedAt ? '· ' + formatDateTime(liveRow.categorizedAt) : ''}` : ''}`
+                  : liveRow.categorizedBy ? `${liveRow.categorizedBy === 'manual' ? "qo'lda" : liveRow.categorizedBy}${liveRow.categorizedAt ? ' · ' + formatDateTime(liveRow.categorizedAt) : ''}` : null
+              }
+              emptyText="Tayinlanmagan"
+              showClear={canManage && !!liveRow.subcategory}
+              onClear={() => setCategoryMut.mutate({ categoryId: liveRow.categoryId, subcategoryId: null })}
+            />
 
-              {/* Shartnoma raqami */}
-              <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                  <FileSignature className="h-3 w-3" /> Shartnoma
-                </div>
-                {liveRow.contractNumber ? (
+            {/* Shartnoma qatori */}
+            <InfoRow
+              icon={<FileSignature className="h-3.5 w-3.5" />}
+              label="Shartnoma"
+              customValue={
+                liveRow.contractNumber ? (
                   liveRow.contractStatus === 'unverified' ? (
-                    // XATO — raqam yashirin, faqat badge + AI lookup tugma
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
                         <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
@@ -1520,33 +1490,33 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                       <button
                         onClick={() => setLookupContractDetail({ contract: liveRow.contractNumber, description: liveRow.description })}
                         title="AI yordamida o'xshash shartnomalarni topish"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
+                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                       >
-                        <Wand2 className="h-3.5 w-3.5" />
+                        <Wand2 className="h-3 w-3" />
                       </button>
                     </div>
                   ) : (
-                    // VERIFIED — raqam + mijoz nomi
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
+                      <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded ring-1 ring-indigo-200">
                         {liveRow.contractNumber}
                       </code>
                       {liveRow.contractCustomer && (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={liveRow.contractCustomer}>
+                        <span className="text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[220px]" title={liveRow.contractCustomer}>
                           ✓ {liveRow.contractCustomer}
                         </span>
                       )}
                     </div>
                   )
-                ) : (
-                  <div className="text-[12px] text-slate-400 italic">Topilmadi</div>
-                )}
-              </div>
-            </div>
+                ) : null
+              }
+              emptyText="Topilmadi"
+              showClear={canManage && !!liveRow.contractNumber}
+              onClear={() => setContractMut.mutate(null)}
+            />
 
             {/* Avto-kategoriyalash + Qo'lda tahrirlash tugmalari */}
             {canManage && (
-              <div className="pt-3 border-t border-indigo-200/60">
+              <div className="px-4 py-3 bg-slate-50/50">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
                     {liveRow.category
@@ -2781,6 +2751,76 @@ function CategoryHistoryItem({ h }: { h: any }) {
       {h.contractNumber && (
         <div className="text-[10px] font-mono text-indigo-600">{h.contractNumber}</div>
       )}
+    </div>
+  );
+}
+
+// ═══ INFO ROW — Kontragent/Kategoriya/Shartnoma uchun yaxshi tuzilmali qator
+function InfoRow({
+  icon, label, value, subValue, chip, customValue, docNumber, emptyText, showClear, onClear,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value?: string | null;
+  subValue?: string | null;
+  chip?: { text: string; color: string } | null;
+  customValue?: React.ReactNode;
+  docNumber?: string;
+  emptyText?: string;
+  showClear?: boolean;
+  onClear?: () => void;
+}) {
+  const hasValue = !!(value || chip || customValue);
+  return (
+    <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 last:border-b-0">
+      {/* Label (chap tomonda, sobit eni) */}
+      <div className="w-28 shrink-0 pt-0.5">
+        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 flex items-center gap-1">
+          {icon} {label}
+        </div>
+      </div>
+      {/* Qiymat */}
+      <div className="flex-1 min-w-0">
+        {!hasValue && (
+          <div className="text-[12px] text-slate-400 italic">{emptyText || '—'}</div>
+        )}
+        {chip && (
+          <div
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[12px] font-semibold ring-1 ring-inset"
+            style={{
+              backgroundColor: `${chip.color}18`,
+              color: chip.color,
+              borderColor: `${chip.color}40`,
+            }}
+          >
+            {chip.text}
+          </div>
+        )}
+        {customValue}
+        {value && !chip && !customValue && (
+          <div className="text-[13px] font-semibold text-slate-900 break-words">{value}</div>
+        )}
+        {subValue && (
+          <div className="text-[10px] text-slate-500 mt-0.5 break-words">{subValue}</div>
+        )}
+      </div>
+      {/* O'ng tomon: docNumber + clear */}
+      <div className="flex items-center gap-1 shrink-0">
+        {docNumber && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-600 ring-1 ring-slate-200">
+            <Receipt className="h-3 w-3" /> #{docNumber}
+          </span>
+        )}
+        {showClear && (
+          <button
+            onClick={onClear}
+            title="Tozalash"
+            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
