@@ -580,14 +580,14 @@ export default function TransactionsPage() {
         </Card>
 
         {/* ═══ TABLE ═══ */}
-        <Card className="border-0 shadow-soft overflow-hidden">
-          <CardContent className="p-0">
+        <Card className="border-0 shadow-soft overflow-visible">
+          <CardContent className="p-0 overflow-visible">
             {isLoading ? (
               <div className="p-6 space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-visible" style={{ overflowY: 'visible' }}>
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
@@ -1892,15 +1892,22 @@ function ColumnFilterPopover({
   alignRight?: boolean;
 }) {
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
 
-  // Backend'dan distinct qiymatlar
+  // Debounce — server'ga ko'p so'rov yubormaslik uchun
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Backend'dan distinct qiymatlar (search bo'lsa server ham filterlasin — limit'dan tashqari uchun)
   const distinctQuery = useQuery({
-    queryKey: ['tx-distinct', column],
+    queryKey: ['tx-distinct', column, debouncedSearch],
     queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(
-      `/transactions/distinct?column=${encodeURIComponent(column)}`,
+      `/transactions/distinct?column=${encodeURIComponent(column)}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}`,
     ),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 30_000,
   });
   const distinctList = distinctQuery.data?.values || [];
 

@@ -102,6 +102,10 @@ export class ListTransactionsDto {
   @IsOptional() @IsString()
   column?: string;
 
+  @ApiPropertyOptional({ description: "distinct uchun qidirish (limit'dan tashqarisini ham topadi)" })
+  @IsOptional() @IsString()
+  search?: string;
+
   // export uchun
   @ApiPropertyOptional() @IsOptional() @IsString()
   matchStatus?: string;
