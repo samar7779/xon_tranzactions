@@ -592,13 +592,13 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* ID orqali qidirish — alohida icon tugma */}
+              {/* ID orqali qidirish — alohida tugma (ID matn bilan) */}
               <button
                 onClick={() => setIdSearchOpen(true)}
                 title={t('toolIdSearch')}
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-700 ring-1 ring-slate-200 hover:ring-violet-300 transition-all"
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-700 ring-1 ring-slate-200 hover:ring-violet-300 transition-all font-bold text-[12px] tracking-wider"
               >
-                <Hash className="h-4 w-4" />
+                ID
               </button>
 
               {/* Filter mode toggle — faqat icon */}
