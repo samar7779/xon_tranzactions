@@ -12,7 +12,7 @@ import {
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
   Hash, Receipt, Link2, History, Loader2, AlertCircle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
-  Filter as FilterIcon,
+  Filter as FilterIcon, Briefcase,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
