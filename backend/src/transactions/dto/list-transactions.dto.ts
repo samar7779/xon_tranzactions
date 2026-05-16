@@ -96,4 +96,13 @@ export class ListTransactionsDto {
   @ApiPropertyOptional({ description: "Hisob nomi (Yuboruvchi/Qabul qiluvchi, ko'p qiymat vergul bilan)" })
   @IsOptional() @IsString()
   hisobNomi?: string;
+
+  // distinct endpoint uchun (whitelist'dan o'tish uchun ham bu yerda bo'lishi kerak)
+  @ApiPropertyOptional({ description: "distinct uchun ustun nomi" })
+  @IsOptional() @IsString()
+  column?: string;
+
+  // export uchun
+  @ApiPropertyOptional() @IsOptional() @IsString()
+  matchStatus?: string;
 }
