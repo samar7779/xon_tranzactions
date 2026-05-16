@@ -77,20 +77,51 @@ const MINFIN_FROM_NAMES = [
 ];
 
 // Soliq turi → MINFIN subkategoriya keyi (legacy 8 finance_tools.py)
+// Bank izohlarida Uzbek Kirill (Қ,Ў,Ғ,Ҳ) va sodda Kirill (К,У,Г,Х) aralash uchraydi
+// — har ikki variantni ham kiritamiz. Description UPPER bo'lganidan keyin tekshiriladi.
 const TAX_KEYWORDS: Array<[string, keyof CategoryRefs]> = [
+  // Suv
   ['ВОДОСНАБЖЕНИЕМ', 'MINFIN_WATER'],
-  ['36 ИЖТИМОИЙ', 'MINFIN_ESP'],
-  ['ЯТМФ БИЛАН', 'MINFIN_ESP'],
-  ['52 СУВ РЕСУРСЛАРИДАН', 'MINFIN_WATER_RES'],
-  ['53 ЮРИДИК ШАХСЛАР ЕР', 'MINFIN_LAND'],
+  ['ВОДОСНАБЖЕНИЕ',  'MINFIN_WATER'],
+  // ЕСП (Yagona ijtimoiy to'lov)
+  ['36 ИЖТИМОИЙ',    'MINFIN_ESP'],
+  ['ЯТМФ',           'MINFIN_ESP'],
+  ['ЕСП',            'MINFIN_ESP'],
+  // Suv resurslari
+  ['52 СУВ РЕСУРС',  'MINFIN_WATER_RES'],
+  ['СУВ РЕСУРС',     'MINFIN_WATER_RES'],
+  // Yer solig'i
+  ['53 ЮРИДИК ШАХСЛАР ЕР',  'MINFIN_LAND'],
+  ['ЕР СОЛИ',               'MINFIN_LAND'],
+  ['НАЛОГ НА ЗЕМЛЮ',        'MINFIN_LAND'],
+  // Mol-mulk solig'i
   ['44 ЮРИДИК ШАХСЛАР МОЛ-МУЛК', 'MINFIN_PROPERTY'],
-  ['ҚЎШИЛГАН ҚИЙМАТ СОЛИҒИ', 'MINFIN_NDS'],
-  ['?ўшилган ?иймат соли?и'.toUpperCase(), 'MINFIN_NDS'],
-  ['НДС', 'MINFIN_NDS'],
+  ['МОЛ-МУЛК',                    'MINFIN_PROPERTY'],
+  ['МОЛ МУЛК',                    'MINFIN_PROPERTY'],
+  ['НАЛОГ НА ИМУЩЕСТВО',          'MINFIN_PROPERTY'],
+  // QQS / NDS
+  ['ҚЎШИЛГАН ҚИЙМАТ', 'MINFIN_NDS'],
+  ['КУШИЛГАН КИЙМАТ', 'MINFIN_NDS'],
+  ['ҚИЙМАТ СОЛИ',     'MINFIN_NDS'],
+  ['КИЙМАТ СОЛИ',     'MINFIN_NDS'],
+  ['НДС',             'MINFIN_NDS'],
+  ['QQS',             'MINFIN_NDS'],
+  // NDFL (jismoniy shaxs daromadidan) — dividend BIRINCHI tekshiriladi (specific)
+  ['138 ЖИСМОНИЙ',                     'MINFIN_NDFL_DIV'],
+  ['ДИВИДЕНД',                         'MINFIN_NDFL_DIV'],
   ['46 ЖИСМОНИЙ ШАХСЛАР ДАРОМАДИДАН', 'MINFIN_NDFL'],
-  ['138 ЖИСМОНИЙ ШАХСЛАРНИНГ ДИВИДЕНД', 'MINFIN_NDFL_DIV'],
-  ['199 СОРЖ', 'MINFIN_PENALTY'],
-  ['100 АЙЛАНМАДАН', 'MINFIN_PROFIT'],
+  ['ЖИСМОНИЙ ШАХСЛАР ДАРОМАД',         'MINFIN_NDFL'],
+  ['НДФЛ',                              'MINFIN_NDFL'],
+  // Jarima
+  ['199 СОРЖ',     'MINFIN_PENALTY'],
+  ['ЖАРИМА',        'MINFIN_PENALTY'],
+  ['ПЕНЯ',          'MINFIN_PENALTY'],
+  ['ШТРАФ',         'MINFIN_PENALTY'],
+  // Foyda solig'i
+  ['100 АЙЛАНМА',  'MINFIN_PROFIT'],
+  ['АЙЛАНМАДАН',    'MINFIN_PROFIT'],
+  ['ФОЙДА СОЛИ',    'MINFIN_PROFIT'],
+  ['НАЛОГ НА ПРИБЫЛЬ', 'MINFIN_PROFIT'],
 ];
 
 export interface CategorizeResult {
@@ -258,11 +289,17 @@ export class CategorizationService {
       }
     }
 
-    // ── 3) Молия Вазирлиги — fromName aniq matn bo'lsa
-    if (!categoryId && MINFIN_FROM_NAMES.some((m) => fromName.includes(m))) {
-      categoryId = refs.MINFIN;
-      subcategoryId = this.pickMinfinSubcategory(desc, refs);
-      reason = 'fromName Molia Vazirligi';
+    // ── 3) Молия Вазирлиги — fromName aniq matn YOKI desc'da soliq kalit so'zi
+    if (!categoryId) {
+      const isMolia = MINFIN_FROM_NAMES.some((m) => fromName.includes(m));
+      const taxSubKey = this.pickMinfinSubcategory(desc, refs);
+      if (isMolia || taxSubKey) {
+        categoryId = refs.MINFIN;
+        subcategoryId = taxSubKey;
+        reason = isMolia
+          ? `fromName Molia Vazirligi${taxSubKey ? ' + soliq turi' : ''}`
+          : 'desc soliq kalit soz';
+      }
     }
 
     // ── 4) Bank xizmati — CORPORATE/TARIF
