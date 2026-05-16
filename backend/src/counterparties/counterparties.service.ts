@@ -502,8 +502,8 @@ export class CounterpartiesService {
    * background cron DIDOX'dan asta-sekin to'ldiradi.
    */
   async importExcel(buffer: Buffer, addedBy: string): Promise<{
-    total: number; added: number; skipped: number; failed: number;
-    rows: Array<{ inn: string; name?: string; status: 'added' | 'skipped' | 'failed'; reason?: string }>;
+    total: number; added: number; updated: number; skipped: number; failed: number;
+    rows: Array<{ inn: string; name?: string; status: 'added' | 'updated' | 'skipped' | 'failed'; reason?: string }>;
   }> {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
@@ -522,8 +522,8 @@ export class CounterpartiesService {
     });
 
     const result = {
-      total: rowsToProcess.length, added: 0, skipped: 0, failed: 0,
-      rows: [] as Array<{ inn: string; name?: string; status: 'added' | 'skipped' | 'failed'; reason?: string }>,
+      total: rowsToProcess.length, added: 0, updated: 0, skipped: 0, failed: 0,
+      rows: [] as Array<{ inn: string; name?: string; status: 'added' | 'updated' | 'skipped' | 'failed'; reason?: string }>,
     };
 
     if (rowsToProcess.length === 0) return result;
@@ -542,21 +542,28 @@ export class CounterpartiesService {
       validRows.push({ inn: r.inn, name: r.name || `INN ${r.inn}`, isStandard });
     }
 
-    // 2) Dublikatlarni bitta query bilan tekshiramiz (1 ta SELECT)
+    // 2) Mavjudlarini bitta SELECT bilan ko'rib chiqamiz (inn + name)
     const innsToCheck = validRows.map((r) => r.inn);
     const existingRows = await this.prisma.counterparty.findMany({
       where: { inn: { in: innsToCheck } },
-      select: { inn: true },
+      select: { inn: true, name: true },
     });
-    const existingSet = new Set(existingRows.map((r) => r.inn));
+    const existingMap = new Map(existingRows.map((r) => [r.inn, r.name]));
 
-    // 3) Yangi INN'larni bulk insert qilamiz (createMany + skipDuplicates)
-    const toInsert: Array<{ inn: string; name: string; addedBy: string; lastFetchError: string }> = [];
+    // 3) Excel'da bir xil INN bir necha marta uchrasa — eng oxirgi nomini olamiz
+    //    (asl tartibida — keyingilari avvalgisini bekor qiladi)
+    const uniqMap = new Map<string, { inn: string; name: string; isStandard: boolean }>();
     for (const r of validRows) {
-      if (existingSet.has(r.inn)) {
-        result.skipped++;
-        result.rows.push({ inn: r.inn, name: r.name, status: 'skipped', reason: 'INN allaqachon mavjud' });
-      } else {
+      uniqMap.set(r.inn, r);
+    }
+    const uniqRows = [...uniqMap.values()];
+
+    // 4) Yangi va mavjudlarni ajratamiz
+    const toInsert: Array<{ inn: string; name: string; addedBy: string; lastFetchError: string }> = [];
+    const toUpdate: Array<{ inn: string; name: string }> = [];
+    for (const r of uniqRows) {
+      const existingName = existingMap.get(r.inn);
+      if (existingName === undefined) {
         toInsert.push({
           inn: r.inn,
           name: r.name,
@@ -565,10 +572,20 @@ export class CounterpartiesService {
             ? 'Avto-yangilanish kutilmoqda (cron 08:00–22:00)'
             : 'Nostandart INN — qo\'lda tahrirlash kerak',
         });
+      } else if (existingName !== r.name) {
+        // INN mavjud, lekin nom o'zgargan — yangilab qo'yamiz
+        toUpdate.push({ inn: r.inn, name: r.name });
+      } else {
+        // Hech narsa o'zgarmagan
+        result.skipped++;
+        result.rows.push({ inn: r.inn, name: r.name, status: 'skipped', reason: 'O\'zgarish yo\'q' });
       }
     }
 
     const successfullyInserted: string[] = [];
+    const successfullyUpdated: string[] = [];
+
+    // 5) Bulk INSERT yangi qatorlar uchun
     if (toInsert.length > 0) {
       try {
         const inserted = await this.prisma.counterparty.createMany({
@@ -594,30 +611,58 @@ export class CounterpartiesService {
           }
         }
       }
+    }
 
-      // History — har bir saqlangan kontragent uchun bitta yozuv
-      // (bulk insert qilamiz ko'p qator log uchun ham)
-      if (successfullyInserted.length > 0) {
-        try {
-          let actorName: string | null = null;
-          const u = await this.prisma.adminUser.findUnique({
-            where: { id: addedBy }, select: { fullName: true, email: true },
-          });
-          actorName = u?.fullName || u?.email || null;
-          await this.prisma.counterpartyHistory.createMany({
-            data: successfullyInserted.map((inn) => ({
-              inn, action: 'imported', actorType: 'user', actorId: addedBy, actorName,
-              source: null, fieldsChanged: [],
-              note: 'Excel import orqali qo\'shildi',
-            })),
-          });
-        } catch (e: any) {
-          this.log.warn(`Import history yozish xato: ${e?.message}`);
-        }
+    // 6) Bulk UPDATE — mavjud INN'lar uchun faqat name'ni yangilaymiz
+    //    (boshqa maydonlar — director, phone, reyting va h.k. — cron orqali keladi)
+    for (const r of toUpdate) {
+      try {
+        await this.prisma.counterparty.update({
+          where: { inn: r.inn },
+          data: { name: r.name },
+        });
+        result.updated++;
+        result.rows.push({ inn: r.inn, name: r.name, status: 'updated' });
+        successfullyUpdated.push(r.inn);
+      } catch (e: any) {
+        result.failed++;
+        result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: e?.message || 'xato' });
       }
     }
 
-    this.log.log(`Import: ${result.added} yozildi, ${result.skipped} skip, ${result.failed} xato`);
+    // 7) History — bulk audit yozuvi (added va updated alohida tarix yozuvlari)
+    if (successfullyInserted.length > 0 || successfullyUpdated.length > 0) {
+      try {
+        let actorName: string | null = null;
+        const u = await this.prisma.adminUser.findUnique({
+          where: { id: addedBy }, select: { fullName: true, email: true },
+        });
+        actorName = u?.fullName || u?.email || null;
+
+        const historyData: any[] = [];
+        for (const inn of successfullyInserted) {
+          historyData.push({
+            inn, action: 'imported', actorType: 'user', actorId: addedBy, actorName,
+            source: null, fieldsChanged: [],
+            note: 'Excel import orqali qo\'shildi',
+          });
+        }
+        for (const inn of successfullyUpdated) {
+          historyData.push({
+            inn, action: 'manual_edit', actorType: 'user', actorId: addedBy, actorName,
+            source: 'manual', fieldsChanged: ['name'],
+            note: 'Excel re-import: nom yangilandi',
+          });
+        }
+        await this.prisma.counterpartyHistory.createMany({ data: historyData });
+      } catch (e: any) {
+        this.log.warn(`Import history yozish xato: ${e?.message}`);
+      }
+    }
+
+    this.log.log(
+      `Import: ${result.added} yangi, ${result.updated} yangilandi, ${result.skipped} o'zgarish yo'q, ${result.failed} xato`,
+    );
     return result;
   }
 
