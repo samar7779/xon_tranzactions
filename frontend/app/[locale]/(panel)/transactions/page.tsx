@@ -1502,9 +1502,12 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           {/* Tarix (Audit log) */}
           <CategoryHistorySection txId={row.id} />
 
-          {/* Tranzaksiya ID — faqat copy icon */}
-          <div className="flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
-            <span className="uppercase tracking-wider font-semibold">{t('detailComposite')}</span>
+          {/* Tranzaksiya ID — ID matni + copy icon */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 shrink-0">{t('detailComposite')}</span>
+            <code className="flex-1 min-w-0 font-mono text-[11px] text-slate-700 bg-slate-50 px-2 py-1 rounded ring-1 ring-slate-200 break-all select-all">
+              {row.externalId || row.id}
+            </code>
             <CopyIdButton value={row.externalId || row.id} />
           </div>
 
