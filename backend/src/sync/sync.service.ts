@@ -346,8 +346,14 @@ export class SyncService {
     const valueDate = this.parseKbDate(item.vdate);
     const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
 
-    // Yo'nalish: PDF §9.7: 1 chiqim, 2 kirim
-    const direction: TxnDirection = item.dir === 2 ? 'IN' : 'OUT';
+    // Yo'nalish: bank dir maydoni ba'zan noto'g'ri kelganligi tufayli, acc_ct/acc_dt'dan aniqlaymiz
+    //   acc_ct = kreditlanadigan hisob (kim oladi)  → bizning hisob bo'lsa KIRIM
+    //   acc_dt = debetlanadigan hisob (kim beradi)  → bizning hisob bo'lsa CHIQIM
+    // Fallback (acc_ct/acc_dt yo'q bo'lsa) → eski PDF §9.7 logikasi
+    let direction: TxnDirection;
+    if (item.acc_ct === accountNo) direction = 'IN';
+    else if (item.acc_dt === accountNo) direction = 'OUT';
+    else direction = item.dir === 2 ? 'IN' : 'OUT'; // fallback
 
     // Holat: PDF §9.1 (1 introduced, 2 approved, 3 proved, 6 deleted, 16 deferred)
     const status: TxnStatus =

@@ -252,6 +252,38 @@ async function backfillCounterpartyManual() {
   }
 }
 
+async function backfillTransactionDirection() {
+  // Bank `dir` field ba'zan noto'g'ri kelgan tranzaksiyalar uchun yo'nalishni qayta hisoblash:
+  //   to_account = bizning hisob_no  →  KIRIM (IN)
+  //   from_account = bizning hisob_no  →  CHIQIM (OUT)
+  // Faqat yo'nalish noto'g'ri bo'lganlarni yangilaymiz.
+  try {
+    const fixedIn = await prisma.$executeRawUnsafe(`
+      UPDATE transactions t
+      SET direction = 'IN'
+      FROM bank_accounts a
+      WHERE t.account_id = a.id
+        AND t.to_account = a.account_no
+        AND t.direction = 'OUT'
+    `);
+    const fixedOut = await prisma.$executeRawUnsafe(`
+      UPDATE transactions t
+      SET direction = 'OUT'
+      FROM bank_accounts a
+      WHERE t.account_id = a.id
+        AND t.from_account = a.account_no
+        AND t.direction = 'IN'
+    `);
+    const inN = typeof fixedIn === 'number' ? fixedIn : 0;
+    const outN = typeof fixedOut === 'number' ? fixedOut : 0;
+    if (inN + outN > 0) {
+      console.log(`✓ Transactions direction backfilled: ${inN} → IN, ${outN} → OUT`);
+    }
+  } catch (e: any) {
+    console.log(`⚠ direction backfill xato: ${e?.message}`);
+  }
+}
+
 async function backfillIpakExternalIdPrefix() {
   // Ipak Yo'li bank tranzaksiyalarining externalId'siga IP_ prefiksi qo'shamiz
   // (agar hali qo'shilmagan bo'lsa). Kapitalbank ID'lari bilan ajratish uchun.
@@ -299,5 +331,6 @@ main()
   .then(() => backfillCounterpartyManual())
   .then(() => backfillHistoryActorEmail())
   .then(() => backfillIpakExternalIdPrefix())
+  .then(() => backfillTransactionDirection())
   .catch((e) => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
