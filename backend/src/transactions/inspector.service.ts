@@ -5,6 +5,18 @@ import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
 import { KbDoc1CItem } from '../integrations/kapitalbank/types';
 
+interface ParsedId {
+  bankPrefix: 'IP' | null;
+  generalId: string;
+  num: string;
+  ddate: string;
+  accCt: string;
+  accDt: string;
+  amountTiyin: string;
+  sign: '+' | '-';
+  ourAccount: string;
+}
+
 /**
  * Bitta tranzaksiya ID'sini parse qilib, bankdan qidiradi.
  *
@@ -29,7 +41,7 @@ export class InspectorService {
   ) {}
 
   /** Composite ID'ni komponentlarga ajratish. */
-  parseId(rawId: string) {
+  parseId(rawId: string): ParsedId {
     if (!rawId || typeof rawId !== 'string') {
       throw new BadRequestException("ID bo'sh");
     }
@@ -75,7 +87,7 @@ export class InspectorService {
   }
 
   /** Bitta yozuv parsed bilan to'liq mos kelsa — qaysi maydon bo'yicha mos kelganini qaytaradi */
-  private matchItem(it: KbDoc1CItem, parsed: ReturnType<typeof this.parseId>): string | null {
+  private matchItem(it: KbDoc1CItem, parsed: ParsedId): string | null {
     if (it.general_id && it.general_id === parsed.generalId) return 'general_id';
     if (String(it.num || '') === parsed.num && it.ddate === parsed.ddate) return 'num+ddate';
     if (

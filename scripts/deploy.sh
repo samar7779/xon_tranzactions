@@ -83,19 +83,38 @@ tg() {
   rm -f "$tmp"
 }
 
-# Build muvaffaqiyatsiz bo'lsa — log fayli bilan
-tg_with_log() {
+# Build muvaffaqiyatsiz bo'lsa — caption + oxirgi log qismini INLINE (Telegram chat ichida)
+# ko'rsatadi (foydalanuvchi serverga kirmasdan xatoni o'qiy oladi).
+# Qo'shimcha: to'liq log ham fayl sifatida yuboriladi (zaxira).
+tg_fail() {
   [ -z "${TG_BOT_TOKEN:-}" ] && return 0
   [ -z "${DEPLOY_NOTIFY_CHAT:-}" ] && return 0
   local caption="$1"
-  tail -50 "$LOG" | tail -c 3500 > /tmp/build-err.txt
+  # Eng muhim xato qatorlarini topamiz (grep), bo'lmasa oxirgi 60 qator
+  local err_lines
+  err_lines=$(grep -iE 'error|fail|ENOENT|EACCES|ECONNREFUSED|TS[0-9]+:|Cannot find|Module not found|Type .+ is not|✗ FAIL|SyntaxError|TypeError|ReferenceError' "$LOG" 2>/dev/null | tail -30 | tail -c 2500)
+  if [ -z "$err_lines" ]; then
+    err_lines=$(tail -60 "$LOG" 2>/dev/null | tail -c 2500)
+  fi
+  # HTML-escape (& < >)
+  err_lines=$(printf '%s' "$err_lines" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g')
+
+  tg "${caption}
+
+<pre>${err_lines}</pre>
+
+📋 To'liq log faylda (pastda)"
+
+  # Zaxira: oxirgi 300 qator log fayl sifatida
+  tail -300 "$LOG" 2>/dev/null > /tmp/xon-deploy-fail.log
   curl -sS -m 15 \
-    -d chat_id="${DEPLOY_NOTIFY_CHAT}" \
-    -F document=@/tmp/build-err.txt \
-    -F caption="$caption" \
-    -F parse_mode=HTML \
+    -F chat_id="${DEPLOY_NOTIFY_CHAT}" \
+    -F document=@/tmp/xon-deploy-fail.log \
     "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" >> "$LOG" 2>&1 || true
 }
+
+# Eski nom bilan ham ishlasin (orqaga moslik)
+tg_with_log() { tg_fail "$@"; }
 
 esc() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
@@ -217,29 +236,25 @@ if [ "$need_be" = "1" ]; then
   if [ -d "$REPO/backend" ]; then
     pushd "$REPO/backend" > /dev/null
     if ! run "backend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
-      tg_with_log "❌ <b>xon.transactions</b> · backend npm install xatosi"
-      tg "❌ <b>xon.transactions</b> · backend npm install muvaffaqiyatsiz"
+      tg_fail "❌ <b>xon.transactions</b> · backend npm install muvaffaqiyatsiz"
       exit 1
     fi
     run "backend prisma generate" npx prisma generate || true
     if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
       if ! run "backend prisma migrate deploy" npx prisma migrate deploy; then
-        tg_with_log "❌ <b>xon.transactions</b> · prisma migrate xatosi"
-        tg "❌ <b>xon.transactions</b> · prisma migrate muvaffaqiyatsiz"
+        tg_fail "❌ <b>xon.transactions</b> · prisma migrate muvaffaqiyatsiz"
         exit 1
       fi
     else
       if ! run "backend prisma db push" npx prisma db push --accept-data-loss --skip-generate; then
-        tg_with_log "❌ <b>xon.transactions</b> · prisma db push xatosi"
-        tg "❌ <b>xon.transactions</b> · prisma db push muvaffaqiyatsiz"
+        tg_fail "❌ <b>xon.transactions</b> · prisma db push muvaffaqiyatsiz"
         exit 1
       fi
     fi
     # Seed — banklar, rollar, admin (idempotent — har deploy'da xavfsiz)
     run "backend prisma seed" npm run seed || log "⚠ seed xatosi (jiddiy emas)"
     if ! run "backend build" npm run build; then
-      tg_with_log "❌ <b>xon.transactions</b> · backend build xatosi"
-      tg "❌ <b>xon.transactions</b> · backend build muvaffaqiyatsiz"
+      tg_fail "❌ <b>xon.transactions</b> · backend build muvaffaqiyatsiz"
       exit 1
     fi
     popd > /dev/null
@@ -254,16 +269,14 @@ if [ "$need_fe" = "1" ]; then
   if [ -d "$REPO/frontend" ]; then
     pushd "$REPO/frontend" > /dev/null
     if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
-      tg_with_log "❌ <b>xon.transactions</b> · frontend npm install xatosi"
-      tg "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz"
+      tg_fail "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz"
       exit 1
     fi
     # Eski temp build qoldiqlarini tozalash
     rm -rf .next-build .next-old
     # Temp papkaga build — eski .next tegilmaydi
     if ! run "frontend build (→ .next-build)" env NEXT_DIST_DIR=.next-build npm run build; then
-      tg_with_log "❌ <b>xon.transactions</b> · frontend build xatosi"
-      tg "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz"
+      tg_fail "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz"
       rm -rf .next-build
       exit 1
     fi
