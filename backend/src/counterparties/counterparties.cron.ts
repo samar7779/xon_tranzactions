@@ -15,13 +15,9 @@ export class CounterpartiesCron {
   constructor(private svc: CounterpartiesService) {}
 
   @Cron('0 8-22 * * *', { name: 'counterparties-refresh', timeZone: 'Asia/Tashkent' })
-  async refreshHourly() {
-    this.log.log('Cron boshlandi: kontragentlarni DIDOX\'dan yangilash');
-    try {
-      const r = await this.svc.refreshAll();
-      this.log.log(`Cron tugadi: ${r.updated}/${r.total} yangilandi (${r.failed} xato)`);
-    } catch (e: any) {
-      this.log.error(`Cron xatosi: ${e?.message || e}`);
-    }
+  refreshHourly() {
+    this.log.log('Cron: kontragentlarni yangilash boshlandi');
+    // refreshAll endi background'ga ishlaydi — log o'zi yozadi
+    this.svc.refreshAll();
   }
 }

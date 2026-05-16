@@ -36,11 +36,14 @@ export class DidoxService {
       throw new Error('DIDOX env vars not configured (DIDOX_LOGIN_INN, DIDOX_LOGIN_PASSWORD, DIDOX_PARTNER_AUTH)');
     }
     const url = `${e.base}/v1/auth/${encodeURIComponent(e.inn)}/password/${DIDOX_LOCALE}`;
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 10_000);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({ password: e.password }),
-    });
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(tm));
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`DIDOX login failed: ${res.status} ${text.slice(0, 200)}`);
@@ -58,13 +61,17 @@ export class DidoxService {
     const token = await this.getToken();
     const e = env();
     const url = `${e.base}${path}`;
+    // 12 soniya — DIDOX'ning /v2/documents katta payload qaytaradi
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 12_000);
     const res = await fetch(url, {
       headers: {
         'user-key': token,
         'Partner-Authorization': e.partner,
         'Accept': 'application/json',
       },
-    });
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(tm));
     if (res.status === 401 && !retried) {
       this.cached = null;
       return this.authedGet(path, true);
@@ -88,12 +95,13 @@ export class DidoxService {
   }
 
   /**
-   * Eski 90 kunlik incoming fakturalardan shu INN'ga oid eng yangi bittasini topib,
+   * Oxirgi 30 kunlik incoming fakturalardan shu INN'ga oid eng yangi bittasini topib,
    * undagi bank hisobi va g.b. ma'lumotlarini ajratib oladi.
    * Topilmasa null qaytaradi (faktura aylanmasi bo'lmasa normal).
+   * 30 kun — 90 emas, chunki katta payload va sekin.
    */
   async findLatestBankInfo(inn: string): Promise<DidoxBankInfo | null> {
-    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000)
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
       .toISOString().slice(0, 10);
     // Incoming (002) — bizga keladigan fakturalarda partnerTin = sotuvchi (seller)
     const list = await this.authedGet(
