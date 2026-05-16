@@ -65,6 +65,7 @@ export class TransactionsService {
             },
           },
           category: true,
+          subcategory: true,
         },
       }),
     ]);
@@ -147,6 +148,7 @@ export class TransactionsService {
         bank: true,
         account: true,
         category: true,
+        subcategory: true,
       },
     });
   }
