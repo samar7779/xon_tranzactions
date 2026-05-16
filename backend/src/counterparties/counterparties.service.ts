@@ -301,7 +301,24 @@ export class CounterpartiesService {
    * Cron yangilashi — barcha kontragentlarni DIDOX'dan qayta olib yangilaydi.
    * Parallel emas, ketma-ket: DIDOX'ga ortiqcha bosim bo'lmasin.
    */
-  async refreshAll(): Promise<{ total: number; updated: number; failed: number }> {
+  /**
+   * Hammasini yangilash — DARROV javob qaytaradi (background'da ishlaydi).
+   * Foydalanuvchi 504 timeout kutmaydi: 100 ta kontragent = 5+ daqiqa ish.
+   * Cron ham xuddi shu metodni chaqiradi.
+   */
+  refreshAll(): { ok: true; started: true; message: string } {
+    // Fire-and-forget — sahifa response'ni darrov qaytaradi
+    this.runRefreshAllInBackground().catch((e) => {
+      this.log.error(`refreshAll background xato: ${e?.message || e}`);
+    });
+    return {
+      ok: true,
+      started: true,
+      message: 'Yangilash fonda boshlandi — birozdan keyin sahifani yangilang',
+    };
+  }
+
+  private async runRefreshAllInBackground(): Promise<void> {
     const all = await this.prisma.counterparty.findMany({
       where: { isActive: true },
       select: { inn: true, bankAccounts: true },
@@ -320,15 +337,14 @@ export class CounterpartiesService {
         try {
           await this.prisma.counterparty.update({
             where: { inn: cp.inn },
-            data: { lastFetchError: e?.message || String(e), lastFetchedAt: new Date() },
+            data: { lastFetchError: humanizeEnrichmentError(e, cp.inn), lastFetchedAt: new Date() },
           });
         } catch { /* ignore */ }
       }
       // Yengil zaxira — rate limit'ga tushmaslik uchun
       await new Promise((r) => setTimeout(r, 200));
     }
-    this.log.log(`Cron refresh: ${updated} yangilandi, ${failed} xato (jami ${all.length})`);
-    return { total: all.length, updated, failed };
+    this.log.log(`refreshAll tugadi: ${updated} yangilandi, ${failed} xato (jami ${all.length})`);
   }
 
   // ────────────────────────── Import / Export ──────────────────────────

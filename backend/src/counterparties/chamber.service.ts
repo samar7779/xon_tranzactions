@@ -13,10 +13,13 @@ export class ChamberService {
 
   async getCompany(inn: string): Promise<ChamberCompany | null> {
     const url = `${CHAMBER_BASE}/Soliq/GetCompanyCriteries/${encodeURIComponent(inn)}`;
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 8_000);
     try {
       const res = await fetch(url, {
         method: 'GET',
         headers: { 'Accept': 'application/json' },
+        signal: ctrl.signal,
       });
       if (res.status === 400) {
         // "Soliq tizimidan ma'lumot topilmadi" — INN haqiqatan yo'q
@@ -45,6 +48,8 @@ export class ChamberService {
     } catch (e: any) {
       this.log.warn(`Chamber ${inn} error: ${e?.message}`);
       return null;
+    } finally {
+      clearTimeout(tm);
     }
   }
 }

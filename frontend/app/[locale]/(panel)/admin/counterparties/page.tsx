@@ -122,10 +122,11 @@ export default function CounterpartiesPage() {
   });
 
   const refreshAllMut = useMutation({
-    mutationFn: () => api.post<{ total: number; updated: number; failed: number }>('/counterparties/refresh-all'),
+    mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/counterparties/refresh-all'),
     onSuccess: (r: any) => {
-      toast.success(`${r.updated}/${r.total} yangilandi${r.failed ? ` (${r.failed} xato)` : ''}`);
-      qc.invalidateQueries({ queryKey: ['counterparties'] });
+      toast.success(r?.message || 'Yangilash fonda boshlandi');
+      // 30 soniyadan keyin sahifani avto-yangilaymiz
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['counterparties'] }), 30_000);
     },
     onError: (e: any) => toast.error(e?.message || tc('error')),
   });
