@@ -504,7 +504,11 @@ export default function CounterpartiesPage() {
                       const grade = ratingGrade(it.rating ?? null);
                       const manual = !isStandardInn(it.inn);
                       return (
-                        <tr key={it.inn} className="group hover:bg-indigo-50/70 hover:shadow-[inset_3px_0_0_0_theme(colors.indigo.500)] transition-colors cursor-pointer" onClick={() => setDetailRow(it)}>
+                        <tr
+                          key={it.inn}
+                          className="group cursor-pointer border-l-4 border-l-transparent hover:bg-indigo-50 hover:border-l-indigo-500 transition-all duration-150"
+                          onClick={() => setDetailRow(it)}
+                        >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               <span className="font-mono text-[12px] font-bold text-slate-900">{it.inn}</span>
