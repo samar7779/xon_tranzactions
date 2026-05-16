@@ -711,12 +711,14 @@ function ImportStat({ label, value, tone }: { label: string; value: number; tone
 function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
   const grade = ratingGrade(row.rating ?? null);
   const manual = !isStandardInn(row.inn);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
-  // History data
+  // History data — faqat ochilganda yuklaymiz (lazy)
   const historyQuery = useQuery({
     queryKey: ['counterparty-history', row.inn],
     queryFn: () => api.get<{ items: any[] }>(`/counterparties/${row.inn}/history?limit=50`),
     staleTime: 10_000,
+    enabled: historyOpen,
   });
   const history = historyQuery.data?.items || [];
 
@@ -830,32 +832,72 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
         </div>
       </div>
 
-      {/* History (audit log) */}
-      <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-        <div className="bg-slate-50 px-4 py-2 flex items-center gap-2 border-b border-slate-200">
+      {/* History (audit log) — collapsible, default closed */}
+      <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden bg-white">
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((o) => !o)}
+          className={cn(
+            'w-full px-4 py-2.5 flex items-center gap-2 transition-colors text-left',
+            historyOpen ? 'bg-indigo-50/50' : 'hover:bg-slate-50',
+          )}
+        >
+          <ChevronDown className={cn(
+            'h-4 w-4 transition-transform shrink-0',
+            historyOpen ? 'text-indigo-600' : 'text-slate-400 -rotate-90',
+          )} />
           <Clock className="h-3.5 w-3.5 text-slate-500" />
-          <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">Tarix</div>
-          <span className="text-[10px] text-slate-500 ml-1">{history.length}</span>
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-600">Tarix</span>
+          <span className="text-[10px] text-slate-500 ml-auto">
+            {historyQuery.isLoading ? '…' : history.length ? `${history.length} ta yozuv` : 'bosing'}
+          </span>
+        </button>
+        <div className={cn(
+          'grid transition-[grid-template-rows] duration-300 ease-out',
+          historyOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+        )}>
+          <div className="overflow-hidden">
+            <div className="border-t border-slate-100">
+              {historyQuery.isLoading ? (
+                <div className="px-4 py-4 text-[11px] text-slate-400 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda…
+                </div>
+              ) : history.length === 0 ? (
+                <div className="px-4 py-4 text-[11px] text-slate-400">Hozircha yozuv yo'q</div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                  {history.map((h) => (
+                    <HistoryRow key={h.id} h={h} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        {historyQuery.isLoading ? (
-          <div className="px-4 py-3 text-[11px] text-slate-400 flex items-center gap-1.5">
-            <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda…
-          </div>
-        ) : history.length === 0 ? (
-          <div className="px-4 py-3 text-[11px] text-slate-400">Hozircha yozuv yo'q</div>
-        ) : (
-          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
-            {history.map((h) => (
-              <HistoryRow key={h.id} h={h} />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
+const FIELD_LABEL: Record<string, string> = {
+  name: 'Nomi',
+  fullName: 'To\'liq nom',
+  director: 'Direktor',
+  accountant: 'Bosh hisobchi',
+  phone: 'Telefon',
+  email: 'Email',
+  address: 'Manzil',
+  vatNumber: 'QQS reg kodi',
+  vatStatus: 'QQS holati',
+  oked: 'OKED',
+  rating: 'Reyting',
+  bankAccounts: 'Bank hisoblari',
+  notes: 'Izoh',
+  isActive: 'Faol',
+};
+
 function HistoryRow({ h }: { h: any }) {
+  const [open, setOpen] = useState(false);
   const actionMeta: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
     created:      { label: 'Qo\'shildi',         cls: 'bg-emerald-100 text-emerald-700', icon: <Plus className="h-3 w-3" /> },
     imported:     { label: 'Import',             cls: 'bg-blue-100 text-blue-700',       icon: <Upload className="h-3 w-3" /> },
@@ -865,23 +907,76 @@ function HistoryRow({ h }: { h: any }) {
     deleted:      { label: 'O\'chirildi',        cls: 'bg-rose-100 text-rose-700',       icon: <Trash2 className="h-3 w-3" /> },
   };
   const m = actionMeta[h.action] || { label: h.action, cls: 'bg-slate-100 text-slate-700', icon: null };
+  const changes = h.changes && typeof h.changes === 'object' ? h.changes : null;
+  const hasChanges = changes && Object.keys(changes).length > 0;
+
   return (
-    <div className="px-4 py-2 flex items-start gap-2 hover:bg-slate-50/40">
-      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0', m.cls)}>
-        {m.icon} {m.label}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[11px] text-slate-700">
-          <b>{h.actorName || '—'}</b>
-          {h.source && h.source !== 'none' && (
-            <span className="ml-1 text-slate-500">· {h.source}</span>
+    <div className="px-4 py-2 hover:bg-slate-50/40">
+      <button
+        type="button"
+        onClick={() => hasChanges && setOpen((o) => !o)}
+        className={cn('w-full flex items-start gap-2 text-left', hasChanges && 'cursor-pointer')}
+      >
+        <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider shrink-0', m.cls)}>
+          {m.icon} {m.label}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] text-slate-700 flex items-center gap-1.5 flex-wrap">
+            <b>{h.actorName || '—'}</b>
+            {h.source && h.source !== 'none' && (
+              <span className="text-slate-500">· {h.source}</span>
+            )}
+            {hasChanges && (
+              <span className="text-[10px] text-indigo-600 font-semibold inline-flex items-center gap-0.5">
+                {Object.keys(changes).length} o'zgarish
+                <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
+              </span>
+            )}
+          </div>
+          {h.note && !hasChanges && (
+            <div className="text-[10px] text-slate-500 truncate" title={h.note}>{h.note}</div>
           )}
         </div>
-        {h.note && <div className="text-[10px] text-slate-500 truncate" title={h.note}>{h.note}</div>}
-      </div>
-      <div className="text-[10px] text-slate-400 tabular-nums shrink-0">{formatDateTime(h.createdAt)}</div>
+        <div className="text-[10px] text-slate-400 tabular-nums shrink-0 pt-0.5">{formatDateTime(h.createdAt)}</div>
+      </button>
+
+      {/* O'zgarishlar tafsiloti */}
+      {hasChanges && open && (
+        <div className="mt-2 ml-1 space-y-1.5 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-2.5">
+          {Object.entries(changes).map(([field, diff]: [string, any]) => (
+            <div key={field} className="text-[11px]">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">
+                {FIELD_LABEL[field] || field}
+              </div>
+              <div className="flex items-start gap-1.5 flex-wrap">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 ring-1 ring-rose-200 line-through max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.old)}>
+                  {formatHistoryValue(diff.old) || '—'}
+                </span>
+                <span className="text-slate-400 text-[10px] pt-0.5">→</span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.new)}>
+                  {formatHistoryValue(diff.new) || '—'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+function formatHistoryValue(v: any): string {
+  if (v == null) return '';
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (Array.isArray(v)) {
+    // bankAccounts uchun chiroyli ko'rinish
+    return v.map((b: any) => {
+      if (b?.account) return `${b.account}${b.mfo ? ` (MFO ${b.mfo})` : ''}`;
+      return JSON.stringify(b);
+    }).join('; ');
+  }
+  try { return JSON.stringify(v); } catch { return String(v); }
 }
 
 function CounterpartyEditForm({

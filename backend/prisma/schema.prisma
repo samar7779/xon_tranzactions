@@ -540,6 +540,7 @@ model CounterpartyHistory {
   actorName       String?  @map("actor_name") @db.VarChar(190) // log uchun shu paytdagi nom (admin keyin o'chirilsa ham qoladi)
   source          String?  @db.VarChar(30)               // didox | chamber | didox+chamber | manual | none
   fieldsChanged   String[] @map("fields_changed") @default([])   // qaysi maydonlar o'zgardi
+  changes         Json?                                  // {fieldName: {old: '…', new: '…'}, ...} — manual_edit uchun
   note            String?  @db.Text                      // qisqacha izoh
 
   createdAt       DateTime @default(now()) @map("created_at")

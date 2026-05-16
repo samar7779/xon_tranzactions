@@ -49,6 +49,7 @@ export class CounterpartiesService {
     actorId?: string | null;
     source?: string | null;
     fieldsChanged?: string[];
+    changes?: Record<string, { old: any; new: any }> | null;
     note?: string;
   }): Promise<void> {
     try {
@@ -73,6 +74,7 @@ export class CounterpartiesService {
           actorName,
           source: input.source || null,
           fieldsChanged: input.fieldsChanged || [],
+          changes: input.changes || undefined,
           note: input.note || null,
         },
       });
@@ -401,12 +403,30 @@ export class CounterpartiesService {
     }
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.isActive !== undefined) data.isActive = !!dto.isActive;
+
+    // Diff hisoblaymiz — faqat haqiqatan o'zgargan maydonlar
+    const changes: Record<string, { old: any; new: any }> = {};
+    for (const k of Object.keys(data)) {
+      const oldVal = (existing as any)[k];
+      const newVal = data[k];
+      // bankAccounts uchun JSON solishtirish
+      const oldStr = oldVal == null ? '' : (typeof oldVal === 'object' ? JSON.stringify(oldVal) : String(oldVal));
+      const newStr = newVal == null ? '' : (typeof newVal === 'object' ? JSON.stringify(newVal) : String(newVal));
+      if (oldStr !== newStr) {
+        changes[k] = { old: oldVal, new: newVal };
+      }
+    }
+
     const updated = await this.prisma.counterparty.update({ where: { inn }, data });
-    await this.logHistory({
-      inn, action: 'manual_edit', actorType: 'user', actorId, source: 'manual',
-      fieldsChanged: Object.keys(data),
-      note: `Qo'lda tahrirlandi: ${Object.keys(data).join(', ')}`,
-    });
+
+    if (Object.keys(changes).length > 0) {
+      await this.logHistory({
+        inn, action: 'manual_edit', actorType: 'user', actorId, source: 'manual',
+        fieldsChanged: Object.keys(changes),
+        changes,
+        note: `${Object.keys(changes).length} ta maydon yangilandi`,
+      });
+    }
     return { ok: true, counterparty: updated };
   }
 
@@ -615,8 +635,10 @@ export class CounterpartiesService {
 
     // 6) Bulk UPDATE — mavjud INN'lar uchun faqat name'ni yangilaymiz
     //    (boshqa maydonlar — director, phone, reyting va h.k. — cron orqali keladi)
+    const updateDiffs: Array<{ inn: string; oldName: string; newName: string }> = [];
     for (const r of toUpdate) {
       try {
+        const oldName = existingMap.get(r.inn) || '';
         await this.prisma.counterparty.update({
           where: { inn: r.inn },
           data: { name: r.name },
@@ -624,6 +646,7 @@ export class CounterpartiesService {
         result.updated++;
         result.rows.push({ inn: r.inn, name: r.name, status: 'updated' });
         successfullyUpdated.push(r.inn);
+        updateDiffs.push({ inn: r.inn, oldName, newName: r.name });
       } catch (e: any) {
         result.failed++;
         result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: e?.message || 'xato' });
@@ -647,10 +670,11 @@ export class CounterpartiesService {
             note: 'Excel import orqali qo\'shildi',
           });
         }
-        for (const inn of successfullyUpdated) {
+        for (const diff of updateDiffs) {
           historyData.push({
-            inn, action: 'manual_edit', actorType: 'user', actorId: addedBy, actorName,
+            inn: diff.inn, action: 'manual_edit', actorType: 'user', actorId: addedBy, actorName,
             source: 'manual', fieldsChanged: ['name'],
+            changes: { name: { old: diff.oldName, new: diff.newName } },
             note: 'Excel re-import: nom yangilandi',
           });
         }
