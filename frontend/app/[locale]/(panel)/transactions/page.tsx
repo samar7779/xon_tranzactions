@@ -58,33 +58,38 @@ export default function TransactionsPage() {
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
   const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
 
-  // localStorage filter persistence — refresh'da saqlanadi
-  const STORAGE_KEY = 'tx-filters-v1';
-  const initialFilters = (() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  })();
-
+  // Filter state'lar (oddiy useState — hech qanday persistance yo'q)
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
-  const [q, setQ] = useState(initialFilters?.q || '');
-  const [direction, setDirection] = useState<string>(initialFilters?.direction || 'all');
-  const [matchStatus, setMatchStatus] = useState<string>(initialFilters?.matchStatus || 'all');
-  const [bankId, setBankId] = useState<string>(initialFilters?.bankId || 'all');
-  const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom || '');
-  const [dateTo, setDateTo] = useState(initialFilters?.dateTo || '');
+  const [q, setQ] = useState('');
+  const [direction, setDirection] = useState<string>('all');
+  const [matchStatus, setMatchStatus] = useState<string>('all');
+  const [bankId, setBankId] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  // Filter o'zgarishlarini localStorage'ga yozish
+  // localStorage'dan filter o'qish (mount paytida, client-only)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    try {
+      const raw = localStorage.getItem('tx-filters-v1');
+      if (!raw) return;
+      const f = JSON.parse(raw);
+      if (typeof f?.q === 'string') setQ(f.q);
+      if (typeof f?.direction === 'string') setDirection(f.direction);
+      if (typeof f?.matchStatus === 'string') setMatchStatus(f.matchStatus);
+      if (typeof f?.bankId === 'string') setBankId(f.bankId);
+      if (typeof f?.dateFrom === 'string') setDateFrom(f.dateFrom);
+      if (typeof f?.dateTo === 'string') setDateTo(f.dateTo);
+    } catch { /* ignore */ }
+  }, []);
+
+  // Filter o'zgarishlarini localStorage'ga saqlash
+  useEffect(() => {
     try {
       const filters = { q, direction, matchStatus, bankId, dateFrom, dateTo };
       const hasAny = q || direction !== 'all' || matchStatus !== 'all' || bankId !== 'all' || dateFrom || dateTo;
-      if (hasAny) localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
-      else localStorage.removeItem(STORAGE_KEY);
+      if (hasAny) localStorage.setItem('tx-filters-v1', JSON.stringify(filters));
+      else localStorage.removeItem('tx-filters-v1');
     } catch { /* ignore */ }
   }, [q, direction, matchStatus, bankId, dateFrom, dateTo]);
   const [filterOpen, setFilterOpen] = useState(false);
