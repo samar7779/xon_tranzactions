@@ -1750,6 +1750,16 @@ function CategoryHistoryItem({ h }: { h: any }) {
     cron:   'bg-amber-100 text-amber-700',
   };
   const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
+
+  // Action turi: qo'shildi / o'zgartirildi / o'chirildi
+  const hadOld = !!(h.oldCategoryName || h.oldSubcategoryName);
+  const hasNew = !!(h.newCategoryName || h.newSubcategoryName);
+  let actionLabel = '';
+  let actionLabelCls = '';
+  if (!hadOld && hasNew) { actionLabel = "qo'shildi";       actionLabelCls = 'text-emerald-700'; }
+  else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700'; }
+  else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700'; }
+
   const renderCat = (name: string | null, sub: string | null) => {
     if (!name && !sub) return <span className="text-slate-400 italic">bo'sh</span>;
     return (
@@ -1761,23 +1771,39 @@ function CategoryHistoryItem({ h }: { h: any }) {
   return (
     <div className="rounded-lg ring-1 ring-slate-100 bg-slate-50/50 px-3 py-2 text-[11px] space-y-1">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider', cls)}>
             {h.action}
           </span>
           <span className="font-medium text-slate-700">{actorLabel}</span>
+          {actionLabel && (
+            <span className={cn('text-[10px] font-bold lowercase', actionLabelCls)}>
+              {actionLabel}
+            </span>
+          )}
         </div>
         <span className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(h.createdAt)}</span>
       </div>
-      <div className="flex items-center gap-1.5 text-[11px]">
-        <span className="line-through text-rose-600/80">
-          {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
-        </span>
-        <span className="text-slate-400">→</span>
-        <span className="text-emerald-700">
+      {/* Diff — faqat o'zgartirildi (eski + yangi) holatda ko'rsatish, qo'shildi/o'chirildi'da bittasi yetadi */}
+      {hadOld && hasNew ? (
+        <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+          <span className="line-through text-rose-600/80">
+            {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
+          </span>
+          <span className="text-slate-400">→</span>
+          <span className="text-emerald-700">
+            {renderCat(h.newCategoryName, h.newSubcategoryName)}
+          </span>
+        </div>
+      ) : hasNew ? (
+        <div className="text-[11px] text-emerald-700">
           {renderCat(h.newCategoryName, h.newSubcategoryName)}
-        </span>
-      </div>
+        </div>
+      ) : (
+        <div className="text-[11px] text-rose-700 line-through">
+          {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
+        </div>
+      )}
       {h.reason && (
         <div className="text-[10px] text-slate-500 italic">{h.reason}</div>
       )}
