@@ -305,35 +305,23 @@ export default function CounterpartiesPage() {
         {/* Search + compact filter dropdowns + actions */}
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 flex items-center gap-2 flex-wrap">
-            {/* Search — pro effect: animated gradient halo on focus */}
-            <div className="relative flex-1 min-w-[240px] group/search">
-              {/* outer gradient halo */}
-              <div
-                aria-hidden
-                className="pointer-events-none absolute -inset-[2px] rounded-[14px] bg-[conic-gradient(from_0deg,theme(colors.indigo.500),theme(colors.violet.500),theme(colors.cyan.400),theme(colors.indigo.500))] opacity-0 blur-[6px] transition-opacity duration-300 group-focus-within/search:opacity-70 group-hover/search:opacity-30 motion-safe:group-focus-within/search:animate-[spin_6s_linear_infinite]"
+            {/* Search */}
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                placeholder={t('search')}
+                className="pl-9 pr-8 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
               />
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 transition-colors duration-200 group-focus-within/search:text-indigo-600" />
-                <Input
-                  value={q}
-                  onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                  placeholder={t('search')}
-                  className="pl-9 pr-8 h-10 rounded-xl bg-white border-slate-200 shadow-sm transition-all duration-200 focus-visible:bg-white focus-visible:border-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500/25 focus-visible:shadow-md focus-visible:shadow-indigo-500/15"
-                />
-                {/* shimmer accent on focus */}
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-y-0 left-0 w-0 rounded-l-xl bg-gradient-to-r from-indigo-500/0 via-indigo-500/0 to-transparent transition-all duration-500 group-focus-within/search:w-full group-focus-within/search:from-indigo-500/10 group-focus-within/search:via-violet-500/5"
-                />
-                {q && (
-                  <button
-                    onClick={() => { setQ(''); setPage(1); }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600 transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
+              {q && (
+                <button
+                  onClick={() => { setQ(''); setPage(1); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Reyting filter dropdown */}
@@ -430,33 +418,58 @@ export default function CounterpartiesPage() {
               </button>
             )}
 
-            {/* Divider + Action buttons */}
+            {/* Actions — bitta dropdown ichida */}
             <div className="ml-auto flex items-center gap-2">
               <div className="h-8 w-px bg-slate-200" />
-              {canManage && (
-                <>
-                  <IconBtn title={t('add')} onClick={() => setAddOpen(true)} primary>
-                    <Plus className="h-5 w-5" />
-                  </IconBtn>
-                  <IconBtn title={t('import')} onClick={() => setImportOpen(true)}>
-                    <Upload className="h-5 w-5" />
-                  </IconBtn>
-                </>
-              )}
-              <IconBtn title={t('export')} onClick={onExport}>
-                <Download className="h-5 w-5" />
-              </IconBtn>
-              {canManage && (
-                <IconBtn
-                  title={t('refreshAll')}
-                  onClick={() => refreshAllMut.mutate()}
-                  disabled={refreshAllMut.isPending}
-                >
-                  {refreshAllMut.isPending
-                    ? <Loader2 className="h-5 w-5 animate-spin" />
-                    : <RefreshCw className="h-5 w-5" />}
-                </IconBtn>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    title={t('actions') || 'Amallar'}
+                    aria-label="Amallar"
+                    className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 text-white shadow-sm hover:shadow-md hover:shadow-indigo-500/30 transition-all"
+                  >
+                    {refreshAllMut.isPending
+                      ? <Loader2 className="h-4 w-4 animate-spin" />
+                      : <Plus className="h-4 w-4" />}
+                    <span className="text-[12px] font-semibold">Amallar</span>
+                    <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  {canManage && (
+                    <DropdownMenuItem onClick={() => setAddOpen(true)} className="cursor-pointer">
+                      <Plus className="h-4 w-4 mr-2 text-indigo-600" />
+                      <span className="font-medium">{t('add')}</span>
+                    </DropdownMenuItem>
+                  )}
+                  {canManage && (
+                    <DropdownMenuItem onClick={() => setImportOpen(true)} className="cursor-pointer">
+                      <Upload className="h-4 w-4 mr-2 text-emerald-600" />
+                      <span className="font-medium">{t('import')}</span>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={onExport} className="cursor-pointer">
+                    <Download className="h-4 w-4 mr-2 text-blue-600" />
+                    <span className="font-medium">{t('export')}</span>
+                  </DropdownMenuItem>
+                  {canManage && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => refreshAllMut.mutate()}
+                        disabled={refreshAllMut.isPending}
+                        className="cursor-pointer"
+                      >
+                        {refreshAllMut.isPending
+                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
+                          : <RefreshCw className="h-4 w-4 mr-2 text-amber-600" />}
+                        <span className="font-medium">{t('refreshAll')}</span>
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </CardContent>
         </Card>
@@ -929,35 +942,6 @@ function FilterDropdown({
   );
 }
 
-function IconBtn({
-  title, onClick, disabled, primary, children,
-}: {
-  title: string;
-  onClick: () => void;
-  disabled?: boolean;
-  primary?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      className={cn(
-        'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all shrink-0',
-        'hover:scale-105 active:scale-95',
-        primary
-          ? 'bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 text-white shadow-lg shadow-indigo-500/30 hover:shadow-xl hover:shadow-indigo-500/40'
-          : 'bg-slate-100 text-slate-700 hover:bg-slate-200 ring-1 ring-slate-200/80',
-        disabled && 'opacity-60 cursor-not-allowed pointer-events-none',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 function ImportStat({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
   const cls = tone === 'emerald' ? 'bg-emerald-50 ring-emerald-200 text-emerald-700'
