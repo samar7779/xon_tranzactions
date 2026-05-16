@@ -252,6 +252,27 @@ async function backfillCounterpartyManual() {
   }
 }
 
+async function backfillIpakExternalIdPrefix() {
+  // Ipak Yo'li bank tranzaksiyalarining externalId'siga IP_ prefiksi qo'shamiz
+  // (agar hali qo'shilmagan bo'lsa). Kapitalbank ID'lari bilan ajratish uchun.
+  try {
+    const updated = await prisma.$executeRawUnsafe(`
+      UPDATE transactions t
+      SET external_id = 'IP_' || external_id
+      FROM banks b
+      WHERE t.bank_id = b.id
+        AND b.code = 'IPAK_YULI'
+        AND t.external_id IS NOT NULL
+        AND t.external_id NOT LIKE 'IP\\_%' ESCAPE '\\'
+    `);
+    if (typeof updated === 'number' && updated > 0) {
+      console.log(`✓ Ipak Yo'li externalId backfilled: ${updated} qator`);
+    }
+  } catch (e: any) {
+    console.log(`⚠ Ipak Yo'li externalId backfill xato: ${e?.message}`);
+  }
+}
+
 async function backfillHistoryActorEmail() {
   // counterparty_history.actor_name — avval fullName saqlanardi.
   // Endi email (login) saqlaymiz. Eski qatorlarni admin_users'dan email bilan yangilab chiqamiz.
@@ -277,5 +298,6 @@ async function backfillHistoryActorEmail() {
 main()
   .then(() => backfillCounterpartyManual())
   .then(() => backfillHistoryActorEmail())
+  .then(() => backfillIpakExternalIdPrefix())
   .catch((e) => { console.error(e); process.exit(1); })
   .finally(async () => { await prisma.$disconnect(); });
