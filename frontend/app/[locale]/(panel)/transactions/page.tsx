@@ -227,6 +227,7 @@ export default function TransactionsPage() {
   // Column filter -> URL param map (vergul bilan ajratilgan)
   const COLUMN_TO_PARAM: Record<string, string> = {
     bank: 'bankIds',
+    accountIds: 'accountIds',
     kontragent: 'categoryIds',
     kategoriya: 'subcategoryIds',
     direction: 'directions',
@@ -678,7 +679,7 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
+                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} tabs={[{ column: 'bank', label: 'Bank' }, { column: 'accountIds', label: 'Hisob raqami' }]} />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
                       <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
                       <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
@@ -1893,9 +1894,10 @@ function CopyBlock({ value }: { value: string }) {
 }
 
 // ═══ COLUMN TH — filter icon bilan ustun headeri (Google Sheets stilida)
+// `tabs` berilsa, popover ichida tab bar ko'rsatiladi (masalan: Bank + Hisob raqami)
 function ColumnTh({
   label, column, widthClass, filterMode, columnFilters, setColumnFilters,
-  openFilterColumn, setOpenFilterColumn, alignRight, activeFilterParams,
+  openFilterColumn, setOpenFilterColumn, alignRight, activeFilterParams, tabs,
 }: {
   label: string;
   column: string;
@@ -1907,8 +1909,12 @@ function ColumnTh({
   setOpenFilterColumn: (col: string | null) => void;
   alignRight?: boolean;
   activeFilterParams: string;
+  tabs?: Array<{ column: string; label: string }>;
 }) {
-  const active = (columnFilters[column]?.size || 0) > 0;
+  // Tab bo'lsa — barcha tab'lar bo'yicha aktiv tanlovni jamlaymiz
+  const tabColumns = tabs ? tabs.map((t) => t.column) : [column];
+  const activeCount = tabColumns.reduce((acc, c) => acc + (columnFilters[c]?.size || 0), 0);
+  const active = activeCount > 0;
   const isOpen = openFilterColumn === column;
   const btnRef = useRef<HTMLButtonElement>(null);
   return (
@@ -1925,7 +1931,7 @@ function ColumnTh({
                 ? 'bg-indigo-600 text-white'
                 : 'text-slate-400 hover:text-indigo-700 hover:bg-indigo-100',
             )}
-            title={active ? `${columnFilters[column].size} qiymat tanlangan` : 'Filter'}
+            title={active ? `${activeCount} qiymat tanlangan` : 'Filter'}
           >
             <FilterIcon className="h-3 w-3" />
           </button>
@@ -1934,13 +1940,20 @@ function ColumnTh({
       {isOpen && (
         <ColumnFilterPopover
           column={column}
-          selected={columnFilters[column] || new Set()}
+          tabs={tabs}
+          selectedByColumn={Object.fromEntries(
+            tabColumns.map((c) => [c, columnFilters[c] || new Set()]),
+          )}
           alignRight={alignRight}
           triggerRef={btnRef}
           activeFilterParams={activeFilterParams}
           onClose={() => setOpenFilterColumn(null)}
-          onApply={(set) => {
-            setColumnFilters((prev) => ({ ...prev, [column]: set }));
+          onApply={(byColumn) => {
+            setColumnFilters((prev) => {
+              const next = { ...prev };
+              for (const [c, set] of Object.entries(byColumn)) next[c] = set;
+              return next;
+            });
             setOpenFilterColumn(null);
           }}
         />
@@ -1950,31 +1963,45 @@ function ColumnTh({
 }
 
 // ═══ COLUMN FILTER POPOVER — Portal orqali document.body'ga render
+// tabs berilsa, ichida bir nechta tab bo'ladi (har biri alohida column'ga mos)
 function ColumnFilterPopover({
-  column, selected, onClose, onApply, alignRight, triggerRef, activeFilterParams,
+  column, selectedByColumn, onClose, onApply, alignRight, triggerRef, activeFilterParams, tabs,
 }: {
   column: string;
-  selected: Set<string>;
+  selectedByColumn: Record<string, Set<string>>;
   onClose: () => void;
-  onApply: (set: Set<string>) => void;
+  onApply: (byColumn: Record<string, Set<string>>) => void;
   alignRight?: boolean;
   triggerRef: React.RefObject<HTMLElement>;
-  activeFilterParams: string; // boshqa aktiv filterlar URLSearchParams string sifatida
+  activeFilterParams: string;
+  tabs?: Array<{ column: string; label: string }>;
 }) {
+  // Tab'lar: agar berilmagan bo'lsa — bitta tab (asosiy column)
+  const tabList = tabs && tabs.length > 0 ? tabs : [{ column, label: '' }];
+  const [activeTab, setActiveTab] = useState<string>(tabList[0].column);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
+  // Har bir column uchun alohida lokal tanlov (Apply bosilgunga qadar)
+  const [localByColumn, setLocalByColumn] = useState<Record<string, Set<string>>>(
+    () => Object.fromEntries(tabList.map((t) => [t.column, new Set(selectedByColumn[t.column] || [])])),
+  );
+  const localSelected = localByColumn[activeTab] || new Set<string>();
+  const setLocalSelected = (next: Set<string>) =>
+    setLocalByColumn((prev) => ({ ...prev, [activeTab]: next }));
+
+  // Tab almashganda search'ni tozalaymiz
+  useEffect(() => { setSearch(''); }, [activeTab]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
 
-  // Backend'dan distinct qiymatlar (aktiv filterlar bilan)
+  // Backend'dan distinct qiymatlar (aktiv filterlar bilan) — aktiv tab column bo'yicha
   const distinctQuery = useQuery({
-    queryKey: ['tx-distinct', column, debouncedSearch, activeFilterParams],
+    queryKey: ['tx-distinct', activeTab, debouncedSearch, activeFilterParams],
     queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(
-      `/transactions/distinct?column=${encodeURIComponent(column)}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${activeFilterParams ? `&${activeFilterParams}` : ''}`,
+      `/transactions/distinct?column=${encodeURIComponent(activeTab)}${debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ''}${activeFilterParams ? `&${activeFilterParams}` : ''}`,
     ),
     staleTime: 30_000,
   });
@@ -2061,6 +2088,32 @@ function ColumnFilterPopover({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
+        {tabList.length > 1 && (
+          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+            {tabList.map((t) => {
+              const count = localByColumn[t.column]?.size || 0;
+              const isActive = activeTab === t.column;
+              return (
+                <button
+                  key={t.column}
+                  onClick={() => setActiveTab(t.column)}
+                  className={cn(
+                    'flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5',
+                    isActive ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                  )}
+                >
+                  <span>{t.label}</span>
+                  {count > 0 && (
+                    <span className={cn(
+                      'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold',
+                      isActive ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-700',
+                    )}>{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <button
             onClick={() => setLocalSelected(new Set(allValues.map((v) => v.id)))}
@@ -2134,7 +2187,7 @@ function ColumnFilterPopover({
         <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-[11px]">
           Bekor
         </Button>
-        <Button size="sm" onClick={() => onApply(localSelected)} className="h-7 text-[11px]">
+        <Button size="sm" onClick={() => onApply(localByColumn)} className="h-7 text-[11px]">
           OK
         </Button>
       </div>

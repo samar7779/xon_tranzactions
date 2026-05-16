@@ -21,6 +21,7 @@ export interface ExportFilters {
   matchStatus?: string;
   // Column filterlar (Google Sheets stilida)
   bankIds?: string;
+  accountIds?: string;
   categoryIds?: string;
   subcategoryIds?: string;
   directions?: string;
@@ -45,7 +46,7 @@ export class TransactionsService {
   private buildWhere(query: ListTransactionsDto): any {
     const {
       type, status, direction, bankId, accountId, dateFrom, dateTo, q,
-      bankIds, categoryIds, subcategoryIds, directions, contractStatuses,
+      bankIds, accountIds, categoryIds, subcategoryIds, directions, contractStatuses,
       amountMin, amountMax, hisobNomi,
     } = query;
     const where: any = {};
@@ -73,6 +74,9 @@ export class TransactionsService {
     // Column filterlar
     const bankIdsList = this.parseList(bankIds);
     if (bankIdsList) where.bankId = { in: bankIdsList };
+
+    const accountIdsList = this.parseList(accountIds);
+    if (accountIdsList) where.accountId = { in: accountIdsList };
 
     const categoryIdsList = this.parseList(categoryIds);
     if (categoryIdsList) where.categoryId = { in: categoryIdsList };
@@ -285,6 +289,7 @@ export class TransactionsService {
     // Ustun nomidan tegishli filter paramini chiqarib tashlash (self-exclusion)
     const COLUMN_TO_PARAM: Record<string, string> = {
       bank: 'bankIds',
+      accountIds: 'accountIds',
       kontragent: 'categoryIds',
       kategoriya: 'subcategoryIds',
       direction: 'directions',
@@ -311,6 +316,28 @@ export class TransactionsService {
           orderBy: { name: 'asc' },
         });
         return { ok: true, values: banks.map((b) => ({ id: b.id, name: b.name })) };
+      }
+      case 'accountIds': {
+        // Bank hisoblari — tranzaksiyalarda ishlatilganlari
+        // (bankIds filtri saqlanadi — bank tanlangach faqat shu bank hisoblari chiqadi)
+        const txs = await this.prisma.transaction.findMany({
+          where: { ...where, accountId: { not: null } },
+          distinct: ['accountId'], select: { accountId: true }, take: 1000,
+        });
+        const ids = txs.map((t) => t.accountId).filter(Boolean) as string[];
+        if (ids.length === 0) return { ok: true, values: [] };
+        const accs = await this.prisma.bankAccount.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, accountNo: true, ownerName: true, bank: { select: { name: true } } },
+          orderBy: [{ ownerName: 'asc' }, { accountNo: 'asc' }],
+        });
+        return {
+          ok: true,
+          values: accs.map((a) => ({
+            id: a.id,
+            name: `${a.accountNo} — ${a.ownerName || ''} (${a.bank?.name || ''})`.trim(),
+          })),
+        };
       }
       case 'kontragent': {
         // Aktiv filter'lar ostida tranzaksiyalarda mavjud top kategoriyalar
