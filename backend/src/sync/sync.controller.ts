@@ -121,6 +121,11 @@ export class SyncController {
       const firstKept = dates[0];
       warning = `Sync chegarasi (${minStr}) tufayli ${clampedCount} ta kun o'tkazib yuborildi. Sync ${firstKept} dan boshlab boshlanadi.`;
     }
+    // dd.MM.yyyy → yyyy-MM-dd
+    const toIso = (ddMmYyyy: string): string => {
+      const m = ddMmYyyy.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      return m ? `${m[3]}-${m[2]}-${m[1]}` : ddMmYyyy;
+    };
     return {
       ok: true,
       started: true,
@@ -130,6 +135,10 @@ export class SyncController {
       warning,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
       clampedDays: clampedCount,
+      requestedFrom: body.dateFrom,
+      requestedTo: body.dateTo,
+      actualFrom: dates.length > 0 ? toIso(dates[0]) : null,
+      actualTo: dates.length > 0 ? toIso(dates[dates.length - 1]) : null,
     };
   }
 
