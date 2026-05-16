@@ -103,9 +103,10 @@ export class CounterpartiesService {
       if (input.actorId) {
         const u = await this.prisma.adminUser.findUnique({
           where: { id: input.actorId },
-          select: { fullName: true, email: true },
+          select: { email: true, fullName: true },
         });
-        actorName = u?.fullName || u?.email || null;
+        // Login nomi (email) ustun — fullName/role nomi emas
+        actorName = u?.email || u?.fullName || null;
       } else if (input.actorType === 'cron') {
         actorName = 'Avto-yangilash (cron)';
       } else if (input.actorType === 'system') {
@@ -717,9 +718,10 @@ export class CounterpartiesService {
       try {
         let actorName: string | null = null;
         const u = await this.prisma.adminUser.findUnique({
-          where: { id: addedBy }, select: { fullName: true, email: true },
+          where: { id: addedBy }, select: { email: true, fullName: true },
         });
-        actorName = u?.fullName || u?.email || null;
+        // Login (email) ustun — fullName emas
+        actorName = u?.email || u?.fullName || null;
 
         const historyData: any[] = [];
         for (const inn of successfullyInserted) {
