@@ -1,7 +1,8 @@
 'use client';
 // rebuild trigger — frontend force redeploy uchun
 
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -1842,16 +1843,18 @@ function ColumnTh({
   setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
   openFilterColumn: string | null;
   setOpenFilterColumn: (col: string | null) => void;
-  alignRight?: boolean;     // popover'ni o'ng tomonga aligndash (right-edge ustunlari uchun)
+  alignRight?: boolean;
 }) {
   const active = (columnFilters[column]?.size || 0) > 0;
   const isOpen = openFilterColumn === column;
+  const btnRef = useRef<HTMLButtonElement>(null);
   return (
-    <th className={cn('text-left px-4 py-3 relative', widthClass)}>
+    <th className={cn('text-left px-4 py-3', widthClass)}>
       <div className="flex items-center gap-1.5">
         <span>{label}</span>
         {filterMode && (
           <button
+            ref={btnRef}
             onClick={() => setOpenFilterColumn(isOpen ? null : column)}
             className={cn(
               'inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
@@ -1870,6 +1873,7 @@ function ColumnTh({
           column={column}
           selected={columnFilters[column] || new Set()}
           alignRight={alignRight}
+          triggerRef={btnRef}
           onClose={() => setOpenFilterColumn(null)}
           onApply={(set) => {
             setColumnFilters((prev) => ({ ...prev, [column]: set }));
@@ -1881,15 +1885,16 @@ function ColumnTh({
   );
 }
 
-// ═══ COLUMN FILTER POPOVER — backend'dan distinct olib chiqaradi
+// ═══ COLUMN FILTER POPOVER — Portal orqali document.body'ga render
 function ColumnFilterPopover({
-  column, selected, onClose, onApply, alignRight,
+  column, selected, onClose, onApply, alignRight, triggerRef,
 }: {
   column: string;
   selected: Set<string>;
   onClose: () => void;
   onApply: (set: Set<string>) => void;
   alignRight?: boolean;
+  triggerRef: React.RefObject<HTMLElement>;
 }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -1958,13 +1963,37 @@ function ColumnFilterPopover({
     };
   }, [onClose]);
 
-  return (
+  // Trigger button koordinatalari (fixed positioning uchun)
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!triggerRef.current) return;
+    function update() {
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const popoverWidth = 384;
+      const top = rect.bottom + 4;
+      const left = alignRight
+        ? Math.max(8, rect.right - popoverWidth)
+        : Math.min(rect.left, window.innerWidth - popoverWidth - 8);
+      setPos({ top, left });
+    }
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [alignRight, triggerRef]);
+
+  if (!pos) return null;
+
+  return createPortal(
     <div
       data-col-filter
-      className={cn(
-        'absolute top-full mt-1 z-50 w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal',
-        alignRight ? 'right-0' : 'left-0',
-      )}
+      className="fixed z-[100] w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal"
+      style={{ top: pos.top, left: pos.left }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -2045,7 +2074,8 @@ function ColumnFilterPopover({
           OK
         </Button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
