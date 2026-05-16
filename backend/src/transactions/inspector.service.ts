@@ -126,6 +126,58 @@ export class InspectorService {
       bankError = e?.message || 'Noma\'lum bank xatosi';
     }
 
+    // ── getDocDetails — bitta hujjat tafsiloti (payment_state_name, parent_payment_id...)
+    // sid kerak, shuning uchun APILogin chaqiramiz. Xato bo'lsa, mainpipe'ni buzmaymiz.
+    let docDetails: any = null;
+    let docDetailsError: string | null = null;
+    let docDetailsTriedTypes: number[] = [];
+    try {
+      const loginRes = await this.kb.apiLogin({
+        baseUrl: bank.apiBaseUrl,
+        login,
+        password,
+        useProxy: cred.useProxy === true,
+      });
+      const sid = loginRes?.sid;
+      if (!sid) {
+        docDetailsError = 'APILogin sid qaytarmadi';
+      } else {
+        // doc_type ma'lum emas — sign asosida taxmin qilamiz, keyin boshqalarini sinaymiz
+        // sign '+' → bizning hisob debit (chiqim/yuborilgan) → doc_type=1
+        // sign '-' → bizning hisob credit (kirim/kelgan) → doc_type=0
+        const preferred = parsed.sign === '+' ? 1 : 0;
+        const candidates = [preferred, preferred === 1 ? 0 : 1, 2];
+        for (const dt of candidates) {
+          docDetailsTriedTypes.push(dt);
+          try {
+            const r: any = await this.kb.getDocDetails({
+              baseUrl: bank.apiBaseUrl,
+              login,
+              password,
+              sid,
+              branch: account.branch,
+              account: account.accountNo,
+              bank_day: parsed.ddate,
+              doc_id: parsed.generalId,
+              doc_type: dt,
+            });
+            if (r?.result && (!r.error || r.error.code === 0)) {
+              docDetails = { ...r.result, _used_doc_type: dt };
+              break;
+            }
+            // error bo'lsa — keyingi doc_type bilan sinaymiz
+            if (r?.error?.message) {
+              docDetailsError = `doc_type=${dt}: ${r.error.message}`;
+            }
+          } catch (e: any) {
+            docDetailsError = `doc_type=${dt}: ${e?.message || 'noma\'lum xato'}`;
+          }
+        }
+      }
+    } catch (e: any) {
+      docDetailsError = `APILogin xato: ${e?.message || 'noma\'lum'}`;
+    }
+
     // Mos yozuvni topish — avval general_id bo'yicha, keyin num bo'yicha
     const matchByGeneralId = items.find((it) => it.general_id === parsed.generalId);
     const matchByNum = matchByGeneralId
@@ -178,6 +230,11 @@ export class InspectorService {
         saldoOutSom: saldoOut != null ? Number(saldoOut) / 100 : null,
         matchedBy,
         item: found,
+      },
+      docDetails: {
+        result: docDetails,
+        error: docDetailsError,
+        triedDocTypes: docDetailsTriedTypes,
       },
     };
   }

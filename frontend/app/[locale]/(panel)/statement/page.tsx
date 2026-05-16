@@ -18,6 +18,9 @@ import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+} from '@/components/ui/dialog';
 import { api, apiDownload } from '@/lib/api';
 import { cn, formatMoney, formatDate } from '@/lib/utils';
 
@@ -136,8 +139,10 @@ export default function StatementPage() {
 
       <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
 
-        {/* ═══ ID Inspector — bank API'dan tranzaksiyani qidirish ═══ */}
-        <IdInspectorCard />
+        {/* ═══ ID Inspector — kichik tugma, Dialog ichida ═══ */}
+        <div className="flex items-center justify-end">
+          <IdInspectorButton />
+        </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
 
@@ -361,7 +366,9 @@ function EmptyHint({ icon: Icon, text }: { icon: any; text: string }) {
 }
 
 // ═══ ID INSPECTOR — composite ID'ni bankdan qidirish (faqat bank API)
-function IdInspectorCard() {
+// Kichik tugma — Dialog ichida ochiladi
+function IdInspectorButton() {
+  const [open, setOpen] = useState(false);
   const [id, setId] = useState('');
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -387,29 +394,40 @@ function IdInspectorCard() {
     setError(null);
   }
 
+  function handleOpenChange(o: boolean) {
+    setOpen(o);
+    if (!o) { setId(''); setResult(null); setError(null); }
+  }
+
   return (
-    <Card className="border-0 shadow-soft overflow-hidden">
-      <div className="bg-gradient-to-br from-indigo-600 via-fuchsia-600 to-purple-700 px-5 py-3.5 text-white">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-white/15 grid place-items-center">
-            <ScanLine className="h-4 w-4" />
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/80">
-              Bank API · Tranzaksiya tekshirish
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogTrigger asChild>
+        <button
+          className="inline-flex items-center gap-2 px-3 h-9 rounded-xl text-[12px] font-semibold text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 shadow-sm"
+          title="ID bo'yicha bankdan qidirish"
+        >
+          <ScanLine className="h-3.5 w-3.5" />
+          <span>ID tekshirish</span>
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 grid place-items-center text-white">
+              <ScanLine className="h-3.5 w-3.5" />
             </div>
-            <div className="text-sm font-bold">ID bo'yicha bankdan qidirish</div>
-          </div>
-        </div>
-      </div>
-      <CardContent className="p-5 space-y-4">
-        <form onSubmit={submit} className="flex items-stretch gap-2">
+            Tranzaksiya ID — bankdan qidirish
+          </DialogTitle>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="flex items-stretch gap-2 mt-2">
           <div className="relative flex-1">
             <Input
               value={id}
               onChange={(e) => setId(e.target.value)}
-              placeholder="Masalan: 5424816081_27185799_04.05.2026_23120000200000959001_..."
-              className="h-11 pr-9 font-mono text-[12px]"
+              placeholder="general_id_num_ddate_acc_ct_acc_dt_amount_sign"
+              className="h-10 pr-9 font-mono text-[11px]"
+              autoFocus
             />
             {id && (
               <button
@@ -424,7 +442,7 @@ function IdInspectorCard() {
           <Button
             type="submit"
             disabled={!id.trim() || mut.isPending}
-            className="h-11 px-5 rounded-xl font-semibold gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+            className="h-10 px-4 rounded-xl font-semibold gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
           >
             {mut.isPending ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Qidirilmoqda</>
@@ -435,15 +453,15 @@ function IdInspectorCard() {
         </form>
 
         {error && (
-          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px] mt-3">
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
             <div className="break-all">{error}</div>
           </div>
         )}
 
-        {result && <InspectorResult data={result} />}
-      </CardContent>
-    </Card>
+        {result && <div className="mt-3"><InspectorResult data={result} /></div>}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -452,11 +470,25 @@ function InspectorResult({ data }: { data: any }) {
   const acc = data.account || {};
   const bank = data.bankResponse || {};
   const found = bank.item;
+  const dd = data.docDetails?.result;
 
   return (
     <div className="space-y-3">
       {/* Status banner */}
-      {data.bankError ? (
+      {dd ? (
+        <div className="px-3 py-2.5 rounded-lg bg-emerald-50 ring-1 ring-emerald-200 text-emerald-800 text-[12px] space-y-0.5">
+          <div className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span>Bank tafsiloti olindi (getDocDetails)</span>
+          </div>
+          {dd.payment_state_name && (
+            <div className="ml-6 text-emerald-700">
+              Holati: <b>{dd.payment_state_name}</b>
+              {dd.payment_state_id != null && ` (id=${dd.payment_state_id})`}
+            </div>
+          )}
+        </div>
+      ) : data.bankError ? (
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-amber-800 text-[12px]">
           <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
           <div>
@@ -481,6 +513,31 @@ function InspectorResult({ data }: { data: any }) {
             <div className="font-semibold mb-0.5">Bankda topilmadi (o'sha kun jami {bank.totalItemsThatDay} ta tranzaksiya)</div>
             <div className="text-rose-600">Bank tranzaksiyani o'chirgan yoki bekor qilgan bo'lishi mumkin</div>
           </div>
+        </div>
+      )}
+
+      {/* getDocDetails — payment_state_name, parent_payment_id, proved_date, plat_purpose */}
+      {dd && (
+        <InfoBox title="To'lov tafsiloti (bank)">
+          <KV k="payment_state" v={dd.payment_state_name || dd.status || '—'} />
+          <KV k="payment_type" v={dd.payment_type_name || '—'} />
+          <KV k="parent_payment_id" v={dd.parent_payment_id || '—'} mono small />
+          <KV k="payment_number" v={dd.payment_number || dd.doc_num || '—'} />
+          <KV k="payment_date" v={dd.payment_date || dd.doc_date || '—'} />
+          <KV k="proved_date" v={dd.proved_date || '—'} />
+          <KV k="input_date" v={dd.input_date || '—'} />
+          <KV k="sender" v={`${dd.sender_name || dd.name_dt || '—'}${dd.sender_account_number || dd.account_dt ? ` · ${dd.sender_account_number || dd.account_dt}` : ''}`} small />
+          <KV k="receiver" v={`${dd.receiver_name || dd.name_cr || '—'}${dd.receiver_account_number || dd.account_cr ? ` · ${dd.receiver_account_number || dd.account_cr}` : ''}`} small />
+          <KV k="amount" v={dd.amount != null ? Number(dd.amount).toLocaleString('uz-UZ') + ` ${dd.currency_code || ''}` : (dd.summa != null ? Number(dd.summa).toLocaleString('uz-UZ') : '—')} />
+          <KV k="plat_purpose" v={dd.plat_purpose || dd.nazpla || '—'} small />
+        </InfoBox>
+      )}
+      {!dd && data.docDetails?.error && (
+        <div className="text-[10.5px] text-slate-500 px-1">
+          <span className="font-semibold">getDocDetails xato:</span> {data.docDetails.error}
+          {data.docDetails?.triedDocTypes?.length > 0 && (
+            <span className="ml-1 text-slate-400">(doc_type sinab ko'rildi: {data.docDetails.triedDocTypes.join(', ')})</span>
+          )}
         </div>
       )}
 
