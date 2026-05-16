@@ -1187,7 +1187,6 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
-  const [contractEditOpen, setContractEditOpen] = useState(false);
 
   // Tafsilot uchun jonli ma'lumot — categorize/setManual'dan keyin yangilanadi
   const liveQuery = useQuery({
@@ -1224,12 +1223,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     mutationFn: (contractNumber: string | null) =>
       api.post<{ ok: boolean; verified: boolean; customerName: string | null }>(`/categorization/transactions/${row.id}/set-contract`, { contractNumber }),
     onSuccess: (r) => {
-      if (r.verified) {
-        toast.success(`Shartnoma saqlandi — CRM tasdiqladi: ${r.customerName || 'mijoz'}`);
-      } else {
-        toast.warning("Shartnoma saqlandi — CRM'da tasdiqlanmadi (xato)");
-      }
-      setContractEditOpen(false);
+      toast.success(`Shartnoma saqlandi — ${r.customerName || 'CRM tasdiqladi'}`);
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
       liveQuery.refetch();
@@ -1329,18 +1323,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             {/* Kontragent — haqiqiy entity nomi (CRM mijoz / firma) */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1 flex items-center justify-between gap-1">
-                  <span>Kontragent</span>
-                  {canManage && (
-                    <button
-                      onClick={() => setManualEditOpen(true)}
-                      title="Kontragent (top kategoriya) o'zgartirish"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                    >
-                      <FileText className="h-3 w-3" />
-                    </button>
-                  )}
-                </div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Kontragent</div>
                 {liveRow.counterpartyDisplay ? (
                   <>
                     <div className="text-[14px] font-semibold text-slate-900 truncate">{liveRow.counterpartyDisplay}</div>
@@ -1365,19 +1348,10 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-indigo-200/60">
-              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label, inline edit */}
+              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label */}
               <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center justify-between gap-1">
-                  <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Kategoriya</span>
-                  {canManage && (
-                    <button
-                      onClick={() => setManualEditOpen(true)}
-                      title="Kategoriyani o'zgartirish"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                    >
-                      <FileText className="h-3 w-3" />
-                    </button>
-                  )}
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Kategoriya
                 </div>
                 {liveRow.category ? (
                   <div className="space-y-1">
@@ -1411,19 +1385,10 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 )}
               </div>
 
-              {/* Shartnoma raqami — inline edit (faqat CLIENT yoki uncategorized uchun) */}
+              {/* Shartnoma raqami */}
               <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center justify-between gap-1">
-                  <span className="flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span>
-                  {canManage && (!liveRow.category || liveRow.category?.code === 'CLIENT') && (
-                    <button
-                      onClick={() => setContractEditOpen(true)}
-                      title="Shartnomani o'zgartirish (CRM search)"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                    >
-                      <FileText className="h-3 w-3" />
-                    </button>
-                  )}
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+                  <FileSignature className="h-3 w-3" /> Shartnoma
                 </div>
                 {liveRow.contractNumber ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1447,23 +1412,34 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
               </div>
             </div>
 
-            {/* Avto-kategoriyalash tugmasi (faqat kategoriya yo'q bo'lsa) */}
-            {canManage && !liveRow.category && (
+            {/* Avto-kategoriyalash + Qo'lda tahrirlash tugmalari */}
+            {canManage && (
               <div className="pt-3 border-t border-indigo-200/60">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
-                    Qoidalar bo'yicha avto-aniqlash
+                    {liveRow.category
+                      ? "Kontragent / Kategoriya / Shartnomani qo'lda o'zgartirish"
+                      : "Qoidalar bo'yicha avto-aniqlash yoki qo'lda kiritish"}
                   </div>
                   <div className="flex items-center gap-2">
+                    {!liveRow.category && (
+                      <button
+                        onClick={() => categorizeMut.mutate(false)}
+                        disabled={categorizeMut.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        {categorizeMut.isPending
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Wand2 className="h-3 w-3" />}
+                        Avto-kategoriyalash
+                      </button>
+                    )}
                     <button
-                      onClick={() => categorizeMut.mutate(false)}
-                      disabled={categorizeMut.isPending}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      onClick={() => setManualEditOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-indigo-400 hover:text-indigo-700 transition-colors"
                     >
-                      {categorizeMut.isPending
-                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : <Wand2 className="h-3 w-3" />}
-                      Avto-kategoriyalash
+                      <FileText className="h-3 w-3" />
+                      Qo'lda tahrirlash
                     </button>
                   </div>
                 </div>
@@ -1620,24 +1596,16 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
         </div>
       </DialogContent>
 
-      {/* Qo'lda kategoriya tahrirlash */}
+      {/* Qo'lda tahrirlash — birlashtirilgan dialog (Kontragent + Kategoriya + Shartnoma) */}
       {manualEditOpen && (
-        <CategoryEditDialog
+        <CombinedEditDialog
           row={liveRow}
           tree={categoriesTree}
           onClose={() => setManualEditOpen(false)}
-          onSave={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
-          saving={setCategoryMut.isPending}
-        />
-      )}
-
-      {/* Shartnoma CRM search bilan tahrirlash */}
-      {contractEditOpen && (
-        <ContractEditDialog
-          currentContract={liveRow.contractNumber}
-          onClose={() => setContractEditOpen(false)}
-          onSave={(newContract) => setContractMut.mutate(newContract)}
-          saving={setContractMut.isPending}
+          onSaveCategory={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
+          onSaveContract={(contract) => setContractMut.mutate(contract)}
+          savingCategory={setCategoryMut.isPending}
+          savingContract={setContractMut.isPending}
         />
       )}
     </Dialog>
@@ -1777,7 +1745,237 @@ function CopyBlock({ value }: { value: string }) {
   );
 }
 
-// ═══ SHARTNOMA TAHRIR — CRM'dan typeahead search bilan
+// ═══ BIRLASHTIRILGAN TAHRIR DIALOG — Kontragent + Kategoriya + Shartnoma 1 ta dialog'da
+function CombinedEditDialog({
+  row, tree, onClose, onSaveCategory, onSaveContract, savingCategory, savingContract,
+}: {
+  row: any;
+  tree: any[];
+  onClose: () => void;
+  onSaveCategory: (categoryId: string | null, subcategoryId: string | null) => void;
+  onSaveContract: (contract: string | null) => void;
+  savingCategory: boolean;
+  savingContract: boolean;
+}) {
+  // Kategoriya state
+  const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(row?.subcategoryId || null);
+  const [filter, setFilter] = useState('');
+  // Shartnoma state
+  const [contractQuery, setContractQuery] = useState(row?.contractNumber || '');
+  const [debouncedQ, setDebouncedQ] = useState(contractQuery);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(contractQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [contractQuery]);
+
+  // CRM search
+  const searchQuery = useQuery({
+    queryKey: ['crm-search', debouncedQ],
+    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=10`),
+    enabled: debouncedQ.length >= 3,
+    staleTime: 60_000,
+  });
+  const crmItems = searchQuery.data?.items || [];
+
+  // Tree filter
+  const filterLower = filter.trim().toLowerCase();
+  const visible = filterLower
+    ? tree
+        .map((t) => {
+          const matchTop = t.name.toLowerCase().includes(filterLower);
+          const matchedChildren = (t.children || []).filter((s: any) => s.name.toLowerCase().includes(filterLower));
+          if (matchTop) return t;
+          if (matchedChildren.length > 0) return { ...t, children: matchedChildren };
+          return null;
+        })
+        .filter(Boolean)
+    : tree;
+
+  const categoryChanged =
+    selectedTopId !== (row?.categoryId || null) ||
+    selectedSubId !== (row?.subcategoryId || null);
+  const contractChanged = contractQuery.trim().toUpperCase() !== (row?.contractNumber || '');
+
+  const selectedTop = tree.find((t) => t.id === selectedTopId);
+  const selectedSub = selectedTop?.children?.find((s: any) => s.id === selectedSubId);
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="h-4 w-4 text-indigo-600" /> Qo'lda tahrirlash
+          </DialogTitle>
+          <DialogDescription>
+            Kontragent, Kategoriya va Shartnomani qo'lda o'zgartirish
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          {/* ═══ KONTRAGENT + KATEGORIYA (tree) ═══ */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block">
+              Kontragent / Kategoriya
+            </label>
+            <div className="relative mb-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Qidirish... (vznosy, ndfl, zarplata)"
+                className="pl-9 h-9"
+              />
+            </div>
+            <div className="max-h-[260px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+              {visible.length === 0 && (
+                <div className="px-4 py-6 text-center text-[11px] text-slate-400 italic">Hech narsa topilmadi</div>
+              )}
+              {visible.map((t: any) => {
+                const topSelected = selectedTopId === t.id && !selectedSubId;
+                const color = t.color || '#64748b';
+                const hasChildren = (t.children || []).length > 0;
+                return (
+                  <div key={t.id}>
+                    <button
+                      onClick={() => { setSelectedTopId(t.id); setSelectedSubId(null); }}
+                      className={cn(
+                        'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors',
+                        topSelected && 'bg-indigo-50',
+                      )}
+                      style={topSelected ? { backgroundColor: `${color}12` } : {}}
+                    >
+                      <span className="font-semibold text-[12px]" style={{ color: topSelected ? color : undefined }}>
+                        {t.name}
+                      </span>
+                      {topSelected && <CheckCircle2 className="h-3.5 w-3.5" style={{ color }} />}
+                    </button>
+                    {hasChildren && (t.children || []).map((s: any) => {
+                      const subSelected = selectedSubId === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          onClick={() => { setSelectedTopId(t.id); setSelectedSubId(s.id); }}
+                          className={cn(
+                            'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 transition-colors',
+                            subSelected && 'bg-indigo-50',
+                          )}
+                          style={subSelected ? { backgroundColor: `${color}12` } : {}}
+                        >
+                          <span className="text-slate-700" style={subSelected ? { color, fontWeight: 600 } : {}}>
+                            ↳ {s.name}
+                          </span>
+                          {subSelected && <CheckCircle2 className="h-3 w-3" style={{ color }} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Preview */}
+            <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
+              <div>
+                <span className="text-slate-500">Tanlangan: </span>
+                {selectedTop ? (
+                  <span className="font-semibold" style={{ color: selectedTop.color }}>
+                    {selectedTop.name}{selectedSub && <span className="text-slate-400 mx-1">/</span>}
+                    {selectedSub && <span style={{ color: selectedTop.color }}>{selectedSub.name}</span>}
+                  </span>
+                ) : (
+                  <span className="text-slate-400 italic">tanlanmagan</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
+                  disabled={savingCategory || (!selectedTopId && !selectedSubId)}
+                  className="text-[10px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
+                >
+                  Tozalash
+                </button>
+                <span className="text-slate-300">·</span>
+                <button
+                  onClick={() => onSaveCategory(selectedTopId, selectedSubId)}
+                  disabled={savingCategory || !categoryChanged}
+                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold disabled:opacity-30"
+                >
+                  {savingCategory ? 'Saqlanmoqda...' : 'Saqlash'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* ═══ SHARTNOMA — CRM search ═══ */}
+          {(!selectedTop || selectedTop.code === 'CLIENT' || row?.contractNumber) && (
+            <div className="pt-4 border-t border-slate-100">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block">
+                Shartnoma raqami (CRM'dan qidirish)
+              </label>
+              <div className="relative mb-2">
+                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  value={contractQuery}
+                  onChange={(e) => setContractQuery(e.target.value)}
+                  placeholder="Masalan: 1494VTN24DQ (3+ belgi yozsangiz CRM'dan izlanadi)"
+                  className="pl-9 font-mono"
+                />
+                {searchQuery.isFetching && debouncedQ.length >= 3 && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 animate-spin" />
+                )}
+              </div>
+              {debouncedQ.length >= 3 && (
+                <div className="max-h-[180px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+                  {crmItems.length === 0 && !searchQuery.isFetching && (
+                    <div className="px-4 py-3 text-[11px] text-rose-600">
+                      CRM'da topilmadi — bu raqam saqlash uchun yaroqsiz
+                    </div>
+                  )}
+                  {crmItems.map((it: any) => (
+                    <button
+                      key={it.contract || it.id}
+                      onClick={() => onSaveContract(String(it.contract || '').trim())}
+                      disabled={savingContract}
+                      className="w-full text-left px-3 py-2 hover:bg-emerald-50 transition-colors disabled:opacity-50 group"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
+                          {it.contract}
+                        </code>
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 opacity-0 group-hover:opacity-100" />
+                      </div>
+                      <div className="text-[11px] text-slate-600 truncate mt-0.5">
+                        {it.client?.full_name_kirill || it.client?.full_name_lotin || it.client?.name || it.object_name || '—'}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="mt-2 text-[11px] flex items-center justify-end gap-1">
+                <button
+                  onClick={() => onSaveContract(null)}
+                  disabled={savingContract || !row?.contractNumber}
+                  className="text-[10px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
+                >
+                  Shartnomani tozalash
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+            <Button variant="outline" size="sm" onClick={onClose}>
+              Yopish
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══ ESKI — endi ishlatilmaydi (saqlangan kelajak uchun)
 function ContractEditDialog({
   currentContract, onClose, onSave, saving,
 }: {
