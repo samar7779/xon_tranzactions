@@ -715,24 +715,60 @@ export default function CounterpartiesPage() {
                 <div className="grid grid-cols-4 gap-2">
                   <ImportStat label="Qo'shildi" value={importResult.added || 0} tone="emerald" />
                   <ImportStat label="Yangilandi" value={importResult.updated || 0} tone="blue" />
-                  <ImportStat label="O'tkazildi" value={importResult.skipped || 0} tone="amber" />
+                  <ImportStat label="O'zgarmagan" value={importResult.skipped || 0} tone="amber" />
                   <ImportStat label="Xato" value={importResult.failed || 0} tone="rose" />
                 </div>
-                <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100">
-                  {(importResult.rows || []).map((r: any, i: number) => (
-                    <div key={i} className="px-3 py-2 flex items-center gap-2 text-[11px]">
-                      <span className={cn(
-                        'w-2 h-2 rounded-full shrink-0',
-                        r.status === 'added' ? 'bg-emerald-500' :
-                        r.status === 'updated' ? 'bg-blue-500' :
-                        r.status === 'skipped' ? 'bg-amber-500' : 'bg-rose-500',
-                      )} />
-                      <span className="font-mono font-bold">{r.inn}</span>
-                      <span className="text-slate-500 truncate flex-1">{r.name || ''}</span>
-                      {r.reason && <span className="text-slate-400 truncate" title={r.reason}>{r.reason}</span>}
+
+                {/* O'zgarmaganlar haqida qisqacha izoh */}
+                {importResult.skipped > 0 && (
+                  <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[11px] text-amber-900 flex items-start gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <b>{importResult.skipped} ta qator o'zgarmagan</b> — INN va nom DB'da xuddi shunday turibdi.
+                      Ro'yxatga qo'shilmadi (UI'ni og'irlashtirmaslik uchun).
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
+
+                {/* O'zgargan / xato qatorlar ro'yxati */}
+                {(importResult.rows || []).length > 0 ? (
+                  <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100">
+                    <div className="bg-slate-50 px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 sticky top-0">
+                      O'zgargan qatorlar ({(importResult.rows || []).length})
+                    </div>
+                    {(importResult.rows || []).map((r: any, i: number) => (
+                      <div key={i} className="px-3 py-2 flex items-center gap-2 text-[11px]">
+                        <span className={cn(
+                          'w-2 h-2 rounded-full shrink-0',
+                          r.status === 'added' ? 'bg-emerald-500' :
+                          r.status === 'updated' ? 'bg-blue-500' :
+                          r.status === 'skipped' ? 'bg-amber-500' : 'bg-rose-500',
+                        )} />
+                        <span className="font-mono font-bold">{r.inn}</span>
+                        <span className="text-slate-500 truncate flex-1">{r.name || ''}</span>
+                        {r.reason && <span className="text-slate-400 truncate" title={r.reason}>{r.reason}</span>}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-6 text-center text-[12px] text-slate-500">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                    Hammasi o'z joyida — DB allaqachon Excel bilan bir xil. Hech narsa o'zgartirilmadi.
+                  </div>
+                )}
+
+                {/* Faqat yangi/yangilangan qatorlar bo'lsa — refresh tavsiya */}
+                {(importResult.added > 0 || importResult.updated > 0) && (
+                  <div className="rounded-lg bg-indigo-50 ring-1 ring-indigo-200 px-3 py-2 text-[11px] text-indigo-900 flex items-start gap-2">
+                    <RefreshCw className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                    <div>
+                      Yangi qatorlar uchun direktor, telefon, reyting va boshqa ma'lumotlar
+                      keyingi soatlik cron'da (08:00–22:00) avtomatik to'ldiriladi.
+                      Yoki <b>"Hammasini yangilash"</b> tugmasini bosing.
+                    </div>
+                  </div>
+                )}
+
                 <Button onClick={() => { setImportOpen(false); setImportResult(null); }} className="w-full">
                   {tc('close')}
                 </Button>

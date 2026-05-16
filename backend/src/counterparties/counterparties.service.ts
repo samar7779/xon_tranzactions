@@ -656,9 +656,9 @@ export class CounterpartiesService {
         // INN mavjud, lekin nom o'zgargan — yangilab qo'yamiz
         toUpdate.push({ inn: r.inn, name: r.name });
       } else {
-        // Hech narsa o'zgarmagan
+        // Hech narsa o'zgarmagan — faqat hisoblaymiz, ro'yxatga qo'shmaymiz
+        // (3000+ "O'zgarish yo'q" qatorlar UI'ni og'irlashtirar edi)
         result.skipped++;
-        result.rows.push({ inn: r.inn, name: r.name, status: 'skipped', reason: 'O\'zgarish yo\'q' });
       }
     }
 
