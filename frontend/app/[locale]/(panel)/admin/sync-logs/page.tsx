@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -37,14 +38,20 @@ const isBackfillLog = (l: any) => (l.source || '').includes('backfill');
 
 type SubTab = 'history' | 'settings';
 
+const PAGE_SIZE = 20;
+
 export default function SyncLogsPage() {
   const [subTab, setSubTab] = useState<SubTab>('history');
   const [statusFilter, setStatusFilter] = useState('all');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+
+  // Filter o'zgarganda 1-sahifaga qaytamiz
+  useEffect(() => { setPage(1); }, [statusFilter, q]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['sync-logs'],
-    queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=100'),
+    queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=200'),
     refetchInterval: 10_000,
   });
 
@@ -200,67 +207,80 @@ export default function SyncLogsPage() {
                   : "Filtr yoki qidiruvni o'zgartirib ko'ring"}
               />
             ) : (
-              <div className="divide-y divide-slate-100">
-                {filtered.map((l: any) => {
-                  const cfg = STATUS_CONFIG[l.status] || STATUS_CONFIG.SUCCESS;
-                  const Icon = cfg.icon;
-                  return (
-                    <div key={l.id} className="px-6 py-3.5 hover:bg-slate-50/60 transition-colors">
-                      <div className="flex items-start gap-4">
-                        {/* Status pill */}
-                        <div className="shrink-0 mt-0.5">
-                          <div className={cn(
-                            "w-9 h-9 rounded-xl grid place-items-center ring-1 ring-inset",
-                            cfg.cls,
-                          )}>
-                            <Icon className={cn("h-4 w-4", l.status === 'RUNNING' && 'animate-spin')} />
-                          </div>
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className={cn(
-                                  "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ring-inset",
-                                  cfg.cls,
-                                )}>
-                                  {cfg.label}
-                                </span>
-                                {isBackfillLog(l) && (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
-                                    Tarix yuklash
-                                  </span>
-                                )}
-                                <span className="font-mono text-[11px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">{l.source}</span>
-                                <span className="text-[11px] text-slate-500 tabular-nums">{formatDateTime(l.startedAt)}</span>
+              <>
+                <div className="divide-y divide-slate-100">
+                  {(() => {
+                    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+                    const safePage = Math.min(page, totalPages);
+                    const start = (safePage - 1) * PAGE_SIZE;
+                    const pagedItems = filtered.slice(start, start + PAGE_SIZE);
+                    return pagedItems.map((l: any) => {
+                      const cfg = STATUS_CONFIG[l.status] || STATUS_CONFIG.SUCCESS;
+                      const Icon = cfg.icon;
+                      return (
+                        <div key={l.id} className="px-6 py-3.5 hover:bg-slate-50/60 transition-colors">
+                          <div className="flex items-start gap-4">
+                            <div className="shrink-0 mt-0.5">
+                              <div className={cn(
+                                "w-9 h-9 rounded-xl grid place-items-center ring-1 ring-inset",
+                                cfg.cls,
+                              )}>
+                                <Icon className={cn("h-4 w-4", l.status === 'RUNNING' && 'animate-spin')} />
                               </div>
-                              {l.errorMessage && (
-                                <div className="mt-1.5 text-[11px] text-rose-600 line-clamp-2 leading-relaxed">
-                                  <AlertTriangle className="h-3 w-3 inline mr-1" /> {l.errorMessage}
-                                </div>
-                              )}
                             </div>
 
-                            {/* Stats */}
-                            <div className="flex items-center gap-4 text-[11px] shrink-0">
-                              <Stat icon={Database} value={l.fetched ?? 0} label="olindi" />
-                              <Stat icon={CheckCircle2} value={l.saved ?? 0} label="saqlandi" tone={l.saved > 0 ? 'emerald' : 'slate'} />
-                              {(l.errors ?? 0) > 0 && <Stat icon={XCircle} value={l.errors} label="xato" tone="rose" />}
-                              {l.durationMs && (
-                                <span className="inline-flex items-center gap-1 text-slate-500">
-                                  <Clock className="h-3 w-3" />
-                                  <span className="font-medium tabular-nums">{l.durationMs} ms</span>
-                                </span>
-                              )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start justify-between gap-3 flex-wrap">
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className={cn(
+                                      "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ring-inset",
+                                      cfg.cls,
+                                    )}>
+                                      {cfg.label}
+                                    </span>
+                                    {isBackfillLog(l) && (
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
+                                        Tarix yuklash
+                                      </span>
+                                    )}
+                                    <span className="font-mono text-[11px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">{l.source}</span>
+                                    <span className="text-[11px] text-slate-500 tabular-nums">{formatDateTime(l.startedAt)}</span>
+                                  </div>
+                                  {l.errorMessage && (
+                                    <div className="mt-1.5 text-[11px] text-rose-600 line-clamp-2 leading-relaxed">
+                                      <AlertTriangle className="h-3 w-3 inline mr-1" /> {l.errorMessage}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-4 text-[11px] shrink-0">
+                                  <Stat icon={Database} value={l.fetched ?? 0} label="olindi" />
+                                  <Stat icon={CheckCircle2} value={l.saved ?? 0} label="saqlandi" tone={l.saved > 0 ? 'emerald' : 'slate'} />
+                                  {(l.errors ?? 0) > 0 && <Stat icon={XCircle} value={l.errors} label="xato" tone="rose" />}
+                                  {l.durationMs && (
+                                    <span className="inline-flex items-center gap-1 text-slate-500">
+                                      <Clock className="h-3 w-3" />
+                                      <span className="font-medium tabular-nums">{l.durationMs} ms</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    });
+                  })()}
+                </div>
+
+                {/* Pagination — 20 ta/sahifa */}
+                <PaginationBar
+                  page={page}
+                  totalPages={Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))}
+                  onChange={setPage}
+                />
+              </>
             )}
           </CardContent>
         </Card>
@@ -421,5 +441,42 @@ function Stat({ icon: Icon, value, label, tone = 'slate' }: { icon: any; value: 
       <span className="font-semibold">{value}</span>
       <span className="text-slate-400">{label}</span>
     </span>
+  );
+}
+
+// ═══ Pagination
+function PaginationBar({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  const safePage = Math.min(page, totalPages);
+  const btn = (p: number, label: React.ReactNode, disabled = false) => (
+    <button
+      key={`${p}-${typeof label === 'string' ? label : 'icon'}-${disabled ? 'd' : ''}`}
+      onClick={() => !disabled && onChange(p)}
+      disabled={disabled}
+      className={cn(
+        'inline-flex items-center justify-center h-8 min-w-[32px] px-2 rounded-md text-[12px] font-semibold transition-colors',
+        disabled && 'text-slate-300 cursor-not-allowed',
+        !disabled && p === safePage && 'bg-indigo-600 text-white',
+        !disabled && p !== safePage && 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+      )}
+    >
+      {label}
+    </button>
+  );
+  const pages: number[] = [];
+  for (let i = Math.max(1, safePage - 2); i <= Math.min(totalPages, safePage + 2); i++) pages.push(i);
+  return (
+    <div className="flex items-center justify-center gap-1 px-6 py-3 border-t border-slate-100">
+      {btn(1, <ChevronsLeft className="h-4 w-4" />, safePage === 1)}
+      {btn(safePage - 1, <ChevronLeft className="h-4 w-4" />, safePage === 1)}
+      {pages[0] > 1 && <span className="text-slate-400 text-[11px] px-1">…</span>}
+      {pages.map((p) => btn(p, String(p)))}
+      {pages[pages.length - 1] < totalPages && <span className="text-slate-400 text-[11px] px-1">…</span>}
+      {btn(safePage + 1, <ChevronRight className="h-4 w-4" />, safePage === totalPages)}
+      {btn(totalPages, <ChevronsRight className="h-4 w-4" />, safePage === totalPages)}
+      <span className="ml-3 text-[10.5px] text-slate-400 tabular-nums">
+        {safePage} / {totalPages}
+      </span>
+    </div>
   );
 }
