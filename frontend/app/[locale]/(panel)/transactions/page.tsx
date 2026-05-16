@@ -1,4 +1,5 @@
 'use client';
+// rebuild trigger — frontend force redeploy uchun
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
