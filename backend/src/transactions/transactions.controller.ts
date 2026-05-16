@@ -1,5 +1,6 @@
-import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Res, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags, ApiOperation } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { TransactionsService } from './transactions.service';
 import { StatementService } from './statement.service';
@@ -26,6 +27,15 @@ export class TransactionsController {
   @ApiOperation({ summary: "Composite ID'ni parse qilib, bankdan o'sha tranzaksiyani so'raydi (DB tekshirilmaydi)" })
   inspectId(@Body() body: { id: string }) {
     return this.inspectorSvc.lookupFromBank(body?.id);
+  }
+
+  @Post('parse-ids-excel')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: "Excel A ustunidan composite ID'larni o'qib chiqaradi (toplam tekshirish uchun)" })
+  async parseIdsExcel(@UploadedFile() file: any) {
+    if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
+    const ids = await this.inspectorSvc.parseIdsFromExcel(file.buffer);
+    return { ok: true, ids };
   }
 
   @Get()

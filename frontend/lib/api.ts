@@ -99,11 +99,49 @@ export async function apiDownload(path: string, fallbackName = 'download'): Prom
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Multipart FormData yuborish — Content-Type'ni browser o'zi belgilaydi (boundary bilan).
+ * Excel/CSV/fayl upload uchun.
+ */
+async function apiPostForm<T = any>(path: string, fd: FormData, opts?: { timeout?: number }): Promise<T> {
+  const token = getToken();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), opts?.timeout ?? DEFAULT_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: fd,
+      signal: ctrl.signal,
+    });
+    clearTimeout(timer);
+    const text = await resp.text();
+    const data = text ? safeJson(text) : null;
+    if (!resp.ok) {
+      const err: ApiError = new Error(data?.message || data?.error?.message || resp.statusText);
+      err.status = resp.status;
+      err.data = data;
+      throw err;
+    }
+    return data as T;
+  } catch (e: any) {
+    clearTimeout(timer);
+    if (e?.name === 'AbortError') {
+      const err: ApiError = new Error("Server javob bermayapti — keyinroq urinib ko'ring");
+      err.isTimeout = true;
+      throw err;
+    }
+    throw e;
+  }
+}
+
 export const api = {
   get: <T = any>(path: string, opts?: { timeout?: number }) =>
     apiFetch<T>(path, { method: 'GET', ...opts }),
   post: <T = any>(path: string, body?: any, opts?: { auth?: boolean; timeout?: number }) =>
     apiFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined, ...opts }),
+  postForm: <T = any>(path: string, fd: FormData, opts?: { timeout?: number }) =>
+    apiPostForm<T>(path, fd, opts),
   patch: <T = any>(path: string, body?: any, opts?: { timeout?: number }) =>
     apiFetch<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined, ...opts }),
   delete: <T = any>(path: string, opts?: { timeout?: number }) =>
