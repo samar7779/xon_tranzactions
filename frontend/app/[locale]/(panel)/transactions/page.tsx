@@ -466,12 +466,12 @@ export default function TransactionsPage() {
               : <ChevronLeft className="h-4 w-4" />}
           </button>
 
-          {/* Action menu — bitta tugma, ichida 2 ta amal (KPI o'ng pastki burchagida) */}
+          {/* Action menu — bitta tugma, ichida 2 ta amal (KPI'dan tashqari, o'ng pastki burchak) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 title="Amallar"
-                className="absolute -bottom-2 right-12 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-indigo-500/40 transition-all"
+                className="absolute -bottom-4 -right-3 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-indigo-500/40 transition-all"
               >
                 {recategorizeAllMut.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin" />
