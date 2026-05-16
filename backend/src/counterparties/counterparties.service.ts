@@ -233,8 +233,8 @@ export class CounterpartiesService {
       data = this.mapToRecord(company, chamber, bank);
       this.log.log(`Create ${inn}: enrichment manbasi = ${source}`);
     } catch (e: any) {
-      fetchError = e?.message || String(e);
-      this.log.warn(`Create ${inn}: enrichment xatosi — saqlaymiz, keyin sync qiladi: ${fetchError}`);
+      fetchError = humanizeEnrichmentError(e, inn);
+      this.log.warn(`Create ${inn}: enrichment xatosi — saqlaymiz: ${fetchError}`);
     }
 
     const created = await this.prisma.counterparty.create({
@@ -266,11 +266,14 @@ export class CounterpartiesService {
       this.log.log(`Refresh ${inn}: enrichment manbasi = ${source}`);
       return { ok: true, counterparty: updated, source };
     } catch (e: any) {
-      await this.prisma.counterparty.update({
+      // Hech bir manbada ma'lumot topilmadi — bu xato emas, faqat eslatma
+      const friendly = humanizeEnrichmentError(e, inn);
+      const updated = await this.prisma.counterparty.update({
         where: { inn },
-        data: { lastFetchError: e?.message || String(e), lastFetchedAt: new Date() },
+        data: { lastFetchError: friendly, lastFetchedAt: new Date() },
       });
-      throw e;
+      // 404 qaytarmaymiz — UI chiroyli message bilan ko'rsatadi
+      return { ok: false, counterparty: updated, source: 'none' as const, error: friendly };
     }
   }
 
@@ -461,3 +464,22 @@ export class CounterpartiesService {
 
 // __ Re-export VAT status map ___ (foydali bo'lishi mumkin)
 export { VAT_STATUS_MAP };
+
+/**
+ * DIDOX/Chamber xato xabarlarini foydalanuvchiga tushunarli matnga aylantiradi.
+ */
+function humanizeEnrichmentError(e: any, inn: string): string {
+  const raw = e?.message || String(e);
+  // 14 raqam = PINFL (yakka tartibdagi tadbirkor / jismoniy shaxs)
+  if (/^\d{14}$/.test(inn)) {
+    return `INN ${inn} — bu 14 raqamli PINFL (jismoniy shaxs / yakka tartibdagi tadbirkor). DIDOX va Chamber faqat 9 raqamli kompaniya INN'lari bo'yicha ma'lumot beradi. Ma'lumotni qo'lda kiriting.`;
+  }
+  if (/topilmadi|404|400|Не удалось|Ma'lumotlar topilmadi/i.test(raw)) {
+    return `INN ${inn} bo'yicha ma'lumot DIDOX va Chamber bazasida topilmadi.`;
+  }
+  if (/401|403|env vars not configured|login failed/i.test(raw)) {
+    return `DIDOX serverda sozlanmagan yoki login muvaffaqiyatsiz. Faqat Chamber'dan asosiy ma'lumot olinadi.`;
+  }
+  // Asosiy texnik xato — qisqartirib
+  return raw.length > 200 ? raw.slice(0, 200) + '…' : raw;
+}
