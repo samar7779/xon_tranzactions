@@ -197,6 +197,40 @@ export class CrmService {
       return { ...it, customerName };
     });
 
+    // 4) Nomi yo'q natijalar uchun /show chaqirish (parallel, max 10)
+    const missingName = enriched.filter((it) => !it.customerName).slice(0, 10);
+    if (missingName.length > 0) {
+      const showResults = await Promise.allSettled(
+        missingName.map((it) =>
+          this.show({ contract: String(it.contract || it.id || '').trim() }),
+        ),
+      );
+      const showMap = new Map<string, string>();
+      for (let i = 0; i < missingName.length; i++) {
+        const res = showResults[i];
+        if (res.status === 'fulfilled' && (res.value as any)?.detail) {
+          const detail: any = (res.value as any).detail;
+          const name = detail.client?.full_name_kirill
+            || detail.client?.full_name_lotin
+            || detail.client?.full_name
+            || detail.client?.name
+            || null;
+          if (name) {
+            const num = String(missingName[i].contract || missingName[i].id || '').trim().toUpperCase();
+            showMap.set(num, name);
+          }
+        }
+      }
+      // Enriched'ga nomlarni qo'shamiz
+      for (const it of enriched) {
+        if (!it.customerName) {
+          const num = String(it.contract || it.id || '').trim().toUpperCase();
+          const name = showMap.get(num);
+          if (name) it.customerName = name;
+        }
+      }
+    }
+
     return { ok: true, total: enriched.length, items: enriched };
   }
 
