@@ -524,10 +524,10 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
-                      <th className="text-left px-4 py-3">{t('directionHeader')}</th>
-                      <th className="text-left px-4 py-3">Hisob nomi</th>
                       <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
+                      <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
+                      <th className="text-left px-4 py-3">Hisob nomi</th>
+                      <th className="text-left px-4 py-3 w-24">{t('directionHeader')}</th>
                       <th className="text-left px-4 py-3 w-40">Kontragent</th>
                       <th className="text-left px-4 py-3 w-40">Kategoriya</th>
                       <th className="text-left px-4 py-3 w-32">Shartnoma</th>
@@ -547,10 +547,23 @@ export default function TransactionsPage() {
                           className="group hover:bg-slate-50/60 transition-colors cursor-pointer"
                           onClick={() => setDetailRow(it)}
                         >
+                          {/* 1) Bank · Hisob */}
+                          <td className="px-4 py-3 max-w-[220px]">
+                            <div className="flex items-center gap-2">
+                              <BankLogo code={it.account?.bank?.code || it.bank?.code || ''} name={it.account?.bank?.name || it.bank?.name} size={28} rounded="rounded-lg" />
+                              <div className="min-w-0">
+                                <div className="text-[12px] font-medium truncate">{it.account?.bank?.name || it.bank?.name || '—'}</div>
+                                {it.account?.ownerName && (
+                                  <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
+                                )}
+                                <div className="font-mono text-[10px] text-slate-400 truncate">{it.account?.accountNo || ''}</div>
+                              </div>
+                            </div>
+                          </td>
+                          {/* 2) Sana / Vaqt */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-[13px] font-medium tabular-nums">{formatDate(it.txnDate)}</div>
                             <div className="text-[10px] text-slate-500 tabular-nums">
-                              {/* operationTime — bank bergan haqiqiy vaqt (HH:mm:ss); yo'q bo'lsa txnDate'dan */}
                               {it.operationTime
                                 ? it.operationTime.slice(0, 5)
                                 : (it.inputAt
@@ -558,18 +571,7 @@ export default function TransactionsPage() {
                                     : '—')}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={cn(
-                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset",
-                              it.direction === 'IN'
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                                : "bg-rose-50 text-rose-700 ring-rose-200",
-                            )}>
-                              {it.direction === 'IN'
-                                ? <><ArrowDownLeft className="h-3 w-3" /> {t('dirIn')}</>
-                                : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
-                            </span>
-                          </td>
+                          {/* 3) Hisob nomi (raw fromName/toName) */}
                           <td className="px-4 py-3 max-w-[280px]">
                             <div className="flex items-center gap-2.5 min-w-0">
                               <div className={cn(
@@ -588,17 +590,18 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 max-w-[220px]">
-                            <div className="flex items-center gap-2">
-                              <BankLogo code={it.account?.bank?.code || it.bank?.code || ''} name={it.account?.bank?.name || it.bank?.name} size={28} rounded="rounded-lg" />
-                              <div className="min-w-0">
-                                <div className="text-[12px] font-medium truncate">{it.account?.bank?.name || it.bank?.name || '—'}</div>
-                                {it.account?.ownerName && (
-                                  <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
-                                )}
-                                <div className="font-mono text-[10px] text-slate-400 truncate">{it.account?.accountNo || ''}</div>
-                              </div>
-                            </div>
+                          {/* 4) Yo'nalish */}
+                          <td className="px-4 py-3">
+                            <span className={cn(
+                              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset",
+                              it.direction === 'IN'
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                : "bg-rose-50 text-rose-700 ring-rose-200",
+                            )}>
+                              {it.direction === 'IN'
+                                ? <><ArrowDownLeft className="h-3 w-3" /> {t('dirIn')}</>
+                                : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
+                            </span>
                           </td>
                           {/* Kontragent (firma nomi yoki kategoriya placeholder) */}
                           <td className="px-4 py-3 max-w-[160px]">
@@ -1158,7 +1161,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
 
-  const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'composite', 'raw'];
+  const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'raw'];
   const allOpen = SECTION_KEYS.every((k) => openSections.has(k));
 
   function toggleAll() {
@@ -1459,15 +1462,11 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             {row.docType && <CopyRow label={t('detailDocType')} value={row.docType} mono />}
           </DetailSection>
 
-          {/* Tranzaksiya ID */}
-          <DetailSection
-            id="composite" open={openSections.has('composite')} onToggle={() => toggleOne('composite')}
-            title={t('detailComposite')} icon={Hash}
-          >
-            <div className="py-2">
-              <CopyBlock value={row.externalId || row.id} />
-            </div>
-          </DetailSection>
+          {/* Tranzaksiya ID — faqat copy icon */}
+          <div className="flex items-center justify-end gap-1.5 text-[10px] text-slate-500">
+            <span className="uppercase tracking-wider font-semibold">{t('detailComposite')}</span>
+            <CopyIdButton value={row.externalId || row.id} />
+          </div>
 
           {/* Bankdan kelgan to'liq JSON */}
           {(row.metadata || row.rawExtra) && (
@@ -1617,6 +1616,26 @@ function CopyBlock({ value }: { value: string }) {
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+// ═══ COPY ID — kichik icon tugma, bosilganda ID'ni clipboard'ga nusxalaydi
+function CopyIdButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    toast.success('ID nusxalandi');
+    setTimeout(() => setCopied(false), 1500);
+  }
+  return (
+    <button
+      onClick={copy}
+      title={`Tranzaksiya ID nusxalash: ${value}`}
+      className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 transition-colors"
+    >
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+    </button>
   );
 }
 

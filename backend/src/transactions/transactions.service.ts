@@ -99,17 +99,25 @@ export class TransactionsService {
     const accByNo = new Map(ownAccs.map((a) => [a.accountNo, a.ownerName]));
 
     // 3) Har bir tx'ga counterpartyDisplay maydonini qo'shamiz
+    // Logika:
+    //   - TRANSFER (Переброска) → BankAccount.ownerName (LEVEL UP-STROY)
+    //   - COUNTERPARTY (matched specific firm) → Counterparty.name (GREATCITY, BARAKAT)
+    //   - Boshqa kategoriyalar (CLIENT/BANK/MINFIN/SALARY/LOAN) → kategoriya nomi
+    //   - Kategoriya yo'q → null
     const enriched = items.map((tx: any) => {
       const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
       const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
+      const code = tx.category?.code;
       let counterpartyDisplay: string | null = null;
-      // Eng aniq → eng umumiy:
-      // 1) Bizning Counterparty jadvalimizdan INN bo'yicha (GREATCITY, BARAKAT HOUSE va h.k.)
-      if (inn && cpByInn.has(inn)) counterpartyDisplay = cpByInn.get(inn)!;
-      // 2) O'z bank hisoblarimizdan (Переброска uchun — LEVEL UP-STROY)
-      else if (acc && accByNo.has(acc)) counterpartyDisplay = accByNo.get(acc)!;
-      // 3) Kategoriya nomi (Банк, Клиент/Физ.Л/Юр.Л, Молия Вазирлиги)
-      else if (tx.category?.name) counterpartyDisplay = tx.category.name;
+
+      if (code === 'TRANSFER') {
+        counterpartyDisplay = (acc && accByNo.get(acc)) || tx.category?.name || null;
+      } else if (code === 'COUNTERPARTY') {
+        counterpartyDisplay = (inn && cpByInn.get(inn)) || tx.category?.name || null;
+      } else if (tx.category?.name) {
+        // CLIENT/BANK/MINFIN/SALARY/LOAN/COUNTERPARTY_RETURN — kategoriya nomi
+        counterpartyDisplay = tx.category.name;
+      }
       return { ...tx, counterpartyDisplay };
     });
 
