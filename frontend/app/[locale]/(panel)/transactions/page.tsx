@@ -466,28 +466,37 @@ export default function TransactionsPage() {
               : <ChevronLeft className="h-4 w-4" />}
           </button>
 
-          {/* Action icons — KPI o'ng yuqori qismida kichik square tugmalar */}
-          <div className="absolute -top-3 right-12 flex items-center gap-1.5 z-10">
-            <button
-              onClick={() => setBackfillOpen(true)}
-              title={t('toolBackfill')}
-              className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:ring-indigo-300 shadow-sm hover:shadow transition-all"
-            >
-              <History className="h-3.5 w-3.5" />
-            </button>
-            {canManageCategories && (
+          {/* Action menu — bitta tugma, ichida 2 ta amal (KPI o'ng pastki burchagida) */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                onClick={() => recategorizeAllMut.mutate()}
-                disabled={recategorizeAllMut.isPending}
-                title="Barcha tranzaksiyalarni qayta kategoriyalash"
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm hover:shadow-md hover:shadow-amber-500/40 transition-all disabled:opacity-60"
+                title="Amallar"
+                className="absolute -bottom-2 right-12 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-indigo-500/40 transition-all"
               >
                 {recategorizeAllMut.isPending
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <Wand2 className="h-3.5 w-3.5" />}
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <Wand2 className="h-4 w-4" />}
               </button>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
+                <History className="h-4 w-4 mr-2 text-indigo-600" />
+                <span className="flex-1">{t('toolBackfill')}</span>
+              </DropdownMenuItem>
+              {canManageCategories && (
+                <DropdownMenuItem
+                  onClick={() => recategorizeAllMut.mutate()}
+                  disabled={recategorizeAllMut.isPending}
+                  className="cursor-pointer"
+                >
+                  {recategorizeAllMut.isPending
+                    ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
+                    : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
+                  <span className="flex-1">Kategoriyalash</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* ═══ FILTER BAR ═══ */}
