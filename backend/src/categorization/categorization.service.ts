@@ -234,6 +234,12 @@ export class CategorizationService {
       if (!body.categoryId) body.categoryId = sub.parentId;
     }
 
+    // Eskisini olamiz (tarix uchun)
+    const old = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { categoryId: true, subcategoryId: true, contractNumber: true },
+    });
+
     await this.prisma.transaction.update({
       where: { id: txId },
       data: {
@@ -244,7 +250,95 @@ export class CategorizationService {
         categorizedById: actorId,
       },
     });
+
+    // Tarix yozish
+    await this.logHistory(txId, {
+      action: 'manual',
+      actorId,
+      oldCategoryId: old?.categoryId || null,
+      oldSubcategoryId: old?.subcategoryId || null,
+      newCategoryId: body.categoryId,
+      newSubcategoryId: body.subcategoryId || null,
+      contractNumber: old?.contractNumber || null,
+      reason: "qo'lda o'zgartirildi",
+    });
+
     return { ok: true };
+  }
+
+  /** Tranzaksiya kategoriya tarixi (eng yangidan oldingiga) */
+  async getHistory(txId: string, limit = 50) {
+    const items = await this.prisma.transactionCategoryHistory.findMany({
+      where: { txId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+    return { ok: true, items };
+  }
+
+  /**
+   * Tarixga yozuv qo'shadi — eski va yangi kategoriya nomlarini ham resolve qiladi.
+   * O'zgarish bo'lmasa (eski va yangi bir xil) — skip.
+   */
+  private async logHistory(
+    txId: string,
+    p: {
+      action: string;
+      actorId?: string | null;
+      oldCategoryId: string | null;
+      oldSubcategoryId: string | null;
+      newCategoryId: string | null;
+      newSubcategoryId: string | null;
+      contractNumber: string | null;
+      reason: string;
+    },
+  ): Promise<void> {
+    // O'zgarish bo'lmasa — yozmaymiz (shovqin kamaytirish)
+    if (
+      p.oldCategoryId === p.newCategoryId &&
+      p.oldSubcategoryId === p.newSubcategoryId
+    ) {
+      return;
+    }
+
+    // Kategoriya nomlarini olamiz
+    const ids = [p.oldCategoryId, p.oldSubcategoryId, p.newCategoryId, p.newSubcategoryId].filter(Boolean) as string[];
+    const cats = ids.length > 0
+      ? await this.prisma.category.findMany({ where: { id: { in: Array.from(new Set(ids)) } }, select: { id: true, name: true } })
+      : [];
+    const nameById = new Map(cats.map((c) => [c.id, c.name]));
+
+    // Actor email olamiz (manual uchun)
+    let actorName: string | null = null;
+    if (p.action === 'manual' && p.actorId) {
+      const u = await this.prisma.adminUser.findUnique({ where: { id: p.actorId }, select: { email: true } });
+      actorName = u?.email || null;
+    } else if (p.action === 'sync') actorName = 'sync';
+    else if (p.action === 'cron') actorName = 'cron';
+    else if (p.action === 'auto') actorName = 'auto';
+
+    try {
+      await this.prisma.transactionCategoryHistory.create({
+        data: {
+          txId,
+          action: p.action,
+          actorId: p.actorId || null,
+          actorName,
+          oldCategoryId: p.oldCategoryId,
+          oldCategoryName: p.oldCategoryId ? nameById.get(p.oldCategoryId) || null : null,
+          oldSubcategoryId: p.oldSubcategoryId,
+          oldSubcategoryName: p.oldSubcategoryId ? nameById.get(p.oldSubcategoryId) || null : null,
+          newCategoryId: p.newCategoryId,
+          newCategoryName: p.newCategoryId ? nameById.get(p.newCategoryId) || null : null,
+          newSubcategoryId: p.newSubcategoryId,
+          newSubcategoryName: p.newSubcategoryId ? nameById.get(p.newSubcategoryId) || null : null,
+          contractNumber: p.contractNumber,
+          reason: p.reason,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`logHistory xato (${txId}): ${e?.message}`);
+    }
   }
 
   // ────────────────────────── CORE RULES ──────────────────────────
@@ -354,6 +448,18 @@ export class CategorizationService {
         categorizedBy: opts?.actor || 'auto',
         categorizedById: opts?.actorId || null,
       },
+    });
+
+    // Tarix yozish (faqat o'zgarish bo'lganda)
+    await this.logHistory(tx.id, {
+      action: opts?.actor || 'auto',
+      actorId: opts?.actorId,
+      oldCategoryId: tx.categoryId,
+      oldSubcategoryId: tx.subcategoryId,
+      newCategoryId: categoryId,
+      newSubcategoryId: subcategoryId,
+      contractNumber,
+      reason,
     });
 
     return {
