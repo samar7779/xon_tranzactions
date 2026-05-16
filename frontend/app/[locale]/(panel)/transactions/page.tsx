@@ -1182,6 +1182,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
+  const [contractEditOpen, setContractEditOpen] = useState(false);
 
   // Tafsilot uchun jonli ma'lumot — categorize/setManual'dan keyin yangilanadi
   const liveQuery = useQuery({
@@ -1207,6 +1208,23 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     onSuccess: () => {
       toast.success('Kategoriya saqlandi');
       setManualEditOpen(false);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      liveQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const setContractMut = useMutation({
+    mutationFn: (contractNumber: string | null) =>
+      api.post<{ ok: boolean; verified: boolean; customerName: string | null }>(`/categorization/transactions/${row.id}/set-contract`, { contractNumber }),
+    onSuccess: (r) => {
+      if (r.verified) {
+        toast.success(`Shartnoma saqlandi — CRM tasdiqladi: ${r.customerName || 'mijoz'}`);
+      } else {
+        toast.warning("Shartnoma saqlandi — CRM'da tasdiqlanmadi (xato)");
+      }
+      setContractEditOpen(false);
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
       liveQuery.refetch();
@@ -1331,14 +1349,22 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-indigo-200/60">
-              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label */}
+              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label, inline edit */}
               <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                  <Tag className="h-3 w-3" /> Kategoriya
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center justify-between gap-1">
+                  <span className="flex items-center gap-1"><Tag className="h-3 w-3" /> Kategoriya</span>
+                  {canManage && (
+                    <button
+                      onClick={() => setManualEditOpen(true)}
+                      title="Kategoriyani o'zgartirish"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                    >
+                      <FileText className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
                 {liveRow.category ? (
                   <div className="space-y-1">
-                    {/* Asosiy chip — subkategoriya bo'lsa u, bo'lmasa top kategoriya */}
                     <div
                       className="inline-flex items-center px-2 py-1 rounded-md text-[12px] font-semibold ring-1 ring-inset"
                       style={{
@@ -1349,7 +1375,6 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                     >
                       {liveRow.subcategory?.name || liveRow.category.name}
                     </div>
-                    {/* Subkategoriya bor bo'lsa, top kategoriya kichik label */}
                     {liveRow.subcategory && (
                       <div className="text-[10px] text-slate-500">
                         {liveRow.category.name}
@@ -1370,10 +1395,19 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 )}
               </div>
 
-              {/* Shartnoma raqami */}
+              {/* Shartnoma raqami — inline edit (CRM search bilan) */}
               <div>
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                  <FileSignature className="h-3 w-3" /> Shartnoma
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center justify-between gap-1">
+                  <span className="flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span>
+                  {canManage && (
+                    <button
+                      onClick={() => setContractEditOpen(true)}
+                      title="Shartnomani o'zgartirish (CRM search)"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                    >
+                      <FileText className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
                 {liveRow.contractNumber ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1397,34 +1431,23 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
               </div>
             </div>
 
-            {/* Avto-kategoriyalash + qo'lda tahrirlash tugmalari */}
-            {canManage && (
+            {/* Avto-kategoriyalash tugmasi (faqat kategoriya yo'q bo'lsa) */}
+            {canManage && !liveRow.category && (
               <div className="pt-3 border-t border-indigo-200/60">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
-                    {liveRow.category
-                      ? "Kategoriyani qo'lda o'zgartirish mumkin"
-                      : "Qoidalar bo'yicha avto-aniqlash"}
+                    Qoidalar bo'yicha avto-aniqlash
                   </div>
                   <div className="flex items-center gap-2">
-                    {!liveRow.category && (
-                      <button
-                        onClick={() => categorizeMut.mutate(false)}
-                        disabled={categorizeMut.isPending}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                      >
-                        {categorizeMut.isPending
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : <Wand2 className="h-3 w-3" />}
-                        Avto-kategoriyalash
-                      </button>
-                    )}
                     <button
-                      onClick={() => setManualEditOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-slate-400 transition-colors"
+                      onClick={() => categorizeMut.mutate(false)}
+                      disabled={categorizeMut.isPending}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
                     >
-                      <FileText className="h-3 w-3" />
-                      Qo'lda tahrirlash
+                      {categorizeMut.isPending
+                        ? <Loader2 className="h-3 w-3 animate-spin" />
+                        : <Wand2 className="h-3 w-3" />}
+                      Avto-kategoriyalash
                     </button>
                   </div>
                 </div>
@@ -1591,6 +1614,16 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           saving={setCategoryMut.isPending}
         />
       )}
+
+      {/* Shartnoma CRM search bilan tahrirlash */}
+      {contractEditOpen && (
+        <ContractEditDialog
+          currentContract={liveRow.contractNumber}
+          onClose={() => setContractEditOpen(false)}
+          onSave={(newContract) => setContractMut.mutate(newContract)}
+          saving={setContractMut.isPending}
+        />
+      )}
     </Dialog>
   );
 }
@@ -1725,6 +1758,120 @@ function CopyBlock({ value }: { value: string }) {
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+// ═══ SHARTNOMA TAHRIR — CRM'dan typeahead search bilan
+function ContractEditDialog({
+  currentContract, onClose, onSave, saving,
+}: {
+  currentContract: string | null;
+  onClose: () => void;
+  onSave: (contract: string | null) => void;
+  saving: boolean;
+}) {
+  const [query, setQuery] = useState(currentContract || '');
+  const [debouncedQ, setDebouncedQ] = useState(query);
+
+  // Debounce 300ms — har harf kiritilganda CRM'ga so'rov yubormaslik uchun
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // CRM search
+  const searchQuery = useQuery({
+    queryKey: ['crm-search', debouncedQ],
+    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=20`),
+    enabled: debouncedQ.length >= 3,
+    staleTime: 60_000,
+  });
+  const items = searchQuery.data?.items || [];
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileSignature className="h-4 w-4 text-indigo-600" /> Shartnoma raqami
+          </DialogTitle>
+          <DialogDescription>
+            CRM'dan qidirish uchun shartnoma raqamini yozing (3+ belgi)
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Masalan: 1494VTN24DQ"
+              className="pl-9 font-mono"
+            />
+            {searchQuery.isFetching && debouncedQ.length >= 3 && (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 animate-spin" />
+            )}
+          </div>
+
+          {debouncedQ.length < 3 ? (
+            <div className="text-[11px] text-slate-400 italic px-2">
+              Kamida 3 belgi kiriting…
+            </div>
+          ) : items.length === 0 && !searchQuery.isFetching ? (
+            <div className="text-[11px] text-rose-600 px-2">
+              CRM'da topilmadi — baribir saqlash mumkin (xato badge bilan)
+            </div>
+          ) : (
+            <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+              {items.map((it: any) => (
+                <button
+                  key={it.contract || it.id}
+                  onClick={() => onSave(String(it.contract || '').trim())}
+                  disabled={saving}
+                  className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors disabled:opacity-50 group"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
+                      {it.contract}
+                    </code>
+                    {it.status && (
+                      <span className="text-[9px] text-slate-500 uppercase tracking-wider">{it.status}</span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-600 truncate mt-0.5">
+                    {it.client?.full_name_kirill || it.client?.full_name_lotin || it.client?.name || it.object_name || '—'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <button
+              onClick={() => onSave(null)}
+              disabled={saving || !currentContract}
+              className="text-[12px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
+            >
+              Tozalash
+            </button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+                Bekor qilish
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => onSave(query.trim() || null)}
+                disabled={saving || !query.trim() || query.trim() === currentContract}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Saqlash'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

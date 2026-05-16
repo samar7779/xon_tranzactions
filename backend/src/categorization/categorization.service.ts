@@ -275,6 +275,60 @@ export class CategorizationService {
     return { ok: true };
   }
 
+  /**
+   * Shartnoma raqamini qo'lda o'zgartirish — CRM'da tekshiriladi va CrmContract keshiga yoziladi.
+   */
+  async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; verified: boolean; customerName: string | null }> {
+    const old = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { contractNumber: true, categoryId: true, subcategoryId: true },
+    });
+    if (!old) throw new Error('Tranzaksiya topilmadi');
+
+    const newContract = contractNumber?.trim().toUpperCase() || null;
+    let verified = false;
+    let customerName: string | null = null;
+
+    // CRM'da tekshirish
+    if (newContract) {
+      const cached = await this.crmCache.lookup(newContract);
+      verified = !!cached?.found;
+      customerName = cached?.customerName || null;
+    }
+
+    await this.prisma.transaction.update({
+      where: { id: txId },
+      data: { contractNumber: newContract },
+    });
+
+    // Tarixga to'g'ridan-to'g'ri yozish (logHistory'da kategoriya o'zgarmagani uchun skip bo'lar edi)
+    if (old.contractNumber !== newContract) {
+      const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+      try {
+        await this.prisma.transactionCategoryHistory.create({
+          data: {
+            txId,
+            action: 'manual',
+            actorId,
+            actorName: u?.email || null,
+            oldCategoryId: old.categoryId,
+            oldSubcategoryId: old.subcategoryId,
+            newCategoryId: old.categoryId,
+            newSubcategoryId: old.subcategoryId,
+            contractNumber: newContract,
+            reason: newContract
+              ? `shartnoma → ${newContract}${verified ? ` (CRM: ${customerName})` : ' (CRM xato)'}`
+              : "shartnoma o'chirildi",
+          },
+        });
+      } catch (e: any) {
+        this.log.warn(`setContract history yozishda xato (${txId}): ${e?.message}`);
+      }
+    }
+
+    return { ok: true, verified, customerName };
+  }
+
   /** Tranzaksiya kategoriya tarixi (eng yangidan oldingiga) */
   async getHistory(txId: string, limit = 50) {
     const items = await this.prisma.transactionCategoryHistory.findMany({

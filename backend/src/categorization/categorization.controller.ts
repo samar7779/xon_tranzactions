@@ -59,6 +59,18 @@ export class CategorizationController {
     return this.svc.setManual(id, body, userId);
   }
 
+  // ─── Faqat shartnoma raqamini o'zgartirish ─────────────────────
+  @Post('transactions/:id/set-contract')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: 'Shartnoma raqamini qo\'lda o\'zgartirish (CRM\'da ham tasdiqlanadi)' })
+  setContract(
+    @Param('id') id: string,
+    @Body() body: { contractNumber: string | null },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.setContract(id, body.contractNumber, userId);
+  }
+
   // ─── Hammasini qayta hisoblash ─────────────────────────────────
   @Post('run-all')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
