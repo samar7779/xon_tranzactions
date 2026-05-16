@@ -1293,7 +1293,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
               {isIn ? '+' : '−'}{formatMoney(row.amount, row.currency)}
             </div>
             <div className="text-sm text-white/90 mt-1 font-medium truncate">
-              {counterpartyName || '—'}
+              {liveRow.counterpartyDisplay || counterpartyName || '—'}
             </div>
           </div>
         </div>
@@ -1303,13 +1303,24 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
 
           {/* ═══ KONTRAGENT + KATEGORIYA + SHARTNOMA — asosiy info ═══ */}
           <div className="rounded-xl ring-1 ring-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/40 p-4 space-y-3">
-            {/* Kontragent */}
+            {/* Kontragent — haqiqiy entity nomi (CRM mijoz / firma) */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Kontragent</div>
-                <div className="text-[14px] font-semibold text-slate-900 truncate">{counterpartyName || '—'}</div>
-                {counterpartyInn && (
-                  <div className="font-mono text-[11px] text-slate-500 mt-0.5">STIR: {counterpartyInn}</div>
+                {liveRow.counterpartyDisplay ? (
+                  <>
+                    <div className="text-[14px] font-semibold text-slate-900 truncate">{liveRow.counterpartyDisplay}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 truncate" title={counterpartyName || ''}>
+                      {counterpartyName}{counterpartyInn ? ` · ${counterpartyInn}` : ''}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[14px] font-semibold text-slate-700 truncate">{counterpartyName || '—'}</div>
+                    {counterpartyInn && (
+                      <div className="font-mono text-[11px] text-slate-500 mt-0.5">STIR: {counterpartyInn}</div>
+                    )}
+                  </>
                 )}
               </div>
               {row.docNumber && (
@@ -1320,22 +1331,28 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-indigo-200/60">
-              {/* Kategoriya */}
+              {/* Kategoriya — subkategoriya birinchi (chip), top kichik label */}
               <div>
                 <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
                   <Tag className="h-3 w-3" /> Kategoriya
                 </div>
                 {liveRow.category ? (
                   <div className="space-y-1">
+                    {/* Asosiy chip — subkategoriya bo'lsa u, bo'lmasa top kategoriya */}
                     <div
                       className="inline-flex items-center px-2 py-1 rounded-md text-[12px] font-semibold ring-1 ring-inset"
-                      style={{ backgroundColor: `${(liveRow.category.color || '#6366f1')}18`, color: (liveRow.category.color || '#6366f1'), borderColor: `${(liveRow.category.color || '#6366f1')}40` }}
+                      style={{
+                        backgroundColor: `${(liveRow.category.color || '#6366f1')}18`,
+                        color: (liveRow.category.color || '#6366f1'),
+                        borderColor: `${(liveRow.category.color || '#6366f1')}40`,
+                      }}
                     >
-                      {liveRow.category.name}
+                      {liveRow.subcategory?.name || liveRow.category.name}
                     </div>
+                    {/* Subkategoriya bor bo'lsa, top kategoriya kichik label */}
                     {liveRow.subcategory && (
-                      <div className="text-[11px] text-slate-600">
-                        ↳ {liveRow.subcategory.name}
+                      <div className="text-[10px] text-slate-500">
+                        {liveRow.category.name}
                       </div>
                     )}
                     {liveRow.categorizedBy && (
