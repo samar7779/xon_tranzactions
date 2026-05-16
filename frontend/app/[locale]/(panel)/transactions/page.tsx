@@ -526,9 +526,10 @@ export default function TransactionsPage() {
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
                       <th className="text-left px-4 py-3">{t('directionHeader')}</th>
-                      <th className="text-left px-4 py-3">{t('counterpartyHeader')}</th>
+                      <th className="text-left px-4 py-3">Hisob nomi</th>
                       <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
-                      <th className="text-left px-4 py-3 w-44">Kategoriya</th>
+                      <th className="text-left px-4 py-3 w-40">Kontragent</th>
+                      <th className="text-left px-4 py-3 w-40">Kategoriya</th>
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -598,12 +599,23 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 max-w-[180px]">
+                          {/* Kontragent (top-level kategoriya) */}
+                          <td className="px-4 py-3 max-w-[160px]">
                             <CategoryChip
                               category={it.category}
-                              subcategory={it.subcategory}
                               onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
                               canEdit={canManageCategories}
+                              placeholder="+ tanlash"
+                            />
+                          </td>
+                          {/* Kategoriya (subkategoriya) */}
+                          <td className="px-4 py-3 max-w-[160px]">
+                            <CategoryChip
+                              category={it.subcategory}
+                              parentColor={it.category?.color}
+                              onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
+                              canEdit={canManageCategories && !!it.category}
+                              placeholder={it.category ? '—' : ''}
                             />
                           </td>
                           <td className={cn(
@@ -1597,31 +1609,32 @@ function CopyBlock({ value }: { value: string }) {
   );
 }
 
-// ═══ KATEGORIYA CHIP — tranzaksiya jadvalida 1 ta katakda ko'rinadi ═══
+// ═══ KATEGORIYA CHIP — bitta kategoriya (top yoki sub) chipi ═══
 function CategoryChip({
-  category, subcategory, onClick, canEdit,
+  category, parentColor, onClick, canEdit, placeholder = '+ tanlash',
 }: {
   category: any | null;
-  subcategory: any | null;
+  parentColor?: string;          // sub uchun — parent kategoriya rangini meros oladi
   onClick: (e: React.MouseEvent) => void;
   canEdit: boolean;
+  placeholder?: string;
 }) {
-  if (!category && !subcategory) {
+  if (!category) {
+    if (!placeholder) return <span className="text-[10px] text-slate-300">—</span>;
     return canEdit ? (
       <button
         onClick={onClick}
         className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 ring-1 ring-dashed ring-slate-200 hover:ring-indigo-300 transition-colors"
       >
-        + tanlash
+        {placeholder}
       </button>
     ) : (
-      <span className="text-[10px] text-slate-400">—</span>
+      <span className="text-[10px] text-slate-400">{placeholder}</span>
     );
   }
-  const color = category?.color || '#64748b';
-  // Tailwind dinamik klasslarni kompile qilmaydi, shuning uchun inline style
+  const color = category.color || parentColor || '#64748b';
   const style = {
-    backgroundColor: `${color}15`,
+    backgroundColor: `${color}18`,
     color: color,
     borderColor: `${color}40`,
   };
@@ -1630,18 +1643,13 @@ function CategoryChip({
       onClick={onClick}
       disabled={!canEdit}
       className={cn(
-        'inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset text-left max-w-full transition-all',
+        'inline-flex items-center px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset text-left max-w-full transition-all',
         canEdit && 'hover:ring-2 cursor-pointer',
       )}
       style={style}
-      title={canEdit ? "O'zgartirish uchun bosing" : undefined}
+      title={canEdit ? "O'zgartirish uchun bosing" : category.name}
     >
-      <span className="truncate max-w-[160px] leading-tight">{category?.name || '—'}</span>
-      {subcategory && (
-        <span className="text-[9px] font-medium opacity-80 truncate max-w-[160px] leading-tight">
-          ↳ {subcategory.name}
-        </span>
-      )}
+      <span className="truncate max-w-[150px] leading-tight">{category.name}</span>
     </button>
   );
 }
