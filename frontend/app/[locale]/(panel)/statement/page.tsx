@@ -471,52 +471,70 @@ function InspectorResult({ data }: { data: any }) {
   const bank = data.bankResponse || {};
   const found = bank.item;
   const dd = data.docDetails?.result;
+  const verdict = (data.verdict || 'no_data') as 'found' | 'shifted' | 'cancelled' | 'no_data' | 'partial';
+
+  const verdictUi: Record<string, { bg: string; ring: string; text: string; title: string }> = {
+    found:     { bg: 'bg-emerald-50', ring: 'ring-emerald-200', text: 'text-emerald-900', title: '✅ Bankda mavjud' },
+    shifted:   { bg: 'bg-amber-50',   ring: 'ring-amber-200',   text: 'text-amber-900',   title: "⚠️ Boshqa kunga ko'chirilgan" },
+    cancelled: { bg: 'bg-rose-50',    ring: 'ring-rose-200',    text: 'text-rose-900',    title: '🔴 Bekor qilingan / qaytarilgan' },
+    no_data:   { bg: 'bg-slate-50',   ring: 'ring-slate-200',   text: 'text-slate-700',   title: "ℹ️ Ma'lumot olinmadi" },
+    partial:   { bg: 'bg-amber-50',   ring: 'ring-amber-200',   text: 'text-amber-900',   title: "⚠️ To'liq emas" },
+  };
+  const v = verdictUi[verdict] || verdictUi.no_data;
 
   return (
     <div className="space-y-3">
-      {/* Status banner */}
-      {dd ? (
-        <div className="px-3 py-2.5 rounded-lg bg-emerald-50 ring-1 ring-emerald-200 text-emerald-800 text-[12px] space-y-0.5">
+      {/* ═══ VERDICT BANNER ═══ */}
+      <div className={cn('px-4 py-3 rounded-xl ring-1', v.bg, v.ring, v.text)}>
+        <div className="text-[13px] font-bold mb-0.5">{v.title}</div>
+        <div className="text-[11.5px] opacity-90">{data.verdictDetail}</div>
+        {bank.foundOnDate && bank.matchedBy && (
+          <div className="text-[10.5px] opacity-75 mt-1">
+            ({bank.matchedBy} bo'yicha, {bank.foundOnDate} kuni)
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Kunlar bo'yicha chip'lar ═══ */}
+      {bank.daysChecked?.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {bank.daysChecked.map((d: any) => (
+            <div
+              key={d.date}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg text-[10.5px] font-medium',
+                d.date === p.ddate
+                  ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-300'
+                  : 'bg-slate-100 text-slate-700',
+                d.error && '!bg-rose-50 !text-rose-700 !ring-rose-200',
+                d.date === bank.foundOnDate && '!bg-emerald-100 !text-emerald-800 !ring-emerald-300',
+              )}
+            >
+              <span className="font-bold tabular-nums">{d.date}</span>
+              <span className="opacity-60">·</span>
+              <span>{d.error ? 'xato' : `${d.itemCount} ta`}</span>
+              {d.date === bank.foundOnDate && <CheckCircle2 className="h-3 w-3" />}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ═══ getDocDetails — payment_state_name */}
+      {dd && (
+        <div className="px-3 py-2.5 rounded-lg bg-blue-50 ring-1 ring-blue-200 text-blue-900 text-[12px]">
           <div className="flex items-center gap-2 font-semibold">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>Bank tafsiloti olindi (getDocDetails)</span>
+            <span>Bank tafsiloti (getDocDetails)</span>
           </div>
           {dd.payment_state_name && (
-            <div className="ml-6 text-emerald-700">
+            <div className="ml-6 text-blue-700 mt-0.5">
               Holati: <b>{dd.payment_state_name}</b>
               {dd.payment_state_id != null && ` (id=${dd.payment_state_id})`}
             </div>
           )}
         </div>
-      ) : data.bankError ? (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-amber-800 text-[12px]">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold mb-0.5">Bankga so'rov xato:</div>
-            <div className="break-all">{data.bankError}</div>
-          </div>
-        </div>
-      ) : found ? (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-emerald-50 ring-1 ring-emerald-200 text-emerald-800 text-[12px]">
-          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <span className="font-semibold">Bankda topildi</span>
-            <span className="text-emerald-600 ml-1.5">
-              ({bank.matchedBy} bo'yicha — o'sha kun jami {bank.totalItemsThatDay} ta tranzaksiya)
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <div className="font-semibold mb-0.5">Bankda topilmadi (o'sha kun jami {bank.totalItemsThatDay} ta tranzaksiya)</div>
-            <div className="text-rose-600">Bank tranzaksiyani o'chirgan yoki bekor qilgan bo'lishi mumkin</div>
-          </div>
-        </div>
       )}
 
-      {/* getDocDetails — payment_state_name, parent_payment_id, proved_date, plat_purpose */}
       {dd && (
         <InfoBox title="To'lov tafsiloti (bank)">
           <KV k="payment_state" v={dd.payment_state_name || dd.status || '—'} />
@@ -535,9 +553,59 @@ function InspectorResult({ data }: { data: any }) {
       {!dd && data.docDetails?.error && (
         <div className="text-[10.5px] text-slate-500 px-1">
           <span className="font-semibold">getDocDetails xato:</span> {data.docDetails.error}
-          {data.docDetails?.triedDocTypes?.length > 0 && (
-            <span className="ml-1 text-slate-400">(doc_type sinab ko'rildi: {data.docDetails.triedDocTypes.join(', ')})</span>
+          {data.docDetails?.triedVariants?.length > 0 && (
+            <span className="ml-1 text-slate-400">(variantlar: {data.docDetails.triedVariants.join(', ')})</span>
           )}
+        </div>
+      )}
+
+      {/* ═══ Eng yaqin 5 ta tranzaksiya — bekor qilinganda parent topish uchun ═══ */}
+      {!found && bank.closest?.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">
+            Eng yaqin tranzaksiyalar (summa bo'yicha) — parent yoki o'xshashlik topish uchun
+          </div>
+          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden divide-y divide-slate-100">
+            {bank.closest.map((c: any, i: number) => {
+              const isExactAmount = c.amountDiffSom === 0;
+              return (
+                <div key={i} className="px-3 py-2 text-[11px] hover:bg-slate-50">
+                  <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-slate-800">{c.general_id || '—'}</span>
+                      <span className="text-slate-400">·</span>
+                      <span className="text-slate-500">{c.onDate}</span>
+                      {c.dir === 1 ? (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[9px] font-bold">CHIQIM</span>
+                      ) : c.dir === 2 ? (
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[9px] font-bold">KIRIM</span>
+                      ) : null}
+                    </div>
+                    <div className="text-right">
+                      <span className="font-bold tabular-nums text-slate-800">
+                        {c.amountSom.toLocaleString('uz-UZ')} so'm
+                      </span>
+                      {!isExactAmount && (
+                        <span className="ml-2 text-[10px] text-amber-700">
+                          (Δ {c.amountDiffSom.toLocaleString('uz-UZ')})
+                        </span>
+                      )}
+                      {isExactAmount && (
+                        <span className="ml-1.5 px-1 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[9px] font-bold">teng</span>
+                      )}
+                    </div>
+                  </div>
+                  {c.purpose && (
+                    <div className="text-slate-600 text-[10.5px] line-clamp-2 mt-0.5">{c.purpose}</div>
+                  )}
+                  <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-0.5">
+                    <span>D: <span className="font-mono">{c.acc_dt || '—'}</span> {c.name_dt && `(${c.name_dt.slice(0, 25)})`}</span>
+                    <span>K: <span className="font-mono">{c.acc_ct || '—'}</span> {c.name_ct && `(${c.name_ct.slice(0, 25)})`}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

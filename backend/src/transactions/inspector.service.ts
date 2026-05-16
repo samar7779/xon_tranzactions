@@ -5,14 +5,17 @@ import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.clien
 import { KbDoc1CItem } from '../integrations/kapitalbank/types';
 
 /**
- * Bitta tranzaksiya ID'sini parse qilib, bankdan o'sha kun GetDoc1C'ni
- * so'rab, mos yozuvni topadi.
+ * Bitta tranzaksiya ID'sini parse qilib, bankdan qidiradi.
+ *
+ * Strategiya:
+ *   1) ddate kunini so'raymiz (asosiy)
+ *   2) Topilmasa ±1, ±2 kun ham so'raymiz (bank ba'zan kechiktirib qo'yadi)
+ *   3) Topilmasa eng yaqin 5 ta tranzaksiyani ko'rsatamiz
+ *   4) Verdict: found / cancelled / shifted / unknown
+ *   5) getDocDetails ham chaqiramiz (payment_state_name uchun)
  *
  * Kompozit ID format (sync.service makeCompositeId bilan teng):
  *   [IP_]{general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
- *
- * sign='+' bo'lsa — bizning hisob acc_dt (sync paytida shunday yozilgan),
- * '-' bo'lsa — acc_ct.
  */
 @Injectable()
 export class InspectorService {
@@ -25,17 +28,7 @@ export class InspectorService {
   ) {}
 
   /** Composite ID'ni komponentlarga ajratish. */
-  parseId(rawId: string): {
-    bankPrefix: 'IP' | null;
-    generalId: string;
-    num: string;
-    ddate: string;
-    accCt: string;
-    accDt: string;
-    amountTiyin: string;
-    sign: '+' | '-';
-    ourAccount: string;
-  } {
+  parseId(rawId: string) {
     if (!rawId || typeof rawId !== 'string') {
       throw new BadRequestException("ID bo'sh");
     }
@@ -68,14 +61,48 @@ export class InspectorService {
     };
   }
 
-  /**
-   * ID bo'yicha bankka so'rov yuborib, mos yozuvni topadi.
-   * Faqat bank API natijasi qaytariladi (DB tekshirilmaydi).
-   */
+  /** "dd.MM.yyyy" → Date */
+  private parseDdate(s: string): Date | null {
+    const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return null;
+    return new Date(`${m[3]}-${m[2]}-${m[1]}T00:00:00+05:00`);
+  }
+
+  /** Date → "dd.MM.yyyy" */
+  private fmtDdate(d: Date): string {
+    return `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`;
+  }
+
+  /** Bitta yozuv parsed bilan to'liq mos kelsa — qaysi maydon bo'yicha mos kelganini qaytaradi */
+  private matchItem(it: KbDoc1CItem, parsed: ReturnType<typeof this.parseId>): string | null {
+    if (it.general_id && it.general_id === parsed.generalId) return 'general_id';
+    if (String(it.num || '') === parsed.num && it.ddate === parsed.ddate) return 'num+ddate';
+    if (
+      String(it.amount ?? '') === parsed.amountTiyin &&
+      it.acc_ct === parsed.accCt &&
+      it.acc_dt === parsed.accDt
+    ) return 'amount+accounts';
+    // Yumshoq match — faqat summa va bir hisob
+    if (
+      String(it.amount ?? '') === parsed.amountTiyin &&
+      (it.acc_ct === parsed.accCt || it.acc_dt === parsed.accDt)
+    ) return 'amount+one_account';
+    return null;
+  }
+
+  /** Eng yaqin 5 ta tranzaksiyani topish (summa farqi bo'yicha) */
+  private closestByAmount(items: KbDoc1CItem[], targetTiyin: number, top = 5): Array<KbDoc1CItem & { diff: number }> {
+    return items
+      .map((it) => ({ ...it, diff: Math.abs(Number(it.amount || 0) - targetTiyin) }))
+      .sort((a, b) => a.diff - b.diff)
+      .slice(0, top);
+  }
+
+  /** Asosiy lookup — bir necha kun va getDocDetails bilan */
   async lookupFromBank(rawId: string) {
     const parsed = this.parseId(rawId);
 
-    // Bizning DB'dan account topamiz (credentials kerak)
+    // ─── DB'dan account topamiz (credentials kerak) ───
     const account = await this.prisma.bankAccount.findFirst({
       where: { accountNo: parsed.ourAccount },
       include: { bank: true, credential: { include: { bank: true } } },
@@ -86,133 +113,145 @@ export class InspectorService {
       );
     }
     const cred = account.credential;
-    if (!cred) {
-      throw new BadRequestException(
-        `${parsed.ourAccount} hisobiga bank ulanishi biriktirilmagan`,
-      );
-    }
+    if (!cred) throw new BadRequestException(`${parsed.ourAccount} hisobiga bank ulanishi biriktirilmagan`);
     const bank = cred.bank;
     if (bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException(
-        `Hozircha faqat KAPITALBANK_V3 banklar uchun — bu ${bank.apiKind}`,
-      );
+      throw new BadRequestException(`Hozircha faqat KAPITALBANK_V3 banklar uchun — bu ${bank.apiKind}`);
     }
-    if (!bank.apiBaseUrl) {
-      throw new BadRequestException("Bank API URL'i sozlanmagan");
-    }
+    if (!bank.apiBaseUrl) throw new BadRequestException("Bank API URL'i sozlanmagan");
 
     const password = this.crypto.decrypt(cred.passwordEnc);
     const login = (cred.loginPrefix || '') + cred.loginName;
 
-    // ── Bankdan o'sha kunni so'raymiz ──
-    let items: KbDoc1CItem[] = [];
-    let bankError: string | null = null;
-    let saldoIn: number | null = null;
-    let saldoOut: number | null = null;
-    try {
-      const result = await this.kb.getDoc1C({
-        baseUrl: bank.apiBaseUrl,
-        login,
-        password,
-        branch: account.branch,
-        account: account.accountNo,
-        date: parsed.ddate,
-        useProxy: cred.useProxy === true,
-      });
-      items = result?.content || [];
-      saldoIn = result?.saldo_in ?? null;
-      saldoOut = result?.saldo_out ?? null;
-    } catch (e: any) {
-      bankError = e?.message || 'Noma\'lum bank xatosi';
+    // ─── ±2 kun atrofini so'raymiz (parallel) ───
+    const baseDate = this.parseDdate(parsed.ddate);
+    const datesToCheck: string[] = [];
+    if (baseDate) {
+      for (const offset of [0, -1, 1, -2, 2]) {
+        const d = new Date(baseDate.getTime() + offset * 86_400_000);
+        datesToCheck.push(this.fmtDdate(d));
+      }
+    } else {
+      datesToCheck.push(parsed.ddate);
     }
 
-    // ── getDocDetails — bitta hujjat tafsiloti (payment_state_name, parent_payment_id...)
-    // sid kerak, shuning uchun APILogin chaqiramiz. Xato bo'lsa, mainpipe'ni buzmaymiz.
-    let docDetails: any = null;
-    let docDetailsError: string | null = null;
-    let docDetailsTriedTypes: number[] = [];
-    try {
-      const loginRes = await this.kb.apiLogin({
-        baseUrl: bank.apiBaseUrl,
-        login,
-        password,
-        useProxy: cred.useProxy === true,
-      });
-      const sid = loginRes?.sid;
-      if (!sid) {
-        docDetailsError = 'APILogin sid qaytarmadi';
-      } else {
-        // doc_type ma'lum emas — sign asosida taxmin qilamiz, keyin boshqalarini sinaymiz
-        // sign '+' → bizning hisob debit (chiqim/yuborilgan) → doc_type=1
-        // sign '-' → bizning hisob credit (kirim/kelgan) → doc_type=0
-        const preferred = parsed.sign === '+' ? 1 : 0;
-        const candidates = [preferred, preferred === 1 ? 0 : 1, 2];
-        for (const dt of candidates) {
-          docDetailsTriedTypes.push(dt);
-          try {
-            const r: any = await this.kb.getDocDetails({
-              baseUrl: bank.apiBaseUrl,
-              login,
-              password,
-              sid,
-              branch: account.branch,
-              account: account.accountNo,
-              bank_day: parsed.ddate,
-              doc_id: parsed.generalId,
-              doc_type: dt,
-            });
-            if (r?.result && (!r.error || r.error.code === 0)) {
-              docDetails = { ...r.result, _used_doc_type: dt };
-              break;
-            }
-            // error bo'lsa — keyingi doc_type bilan sinaymiz
-            if (r?.error?.message) {
-              docDetailsError = `doc_type=${dt}: ${r.error.message}`;
-            }
-          } catch (e: any) {
-            docDetailsError = `doc_type=${dt}: ${e?.message || 'noma\'lum xato'}`;
-          }
+    const dayResults: Array<{
+      date: string;
+      items: KbDoc1CItem[];
+      saldoIn: number | null;
+      saldoOut: number | null;
+      error: string | null;
+    }> = [];
+
+    await Promise.all(
+      datesToCheck.map(async (date) => {
+        try {
+          const result = await this.kb.getDoc1C({
+            baseUrl: bank.apiBaseUrl!,
+            login,
+            password,
+            branch: account.branch,
+            account: account.accountNo,
+            date,
+            useProxy: cred.useProxy === true,
+          });
+          dayResults.push({
+            date,
+            items: result?.content || [],
+            saldoIn: result?.saldo_in ?? null,
+            saldoOut: result?.saldo_out ?? null,
+            error: null,
+          });
+        } catch (e: any) {
+          dayResults.push({
+            date,
+            items: [],
+            saldoIn: null,
+            saldoOut: null,
+            error: e?.message || 'xato',
+          });
+        }
+      }),
+    );
+    // Asl ddate birinchi tursin
+    dayResults.sort((a, b) => (a.date === parsed.ddate ? -1 : b.date === parsed.ddate ? 1 : 0));
+
+    // ─── Har bir kunda match topish ───
+    let foundItem: KbDoc1CItem | null = null;
+    let foundOnDate: string | null = null;
+    let matchedBy: string | null = null;
+    for (const day of dayResults) {
+      for (const it of day.items) {
+        const mb = this.matchItem(it, parsed);
+        if (mb) {
+          foundItem = it;
+          foundOnDate = day.date;
+          matchedBy = mb;
+          break;
         }
       }
-    } catch (e: any) {
-      docDetailsError = `APILogin xato: ${e?.message || 'noma\'lum'}`;
+      if (foundItem) break;
     }
 
-    // Mos yozuvni topish — avval general_id bo'yicha, keyin num bo'yicha
-    const matchByGeneralId = items.find((it) => it.general_id === parsed.generalId);
-    const matchByNum = matchByGeneralId
-      ? null
-      : items.find(
-          (it) => String(it.num) === parsed.num && it.ddate === parsed.ddate,
-        );
-    const matchByAmount = matchByGeneralId || matchByNum
-      ? null
-      : items.find(
-          (it) =>
-            String(it.amount) === parsed.amountTiyin &&
-            it.acc_ct === parsed.accCt &&
-            it.acc_dt === parsed.accDt,
-        );
+    // ─── Asl kun (ddate) statistikasi ───
+    const mainDay = dayResults.find((d) => d.date === parsed.ddate);
 
-    const found = matchByGeneralId || matchByNum || matchByAmount || null;
-    const matchedBy = matchByGeneralId
-      ? 'general_id'
-      : matchByNum
-      ? 'num'
-      : matchByAmount
-      ? 'amount+accounts'
-      : null;
+    // ─── Eng yaqin tranzaksiyalar (asl kun + atrofdagi kunlar birlashtirilgan) ───
+    const allItems = dayResults.flatMap((d) => d.items.map((it) => ({ ...it, _onDate: d.date })));
+    const targetTiyin = Number(parsed.amountTiyin);
+    const closest = this.closestByAmount(allItems as any, targetTiyin, 5);
+
+    // ─── Verdict ───
+    let verdict: 'found' | 'shifted' | 'cancelled' | 'no_data' | 'partial' = 'no_data';
+    let verdictDetail = '';
+    if (foundItem) {
+      if (foundOnDate === parsed.ddate) {
+        verdict = 'found';
+        verdictDetail = `Tranzaksiya bankda mavjud, ${matchedBy} bo'yicha topildi`;
+      } else {
+        verdict = 'shifted';
+        verdictDetail = `Tranzaksiya boshqa kunga ko'chirilgan: ${foundOnDate} (asl kun: ${parsed.ddate})`;
+      }
+    } else {
+      const totalItemsAcrossDays = dayResults.reduce((s, d) => s + d.items.length, 0);
+      const hasAnyData = dayResults.some((d) => !d.error);
+      if (!hasAnyData) {
+        verdict = 'no_data';
+        verdictDetail = "Bankka ulanib bo'lmadi yoki barcha kunlar bo'sh";
+      } else if (mainDay && !mainDay.error && totalItemsAcrossDays > 0) {
+        verdict = 'cancelled';
+        verdictDetail = `Tranzaksiya ${parsed.ddate} kuni va ±2 kun atrofida bank ro'yxatida yo'q — bekor qilingan yoki qaytarilgan bo'lishi mumkin (jami ${totalItemsAcrossDays} ta tranzaksiya tekshirildi)`;
+      } else {
+        verdict = 'partial';
+        verdictDetail = `Ayrim kunlardan ma'lumot kelmadi — to'liq xulosa qilish qiyin`;
+      }
+    }
+
+    // ─── getDocDetails (payment_state_name uchun) — 4 ta variant sinab ko'ramiz ───
+    const docDetails = await this.tryGetDocDetails({
+      baseUrl: bank.apiBaseUrl!,
+      login,
+      password,
+      useProxy: cred.useProxy === true,
+      branch: account.branch,
+      account: account.accountNo,
+      bank_day: parsed.ddate,
+      doc_id: parsed.generalId,
+      sign: parsed.sign,
+    });
 
     return {
       ok: true,
       id: rawId,
+      verdict,
+      verdictDetail,
       parsed: {
         generalId: parsed.generalId,
         num: parsed.num,
         ddate: parsed.ddate,
         accCt: parsed.accCt,
         accDt: parsed.accDt,
-        amountSom: Number(parsed.amountTiyin) / 100,
+        amountSom: targetTiyin / 100,
         direction: parsed.sign === '+' ? 'OUT (chiqim)' : 'IN (kirim)',
         ourAccount: parsed.ourAccount,
       },
@@ -223,19 +262,96 @@ export class InspectorService {
         branch: account.branch,
         bank: { code: account.bank?.code, name: account.bank?.name },
       },
-      bankError,
       bankResponse: {
-        totalItemsThatDay: items.length,
-        saldoInSom: saldoIn != null ? Number(saldoIn) / 100 : null,
-        saldoOutSom: saldoOut != null ? Number(saldoOut) / 100 : null,
+        mainDateTotalItems: mainDay?.items.length || 0,
+        mainDateError: mainDay?.error || null,
+        saldoInSom: mainDay?.saldoIn != null ? Number(mainDay.saldoIn) / 100 : null,
+        saldoOutSom: mainDay?.saldoOut != null ? Number(mainDay.saldoOut) / 100 : null,
         matchedBy,
-        item: found,
+        foundOnDate,
+        item: foundItem,
+        daysChecked: dayResults.map((d) => ({
+          date: d.date,
+          itemCount: d.items.length,
+          error: d.error,
+        })),
+        closest: closest.map((c: any) => ({
+          general_id: c.general_id,
+          num: c.num,
+          ddate: c.ddate,
+          onDate: c._onDate,
+          amountSom: Number(c.amount || 0) / 100,
+          amountDiffSom: c.diff / 100,
+          acc_dt: c.acc_dt,
+          acc_ct: c.acc_ct,
+          name_dt: c.name_dt,
+          name_ct: c.name_ct,
+          purpose: c.purpose,
+          dir: c.dir,
+          state: c.state,
+        })),
       },
-      docDetails: {
-        result: docDetails,
-        error: docDetailsError,
-        triedDocTypes: docDetailsTriedTypes,
-      },
+      docDetails,
     };
+  }
+
+  /**
+   * getDocDetails endpoint'ini turli variantlarda sinab ko'rish.
+   * Yo'riqnomada cyrillic mangled bo'lib chiqdi, shuning uchun bir nechta usul sinaymiz:
+   *   - GET + sid query
+   *   - GET + Basic auth (sidsiz)
+   *   - POST body
+   */
+  private async tryGetDocDetails(p: {
+    baseUrl: string;
+    login: string;
+    password: string;
+    useProxy: boolean;
+    branch: string;
+    account: string;
+    bank_day: string;
+    doc_id: string;
+    sign: '+' | '-';
+  }): Promise<{ result: any; error: string | null; triedVariants: string[] }> {
+    const triedVariants: string[] = [];
+    let lastError: string | null = null;
+
+    // sid olamiz
+    let sid: string | null = null;
+    try {
+      const loginRes = await this.kb.apiLogin({
+        baseUrl: p.baseUrl, login: p.login, password: p.password, useProxy: p.useProxy,
+      });
+      sid = loginRes?.sid || null;
+    } catch (e: any) {
+      lastError = `APILogin: ${e?.message || 'xato'}`;
+    }
+
+    // doc_type 0/1/2 — tartib sign asosida (chiqim=1, kirim=0, ichki=2)
+    const preferred = p.sign === '+' ? 1 : 0;
+    const docTypes = [preferred, preferred === 1 ? 0 : 1, 2];
+
+    if (sid) {
+      for (const dt of docTypes) {
+        const variant = `GET sid?dt=${dt}`;
+        triedVariants.push(variant);
+        try {
+          const r: any = await this.kb.getDocDetails({
+            baseUrl: p.baseUrl, login: p.login, password: p.password,
+            sid, branch: p.branch, account: p.account,
+            bank_day: p.bank_day, doc_id: p.doc_id, doc_type: dt,
+            useProxy: p.useProxy,
+          });
+          if (r?.result && (!r.error || r.error.code === 0)) {
+            return { result: { ...r.result, _variant: variant }, error: null, triedVariants };
+          }
+          if (r?.error?.message) lastError = `${variant}: ${r.error.message}`;
+        } catch (e: any) {
+          lastError = `${variant}: ${e?.message?.slice(0, 200) || 'xato'}`;
+        }
+      }
+    }
+
+    return { result: null, error: lastError, triedVariants };
   }
 }
