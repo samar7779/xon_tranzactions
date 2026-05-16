@@ -38,6 +38,24 @@ export class TransactionsController {
     return { ok: true, ids };
   }
 
+  @Post('export-inspect-results')
+  @ApiOperation({ summary: 'ID Inspector bulk natijalarini Excel sifatida yuklab olish' })
+  async exportInspectResults(
+    @Body() body: { results: Array<{ id: string; result?: any; error?: string }> },
+    @Res() res: Response,
+  ) {
+    if (!Array.isArray(body?.results) || body.results.length === 0) {
+      throw new BadRequestException("Natijalar bo'sh");
+    }
+    const { buffer, filename } = await this.inspectorSvc.exportResultsToXlsx(body.results);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Get()
   @ApiOperation({ summary: "Tranzaksiyalar ro'yxati (filter + pagination)" })
   list(@Query() q: ListTransactionsDto) {

@@ -1,18 +1,23 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   ScanLine, Search, X, Loader2, AlertTriangle, CheckCircle2,
-  Upload, ChevronDown, ChevronRight, FileSpreadsheet, Hash,
+  Upload, ChevronDown, ChevronRight, FileSpreadsheet, Hash, Download,
+  ChevronLeft, ChevronsLeft, ChevronsRight,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api';
+import { api, apiDownloadPost } from '@/lib/api';
 import { cn } from '@/lib/utils';
+
+const PAGE_SIZE = 15;
+type StatusFilter = 'all' | 'found' | 'cancelled' | 'shifted' | 'no_data' | 'partial' | 'error' | 'pending';
 
 type Mode = 'single' | 'bulk';
 
@@ -38,6 +43,9 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
   const [rows, setRows] = useState<BulkRow[]>([]);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [bulkProgress, setBulkProgress] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [page, setPage] = useState(1);
+  const [downloading, setDownloading] = useState(false);
 
   const mut = useMutation({
     mutationFn: (rawId: string) => api.post<any>('/transactions/inspect-id', { id: rawId }, { timeout: 30_000 }),
@@ -66,6 +74,58 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
       setId(''); setResult(null); setError(null);
       setRows([]); setBulkProgress(0); setBulkRunning(false);
       setMode('single');
+      setStatusFilter('all'); setPage(1);
+    }
+  }
+
+  // Status hisoblari (chip uchun)
+  const counts = useMemo(() => {
+    const c = { all: rows.length, found: 0, cancelled: 0, shifted: 0, no_data: 0, partial: 0, error: 0, pending: 0 };
+    for (const r of rows) {
+      if (r.status === 'error') c.error++;
+      else if (r.status === 'pending' || r.status === 'loading') c.pending++;
+      else {
+        const v = r.result?.verdict || 'no_data';
+        if (v === 'found') c.found++;
+        else if (v === 'cancelled') c.cancelled++;
+        else if (v === 'shifted') c.shifted++;
+        else if (v === 'partial') c.partial++;
+        else c.no_data++;
+      }
+    }
+    return c;
+  }, [rows]);
+
+  // Filterlangan qatorlar (asl indeks bilan)
+  const filteredRows = useMemo(() => {
+    return rows
+      .map((r, originalIndex) => ({ row: r, originalIndex }))
+      .filter(({ row }) => {
+        if (statusFilter === 'all') return true;
+        if (statusFilter === 'error') return row.status === 'error';
+        if (statusFilter === 'pending') return row.status === 'pending' || row.status === 'loading';
+        const v = row.result?.verdict;
+        return v === statusFilter;
+      });
+  }, [rows, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pagedRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  async function downloadResults() {
+    if (rows.length === 0 || downloading) return;
+    setDownloading(true);
+    try {
+      const payload = {
+        results: rows.map((r) => ({ id: r.id, result: r.result, error: r.error })),
+      };
+      await apiDownloadPost('/transactions/export-inspect-results', payload, 'id_tekshiruv.xlsx');
+      toast.success("Excel yuklab olindi");
+    } catch (e: any) {
+      toast.error(e?.message || 'Excel yuklash xato');
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -240,9 +300,9 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
               </Button>
               {rows.length > 0 && (
                 <>
-                  <div className="text-[12px] text-slate-600">
-                    {rows.length} ta ID topildi
-                    {bulkRunning && <span className="ml-2 text-indigo-600 font-semibold">· {bulkProgress}/{rows.length}</span>}
+                  <div className="text-[12px] text-slate-600 ml-1">
+                    <b className="text-slate-800">{rows.length}</b> ta ID
+                    {bulkRunning && <span className="ml-1.5 text-indigo-600 font-semibold">· {bulkProgress}/{rows.length}</span>}
                   </div>
                   <Button
                     onClick={runBulk}
@@ -255,9 +315,31 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
                       <><Search className="h-4 w-4" /> Tekshirishni boshlash</>
                     )}
                   </Button>
+                  <Button
+                    onClick={downloadResults}
+                    disabled={downloading || bulkRunning || counts.pending === rows.length}
+                    title="Excel'ga yuklab olish"
+                    className="h-10 w-10 rounded-xl p-0 bg-slate-100 hover:bg-slate-200 text-slate-700"
+                  >
+                    {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  </Button>
                 </>
               )}
             </div>
+
+            {/* Status filter chip'lar */}
+            {rows.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <StatusChip label="Hammasi" value="all" count={counts.all}        active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} />
+                <StatusChip label="Mavjud"   value="found"     count={counts.found}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="emerald" />
+                <StatusChip label="Bekor"    value="cancelled" count={counts.cancelled}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
+                <StatusChip label="Kun siljigan" value="shifted" count={counts.shifted}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
+                <StatusChip label="Qisman"   value="partial"   count={counts.partial}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
+                <StatusChip label="Yo'q"     value="no_data"   count={counts.no_data}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
+                <StatusChip label="Xato"     value="error"     count={counts.error}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
+                <StatusChip label="Kutilmoqda" value="pending" count={counts.pending}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
+              </div>
+            )}
 
             {error && (
               <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
@@ -274,11 +356,30 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
             )}
 
             {rows.length > 0 && (
-              <div className="rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100 overflow-hidden">
-                {rows.map((row, i) => (
-                  <BulkRowItem key={i} row={row} index={i} />
-                ))}
-              </div>
+              <>
+                <div className="rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100 overflow-hidden">
+                  {pagedRows.length === 0 ? (
+                    <div className="px-3 py-8 text-center text-[12px] text-slate-400">
+                      Bu status bo'yicha qator topilmadi
+                    </div>
+                  ) : (
+                    pagedRows.map(({ row, originalIndex }) => (
+                      <BulkRowItem key={originalIndex} row={row} index={originalIndex} />
+                    ))
+                  )}
+                </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-1 pt-2">
+                    <Pager
+                      page={safePage}
+                      total={totalPages}
+                      onChange={(p) => setPage(p)}
+                    />
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -337,6 +438,83 @@ function BulkRowItem({ row, index }: { row: BulkRow; index: number }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ═══ Status filter chip
+function StatusChip({
+  label, value, count, active, onClick, color = 'indigo',
+}: {
+  label: string;
+  value: StatusFilter;
+  count: number;
+  active: StatusFilter;
+  onClick: (v: StatusFilter) => void;
+  color?: 'indigo' | 'emerald' | 'rose' | 'amber' | 'slate';
+}) {
+  const isActive = active === value;
+  const colorMap: Record<string, { bg: string; text: string; ring: string }> = {
+    indigo:  { bg: 'bg-indigo-600',  text: 'text-white', ring: 'ring-indigo-300' },
+    emerald: { bg: 'bg-emerald-600', text: 'text-white', ring: 'ring-emerald-300' },
+    rose:    { bg: 'bg-rose-600',    text: 'text-white', ring: 'ring-rose-300' },
+    amber:   { bg: 'bg-amber-600',   text: 'text-white', ring: 'ring-amber-300' },
+    slate:   { bg: 'bg-slate-600',   text: 'text-white', ring: 'ring-slate-300' },
+  };
+  const c = colorMap[color];
+  const disabled = count === 0 && value !== 'all';
+  return (
+    <button
+      type="button"
+      onClick={() => !disabled && onClick(value)}
+      disabled={disabled}
+      className={cn(
+        'inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full text-[10.5px] font-semibold transition-all',
+        isActive
+          ? cn(c.bg, c.text, 'shadow-sm')
+          : disabled
+            ? 'bg-slate-50 text-slate-300 cursor-not-allowed'
+            : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+      )}
+    >
+      <span>{label}</span>
+      <span className={cn(
+        'inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[9px] font-bold',
+        isActive ? 'bg-white/25 text-white' : 'bg-white text-slate-700',
+      )}>{count}</span>
+    </button>
+  );
+}
+
+// ═══ Pagination
+function Pager({ page, total, onChange }: { page: number; total: number; onChange: (p: number) => void }) {
+  const btn = (p: number, label?: React.ReactNode, disabled = false) => (
+    <button
+      key={`${p}-${label || ''}`}
+      onClick={() => !disabled && onChange(p)}
+      disabled={disabled}
+      className={cn(
+        'inline-flex items-center justify-center h-7 min-w-[28px] px-1.5 rounded-md text-[11px] font-semibold transition-colors',
+        disabled && 'text-slate-300 cursor-not-allowed',
+        !disabled && p === page && 'bg-indigo-600 text-white',
+        !disabled && p !== page && 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+      )}
+    >
+      {label ?? p}
+    </button>
+  );
+  // Sahifa raqamlari — joriy atrofidan 2 ta
+  const pages: number[] = [];
+  for (let i = Math.max(1, page - 2); i <= Math.min(total, page + 2); i++) pages.push(i);
+  return (
+    <>
+      {btn(1, <ChevronsLeft className="h-3.5 w-3.5" />, page === 1)}
+      {btn(page - 1, <ChevronLeft className="h-3.5 w-3.5" />, page === 1)}
+      {pages[0] > 1 && <span className="text-slate-400 text-[10px]">…</span>}
+      {pages.map((p) => btn(p))}
+      {pages[pages.length - 1] < total && <span className="text-slate-400 text-[10px]">…</span>}
+      {btn(page + 1, <ChevronRight className="h-3.5 w-3.5" />, page === total)}
+      {btn(total, <ChevronsRight className="h-3.5 w-3.5" />, page === total)}
+    </>
   );
 }
 

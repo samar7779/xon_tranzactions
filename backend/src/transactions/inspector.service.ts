@@ -361,6 +361,84 @@ export class InspectorService {
   }
 
   /**
+   * Tekshiruv natijalarini Excel'ga eksport qilish.
+   * Frontend bulk inspector natijalarini POST qiladi.
+   */
+  async exportResultsToXlsx(results: Array<{ id: string; result?: any; error?: string }>) {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar — ID Inspector';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Tekshiruv natijalari');
+
+    const VERDICT_LABEL: Record<string, string> = {
+      found: 'Bankda mavjud',
+      shifted: "Boshqa kunga ko'chirilgan",
+      cancelled: "Bekor qilingan to'lov",
+      no_data: "Ma'lumot olinmadi",
+      partial: "To'liq emas",
+    };
+
+    ws.columns = [
+      { header: '№', key: 'idx', width: 5 },
+      { header: 'ID', key: 'id', width: 80 },
+      { header: 'Holati', key: 'verdict', width: 26 },
+      { header: 'Sana', key: 'date', width: 12 },
+      { header: 'Summa', key: 'amount', width: 18 },
+      { header: "Yo'nalish", key: 'direction', width: 12 },
+      { header: 'general_id', key: 'generalId', width: 14 },
+      { header: 'num', key: 'num', width: 12 },
+      { header: 'acc_dt (debit)', key: 'accDt', width: 24 },
+      { header: 'acc_ct (credit)', key: 'accCt', width: 24 },
+      { header: 'Xato (agar bo\'lsa)', key: 'errMsg', width: 40 },
+    ];
+    const head = ws.getRow(1);
+    head.font = { bold: true, size: 10 };
+    head.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    });
+    head.height = 22;
+
+    results.forEach((r, i) => {
+      const p = r.result?.parsed || {};
+      const verdict = r.result?.verdict || (r.error ? 'error' : '');
+      const verdictText = VERDICT_LABEL[verdict] || (r.error ? 'Xato' : '—');
+      const row = ws.addRow({
+        idx: i + 1,
+        id: r.id,
+        verdict: verdictText,
+        date: p.ddate || '',
+        amount: p.amountSom != null ? Number(p.amountSom) : '',
+        direction: p.direction || '',
+        generalId: p.generalId || '',
+        num: p.num || '',
+        accDt: p.accDt || '',
+        accCt: p.accCt || '',
+        errMsg: r.error || '',
+      });
+      row.font = { size: 9 };
+      row.getCell('id').font = { name: 'Consolas', size: 8 };
+      row.getCell('amount').numFmt = '#,##0';
+      // Verdict rangi
+      const vColors: Record<string, string> = {
+        found: 'FF047857',
+        shifted: 'FFB45309',
+        cancelled: 'FFBE123C',
+        no_data: 'FF64748B',
+        partial: 'FFB45309',
+        error: 'FFBE123C',
+      };
+      row.getCell('verdict').font = { size: 9, bold: true, color: { argb: vColors[verdict] || 'FF334155' } };
+    });
+
+    const raw = await wb.xlsx.writeBuffer();
+    const buffer: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+    const filename = `id_tekshiruv_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    return { buffer, filename };
+  }
+
+  /**
    * Excel faylning A ustunidan ID'larni o'qib chiqaramiz.
    * - Birinchi qatorda header bo'lsa (composite ID formatiga to'g'ri kelmasa) — o'tkazib yuboriladi
    * - Bo'sh qatorlar o'tkazib yuboriladi
