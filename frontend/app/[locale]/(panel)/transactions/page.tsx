@@ -658,33 +658,29 @@ export default function TransactionsPage() {
                           {/* Shartnoma */}
                           <td className="px-4 py-3">
                             {it.contractNumber ? (
-                              <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center gap-1">
-                                  <code
-                                    className={cn(
-                                      "inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1",
-                                      it.contractStatus === 'unverified'
-                                        ? 'text-rose-700 bg-rose-50 ring-rose-200'
-                                        : 'text-indigo-700 bg-indigo-50 ring-indigo-200',
-                                    )}
-                                    title={it.contractStatus === 'unverified' ? 'CRM\'da topilmadi (xato)' : it.contractCustomer || ''}
+                              it.contractStatus === 'unverified' ? (
+                                // XATO holati — faqat badge + lookup icon, raqamni yashiramiz
+                                <div className="flex items-center gap-1.5">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
+                                    <AlertCircle className="h-3 w-3" /> xato
+                                  </span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setLookupContract(it.contractNumber); }}
+                                    title="CRM'dan o'xshash shartnomalarni ko'rish"
+                                    className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-500 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
                                   >
-                                    {it.contractNumber}
-                                  </code>
-                                  {it.contractStatus === 'unverified' && (
-                                    <button
-                                      onClick={(e) => { e.stopPropagation(); setLookupContract(it.contractNumber); }}
-                                      title="CRM'dan o'xshash shartnomalarni ko'rish"
-                                      className="inline-flex items-center justify-center w-5 h-5 rounded text-rose-500 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
-                                    >
-                                      <Search className="h-3 w-3" />
-                                    </button>
-                                  )}
+                                    <Search className="h-3 w-3" />
+                                  </button>
                                 </div>
-                                {it.contractStatus === 'unverified' && (
-                                  <span className="text-[9px] text-rose-600 font-semibold uppercase tracking-wider">xato</span>
-                                )}
-                              </div>
+                              ) : (
+                                // Verified — shartnoma raqami ko'rinadi
+                                <code
+                                  className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 bg-indigo-50 ring-indigo-200"
+                                  title={it.contractCustomer || ''}
+                                >
+                                  {it.contractNumber}
+                                </code>
+                              )
                             ) : (
                               <span className="text-[10px] text-slate-300">—</span>
                             )}
@@ -1768,23 +1764,36 @@ function CopyBlock({ value }: { value: string }) {
 
 // ═══ SHARTNOMA LOOKUP — xato shartnoma uchun CRM'dan o'xshashlarni ko'rish (info only)
 function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: string; onClose: () => void }) {
-  // Prefix bilan qidirish — 4-6 belgi yetadi
-  const prefix = contractNumber.slice(0, Math.max(4, contractNumber.length - 4));
-  const [searchTerm, setSearchTerm] = useState(prefix);
-  const [debouncedQ, setDebouncedQ] = useState(prefix);
+  // Avtomatik qidirish — qisqartirilgan prefiks bilan (oxirgi 3 ta belgini tashlaymiz)
+  // Misol: "2490MSOP26EH" → prefix "2490MSOP" (8 belgi)
+  // Topilmasa, qisqaroq prefix bilan retry
+  const tryPrefixes = useMemo(() => {
+    const c = contractNumber.trim();
+    const result: string[] = [];
+    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 8))); // birinchi 8
+    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 6))); // birinchi 6
+    if (c.length >= 4) result.push(c.slice(0, 4));                       // birinchi 4
+    return [...new Set(result)]; // dublikatlarni olib tashlash
+  }, [contractNumber]);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQ(searchTerm.trim()), 300);
-    return () => clearTimeout(t);
-  }, [searchTerm]);
+  // Birinchi prefix bilan qidiramiz, agar 0 ta topilsa keyingisini
+  const [currentPrefixIndex, setCurrentPrefixIndex] = useState(0);
+  const currentPrefix = tryPrefixes[currentPrefixIndex] || '';
 
   const searchQuery = useQuery({
-    queryKey: ['crm-lookup', debouncedQ],
-    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=20`),
-    enabled: debouncedQ.length >= 3,
+    queryKey: ['crm-lookup', currentPrefix],
+    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(currentPrefix)}&perPage=20`),
+    enabled: currentPrefix.length >= 3,
     staleTime: 60_000,
   });
   const items = searchQuery.data?.items || [];
+
+  // Agar joriy prefix bilan 0 ta topilsa, qisqaroq prefix bilan urinish
+  useEffect(() => {
+    if (!searchQuery.isFetching && items.length === 0 && currentPrefixIndex < tryPrefixes.length - 1) {
+      setCurrentPrefixIndex((i) => i + 1);
+    }
+  }, [searchQuery.isFetching, items.length, currentPrefixIndex, tryPrefixes.length]);
 
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -1794,7 +1803,7 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
             <Search className="h-4 w-4 text-indigo-600" /> O'xshash shartnomalar
           </DialogTitle>
           <DialogDescription>
-            CRM'da topilmagan shartnoma uchun o'xshash variantlar (faqat malumot uchun)
+            CRM'da topilmagan shartnoma uchun o'xshash variantlar (faqat ma'lumot uchun)
           </DialogDescription>
         </DialogHeader>
 
@@ -1812,29 +1821,16 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
             </div>
           </div>
 
-          {/* CRM search */}
+          {/* CRM natijalari — search inputsiz, avto-yuklanadi */}
           <div>
-            <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Qidiruvni tahrirlang (3+ belgi)"
-                className="pl-9 font-mono"
-              />
-              {searchQuery.isFetching && debouncedQ.length >= 3 && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 animate-spin" />
-              )}
+            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600 mb-1.5 flex items-center justify-between">
+              <span>O'xshash shartnomalar (prefix: <code className="font-mono text-indigo-700">{currentPrefix}</code>)</span>
+              {searchQuery.isFetching && <Loader2 className="h-3 w-3 text-indigo-500 animate-spin" />}
             </div>
-            <div className="max-h-[300px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
-              {debouncedQ.length < 3 && (
-                <div className="px-4 py-6 text-center text-[11px] text-slate-400 italic">
-                  Qidirish uchun kamida 3 belgi yozing
-                </div>
-              )}
-              {debouncedQ.length >= 3 && !searchQuery.isFetching && items.length === 0 && (
+            <div className="max-h-[320px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+              {!searchQuery.isFetching && items.length === 0 && currentPrefixIndex >= tryPrefixes.length - 1 && (
                 <div className="px-4 py-6 text-center text-[11px] text-rose-600">
-                  O'xshash shartnoma topilmadi
+                  Hech qanday o'xshash shartnoma topilmadi
                 </div>
               )}
               {items.map((it: any) => {
@@ -1844,28 +1840,11 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
                   || it.client?.name
                   || it.object_name
                   || null;
-                const exactMatch = String(it.contract || '').toUpperCase() === contractNumber.toUpperCase();
                 return (
-                  <div
-                    key={it.contract || it.id}
-                    className={cn(
-                      'px-3 py-2',
-                      exactMatch ? 'bg-emerald-50' : 'hover:bg-slate-50',
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <code className={cn(
-                        'font-mono text-[12px] font-bold',
-                        exactMatch ? 'text-emerald-700' : 'text-indigo-700',
-                      )}>
-                        {it.contract}
-                      </code>
-                      {exactMatch && (
-                        <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider">
-                          ✓ aniq mos
-                        </span>
-                      )}
-                    </div>
+                  <div key={it.contract || it.id} className="px-3 py-2 hover:bg-slate-50">
+                    <code className="font-mono text-[12px] font-bold text-indigo-700">
+                      {it.contract}
+                    </code>
                     <div className="text-[11px] text-slate-700 mt-0.5 font-medium">
                       {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
                     </div>
@@ -1875,7 +1854,7 @@ function ContractLookupDialog({ contractNumber, onClose }: { contractNumber: str
             </div>
             {items.length > 0 && (
               <div className="text-[10px] text-slate-500 mt-2 text-center italic">
-                Foydalanuvchi mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalanishi mumkin
+                Mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalanishi mumkin
               </div>
             )}
           </div>
