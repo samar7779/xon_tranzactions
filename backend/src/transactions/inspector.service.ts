@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
@@ -353,5 +354,35 @@ export class InspectorService {
     }
 
     return { result: null, error: lastError, triedVariants };
+  }
+
+  /**
+   * Excel faylning A ustunidan ID'larni o'qib chiqaramiz.
+   * - Birinchi qatorda header bo'lsa (composite ID formatiga to'g'ri kelmasa) — o'tkazib yuboriladi
+   * - Bo'sh qatorlar o'tkazib yuboriladi
+   * - IP_ prefiks va trim qo'llaniladi
+   */
+  async parseIdsFromExcel(buffer: Buffer): Promise<string[]> {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new BadRequestException("Excel bo'sh");
+
+    const looksLikeId = (s: string) => {
+      const clean = s.startsWith('IP_') ? s.slice(3) : s;
+      return clean.split('_').length >= 7;
+    };
+
+    const ids: string[] = [];
+    ws.eachRow((row, rowNumber) => {
+      const v = row.getCell(1).value;
+      if (v == null) return;
+      const s = String(v).trim();
+      if (!s) return;
+      // Birinchi qator header bo'lishi mumkin — agar ID formatiga o'xshamasa, skip
+      if (rowNumber === 1 && !looksLikeId(s)) return;
+      ids.push(s);
+    });
+    return ids;
   }
 }

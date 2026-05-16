@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
+import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -608,6 +609,9 @@ export default function TransactionsPage() {
               >
                 ID
               </button>
+
+              {/* Bank ID inspector (composite ID → bankdan tekshirish) */}
+              <IdInspectorDialog iconOnly />
 
               {/* Filter mode toggle — faqat icon */}
               <button
