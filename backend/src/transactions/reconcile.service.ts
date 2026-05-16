@@ -43,10 +43,9 @@ export class ReconcileService {
     }
     if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
 
-    const from = new Date(dateFrom);
-    const to = new Date(dateTo);
-    from.setHours(0, 0, 0, 0);
-    to.setHours(0, 0, 0, 0);
+    // Sana stringlari (YYYY-MM-DD) Tashkent kunlari sifatida talqin qilinadi
+    const from = new Date(`${dateFrom}T00:00:00+05:00`);
+    const to   = new Date(`${dateTo}T00:00:00+05:00`);
     const days = Math.floor((to.getTime() - from.getTime()) / DAY_MS) + 1;
     if (days < 1) throw new BadRequestException("dateFrom dateTo dan keyin bo'lmasligi kerak");
     if (days > MAX_DAYS) throw new BadRequestException(`Davr ${MAX_DAYS} kundan oshmasligi kerak`);
@@ -100,9 +99,8 @@ export class ReconcileService {
     const bankCredit = totalCreditTiyin / 100;  // kirim oboroti
 
     // ── Bizning DB: shu hisob, shu oraliqdagi tranzaksiya summalari ──
-    const start = new Date(from);
-    const end = new Date(to);
-    end.setHours(23, 59, 59, 999);
+    const start = new Date(`${dateFrom}T00:00:00+05:00`);
+    const end   = new Date(`${dateTo}T23:59:59.999+05:00`);
     const grouped = await this.prisma.transaction.groupBy({
       by: ['direction'],
       where: { accountId, txnDate: { gte: start, lte: end } },
