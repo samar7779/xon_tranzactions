@@ -592,11 +592,18 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* ID orqali qidirish — alohida tugma (ID matn bilan) */}
+              {/* ID orqali qidirish — gradient tugma (ID matn bilan) */}
               <button
                 onClick={() => setIdSearchOpen(true)}
                 title={t('toolIdSearch')}
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-700 ring-1 ring-slate-200 hover:ring-violet-300 transition-all font-bold text-[12px] tracking-wider"
+                className={cn(
+                  'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
+                  'bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white',
+                  'shadow-sm hover:shadow-lg hover:shadow-fuchsia-500/40',
+                  'transition-all duration-200 hover:scale-105 active:scale-95',
+                  'ring-1 ring-fuchsia-400/30',
+                  'font-black text-[11px] tracking-widest',
+                )}
               >
                 ID
               </button>
