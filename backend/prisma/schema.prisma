@@ -464,3 +464,64 @@ enum PaymentSource {
   AUTO           // Avtomatik (INN orqali)
   MANUAL         // Admin qo'lda biriktirgan
 }
+
+// ─────────────────────────────────────────────────────────────────
+// COUNTERPARTY — kontragentlar registri (DIDOX'dan boyitiladi)
+// INN — unique. Foydalanuvchi INN + Name kiritadi, qolgan barcha
+// maydonlar DIDOX /v1/ihamkor/companies/{inn} endpoint'idan keladi.
+// Name foydalanuvchi kiritgandek qoladi — refresh paytida tegilmaydi.
+// ─────────────────────────────────────────────────────────────────
+model Counterparty {
+  id                String    @id @default(cuid())
+  inn               String    @unique @db.VarChar(14)        // 9 yoki 14 raqam (INN/PINFL)
+  name              String    @db.VarChar(255)               // foydalanuvchi kiritgan — refresh'da o'zgarmaydi
+
+  // — DIDOX briefData'dan keladigan maydonlar (cron yangilaydi) —
+  fullName          String?   @map("full_name") @db.VarChar(255)
+  director          String?   @db.VarChar(255)
+  directorPinfl     String?   @map("director_pinfl") @db.VarChar(20)
+  accountant        String?   @db.VarChar(255)               // glav. bukh — invoice'dan
+
+  phone             String?   @db.VarChar(50)
+  email             String?   @db.VarChar(190)
+  address           String?   @db.Text                       // billingAddress
+
+  vatNumber         String?   @map("vat_number") @db.VarChar(20)         // Рег. код НДС
+  vatStatus         String?   @map("vat_status") @db.VarChar(100)        // "Faol/Nofaol" matn
+  vatStatusCode     Int?      @map("vat_status_code")                    // 10/20/21/22/30/50/60
+  taxMode           String?   @map("tax_mode") @db.VarChar(50)
+
+  opf               String?   @db.VarChar(100)
+  oked              String?   @db.VarChar(255)
+  companyType       String?   @map("company_type") @db.VarChar(100)
+  businessType      String?   @map("business_type") @db.VarChar(100)
+  registrationDate  DateTime? @map("registration_date") @db.Date
+  registrationNumber String?  @map("registration_number") @db.VarChar(50)
+
+  // — Reyting (DIDOX sustainabilityRating, Chamber criteriaAll bilan bir xil) —
+  rating            Int?
+  ratingType        String?   @map("rating_type") @db.VarChar(20)
+  ratingTitle       String?   @map("rating_title") @db.VarChar(100)
+
+  // — JSON maydonlar —
+  bankAccounts      Json?     @map("bank_accounts")          // [{account, mfo, bankName, lastSeen}, ...]
+  founders          Json?                                     // [{fullName, share, ...}, ...]
+  rawDidoxBrief     Json?     @map("raw_didox_brief")        // butun briefData (debug uchun)
+
+  // — Tizim metadata —
+  addedBy           String    @map("added_by") @db.VarChar(50)   // AdminUser.id
+  addedAt           DateTime  @default(now()) @map("added_at")
+  lastFetchedAt     DateTime? @map("last_fetched_at")            // oxirgi DIDOX so'rovi
+  lastFetchError    String?   @map("last_fetch_error") @db.Text  // agar DIDOX javob bermasa
+  isActive          Boolean   @default(true) @map("is_active")
+  notes             String?   @db.Text
+
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@index([name])
+  @@index([rating])
+  @@index([addedBy])
+  @@index([lastFetchedAt])
+  @@map("counterparties")
+}

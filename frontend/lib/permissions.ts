@@ -25,6 +25,8 @@ export const PERMS = {
   PAYMENTS_VIEW: 'payments:view',
   PAYMENTS_MANAGE: 'payments:manage',
   CRM_VIEW: 'crm:view',
+  COUNTERPARTIES_VIEW: 'counterparties:view',
+  COUNTERPARTIES_MANAGE: 'counterparties:manage',
 } as const;
 
 export type Permission = (typeof PERMS)[keyof typeof PERMS];
