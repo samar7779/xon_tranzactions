@@ -1048,7 +1048,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onOpenChange(false); }}>
-      <DialogContent className={progress ? 'max-w-lg' : 'max-w-md'}>
+      <DialogContent className={progress ? 'max-w-2xl' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <History className="h-4 w-4 text-indigo-600" /> Eski tarixni yuklash
@@ -1113,27 +1113,42 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                   logs.map((l: any) => {
                     const running = l.status === 'RUNNING';
                     const failed = l.status === 'FAILED';
+                    // source: "{accountNo} · {ownerName} · backfill {date1}–{date2}"
+                    const label = accLabel(l.source);
+                    const [accountNo, ...rest] = label.split(' · ');
+                    const ownerName = rest.join(' · ');
                     return (
-                      <div key={l.id} className="px-3 py-2 flex items-center gap-2">
+                      <div key={l.id} className="px-3 py-2 flex items-start gap-2">
                         {running ? (
-                          <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin shrink-0" />
+                          <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin shrink-0 mt-0.5" />
                         ) : failed ? (
-                          <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 grid place-items-center text-white text-[8px]">✕</span>
+                          <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 grid place-items-center text-white text-[8px] mt-0.5">✕</span>
                         ) : (
-                          <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                          <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
                         )}
-                        <span className="font-mono text-[11px] text-slate-700 truncate flex-1" title={accLabel(l.source)}>
-                          {accLabel(l.source)}
-                        </span>
-                        {l.errorMessage ? (
-                          <span className="text-[10px] text-rose-600 truncate max-w-[120px]" title={l.errorMessage}>
-                            {l.errorMessage}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
-                            {l.fetched ?? 0} olindi · <span className="text-emerald-600 font-semibold">{l.saved ?? 0} yangi</span>
-                          </span>
-                        )}
+                        <div className="flex-1 min-w-0">
+                          {/* 1-qator: hisob raqami + statistika (o'ngda) */}
+                          <div className="flex items-baseline justify-between gap-2">
+                            <span className="font-mono text-[11px] font-bold text-slate-800 truncate" title={accountNo}>
+                              {accountNo}
+                            </span>
+                            {l.errorMessage ? (
+                              <span className="text-[10px] text-rose-600 truncate max-w-[180px] shrink-0" title={l.errorMessage}>
+                                {l.errorMessage}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
+                                {l.fetched ?? 0} olindi · <span className="text-emerald-600 font-semibold">{l.saved ?? 0} yangi</span>
+                              </span>
+                            )}
+                          </div>
+                          {/* 2-qator: hisob egasi (mavjud bo'lsa) */}
+                          {ownerName && (
+                            <div className="text-[10px] text-slate-500 truncate mt-0.5" title={ownerName}>
+                              {ownerName}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   })
