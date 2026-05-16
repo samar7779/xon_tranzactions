@@ -7,6 +7,7 @@ import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.clien
 import { KbDoc1CItem } from '../integrations/kapitalbank/types';
 import { PaymentsService } from '../payments/payments.service';
 import { CategorizationService } from '../categorization/categorization.service';
+import { SettingsService } from './settings.service';
 import { TxnDirection, TxnStatus, TxnType, Prisma } from '@prisma/client';
 import { format, parse, subDays } from 'date-fns';
 
@@ -32,9 +33,41 @@ export class SyncService {
     private kb: KapitalbankClient,
     private payments: PaymentsService,
     private categorization: CategorizationService,
+    private settings: SettingsService,
     config: ConfigService,
   ) {
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
+  }
+
+  /**
+   * "dd.MM.yyyy" → Date. Noto'g'ri bo'lsa null.
+   */
+  private parseDdate(s: string): Date | null {
+    const d = parse(s, 'dd.MM.yyyy', new Date());
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  /**
+   * dateList'dan syncMinDate'dan oldingilarni olib tashlaydi.
+   * Qaytaradi: { kept: kept dates, clampedCount: nechta o'tkazib yuborilgan }
+   */
+  private clampDatesAgainstMin(dateList: string[], syncMinDate: Date | null): {
+    kept: string[];
+    clampedCount: number;
+  } {
+    if (!syncMinDate) return { kept: dateList, clampedCount: 0 };
+    const minTime = syncMinDate.getTime();
+    const kept: string[] = [];
+    let clampedCount = 0;
+    for (const ds of dateList) {
+      const d = this.parseDdate(ds);
+      if (d && d.getTime() <= minTime) {
+        clampedCount++;
+      } else {
+        kept.push(ds);
+      }
+    }
+    return { kept, clampedCount };
   }
 
   /**
@@ -123,7 +156,13 @@ export class SyncService {
     accountId?: string;
     dateFrom: string;
     dateTo: string;
-  }): Promise<{ accounts: { id: string; credentialId: string }[]; dates: string[] }> {
+  }): Promise<{
+    accounts: { id: string; credentialId: string }[];
+    dates: string[];
+    syncMinDate: Date | null;
+    originalFromCount: number;
+    clampedCount: number;
+  }> {
     let accounts: { id: string; credentialId: string }[] = [];
     if (opts.scope === 'account' && opts.accountId) {
       // Bitta hisob — foydalanuvchi aniq tanlagan, syncEnabled tekshirilmaydi
@@ -148,11 +187,20 @@ export class SyncService {
 
     const from = new Date(opts.dateFrom);
     const to = new Date(opts.dateTo);
-    const dates: string[] = [];
+    const rawDates: string[] = [];
     for (let t = from.getTime(); t <= to.getTime(); t += 86_400_000) {
-      dates.push(format(new Date(t), 'dd.MM.yyyy'));
+      rawDates.push(format(new Date(t), 'dd.MM.yyyy'));
     }
-    return { accounts, dates };
+    // syncMinDate dan oldingilarni olib tashlash (Setting'dan)
+    const syncMinDate = await this.settings.getSyncMinDate();
+    const { kept, clampedCount } = this.clampDatesAgainstMin(rawDates, syncMinDate);
+    return {
+      accounts,
+      dates: kept,
+      syncMinDate,
+      originalFromCount: rawDates.length,
+      clampedCount,
+    };
   }
 
   /**
@@ -191,11 +239,19 @@ export class SyncService {
 
     const isBackfill = !!opts?.dates?.length;
     // Sana ro'yxati — backfill bo'lsa berilgan sanalar, aks holda oxirgi daysBack kun
-    const dateList: string[] = isBackfill
+    const rawDates: string[] = isBackfill
       ? opts!.dates!
       : Array.from({ length: Math.max(1, this.daysBack) }, (_, i) =>
           format(subDays(new Date(), i), 'dd.MM.yyyy'),
         );
+    // syncMinDate'dan oldingi sanalarni olib tashlaymiz (himoya)
+    const syncMinDate = await this.settings.getSyncMinDate();
+    const { kept: dateList } = this.clampDatesAgainstMin(rawDates, syncMinDate);
+    if (dateList.length === 0) {
+      // Hamma sanalar syncMinDate'dan oldin — sync qilish kerak emas
+      this.logger.warn(`Sync skip (${acc.accountNo}): barcha sanalar syncMinDate dan oldin`);
+      return { ok: true, fetched: 0, saved: 0, errors: 0, skipped: true };
+    }
 
     // Source'da hisob raqami ko'rsatiladi — qaysi hisobda xato bo'lganini aniqlash uchun
     const log = await this.prisma.syncLog.create({

@@ -986,9 +986,18 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     }),
     onSuccess: (r: any) => {
       if (r?.ok && r?.started) {
+        // Sync chegarasi tufayli ba'zi kunlar o'tkazib yuborilgan bo'lsa — ogohlantirish
+        if (r?.warning) {
+          toast.warning(r.warning, { duration: 8000 });
+        }
         setProgress({ total: r.accounts, days: r.days, startedAt: r.startedAt });
         prevDoneRef.current = 0;
         setLastAdvanceAt(Date.now());
+      } else if (r?.clampedAll && r?.syncMinDate) {
+        toast.error(
+          `Tanlangan oraliq sync chegarasidan (${r.syncMinDate}) butunlay oldin — Sync sozlamalaridan chegarani o'zgartiring`,
+          { duration: 10000 },
+        );
       } else {
         toast.error(r?.error || 'Xato');
       }
