@@ -518,35 +518,7 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <FilterChip
-                active={direction !== 'all'}
-                label={direction === 'IN' ? t('dirIn') : direction === 'OUT' ? t('dirOut') : t('directionAll')}
-                value={direction}
-                onChange={(v) => { setDirection(v); setPage(1); }}
-                options={[
-                  { value: 'all', label: tc('all') },
-                  { value: 'IN', label: t('dirIn') },
-                  { value: 'OUT', label: t('dirOut') },
-                ]}
-              />
-
-              <FilterChip
-                active={bankId !== 'all'}
-                label={bankId === 'all' ? t('bankAll') : (banks?.items.find((b: any) => b.id === bankId)?.name || t('bankAll'))}
-                value={bankId}
-                onChange={(v) => { setBankId(v); setPage(1); }}
-                options={[
-                  { value: 'all', label: tc('all') },
-                  // Aktiv banklar boshida
-                  ...[...(banks?.items || [])]
-                    .sort((a: any, b: any) => {
-                      if (a.isActive && !b.isActive) return -1;
-                      if (!a.isActive && b.isActive) return 1;
-                      return a.name.localeCompare(b.name);
-                    })
-                    .map((b: any) => ({ value: b.id, label: b.isActive ? `● ${b.name}` : b.name })),
-                ]}
-              />
+              {/* direction va bankId FilterChip'lari olib tashlandi — column filter'da bor */}
 
               {/* Filter mode toggle — har ustun header'iga filtr icon qo'shadi (Google Sheets stilida) */}
               <button
@@ -614,12 +586,6 @@ export default function TransactionsPage() {
               <div className="p-6 space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
               </div>
-            ) : (filtered?.length ?? 0) === 0 ? (
-              <EmptyState
-                icon={Wallet}
-                title={t('notFoundTitle')}
-                description={q || activeFilters > 0 ? t('noDataChangeFilters') : t('noDataYet')}
-              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -637,7 +603,17 @@ export default function TransactionsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filtered!.map((it: any) => {
+                    {(filtered?.length ?? 0) === 0 ? (
+                      <tr>
+                        <td colSpan={9} className="px-6 py-12 text-center">
+                          <div className="flex flex-col items-center gap-2 text-slate-400">
+                            <Wallet className="h-8 w-8" />
+                            <div className="text-[13px] font-semibold text-slate-600">{t('notFoundTitle')}</div>
+                            <div className="text-[11px]">{q || activeFilters > 0 ? t('noDataChangeFilters') : t('noDataYet')}</div>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : filtered!.map((it: any) => {
                       const counterparty = it.direction === 'IN'
                         ? { name: it.fromName || '—', meta: it.fromInn || '' }
                         : { name: it.toName || '—', meta: it.toAccount || '' };
