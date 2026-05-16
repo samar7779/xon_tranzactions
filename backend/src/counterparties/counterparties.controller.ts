@@ -93,7 +93,14 @@ export class CounterpartiesController {
   @Post('refresh-all')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
   @ApiOperation({ summary: 'Hammasini qo\'lda yangilash (cron\'ga teng)' })
-  refreshAll() {
-    return this.svc.refreshAll();
+  refreshAll(@CurrentUser('id') userId: string) {
+    return this.svc.refreshAll(userId);
+  }
+
+  @Get('refresh-all/status')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'refreshAll holati — ishlamoqdami, qachondan beri, qancha bajarildi' })
+  refreshAllStatus() {
+    return this.svc.getRefreshAllStatus();
   }
 }
