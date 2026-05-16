@@ -100,6 +100,42 @@ export async function apiDownload(path: string, fallbackName = 'download'): Prom
 }
 
 /**
+ * POST + faylni yuklab olish (Excel). JSON body yuboriladi, javob blob.
+ */
+export async function apiDownloadPost(path: string, body: any, fallbackName = 'download'): Promise<void> {
+  const token = getToken();
+  const resp = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    const data = text ? safeJson(text) : null;
+    const err: ApiError = new Error(data?.message || data?.error?.message || resp.statusText);
+    err.status = resp.status;
+    err.data = data;
+    throw err;
+  }
+  const blob = await resp.blob();
+  let fname = fallbackName;
+  const cd = resp.headers.get('Content-Disposition');
+  const m = cd?.match(/filename="?([^"]+)"?/);
+  if (m) fname = m[1];
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fname;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Multipart FormData yuborish — Content-Type'ni browser o'zi belgilaydi (boundary bilan).
  * Excel/CSV/fayl upload uchun.
  */
