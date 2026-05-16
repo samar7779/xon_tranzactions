@@ -74,6 +74,7 @@ export default function CounterpartiesPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
   const [detailRow, setDetailRow] = useState<Counterparty | null>(null);
+  const [editRow, setEditRow] = useState<Counterparty | null>(null);
   const [refreshingInn, setRefreshingInn] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,6 +135,16 @@ export default function CounterpartiesPage() {
   const deleteMut = useMutation({
     mutationFn: (inn: string) => api.delete(`/counterparties/${inn}`),
     onSuccess: () => { toast.success(t('deletedOk')); qc.invalidateQueries({ queryKey: ['counterparties'] }); },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+  });
+
+  const editMut = useMutation({
+    mutationFn: (body: { inn: string; data: any }) => api.patch(`/counterparties/${body.inn}`, body.data),
+    onSuccess: () => {
+      toast.success(t('refreshOk'));
+      setEditRow(null);
+      qc.invalidateQueries({ queryKey: ['counterparties'] });
+    },
     onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
@@ -402,6 +413,11 @@ export default function CounterpartiesPage() {
                                   </DropdownMenuItem>
                                 )}
                                 {canManage && (
+                                  <DropdownMenuItem onClick={() => setEditRow(it)}>
+                                    <FileText className="h-4 w-4 mr-2" /> {t('edit')}
+                                  </DropdownMenuItem>
+                                )}
+                                {canManage && (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem
@@ -570,6 +586,22 @@ export default function CounterpartiesPage() {
           {detailRow && <CounterpartyDetail row={detailRow} t={t} />}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Edit dialog (qo'lda tahrirlash) ─── */}
+      <Dialog open={!!editRow} onOpenChange={(o) => { if (!editMut.isPending && !o) setEditRow(null); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          {editRow && (
+            <CounterpartyEditForm
+              row={editRow}
+              t={t}
+              tc={tc}
+              busy={editMut.isPending}
+              onCancel={() => setEditRow(null)}
+              onSave={(data) => editMut.mutate({ inn: editRow.inn, data })}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -690,6 +722,163 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
           {t('lastFetched')}: <b className="text-slate-700">{row.lastFetchedAt ? formatDateTime(row.lastFetchedAt) : '—'}</b>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CounterpartyEditForm({
+  row, t, tc, busy, onCancel, onSave,
+}: {
+  row: Counterparty;
+  t: any;
+  tc: any;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (data: any) => void;
+}) {
+  const [form, setForm] = useState({
+    name: row.name || '',
+    fullName: row.fullName || '',
+    director: row.director || '',
+    accountant: row.accountant || '',
+    phone: row.phone || '',
+    email: row.email || '',
+    address: row.address || '',
+    vatNumber: row.vatNumber || '',
+    vatStatus: row.vatStatus || '',
+    oked: row.oked || '',
+    rating: row.rating == null ? '' : String(row.rating),
+    notes: '',
+  });
+  const [accounts, setAccounts] = useState<Array<{ account: string; mfo: string }>>(
+    Array.isArray(row.bankAccounts) && row.bankAccounts.length > 0
+      ? (row.bankAccounts as any[]).map((b) => ({ account: b.account || '', mfo: b.mfo || '' }))
+      : [{ account: '', mfo: '' }],
+  );
+
+  function submit() {
+    const data: any = {
+      name: form.name.trim(),
+      fullName: form.fullName.trim() || null,
+      director: form.director.trim() || null,
+      accountant: form.accountant.trim() || null,
+      phone: form.phone.trim() || null,
+      email: form.email.trim() || null,
+      address: form.address.trim() || null,
+      vatNumber: form.vatNumber.trim() || null,
+      vatStatus: form.vatStatus.trim() || null,
+      oked: form.oked.trim() || null,
+      rating: form.rating === '' ? null : Number(form.rating),
+      bankAccounts: accounts.filter((a) => a.account.trim()).map((a) => ({
+        account: a.account.trim(), mfo: a.mfo.trim() || null,
+      })),
+    };
+    onSave(data);
+  }
+
+  return (
+    <div className="space-y-3">
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-indigo-600" />
+          {t('edit')} — {row.inn}
+        </DialogTitle>
+      </DialogHeader>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <EditField label={t('nameLabel') + ' *'} value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
+        <EditField label={t('fullName')} value={form.fullName} onChange={(v) => setForm({ ...form, fullName: v })} />
+        <EditField label={t('director')} value={form.director} onChange={(v) => setForm({ ...form, director: v })} />
+        <EditField label={t('accountant')} value={form.accountant} onChange={(v) => setForm({ ...form, accountant: v })} />
+        <EditField label={t('phone')} value={form.phone} onChange={(v) => setForm({ ...form, phone: v })} mono />
+        <EditField label={t('email')} value={form.email} onChange={(v) => setForm({ ...form, email: v })} />
+        <EditField label={t('vatNumber')} value={form.vatNumber} onChange={(v) => setForm({ ...form, vatNumber: v })} mono />
+        <EditField label={t('vatStatus')} value={form.vatStatus} onChange={(v) => setForm({ ...form, vatStatus: v })} />
+        <EditField label={t('oked')} value={form.oked} onChange={(v) => setForm({ ...form, oked: v })} fullWidth />
+        <EditField label={t('rating')} value={form.rating} onChange={(v) => setForm({ ...form, rating: v.replace(/\D/g, '') })} mono />
+        <EditField label={t('address')} value={form.address} onChange={(v) => setForm({ ...form, address: v })} fullWidth />
+      </div>
+
+      {/* Bank hisoblari */}
+      <div className="space-y-2 pt-2 border-t border-slate-100">
+        <div className="flex items-center justify-between">
+          <Label className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{t('bankAccounts')}</Label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-[11px] gap-1"
+            onClick={() => setAccounts([...accounts, { account: '', mfo: '' }])}
+          >
+            <Plus className="h-3 w-3" /> +
+          </Button>
+        </div>
+        {accounts.map((a, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <Input
+              placeholder="20208000…"
+              value={a.account}
+              onChange={(e) => {
+                const next = [...accounts]; next[i] = { ...next[i], account: e.target.value.replace(/\D/g, '').slice(0, 20) };
+                setAccounts(next);
+              }}
+              className="font-mono text-[12px] h-9 flex-1"
+            />
+            <Input
+              placeholder="MFO"
+              value={a.mfo}
+              onChange={(e) => {
+                const next = [...accounts]; next[i] = { ...next[i], mfo: e.target.value.replace(/\D/g, '').slice(0, 5) };
+                setAccounts(next);
+              }}
+              className="font-mono text-[12px] h-9 w-24"
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="h-9 w-9 p-0 text-rose-600"
+              onClick={() => setAccounts(accounts.filter((_, j) => j !== i))}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+        <Button variant="outline" onClick={onCancel} disabled={busy} className="flex-1">
+          {tc('cancel')}
+        </Button>
+        <Button
+          onClick={submit}
+          disabled={busy || !form.name.trim()}
+          className="flex-1 gap-2 bg-indigo-600 hover:bg-indigo-700"
+        >
+          {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('saving')}</> : <>{t('saveBtn')}</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EditField({
+  label, value, onChange, mono, fullWidth,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  mono?: boolean;
+  fullWidth?: boolean;
+}) {
+  return (
+    <div className={cn('space-y-1', fullWidth && 'md:col-span-2')}>
+      <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{label}</Label>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn('h-9 text-[13px]', mono && 'font-mono text-[12px]')}
+      />
     </div>
   );
 }
