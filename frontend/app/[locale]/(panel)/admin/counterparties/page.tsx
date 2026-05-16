@@ -609,10 +609,11 @@ export default function CounterpartiesPage() {
             {importResult && (
               <div className="space-y-3">
                 <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500">{t('importResult')}</div>
-                <div className="grid grid-cols-3 gap-2">
-                  <ImportStat label={t('added')} value={importResult.added} tone="emerald" />
-                  <ImportStat label={t('skipped')} value={importResult.skipped} tone="amber" />
-                  <ImportStat label={t('failed')} value={importResult.failed} tone="rose" />
+                <div className="grid grid-cols-4 gap-2">
+                  <ImportStat label="Qo'shildi" value={importResult.added || 0} tone="emerald" />
+                  <ImportStat label="Yangilandi" value={importResult.updated || 0} tone="blue" />
+                  <ImportStat label="O'tkazildi" value={importResult.skipped || 0} tone="amber" />
+                  <ImportStat label="Xato" value={importResult.failed || 0} tone="rose" />
                 </div>
                 <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100">
                   {(importResult.rows || []).map((r: any, i: number) => (
@@ -620,6 +621,7 @@ export default function CounterpartiesPage() {
                       <span className={cn(
                         'w-2 h-2 rounded-full shrink-0',
                         r.status === 'added' ? 'bg-emerald-500' :
+                        r.status === 'updated' ? 'bg-blue-500' :
                         r.status === 'skipped' ? 'bg-amber-500' : 'bg-rose-500',
                       )} />
                       <span className="font-mono font-bold">{r.inn}</span>
@@ -693,8 +695,9 @@ function KpiTile({
   );
 }
 
-function ImportStat({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' }) {
+function ImportStat({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
   const cls = tone === 'emerald' ? 'bg-emerald-50 ring-emerald-200 text-emerald-700'
+    : tone === 'blue' ? 'bg-blue-50 ring-blue-200 text-blue-700'
     : tone === 'amber' ? 'bg-amber-50 ring-amber-200 text-amber-700'
     : 'bg-rose-50 ring-rose-200 text-rose-700';
   return (
