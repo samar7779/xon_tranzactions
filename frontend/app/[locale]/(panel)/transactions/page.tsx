@@ -2150,19 +2150,32 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
   description: string | null;
   onClose: () => void;
 }) {
-  // Description'dan mijoz F.I.O. ajratish — "на имя XYZ" yoki tushgan F.I.O. paterni
+  // Description'dan mijoz F.I.O. ajratish — kengaytirilgan pattern'lar
   const extractedName = useMemo(() => {
     if (!description) return null;
-    // Russian: "на имя XYZ", "от XYZ", "на XYZ оглы/кызы"
-    // Uzbek: "XYZ oglu", "XYZ qizi"
     const patterns = [
-      /на\s+имя\s+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`]{4,80}?)(?:\s*,|\s+адрес|\s+от\s|\s+с\s|\s+за|$)/i,
-      /F\.I\.O\.[:\s]+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`]{4,80}?)(?:\s*,|\s+адрес|$)/i,
-      /([A-ZА-ЯЁ]{3,}\s+[A-ZА-ЯЁ]{3,}\s+(?:O[GʻG'`]LI|QIZI|ОГЛЫ|КЫЗЫ|УГЛИ|ЎҒЛИ|ҚИЗИ))/i,
+      // "на имя XYZ" (rus)
+      /на\s+имя\s+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`-]{4,80}?)(?:\s*,|\s+адрес|\s+от\s|\s+с\s|\s+за|\s+\d|$)/i,
+      // "F.I.O.: XYZ"
+      /F\.?I\.?O\.?\s*[:\s]+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`-]{4,80}?)(?:\s*,|\s+адрес|\s+\d|$)/i,
+      // "F¸I¸O: XYZ"
+      /Ф\.?\s*И\.?\s*О\.?\s*[:\s]+([A-ZА-ЯЁ][A-ZА-ЯЁ\s'`-]{4,80}?)(?:\s*,|\s+адрес|\s+\d|$)/i,
+      // Uzbek: XYZ O'G'LI/QIZI/УГЛИ/ҚИЗИ
+      /([A-ZА-ЯЁ]{3,}\s+[A-ZА-ЯЁ]{3,}(?:\s+[A-ZА-ЯЁ]{2,})?\s+(?:O[GʻG'`]LI|QIZI|ОГЛЫ|КЫЗЫ|УГЛИ|ЎҒЛИ|ҚИЗИ))/i,
+      // "от XYZ" — odam ismi keladi
+      /от\s+([A-ZА-ЯЁ]{3,}\s+[A-ZА-ЯЁ]{3,}(?:\s+[A-ZА-ЯЁ]{3,})?)/i,
+      // FAMILYA ISMI OTASI — 3 ta katta harfli so'z (oxirgi resort)
+      /\b([А-ЯЁ]{4,}\s+[А-ЯЁ]{3,}\s+[А-ЯЁ]{3,})/,
+      /\b([A-Z]{4,}\s+[A-Z]{3,}\s+[A-Z]{3,})/,
     ];
     for (const p of patterns) {
       const m = description.match(p);
-      if (m && m[1]) return m[1].trim().replace(/\s+/g, ' ');
+      if (m && m[1]) {
+        const cleaned = m[1].trim().replace(/\s+/g, ' ');
+        // Bank atamalar/oddiy so'zlardan saqlanish
+        if (/^(тариф|оплата|перевод|перечисление|за|по|для|comission|fee)/i.test(cleaned)) continue;
+        return cleaned;
+      }
     }
     return null;
   }, [description]);
@@ -2222,25 +2235,40 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
         </DialogHeader>
 
         <div className="space-y-3">
-          {/* Mijoz bergan shartnoma + topilgan F.I.O. */}
-          <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 ring-1 ring-rose-200">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 mb-1">
+          {/* Mijoz bergan shartnoma + topilgan F.I.O. (2 blok, har doim ko'rinadi) */}
+          <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 ring-1 ring-rose-200 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700">
               Tolov maqsadida kelgan:
             </div>
-            <code className="font-mono text-[14px] font-bold text-rose-900 select-all block">
-              {contractNumber}
-            </code>
-            {extractedName && (
-              <div className="mt-2 pt-2 border-t border-rose-200">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 mb-1 flex items-center gap-1">
-                  <Wand2 className="h-2.5 w-2.5" /> AI ajratdi (F.I.O.):
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {/* Shartnoma raqami */}
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 mb-0.5 flex items-center gap-1">
+                  <FileSignature className="h-2.5 w-2.5" /> Shartnoma raqami
                 </div>
-                <div className="text-[12px] font-semibold text-rose-900 select-all">
-                  {extractedName}
-                </div>
+                <code className="font-mono text-[13px] font-bold text-rose-900 select-all block break-all">
+                  {contractNumber}
+                </code>
               </div>
-            )}
-            <div className="text-[10px] text-rose-600 mt-1">CRM'da topilmadi</div>
+              {/* F.I.O. — har doim block (topilmasa "AI topa olmadi" yoziladi) */}
+              <div>
+                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 mb-0.5 flex items-center gap-1">
+                  <Wand2 className="h-2.5 w-2.5" /> F.I.O. (AI ajratdi)
+                </div>
+                {extractedName ? (
+                  <div className="text-[12px] font-semibold text-rose-900 select-all break-words">
+                    {extractedName}
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-rose-500 italic">
+                    Description'dan F.I.O. topilmadi
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="text-[10px] text-rose-600 pt-1 border-t border-rose-200/60">
+              ⚠ CRM'da topilmadi — quyidagi o'xshashlardan tasdiqlang
+            </div>
           </div>
 
           {/* CRM natijalari */}
@@ -2255,38 +2283,59 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
                   Hech qanday o'xshash shartnoma topilmadi
                 </div>
               )}
-              {sortedItems.map((it: any, idx: number) => {
+              {sortedItems.map((it: any) => {
                 const fullName = it.customerName
                   || it.client?.full_name_kirill
                   || it.client?.full_name_lotin
                   || it.client?.name
                   || it.object_name
                   || null;
-                // Nom moslik darajasi
+                // Mosliklarni hisoblash
+                const contractMatch = String(it.contract || '').toUpperCase() === contractNumber.toUpperCase();
                 let nameMatch = false;
+                let nameMatchScore = 0;
                 if (extractedName && fullName) {
                   const nameWords = extractedName.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
                   const fullLower = fullName.toLowerCase();
-                  const matchedWords = nameWords.filter((w) => fullLower.includes(w));
-                  if (matchedWords.length >= 2) nameMatch = true;
+                  nameMatchScore = nameWords.filter((w) => fullLower.includes(w)).length;
+                  if (nameMatchScore >= 2) nameMatch = true;
                 }
+                const perfectMatch = contractMatch && nameMatch;
                 return (
                   <div
                     key={it.contract || it.id}
                     className={cn(
-                      'px-3 py-2',
-                      nameMatch ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'hover:bg-slate-50',
+                      'px-3 py-2 relative',
+                      perfectMatch ? 'bg-emerald-100 ring-2 ring-emerald-400'
+                        : nameMatch ? 'bg-emerald-50 ring-1 ring-emerald-200'
+                        : contractMatch ? 'bg-amber-50 ring-1 ring-amber-200'
+                        : 'hover:bg-slate-50',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <code className={cn('font-mono text-[12px] font-bold', nameMatch ? 'text-emerald-700' : 'text-indigo-700')}>
+                      <code className={cn(
+                        'font-mono text-[12px] font-bold',
+                        perfectMatch ? 'text-emerald-800' : nameMatch ? 'text-emerald-700' : contractMatch ? 'text-amber-700' : 'text-indigo-700',
+                      )}>
                         {it.contract}
                       </code>
-                      {nameMatch && (
-                        <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
-                          <Wand2 className="h-2.5 w-2.5" /> nom mos keldi
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {perfectMatch && (
+                          <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1 bg-emerald-200 px-1.5 py-0.5 rounded">
+                            <CheckCircle2 className="h-2.5 w-2.5" /> aniq mos
+                          </span>
+                        )}
+                        {!perfectMatch && nameMatch && (
+                          <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                            <Wand2 className="h-2.5 w-2.5" /> nom mos
+                          </span>
+                        )}
+                        {!perfectMatch && !nameMatch && contractMatch && (
+                          <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider">
+                            shartnoma mos
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-[11px] text-slate-700 mt-0.5 font-medium">
                       {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
