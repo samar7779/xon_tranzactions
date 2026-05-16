@@ -530,6 +530,7 @@ export default function TransactionsPage() {
                       <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
                       <th className="text-left px-4 py-3 w-40">Kontragent</th>
                       <th className="text-left px-4 py-3 w-40">Kategoriya</th>
+                      <th className="text-left px-4 py-3 w-32">Shartnoma</th>
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -599,24 +600,34 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </td>
-                          {/* Kontragent (top-level kategoriya) */}
+                          {/* Kontragent (firma nomi yoki kategoriya placeholder) */}
                           <td className="px-4 py-3 max-w-[160px]">
-                            <CategoryChip
+                            <KontragentChip
+                              display={it.counterpartyDisplay}
                               category={it.category}
                               onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
                               canEdit={canManageCategories}
-                              placeholder="+ tanlash"
                             />
                           </td>
-                          {/* Kategoriya (subkategoriya) */}
+                          {/* Kategoriya (subkategoriya yoki TRANSFER/SALARY kabilarda top nomi) */}
                           <td className="px-4 py-3 max-w-[160px]">
                             <CategoryChip
-                              category={it.subcategory}
+                              category={it.subcategory || it.category}
                               parentColor={it.category?.color}
                               onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
                               canEdit={canManageCategories && !!it.category}
                               placeholder={it.category ? '—' : ''}
                             />
+                          </td>
+                          {/* Shartnoma */}
+                          <td className="px-4 py-3">
+                            {it.contractNumber ? (
+                              <code className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded ring-1 ring-indigo-200">
+                                {it.contractNumber}
+                              </code>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">—</span>
+                            )}
                           </td>
                           <td className={cn(
                             "px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap",
@@ -1606,6 +1617,49 @@ function CopyBlock({ value }: { value: string }) {
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+// ═══ KONTRAGENT CHIP — firma nomi (yoki kategoriya placeholder)
+function KontragentChip({
+  display, category, onClick, canEdit,
+}: {
+  display: string | null | undefined;
+  category: any | null;
+  onClick: (e: React.MouseEvent) => void;
+  canEdit: boolean;
+}) {
+  if (!display) {
+    return canEdit ? (
+      <button
+        onClick={onClick}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 ring-1 ring-dashed ring-slate-200 hover:ring-indigo-300 transition-colors"
+      >
+        + tanlash
+      </button>
+    ) : (
+      <span className="text-[10px] text-slate-300">—</span>
+    );
+  }
+  const color = category?.color || '#64748b';
+  const style = {
+    backgroundColor: `${color}18`,
+    color: color,
+    borderColor: `${color}40`,
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={!canEdit}
+      className={cn(
+        'inline-flex items-center px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset text-left max-w-full transition-all',
+        canEdit && 'hover:ring-2 cursor-pointer',
+      )}
+      style={style}
+      title={canEdit ? "O'zgartirish uchun bosing" : display}
+    >
+      <span className="truncate max-w-[150px] leading-tight">{display}</span>
+    </button>
   );
 }
 

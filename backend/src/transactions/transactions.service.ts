@@ -70,7 +70,50 @@ export class TransactionsService {
       }),
     ]);
 
-    return { ok: true, total, page, perPage, items };
+    // ── Enrichment: counterpartyDisplay (firma nomi)
+    // 1) Boshqa tomon INN/account'larini yig'amiz
+    const otherInns = new Set<string>();
+    const otherAccs = new Set<string>();
+    for (const tx of items) {
+      const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
+      const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
+      if (inn) otherInns.add(inn);
+      if (acc) otherAccs.add(acc);
+    }
+    // 2) Counterparty + BankAccount jadvallaridan bir martalik yig'ib olamiz
+    const [counterparties, ownAccs] = await Promise.all([
+      otherInns.size > 0
+        ? this.prisma.counterparty.findMany({
+            where: { inn: { in: Array.from(otherInns) } },
+            select: { inn: true, name: true },
+          })
+        : Promise.resolve([]),
+      otherAccs.size > 0
+        ? this.prisma.bankAccount.findMany({
+            where: { accountNo: { in: Array.from(otherAccs) } },
+            select: { accountNo: true, ownerName: true },
+          })
+        : Promise.resolve([]),
+    ]);
+    const cpByInn = new Map(counterparties.map((c) => [c.inn, c.name]));
+    const accByNo = new Map(ownAccs.map((a) => [a.accountNo, a.ownerName]));
+
+    // 3) Har bir tx'ga counterpartyDisplay maydonini qo'shamiz
+    const enriched = items.map((tx: any) => {
+      const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
+      const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
+      let counterpartyDisplay: string | null = null;
+      // Eng aniq → eng umumiy:
+      // 1) Bizning Counterparty jadvalimizdan INN bo'yicha (GREATCITY, BARAKAT HOUSE va h.k.)
+      if (inn && cpByInn.has(inn)) counterpartyDisplay = cpByInn.get(inn)!;
+      // 2) O'z bank hisoblarimizdan (Переброска uchun — LEVEL UP-STROY)
+      else if (acc && accByNo.has(acc)) counterpartyDisplay = accByNo.get(acc)!;
+      // 3) Kategoriya nomi (Банк, Клиент/Физ.Л/Юр.Л, Молия Вазирлиги)
+      else if (tx.category?.name) counterpartyDisplay = tx.category.name;
+      return { ...tx, counterpartyDisplay };
+    });
+
+    return { ok: true, total, page, perPage, items: enriched };
   }
 
   /**
