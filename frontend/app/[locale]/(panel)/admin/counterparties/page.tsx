@@ -101,9 +101,11 @@ export default function CounterpartiesPage() {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
-  // Filter chips
+  // Filters
   const [ratingTier, setRatingTier] = useState<'' | 'high' | 'mid' | 'ok' | 'low' | 'none'>('');
   const [statusFilter, setStatusFilter] = useState<'' | 'manual' | 'error' | 'never' | 'enriched'>('');
+  const [sortBy, setSortBy] = useState<'addedAt' | 'name' | 'rating' | 'lastFetchedAt'>('addedAt');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [addOpen, setAddOpen] = useState(false);
   const [addInn, setAddInn] = useState('');
   const [addName, setAddName] = useState('');
@@ -119,11 +121,15 @@ export default function CounterpartiesPage() {
     if (q) p.set('q', q);
     if (ratingTier) p.set('ratingTier', ratingTier);
     if (statusFilter) p.set('status', statusFilter);
+    if (sortBy !== 'addedAt' || sortDir !== 'desc') {
+      p.set('sortBy', sortBy);
+      p.set('sortDir', sortDir);
+    }
     return p;
   }
 
   const listQuery = useQuery({
-    queryKey: ['counterparties', page, perPage, q, ratingTier, statusFilter],
+    queryKey: ['counterparties', page, perPage, q, ratingTier, statusFilter, sortBy, sortDir],
     queryFn: () => {
       const p = buildQueryParams();
       p.set('page', String(page));
@@ -339,78 +345,121 @@ export default function CounterpartiesPage() {
           />
         </div>
 
-        {/* Search + filter chips */}
+        {/* Search + compact filter dropdowns */}
         <Card className="border-0 shadow-soft overflow-visible">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-3 flex-wrap">
-              {/* Search */}
-              <div className="relative flex-1 min-w-[260px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  value={q}
-                  onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                  placeholder={t('search')}
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
-                />
-                {q && (
-                  <button
-                    onClick={() => { setQ(''); setPage(1); }}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Aktiv filtrlarni tozalash */}
-              {(ratingTier || statusFilter || q) && (
+          <CardContent className="p-4 flex items-center gap-2 flex-wrap">
+            {/* Search */}
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                placeholder={t('search')}
+                className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
+              />
+              {q && (
                 <button
-                  onClick={() => { setQ(''); setRatingTier(''); setStatusFilter(''); setPage(1); }}
-                  className="text-[12px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1 px-2 h-10"
+                  onClick={() => { setQ(''); setPage(1); }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                 >
-                  <X className="h-3.5 w-3.5" /> {t('filterReset')}
+                  <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
 
-            {/* Filter chips — 2 ta qator: Reyting + Holat */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mr-1">{t('rating')}:</span>
-              {[
-                { v: '',     label: 'Hammasi',     tone: 'slate' as const },
-                { v: 'high', label: 'Yuqori',      tone: 'emerald' as const },
-                { v: 'mid',  label: "O'rta",       tone: 'blue' as const },
-                { v: 'ok',   label: 'Qoniqarli',   tone: 'amber' as const },
-                { v: 'low',  label: 'Quyi',        tone: 'rose' as const },
-                { v: 'none', label: 'Reyting yo\'q', tone: 'slate' as const },
-              ].map((opt) => (
-                <FilterChip
-                  key={opt.v}
-                  label={opt.label}
-                  active={ratingTier === opt.v}
-                  tone={opt.tone}
-                  onClick={() => { setRatingTier(opt.v as any); setPage(1); }}
-                />
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mr-1">Holat:</span>
-              {[
-                { v: '',         label: 'Hammasi',          tone: 'slate' as const },
-                { v: 'enriched', label: 'To\'liq ma\'lumot', tone: 'emerald' as const },
-                { v: 'manual',   label: 'Qo\'lda',          tone: 'violet' as const },
-                { v: 'never',    label: 'Yangilanmagan',    tone: 'amber' as const },
-                { v: 'error',    label: 'Xato',             tone: 'rose' as const },
-              ].map((opt) => (
-                <FilterChip
-                  key={opt.v}
-                  label={opt.label}
-                  active={statusFilter === opt.v}
-                  tone={opt.tone}
-                  onClick={() => { setStatusFilter(opt.v as any); setPage(1); }}
-                />
-              ))}
-            </div>
+            {/* Reyting filter dropdown */}
+            <FilterDropdown
+              label="Reyting"
+              activeLabel={
+                ratingTier === 'high' ? 'Yuqori'
+                : ratingTier === 'mid' ? "O'rta"
+                : ratingTier === 'ok' ? 'Qoniqarli'
+                : ratingTier === 'low' ? 'Quyi'
+                : ratingTier === 'none' ? "Reyting yo'q"
+                : null
+              }
+              icon={<Star className="h-3.5 w-3.5" />}
+              options={[
+                { v: '',     label: 'Hammasi',        sub: undefined },
+                { v: 'high', label: 'Yuqori',         sub: '≥86 (AAA/AA/A)',  tone: 'emerald' },
+                { v: 'mid',  label: "O'rta",          sub: '56-85 (BBB/BB/B)', tone: 'blue' },
+                { v: 'ok',   label: 'Qoniqarli',      sub: '26-55 (CCC/CC/C)', tone: 'amber' },
+                { v: 'low',  label: 'Quyi',           sub: '≤25 (D)',          tone: 'rose' },
+                { v: 'none', label: "Reyting yo'q",   sub: 'Hali enrich qilinmagan', tone: 'slate' },
+              ]}
+              value={ratingTier}
+              onChange={(v) => { setRatingTier(v as any); setPage(1); }}
+            />
+
+            {/* Holat filter dropdown */}
+            <FilterDropdown
+              label="Holat"
+              activeLabel={
+                statusFilter === 'enriched' ? "To'liq ma'lumot"
+                : statusFilter === 'manual' ? "Qo'lda"
+                : statusFilter === 'never' ? 'Yangilanmagan'
+                : statusFilter === 'error' ? 'Xato'
+                : null
+              }
+              icon={<Tag className="h-3.5 w-3.5" />}
+              options={[
+                { v: '',         label: 'Hammasi' },
+                { v: 'enriched', label: "To'liq ma'lumot", sub: 'DIDOX/Chamber javob bergan', tone: 'emerald' },
+                { v: 'manual',   label: "Qo'lda kiritilgan", sub: 'Nostandart INN (kod0088 va h.k.)', tone: 'violet' },
+                { v: 'never',    label: 'Yangilanmagan',    sub: 'Cron hali tegmagan',            tone: 'amber' },
+                { v: 'error',    label: 'Xato',             sub: 'DIDOX/Chamber javob bermagan',  tone: 'rose' },
+              ]}
+              value={statusFilter}
+              onChange={(v) => { setStatusFilter(v as any); setPage(1); }}
+            />
+
+            {/* Saralash dropdown */}
+            <FilterDropdown
+              label="Saralash"
+              activeLabel={(() => {
+                const k = `${sortBy}:${sortDir}`;
+                if (k === 'addedAt:desc') return null; // default
+                if (k === 'addedAt:asc')        return 'Eski qo\'shilgan';
+                if (k === 'name:asc')           return 'Nomi A-Z';
+                if (k === 'name:desc')          return 'Nomi Z-A';
+                if (k === 'rating:desc')        return 'Reyting (yuqori)';
+                if (k === 'rating:asc')         return 'Reyting (past)';
+                if (k === 'lastFetchedAt:desc') return 'Yangi yangilangan';
+                if (k === 'lastFetchedAt:asc')  return 'Eski yangilangan';
+                return null;
+              })()}
+              icon={<RefreshCw className="h-3.5 w-3.5" />}
+              options={[
+                { v: 'addedAt:desc',        label: 'Yangi qo\'shilgan',    sub: 'Default' },
+                { v: 'addedAt:asc',         label: 'Eski qo\'shilgan' },
+                { v: 'name:asc',            label: 'Nomi A-Z' },
+                { v: 'name:desc',           label: 'Nomi Z-A' },
+                { v: 'rating:desc',         label: 'Reyting (yuqori)' },
+                { v: 'rating:asc',          label: 'Reyting (past)' },
+                { v: 'lastFetchedAt:desc',  label: 'Yangi yangilangan' },
+                { v: 'lastFetchedAt:asc',   label: 'Eski yangilangan' },
+              ]}
+              value={`${sortBy}:${sortDir}`}
+              onChange={(v) => {
+                const [b, d] = (v as string).split(':');
+                setSortBy(b as any);
+                setSortDir(d as any);
+                setPage(1);
+              }}
+            />
+
+            {/* Tozalash */}
+            {(ratingTier || statusFilter || q || sortBy !== 'addedAt' || sortDir !== 'desc') && (
+              <button
+                onClick={() => {
+                  setQ(''); setRatingTier(''); setStatusFilter('');
+                  setSortBy('addedAt'); setSortDir('desc'); setPage(1);
+                }}
+                className="text-[12px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1 px-3 h-10 rounded-xl hover:bg-rose-50 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" /> {t('filterReset')}
+              </button>
+            )}
           </CardContent>
         </Card>
 
@@ -763,34 +812,77 @@ function KpiTile({
   );
 }
 
-function FilterChip({
-  label, active, tone, onClick,
+type FilterOption = {
+  v: string;
+  label: string;
+  sub?: string;
+  tone?: 'slate' | 'emerald' | 'blue' | 'amber' | 'rose' | 'violet';
+};
+
+function FilterDropdown({
+  label, icon, activeLabel, options, value, onChange,
 }: {
   label: string;
-  active: boolean;
-  tone: 'slate' | 'emerald' | 'blue' | 'amber' | 'rose' | 'violet';
-  onClick: () => void;
+  icon: React.ReactNode;
+  activeLabel: string | null; // null = default selected (Hammasi)
+  options: FilterOption[];
+  value: string;
+  onChange: (v: string) => void;
 }) {
-  const inactiveCls = 'bg-slate-50 text-slate-600 ring-slate-200 hover:bg-slate-100';
-  const activeMap: Record<string, string> = {
-    slate:   'bg-slate-700 text-white ring-slate-700',
-    emerald: 'bg-emerald-600 text-white ring-emerald-600',
-    blue:    'bg-blue-600 text-white ring-blue-600',
-    amber:   'bg-amber-500 text-white ring-amber-500',
-    rose:    'bg-rose-600 text-white ring-rose-600',
-    violet:  'bg-violet-600 text-white ring-violet-600',
-  };
+  const isActive = activeLabel !== null;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 transition-colors',
-        active ? activeMap[tone] : inactiveCls,
-      )}
-    >
-      {label}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'inline-flex items-center gap-1.5 px-3 h-10 rounded-xl text-[12px] font-semibold ring-1 transition-colors',
+            isActive
+              ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100'
+              : 'bg-slate-50/60 text-slate-700 ring-slate-200 hover:bg-slate-100',
+          )}
+        >
+          <span className={cn('shrink-0', isActive ? 'text-indigo-600' : 'text-slate-400')}>{icon}</span>
+          <span className="text-[10px] uppercase tracking-wider font-bold opacity-70">{label}:</span>
+          <span className="truncate max-w-[140px]">{activeLabel || 'Hammasi'}</span>
+          {isActive && (
+            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 ml-0.5 shrink-0" />
+          )}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        {options.map((opt) => {
+          const selected = opt.v === value;
+          const toneDot: Record<string, string> = {
+            slate: 'bg-slate-400', emerald: 'bg-emerald-500', blue: 'bg-blue-500',
+            amber: 'bg-amber-500', rose: 'bg-rose-500', violet: 'bg-violet-500',
+          };
+          return (
+            <DropdownMenuItem
+              key={opt.v || 'all'}
+              onClick={() => onChange(opt.v)}
+              className={cn(
+                'cursor-pointer flex items-start gap-2',
+                selected && 'bg-indigo-50 focus:bg-indigo-100',
+              )}
+            >
+              <span className={cn(
+                'w-2 h-2 rounded-full mt-1.5 shrink-0',
+                opt.tone ? toneDot[opt.tone] : 'bg-slate-300',
+              )} />
+              <div className="min-w-0 flex-1">
+                <div className={cn('text-[12px] font-semibold', selected && 'text-indigo-700')}>
+                  {opt.label}
+                </div>
+                {opt.sub && <div className="text-[10px] text-slate-500 truncate">{opt.sub}</div>}
+              </div>
+              {selected && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-1" />}
+            </DropdownMenuItem>
+          );
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
