@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   FileSpreadsheet, Download, Calendar, Building2, Search, Check,
-  Loader2, Wallet, X, ChevronRight,
+  Loader2, Wallet, X, ChevronRight, ScanLine, AlertTriangle, CheckCircle2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -134,7 +134,11 @@ export default function StatementPage() {
       <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
-      <div className="flex-1 p-6 lg:p-8 w-full">
+      <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
+
+        {/* ═══ ID Inspector — bank API'dan tranzaksiyani qidirish ═══ */}
+        <IdInspectorCard />
+
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
 
           {/* ═══ LEFT — sozlamalar ═══ */}
@@ -352,6 +356,193 @@ function EmptyHint({ icon: Icon, text }: { icon: any; text: string }) {
         <Icon className="h-5 w-5 text-slate-300" />
       </div>
       <div className="text-sm text-slate-400">{text}</div>
+    </div>
+  );
+}
+
+// ═══ ID INSPECTOR — composite ID'ni bankdan qidirish (faqat bank API)
+function IdInspectorCard() {
+  const [id, setId] = useState('');
+  const [result, setResult] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const mut = useMutation({
+    mutationFn: (rawId: string) => api.post<any>('/transactions/inspect-id', { id: rawId }),
+    onSuccess: (r: any) => { setResult(r); setError(null); },
+    onError: (e: any) => { setError(e?.message || 'Xato'); setResult(null); },
+  });
+
+  function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    const trimmed = id.trim();
+    if (!trimmed) return;
+    setResult(null);
+    setError(null);
+    mut.mutate(trimmed);
+  }
+
+  function clear() {
+    setId('');
+    setResult(null);
+    setError(null);
+  }
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="bg-gradient-to-br from-indigo-600 via-fuchsia-600 to-purple-700 px-5 py-3.5 text-white">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-white/15 grid place-items-center">
+            <ScanLine className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/80">
+              Bank API · Tranzaksiya tekshirish
+            </div>
+            <div className="text-sm font-bold">ID bo'yicha bankdan qidirish</div>
+          </div>
+        </div>
+      </div>
+      <CardContent className="p-5 space-y-4">
+        <form onSubmit={submit} className="flex items-stretch gap-2">
+          <div className="relative flex-1">
+            <Input
+              value={id}
+              onChange={(e) => setId(e.target.value)}
+              placeholder="Masalan: 5424816081_27185799_04.05.2026_23120000200000959001_..."
+              className="h-11 pr-9 font-mono text-[12px]"
+            />
+            {id && (
+              <button
+                type="button"
+                onClick={clear}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Button
+            type="submit"
+            disabled={!id.trim() || mut.isPending}
+            className="h-11 px-5 rounded-xl font-semibold gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
+          >
+            {mut.isPending ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Qidirilmoqda</>
+            ) : (
+              <><Search className="h-4 w-4" /> Qidirish</>
+            )}
+          </Button>
+        </form>
+
+        {error && (
+          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="break-all">{error}</div>
+          </div>
+        )}
+
+        {result && <InspectorResult data={result} />}
+      </CardContent>
+    </Card>
+  );
+}
+
+function InspectorResult({ data }: { data: any }) {
+  const p = data.parsed || {};
+  const acc = data.account || {};
+  const bank = data.bankResponse || {};
+  const found = bank.item;
+
+  return (
+    <div className="space-y-3">
+      {/* Status banner */}
+      {data.bankError ? (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-amber-800 text-[12px]">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold mb-0.5">Bankga so'rov xato:</div>
+            <div className="break-all">{data.bankError}</div>
+          </div>
+        </div>
+      ) : found ? (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-emerald-50 ring-1 ring-emerald-200 text-emerald-800 text-[12px]">
+          <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold">Bankda topildi</span>
+            <span className="text-emerald-600 ml-1.5">
+              ({bank.matchedBy} bo'yicha — o'sha kun jami {bank.totalItemsThatDay} ta tranzaksiya)
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+          <div>
+            <div className="font-semibold mb-0.5">Bankda topilmadi (o'sha kun jami {bank.totalItemsThatDay} ta tranzaksiya)</div>
+            <div className="text-rose-600">Bank tranzaksiyani o'chirgan yoki bekor qilgan bo'lishi mumkin</div>
+          </div>
+        </div>
+      )}
+
+      {/* Parsed + account */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <InfoBox title="ID parsed">
+          <KV k="general_id" v={p.generalId} mono />
+          <KV k="num" v={p.num} mono />
+          <KV k="sana" v={p.ddate} />
+          <KV k="summa" v={p.amountSom != null ? p.amountSom.toLocaleString('uz-UZ') + ' so\'m' : '—'} />
+          <KV k="yo'nalish" v={p.direction} />
+          <KV k="acc_dt (debit)" v={p.accDt} mono small />
+          <KV k="acc_ct (credit)" v={p.accCt} mono small />
+        </InfoBox>
+
+        <InfoBox title="Bizning hisob">
+          <KV k="bank" v={`${acc.bank?.name || '—'}${acc.bank?.code ? ` (${acc.bank.code})` : ''}`} />
+          <KV k="MFO" v={acc.branch} />
+          <KV k="hisob raqami" v={acc.accountNo} mono />
+          <KV k="egasi" v={acc.ownerName || '—'} />
+          <KV k="saldo (kun boshi)" v={bank.saldoInSom != null ? bank.saldoInSom.toLocaleString('uz-UZ') + ' so\'m' : '—'} />
+          <KV k="saldo (kun oxiri)" v={bank.saldoOutSom != null ? bank.saldoOutSom.toLocaleString('uz-UZ') + ' so\'m' : '—'} />
+        </InfoBox>
+      </div>
+
+      {/* Bank javobi — to'liq item */}
+      {found && (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">
+            Bank javobi (barcha maydonlar)
+          </div>
+          <div className="rounded-xl bg-slate-900 text-emerald-300 p-3 font-mono text-[11px] overflow-x-auto">
+            <pre className="leading-relaxed">{JSON.stringify(found, null, 2)}</pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InfoBox({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50/40 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">{title}</div>
+      <div className="divide-y divide-slate-100">{children}</div>
+    </div>
+  );
+}
+
+function KV({ k, v, mono, small }: { k: string; v: any; mono?: boolean; small?: boolean }) {
+  return (
+    <div className="flex items-baseline gap-2 py-1">
+      <span className="text-[11px] text-slate-500 shrink-0 min-w-[110px]">{k}</span>
+      <span
+        className={cn(
+          'flex-1 break-all text-slate-800',
+          mono && 'font-mono',
+          small ? 'text-[10.5px]' : 'text-[12px]',
+        )}
+      >
+        {v ?? '—'}
+      </span>
     </div>
   );
 }
