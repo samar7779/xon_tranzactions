@@ -9,7 +9,7 @@ import {
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
   Hash, Receipt, Link2, History, Loader2, AlertCircle,
-  Wrench, Printer,
+  Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -684,7 +684,11 @@ export default function TransactionsPage() {
       </div>
 
       {/* ═══ DETAIL MODAL ═══ */}
-      <TransactionDetailDialog row={detailRow} onClose={() => setDetailRow(null)} />
+      <TransactionDetailDialog
+        row={detailRow}
+        onClose={() => setDetailRow(null)}
+        canManage={canManageCategories}
+      />
 
       {/* ═══ ESKI TARIXNI YUKLASH (BACKFILL) ═══ */}
       <BackfillDialog open={backfillOpen} onOpenChange={setBackfillOpen} banks={banks?.items || []} />
@@ -1125,13 +1129,48 @@ function FilterChip({
   );
 }
 
-function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => void }) {
+function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClose: () => void; canManage: boolean }) {
   const t = useTranslations('transactions');
-  const tp = useTranslations('payments');
+  const qc = useQueryClient();
+  const [openSections, setOpenSections] = useState<Set<string>>(new Set());
+  const [categorizeLog, setCategorizeLog] = useState<any>(null);
+
+  const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'composite', 'raw'];
+  const allOpen = SECTION_KEYS.every((k) => openSections.has(k));
+
+  function toggleAll() {
+    if (allOpen) setOpenSections(new Set());
+    else setOpenSections(new Set(SECTION_KEYS));
+  }
+  function toggleOne(k: string) {
+    setOpenSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(k)) next.delete(k); else next.add(k);
+      return next;
+    });
+  }
+
+  // Yangi tranzaksiya — log/ochilgan bo'limlarni reset qilamiz
+  useEffect(() => {
+    setCategorizeLog(null);
+    setOpenSections(new Set());
+  }, [row?.id]);
+
+  const categorizeMut = useMutation({
+    mutationFn: (force: boolean) =>
+      api.post<any>(`/categorization/transactions/${row.id}/categorize${force ? '?force=true' : ''}`),
+    onSuccess: (r: any) => {
+      setCategorizeLog(r);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (e: any) => setCategorizeLog({ ok: false, error: e?.message || 'Xato' }),
+  });
+
   if (!row) return null;
   const isIn = row.direction === 'IN';
-  const matchKey = row.matchStatus || 'UNMATCHED';
-  const match = { label: tp(MATCH_KEYS[matchKey]), cls: MATCH_CLS[matchKey] };
+  const counterpartyName = isIn ? row.fromName : row.toName;
+  const counterpartyInn = isIn ? row.fromInn : row.toInn;
+  const catColor = row.category?.color || '#6366f1';
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
@@ -1166,30 +1205,180 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
               {isIn ? '+' : '−'}{formatMoney(row.amount, row.currency)}
             </div>
             <div className="text-sm text-white/90 mt-1 font-medium truncate">
-              {isIn ? row.fromName : row.toName || '—'}
+              {counterpartyName || '—'}
             </div>
           </div>
         </div>
 
         {/* ─── Body — scrollable ─── */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
-          {/* Status + match badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={cn(
-              "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset",
-              match.cls,
-            )}>
-              <Link2 className="h-3 w-3" /> {match.label}
-            </span>
-            {row.docNumber && (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600">
-                <Receipt className="h-3 w-3" /> #{row.docNumber}
-              </span>
+
+          {/* ═══ KONTRAGENT + KATEGORIYA + SHARTNOMA — asosiy info ═══ */}
+          <div className="rounded-xl ring-1 ring-indigo-200 bg-gradient-to-br from-indigo-50/70 to-violet-50/40 p-4 space-y-3">
+            {/* Kontragent */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Kontragent</div>
+                <div className="text-[14px] font-semibold text-slate-900 truncate">{counterpartyName || '—'}</div>
+                {counterpartyInn && (
+                  <div className="font-mono text-[11px] text-slate-500 mt-0.5">STIR: {counterpartyInn}</div>
+                )}
+              </div>
+              {row.docNumber && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium bg-white text-slate-600 ring-1 ring-slate-200 shrink-0">
+                  <Receipt className="h-3 w-3" /> #{row.docNumber}
+                </span>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-indigo-200/60">
+              {/* Kategoriya */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+                  <Tag className="h-3 w-3" /> Kategoriya
+                </div>
+                {row.category ? (
+                  <div className="space-y-1">
+                    <div
+                      className="inline-flex items-center px-2 py-1 rounded-md text-[12px] font-semibold ring-1 ring-inset"
+                      style={{ backgroundColor: `${catColor}18`, color: catColor, borderColor: `${catColor}40` }}
+                    >
+                      {row.category.name}
+                    </div>
+                    {row.subcategory && (
+                      <div className="text-[11px] text-slate-600">
+                        ↳ {row.subcategory.name}
+                      </div>
+                    )}
+                    {row.categorizedBy && (
+                      <div className="text-[10px] text-slate-400">
+                        {row.categorizedBy === 'auto' && 'avto'}
+                        {row.categorizedBy === 'sync' && 'sync paytida'}
+                        {row.categorizedBy === 'manual' && "qo'lda"}
+                        {row.categorizedBy === 'cron' && 'cron'}
+                        {row.categorizedAt && ` · ${formatDateTime(row.categorizedAt)}`}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-[12px] text-slate-400 italic">Tayinlanmagan</div>
+                )}
+              </div>
+
+              {/* Shartnoma raqami */}
+              <div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+                  <FileSignature className="h-3 w-3" /> Shartnoma
+                </div>
+                {row.contractNumber ? (
+                  <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
+                    {row.contractNumber}
+                  </code>
+                ) : (
+                  <div className="text-[12px] text-slate-400 italic">Topilmadi</div>
+                )}
+              </div>
+            </div>
+
+            {/* Avto-kategoriyalash tugma + natija */}
+            {canManage && (
+              <div className="pt-3 border-t border-indigo-200/60">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="text-[11px] text-slate-600">
+                    {row.category
+                      ? <span className="text-amber-700">Kategoriya bor — qayta hisoblash uchun "Majburiy" tugma</span>
+                      : <span>Qoidalar bo'yicha avto-aniqlash</span>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {!row.category && (
+                      <button
+                        onClick={() => categorizeMut.mutate(false)}
+                        disabled={categorizeMut.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        {categorizeMut.isPending
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Wand2 className="h-3 w-3" />}
+                        Avto-kategoriyalash
+                      </button>
+                    )}
+                    {row.category && (
+                      <button
+                        onClick={() => categorizeMut.mutate(true)}
+                        disabled={categorizeMut.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-[11px] font-semibold hover:bg-amber-700 disabled:opacity-50 transition-colors"
+                      >
+                        {categorizeMut.isPending
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Wand2 className="h-3 w-3" />}
+                        Majburiy qayta hisoblash
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Natija logi */}
+                {categorizeLog && (
+                  <div className={cn(
+                    "mt-3 rounded-lg p-3 text-[11px] ring-1",
+                    categorizeLog.categoryCode === 'EXISTING'
+                      ? 'bg-amber-50 ring-amber-200 text-amber-900'
+                      : categorizeLog.categoryCode
+                        ? 'bg-emerald-50 ring-emerald-200 text-emerald-900'
+                        : 'bg-slate-50 ring-slate-200 text-slate-700',
+                  )}>
+                    <div className="flex items-start gap-2">
+                      {categorizeLog.categoryCode === 'EXISTING' ? (
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      ) : categorizeLog.categoryCode ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      ) : (
+                        <AlertCircle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      )}
+                      <div className="flex-1 space-y-0.5">
+                        {categorizeLog.categoryCode === 'EXISTING' && (
+                          <div className="font-semibold">Skip: allaqachon kategoriyalangan</div>
+                        )}
+                        {categorizeLog.categoryCode && categorizeLog.categoryCode !== 'EXISTING' && (
+                          <div className="font-semibold">
+                            ✓ {categorizeLog.categoryCode}
+                            {categorizeLog.subcategoryCode && ` → ${categorizeLog.subcategoryCode}`}
+                          </div>
+                        )}
+                        {!categorizeLog.categoryCode && (
+                          <div className="font-semibold">Qoida topilmadi — qo'lda tayinlang</div>
+                        )}
+                        {categorizeLog.reason && (
+                          <div className="text-[10px] opacity-80">Sabab: {categorizeLog.reason}</div>
+                        )}
+                        {categorizeLog.contractNumber && (
+                          <div className="text-[10px] opacity-80 font-mono">Shartnoma: {categorizeLog.contractNumber}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
+          {/* ═══ Hammasini ochish/yopish ═══ */}
+          <div className="flex items-center justify-end">
+            <button
+              onClick={toggleAll}
+              title={allOpen ? "Hammasini yopish" : "Hammasini ochish"}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+            >
+              {allOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {allOpen ? "Yopish" : "Ochish"}
+            </button>
+          </div>
+
           {/* Yuboruvchi */}
-          <DetailSection title={t('detailSender')} icon={ArrowUpRight} highlighted={!isIn} tone="rose">
+          <DetailSection
+            id="sender" open={openSections.has('sender')} onToggle={() => toggleOne('sender')}
+            title={t('detailSender')} icon={ArrowUpRight} highlighted={!isIn} tone="rose"
+          >
             <CopyRow label={t('detailFieldName')} value={row.fromName || '—'} />
             <CopyRow label={t('detailFieldInn')} value={row.fromInn} mono copyable />
             <CopyRow label={t('detailFieldAccount')} value={row.fromAccount} mono copyable />
@@ -1197,45 +1386,48 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
           </DetailSection>
 
           {/* Qabul qiluvchi */}
-          <DetailSection title={t('detailReceiver')} icon={ArrowDownLeft} highlighted={isIn} tone="emerald">
+          <DetailSection
+            id="receiver" open={openSections.has('receiver')} onToggle={() => toggleOne('receiver')}
+            title={t('detailReceiver')} icon={ArrowDownLeft} highlighted={isIn} tone="emerald"
+          >
             <CopyRow label={t('detailFieldName')} value={row.toName || '—'} />
             <CopyRow label={t('detailFieldInn')} value={row.toInn} mono copyable />
             <CopyRow label={t('detailFieldAccount')} value={row.toAccount} mono copyable />
             <CopyRow label={t('detailFieldMfo')} value={row.toMfo} mono />
           </DetailSection>
 
-          {/* To'lov maqsadi */}
+          {/* To'lov maqsadi — collapsible */}
           {row.description && (
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{t('detailPaymentPurpose')}</div>
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
-                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap">{row.description.trim()}</div>
-                {row.purposeCode && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
-                    {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            <DetailSection
+              id="purpose" open={openSections.has('purpose')} onToggle={() => toggleOne('purpose')}
+              title={t('detailPaymentPurpose')} icon={FileText}
+            >
+              <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap py-2">{row.description.trim()}</div>
+              {row.purposeCode && (
+                <div className="mt-1 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
+                  {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
+                </div>
+              )}
+            </DetailSection>
           )}
 
           {/* Vaqt ma'lumotlari */}
-          <DetailSection title={t('detailTime')} icon={Calendar}>
+          <DetailSection
+            id="time" open={openSections.has('time')} onToggle={() => toggleOne('time')}
+            title={t('detailTime')} icon={Calendar}
+          >
             <CopyRow label={t('detailDocDate')} value={formatDate(row.txnDate)} />
             <CopyRow label={t('detailOpTime')} value={row.operationTime} mono />
-            <CopyRow
-              label={t('detailValueDate')}
-              value={row.valueDate ? formatDate(row.valueDate) : undefined}
-            />
+            <CopyRow label={t('detailValueDate')} value={row.valueDate ? formatDate(row.valueDate) : undefined} />
             <CopyRow label={t('detailSettlement')} value={row.settlementTime} mono />
-            <CopyRow
-              label={t('detailInput')}
-              value={row.inputAt ? formatDateTime(row.inputAt) : undefined}
-            />
+            <CopyRow label={t('detailInput')} value={row.inputAt ? formatDateTime(row.inputAt) : undefined} />
           </DetailSection>
 
           {/* Tizim ma'lumotlari */}
-          <DetailSection title={t('detailSystem')} icon={Hash}>
+          <DetailSection
+            id="system" open={openSections.has('system')} onToggle={() => toggleOne('system')}
+            title={t('detailSystem')} icon={Hash}
+          >
             <CopyRow label={t('bank')} value={row.account?.bank?.name || '—'} />
             <CopyRow label={t('detailLocalAccount')} value={row.account?.accountNo} mono copyable />
             <CopyRow label={t('detailB2')} value={row.bankB2Id} mono copyable />
@@ -1244,23 +1436,27 @@ function TransactionDetailDialog({ row, onClose }: { row: any; onClose: () => vo
             {row.docType && <CopyRow label={t('detailDocType')} value={row.docType} mono />}
           </DetailSection>
 
-          {/* Tranzaksiya ID — to'liq, alohida blok */}
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{t('detailComposite')}</div>
-            <CopyBlock value={row.externalId || row.id} />
-          </div>
+          {/* Tranzaksiya ID */}
+          <DetailSection
+            id="composite" open={openSections.has('composite')} onToggle={() => toggleOne('composite')}
+            title={t('detailComposite')} icon={Hash}
+          >
+            <div className="py-2">
+              <CopyBlock value={row.externalId || row.id} />
+            </div>
+          </DetailSection>
 
           {/* Bankdan kelgan to'liq JSON */}
           {(row.metadata || row.rawExtra) && (
-            <details className="rounded-xl border border-slate-200 overflow-hidden">
-              <summary className="px-4 py-2.5 cursor-pointer text-[10px] font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 uppercase tracking-[0.15em]">
-                <FileText className="h-3.5 w-3.5" /> {t('detailFullJson')}
-              </summary>
-              <div className="px-4 py-3 bg-slate-50/60 space-y-3">
+            <DetailSection
+              id="raw" open={openSections.has('raw')} onToggle={() => toggleOne('raw')}
+              title={t('detailFullJson')} icon={FileText}
+            >
+              <div className="space-y-3 py-2">
                 {row.metadata && <RawJsonBlock label={t('detailRawMeta')} data={row.metadata} />}
                 {row.rawExtra && <RawJsonBlock label={t('detailRawExtra')} data={row.rawExtra} />}
               </div>
-            </details>
+            </DetailSection>
           )}
         </div>
       </DialogContent>
@@ -1296,8 +1492,11 @@ function RawJsonBlock({ label, data }: { label: string; data: any }) {
 }
 
 function DetailSection({
-  title, icon: Icon, highlighted, tone, children,
+  id, open, onToggle, title, icon: Icon, highlighted, tone, children,
 }: {
+  id: string;
+  open: boolean;
+  onToggle: () => void;
   title: string;
   icon: any;
   highlighted?: boolean;
@@ -1307,16 +1506,29 @@ function DetailSection({
   const t = useTranslations('transactions');
   const ring = highlighted
     ? tone === 'emerald' ? 'ring-emerald-200 bg-emerald-50/50' : 'ring-rose-200 bg-rose-50/50'
-    : 'ring-slate-200 bg-slate-50/60';
+    : 'ring-slate-200 bg-white';
   return (
-    <div>
-      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
-        <Icon className="h-3 w-3" /> {title}
-        {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· {t('detailYou')}</span>}
-      </div>
-      <div className={cn("rounded-xl ring-1 px-4 py-2.5 divide-y divide-slate-100/80", ring)}>
-        {children}
-      </div>
+    <div className={cn("rounded-xl ring-1 overflow-hidden", ring)}>
+      <button
+        onClick={onToggle}
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+      >
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+          <Icon className="h-3 w-3" /> {title}
+          {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· {t('detailYou')}</span>}
+        </div>
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 text-slate-400 transition-transform shrink-0",
+            open && 'rotate-180',
+          )}
+        />
+      </button>
+      {open && (
+        <div className="px-4 pb-2.5 pt-1 divide-y divide-slate-100/80 border-t border-slate-100">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
