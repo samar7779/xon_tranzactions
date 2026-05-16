@@ -2180,13 +2180,16 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
     return null;
   }, [description]);
 
-  // Avtomatik prefix qidirish — qisqartirilgan variantlarda
+  // Avtomatik prefix qidirish — to'liq → qisqartirilgan (4 belgi minimum, juda loose emas)
+  // Misol: "483VDY253K" → ["483VDY253K", "483VDY25", "483VDY", "483V"]
   const tryPrefixes = useMemo(() => {
     const c = contractNumber.trim();
     const result: string[] = [];
-    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 8)));
-    if (c.length >= 4) result.push(c.slice(0, Math.min(c.length, 6)));
-    if (c.length >= 4) result.push(c.slice(0, 4));
+    if (c.length > 0) result.push(c);                                    // to'liq
+    if (c.length > 8) result.push(c.slice(0, 8));                       // 8 belgi
+    if (c.length > 6) result.push(c.slice(0, 6));                       // 6 belgi
+    if (c.length > 5) result.push(c.slice(0, 5));                       // 5 belgi
+    if (c.length >= 4) result.push(c.slice(0, 4));                      // 4 belgi (oxirgi)
     return [...new Set(result)];
   }, [contractNumber]);
 
@@ -2201,26 +2204,44 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
   });
   const items = searchQuery.data?.items || [];
 
-  // Topilmasa qisqaroq prefix bilan
+  // Topilmasa qisqaroq prefix bilan (sortedItems'da prefix bilan boshlangan natija bo'lmasa ham retry)
   useEffect(() => {
-    if (!searchQuery.isFetching && items.length === 0 && currentPrefixIndex < tryPrefixes.length - 1) {
+    if (searchQuery.isFetching) return;
+    if (currentPrefixIndex >= tryPrefixes.length - 1) return;
+    // Agar prefiks bilan boshlangan natija yo'q bo'lsa, keyingi (qisqaroq) prefiksga o'tish
+    const prefixUpper = currentPrefix.toUpperCase();
+    const hasStartsWith = items.some((it: any) =>
+      String(it.contract || '').toUpperCase().startsWith(prefixUpper)
+    );
+    if (!hasStartsWith) {
       setCurrentPrefixIndex((i) => i + 1);
     }
-  }, [searchQuery.isFetching, items.length, currentPrefixIndex, tryPrefixes.length]);
+  }, [searchQuery.isFetching, items, currentPrefixIndex, tryPrefixes.length, currentPrefix]);
 
-  // Natijalarni nom bilan moslik bo'yicha tartiblash (extractedName bo'lsa)
+  // Filter + sort
+  // 1) Faqat prefix bilan boshlangan kontraktlar (XonSaroy contains qiladi, bizga startsWith kerak)
+  // 2) Agar F.I.O. ajratilgan bo'lsa, nom mos kelganlari tepada
+  // 3) Hech narsa mos kelmasa, original ro'yxat (kamida prefix mos)
   const sortedItems = useMemo(() => {
-    if (!extractedName || items.length === 0) return items;
-    const nameLower = extractedName.toLowerCase();
-    const nameWords = nameLower.split(/\s+/).filter((w) => w.length >= 3);
-    return [...items].sort((a, b) => {
-      const aName = (a.customerName || a.client?.full_name_kirill || a.client?.full_name_lotin || '').toLowerCase();
-      const bName = (b.customerName || b.client?.full_name_kirill || b.client?.full_name_lotin || '').toLowerCase();
+    if (items.length === 0) return [];
+    const prefixUpper = currentPrefix.toUpperCase();
+    // Birinchi: prefiksga startsWith bo'yicha filter
+    const prefixed = items.filter((it: any) =>
+      String(it.contract || '').toUpperCase().startsWith(prefixUpper)
+    );
+    // Agar prefix bilan boshlangan natija bo'sh bo'lsa — original (XonSaroy substring matchlar) qaytar
+    const base = prefixed.length > 0 ? prefixed : items;
+    // F.I.O. mos kelganlarini tepaga ko'taramiz
+    if (!extractedName) return base;
+    const nameWords = extractedName.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+    return [...base].sort((a, b) => {
+      const aName = (a.customerName || '').toLowerCase();
+      const bName = (b.customerName || '').toLowerCase();
       const aScore = nameWords.filter((w) => aName.includes(w)).length;
       const bScore = nameWords.filter((w) => bName.includes(w)).length;
       return bScore - aScore;
     });
-  }, [items, extractedName]);
+  }, [items, extractedName, currentPrefix]);
 
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
