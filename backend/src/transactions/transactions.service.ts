@@ -276,7 +276,7 @@ export class TransactionsService {
       }
       case 'contractStatus':
       case 'contractNumber': {
-        // Distinct shartnoma raqamlari (jadval ichida mavjud, limit 500)
+        // Distinct shartnoma raqamlari + CRM holati (xato/verified)
         const txs = await this.prisma.transaction.findMany({
           where: { ...where, contractNumber: { not: null } },
           distinct: ['contractNumber'],
@@ -284,8 +284,22 @@ export class TransactionsService {
           orderBy: { contractNumber: 'asc' },
           take: 500,
         });
-        const values = txs.map((t) => ({ id: t.contractNumber!, name: t.contractNumber! }));
-        // (Bo'sh — shartnomasi yo'q) yozuvini ham qo'shamiz
+        const contracts = txs.map((t) => t.contractNumber!).filter(Boolean);
+        // CRM kesh — verified/xato statusi
+        const crmRows = contracts.length > 0
+          ? await this.prisma.crmContract.findMany({
+              where: { contractNumber: { in: contracts } },
+              select: { contractNumber: true, found: true },
+            })
+          : [];
+        const crmMap = new Map(crmRows.map((c) => [c.contractNumber, c.found]));
+        const values = contracts.map((c) => {
+          const found = crmMap.get(c);
+          // found=false → xato; found=true → verified; map'da yo'q → noma'lum
+          const tag = found === false ? ' (xato)' : '';
+          return { id: c, name: `${c}${tag}` };
+        });
+        // (Bo'sh — shartnomasi yo'q)
         const anyEmpty = await this.prisma.transaction.findFirst({
           where: { ...where, contractNumber: null },
           select: { id: true },
