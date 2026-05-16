@@ -1155,6 +1155,38 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const qc = useQueryClient();
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
+  const [manualEditOpen, setManualEditOpen] = useState(false);
+
+  // Tafsilot uchun jonli ma'lumot — categorize/setManual'dan keyin yangilanadi
+  const liveQuery = useQuery({
+    queryKey: ['tx-detail', row?.id],
+    queryFn: () => api.get<any>(`/transactions/${row.id}`),
+    enabled: !!row?.id,
+    initialData: row,
+    staleTime: 30_000,
+  });
+  const liveRow = liveQuery.data || row;
+
+  // Kategoriyalar daraxti (manual edit uchun)
+  const categoriesQuery = useQuery({
+    queryKey: ['categories-tree'],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>('/categorization/categories'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoriesTree = categoriesQuery.data?.items || [];
+
+  const setCategoryMut = useMutation({
+    mutationFn: (body: { categoryId: string | null; subcategoryId: string | null }) =>
+      api.post(`/categorization/transactions/${row.id}/set`, body),
+    onSuccess: () => {
+      toast.success('Kategoriya saqlandi');
+      setManualEditOpen(false);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      liveQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
 
   const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'raw'];
   const allOpen = SECTION_KEYS.every((k) => openSections.has(k));
@@ -1183,6 +1215,9 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     onSuccess: (r: any) => {
       setCategorizeLog(r);
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      // Tafsilotni qayta yuklash — Kategoriya/Shartnoma darrov ko'rinadi
+      liveQuery.refetch();
     },
     onError: (e: any) => setCategorizeLog({ ok: false, error: e?.message || 'Xato' }),
   });
@@ -1258,26 +1293,26 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
                   <Tag className="h-3 w-3" /> Kategoriya
                 </div>
-                {row.category ? (
+                {liveRow.category ? (
                   <div className="space-y-1">
                     <div
                       className="inline-flex items-center px-2 py-1 rounded-md text-[12px] font-semibold ring-1 ring-inset"
-                      style={{ backgroundColor: `${catColor}18`, color: catColor, borderColor: `${catColor}40` }}
+                      style={{ backgroundColor: `${(liveRow.category.color || '#6366f1')}18`, color: (liveRow.category.color || '#6366f1'), borderColor: `${(liveRow.category.color || '#6366f1')}40` }}
                     >
-                      {row.category.name}
+                      {liveRow.category.name}
                     </div>
-                    {row.subcategory && (
+                    {liveRow.subcategory && (
                       <div className="text-[11px] text-slate-600">
-                        ↳ {row.subcategory.name}
+                        ↳ {liveRow.subcategory.name}
                       </div>
                     )}
-                    {row.categorizedBy && (
+                    {liveRow.categorizedBy && (
                       <div className="text-[10px] text-slate-400">
-                        {row.categorizedBy === 'auto' && 'avto'}
-                        {row.categorizedBy === 'sync' && 'sync paytida'}
-                        {row.categorizedBy === 'manual' && "qo'lda"}
-                        {row.categorizedBy === 'cron' && 'cron'}
-                        {row.categorizedAt && ` · ${formatDateTime(row.categorizedAt)}`}
+                        {liveRow.categorizedBy === 'auto' && 'avto'}
+                        {liveRow.categorizedBy === 'sync' && 'sync paytida'}
+                        {liveRow.categorizedBy === 'manual' && "qo'lda"}
+                        {liveRow.categorizedBy === 'cron' && 'cron'}
+                        {liveRow.categorizedAt && ` · ${formatDateTime(liveRow.categorizedAt)}`}
                       </div>
                     )}
                   </div>
@@ -1291,17 +1326,17 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center gap-1">
                   <FileSignature className="h-3 w-3" /> Shartnoma
                 </div>
-                {row.contractNumber ? (
+                {liveRow.contractNumber ? (
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-white px-2 py-1 rounded ring-1 ring-indigo-200">
-                      {row.contractNumber}
+                      {liveRow.contractNumber}
                     </code>
-                    {row.contractStatus === 'verified' && row.contractCustomer && (
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={row.contractCustomer}>
-                        ✓ {row.contractCustomer}
+                    {liveRow.contractStatus === 'verified' && liveRow.contractCustomer && (
+                      <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[160px]" title={liveRow.contractCustomer}>
+                        ✓ {liveRow.contractCustomer}
                       </span>
                     )}
-                    {row.contractStatus === 'unverified' && (
+                    {liveRow.contractStatus === 'unverified' && (
                       <span className="text-[10px] text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded ring-1 ring-rose-200 font-semibold">
                         xato — CRM'da topilmadi
                       </span>
@@ -1313,23 +1348,34 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
               </div>
             </div>
 
-            {/* Avto-kategoriyalash tugma + natija — faqat kategoriya YO'Q bo'lganda */}
-            {canManage && !row.category && (
+            {/* Avto-kategoriyalash + qo'lda tahrirlash tugmalari */}
+            {canManage && (
               <div className="pt-3 border-t border-indigo-200/60">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
-                    Qoidalar bo'yicha avto-aniqlash
+                    {liveRow.category
+                      ? "Kategoriyani qo'lda o'zgartirish mumkin"
+                      : "Qoidalar bo'yicha avto-aniqlash"}
                   </div>
                   <div className="flex items-center gap-2">
+                    {!liveRow.category && (
+                      <button
+                        onClick={() => categorizeMut.mutate(false)}
+                        disabled={categorizeMut.isPending}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      >
+                        {categorizeMut.isPending
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Wand2 className="h-3 w-3" />}
+                        Avto-kategoriyalash
+                      </button>
+                    )}
                     <button
-                      onClick={() => categorizeMut.mutate(false)}
-                      disabled={categorizeMut.isPending}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                      onClick={() => setManualEditOpen(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-slate-400 transition-colors"
                     >
-                      {categorizeMut.isPending
-                        ? <Loader2 className="h-3 w-3 animate-spin" />
-                        : <Wand2 className="h-3 w-3" />}
-                      Avto-kategoriyalash
+                      <FileText className="h-3 w-3" />
+                      Qo'lda tahrirlash
                     </button>
                   </div>
                 </div>
@@ -1476,6 +1522,17 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           )}
         </div>
       </DialogContent>
+
+      {/* Qo'lda kategoriya tahrirlash */}
+      {manualEditOpen && (
+        <CategoryEditDialog
+          row={liveRow}
+          tree={categoriesTree}
+          onClose={() => setManualEditOpen(false)}
+          onSave={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
+          saving={setCategoryMut.isPending}
+        />
+      )}
     </Dialog>
   );
 }

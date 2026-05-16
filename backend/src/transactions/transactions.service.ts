@@ -216,7 +216,7 @@ export class TransactionsService {
 
   async findOne(idOrExternal: string) {
     // Ichki id yoki bank bergan kompozit externalId bo'yicha qidiramiz
-    return this.prisma.transaction.findFirst({
+    const tx: any = await this.prisma.transaction.findFirst({
       where: { OR: [{ id: idOrExternal }, { externalId: idOrExternal }] },
       include: {
         bank: true,
@@ -225,6 +225,40 @@ export class TransactionsService {
         subcategory: true,
       },
     });
+    if (!tx) return null;
+    // Enrichment (list bilan bir xil mantiq)
+    const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
+    const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
+    const code = tx.category?.code;
+
+    const [cpRow, accRow, crmRow] = await Promise.all([
+      inn ? this.prisma.counterparty.findUnique({ where: { inn }, select: { name: true } }) : Promise.resolve(null),
+      acc ? this.prisma.bankAccount.findFirst({ where: { accountNo: acc }, select: { ownerName: true } }) : Promise.resolve(null),
+      tx.contractNumber
+        ? this.prisma.crmContract.findUnique({
+            where: { contractNumber: tx.contractNumber },
+            select: { found: true, customerName: true, objectName: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    let counterpartyDisplay: string | null = null;
+    if (code === 'TRANSFER') counterpartyDisplay = accRow?.ownerName || tx.category?.name || null;
+    else if (code === 'COUNTERPARTY') counterpartyDisplay = cpRow?.name || tx.category?.name || null;
+    else if (tx.category?.name) counterpartyDisplay = tx.category.name;
+
+    let contractStatus: 'verified' | 'unverified' | null = null;
+    let contractCustomer: string | null = null;
+    if (tx.contractNumber) {
+      if (crmRow) {
+        contractStatus = crmRow.found ? 'verified' : 'unverified';
+        contractCustomer = crmRow.customerName || null;
+      } else {
+        contractStatus = 'unverified';
+      }
+    }
+
+    return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
   }
 
   /**
