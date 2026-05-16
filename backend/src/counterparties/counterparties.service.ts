@@ -227,13 +227,30 @@ export class CounterpartiesService {
 
     const sortBy = q.sortBy || 'addedAt';
     const sortDir = q.sortDir || 'desc';
-    const [total, items] = await Promise.all([
+    const [total, items, activeVat, ratingAgg] = await Promise.all([
       this.prisma.counterparty.count({ where }),
       this.prisma.counterparty.findMany({
         where,
         orderBy: { [sortBy]: sortDir },
         skip: (page - 1) * perPage,
         take: perPage,
+      }),
+      // Global stats — barcha kontragentlar bo'yicha (filtr emas)
+      this.prisma.counterparty.count({
+        where: {
+          isActive: true,
+          OR: [
+            { vatStatus: { contains: 'Активн', mode: 'insensitive' } },
+            { vatStatus: { contains: 'faol', mode: 'insensitive' } },
+            { vatStatus: { contains: 'active', mode: 'insensitive' } },
+          ],
+        },
+      }),
+      this.prisma.counterparty.aggregate({
+        where: { isActive: true, rating: { not: null } },
+        _avg: { rating: true },
+        _max: { lastFetchedAt: true },
+        _count: { rating: true },
       }),
     ]);
 
@@ -251,12 +268,20 @@ export class CounterpartiesService {
       addedByUser: it.addedBy ? adminMap.get(it.addedBy) || null : null,
     }));
 
-    // Avto-yangilash holatini ham qaytaramiz
+    // Global stats — sahifadan emas, butun DB'dan
+    const grandTotal = await this.prisma.counterparty.count({ where: { isActive: true } });
     return {
       ok: true,
       total, page, perPage,
       items: itemsWithAdmin,
       didoxConfigured: this.didox.isConfigured(),
+      stats: {
+        total: grandTotal,
+        activeVat,
+        avgRating: ratingAgg._avg.rating != null ? Math.round(Number(ratingAgg._avg.rating)) : null,
+        ratedCount: ratingAgg._count.rating,
+        lastFetchedAt: ratingAgg._max.lastFetchedAt,
+      },
     };
   }
 
