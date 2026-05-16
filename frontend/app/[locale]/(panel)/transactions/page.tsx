@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -59,50 +58,35 @@ export default function TransactionsPage() {
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
   const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
 
-  // URL filter persistence — refresh'da yo'qolmasligi uchun (defensive)
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  // Xavfsiz getter — searchParams null bo'lishi mumkin
-  const getParam = (key: string): string => {
-    try { return searchParams?.get(key) || ''; } catch { return ''; }
-  };
-
-  const [page, setPage] = useState(() => Number(getParam('page') || 1));
-  const [perPage, setPerPage] = useState(() => Number(getParam('perPage') || 25));
-  const [q, setQ] = useState(() => getParam('q') || '');
-  const [direction, setDirection] = useState<string>(() => getParam('direction') || 'all');
-  const [matchStatus, setMatchStatus] = useState<string>(() => getParam('matchStatus') || 'all');
-  const [bankId, setBankId] = useState<string>(() => getParam('bankId') || 'all');
-  const [dateFrom, setDateFrom] = useState(() => getParam('dateFrom') || '');
-  const [dateTo, setDateTo] = useState(() => getParam('dateTo') || '');
-
-  // Filter o'zgarishlarini URL'ga yozish (browser refresh va back tugmasi uchun)
-  // Birinchi mount'da o'tkazib yuborib — useState initial value URL'dan o'qigan,
-  // qayta yozish keraksiz va loop'ga sabab bo'lishi mumkin
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
+  // localStorage filter persistence — refresh'da saqlanadi
+  const STORAGE_KEY = 'tx-filters-v1';
+  const initialFilters = (() => {
+    if (typeof window === 'undefined') return null;
     try {
-      const params = new URLSearchParams();
-      if (q) params.set('q', q);
-      if (direction !== 'all') params.set('direction', direction);
-      if (matchStatus !== 'all') params.set('matchStatus', matchStatus);
-      if (bankId !== 'all') params.set('bankId', bankId);
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
-      if (page !== 1) params.set('page', String(page));
-      if (perPage !== 25) params.set('perPage', String(perPage));
-      const query = params.toString();
-      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
-    } catch (e) {
-      // ignore — refresh ishlamasa ham sahifa ishlay olsin
-    }
-  }, [q, direction, matchStatus, bankId, dateFrom, dateTo, page, perPage]);  // eslint-disable-line react-hooks/exhaustive-deps
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(25);
+  const [q, setQ] = useState(initialFilters?.q || '');
+  const [direction, setDirection] = useState<string>(initialFilters?.direction || 'all');
+  const [matchStatus, setMatchStatus] = useState<string>(initialFilters?.matchStatus || 'all');
+  const [bankId, setBankId] = useState<string>(initialFilters?.bankId || 'all');
+  const [dateFrom, setDateFrom] = useState(initialFilters?.dateFrom || '');
+  const [dateTo, setDateTo] = useState(initialFilters?.dateTo || '');
+
+  // Filter o'zgarishlarini localStorage'ga yozish
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const filters = { q, direction, matchStatus, bankId, dateFrom, dateTo };
+      const hasAny = q || direction !== 'all' || matchStatus !== 'all' || bankId !== 'all' || dateFrom || dateTo;
+      if (hasAny) localStorage.setItem(STORAGE_KEY, JSON.stringify(filters));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch { /* ignore */ }
+  }, [q, direction, matchStatus, bankId, dateFrom, dateTo]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<any>(null);
   const [idSearchOpen, setIdSearchOpen] = useState(false);
