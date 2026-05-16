@@ -275,12 +275,17 @@ export default function TransactionsPage() {
     queryKey: ['banks'],
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
+  // KPI toggle: 'all' yoki 'CLIENT' (debitorka)
+  const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
+
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats-30d'],
+    queryKey: ['tx-stats-30d', kpiMode],
     queryFn: () => {
       const from = new Date();
       from.setDate(from.getDate() - 30);
-      return api.get<any>(`/transactions/stats?from=${from.toISOString().slice(0, 10)}`);
+      const dateStr = from.toISOString().slice(0, 10);
+      const catParam = kpiMode === 'CLIENT' ? '&categoryCode=CLIENT' : '';
+      return api.get<any>(`/transactions/stats?from=${dateStr}${catParam}`);
     },
   });
 
@@ -404,36 +409,53 @@ export default function TransactionsPage() {
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
 
-        {/* ═══ KPI ROW ═══ */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            label={t('kpiIn30')}
-            value={formatMoney(inSum)}
-            icon={ArrowDownLeft}
-            color="emerald"
-            spark={spark(1.2)}
-          />
-          <StatCard
-            label={t('kpiOut30')}
-            value={formatMoney(outSum)}
-            icon={ArrowUpRight}
-            color="rose"
-            spark={spark(0.9)}
-          />
-          <StatCard
-            label={t('kpiNet')}
-            value={(net >= 0 ? '+' : '') + formatMoney(net)}
-            icon={TrendingUp}
-            color={net >= 0 ? 'indigo' : 'rose'}
-            spark={spark(1)}
-          />
-          <StatCard
-            label={t('kpiCount')}
-            value={String(txnCount)}
-            icon={Wallet}
-            color="amber"
-            spark={spark(0.6)}
-          />
+        {/* ═══ KPI ROW (toggle: all / CLIENT only) ═══ */}
+        <div className="relative">
+          {kpiMode === 'CLIENT' && (
+            <div className="absolute -top-2 left-3 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider z-10 shadow">
+              Klient / Debitorka
+            </div>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              label={kpiMode === 'CLIENT' ? "Klient kirim · 30 kun" : t('kpiIn30')}
+              value={formatMoney(inSum)}
+              icon={ArrowDownLeft}
+              color="emerald"
+              spark={spark(1.2)}
+            />
+            <StatCard
+              label={kpiMode === 'CLIENT' ? "Klient chiqim · 30 kun" : t('kpiOut30')}
+              value={formatMoney(outSum)}
+              icon={ArrowUpRight}
+              color="rose"
+              spark={spark(0.9)}
+            />
+            <StatCard
+              label={t('kpiNet')}
+              value={(net >= 0 ? '+' : '') + formatMoney(net)}
+              icon={TrendingUp}
+              color={net >= 0 ? 'indigo' : 'rose'}
+              spark={spark(1)}
+            />
+            <StatCard
+              label={t('kpiCount')}
+              value={String(txnCount)}
+              icon={Wallet}
+              color="amber"
+              spark={spark(0.6)}
+            />
+          </div>
+          {/* Toggle strelka — KPI'larni Klient/all rejimda almashtirish */}
+          <button
+            onClick={() => setKpiMode((m) => (m === 'all' ? 'CLIENT' : 'all'))}
+            title={kpiMode === 'all' ? 'Klient (debitorka) statistikasi' : "Umumiy statistikaga qaytish"}
+            className="absolute -right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white shadow-lg ring-1 ring-slate-200 hover:bg-indigo-50 hover:ring-indigo-300 hover:text-indigo-700 transition-all hover:scale-110"
+          >
+            {kpiMode === 'all'
+              ? <ChevronRight className="h-4 w-4" />
+              : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
 
         {/* ═══ FILTER BAR ═══ */}
@@ -512,10 +534,6 @@ export default function TransactionsPage() {
                     <History className="h-4 w-4 mr-2 text-indigo-600" />
                     <span className="flex-1">{t('toolBackfill')}</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
-                    <Hash className="h-4 w-4 mr-2 text-violet-600" />
-                    <span className="flex-1">{t('toolIdSearch')}</span>
-                  </DropdownMenuItem>
                   {canManageCategories && (
                     <DropdownMenuItem
                       onClick={() => recategorizeAllMut.mutate()}
@@ -551,21 +569,27 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* direction va bankId FilterChip'lari olib tashlandi — column filter'da bor */}
+              {/* ID orqali qidirish — alohida icon tugma */}
+              <button
+                onClick={() => setIdSearchOpen(true)}
+                title={t('toolIdSearch')}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-50 hover:bg-violet-50 hover:text-violet-700 text-slate-700 ring-1 ring-slate-200 hover:ring-violet-300 transition-all"
+              >
+                <Hash className="h-4 w-4" />
+              </button>
 
-              {/* Filter mode toggle — har ustun header'iga filtr icon qo'shadi (Google Sheets stilida) */}
+              {/* Filter mode toggle — faqat icon */}
               <button
                 onClick={() => setColumnFilterMode((v) => !v)}
                 title={columnFilterMode ? "Filter rejimini o'chirish" : "Har ustunga filter qo'yish"}
                 className={cn(
-                  "inline-flex items-center gap-1.5 h-10 px-3.5 rounded-xl text-sm font-medium transition-all",
+                  "inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all",
                   columnFilterMode
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
                     : 'bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200',
                 )}
               >
                 <FilterIcon className="h-4 w-4" />
-                Filter {columnFilterMode && '✓'}
               </button>
 
               <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
