@@ -9,6 +9,7 @@ import {
   ChevronDown, Search, X,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { TransactionsTabs } from '@/components/transactions-tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -96,6 +97,7 @@ export default function CheckPage() {
         title={t('title')}
         subtitle={t('subtitle')}
       />
+      <TransactionsTabs />
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         {/* ═══ Boshqaruv paneli ═══ */}

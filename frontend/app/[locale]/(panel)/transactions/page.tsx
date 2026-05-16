@@ -12,6 +12,7 @@ import {
   Wrench, Printer,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { TransactionsTabs } from '@/components/transactions-tabs';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -237,6 +238,7 @@ export default function TransactionsPage() {
   return (
     <>
       <Topbar title={t('title')} subtitle={t('subtitle')} />
+      <TransactionsTabs />
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
 
