@@ -105,9 +105,18 @@ export default function CounterpartiesPage() {
   });
 
   const refreshMut = useMutation({
-    mutationFn: (inn: string) => api.post(`/counterparties/${inn}/refresh`),
+    mutationFn: (inn: string) =>
+      api.post<{ ok: boolean; source?: string; error?: string }>(`/counterparties/${inn}/refresh`),
     onMutate: (inn) => setRefreshingInn(inn),
-    onSuccess: () => { toast.success(t('refreshOk')); qc.invalidateQueries({ queryKey: ['counterparties'] }); },
+    onSuccess: (r) => {
+      if (r?.ok) {
+        const src = r.source && r.source !== 'none' ? ` (${r.source})` : '';
+        toast.success(t('refreshOk') + src);
+      } else {
+        toast.warning(r?.error || t('refreshError'));
+      }
+      qc.invalidateQueries({ queryKey: ['counterparties'] });
+    },
     onError: (e: any) => toast.error(e?.message || t('refreshError')),
     onSettled: () => setRefreshingInn(null),
   });
