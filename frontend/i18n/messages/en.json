@@ -498,6 +498,8 @@
     "accountant": "Chief accountant",
     "syncing": "Syncing...",
     "perPage": "{n}/page",
+    "perPageLabel": "Per page:",
+    "goToPage": "Page:",
     "ofTotal": "{n} counterparties",
     "filterReset": "Reset"
   },
