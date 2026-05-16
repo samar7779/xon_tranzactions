@@ -131,18 +131,24 @@ export class TransactionsService {
         }
       }
 
-      // counterpartyDisplay — FAQAT haqiqiy entity nomi (kategoriya nomi emas!)
-      //   - CLIENT (CRM verified) → mijoz nomi
-      //   - TRANSFER → bizning bank hisobimiz egasi (LEVEL UP-STROY)
-      //   - COUNTERPARTY → Counterparty jadvalidan (GREATCITY, BARAKAT)
-      //   - Boshqalar → null (BANK/MINFIN/SALARY/LOAN — kategoriya o'zi yetarli)
+      // counterpartyDisplay — legacy F ustun (Excel) bilan moslangan:
+      //   1) Specific entity bor bo'lsa — uni ko'rsatamiz (eng aniq)
+      //      - CLIENT (CRM verified) → mijoz nomi (Ivanov Ivan)
+      //      - TRANSFER → o'z bank hisobimiz egasi (LEVEL UP-STROY)
+      //      - COUNTERPARTY → Counterparty.name (GREATCITY, BARAKAT)
+      //   2) Aks holda — kategoriya nomi (placeholder turi)
+      //      "Банк", "Клиент / Физ.Л / Юр.Л", "Молия Вазирлиги", "Зарплата"
+      //   3) Kategoriya ham yo'q → null
       let counterpartyDisplay: string | null = null;
       if (code === 'CLIENT') {
-        counterpartyDisplay = contractCustomer || null;
+        counterpartyDisplay = contractCustomer || tx.category?.name || null;
       } else if (code === 'TRANSFER') {
-        counterpartyDisplay = (acc && accByNo.get(acc)) || null;
+        counterpartyDisplay = (acc && accByNo.get(acc)) || tx.category?.name || null;
       } else if (code === 'COUNTERPARTY') {
-        counterpartyDisplay = (inn && cpByInn.get(inn)) || null;
+        counterpartyDisplay = (inn && cpByInn.get(inn)) || tx.category?.name || null;
+      } else if (tx.category?.name) {
+        // BANK / MINFIN / SALARY / LOAN / COUNTERPARTY_RETURN
+        counterpartyDisplay = tx.category.name;
       }
       return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
     });

@@ -59,34 +59,50 @@ export default function TransactionsPage() {
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
   const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
 
-  // URL filter persistence — refresh'da yo'qolmasligi uchun
+  // URL filter persistence — refresh'da yo'qolmasligi uchun (defensive)
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [page, setPage] = useState(() => Number(searchParams.get('page') || 1));
-  const [perPage, setPerPage] = useState(() => Number(searchParams.get('perPage') || 25));
-  const [q, setQ] = useState(() => searchParams.get('q') || '');
-  const [direction, setDirection] = useState<string>(() => searchParams.get('direction') || 'all');
-  const [matchStatus, setMatchStatus] = useState<string>(() => searchParams.get('matchStatus') || 'all');
-  const [bankId, setBankId] = useState<string>(() => searchParams.get('bankId') || 'all');
-  const [dateFrom, setDateFrom] = useState(() => searchParams.get('dateFrom') || '');
-  const [dateTo, setDateTo] = useState(() => searchParams.get('dateTo') || '');
+  // Xavfsiz getter — searchParams null bo'lishi mumkin
+  const getParam = (key: string): string => {
+    try { return searchParams?.get(key) || ''; } catch { return ''; }
+  };
+
+  const [page, setPage] = useState(() => Number(getParam('page') || 1));
+  const [perPage, setPerPage] = useState(() => Number(getParam('perPage') || 25));
+  const [q, setQ] = useState(() => getParam('q') || '');
+  const [direction, setDirection] = useState<string>(() => getParam('direction') || 'all');
+  const [matchStatus, setMatchStatus] = useState<string>(() => getParam('matchStatus') || 'all');
+  const [bankId, setBankId] = useState<string>(() => getParam('bankId') || 'all');
+  const [dateFrom, setDateFrom] = useState(() => getParam('dateFrom') || '');
+  const [dateTo, setDateTo] = useState(() => getParam('dateTo') || '');
 
   // Filter o'zgarishlarini URL'ga yozish (browser refresh va back tugmasi uchun)
+  // Birinchi mount'da o'tkazib yuborib — useState initial value URL'dan o'qigan,
+  // qayta yozish keraksiz va loop'ga sabab bo'lishi mumkin
+  const isInitialMount = useRef(true);
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (q) params.set('q', q);
-    if (direction !== 'all') params.set('direction', direction);
-    if (matchStatus !== 'all') params.set('matchStatus', matchStatus);
-    if (bankId !== 'all') params.set('bankId', bankId);
-    if (dateFrom) params.set('dateFrom', dateFrom);
-    if (dateTo) params.set('dateTo', dateTo);
-    if (page !== 1) params.set('page', String(page));
-    if (perPage !== 25) params.set('perPage', String(perPage));
-    const query = params.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
-  }, [q, direction, matchStatus, bankId, dateFrom, dateTo, page, perPage, pathname, router]);
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    try {
+      const params = new URLSearchParams();
+      if (q) params.set('q', q);
+      if (direction !== 'all') params.set('direction', direction);
+      if (matchStatus !== 'all') params.set('matchStatus', matchStatus);
+      if (bankId !== 'all') params.set('bankId', bankId);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      if (page !== 1) params.set('page', String(page));
+      if (perPage !== 25) params.set('perPage', String(perPage));
+      const query = params.toString();
+      router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+    } catch (e) {
+      // ignore — refresh ishlamasa ham sahifa ishlay olsin
+    }
+  }, [q, direction, matchStatus, bankId, dateFrom, dateTo, page, perPage]);  // eslint-disable-line react-hooks/exhaustive-deps
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<any>(null);
   const [idSearchOpen, setIdSearchOpen] = useState(false);
@@ -1324,7 +1340,18 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             {/* Kontragent — haqiqiy entity nomi (CRM mijoz / firma) */}
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Kontragent</div>
+                <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1 flex items-center justify-between gap-1">
+                  <span>Kontragent</span>
+                  {canManage && (
+                    <button
+                      onClick={() => setManualEditOpen(true)}
+                      title="Kontragent (top kategoriya) o'zgartirish"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-slate-400 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                    >
+                      <FileText className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
                 {liveRow.counterpartyDisplay ? (
                   <>
                     <div className="text-[14px] font-semibold text-slate-900 truncate">{liveRow.counterpartyDisplay}</div>
@@ -1395,11 +1422,11 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 )}
               </div>
 
-              {/* Shartnoma raqami — inline edit (CRM search bilan) */}
+              {/* Shartnoma raqami — inline edit (faqat CLIENT yoki uncategorized uchun) */}
               <div>
                 <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 flex items-center justify-between gap-1">
                   <span className="flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span>
-                  {canManage && (
+                  {canManage && (!liveRow.category || liveRow.category?.code === 'CLIENT') && (
                     <button
                       onClick={() => setContractEditOpen(true)}
                       title="Shartnomani o'zgartirish (CRM search)"
