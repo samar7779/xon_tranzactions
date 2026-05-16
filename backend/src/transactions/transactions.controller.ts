@@ -26,6 +26,12 @@ export class TransactionsController {
     return this.svc.list(q);
   }
 
+  @Get('distinct')
+  @ApiOperation({ summary: "Ustun bo'yicha distinct qiymatlar (Google Sheets filter uchun)" })
+  distinct(@Query('column') column: string, @Query() q: ListTransactionsDto) {
+    return this.svc.distinctValues(column, q);
+  }
+
   @Get('stats')
   @ApiOperation({ summary: 'Statistika: jami, IN/OUT, banklar bo\'yicha' })
   stats(@Query('from') from?: string, @Query('to') to?: string) {

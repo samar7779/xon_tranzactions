@@ -86,16 +86,39 @@ export default function TransactionsPage() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem('tx-filters-v1');
-      if (!raw) return;
-      const f = JSON.parse(raw);
-      if (typeof f?.q === 'string') setQ(f.q);
-      if (typeof f?.direction === 'string') setDirection(f.direction);
-      if (typeof f?.matchStatus === 'string') setMatchStatus(f.matchStatus);
-      if (typeof f?.bankId === 'string') setBankId(f.bankId);
-      if (typeof f?.dateFrom === 'string') setDateFrom(f.dateFrom);
-      if (typeof f?.dateTo === 'string') setDateTo(f.dateTo);
+      if (raw) {
+        const f = JSON.parse(raw);
+        if (typeof f?.q === 'string') setQ(f.q);
+        if (typeof f?.direction === 'string') setDirection(f.direction);
+        if (typeof f?.matchStatus === 'string') setMatchStatus(f.matchStatus);
+        if (typeof f?.bankId === 'string') setBankId(f.bankId);
+        if (typeof f?.dateFrom === 'string') setDateFrom(f.dateFrom);
+        if (typeof f?.dateTo === 'string') setDateTo(f.dateTo);
+      }
+      // Column filterlar
+      const rawCol = localStorage.getItem('tx-column-filters-v1');
+      if (rawCol) {
+        const obj = JSON.parse(rawCol);
+        const restored: Record<string, Set<string>> = {};
+        for (const k of Object.keys(obj)) {
+          if (Array.isArray(obj[k]) && obj[k].length > 0) restored[k] = new Set(obj[k]);
+        }
+        if (Object.keys(restored).length > 0) setColumnFilters(restored);
+      }
     } catch { /* ignore */ }
   }, []);
+
+  // Column filterlar saqlash
+  useEffect(() => {
+    try {
+      const obj: Record<string, string[]> = {};
+      for (const k of Object.keys(columnFilters)) {
+        if (columnFilters[k]?.size > 0) obj[k] = Array.from(columnFilters[k]);
+      }
+      if (Object.keys(obj).length > 0) localStorage.setItem('tx-column-filters-v1', JSON.stringify(obj));
+      else localStorage.removeItem('tx-column-filters-v1');
+    } catch { /* ignore */ }
+  }, [columnFilters]);
 
   // Filter o'zgarishlarini localStorage'ga saqlash
   useEffect(() => {
@@ -186,15 +209,35 @@ export default function TransactionsPage() {
     return c;
   }, [direction, bankId, dateFrom, dateTo, columnFilters]);
 
+  // Column filter -> URL param map (vergul bilan ajratilgan)
+  const COLUMN_TO_PARAM: Record<string, string> = {
+    bank: 'bankIds',
+    kontragent: 'categoryIds',
+    kategoriya: 'subcategoryIds',
+    direction: 'directions',
+    contractStatus: 'contractStatuses',
+    hisobNomi: 'hisobNomi',
+  };
+
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
   if (q) params.set('q', q);
   if (direction !== 'all') params.set('direction', direction);
   if (dateFrom) params.set('dateFrom', dateFrom);
   if (dateTo) params.set('dateTo', dateTo);
   if (bankId !== 'all') params.set('bankId', bankId);
+  // Column filterlarni URL'ga qo'shamiz
+  for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+    const set = columnFilters[col];
+    if (set && set.size > 0) params.set(paramName, Array.from(set).join(','));
+  }
+
+  // columnFilters Set object — JSON serialization uchun array'ga aylantiramiz
+  const columnFiltersKey = JSON.stringify(
+    Object.fromEntries(Object.entries(columnFilters).map(([k, v]) => [k, Array.from(v).sort()])),
+  );
 
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, matchStatus, dateFrom, dateTo, bankId],
+    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -210,39 +253,8 @@ export default function TransactionsPage() {
     },
   });
 
-  // Client-side per-column filter (Google Sheets stilida)
-  // Har ustun uchun columnFilters[col] Set bo'lsa, faqat shu qiymatlarni qoldiramiz
-  const filtered = useMemo(() => {
-    let arr = data?.items || [];
-    // Eski matchStatus filter — yo'q endi, lekin barqarorlik uchun qoldiramiz
-    if (matchStatus !== 'all') {
-      arr = arr.filter((it) => (it.matchStatus || 'UNMATCHED') === matchStatus);
-    }
-    // Per-column filterlar
-    for (const col of Object.keys(columnFilters)) {
-      const set = columnFilters[col];
-      if (!set || set.size === 0) continue;
-      arr = arr.filter((it: any) => {
-        const val = columnValueFor(it, col);
-        return set.has(val ?? '(bo\'sh)');
-      });
-    }
-    return arr;
-  }, [data?.items, matchStatus, columnFilters]);
-
-  // Har ustun uchun distinct qiymatlar (joriy sahifa'dagilar)
-  const columnDistinctValues = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
-    const cols = ['direction', 'kontragent', 'kategoriya', 'bank', 'hisobNomi'];
-    for (const col of cols) map[col] = new Set<string>();
-    for (const it of (data?.items || [])) {
-      for (const col of cols) {
-        const val = columnValueFor(it, col);
-        map[col].add(val ?? '(bo\'sh)');
-      }
-    }
-    return map;
-  }, [data?.items]);
+  // Backend allaqachon filtrlangan natijani qaytaradi — qo'shimcha client-side filter shart emas
+  const filtered = data?.items || [];
 
   const autoMatchMut = useMutation({
     mutationFn: (id: string) => api.post(`/payments/auto-match/${id}`),
@@ -286,6 +298,11 @@ export default function TransactionsPage() {
     if (bankId !== 'all') p.set('bankId', bankId);
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo) p.set('dateTo', dateTo);
+    // Column filterlarni ham qo'shamiz
+    for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+      const set = columnFilters[col];
+      if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+    }
     try {
       toast.loading(t('excelPreparing'), { id: 'tx-export' });
       await apiDownload(`/transactions/export?${p}`, `tranzaksiyalar-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -345,6 +362,8 @@ export default function TransactionsPage() {
   function clearFilters() {
     setDirection('all'); setMatchStatus('all'); setBankId('all');
     setDateFrom(''); setDateTo(''); setQ(''); setPage(1);
+    setColumnFilters({});
+    try { localStorage.removeItem('tx-column-filters-v1'); } catch { /* ignore */ }
   }
 
   return (
@@ -608,61 +627,13 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-                      <ColumnTh
-                        label={t('bankAccountHeader')}
-                        column="bank"
-                        filterMode={columnFilterMode}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        openFilterColumn={openFilterColumn}
-                        setOpenFilterColumn={setOpenFilterColumn}
-                        distinctValues={columnDistinctValues.bank}
-                      />
+                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
-                      <ColumnTh
-                        label="Hisob nomi"
-                        column="hisobNomi"
-                        filterMode={columnFilterMode}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        openFilterColumn={openFilterColumn}
-                        setOpenFilterColumn={setOpenFilterColumn}
-                        distinctValues={columnDistinctValues.hisobNomi}
-                      />
-                      <ColumnTh
-                        label={t('directionHeader')}
-                        column="direction"
-                        widthClass="w-24"
-                        filterMode={columnFilterMode}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        openFilterColumn={openFilterColumn}
-                        setOpenFilterColumn={setOpenFilterColumn}
-                        distinctValues={columnDistinctValues.direction}
-                      />
-                      <ColumnTh
-                        label="Kontragent"
-                        column="kontragent"
-                        widthClass="w-40"
-                        filterMode={columnFilterMode}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        openFilterColumn={openFilterColumn}
-                        setOpenFilterColumn={setOpenFilterColumn}
-                        distinctValues={columnDistinctValues.kontragent}
-                      />
-                      <ColumnTh
-                        label="Kategoriya"
-                        column="kategoriya"
-                        widthClass="w-40"
-                        filterMode={columnFilterMode}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        openFilterColumn={openFilterColumn}
-                        setOpenFilterColumn={setOpenFilterColumn}
-                        distinctValues={columnDistinctValues.kategoriya}
-                      />
-                      <th className="text-left px-4 py-3 w-32">Shartnoma</th>
+                      <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label="Kontragent" column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -1887,7 +1858,7 @@ function CopyBlock({ value }: { value: string }) {
 // ═══ COLUMN TH — filter icon bilan ustun headeri (Google Sheets stilida)
 function ColumnTh({
   label, column, widthClass, filterMode, columnFilters, setColumnFilters,
-  openFilterColumn, setOpenFilterColumn, distinctValues,
+  openFilterColumn, setOpenFilterColumn,
 }: {
   label: string;
   column: string;
@@ -1897,7 +1868,6 @@ function ColumnTh({
   setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
   openFilterColumn: string | null;
   setOpenFilterColumn: (col: string | null) => void;
-  distinctValues: Set<string>;
 }) {
   const active = (columnFilters[column]?.size || 0) > 0;
   const isOpen = openFilterColumn === column;
@@ -1923,7 +1893,6 @@ function ColumnTh({
       {isOpen && (
         <ColumnFilterPopover
           column={column}
-          distinctValues={distinctValues}
           selected={columnFilters[column] || new Set()}
           onClose={() => setOpenFilterColumn(null)}
           onApply={(set) => {
@@ -1936,12 +1905,11 @@ function ColumnTh({
   );
 }
 
-// ═══ COLUMN FILTER POPOVER — Google Sheets'ga o'xshash (search + checkboxes + OK/Cancel)
+// ═══ COLUMN FILTER POPOVER — backend'dan distinct olib chiqaradi
 function ColumnFilterPopover({
-  column, distinctValues, selected, onClose, onApply,
+  column, selected, onClose, onApply,
 }: {
   column: string;
-  distinctValues: Set<string>;
   selected: Set<string>;
   onClose: () => void;
   onApply: (set: Set<string>) => void;
@@ -1949,29 +1917,37 @@ function ColumnFilterPopover({
   const [search, setSearch] = useState('');
   const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
 
+  // Backend'dan distinct qiymatlar
+  const distinctQuery = useQuery({
+    queryKey: ['tx-distinct', column],
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(
+      `/transactions/distinct?column=${encodeURIComponent(column)}`,
+    ),
+    staleTime: 5 * 60 * 1000,
+  });
+  const distinctList = distinctQuery.data?.values || [];
+
   const allValues = useMemo(() => {
-    const arr = Array.from(distinctValues).sort();
+    const arr = distinctList.map((d) => ({ id: d.id, name: d.name }));
     if (!search.trim()) return arr;
     const q = search.toLowerCase();
-    return arr.filter((v) => v.toLowerCase().includes(q));
-  }, [distinctValues, search]);
+    return arr.filter((v) => v.name.toLowerCase().includes(q));
+  }, [distinctList, search]);
 
-  const allSelected = allValues.every((v) => localSelected.has(v));
+  const allSelected = allValues.length > 0 && allValues.every((v) => localSelected.has(v.id));
 
   function toggleAll() {
-    if (allSelected) {
-      const next = new Set(localSelected);
-      for (const v of allValues) next.delete(v);
-      setLocalSelected(next);
-    } else {
-      const next = new Set(localSelected);
-      for (const v of allValues) next.add(v);
-      setLocalSelected(next);
-    }
-  }
-  function toggleOne(v: string) {
     const next = new Set(localSelected);
-    if (next.has(v)) next.delete(v); else next.add(v);
+    if (allSelected) {
+      for (const v of allValues) next.delete(v.id);
+    } else {
+      for (const v of allValues) next.add(v.id);
+    }
+    setLocalSelected(next);
+  }
+  function toggleOne(id: string) {
+    const next = new Set(localSelected);
+    if (next.has(id)) next.delete(id); else next.add(id);
     setLocalSelected(next);
   }
 
@@ -1994,10 +1970,10 @@ function ColumnFilterPopover({
       <div className="p-3 space-y-2">
         <div className="flex items-center justify-between">
           <button
-            onClick={() => setLocalSelected(new Set(allValues))}
+            onClick={() => setLocalSelected(new Set(allValues.map((v) => v.id)))}
             className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
           >
-            Hammasini tanlash ({distinctValues.size})
+            Hammasini tanlash ({distinctList.length})
           </button>
           <button
             onClick={() => setLocalSelected(new Set())}
@@ -2016,7 +1992,11 @@ function ColumnFilterPopover({
           />
         </div>
         <div className="max-h-[220px] overflow-y-auto rounded-lg ring-1 ring-slate-100 divide-y divide-slate-50">
-          {allValues.length === 0 ? (
+          {distinctQuery.isLoading ? (
+            <div className="px-3 py-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-2">
+              <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
+            </div>
+          ) : allValues.length === 0 ? (
             <div className="px-3 py-4 text-center text-[11px] text-slate-400 italic">Topilmadi</div>
           ) : (
             <>
@@ -2032,14 +2012,14 @@ function ColumnFilterPopover({
                 </span>
               </label>
               {allValues.map((v) => (
-                <label key={v} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
+                <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={localSelected.has(v)}
-                    onChange={() => toggleOne(v)}
+                    checked={localSelected.has(v.id)}
+                    onChange={() => toggleOne(v.id)}
                     className="w-3.5 h-3.5 rounded"
                   />
-                  <span className="text-[11px] text-slate-700 truncate">{v}</span>
+                  <span className="text-[11px] text-slate-700 truncate" title={v.name}>{v.name}</span>
                 </label>
               ))}
             </>
