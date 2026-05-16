@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Users, ShieldCheck, History, Zap, Trash2, Briefcase } from 'lucide-react';
+import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
@@ -14,6 +14,7 @@ const TABS = [
   { key: 'sync-logs',      tKey: 'syncLogs',       icon: History },
   { key: 'api-explorer',   tKey: 'apiExplorer',    icon: Zap },
   { key: 'cleanup',        tKey: 'cleanup',        icon: Trash2 },
+  { key: 'import',         tKey: 'import',         icon: Upload },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

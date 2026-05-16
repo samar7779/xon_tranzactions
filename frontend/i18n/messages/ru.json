@@ -87,7 +87,8 @@
       "counterparties": "Контрагенты",
       "syncLogs": "История sync",
       "apiExplorer": "API Explorer",
-      "cleanup": "Очистка"
+      "cleanup": "Очистка",
+      "import": "Импорт"
     }
   },
   "cleanup": {

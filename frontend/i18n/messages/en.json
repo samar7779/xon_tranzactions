@@ -87,7 +87,8 @@
       "counterparties": "Counterparties",
       "syncLogs": "Sync logs",
       "apiExplorer": "API Explorer",
-      "cleanup": "Cleanup"
+      "cleanup": "Cleanup",
+      "import": "Import"
     }
   },
   "cleanup": {

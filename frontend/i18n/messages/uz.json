@@ -87,7 +87,8 @@
       "counterparties": "Kontragentlar",
       "syncLogs": "Sync tarixi",
       "apiExplorer": "API Explorer",
-      "cleanup": "Tozalash"
+      "cleanup": "Tozalash",
+      "import": "Import"
     }
   },
   "cleanup": {
