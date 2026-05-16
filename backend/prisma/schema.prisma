@@ -476,6 +476,9 @@ model Counterparty {
   inn               String    @unique @db.VarChar(20)        // 9/14 raqam standart, lekin legacy kodlar uchun (null0004, kod0088, va h.k.) ruxsat etilgan
   name              String    @db.VarChar(255)               // foydalanuvchi kiritgan — refresh'da o'zgarmaydi
 
+  // Qo'lda kiritilgan kontragentlar (INN 9/14 raqamli emas) — DIDOX/Chamber tegmaydi
+  isManual          Boolean   @default(false) @map("is_manual")
+
   // — DIDOX briefData'dan keladigan maydonlar (cron yangilaydi) —
   fullName          String?   @map("full_name") @db.VarChar(255)
   director          String?   @db.VarChar(255)
