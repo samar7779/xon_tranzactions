@@ -108,6 +108,19 @@ model Transaction {
   metadata      Json?                                                // bank javobining to'liq raw
   rawExtra      Json?     @map("raw_extra")                          // bizga noma'lum fieldlar (future-proof)
 
+  // ─── MANBA (Sync / Import) ───
+  // SYNC = bank API'dan avtomatik olingan, IMPORT = qo'lda Excel'dan kiritilgan
+  source        TxnSource @default(SYNC)
+  // Qo'lda import qilinganda — bizning kategoriya ro'yxatida yo'q nomlar matn sifatida saqlanadi
+  importCategoryText  String?  @map("import_category_text") @db.VarChar(255)
+  // Qo'lda import qilinganda — kontragent nomi (free-text, Counterparty bilan match qilinmagan)
+  importCounterpartyText String? @map("import_counterparty_text") @db.VarChar(255)
+  // Qo'lda import qilinganda — bank nomi (Excel'dagi original matn, agar bank topilmagan bo'lsa)
+  importBankNameText  String?  @map("import_bank_name_text") @db.VarChar(255)
+  // Qo'lda import qilinganda — kim import qilgan va qachon
+  importedBy    String?    @map("imported_by") @db.VarChar(190)
+  importedAt    DateTime?  @map("imported_at")
+
   // Bog'lanishlar
   bankId        String?      @map("bank_id")
   bank          Bank?        @relation(fields: [bankId], references: [id])
@@ -155,6 +168,7 @@ model Transaction {
   @@index([categoryId])
   @@index([subcategoryId])
   @@index([contractNumber])
+  @@index([source])
   @@map("transactions")
 }
 
@@ -187,6 +201,12 @@ enum TxnStatus {
 enum TxnDirection {
   IN             // Kiruvchi
   OUT            // Chiquvchi
+}
+
+enum TxnSource {
+  SYNC           // Bank API'dan avtomatik sync
+  IMPORT         // Qo'lda Excel'dan import qilingan
+  MANUAL         // Qo'lda admin tomonidan kiritilgan (kelajakda)
 }
 
 // ─────────────────────────────────────────────────────────────────

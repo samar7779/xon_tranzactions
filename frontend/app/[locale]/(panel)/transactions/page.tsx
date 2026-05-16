@@ -1544,6 +1544,14 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                     ⚡ ANOR 24/7
                   </span>
                 )}
+                {row.source === 'IMPORT' && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-300/25 text-fuchsia-100 ring-1 ring-fuchsia-200/40"
+                    title={`Qo'lda Excel'dan import qilingan${row.importedBy ? ' · ' + row.importedBy : ''}${row.importedAt ? ' · ' + formatDateTime(row.importedAt) : ''}`}
+                  >
+                    📥 IMPORT
+                  </span>
+                )}
               </div>
               <button onClick={onClose} className="text-white/70 hover:text-white shrink-0 -mr-1 -mt-1 p-1">
                 <X className="h-5 w-5" />
@@ -2934,6 +2942,7 @@ function CategoryHistoryItem({ h }: { h: any }) {
     sync:   'bg-emerald-100 text-emerald-700',
     auto:   'bg-violet-100 text-violet-700',
     cron:   'bg-amber-100 text-amber-700',
+    import: 'bg-fuchsia-100 text-fuchsia-700',
   };
   const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
 

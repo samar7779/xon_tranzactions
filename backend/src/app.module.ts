@@ -22,6 +22,7 @@ import { ApiExplorerModule } from './api-explorer/api-explorer.module';
 import { CrmModule } from './crm/crm.module';
 import { CounterpartiesModule } from './counterparties/counterparties.module';
 import { CategorizationModule } from './categorization/categorization.module';
+import { ImportModule } from './import/import.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { CategorizationModule } from './categorization/categorization.module';
     CrmModule,
     CounterpartiesModule,
     CategorizationModule,
+    ImportModule,
   ],
 })
 export class AppModule {}
