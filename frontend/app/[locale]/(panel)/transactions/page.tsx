@@ -275,17 +275,26 @@ export default function TransactionsPage() {
     queryKey: ['banks'],
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
-  // KPI toggle: 'all' yoki 'CLIENT' (debitorka)
+  // KPI toggle: 'all' (oxirgi 30 kun) yoki 'CLIENT' (shu oy — debitorka)
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats-30d', kpiMode],
+    queryKey: ['tx-stats', kpiMode],
     queryFn: () => {
-      const from = new Date();
-      from.setDate(from.getDate() - 30);
-      const dateStr = from.toISOString().slice(0, 10);
-      const catParam = kpiMode === 'CLIENT' ? '&categoryCode=CLIENT' : '';
-      return api.get<any>(`/transactions/stats?from=${dateStr}${catParam}`);
+      const today = new Date();
+      let from: Date;
+      if (kpiMode === 'CLIENT') {
+        // Shu oyning 1-kunidan bugungacha
+        from = new Date(today.getFullYear(), today.getMonth(), 1);
+      } else {
+        // Oxirgi 30 kun
+        from = new Date();
+        from.setDate(from.getDate() - 30);
+      }
+      const fromStr = from.toISOString().slice(0, 10);
+      const toStr = today.toISOString().slice(0, 10);
+      const catParam = kpiMode === 'CLIENT' ? `&categoryCode=CLIENT&to=${toStr}` : '';
+      return api.get<any>(`/transactions/stats?from=${fromStr}${catParam}`);
     },
   });
 
@@ -418,14 +427,14 @@ export default function TransactionsPage() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
-              label={kpiMode === 'CLIENT' ? "Klient kirim · 30 kun" : t('kpiIn30')}
+              label={kpiMode === 'CLIENT' ? "Klient kirim · shu oy" : t('kpiIn30')}
               value={formatMoney(inSum)}
               icon={ArrowDownLeft}
               color="emerald"
               spark={spark(1.2)}
             />
             <StatCard
-              label={kpiMode === 'CLIENT' ? "Klient chiqim · 30 kun" : t('kpiOut30')}
+              label={kpiMode === 'CLIENT' ? "Klient chiqim · shu oy" : t('kpiOut30')}
               value={formatMoney(outSum)}
               icon={ArrowUpRight}
               color="rose"
@@ -1332,8 +1341,11 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     onSuccess: () => {
       toast.success('Kategoriya saqlandi');
       setManualEditOpen(false);
+      // Jadval va detail darrov yangilanishi uchun — invalidate + force refetch
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      qc.invalidateQueries({ queryKey: ['tx-distinct'] });
       liveQuery.refetch();
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
@@ -1344,8 +1356,11 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
       api.post<{ ok: boolean; verified: boolean; customerName: string | null }>(`/categorization/transactions/${row.id}/set-contract`, { contractNumber }),
     onSuccess: (r) => {
       toast.success(`Shartnoma saqlandi — ${r.customerName || 'CRM tasdiqladi'}`);
+      // Jadval va detail darrov yangilanishi uchun — invalidate + force refetch
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      qc.invalidateQueries({ queryKey: ['tx-distinct'] });
       liveQuery.refetch();
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
