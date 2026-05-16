@@ -182,7 +182,7 @@ export class CrmService {
       }
     }
 
-    // 3) Har bir natijaga customerName qo'shamiz
+    // 3) Har bir natijaga customerName qo'shamiz — barcha mumkin bo'lgan maydonlardan
     const enriched = items.map((it) => {
       const num = String(it.contract || it.id || '').trim().toUpperCase();
       const customerName = cacheMap.get(num)
@@ -190,8 +190,13 @@ export class CrmService {
         || it.client?.full_name_lotin
         || it.client?.full_name
         || it.client?.name
+        || it.client?.fio
         || it.client_name
+        || it.full_name_kirill
+        || it.full_name_lotin
+        || it.full_name
         || it.fio
+        || it.name
         || it.object_name
         || null;
       return { ...it, customerName };
@@ -200,25 +205,62 @@ export class CrmService {
     // 4) Nomi yo'q natijalar uchun /show chaqirish (parallel, max 10)
     const missingName = enriched.filter((it) => !it.customerName).slice(0, 10);
     if (missingName.length > 0) {
+      // /show'ni har item uchun chaqirish — contract va id ikkalasini ham urin
       const showResults = await Promise.allSettled(
-        missingName.map((it) =>
-          this.show({ contract: String(it.contract || it.id || '').trim() }),
-        ),
+        missingName.map(async (it) => {
+          const contract = String(it.contract || '').trim();
+          const id = it.id;
+          // Birinchi contract bilan
+          let res = await this.show({ contract });
+          // Agar ok bo'lmasa va id bo'lsa — id bilan urinish
+          if (!(res as any)?.ok && id) {
+            res = await this.show({ id });
+          }
+          return res;
+        }),
       );
       const showMap = new Map<string, string>();
       for (let i = 0; i < missingName.length; i++) {
         const res = showResults[i];
         if (res.status === 'fulfilled' && (res.value as any)?.detail) {
           const detail: any = (res.value as any).detail;
+          // Barcha mumkin bo'lgan nom maydonlari (CRM turli versiyalarda boshqacha keladi)
           const name = detail.client?.full_name_kirill
             || detail.client?.full_name_lotin
             || detail.client?.full_name
             || detail.client?.name
+            || detail.client?.fio
+            || detail.fio
+            || detail.full_name_kirill
+            || detail.full_name_lotin
+            || detail.full_name
+            || detail.client_name
+            || detail.name
             || null;
           if (name) {
             const num = String(missingName[i].contract || missingName[i].id || '').trim().toUpperCase();
             showMap.set(num, name);
+            // CrmContract keshiga ham yozamiz (keyingi safar tez)
+            try {
+              await this.prisma.crmContract.upsert({
+                where: { contractNumber: num },
+                create: {
+                  contractNumber: num,
+                  customerName: name,
+                  status: String(detail.status || '').toLowerCase() || null,
+                  objectName: detail.object_name || null,
+                  found: true,
+                },
+                update: {
+                  customerName: name,
+                  found: true,
+                  lastVerifiedAt: new Date(),
+                },
+              });
+            } catch { /* ignore */ }
           }
+        } else if (res.status === 'rejected') {
+          this.log.warn(`/show xato (${missingName[i].contract}): ${res.reason}`);
         }
       }
       // Enriched'ga nomlarni qo'shamiz
