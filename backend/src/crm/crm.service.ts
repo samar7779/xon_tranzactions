@@ -182,21 +182,37 @@ export class CrmService {
       }
     }
 
-    // 3) Har bir natijaga customerName qo'shamiz — barcha mumkin bo'lgan maydonlardan
+    // XonSaroy CRM clientName builder — {first_name: {lotin, kirill}, last_name: {...}, ...}
+    const extractClientName = (it: any): string | null => {
+      const c = it.client || it.client_name;
+      if (!c) return null;
+      // String holatda — to'g'ridan-to'g'ri
+      if (typeof c === 'string') return c.trim() || null;
+      // Object holatda — {first_name: {lotin, kirill}, ...}
+      const f = (v: any): string => {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        return v.kirill || v.lotin || '';
+      };
+      const name = [f(c.last_name), f(c.first_name), f(c.middle_name)]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (name) return name;
+      // Fallback alohida maydonlar
+      return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || null;
+    };
+
+    // 3) Har bir natijaga customerName qo'shamiz
     const enriched = items.map((it) => {
       const num = String(it.contract || it.id || '').trim().toUpperCase();
       const customerName = cacheMap.get(num)
-        || it.client?.full_name_kirill
-        || it.client?.full_name_lotin
-        || it.client?.full_name
-        || it.client?.name
-        || it.client?.fio
-        || it.client_name
+        || extractClientName(it)
+        || it.fio
+        || it.full_name
         || it.full_name_kirill
         || it.full_name_lotin
-        || it.full_name
-        || it.fio
-        || it.name
+        || it.object
         || it.object_name
         || null;
       return { ...it, customerName };
