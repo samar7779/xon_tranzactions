@@ -277,11 +277,48 @@ export class CounterpartiesService {
     }
   }
 
-  async update(inn: string, dto: { name?: string; notes?: string; isActive?: boolean }) {
+  /**
+   * Qo'lda tahrirlash — DIDOX/Chamber'da topilmaydigan kontragentlar uchun
+   * (masalan PINFL'lar). Barcha maydonlarni tahrirlash mumkin.
+   */
+  async update(inn: string, dto: Partial<{
+    name: string;
+    fullName: string | null;
+    director: string | null;
+    accountant: string | null;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    vatNumber: string | null;
+    vatStatus: string | null;
+    oked: string | null;
+    rating: number | null;
+    bankAccounts: Array<{ account: string; mfo?: string | null }>;
+    notes: string;
+    isActive: boolean;
+  }>) {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
     const data: any = {};
     if (dto.name !== undefined) data.name = String(dto.name).trim();
+    if (dto.fullName !== undefined) data.fullName = dto.fullName || null;
+    if (dto.director !== undefined) data.director = dto.director || null;
+    if (dto.accountant !== undefined) data.accountant = dto.accountant || null;
+    if (dto.phone !== undefined) data.phone = dto.phone || null;
+    if (dto.email !== undefined) data.email = dto.email || null;
+    if (dto.address !== undefined) data.address = dto.address || null;
+    if (dto.vatNumber !== undefined) data.vatNumber = dto.vatNumber || null;
+    if (dto.vatStatus !== undefined) data.vatStatus = dto.vatStatus || null;
+    if (dto.oked !== undefined) data.oked = dto.oked || null;
+    if (dto.rating !== undefined) data.rating = dto.rating == null ? null : Number(dto.rating);
+    if (dto.bankAccounts !== undefined) {
+      const norm = Array.isArray(dto.bankAccounts)
+        ? dto.bankAccounts
+            .filter((b) => b?.account)
+            .map((b) => ({ account: String(b.account).trim(), mfo: b.mfo ? String(b.mfo).trim() : null }))
+        : null;
+      data.bankAccounts = norm && norm.length ? norm : null;
+    }
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.isActive !== undefined) data.isActive = !!dto.isActive;
     const updated = await this.prisma.counterparty.update({ where: { inn }, data });
@@ -350,8 +387,13 @@ export class CounterpartiesService {
   // ────────────────────────── Import / Export ──────────────────────────
 
   /**
-   * Excel'dan bulk import — har bir qator INN + Name.
-   * Dublikat INN → skip. Natijani satr-satr qaytaradi.
+   * Excel'dan bulk import — TEZ rejim:
+   *   • Faqat INN + Name DB'ga yoziladi (DIDOX/Chamber chaqirilmaydi)
+   *   • Dublikat INN'lar (skipDuplicates) o'tkazib yuboriladi
+   *   • lastFetchError = "Avto-yangilanish kutilmoqda..." — keyingi cron yangilaydi
+   *
+   * 1000 ta INN ~1 soniyada saqlanadi. Soati kelganda (08-22 har soat)
+   * background cron DIDOX'dan asta-sekin to'ldiradi.
    */
   async importExcel(buffer: Buffer, addedBy: string): Promise<{
     total: number; added: number; skipped: number; failed: number;
@@ -378,28 +420,71 @@ export class CounterpartiesService {
       rows: [] as Array<{ inn: string; name?: string; status: 'added' | 'skipped' | 'failed'; reason?: string }>,
     };
 
+    if (rowsToProcess.length === 0) return result;
+
+    // 1) Validate va format'siz INN'larni alohida ajratamiz
+    const validRows: Array<{ inn: string; name: string }> = [];
     for (const r of rowsToProcess) {
       if (!/^\d{9}$|^\d{14}$/.test(r.inn)) {
         result.failed++;
-        result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: 'INN noto\'g\'ri' });
+        result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: 'INN noto\'g\'ri (9 yoki 14 raqam)' });
         continue;
       }
-      const exists = await this.prisma.counterparty.findUnique({ where: { inn: r.inn } });
-      if (exists) {
+      validRows.push({ inn: r.inn, name: r.name || `INN ${r.inn}` });
+    }
+
+    // 2) Dublikatlarni bitta query bilan tekshiramiz (1 ta SELECT)
+    const innsToCheck = validRows.map((r) => r.inn);
+    const existingRows = await this.prisma.counterparty.findMany({
+      where: { inn: { in: innsToCheck } },
+      select: { inn: true },
+    });
+    const existingSet = new Set(existingRows.map((r) => r.inn));
+
+    // 3) Yangi INN'larni bulk insert qilamiz (createMany + skipDuplicates)
+    const toInsert: Array<{ inn: string; name: string; addedBy: string; lastFetchError: string }> = [];
+    for (const r of validRows) {
+      if (existingSet.has(r.inn)) {
         result.skipped++;
         result.rows.push({ inn: r.inn, name: r.name, status: 'skipped', reason: 'INN allaqachon mavjud' });
-        continue;
-      }
-      const name = r.name || `INN ${r.inn}`;
-      try {
-        await this.create({ inn: r.inn, name }, addedBy);
-        result.added++;
-        result.rows.push({ inn: r.inn, name, status: 'added' });
-      } catch (e: any) {
-        result.failed++;
-        result.rows.push({ inn: r.inn, name, status: 'failed', reason: e?.message || 'xato' });
+      } else {
+        toInsert.push({
+          inn: r.inn,
+          name: r.name,
+          addedBy,
+          lastFetchError: 'Avto-yangilanish kutilmoqda (cron 08:00–22:00)',
+        });
       }
     }
+
+    if (toInsert.length > 0) {
+      try {
+        const inserted = await this.prisma.counterparty.createMany({
+          data: toInsert,
+          skipDuplicates: true,
+        });
+        result.added = inserted.count;
+        // Hammasini "added" sifatida qaytaramiz (createMany batch'da bo'lganlar)
+        for (const r of toInsert) {
+          result.rows.push({ inn: r.inn, name: r.name, status: 'added' });
+        }
+      } catch (e: any) {
+        // Bulk fail bo'lsa — har birini alohida sinab ko'ramiz
+        this.log.warn(`Bulk insert xato: ${e?.message} — har birini alohida sinaymiz`);
+        for (const r of toInsert) {
+          try {
+            await this.prisma.counterparty.create({ data: r });
+            result.added++;
+            result.rows.push({ inn: r.inn, name: r.name, status: 'added' });
+          } catch (ee: any) {
+            result.failed++;
+            result.rows.push({ inn: r.inn, name: r.name, status: 'failed', reason: ee?.message || 'xato' });
+          }
+        }
+      }
+    }
+
+    this.log.log(`Import: ${result.added} yozildi, ${result.skipped} skip, ${result.failed} xato`);
     return result;
   }
 

@@ -62,8 +62,8 @@ export class CounterpartiesController {
 
   @Patch(':inn')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
-  @ApiOperation({ summary: 'Qo\'lda tahrirlash (name / notes / isActive)' })
-  update(@Param('inn') inn: string, @Body() body: { name?: string; notes?: string; isActive?: boolean }) {
+  @ApiOperation({ summary: 'Qo\'lda tahrirlash — barcha maydonlar (PINFL/qo\'lda yozilgan kontragentlar uchun)' })
+  update(@Param('inn') inn: string, @Body() body: any) {
     return this.svc.update(inn, body);
   }
 
