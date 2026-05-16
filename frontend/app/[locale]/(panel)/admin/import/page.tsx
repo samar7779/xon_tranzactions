@@ -4,8 +4,9 @@ import { useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Upload, Loader2, CheckCircle2, AlertTriangle, FileSpreadsheet,
-  X, ChevronDown, ChevronRight, Info,
+  Upload, Loader2, AlertTriangle, FileSpreadsheet, X,
+  ChevronDown, ChevronRight, Info, Wallet, Briefcase, Users,
+  FileSignature, Lock,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,21 +21,114 @@ interface ImportResult {
   errorRows: Array<{ row: number; reason: string }>;
 }
 
-const COLUMNS: Array<{ letter: string; header: string; description: string; required?: boolean }> = [
-  { letter: 'A', header: 'Р/С', description: 'Hisob raqami', required: true },
-  { letter: 'B', header: 'Банк Названия', description: "Bank nomi (bo'sh bo'lsa, A bo'yicha avto)" },
-  { letter: 'C', header: 'ДАТА', description: 'Sana (dd.MM.yyyy)', required: true },
-  { letter: 'D', header: 'Наименование счета', description: 'Hisob nomi' },
-  { letter: 'E', header: 'Контрагент', description: 'Kontragent' },
-  { letter: 'F', header: 'Категория', description: 'Kategoriya (yangi nomlar ham qabul qilinadi)' },
-  { letter: 'G', header: '№Заявка/Дог', description: 'Shartnoma raqami' },
-  { letter: 'H', header: 'ОборотДебет', description: 'Chiqim (OUT)' },
-  { letter: 'I', header: 'ОборотКредит', description: 'Kirim (IN)' },
-  { letter: 'J', header: 'Назначение платежа', description: "To'lov maqsadi" },
-  { letter: 'K', header: 'ID', description: 'Unikal ID (dublikat skip)', required: true },
+type ImportKind = 'transactions' | 'counterparties' | 'customers' | 'contracts';
+
+interface KindDef {
+  key: ImportKind;
+  label: string;
+  icon: any;
+  description: string;
+  available: boolean;
+}
+
+const KINDS: KindDef[] = [
+  { key: 'transactions',   label: 'Tranzaksiyalar',  icon: Wallet,         description: "Bank vipiskasi formatiga moslangan Excel", available: true },
+  { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va nom bo\'yicha (kelajakda)',        available: false },
+  { key: 'customers',      label: 'Mijozlar',        icon: Users,          description: 'CRM mijozlarini import (kelajakda)',       available: false },
+  { key: 'contracts',      label: 'Shartnomalar',    icon: FileSignature,  description: 'Shartnomalar tarixi (kelajakda)',          available: false },
 ];
 
 export default function ImportPage() {
+  const [activeKind, setActiveKind] = useState<ImportKind>('transactions');
+
+  return (
+    <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
+      {/* ─── Hub header ─── */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 px-6 py-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/15 grid place-items-center">
+              <Upload className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/80">Admin / Import</div>
+              <div className="text-lg font-bold">Ma'lumotlarni qo'lda import qilish</div>
+              <div className="text-[11px] text-white/75 mt-0.5">
+                Qaysi turdagi ma'lumotni import qilishni tanlang
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* ─── Kind selector (cards) ─── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {KINDS.map((k) => {
+          const Icon = k.icon;
+          const active = activeKind === k.key;
+          return (
+            <button
+              key={k.key}
+              onClick={() => k.available && setActiveKind(k.key)}
+              disabled={!k.available}
+              className={cn(
+                'group relative rounded-2xl p-4 text-left transition-all',
+                active
+                  ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
+                  : k.available
+                    ? 'bg-white ring-1 ring-slate-200 hover:ring-indigo-300 hover:shadow-md cursor-pointer'
+                    : 'bg-slate-50 ring-1 ring-slate-100 cursor-not-allowed opacity-60',
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className={cn(
+                  'w-9 h-9 rounded-xl grid place-items-center',
+                  active ? 'bg-white/20' : 'bg-indigo-50',
+                )}>
+                  <Icon className={cn('h-4 w-4', active ? 'text-white' : 'text-indigo-600')} />
+                </div>
+                {!k.available && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+                    <Lock className="h-2.5 w-2.5" />
+                    Tez orada
+                  </span>
+                )}
+              </div>
+              <div className={cn('text-[13px] font-bold', active ? 'text-white' : 'text-slate-800')}>
+                {k.label}
+              </div>
+              <div className={cn('text-[10.5px] mt-0.5', active ? 'text-white/85' : 'text-slate-500')}>
+                {k.description}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ─── Active panel ─── */}
+      {activeKind === 'transactions' && <TransactionsImportPanel />}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TRANZAKSIYALAR import paneli (ilgari butun sahifa edi)
+// ═══════════════════════════════════════════════════════════════════════
+const TXN_COLUMNS: Array<{ letter: string; header: string; description: string; required?: boolean }> = [
+  { letter: 'A', header: 'Р/С',                description: 'Hisob raqami', required: true },
+  { letter: 'B', header: 'Банк Названия',      description: "Bank nomi (bo'sh bo'lsa, A bo'yicha avto)" },
+  { letter: 'C', header: 'ДАТА',               description: 'Sana (dd.MM.yyyy)', required: true },
+  { letter: 'D', header: 'Наименование счета', description: 'Hisob nomi' },
+  { letter: 'E', header: 'Контрагент',         description: 'Kontragent' },
+  { letter: 'F', header: 'Категория',          description: 'Kategoriya (yangi nomlar ham qabul qilinadi)' },
+  { letter: 'G', header: '№Заявка/Дог',        description: 'Shartnoma raqami' },
+  { letter: 'H', header: 'ОборотДебет',        description: 'Chiqim (OUT)' },
+  { letter: 'I', header: 'ОборотКредит',       description: 'Kirim (IN)' },
+  { letter: 'J', header: 'Назначение платежа', description: "To'lov maqsadi" },
+  { letter: 'K', header: 'ID',                 description: 'Unikal ID (dublikat skip)', required: true },
+];
+
+function TransactionsImportPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -72,26 +166,15 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
-      {/* Header card */}
-      <Card className="border-0 shadow-soft overflow-hidden">
-        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 px-6 py-5 text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/15 grid place-items-center">
-              <Upload className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/80">Admin / Import</div>
-              <div className="text-lg font-bold">Tranzaksiyalarni qo'lda import qilish</div>
-              <div className="text-[11px] text-white/75 mt-0.5">
-                Eski tarixiy ma'lumotlarni Excel orqali bazaga kiritish (bank vipiskasidan)
-              </div>
-            </div>
-          </div>
-        </div>
-
+    <div className="space-y-5">
+      {/* Upload card */}
+      <Card className="border-0 shadow-soft">
         <CardContent className="p-6 space-y-5">
-          {/* File upload */}
+          <div className="flex items-center gap-2 pb-1">
+            <Wallet className="h-4 w-4 text-indigo-600" />
+            <div className="text-sm font-semibold text-slate-800">Tranzaksiyalarni Excel'dan import qilish</div>
+          </div>
+
           <div className="flex items-center gap-3">
             <input
               ref={fileRef}
@@ -118,16 +201,14 @@ export default function ImportPage() {
             )}
           </div>
 
-          {/* Result */}
           {result && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Jami qator" value={result.total} color="slate" />
-                <Stat label="Qo'shildi" value={result.added} color="emerald" />
-                <Stat label="Dublikat skip" value={result.skipped} color="amber" />
-                <Stat label="Xato" value={result.errors} color="rose" />
+                <Stat label="Jami qator"      value={result.total}   color="slate" />
+                <Stat label="Qo'shildi"       value={result.added}   color="emerald" />
+                <Stat label="Dublikat skip"   value={result.skipped} color="amber" />
+                <Stat label="Xato"            value={result.errors}  color="rose" />
               </div>
-
               {result.errors > 0 && (
                 <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
                   <button
@@ -174,7 +255,7 @@ export default function ImportPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {COLUMNS.map((c) => (
+                {TXN_COLUMNS.map((c) => (
                   <tr key={c.letter} className="hover:bg-slate-50/50">
                     <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
                     <td className="px-3 py-2 font-mono text-slate-800">
