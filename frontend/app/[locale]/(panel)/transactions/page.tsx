@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -58,14 +59,34 @@ export default function TransactionsPage() {
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
   const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
 
-  const [page, setPage] = useState(1);
-  const [perPage, setPerPage] = useState(25);
-  const [q, setQ] = useState('');
-  const [direction, setDirection] = useState<string>('all');
-  const [matchStatus, setMatchStatus] = useState<string>('all');
-  const [bankId, setBankId] = useState<string>('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  // URL filter persistence — refresh'da yo'qolmasligi uchun
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [page, setPage] = useState(() => Number(searchParams.get('page') || 1));
+  const [perPage, setPerPage] = useState(() => Number(searchParams.get('perPage') || 25));
+  const [q, setQ] = useState(() => searchParams.get('q') || '');
+  const [direction, setDirection] = useState<string>(() => searchParams.get('direction') || 'all');
+  const [matchStatus, setMatchStatus] = useState<string>(() => searchParams.get('matchStatus') || 'all');
+  const [bankId, setBankId] = useState<string>(() => searchParams.get('bankId') || 'all');
+  const [dateFrom, setDateFrom] = useState(() => searchParams.get('dateFrom') || '');
+  const [dateTo, setDateTo] = useState(() => searchParams.get('dateTo') || '');
+
+  // Filter o'zgarishlarini URL'ga yozish (browser refresh va back tugmasi uchun)
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (direction !== 'all') params.set('direction', direction);
+    if (matchStatus !== 'all') params.set('matchStatus', matchStatus);
+    if (bankId !== 'all') params.set('bankId', bankId);
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (page !== 1) params.set('page', String(page));
+    if (perPage !== 25) params.set('perPage', String(perPage));
+    const query = params.toString();
+    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
+  }, [q, direction, matchStatus, bankId, dateFrom, dateTo, page, perPage, pathname, router]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<any>(null);
   const [idSearchOpen, setIdSearchOpen] = useState(false);
@@ -498,8 +519,13 @@ export default function TransactionsPage() {
               </DropdownMenu>
 
               {(activeFilters > 0 || q) && (
-                <button onClick={clearFilters} className="text-xs text-slate-500 hover:text-rose-600 font-medium flex items-center gap-1">
-                  <X className="h-3.5 w-3.5" /> {t('clearN')} ({activeFilters + (q ? 1 : 0)})
+                <button
+                  onClick={clearFilters}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-900 hover:bg-rose-100 hover:text-rose-700 ring-1 ring-amber-300 hover:ring-rose-300 text-[12px] font-semibold transition-colors animate-pulse-once"
+                  title="Faol filtrlarni tozalash"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  {t('clearN')} ({activeFilters + (q ? 1 : 0)})
                 </button>
               )}
             </div>
@@ -1502,14 +1528,8 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           {/* Tarix (Audit log) */}
           <CategoryHistorySection txId={row.id} />
 
-          {/* Tranzaksiya ID — ID matni + copy icon */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 shrink-0">{t('detailComposite')}</span>
-            <code className="flex-1 min-w-0 font-mono text-[11px] text-slate-700 bg-slate-50 px-2 py-1 rounded ring-1 ring-slate-200 break-all select-all">
-              {row.externalId || row.id}
-            </code>
-            <CopyIdButton value={row.externalId || row.id} />
-          </div>
+          {/* Tranzaksiya ID — kollapsi (default yopiq) */}
+          <CompositeIdSection value={row.externalId || row.id} label={t('detailComposite')} />
 
           {/* Bankdan kelgan to'liq JSON */}
           {(row.metadata || row.rawExtra) && (
@@ -1763,6 +1783,32 @@ function CategoryHistoryItem({ h }: { h: any }) {
       )}
       {h.contractNumber && (
         <div className="text-[10px] font-mono text-indigo-600">{h.contractNumber}</div>
+      )}
+    </div>
+  );
+}
+
+// ═══ COMPOSITE ID — kollapsi (default yopiq) + copy icon
+function CompositeIdSection({ value, label }: { value: string; label: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+      >
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+          <Hash className="h-3 w-3" /> {label}
+        </div>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 transition-transform shrink-0', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="px-4 pb-3 pt-1 border-t border-slate-100 flex items-center gap-2">
+          <code className="flex-1 min-w-0 font-mono text-[11px] text-slate-700 bg-slate-50 px-2 py-1 rounded ring-1 ring-slate-200 break-all select-all">
+            {value}
+          </code>
+          <CopyIdButton value={value} />
+        </div>
       )}
     </div>
   );
