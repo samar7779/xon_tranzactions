@@ -361,8 +361,30 @@ export class TransactionsService {
             bank: { select: { name: true } },
           },
         },
+        category: true,
+        subcategory: true,
       },
     });
+
+    // Kontragent display uchun bir martalik join'lar
+    const otherInns = new Set<string>();
+    const otherAccs = new Set<string>();
+    for (const tx of items as any[]) {
+      const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
+      const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
+      if (inn) otherInns.add(inn);
+      if (acc) otherAccs.add(acc);
+    }
+    const [cpRows, accRows] = await Promise.all([
+      otherInns.size > 0
+        ? this.prisma.counterparty.findMany({ where: { inn: { in: Array.from(otherInns) } }, select: { inn: true, name: true } })
+        : Promise.resolve([]),
+      otherAccs.size > 0
+        ? this.prisma.bankAccount.findMany({ where: { accountNo: { in: Array.from(otherAccs) } }, select: { accountNo: true, ownerName: true } })
+        : Promise.resolve([]),
+    ]);
+    const cpByInn = new Map(cpRows.map((c) => [c.inn, c.name]));
+    const accByNo = new Map(accRows.map((a) => [a.accountNo, a.ownerName]));
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Xon Tranzaksiyalar';
@@ -373,8 +395,12 @@ export class TransactionsService {
       { header: 'Bank nomi', key: 'bank', width: 22 },
       { header: 'Hisob raqami', key: 'accountNo', width: 26 },
       { header: 'Hisob nomi', key: 'accountName', width: 32 },
+      { header: 'Sana / Vaqt', key: 'dateTime', width: 18 },
       { header: 'Yuboruvchi nomi', key: 'fromName', width: 32 },
       { header: "Yo'nalish", key: 'direction', width: 12 },
+      { header: 'Kontragent', key: 'kontragent', width: 28 },
+      { header: 'Kategoriya', key: 'kategoriya', width: 28 },
+      { header: 'Shartnoma', key: 'shartnoma', width: 18 },
       { header: 'Summa', key: 'amount', width: 18 },
       { header: "Izoh (to'lov maqsadi)", key: 'description', width: 50 },
       { header: 'Tranzaksiya ID', key: 'externalId', width: 30 },
@@ -393,13 +419,32 @@ export class TransactionsService {
       };
     });
 
-    for (const it of items) {
+    for (const it of items as any[]) {
+      // Kontragent display (list bilan bir xil mantiq)
+      const inn = it.direction === 'IN' ? it.fromInn : it.toInn;
+      const acc = it.direction === 'IN' ? it.fromAccount : it.toAccount;
+      const code = it.category?.code;
+      let kontragent = '';
+      if (code === 'TRANSFER') kontragent = (acc && accByNo.get(acc)) || it.category?.name || '';
+      else if (code === 'COUNTERPARTY') kontragent = (inn && cpByInn.get(inn)) || it.category?.name || '';
+      else if (it.category?.name) kontragent = it.category.name;
+      // Kategoriya = subcategory.name yoki category.name (TRANSFER/SALARY uchun)
+      const kategoriya = it.subcategory?.name || it.category?.name || '';
+      // Sana + vaqt
+      const dateStr = it.txnDate ? new Date(it.txnDate).toLocaleDateString('uz-UZ') : '';
+      const timeStr = it.operationTime ? it.operationTime.slice(0, 5) : '';
+      const dateTime = dateStr + (timeStr ? ` ${timeStr}` : '');
+
       const row = ws.addRow({
         bank: it.bank?.name || it.account?.bank?.name || '',
         accountNo: it.account?.accountNo || '',
         accountName: it.account?.ownerName || '',
+        dateTime,
         fromName: it.fromName || '',
         direction: it.direction === 'IN' ? 'Kirim' : 'Chiqim',
+        kontragent,
+        kategoriya,
+        shartnoma: it.contractNumber || '',
         amount: Number(it.amount),
         description: it.description || '',
         externalId: it.externalId || it.id,
@@ -410,6 +455,10 @@ export class TransactionsService {
         size: 9,
         color: { argb: it.direction === 'IN' ? 'FF047857' : 'FFBE123C' },
       };
+      // Shartnoma — monospace ko'rinish uchun
+      if (it.contractNumber) {
+        row.getCell('shartnoma').font = { name: 'Consolas', size: 9, bold: true };
+      }
     }
 
     const raw = await wb.xlsx.writeBuffer();
