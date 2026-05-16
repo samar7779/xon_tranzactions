@@ -1949,14 +1949,22 @@ function ColumnFilterPopover({
     setLocalSelected(next);
   }
 
-  // Klick tashqarida → yopish
+  // Klick tashqarida YOKI scroll bo'lsa — yopish
   useEffect(() => {
     function handler(e: MouseEvent) {
       const target = e.target as HTMLElement;
       if (!target.closest('[data-col-filter]')) onClose();
     }
-    setTimeout(() => document.addEventListener('mousedown', handler), 0);
-    return () => document.removeEventListener('mousedown', handler);
+    function onScroll() { onClose(); }
+    const t = setTimeout(() => {
+      document.addEventListener('mousedown', handler);
+      window.addEventListener('scroll', onScroll, true);
+    }, 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener('mousedown', handler);
+      window.removeEventListener('scroll', onScroll, true);
+    };
   }, [onClose]);
 
   return (
