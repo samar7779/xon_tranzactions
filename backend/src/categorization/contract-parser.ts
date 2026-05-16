@@ -27,9 +27,10 @@ const CODE_PATTERN = OBJECT_CODES
   .map((code) => code.replace(/[O0]/g, OSET))
   .join('|');
 
-// Asosiy regex — 1-4 raqam + obyekt kodi + 3-4 harf/raqam
+// Asosiy regex — 1-6 raqam + obyekt kodi + 2-6 harf/raqam (tail)
+// Misol: "118MSOP26LA" → 118 + MSO + P26LA (5 chars tail), "1234ZURABCD" → 1234 + ZUR + ABCD
 const CONTRACT_RE = new RegExp(
-  `(\\d{1,4})\\s*(${CODE_PATTERN})\\s*([A-Z0-9]{3,4})`,
+  `(\\d{1,6})\\s*(${CODE_PATTERN})\\s*([A-Z0-9]{2,6})`,
   'i',
 );
 
