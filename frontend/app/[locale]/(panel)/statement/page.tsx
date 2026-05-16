@@ -236,9 +236,9 @@ export default function StatementPage() {
                   className="w-full h-11 rounded-xl font-semibold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                 >
                   {downloading ? (
-                    <><Loader2 className="h-4 w-4 animate-spin" /> Tayyorlanmoqda...</>
+                    <><Loader2 className="h-4 w-4 animate-spin" /> {t('preparing')}</>
                   ) : (
-                    <><Download className="h-4 w-4" /> Excel yuklab olish</>
+                    <><Download className="h-4 w-4" /> {t('downloadExcel')}</>
                   )}
                 </Button>
               </CardContent>
@@ -251,12 +251,12 @@ export default function StatementPage() {
               <CardContent className="p-0">
                 {/* Header + search */}
                 <div className="px-5 py-4 border-b border-slate-100">
-                  <StepLabel n={2} icon={Wallet} text="Hisob raqamini tanlang" />
+                  <StepLabel n={2} icon={Wallet} text={t('step2Account')} />
                   <div className="relative mt-3">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     <Input
                       className="pl-9 h-10 rounded-xl bg-slate-50/60"
-                      placeholder="Hisob raqami, egasi yoki MFO bo'yicha qidirish..."
+                      placeholder={t('searchAccount')}
                       value={accSearch}
                       onChange={(e) => setAccSearch(e.target.value)}
                       disabled={!bankId}
@@ -272,7 +272,7 @@ export default function StatementPage() {
                   </div>
                   {bankId && (
                     <div className="text-[11px] text-slate-400 mt-2">
-                      {filteredAccounts.length} / {bankAccounts.length} ta hisob
+                      {t('accountsCount', { shown: filteredAccounts.length, total: bankAccounts.length })}
                     </div>
                   )}
                 </div>
@@ -280,9 +280,9 @@ export default function StatementPage() {
                 {/* List */}
                 <div className="max-h-[calc(100vh-340px)] min-h-[320px] overflow-y-auto">
                   {!bankId ? (
-                    <EmptyHint icon={Building2} text="Avval chap tomondan bankni tanlang" />
+                    <EmptyHint icon={Building2} text={t('selectBankFirst')} />
                   ) : filteredAccounts.length === 0 ? (
-                    <EmptyHint icon={Search} text={accSearch ? 'Qidiruv bo\'yicha hisob topilmadi' : 'Bu bankda hisob yo\'q'} />
+                    <EmptyHint icon={Search} text={accSearch ? t('noAccountsFound') : t('noAccountsInBank')} />
                   ) : (
                     <div className="divide-y divide-slate-50">
                       {filteredAccounts.map((a: any) => {
