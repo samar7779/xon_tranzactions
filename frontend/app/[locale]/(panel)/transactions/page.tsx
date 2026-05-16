@@ -596,8 +596,8 @@ export default function TransactionsPage() {
                       <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
                       <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
                       <ColumnTh label="Kontragent" column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
-                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
-                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} alignRight />
+                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} alignRight />
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -1832,7 +1832,7 @@ function CopyBlock({ value }: { value: string }) {
 // ═══ COLUMN TH — filter icon bilan ustun headeri (Google Sheets stilida)
 function ColumnTh({
   label, column, widthClass, filterMode, columnFilters, setColumnFilters,
-  openFilterColumn, setOpenFilterColumn,
+  openFilterColumn, setOpenFilterColumn, alignRight,
 }: {
   label: string;
   column: string;
@@ -1842,6 +1842,7 @@ function ColumnTh({
   setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
   openFilterColumn: string | null;
   setOpenFilterColumn: (col: string | null) => void;
+  alignRight?: boolean;     // popover'ni o'ng tomonga aligndash (right-edge ustunlari uchun)
 }) {
   const active = (columnFilters[column]?.size || 0) > 0;
   const isOpen = openFilterColumn === column;
@@ -1868,6 +1869,7 @@ function ColumnTh({
         <ColumnFilterPopover
           column={column}
           selected={columnFilters[column] || new Set()}
+          alignRight={alignRight}
           onClose={() => setOpenFilterColumn(null)}
           onApply={(set) => {
             setColumnFilters((prev) => ({ ...prev, [column]: set }));
@@ -1881,12 +1883,13 @@ function ColumnTh({
 
 // ═══ COLUMN FILTER POPOVER — backend'dan distinct olib chiqaradi
 function ColumnFilterPopover({
-  column, selected, onClose, onApply,
+  column, selected, onClose, onApply, alignRight,
 }: {
   column: string;
   selected: Set<string>;
   onClose: () => void;
   onApply: (set: Set<string>) => void;
+  alignRight?: boolean;
 }) {
   const [search, setSearch] = useState('');
   const [localSelected, setLocalSelected] = useState<Set<string>>(new Set(selected));
@@ -1951,7 +1954,10 @@ function ColumnFilterPopover({
   return (
     <div
       data-col-filter
-      className="absolute left-0 top-full mt-1 z-50 w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal"
+      className={cn(
+        'absolute top-full mt-1 z-50 w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal',
+        alignRight ? 'right-0' : 'left-0',
+      )}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
@@ -1998,17 +2004,28 @@ function ColumnFilterPopover({
                   {allSelected ? 'Hammasini olib tashlash' : 'Hammasini belgilash'}
                 </span>
               </label>
-              {allValues.map((v) => (
-                <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={localSelected.has(v.id)}
-                    onChange={() => toggleOne(v.id)}
-                    className="w-3.5 h-3.5 rounded"
-                  />
-                  <span className="text-[11px] text-slate-700 truncate" title={v.name}>{v.name}</span>
-                </label>
-              ))}
+              {allValues.map((v) => {
+                // "(xato)" suffix bo'lsa — alohida badge bilan ko'rsatish
+                const xatoMatch = v.name.match(/^(.+?)\s*\(xato\)\s*$/i);
+                const display = xatoMatch ? xatoMatch[1] : v.name;
+                const isXato = !!xatoMatch;
+                return (
+                  <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSelected.has(v.id)}
+                      onChange={() => toggleOne(v.id)}
+                      className="w-3.5 h-3.5 rounded"
+                    />
+                    <span className="text-[11px] text-slate-700 truncate flex-1" title={v.name}>{display}</span>
+                    {isXato && (
+                      <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1 py-0.5 rounded ring-1 ring-rose-200 uppercase shrink-0">
+                        xato
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
             </>
           )}
         </div>
