@@ -969,7 +969,18 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     return list;
   }, [accounts, bankId, accSearch]);
 
-  const [progress, setProgress] = useState<{ total: number; days: number; startedAt: string } | null>(null);
+  const [progress, setProgress] = useState<{
+    total: number;
+    days: number;
+    startedAt: string;
+    requestedFrom: string;
+    requestedTo: string;
+    actualFrom?: string;
+    actualTo?: string;
+    syncMinDate?: string | null;
+    clampedDays?: number;
+    warning?: string | null;
+  } | null>(null);
 
   // To'xtab qolishni aniqlash uchun (deploy/crash server jarayonini o'ldiradi)
   const prevDoneRef = useRef(0);
@@ -988,9 +999,24 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
       if (r?.ok && r?.started) {
         // Sync chegarasi tufayli ba'zi kunlar o'tkazib yuborilgan bo'lsa — ogohlantirish
         if (r?.warning) {
-          toast.warning(r.warning, { duration: 8000 });
+          toast(r.warning, {
+            icon: '⚠️',
+            duration: 10000,
+            style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' },
+          });
         }
-        setProgress({ total: r.accounts, days: r.days, startedAt: r.startedAt });
+        setProgress({
+          total: r.accounts,
+          days: r.days,
+          startedAt: r.startedAt,
+          requestedFrom: r.requestedFrom || dateFrom,
+          requestedTo: r.requestedTo || dateTo,
+          actualFrom: r.actualFrom || null,
+          actualTo: r.actualTo || null,
+          syncMinDate: r.syncMinDate || null,
+          clampedDays: r.clampedDays || 0,
+          warning: r.warning || null,
+        });
         prevDoneRef.current = 0;
         setLastAdvanceAt(Date.now());
       } else if (r?.clampedAll && r?.syncMinDate) {
@@ -1080,6 +1106,38 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                 />
               </div>
               <div className="text-[10px] text-slate-400 mt-1">{progress.days} kun · {scope === 'all' ? 'barcha hisob' : scope === 'bank' ? 'bank bo\'yicha' : 'bitta hisob'}</div>
+            </div>
+
+            {/* ─── Sana oralig'i ko'rsatuvi (so'ralgan vs haqiqiy) ─── */}
+            <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50/60 px-3 py-2.5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-slate-500 font-semibold">So'raldi:</span>
+                <span className="font-mono text-slate-700 tabular-nums">
+                  {progress.requestedFrom} → {progress.requestedTo}
+                </span>
+              </div>
+              {progress.actualFrom && progress.actualTo && (
+                <div className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="text-slate-500 font-semibold">Olinmoqda:</span>
+                  <span className={cn(
+                    'font-mono tabular-nums font-semibold',
+                    (progress.clampedDays || 0) > 0 ? 'text-amber-700' : 'text-emerald-700',
+                  )}>
+                    {progress.actualFrom} → {progress.actualTo}
+                  </span>
+                </div>
+              )}
+              {(progress.clampedDays || 0) > 0 && progress.syncMinDate && (
+                <div className="flex items-start gap-2 px-2 py-2 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-[10.5px] text-amber-900 mt-1">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
+                  <div>
+                    <b>Sync chegarasi ({progress.syncMinDate}) tufayli {progress.clampedDays} ta kun o'tkazib yuborildi.</b>
+                    <div className="text-amber-700 mt-0.5">
+                      Sozlamalardan chegarani o'zgartirib qayta urinib ko'ring.
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* 3 ta jami */}
