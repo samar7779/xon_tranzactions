@@ -529,15 +529,12 @@ export default function TransactionsPage() {
                       <th className="text-left px-4 py-3">{t('counterpartyHeader')}</th>
                       <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
                       <th className="text-left px-4 py-3 w-44">Kategoriya</th>
-                      <th className="text-left px-4 py-3">{t('statusHeader')}</th>
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filtered!.map((it: any) => {
-                      const matchKey = it.matchStatus || 'UNMATCHED';
-                      const match = { label: tp(MATCH_KEYS[matchKey]), cls: MATCH_CLS[matchKey] };
                       const counterparty = it.direction === 'IN'
                         ? { name: it.fromName || '—', meta: it.fromInn || '' }
                         : { name: it.toName || '—', meta: it.toAccount || '' };
@@ -609,14 +606,6 @@ export default function TransactionsPage() {
                               canEdit={canManageCategories}
                             />
                           </td>
-                          <td className="px-4 py-3">
-                            <span className={cn(
-                              "inline-block px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset",
-                              match.cls,
-                            )}>
-                              {match.label}
-                            </span>
-                          </td>
                           <td className={cn(
                             "px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap",
                             it.direction === 'IN' ? 'text-emerald-600' : 'text-rose-600',
@@ -624,7 +613,7 @@ export default function TransactionsPage() {
                             {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            {canManagePayments && it.direction === 'IN' ? (
+                            {canManageCategories ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button size="sm" variant="ghost" className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -635,22 +624,9 @@ export default function TransactionsPage() {
                                   <DropdownMenuItem onClick={() => setDetailRow(it)}>
                                     <Eye className="h-4 w-4 mr-2" /> {t('openDetail')}
                                   </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  {it.matchStatus !== 'AUTO' && it.matchStatus !== 'MANUAL' && (
-                                    <DropdownMenuItem onClick={() => autoMatchMut.mutate(it.id)}>
-                                      <Wand2 className="h-4 w-4 mr-2" /> {t('autoMatchInn')}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {(it.matchStatus === 'AUTO' || it.matchStatus === 'MANUAL' || it.matchStatus === 'PARTIAL') && (
-                                    <DropdownMenuItem onClick={() => unlinkMut.mutate(it.id)}>
-                                      <Link2Off className="h-4 w-4 mr-2" /> {t('unlinkAction')}
-                                    </DropdownMenuItem>
-                                  )}
-                                  {it.matchStatus !== 'IGNORED' && (
-                                    <DropdownMenuItem onClick={() => ignoreMut.mutate(it.id)}>
-                                      <EyeOff className="h-4 w-4 mr-2" /> {t('ignoreAction')}
-                                    </DropdownMenuItem>
-                                  )}
+                                  <DropdownMenuItem onClick={() => setCategoryEditRow(it)}>
+                                    <Wand2 className="h-4 w-4 mr-2 text-indigo-600" /> Kategoriya
+                                  </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             ) : (
