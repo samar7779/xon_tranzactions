@@ -439,7 +439,7 @@ export class CategorizationService {
       categoryId: true,
       subcategoryId: true,
       contractNumber: true,
-    } as const;
+    };
   }
 
   private async getRefs(): Promise<CategoryRefs> {

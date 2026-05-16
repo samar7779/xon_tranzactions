@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -31,7 +31,7 @@ export class SyncService {
     private crypto: CryptoService,
     private kb: KapitalbankClient,
     private payments: PaymentsService,
-    @Optional() private categorization: CategorizationService | null,
+    private categorization: CategorizationService,
     config: ConfigService,
   ) {
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
@@ -428,11 +428,9 @@ export class SyncService {
 
     // Avto-kategoriyalash — yangi tranzaksiyaga qoidalarni qo'llaymiz
     // (sync ni sekinlashtirmaslik uchun fire-and-forget)
-    if (this.categorization) {
-      this.categorization
-        .categorizeOne(created.id, { actor: 'sync' })
-        .catch((e: any) => this.logger.warn(`Avto-kategoriyalash xato (${created.id}): ${e?.message}`));
-    }
+    this.categorization
+      .categorizeOne(created.id, { actor: 'sync' })
+      .catch((e: any) => this.logger.warn(`Avto-kategoriyalash xato (${created.id}): ${e?.message}`));
 
     return true;
   }
