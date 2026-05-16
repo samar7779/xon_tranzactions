@@ -56,6 +56,7 @@ export default function TransactionsPage() {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
+  const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
@@ -71,6 +72,38 @@ export default function TransactionsPage() {
   const [idQuery, setIdQuery] = useState('');
   const [idSearching, setIdSearching] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [categoryEditRow, setCategoryEditRow] = useState<any>(null);
+
+  // Kategoriyalar daraxti (1 marta yuklanadi)
+  const categoriesQuery = useQuery({
+    queryKey: ['categories-tree'],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>('/categorization/categories'),
+    staleTime: 5 * 60 * 1000,
+  });
+  const categoriesTree = categoriesQuery.data?.items || [];
+
+  const setCategoryMut = useMutation({
+    mutationFn: (body: { txId: string; categoryId: string | null; subcategoryId: string | null }) =>
+      api.post(`/categorization/transactions/${body.txId}/set`, {
+        categoryId: body.categoryId,
+        subcategoryId: body.subcategoryId,
+      }),
+    onSuccess: () => {
+      toast.success('Kategoriya saqlandi');
+      setCategoryEditRow(null);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const recategorizeAllMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
+    onSuccess: (r: any) => {
+      toast.success(r?.message || 'Kategoriyalash fonda boshlandi');
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['transactions'] }), 30_000);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
 
   async function searchById() {
     const id = idQuery.trim();
@@ -354,6 +387,18 @@ export default function TransactionsPage() {
                     <Hash className="h-4 w-4 mr-2 text-violet-600" />
                     <span className="flex-1">{t('toolIdSearch')}</span>
                   </DropdownMenuItem>
+                  {canManageCategories && (
+                    <DropdownMenuItem
+                      onClick={() => recategorizeAllMut.mutate()}
+                      disabled={recategorizeAllMut.isPending}
+                      className="cursor-pointer"
+                    >
+                      {recategorizeAllMut.isPending
+                        ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
+                        : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
+                      <span className="flex-1">Kategoriyalarni qayta hisoblash</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('exportByFilter')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
@@ -483,6 +528,7 @@ export default function TransactionsPage() {
                       <th className="text-left px-4 py-3">{t('directionHeader')}</th>
                       <th className="text-left px-4 py-3">{t('counterpartyHeader')}</th>
                       <th className="text-left px-4 py-3">{t('bankAccountHeader')}</th>
+                      <th className="text-left px-4 py-3 w-44">Kategoriya</th>
                       <th className="text-left px-4 py-3">{t('statusHeader')}</th>
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
@@ -554,6 +600,14 @@ export default function TransactionsPage() {
                                 <div className="font-mono text-[10px] text-slate-400 truncate">{it.account?.accountNo || ''}</div>
                               </div>
                             </div>
+                          </td>
+                          <td className="px-4 py-3 max-w-[180px]">
+                            <CategoryChip
+                              category={it.category}
+                              subcategory={it.subcategory}
+                              onClick={(e) => { e.stopPropagation(); setCategoryEditRow(it); }}
+                              canEdit={canManageCategories}
+                            />
                           </td>
                           <td className="px-4 py-3">
                             <span className={cn(
@@ -658,6 +712,17 @@ export default function TransactionsPage() {
 
       {/* ═══ ESKI TARIXNI YUKLASH (BACKFILL) ═══ */}
       <BackfillDialog open={backfillOpen} onOpenChange={setBackfillOpen} banks={banks?.items || []} />
+
+      {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
+      <CategoryEditDialog
+        row={categoryEditRow}
+        tree={categoriesTree}
+        onClose={() => setCategoryEditRow(null)}
+        onSave={(categoryId, subcategoryId) =>
+          setCategoryMut.mutate({ txId: categoryEditRow.id, categoryId, subcategoryId })
+        }
+        saving={setCategoryMut.isPending}
+      />
 
       {/* ═══ TRANZAKSIYA ID QIDIRUV ═══ */}
       <Dialog open={idSearchOpen} onOpenChange={setIdSearchOpen}>
@@ -1341,5 +1406,179 @@ function CopyBlock({ value }: { value: string }) {
         {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
       </button>
     </div>
+  );
+}
+
+// ═══ KATEGORIYA CHIP — tranzaksiya jadvalida 1 ta katakda ko'rinadi ═══
+function CategoryChip({
+  category, subcategory, onClick, canEdit,
+}: {
+  category: any | null;
+  subcategory: any | null;
+  onClick: (e: React.MouseEvent) => void;
+  canEdit: boolean;
+}) {
+  if (!category && !subcategory) {
+    return canEdit ? (
+      <button
+        onClick={onClick}
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 ring-1 ring-dashed ring-slate-200 hover:ring-indigo-300 transition-colors"
+      >
+        + tanlash
+      </button>
+    ) : (
+      <span className="text-[10px] text-slate-400">—</span>
+    );
+  }
+  const color = category?.color || '#64748b';
+  // Tailwind dinamik klasslarni kompile qilmaydi, shuning uchun inline style
+  const style = {
+    backgroundColor: `${color}15`,
+    color: color,
+    borderColor: `${color}40`,
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={!canEdit}
+      className={cn(
+        'inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset text-left max-w-full transition-all',
+        canEdit && 'hover:ring-2 cursor-pointer',
+      )}
+      style={style}
+      title={canEdit ? "O'zgartirish uchun bosing" : undefined}
+    >
+      <span className="truncate max-w-[160px] leading-tight">{category?.name || '—'}</span>
+      {subcategory && (
+        <span className="text-[9px] font-medium opacity-80 truncate max-w-[160px] leading-tight">
+          ↳ {subcategory.name}
+        </span>
+      )}
+    </button>
+  );
+}
+
+// ═══ KATEGORIYA TAHRIR DIALOG ═══
+function CategoryEditDialog({
+  row, tree, onClose, onSave, saving,
+}: {
+  row: any | null;
+  tree: any[];
+  onClose: () => void;
+  onSave: (categoryId: string | null, subcategoryId: string | null) => void;
+  saving: boolean;
+}) {
+  const [selectedTopId, setSelectedTopId] = useState<string | null>(null);
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (row) {
+      setSelectedTopId(row.categoryId || null);
+      setSelectedSubId(row.subcategoryId || null);
+    }
+  }, [row?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!row) return null;
+  const selectedTop = tree.find((t) => t.id === selectedTopId);
+  const subs = selectedTop?.children || [];
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Wand2 className="h-4 w-4 text-indigo-600" /> Kategoriya tanlash
+          </DialogTitle>
+          <DialogDescription>
+            Tranzaksiya: <span className="font-mono text-[11px]">{row.id?.slice(0, 8)}…</span>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2 block">
+              Top kategoriya
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {tree.map((c) => {
+                const selected = selectedTopId === c.id;
+                const color = c.color || '#64748b';
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => { setSelectedTopId(c.id); setSelectedSubId(null); }}
+                    className={cn(
+                      'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
+                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300',
+                    )}
+                    style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                  >
+                    {c.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedTop && subs.length > 0 && (
+            <div>
+              <label className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider mb-2 block">
+                Subkategoriya (ixtiyoriy)
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setSelectedSubId(null)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                    !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
+                  )}
+                >
+                  — yo'q —
+                </button>
+                {subs.map((s: any) => {
+                  const selected = selectedSubId === s.id;
+                  const color = selectedTop.color || '#64748b';
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedSubId(s.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                        selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300',
+                      )}
+                      style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                    >
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <button
+              onClick={() => onSave(null, null)}
+              disabled={saving}
+              className="text-[12px] text-rose-600 hover:text-rose-700 font-medium"
+            >
+              Tozalash
+            </button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
+                Bekor qilish
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => onSave(selectedTopId, selectedSubId)}
+                disabled={saving || !selectedTopId}
+              >
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Saqlash'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
