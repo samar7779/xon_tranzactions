@@ -48,6 +48,10 @@ export const PERMISSIONS = {
 
   // ─── CRM (XonSaroy) ───
   CRM_VIEW: 'crm:view',
+
+  // ─── Kontragentlar (DIDOX) ───
+  COUNTERPARTIES_VIEW: 'counterparties:view',
+  COUNTERPARTIES_MANAGE: 'counterparties:manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -137,6 +141,13 @@ export const PERMISSION_GROUPS: { group: string; items: { value: Permission; lab
     ],
   },
   {
+    group: 'Kontragentlar',
+    items: [
+      { value: PERMISSIONS.COUNTERPARTIES_VIEW, label: 'Kontragentlar ro\'yxatini ko\'rish' },
+      { value: PERMISSIONS.COUNTERPARTIES_MANAGE, label: 'Kontragent qo\'shish/yangilash/o\'chirish' },
+    ],
+  },
+  {
     group: 'Tizim',
     items: [{ value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' }],
   },
@@ -167,6 +178,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
       PERMISSIONS.CRM_VIEW,
+      PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
     ],
   },
   {
@@ -182,6 +194,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CONTRACTS_VIEW, PERMISSIONS.CONTRACTS_MANAGE,
       PERMISSIONS.PAYMENTS_VIEW, PERMISSIONS.PAYMENTS_MANAGE,
       PERMISSIONS.CRM_VIEW,
+      PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
     ],
   },
   {
@@ -199,6 +212,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CONTRACTS_VIEW,
       PERMISSIONS.PAYMENTS_VIEW,
       PERMISSIONS.CRM_VIEW,
+      PERMISSIONS.COUNTERPARTIES_VIEW,
     ],
   },
 ];
