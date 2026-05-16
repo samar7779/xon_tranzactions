@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, ConflictException, NotFoundExc
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { DidoxService, DidoxCompany, DidoxBankInfo } from './didox.service';
+import { ChamberService, ChamberCompany } from './chamber.service';
 
 // vatregstatus raqamlardan matn — Soliq dokumentidan
 const VAT_STATUS_MAP: Record<number, string> = {
@@ -32,12 +33,14 @@ export class CounterpartiesService {
   constructor(
     private prisma: PrismaService,
     private didox: DidoxService,
+    private chamber: ChamberService,
   ) {}
 
   // ────────────────────────── helpers ──────────────────────────
 
-  private mapDidoxToRecord(
-    company: DidoxCompany,
+  private mapToRecord(
+    company: DidoxCompany | null,
+    chamber: ChamberCompany | null,
     bank: DidoxBankInfo | null,
     existingAccounts?: any[] | null,
   ): Record<string, any> {
@@ -53,53 +56,95 @@ export class CounterpartiesService {
 
     // Reg sana — DIDOX dd.mm.YYYY formatda berishi mumkin
     let regDate: Date | null = null;
-    if (company.registrationDate) {
+    if (company?.registrationDate) {
       const s = company.registrationDate;
       const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
       if (m) regDate = new Date(`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`);
       else { const d = new Date(s); if (!isNaN(d.getTime())) regDate = d; }
     }
 
-    // vatStatus: DIDOX `vatStatus` = "Активный/Неактивный" — biz raqamli kod va matnli xohlaymiz
-    // Lekin DIDOX briefData'da `vatregstatus` raqami yo'q — uni invoice'dan kelgan bank ma'lumotlari bilan birga olamiz
-    // Hozircha matnli statusni saqlaymiz (status_ru yoki vatStatus)
-    const vatText = company.status_ru || (company as any).status || null;
+    const vatText = company?.status_ru || (company as any)?.status || null;
+    // Chamber'dan ham region/district ni manzil sifatida (DIDOX yo'q bo'lsa)
+    const chamberAddress = chamber
+      ? [chamber.regionName, chamber.districtName].filter(Boolean).join(', ')
+      : null;
 
     return {
-      fullName: company.name || null,
-      director: company.directorFullName || null,
-      directorPinfl: company.directorPinfl || null,
+      fullName: company?.name || chamber?.nameLat || chamber?.nameRu || null,
+      director: company?.directorFullName || null,
+      directorPinfl: company?.directorPinfl || null,
       accountant: bank?.accountant || null,
-      phone: company.phone || null,
-      email: company.email || null,
-      address: company.billingAddress || null,
-      vatNumber: company.vatNumber ? String(company.vatNumber) : null,
+      phone: company?.phone || null,
+      email: company?.email || null,
+      address: company?.billingAddress || (chamberAddress || null),
+      vatNumber: company?.vatNumber ? String(company.vatNumber) : null,
       vatStatus: vatText,
-      taxMode: company.taxMode || null,
-      opf: company.opf || null,
-      oked: company.oked || null,
-      companyType: company.companyType || null,
-      businessType: company.businessType || null,
+      taxMode: company?.taxMode || null,
+      opf: company?.opf || null,
+      oked: company?.oked || chamber?.oked || null,
+      companyType: company?.companyType || null,
+      businessType: company?.businessType || null,
       registrationDate: regDate,
-      registrationNumber: company.registrationNumber || null,
-      rating: company.sustainabilityRating?.points ?? null,
-      ratingType: company.sustainabilityRating?.type || null,
-      ratingTitle: company.sustainabilityRating?.title || null,
+      registrationNumber: company?.registrationNumber || null,
+      // Reyting — DIDOX'da bo'lsa undan, yo'q bo'lsa Chamber'dan
+      rating: company?.sustainabilityRating?.points ?? chamber?.rating ?? null,
+      ratingType: company?.sustainabilityRating?.type || chamber?.type || null,
+      ratingTitle: company?.sustainabilityRating?.title || null,
       bankAccounts: bankAccounts.length ? bankAccounts : null,
-      founders: company.founders || null,
-      rawDidoxBrief: company as any,
+      founders: company?.founders || null,
+      rawDidoxBrief: company ? (company as any) : (chamber?.raw ? { chamber: chamber.raw } : null),
       lastFetchedAt: new Date(),
       lastFetchError: null,
     };
   }
 
-  /** DIDOX'dan to'liq olish (company + bank info) — single call wrapper */
-  async fetchFromDidox(inn: string): Promise<{ company: DidoxCompany; bank: DidoxBankInfo | null }> {
-    const company = await this.didox.getCompany(inn);
-    if (!company) throw new NotFoundException(`DIDOX'da ${inn} INN bo'yicha ma'lumot topilmadi`);
+  /**
+   * Asosiy enrichment funksiyasi.
+   * 1. DIDOX'ga urinib ko'radi (to'liq ma'lumot — direktor, telefon, manzil, VAT, reyting, OKED)
+   * 2. DIDOX javob bermasa (env yo'q, login xato, yoki INN topilmadi) → Chamber'ga tushadi
+   *    (faqat nom, reyting, region, OKED — public API, auth talab qilmaydi)
+   * 3. Hech qaysi javob bermasa — null+xato.
+   */
+  async fetchEnrichment(inn: string): Promise<{
+    company: DidoxCompany | null;
+    chamber: ChamberCompany | null;
+    bank: DidoxBankInfo | null;
+    source: 'didox' | 'chamber' | 'didox+chamber' | 'none';
+  }> {
+    let company: DidoxCompany | null = null;
     let bank: DidoxBankInfo | null = null;
-    try { bank = await this.didox.findLatestBankInfo(inn); } catch { /* ignore */ }
-    return { company, bank };
+    let didoxError: Error | null = null;
+
+    if (this.didox.isConfigured()) {
+      try {
+        company = await this.didox.getCompany(inn);
+        if (company) {
+          try { bank = await this.didox.findLatestBankInfo(inn); } catch { /* ignore */ }
+        }
+      } catch (e: any) {
+        didoxError = e;
+        this.log.warn(`DIDOX ${inn} xato: ${e?.message} — Chamber'ga o'taman`);
+      }
+    } else {
+      this.log.debug(`DIDOX configured emas, faqat Chamber`);
+    }
+
+    // Chamber'ni har doim chaqiramiz — DIDOX javob bersa ham, reyting/region/oked
+    // bir-birini to'ldirib turishi mumkin
+    const chamber = await this.chamber.getCompany(inn);
+
+    let source: 'didox' | 'chamber' | 'didox+chamber' | 'none';
+    if (company && chamber) source = 'didox+chamber';
+    else if (company) source = 'didox';
+    else if (chamber) source = 'chamber';
+    else source = 'none';
+
+    if (source === 'none') {
+      const reason = didoxError?.message || 'Hech bir manbada (DIDOX, Chamber) topilmadi';
+      throw new NotFoundException(reason);
+    }
+
+    return { company, chamber, bank, source };
   }
 
   // ────────────────────────── CRUD ──────────────────────────
@@ -180,15 +225,16 @@ export class CounterpartiesService {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (existing) throw new ConflictException(`INN ${inn} allaqachon mavjud`);
 
-    // DIDOX'dan boyitish
+    // DIDOX (yoki Chamber fallback) bilan boyitish
     let data: Record<string, any> = {};
     let fetchError: string | null = null;
     try {
-      const { company, bank } = await this.fetchFromDidox(inn);
-      data = this.mapDidoxToRecord(company, bank);
+      const { company, chamber, bank, source } = await this.fetchEnrichment(inn);
+      data = this.mapToRecord(company, chamber, bank);
+      this.log.log(`Create ${inn}: enrichment manbasi = ${source}`);
     } catch (e: any) {
       fetchError = e?.message || String(e);
-      this.log.warn(`Create ${inn}: DIDOX xatosi — saqlaymiz, keyin sync qiladi: ${fetchError}`);
+      this.log.warn(`Create ${inn}: enrichment xatosi — saqlaymiz, keyin sync qiladi: ${fetchError}`);
     }
 
     const created = await this.prisma.counterparty.create({
@@ -204,7 +250,7 @@ export class CounterpartiesService {
   }
 
   /**
-   * Bitta kontragentni yangilash (DIDOX'dan qaytadan olish).
+   * Bitta kontragentni yangilash (DIDOX/Chamber'dan qaytadan olish).
    * Name tegilmaydi.
    */
   async refresh(inn: string) {
@@ -212,12 +258,13 @@ export class CounterpartiesService {
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
 
     try {
-      const { company, bank } = await this.fetchFromDidox(inn);
+      const { company, chamber, bank, source } = await this.fetchEnrichment(inn);
       const updated = await this.prisma.counterparty.update({
         where: { inn },
-        data: this.mapDidoxToRecord(company, bank, existing.bankAccounts as any[] | null),
+        data: this.mapToRecord(company, chamber, bank, existing.bankAccounts as any[] | null),
       });
-      return { ok: true, counterparty: updated };
+      this.log.log(`Refresh ${inn}: enrichment manbasi = ${source}`);
+      return { ok: true, counterparty: updated, source };
     } catch (e: any) {
       await this.prisma.counterparty.update({
         where: { inn },
@@ -252,10 +299,6 @@ export class CounterpartiesService {
    * Parallel emas, ketma-ket: DIDOX'ga ortiqcha bosim bo'lmasin.
    */
   async refreshAll(): Promise<{ total: number; updated: number; failed: number }> {
-    if (!this.didox.isConfigured()) {
-      this.log.warn('Cron refresh: DIDOX env config yo\'q, o\'tkazib yuborildi');
-      return { total: 0, updated: 0, failed: 0 };
-    }
     const all = await this.prisma.counterparty.findMany({
       where: { isActive: true },
       select: { inn: true, bankAccounts: true },
@@ -263,10 +306,10 @@ export class CounterpartiesService {
     let updated = 0, failed = 0;
     for (const cp of all) {
       try {
-        const { company, bank } = await this.fetchFromDidox(cp.inn);
+        const { company, chamber, bank } = await this.fetchEnrichment(cp.inn);
         await this.prisma.counterparty.update({
           where: { inn: cp.inn },
-          data: this.mapDidoxToRecord(company, bank, cp.bankAccounts as any[] | null),
+          data: this.mapToRecord(company, chamber, bank, cp.bankAccounts as any[] | null),
         });
         updated++;
       } catch (e: any) {
@@ -278,7 +321,7 @@ export class CounterpartiesService {
           });
         } catch { /* ignore */ }
       }
-      // Yengil zaxira — DIDOX rate limit'ga tushmaslik uchun
+      // Yengil zaxira — rate limit'ga tushmaslik uchun
       await new Promise((r) => setTimeout(r, 200));
     }
     this.log.log(`Cron refresh: ${updated} yangilandi, ${failed} xato (jami ${all.length})`);
