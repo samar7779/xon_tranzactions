@@ -39,12 +39,16 @@ export class SyncService {
 
   /**
    * Composite tranzaksiya ID — Python kodi formatiga to'liq mos:
-   *   {general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
+   *   [IP_]{general_id}_{num}_{ddate}_{acc_ct}_{acc_dt}_{amount}_{sign}
    * sign = '+' agar bizning hisob acc_dt bo'lsa (chiqim), aks holda '-'
+   *
+   * Bank prefiksi (oldida): Ipak Yo'li tranzaksiyalari IP_ bilan boshlanadi
+   *   — Kapitalbank ID'lari bilan ajratish uchun (ba'zan bir xil ko'rinishda kelishi mumkin)
    */
-  private makeCompositeId(item: KbDoc1CItem, ourAccount: string): string {
+  private makeCompositeId(item: KbDoc1CItem, ourAccount: string, bankCode?: string): string {
     const sign = item.acc_dt === ourAccount ? '+' : '-';
-    return [
+    const prefix = bankCode === 'IPAK_YULI' ? 'IP_' : '';
+    return prefix + [
       item.general_id || 'no_general_id',
       String(item.num || 'no_num'),
       item.ddate || 'no_date',
@@ -234,7 +238,7 @@ export class SyncService {
         }
         for (const item of items) {
           try {
-            const ok = await this.upsertOne(item, acc.id, acc.accountNo, cred.bankId);
+            const ok = await this.upsertOne(item, acc.id, acc.accountNo, cred.bankId, cred.bank.code);
             if (ok) saved++;
           } catch (e: any) {
             errors++;
@@ -318,10 +322,11 @@ export class SyncService {
     accountId: string,
     accountNo: string,
     bankId: string,
+    bankCode?: string,
   ): Promise<boolean> {
     if (!item.general_id && !item.b2_id) return false;
 
-    const externalId = this.makeCompositeId(item, accountNo);
+    const externalId = this.makeCompositeId(item, accountNo, bankCode);
 
     // Mavjudligini tekshirish: yangi composite ID yoki eski format (b2_id/general_id)
     const existing = await this.prisma.transaction.findFirst({
