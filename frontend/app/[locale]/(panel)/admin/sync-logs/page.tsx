@@ -1,13 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
-  TrendingUp, Zap, Database, RefreshCcw, Search, X,
+  TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Sparkline } from '@/components/sparkline';
@@ -32,7 +35,10 @@ const STATUS_FILTERS = [
 
 const isBackfillLog = (l: any) => (l.source || '').includes('backfill');
 
+type SubTab = 'history' | 'settings';
+
 export default function SyncLogsPage() {
+  const [subTab, setSubTab] = useState<SubTab>('history');
   const [statusFilter, setStatusFilter] = useState('all');
   const [q, setQ] = useState('');
 
@@ -76,6 +82,31 @@ export default function SyncLogsPage() {
   return (
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
+        {/* Sub-tab bar — Tarix / Sozlamalar */}
+        <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
+          <button
+            onClick={() => setSubTab('history')}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+              subTab === 'history' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+            )}
+          >
+            <History className="h-3.5 w-3.5" /> Tarix
+          </button>
+          <button
+            onClick={() => setSubTab('settings')}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+              subTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+            )}
+          >
+            <Settings className="h-3.5 w-3.5" /> Sozlamalar
+          </button>
+        </div>
+
+        {subTab === 'settings' && <SyncSettingsPanel />}
+
+        {subTab === 'history' && <>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">Sync tarixi</div>
@@ -233,8 +264,112 @@ export default function SyncLogsPage() {
             )}
           </CardContent>
         </Card>
+        </>}
       </div>
     </>
+  );
+}
+
+// ═══ SYNC SOZLAMALARI — syncMinDate (sync chegarasi) ═══
+function SyncSettingsPanel() {
+  const qc = useQueryClient();
+  const { data, isLoading } = useQuery({
+    queryKey: ['sync-settings'],
+    queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null }>('/sync/settings'),
+  });
+  const [syncMinDate, setSyncMinDate] = useState<string>('');
+  const [dirty, setDirty] = useState(false);
+
+  // Backend'dan kelganda formaga to'ldiramiz
+  useEffect(() => {
+    if (data?.syncMinDate !== undefined) {
+      setSyncMinDate(data.syncMinDate || '');
+      setDirty(false);
+    }
+  }, [data?.syncMinDate]);
+
+  const mut = useMutation({
+    mutationFn: (val: string | null) =>
+      api.patch<any>('/sync/settings', { syncMinDate: val }),
+    onSuccess: (r: any) => {
+      toast.success("Sozlama saqlandi");
+      setSyncMinDate(r.syncMinDate || '');
+      setDirty(false);
+      qc.invalidateQueries({ queryKey: ['sync-settings'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
+  });
+
+  function save() {
+    mut.mutate(syncMinDate || null);
+  }
+
+  function clearDate() {
+    setSyncMinDate('');
+    setDirty(true);
+  }
+
+  return (
+    <Card className="border-0 shadow-soft">
+      <CardContent className="p-6 space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 grid place-items-center shrink-0">
+            <ShieldAlert className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div>
+            <div className="text-base font-bold text-slate-800">Sync chegarasi (minimal sana)</div>
+            <div className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
+              Sync bu sanadan oldingi tranzaksiyalarni <b>HECH QACHON olmaydi</b>.
+              Qo'lda import qilingan tarixiy ma'lumotlarni himoya qilish uchun
+              ishlatiladi. Backfill/sync paytida bu sanadan kichikroq kunlar
+              avtomatik o'tkazib yuboriladi va foydalanuvchiga ogohlantirish ko'rsatiladi.
+            </div>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <Skeleton className="h-10 w-64" />
+        ) : (
+          <div className="space-y-2">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Sync minimal sana
+            </Label>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Input
+                  type="date"
+                  value={syncMinDate}
+                  onChange={(e) => { setSyncMinDate(e.target.value); setDirty(true); }}
+                  className="h-10 w-56 pr-9"
+                />
+                {syncMinDate && (
+                  <button
+                    type="button"
+                    onClick={clearDate}
+                    title="Tozalash (chegara o'chiriladi)"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              <Button
+                onClick={save}
+                disabled={!dirty || mut.isPending}
+                className="h-10 px-4 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Saqlash
+              </Button>
+            </div>
+            <div className="text-[10.5px] text-slate-400">
+              Misol: 31.12.2025 qo'ysangiz, sync 01.01.2026 dan boshlab boshlanadi.
+              Bo'sh qoldirsangiz — chegara yo'q (har qancha eskiga sync ishlatiladi).
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

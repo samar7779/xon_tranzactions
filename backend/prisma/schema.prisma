@@ -386,6 +386,20 @@ enum SyncStatus {
   PARTIAL
 }
 
+// ─────────────────────────────────────────────────────────────────
+// SETTING — umumiy key/value sozlamalar (kelajakda kengayadi)
+// Hozir: syncMinDate — sync bu sanadan oldingi tranzaksiyalarni
+// olmaydi (import qilingan tarixiy ma'lumotlarni himoya qilish uchun)
+// ─────────────────────────────────────────────────────────────────
+model Setting {
+  key       String   @id @db.VarChar(64)
+  value     String?  @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by") @db.VarChar(190)
+
+  @@map("settings")
+}
+
 // ═════════════════════════════════════════════════════════════════
 // BILLING — mijozlar, shartnomalar, bosqichlar, to'lovlar
 // ═════════════════════════════════════════════════════════════════

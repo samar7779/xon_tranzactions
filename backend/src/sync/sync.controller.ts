@@ -1,11 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SyncService } from './sync.service';
+import { SettingsService } from './settings.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PERMISSIONS } from '../auth/permissions';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('sync')
 @ApiBearerAuth()
@@ -14,8 +16,37 @@ import { PERMISSIONS } from '../auth/permissions';
 export class SyncController {
   constructor(
     private readonly svc: SyncService,
+    private readonly settings: SettingsService,
     private readonly prisma: PrismaService,
   ) {}
+
+  @Get('settings')
+  @RequirePermissions(PERMISSIONS.SYNC_VIEW)
+  @ApiOperation({ summary: 'Sync sozlamalari — syncMinDate va boshqalar' })
+  async getSettings() {
+    const syncMinDate = await this.settings.getSyncMinDate();
+    return {
+      ok: true,
+      syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
+    };
+  }
+
+  @Patch('settings')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: 'Sync sozlamalarini saqlash (syncMinDate)' })
+  async setSettings(
+    @Body() body: { syncMinDate?: string | null },
+    @CurrentUser('email') email?: string,
+  ) {
+    if (body.syncMinDate !== undefined) {
+      await this.settings.setSyncMinDate(body.syncMinDate || null, email);
+    }
+    const syncMinDate = await this.settings.getSyncMinDate();
+    return {
+      ok: true,
+      syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
+    };
+  }
 
   @Post('account/:id')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
@@ -61,9 +92,20 @@ export class SyncController {
     if (!body?.dateFrom || !body?.dateTo) {
       return { ok: false, error: 'dateFrom va dateTo kerak' };
     }
-    const { accounts, dates } = await this.svc.resolveBackfillTargets(body);
+    const { accounts, dates, syncMinDate, originalFromCount, clampedCount } =
+      await this.svc.resolveBackfillTargets(body);
     if (accounts.length === 0) {
       return { ok: false, error: 'Sync yoqilgan hisob topilmadi' };
+    }
+    // Hamma kunlar syncMinDate'dan oldin bo'lsa
+    if (dates.length === 0 && originalFromCount > 0 && syncMinDate) {
+      const minStr = syncMinDate.toISOString().slice(0, 10);
+      return {
+        ok: false,
+        error: `Tanlangan sana oralig'i to'liq sync chegarasidan (${minStr}) oldin. Sync sozlamalaridan chegarani o'zgartiring.`,
+        syncMinDate: minStr,
+        clampedAll: true,
+      };
     }
     if (dates.length === 0) {
       return { ok: false, error: 'Sana oralig\'i noto\'g\'ri' };
@@ -71,7 +113,24 @@ export class SyncController {
     const startedAt = new Date().toISOString();
     // Fonda ishga tushiramiz — uzoq davom etadi
     this.svc.runBackfill(accounts, dates).catch(() => {});
-    return { ok: true, started: true, accounts: accounts.length, days: dates.length, startedAt };
+
+    // Ogohlantirish — agar ba'zi kunlar chetga surilgan bo'lsa
+    let warning: string | null = null;
+    if (clampedCount > 0 && syncMinDate) {
+      const minStr = syncMinDate.toISOString().slice(0, 10);
+      const firstKept = dates[0];
+      warning = `Sync chegarasi (${minStr}) tufayli ${clampedCount} ta kun o'tkazib yuborildi. Sync ${firstKept} dan boshlab boshlanadi.`;
+    }
+    return {
+      ok: true,
+      started: true,
+      accounts: accounts.length,
+      days: dates.length,
+      startedAt,
+      warning,
+      syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
+      clampedDays: clampedCount,
+    };
   }
 
   @Get('backfill/status')
