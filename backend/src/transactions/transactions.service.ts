@@ -117,18 +117,8 @@ export class TransactionsService {
       const inn = tx.direction === 'IN' ? tx.fromInn : tx.toInn;
       const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
       const code = tx.category?.code;
-      let counterpartyDisplay: string | null = null;
 
-      if (code === 'TRANSFER') {
-        counterpartyDisplay = (acc && accByNo.get(acc)) || tx.category?.name || null;
-      } else if (code === 'COUNTERPARTY') {
-        counterpartyDisplay = (inn && cpByInn.get(inn)) || tx.category?.name || null;
-      } else if (tx.category?.name) {
-        // CLIENT/BANK/MINFIN/SALARY/LOAN/COUNTERPARTY_RETURN — kategoriya nomi
-        counterpartyDisplay = tx.category.name;
-      }
-
-      // Shartnoma holati: 'verified' (CRM topdi) | 'unverified' (xato) | null
+      // Shartnoma holati + CRM mijoz nomi
       let contractStatus: 'verified' | 'unverified' | null = null;
       let contractCustomer: string | null = null;
       if (tx.contractNumber) {
@@ -137,9 +127,22 @@ export class TransactionsService {
           contractStatus = crm.found ? 'verified' : 'unverified';
           contractCustomer = crm.customerName || null;
         } else {
-          // CrmContract jadvalida yo'q — hali CRM'ga so'rov yuborilmagan
           contractStatus = 'unverified';
         }
+      }
+
+      // counterpartyDisplay — FAQAT haqiqiy entity nomi (kategoriya nomi emas!)
+      //   - CLIENT (CRM verified) → mijoz nomi
+      //   - TRANSFER → bizning bank hisobimiz egasi (LEVEL UP-STROY)
+      //   - COUNTERPARTY → Counterparty jadvalidan (GREATCITY, BARAKAT)
+      //   - Boshqalar → null (BANK/MINFIN/SALARY/LOAN — kategoriya o'zi yetarli)
+      let counterpartyDisplay: string | null = null;
+      if (code === 'CLIENT') {
+        counterpartyDisplay = contractCustomer || null;
+      } else if (code === 'TRANSFER') {
+        counterpartyDisplay = (acc && accByNo.get(acc)) || null;
+      } else if (code === 'COUNTERPARTY') {
+        counterpartyDisplay = (inn && cpByInn.get(inn)) || null;
       }
       return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
     });
@@ -242,11 +245,6 @@ export class TransactionsService {
         : Promise.resolve(null),
     ]);
 
-    let counterpartyDisplay: string | null = null;
-    if (code === 'TRANSFER') counterpartyDisplay = accRow?.ownerName || tx.category?.name || null;
-    else if (code === 'COUNTERPARTY') counterpartyDisplay = cpRow?.name || tx.category?.name || null;
-    else if (tx.category?.name) counterpartyDisplay = tx.category.name;
-
     let contractStatus: 'verified' | 'unverified' | null = null;
     let contractCustomer: string | null = null;
     if (tx.contractNumber) {
@@ -257,6 +255,11 @@ export class TransactionsService {
         contractStatus = 'unverified';
       }
     }
+
+    let counterpartyDisplay: string | null = null;
+    if (code === 'CLIENT') counterpartyDisplay = contractCustomer || null;
+    else if (code === 'TRANSFER') counterpartyDisplay = accRow?.ownerName || null;
+    else if (code === 'COUNTERPARTY') counterpartyDisplay = cpRow?.name || null;
 
     return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
   }
