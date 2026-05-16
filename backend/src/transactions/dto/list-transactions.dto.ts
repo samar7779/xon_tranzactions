@@ -69,6 +69,10 @@ export class ListTransactionsDto {
   @IsOptional() @IsString()
   bankIds?: string;
 
+  @ApiPropertyOptional({ description: "Bank hisob ID'lari (vergul bilan)" })
+  @IsOptional() @IsString()
+  accountIds?: string;
+
   @ApiPropertyOptional({ description: "Top kategoriya ID'lari (vergul bilan)" })
   @IsOptional() @IsString()
   categoryIds?: string;
