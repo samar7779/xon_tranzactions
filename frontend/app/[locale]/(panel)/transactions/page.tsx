@@ -1746,7 +1746,7 @@ function CopyBlock({ value }: { value: string }) {
   );
 }
 
-// ═══ BIRLASHTIRILGAN TAHRIR DIALOG — Kontragent + Kategoriya + Shartnoma 1 ta dialog'da
+// ═══ BIRLASHTIRILGAN TAHRIR — Sequential 3 step: Kontragent → Kategoriya → Shartnoma
 function CombinedEditDialog({
   row, tree, onClose, onSaveCategory, onSaveContract, savingCategory, savingContract,
 }: {
@@ -1758,11 +1758,11 @@ function CombinedEditDialog({
   savingCategory: boolean;
   savingContract: boolean;
 }) {
-  // Kategoriya state
+  // Step 1: Kontragent (top kategoriya)
   const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
+  // Step 2: Kategoriya (subkategoriya — top'dan filterlangan)
   const [selectedSubId, setSelectedSubId] = useState<string | null>(row?.subcategoryId || null);
-  const [filter, setFilter] = useState('');
-  // Shartnoma state
+  // Step 3: Shartnoma (faqat CLIENT uchun)
   const [contractQuery, setContractQuery] = useState(row?.contractNumber || '');
   const [debouncedQ, setDebouncedQ] = useState(contractQuery);
 
@@ -1771,155 +1771,156 @@ function CombinedEditDialog({
     return () => clearTimeout(t);
   }, [contractQuery]);
 
-  // CRM search
   const searchQuery = useQuery({
     queryKey: ['crm-search', debouncedQ],
-    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=10`),
+    queryFn: () => api.get<{ ok: boolean; total: number; items: any[] }>(`/crm/search?contract=${encodeURIComponent(debouncedQ)}&perPage=15`),
     enabled: debouncedQ.length >= 3,
     staleTime: 60_000,
   });
   const crmItems = searchQuery.data?.items || [];
 
-  // Tree filter
-  const filterLower = filter.trim().toLowerCase();
-  const visible = filterLower
-    ? tree
-        .map((t) => {
-          const matchTop = t.name.toLowerCase().includes(filterLower);
-          const matchedChildren = (t.children || []).filter((s: any) => s.name.toLowerCase().includes(filterLower));
-          if (matchTop) return t;
-          if (matchedChildren.length > 0) return { ...t, children: matchedChildren };
-          return null;
-        })
-        .filter(Boolean)
-    : tree;
+  const selectedTop = tree.find((t) => t.id === selectedTopId);
+  const subs = selectedTop?.children || [];
+  const isClient = selectedTop?.code === 'CLIENT';
+  const selectedSub = subs.find((s: any) => s.id === selectedSubId);
+  const topColor = selectedTop?.color || '#6366f1';
 
   const categoryChanged =
     selectedTopId !== (row?.categoryId || null) ||
     selectedSubId !== (row?.subcategoryId || null);
-  const contractChanged = contractQuery.trim().toUpperCase() !== (row?.contractNumber || '');
 
-  const selectedTop = tree.find((t) => t.id === selectedTopId);
-  const selectedSub = selectedTop?.children?.find((s: any) => s.id === selectedSubId);
+  function pickKontragent(t: any) {
+    setSelectedTopId(t.id);
+    // Top o'zgarsa — sub null bo'ladi (parent-child constraint)
+    if (t.id !== row?.categoryId) setSelectedSubId(null);
+    else setSelectedSubId(row?.subcategoryId || null);
+  }
 
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-indigo-600" /> Qo'lda tahrirlash
           </DialogTitle>
           <DialogDescription>
-            Kontragent, Kategoriya va Shartnomani qo'lda o'zgartirish
+            Avval Kontragent, keyin Kategoriya tanlang. Klient bo'lsa Shartnoma ham ko'rinadi.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5">
-          {/* ═══ KONTRAGENT + KATEGORIYA (tree) ═══ */}
+        <div className="space-y-4">
+          {/* ═══ STEP 1: KONTRAGENT (top kategoriya) ═══ */}
           <div>
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block">
-              Kontragent / Kategoriya
+            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">1</span>
+              Kontragent
             </label>
-            <div className="relative mb-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Qidirish... (vznosy, ndfl, zarplata)"
-                className="pl-9 h-9"
-              />
-            </div>
-            <div className="max-h-[260px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
-              {visible.length === 0 && (
-                <div className="px-4 py-6 text-center text-[11px] text-slate-400 italic">Hech narsa topilmadi</div>
-              )}
-              {visible.map((t: any) => {
-                const topSelected = selectedTopId === t.id && !selectedSubId;
+            <div className="grid grid-cols-2 gap-1.5">
+              {tree.map((t: any) => {
+                const selected = selectedTopId === t.id;
                 const color = t.color || '#64748b';
-                const hasChildren = (t.children || []).length > 0;
                 return (
-                  <div key={t.id}>
-                    <button
-                      onClick={() => { setSelectedTopId(t.id); setSelectedSubId(null); }}
-                      className={cn(
-                        'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors',
-                        topSelected && 'bg-indigo-50',
-                      )}
-                      style={topSelected ? { backgroundColor: `${color}12` } : {}}
-                    >
-                      <span className="font-semibold text-[12px]" style={{ color: topSelected ? color : undefined }}>
-                        {t.name}
-                      </span>
-                      {topSelected && <CheckCircle2 className="h-3.5 w-3.5" style={{ color }} />}
-                    </button>
-                    {hasChildren && (t.children || []).map((s: any) => {
-                      const subSelected = selectedSubId === s.id;
-                      return (
-                        <button
-                          key={s.id}
-                          onClick={() => { setSelectedTopId(t.id); setSelectedSubId(s.id); }}
-                          className={cn(
-                            'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 transition-colors',
-                            subSelected && 'bg-indigo-50',
-                          )}
-                          style={subSelected ? { backgroundColor: `${color}12` } : {}}
-                        >
-                          <span className="text-slate-700" style={subSelected ? { color, fontWeight: 600 } : {}}>
-                            ↳ {s.name}
-                          </span>
-                          {subSelected && <CheckCircle2 className="h-3 w-3" style={{ color }} />}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <button
+                    key={t.id}
+                    onClick={() => pickKontragent(t)}
+                    className={cn(
+                      'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
+                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                    )}
+                    style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                  >
+                    {t.name}
+                    {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
+                  </button>
                 );
               })}
             </div>
-            {/* Preview */}
-            <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-              <div>
-                <span className="text-slate-500">Tanlangan: </span>
-                {selectedTop ? (
-                  <span className="font-semibold" style={{ color: selectedTop.color }}>
-                    {selectedTop.name}{selectedSub && <span className="text-slate-400 mx-1">/</span>}
-                    {selectedSub && <span style={{ color: selectedTop.color }}>{selectedSub.name}</span>}
-                  </span>
-                ) : (
-                  <span className="text-slate-400 italic">tanlanmagan</span>
-                )}
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
-                  disabled={savingCategory || (!selectedTopId && !selectedSubId)}
-                  className="text-[10px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
-                >
-                  Tozalash
-                </button>
-                <span className="text-slate-300">·</span>
-                <button
-                  onClick={() => onSaveCategory(selectedTopId, selectedSubId)}
-                  disabled={savingCategory || !categoryChanged}
-                  className="text-[10px] text-indigo-600 hover:text-indigo-800 font-bold disabled:opacity-30"
-                >
-                  {savingCategory ? 'Saqlanmoqda...' : 'Saqlash'}
-                </button>
-              </div>
-            </div>
           </div>
 
-          {/* ═══ SHARTNOMA — CRM search ═══ */}
-          {(!selectedTop || selectedTop.code === 'CLIENT' || row?.contractNumber) && (
-            <div className="pt-4 border-t border-slate-100">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block">
-                Shartnoma raqami (CRM'dan qidirish)
+          {/* ═══ STEP 2: KATEGORIYA (subkategoriya — faqat top tanlangan bo'lsa) ═══ */}
+          {selectedTop && (
+            <div className="pt-3 border-t border-slate-100">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">2</span>
+                Kategoriya
+                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">
+                  ({selectedTop.name} uchun)
+                </span>
+              </label>
+              {subs.length === 0 ? (
+                <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-50 ring-1 ring-slate-200">
+                  {selectedTop.name} uchun subkategoriya yo'q — faqat top kategoriya saqlanadi
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setSelectedSubId(null)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                      !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
+                    )}
+                  >
+                    — yo'q —
+                  </button>
+                  {subs.map((s: any) => {
+                    const selected = selectedSubId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSubId(s.id)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                          selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 text-slate-700',
+                        )}
+                        style={selected ? { backgroundColor: `${topColor}15`, color: topColor, borderColor: topColor } : {}}
+                      >
+                        {s.name}
+                        {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1" style={{ color: topColor }} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Saqlash tugma — kategoriya */}
+          {selectedTop && (
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
+                disabled={savingCategory}
+                className="text-[11px] text-rose-600 hover:text-rose-700 font-medium"
+              >
+                Tozalash
+              </button>
+              <Button
+                size="sm"
+                onClick={() => onSaveCategory(selectedTopId, selectedSubId)}
+                disabled={savingCategory || !categoryChanged}
+                className="h-8 text-[11px]"
+              >
+                {savingCategory ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Kategoriyani saqlash'}
+              </Button>
+            </div>
+          )}
+
+          {/* ═══ STEP 3: SHARTNOMA (faqat CLIENT bo'lsa) ═══ */}
+          {isClient && (
+            <div className="pt-4 border-t border-indigo-200">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">3</span>
+                Shartnoma raqami
+                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">
+                  (CRM'dan qidirish)
+                </span>
               </label>
               <div className="relative mb-2">
                 <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   value={contractQuery}
                   onChange={(e) => setContractQuery(e.target.value)}
-                  placeholder="Masalan: 1494VTN24DQ (3+ belgi yozsangiz CRM'dan izlanadi)"
+                  placeholder="3+ belgi yozsangiz CRM'dan izlanadi"
                   className="pl-9 font-mono"
                 />
                 {searchQuery.isFetching && debouncedQ.length >= 3 && (
@@ -1927,33 +1928,41 @@ function CombinedEditDialog({
                 )}
               </div>
               {debouncedQ.length >= 3 && (
-                <div className="max-h-[180px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+                <div className="max-h-[200px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
                   {crmItems.length === 0 && !searchQuery.isFetching && (
                     <div className="px-4 py-3 text-[11px] text-rose-600">
                       CRM'da topilmadi — bu raqam saqlash uchun yaroqsiz
                     </div>
                   )}
-                  {crmItems.map((it: any) => (
-                    <button
-                      key={it.contract || it.id}
-                      onClick={() => onSaveContract(String(it.contract || '').trim())}
-                      disabled={savingContract}
-                      className="w-full text-left px-3 py-2 hover:bg-emerald-50 transition-colors disabled:opacity-50 group"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
-                          {it.contract}
-                        </code>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 opacity-0 group-hover:opacity-100" />
-                      </div>
-                      <div className="text-[11px] text-slate-600 truncate mt-0.5">
-                        {it.client?.full_name_kirill || it.client?.full_name_lotin || it.client?.name || it.object_name || '—'}
-                      </div>
-                    </button>
-                  ))}
+                  {crmItems.map((it: any) => {
+                    const fullName = it.customerName
+                      || it.client?.full_name_kirill
+                      || it.client?.full_name_lotin
+                      || it.client?.name
+                      || it.object_name
+                      || null;
+                    return (
+                      <button
+                        key={it.contract || it.id}
+                        onClick={() => onSaveContract(String(it.contract || '').trim())}
+                        disabled={savingContract}
+                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 transition-colors disabled:opacity-50 group"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
+                            {it.contract}
+                          </code>
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 opacity-0 group-hover:opacity-100" />
+                        </div>
+                        <div className="text-[11px] text-slate-700 truncate mt-0.5 font-medium">
+                          {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
-              <div className="mt-2 text-[11px] flex items-center justify-end gap-1">
+              <div className="mt-2 flex items-center justify-end">
                 <button
                   onClick={() => onSaveContract(null)}
                   disabled={savingContract || !row?.contractNumber}

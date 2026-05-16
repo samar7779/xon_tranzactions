@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as mysql from 'mysql2/promise';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 const XONSAROY_BASE_URL = process.env.XONSAROY_API_URL || 'https://app-api.xonsaroy.uz/api/v4/client/order';
 const XONSAROY_KEY = process.env.XONSAROY_API_KEY || 'G0C2kwSk3e3AnEZUMJhq067ZM5s9Wkuc';
@@ -19,6 +20,8 @@ const MYSQL_ENABLED = !!(MYSQL_USER && MYSQL_PASSWORD);
 export class CrmService {
   private readonly log = new Logger(CrmService.name);
   private pool: mysql.Pool | null = null;
+
+  constructor(private prisma: PrismaService) {}
 
   private getPool(): mysql.Pool | null {
     if (!MYSQL_ENABLED) return null;
@@ -132,13 +135,69 @@ export class CrmService {
 
   /**
    * Shartnoma raqami bo'yicha qidiruv — XonSaroy CRM'dan ro'yxat keladi.
+   * Har bir natijaga mijoz nomi qo'shiladi:
+   *   1) CrmContract keshidan
+   *   2) MySQL contracts jadvalidan (full_name_kirill / full_name_lotin)
+   *   3) XonSaroy item'idagi har xil nom maydonlari
    */
   async search(contractNumber: string, perPage = 20) {
     if (!contractNumber?.trim()) return { ok: false, error: 'contract kerak' };
     const r = await this.call('/index', { contract: contractNumber.trim(), 'per-page': perPage });
     if (!r.ok) return r;
-    const items = r.data?.data || [];
-    return { ok: true, total: items.length, items };
+    const items: any[] = r.data?.data || [];
+
+    if (items.length === 0) return { ok: true, total: 0, items: [] };
+
+    const contracts = items
+      .map((it) => String(it.contract || it.id || '').trim().toUpperCase())
+      .filter(Boolean);
+
+    // 1) CrmContract keshidan
+    const cached = contracts.length > 0
+      ? await this.prisma.crmContract.findMany({
+          where: { contractNumber: { in: contracts } },
+          select: { contractNumber: true, customerName: true },
+        })
+      : [];
+    const cacheMap = new Map(cached.map((c) => [c.contractNumber, c.customerName]));
+
+    // 2) MySQL contracts jadvalidan (yo'q bo'lganlar uchun)
+    const missingContracts = contracts.filter((c) => !cacheMap.get(c));
+    const pool = this.getPool();
+    if (pool && missingContracts.length > 0) {
+      try {
+        const placeholders = missingContracts.map(() => '?').join(',');
+        const [rows] = await pool.query<mysql.RowDataPacket[]>(
+          `SELECT contract_number, full_name_kirill, full_name_lotin
+           FROM contracts WHERE UPPER(contract_number) IN (${placeholders}) LIMIT ${missingContracts.length}`,
+          missingContracts,
+        );
+        for (const row of rows as any[]) {
+          const num = String(row.contract_number || '').toUpperCase();
+          const name = row.full_name_kirill || row.full_name_lotin || null;
+          if (num && name) cacheMap.set(num, name);
+        }
+      } catch (e: any) {
+        this.log.warn(`MySQL search enrichment xato: ${e?.message}`);
+      }
+    }
+
+    // 3) Har bir natijaga customerName qo'shamiz
+    const enriched = items.map((it) => {
+      const num = String(it.contract || it.id || '').trim().toUpperCase();
+      const customerName = cacheMap.get(num)
+        || it.client?.full_name_kirill
+        || it.client?.full_name_lotin
+        || it.client?.full_name
+        || it.client?.name
+        || it.client_name
+        || it.fio
+        || it.object_name
+        || null;
+      return { ...it, customerName };
+    });
+
+    return { ok: true, total: enriched.length, items: enriched };
   }
 
   /**
