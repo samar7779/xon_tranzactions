@@ -328,9 +328,11 @@ export class SyncService {
 
     const externalId = this.makeCompositeId(item, accountNo, bankCode);
 
-    // Mavjudligini tekshirish: yangi composite ID yoki eski format (b2_id/general_id)
+    // Mavjudligini tekshirish — FAQAT shu account doirasida
+    // (bir tranzaksiya 2 ta account uchun ikki yozuv bo'lishi kerak — sender va receiver)
     const existing = await this.prisma.transaction.findFirst({
       where: {
+        accountId, // muhim — boshqa accountning yozuvini dublikat deb skip qilmaslik
         OR: [
           { externalId },
           { externalId: item.b2_id || undefined },
