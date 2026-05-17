@@ -329,7 +329,9 @@ export default function TransactionsPage() {
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   // stats.total — backend'dan to'g'ridan-to'g'ri count; groups[]._count raqam (obyekt emas)
-  const txnCount = stats?.total ?? (stats?.groups || []).reduce((s: number, g: any) => s + Number(typeof g._count === 'number' ? g._count : g._count?._all || 0), 0);
+  // TRANZAKSIYA SONI — DB'dagi jami (joriy filterlar bilan), 30 kunlik emas
+  // Bu importga to'g'ri javob beradi (eski yillardan kelganlar ham hisoblanadi)
+  const txnCount = data?.total ?? stats?.total ?? 0;
   const net = inSum - outSum;
 
   // Mock sparkline data (for visual continuity until backend serves daily breakdown)
@@ -716,18 +718,32 @@ export default function TransactionsPage() {
                           className="group hover:bg-slate-50/60 transition-colors cursor-pointer"
                           onClick={() => setDetailRow(it)}
                         >
-                          {/* 1) Bank · Hisob */}
+                          {/* 1) Bank · Hisob — import bo'lsa importBankNameText va from/toAccount fallback */}
                           <td className="px-4 py-3 max-w-[220px]">
-                            <div className="flex items-center gap-2">
-                              <BankLogo code={it.account?.bank?.code || it.bank?.code || ''} name={it.account?.bank?.name || it.bank?.name} size={28} rounded="rounded-lg" />
-                              <div className="min-w-0">
-                                <div className="text-[12px] font-medium truncate">{it.account?.bank?.name || it.bank?.name || '—'}</div>
-                                {it.account?.ownerName && (
-                                  <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
-                                )}
-                                <div className="font-mono text-[10px] text-slate-400 truncate">{it.account?.accountNo || ''}</div>
-                              </div>
-                            </div>
+                            {(() => {
+                              const isImport = it.source === 'IMPORT';
+                              const bankName = it.account?.bank?.name || it.bank?.name || (isImport ? it.importBankNameText : null);
+                              const bankCode = it.account?.bank?.code || it.bank?.code || '';
+                              const accountNo = it.account?.accountNo
+                                || (isImport ? (it.direction === 'OUT' ? it.fromAccount : it.toAccount) : '');
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <BankLogo code={bankCode} name={bankName} size={28} rounded="rounded-lg" />
+                                  <div className="min-w-0">
+                                    <div className="text-[12px] font-medium truncate flex items-center gap-1">
+                                      <span className="truncate">{bankName || '—'}</span>
+                                      {isImport && (
+                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">IMP</span>
+                                      )}
+                                    </div>
+                                    {it.account?.ownerName && (
+                                      <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
+                                    )}
+                                    <div className="font-mono text-[10px] text-slate-400 truncate">{accountNo || ''}</div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           {/* 2) Sana / Vaqt */}
                           <td className="px-4 py-3 whitespace-nowrap">
@@ -772,24 +788,32 @@ export default function TransactionsPage() {
                                 : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
                             </span>
                           </td>
-                          {/* Kontragent — faqat ko'rinish, edit Tafsilot ichidan */}
+                          {/* Kontragent — import bo'lsa importCounterpartyText fallback */}
                           <td className="px-4 py-3 max-w-[160px]">
                             <KontragentChip
-                              display={it.counterpartyDisplay}
+                              display={it.counterpartyDisplay || (it.source === 'IMPORT' ? it.importCounterpartyText : null)}
                               category={it.category}
                               onClick={() => {}}
                               canEdit={false}
                             />
                           </td>
-                          {/* Kategoriya — faqat ko'rinish */}
+                          {/* Kategoriya — import bo'lsa importCategoryText fallback */}
                           <td className="px-4 py-3 max-w-[160px]">
-                            <CategoryChip
-                              category={it.subcategory || it.category}
-                              parentColor={it.category?.color}
-                              onClick={() => {}}
-                              canEdit={false}
-                              placeholder={it.category ? '—' : ''}
-                            />
+                            {(it.subcategory || it.category) ? (
+                              <CategoryChip
+                                category={it.subcategory || it.category}
+                                parentColor={it.category?.color}
+                                onClick={() => {}}
+                                canEdit={false}
+                                placeholder={it.category ? '—' : ''}
+                              />
+                            ) : it.source === 'IMPORT' && it.importCategoryText ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200 max-w-full">
+                                <span className="truncate max-w-[140px]" title={it.importCategoryText}>{it.importCategoryText}</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-300">—</span>
+                            )}
                           </td>
                           {/* Shartnoma */}
                           <td className="px-4 py-3">
