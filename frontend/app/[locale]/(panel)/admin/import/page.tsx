@@ -283,10 +283,6 @@ function TransactionsImportPanel() {
       </Card>
 
       {/* ─── Import tarixi ─── */}
-      {/* v2 — force rebuild marker */}
-      <div className="text-[11px] text-fuchsia-600 font-bold uppercase tracking-wider px-2">
-        ⬇ Import tarixi bo'limi (yangi v2)
-      </div>
       <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} />
     </div>
   );
@@ -312,6 +308,7 @@ interface ImportBatch {
 function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['import-batches', refreshKey],
@@ -319,7 +316,8 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
   });
 
   const delMut = useMutation({
-    mutationFn: (id: string) => api.delete<{ ok: boolean; deleted: number }>(`/import/batches/${id}`),
+    // 60k+ qator ham normal o'chsin uchun 5 minut timeout
+    mutationFn: (id: string) => api.delete<{ ok: boolean; deleted: number }>(`/import/batches/${id}`, { timeout: 300_000 }),
     onSuccess: (r) => {
       toast.success(`${r.deleted} ta tranzaksiya o'chirildi`);
       setConfirmDel(null);
@@ -332,11 +330,16 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
   });
 
   async function handleDownload(b: ImportBatch) {
+    if (downloadingId) return;
+    setDownloadingId(b.id);
+    const t = toast.loading('Excel tayyorlanmoqda...');
     try {
       await apiDownload(`/import/batches/${b.id}/export`, b.fileName ? `${b.fileName.replace(/\.xlsx?$/, '')}_backup.xlsx` : `import-${b.id}.xlsx`);
-      toast.success('Excel yuklab olindi');
+      toast.success('Excel yuklab olindi', { id: t });
     } catch (e: any) {
-      toast.error(e?.message || 'Yuklab olish xato');
+      toast.error(e?.message || 'Yuklab olish xato', { id: t });
+    } finally {
+      setDownloadingId(null);
     }
   }
 
@@ -400,17 +403,33 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
                       onClick={() => handleDownload(b)}
+                      disabled={downloadingId === b.id}
                       title="Excel yuklab olish"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                      className={cn(
+                        'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                        downloadingId === b.id
+                          ? 'bg-emerald-100 text-emerald-700 cursor-wait'
+                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                      )}
                     >
-                      <Download className="h-4 w-4" />
+                      {downloadingId === b.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Download className="h-4 w-4" />}
                     </button>
                     <button
                       onClick={() => setConfirmDel(b)}
+                      disabled={delMut.isPending}
                       title="Bu importning barcha tranzaksiyalarini o'chirish"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+                      className={cn(
+                        'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
+                        delMut.isPending
+                          ? 'bg-rose-100 text-rose-700 cursor-wait'
+                          : 'bg-rose-50 text-rose-700 hover:bg-rose-100',
+                      )}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      {delMut.isPending && confirmDel?.id === b.id
+                        ? <Loader2 className="h-4 w-4 animate-spin" />
+                        : <Trash2 className="h-4 w-4" />}
                     </button>
                   </div>
                 </div>
