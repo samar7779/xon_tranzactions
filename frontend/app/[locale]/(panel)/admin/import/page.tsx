@@ -309,10 +309,12 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false); // hidden by default — ustga bosilganda ochiladi
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['import-batches', refreshKey],
     queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>('/import/batches'),
+    enabled: expanded, // faqat bo'lim ochilganda fetch qiladi
   });
 
   const delMut = useMutation({
@@ -353,14 +355,27 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
   const batches = data?.items || [];
 
   return (
-    <Card className="border-0 shadow-soft">
-      <CardContent className="p-6">
-        <div className="flex items-center gap-2 mb-3">
-          <History className="h-4 w-4 text-indigo-600" />
-          <div className="text-sm font-semibold text-slate-800">Import tarixi</div>
-          <span className="text-[11px] text-slate-400 ml-auto">{batches.length} ta yozuv</span>
-        </div>
+    <Card className="border-0 shadow-soft overflow-hidden">
+      {/* Collapsible header — ustga bosilsa ochiladi/yopiladi */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+      >
+        <History className="h-4 w-4 text-indigo-600 shrink-0" />
+        <div className="text-sm font-semibold text-slate-800">Import tarixi</div>
+        {expanded && (
+          <span className="text-[11px] text-slate-400">{batches.length} ta yozuv</span>
+        )}
+        <span className="ml-auto text-slate-400">
+          {expanded
+            ? <ChevronDown className="h-4 w-4" />
+            : <ChevronRight className="h-4 w-4" />}
+        </span>
+      </button>
 
+      {expanded && (
+      <CardContent className="px-6 pb-6 pt-0">
         {isLoading ? (
           <div className="flex items-center gap-2 py-6 text-slate-400 justify-center text-[12px]">
             <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
@@ -437,42 +452,43 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
             ))}
           </div>
         )}
-
-        {/* Delete confirmation */}
-        <Dialog open={!!confirmDel} onOpenChange={(o) => !o && !delMut.isPending && setConfirmDel(null)}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-rose-700">
-                <AlertTriangle className="h-5 w-5" />
-                Importni o'chirishni tasdiqlash
-              </DialogTitle>
-              <DialogDescription className="text-[12px] pt-2">
-                <b>{confirmDel?.fileName || '(nomsiz)'}</b> import bilan birga
-                {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta tranzaksiya</b> o'chiriladi.
-                Bu amal qaytarib bo'lmaydi.
-                {confirmDel?.notes && (
-                  <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 text-amber-800 text-[11px]">
-                    <b>Eslatma:</b> {confirmDel.notes}
-                  </div>
-                )}
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2">
-              <Button variant="outline" onClick={() => setConfirmDel(null)} disabled={delMut.isPending}>
-                Bekor
-              </Button>
-              <Button
-                onClick={() => confirmDel && delMut.mutate(confirmDel.id)}
-                disabled={delMut.isPending}
-                className="bg-rose-600 hover:bg-rose-700 text-white gap-2"
-              >
-                {delMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                Ha, o'chirish
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </CardContent>
+      )}
+
+      {/* Delete confirmation — Dialog Card tashqarisida bo'lishi mumkin (portal'ga ochiladi) */}
+      <Dialog open={!!confirmDel} onOpenChange={(o) => !o && !delMut.isPending && setConfirmDel(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-rose-700">
+              <AlertTriangle className="h-5 w-5" />
+              Importni o'chirishni tasdiqlash
+            </DialogTitle>
+            <DialogDescription className="text-[12px] pt-2">
+              <b>{confirmDel?.fileName || '(nomsiz)'}</b> import bilan birga
+              {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta tranzaksiya</b> o'chiriladi.
+              Bu amal qaytarib bo'lmaydi.
+              {confirmDel?.notes && (
+                <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 text-amber-800 text-[11px]">
+                  <b>Eslatma:</b> {confirmDel.notes}
+                </div>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setConfirmDel(null)} disabled={delMut.isPending}>
+              Bekor
+            </Button>
+            <Button
+              onClick={() => confirmDel && delMut.mutate(confirmDel.id)}
+              disabled={delMut.isPending}
+              className="bg-rose-600 hover:bg-rose-700 text-white gap-2"
+            >
+              {delMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              Ha, o'chirish
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
