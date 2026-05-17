@@ -532,6 +532,11 @@ function verdictStyle(verdict: string): { bg: string; ring: string; text: string
 function SingleResult({ data }: { data: any }) {
   const p = data.parsed || {};
   const v = verdictStyle(data.verdict || 'no_data');
+  const bankItem = data.bankResponse?.item;
+  // Bank javobidan to'liq matnli ma'lumotlar (topilgan bo'lsa)
+  const purpose = bankItem?.purpose || null;
+  const nameDt = bankItem?.name_dt || null;
+  const nameCt = bankItem?.name_ct || null;
   return (
     <div className="space-y-3">
       <div className={cn('px-4 py-3 rounded-xl ring-1', v.bg, v.ring, v.text)}>
@@ -544,7 +549,10 @@ function SingleResult({ data }: { data: any }) {
         <KV k="summa" v={p.amountSom != null ? p.amountSom.toLocaleString('uz-UZ') + " so'm" : '—'} />
         <KV k="yo'nalish" v={p.direction} />
         <KV k="acc_dt (debit)" v={p.accDt} mono small />
+        {nameDt && <KV k="yuboruvchi" v={nameDt} small />}
         <KV k="acc_ct (credit)" v={p.accCt} mono small />
+        {nameCt && <KV k="qabul qiluvchi" v={nameCt} small />}
+        {purpose && <KV k="to'lov maqsadi" v={purpose} small />}
       </InfoBox>
     </div>
   );
