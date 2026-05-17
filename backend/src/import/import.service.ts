@@ -211,32 +211,36 @@ export class ImportService {
     const importedAt = new Date();
     const BATCH_SIZE = 500;
 
+    // Xavfsizlik uchun matnlarni qisqartirish — DB'da uzunlik chegarasi bor maydonlar uchun
+    const trunc = (s: string | null | undefined, max: number) =>
+      s == null ? null : (s.length > max ? s.slice(0, max) : s);
+
     const txnData = newRows.map((r) => {
       const acc = accByNo.get(r.accountNo);
       const direction: TxnDirection = r.credit > 0 ? 'IN' : 'OUT';
       const amount = r.credit > 0 ? r.credit : r.debit;
       const matchedCat = r.categoryText ? catByName.get(r.categoryText.toLowerCase()) : null;
       return {
-        externalId: r.externalId,
+        externalId: trunc(r.externalId, 190),                              // DB index uchun
         type: 'OTHER' as TxnType,
         status: 'COMPLETED' as TxnStatus,
         direction,
         amount: new Prisma.Decimal(amount),
         currency: 'UZS',
-        fromAccount: direction === 'OUT' ? r.accountNo : null,
+        fromAccount: trunc(direction === 'OUT' ? r.accountNo : null, 64),
         fromName: direction === 'OUT' ? r.accountNameText || null : r.counterpartyText || null,
-        toAccount: direction === 'IN' ? r.accountNo : null,
+        toAccount: trunc(direction === 'IN' ? r.accountNo : null, 64),
         toName: direction === 'IN' ? r.accountNameText || null : r.counterpartyText || null,
-        description: r.purpose || null,
-        contractNumber: r.contractNumber || null,
+        description: r.purpose || null,                                    // Text — unlimited
+        contractNumber: trunc(r.contractNumber || null, 128),              // VarChar(128)
         bankId: acc?.bankId ?? null,
         accountId: acc?.id ?? null,
         categoryId: matchedCat?.id ?? null,
         source: 'IMPORT' as TxnSource,
-        importCategoryText: r.categoryText || null,
-        importCounterpartyText: r.counterpartyText || null,
-        importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),
-        importedBy: importedBy || null,
+        importCategoryText: r.categoryText || null,                        // Text — unlimited
+        importCounterpartyText: r.counterpartyText || null,                // Text — unlimited
+        importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),   // Text — unlimited
+        importedBy: trunc(importedBy || null, 190),                        // VarChar(190)
         importedAt,
         txnDate: r.txnDate,
       };
