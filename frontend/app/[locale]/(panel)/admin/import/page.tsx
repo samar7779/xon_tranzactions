@@ -46,24 +46,6 @@ export default function ImportPage() {
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
-      {/* ─── Hub header ─── */}
-      <Card className="border-0 shadow-soft overflow-hidden">
-        <div className="bg-gradient-to-br from-indigo-600 via-purple-600 to-fuchsia-600 px-6 py-5 text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/15 grid place-items-center">
-              <Upload className="h-6 w-6" />
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-white/80">Admin / Import</div>
-              <div className="text-lg font-bold">Ma'lumotlarni qo'lda import qilish</div>
-              <div className="text-[11px] text-white/75 mt-0.5">
-                Qaysi turdagi ma'lumotni import qilishni tanlang
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
-
       {/* ─── Kind selector (cards) ─── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {KINDS.map((k) => {
@@ -137,6 +119,7 @@ function TransactionsImportPanel() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
 
   const mut = useMutation({
     mutationFn: async (file: File) => {
@@ -242,44 +225,55 @@ function TransactionsImportPanel() {
         </CardContent>
       </Card>
 
-      {/* Format guide */}
-      <Card className="border-0 shadow-soft">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Info className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">Excel format</div>
-          </div>
-          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-            <table className="w-full text-[11px]">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {TXN_COLUMNS.map((c) => (
-                  <tr key={c.letter} className="hover:bg-slate-50/50">
-                    <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                    <td className="px-3 py-2 font-mono text-slate-800">
-                      {c.header}
-                      {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{c.description}</td>
+      {/* Format guide — collapsible */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setFormatOpen((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+        >
+          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800">Excel format</div>
+          <span className="ml-auto text-slate-400">
+            {formatOpen
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />}
+          </span>
+        </button>
+        {formatOpen && (
+          <CardContent className="px-6 pb-6 pt-0">
+            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+              <table className="w-full text-[11px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
-            <div>• <b>Summa formati:</b> 596616522,10 (vergul decimal) yoki oddiy raqam</div>
-            <div>• <b>Yo'nalish:</b> ОборотДебет &gt; 0 → CHIQIM, ОборотКредит &gt; 0 → KIRIM</div>
-            <div>• <b>Dublikat skip:</b> ID ustun bo'yicha — agar shu ID DB'da bor bo'lsa, skip</div>
-            <div>• <b>Kategoriya:</b> bizning ro'yxatda yo'q nomlar matn sifatida saqlanadi va UI'da ko'rsatiladi</div>
-            <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {TXN_COLUMNS.map((c) => (
+                    <tr key={c.letter} className="hover:bg-slate-50/50">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">
+                        {c.header}
+                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+              <div>• <b>Summa formati:</b> 596616522,10 (vergul decimal) yoki oddiy raqam</div>
+              <div>• <b>Yo'nalish:</b> ОборотДебет &gt; 0 → CHIQIM, ОборотКредит &gt; 0 → KIRIM</div>
+              <div>• <b>Dublikat skip:</b> ID ustun bo'yicha — agar shu ID DB'da bor bo'lsa, skip</div>
+              <div>• <b>Kategoriya:</b> bizning ro'yxatda yo'q nomlar matn sifatida saqlanadi va UI'da ko'rsatiladi</div>
+              <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
+            </div>
+          </CardContent>
+        )}
       </Card>
 
       {/* ─── Import tarixi ─── */}
@@ -532,6 +526,7 @@ function CounterpartiesImportPanel() {
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<CounterpartyImportResult | null>(null);
   const [failedOpen, setFailedOpen] = useState(false);
+  const [formatOpen, setFormatOpen] = useState(false);
 
   const mut = useMutation({
     mutationFn: async (file: File) => {
@@ -639,43 +634,54 @@ function CounterpartiesImportPanel() {
         </CardContent>
       </Card>
 
-      {/* Format guide */}
-      <Card className="border-0 shadow-soft">
-        <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Info className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">Excel format</div>
-          </div>
-          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-            <table className="w-full text-[11px]">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                  <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {CP_COLUMNS.map((c) => (
-                  <tr key={c.letter} className="hover:bg-slate-50/50">
-                    <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                    <td className="px-3 py-2 font-mono text-slate-800">
-                      {c.header}
-                      {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600">{c.description}</td>
+      {/* Format guide — collapsible */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setFormatOpen((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+        >
+          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800">Excel format</div>
+          <span className="ml-auto text-slate-400">
+            {formatOpen
+              ? <ChevronDown className="h-4 w-4" />
+              : <ChevronRight className="h-4 w-4" />}
+          </span>
+        </button>
+        {formatOpen && (
+          <CardContent className="px-6 pb-6 pt-0">
+            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+              <table className="w-full text-[11px]">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
-            <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
-            <div>• <b>INN majburiy</b> — bo'sh qatorlar o'tkazib yuboriladi</div>
-            <div>• <b>Dublikat:</b> INN allaqachon DB'da bo'lsa, nomi yangilanadi (skip emas)</div>
-            <div>• <b>Nom bo'sh bo'lsa</b> — DIDOX cron orqali fon rejimida to'ldiriladi</div>
-          </div>
-        </CardContent>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {CP_COLUMNS.map((c) => (
+                    <tr key={c.letter} className="hover:bg-slate-50/50">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800">
+                        {c.header}
+                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+              <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
+              <div>• <b>INN majburiy</b> — bo'sh qatorlar o'tkazib yuboriladi</div>
+              <div>• <b>Dublikat:</b> INN allaqachon DB'da bo'lsa, nomi yangilanadi (skip emas)</div>
+              <div>• <b>Nom bo'sh bo'lsa</b> — DIDOX cron orqali fon rejimida to'ldiriladi</div>
+            </div>
+          </CardContent>
+        )}
       </Card>
     </div>
   );
