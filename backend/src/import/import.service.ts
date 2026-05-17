@@ -358,36 +358,47 @@ export class ImportService {
   /**
    * Batchni o'chirish — undagi tranzaksiyalarni ham (CASCADE).
    * Faqat source=IMPORT bo'lganlar o'chiriladi (sync data tegmaydi).
+   *
+   * 60k+ qator bo'lsa, IN clause juda katta bo'lib PostgreSQL choke qiladi va
+   * 500 xato beradi. Shuning uchun chunk'larda o'chiramiz (har biri 500 ID).
    */
   async deleteBatch(batchId: string) {
     const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new BadRequestException('Batch topilmadi');
 
-    // Tranzaksiyalarni topish (source IMPORT bo'lganlar)
-    const txns = await this.prisma.transaction.findMany({
-      where: { importBatchId: batchId, source: 'IMPORT' },
-      select: { id: true },
-    });
-    const ids = txns.map((t) => t.id);
+    const CHUNK = 500;
+    let totalDeleted = 0;
 
-    // Bog'liq history va payment yozuvlarini avval o'chirish (FK)
-    if (ids.length > 0) {
+    // Cycle: 500 ta IDni topib, har birini bog'liq jadvallar bilan birga o'chiramiz
+    // Tugaguncha takrorlanadi
+    while (true) {
+      const txns = await this.prisma.transaction.findMany({
+        where: { importBatchId: batchId, source: 'IMPORT' },
+        select: { id: true },
+        take: CHUNK,
+      });
+      const ids = txns.map((t) => t.id);
+      if (ids.length === 0) break;
+
+      // Bog'liq history va payment yozuvlarini avval o'chirish (FK)
       await this.prisma.transactionCategoryHistory.deleteMany({
         where: { txId: { in: ids } },
       });
       await this.prisma.payment.deleteMany({
         where: { transactionId: { in: ids } },
       });
-      await this.prisma.transaction.deleteMany({
+      const r = await this.prisma.transaction.deleteMany({
         where: { id: { in: ids } },
       });
+      totalDeleted += r.count;
+      this.log.log(`Batch ${batchId}: ${totalDeleted} ta o'chirildi (chunk ${ids.length})`);
     }
 
     // Batchni o'chirish
     await this.prisma.importBatch.delete({ where: { id: batchId } });
 
-    this.log.log(`Batch ${batchId} o'chirildi: ${ids.length} ta tranzaksiya`);
-    return { ok: true, deleted: ids.length };
+    this.log.log(`Batch ${batchId} o'chirildi: jami ${totalDeleted} ta tranzaksiya`);
+    return { ok: true, deleted: totalDeleted };
   }
 
   /**
