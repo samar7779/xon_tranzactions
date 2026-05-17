@@ -1,17 +1,20 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Upload, Loader2, AlertTriangle, FileSpreadsheet, X,
   ChevronDown, ChevronRight, Info, Wallet, Briefcase, Users,
-  FileSignature, Lock,
+  FileSignature, Lock, Download, Trash2, History,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+} from '@/components/ui/dialog';
+import { api, apiDownload } from '@/lib/api';
+import { cn, formatDateTime } from '@/lib/utils';
 
 interface ImportResult {
   total: number;
@@ -278,7 +281,176 @@ function TransactionsImportPanel() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ─── Import tarixi ─── */}
+      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// IMPORT TARIXI — yuklab olish va o'chirish
+// ═══════════════════════════════════════════════════════════════════════
+interface ImportBatch {
+  id: string;
+  kind: string;
+  fileName: string | null;
+  fileSize: number | null;
+  importedBy: string | null;
+  importedAt: string;
+  rowsTotal: number;
+  rowsAdded: number;
+  rowsSkipped: number;
+  rowsErrors: number;
+  notes: string | null;
+}
+
+function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
+  const qc = useQueryClient();
+  const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['import-batches', refreshKey],
+    queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>('/import/batches'),
+  });
+
+  const delMut = useMutation({
+    mutationFn: (id: string) => api.delete<{ ok: boolean; deleted: number }>(`/import/batches/${id}`),
+    onSuccess: (r) => {
+      toast.success(`${r.deleted} ta tranzaksiya o'chirildi`);
+      setConfirmDel(null);
+      qc.invalidateQueries({ queryKey: ['import-batches'] });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-stats'] });
+      refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || "O'chirish xato"),
+  });
+
+  async function handleDownload(b: ImportBatch) {
+    try {
+      await apiDownload(`/import/batches/${b.id}/export`, b.fileName ? `${b.fileName.replace(/\.xlsx?$/, '')}_backup.xlsx` : `import-${b.id}.xlsx`);
+      toast.success('Excel yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab olish xato');
+    }
+  }
+
+  function formatSize(b: number | null): string {
+    if (!b) return '—';
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  const batches = data?.items || [];
+
+  return (
+    <Card className="border-0 shadow-soft">
+      <CardContent className="p-6">
+        <div className="flex items-center gap-2 mb-3">
+          <History className="h-4 w-4 text-indigo-600" />
+          <div className="text-sm font-semibold text-slate-800">Import tarixi</div>
+          <span className="text-[11px] text-slate-400 ml-auto">{batches.length} ta yozuv</span>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center gap-2 py-6 text-slate-400 justify-center text-[12px]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
+          </div>
+        ) : batches.length === 0 ? (
+          <div className="text-center text-[12px] text-slate-400 py-8 rounded-xl ring-1 ring-dashed ring-slate-200">
+            Hozircha import qilinmagan
+          </div>
+        ) : (
+          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden divide-y divide-slate-100">
+            {batches.map((b) => (
+              <div key={b.id} className="px-4 py-3 hover:bg-slate-50/60 transition-colors">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-fuchsia-50 grid place-items-center shrink-0 mt-0.5">
+                    <FileSpreadsheet className="h-4 w-4 text-fuchsia-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[12px] font-semibold text-slate-800 truncate" title={b.fileName || ''}>
+                        {b.fileName || '(nomsiz)'}
+                      </span>
+                      {b.notes && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">LEGACY</span>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                      <span>{formatDateTime(b.importedAt)}</span>
+                      <span className="text-slate-300">·</span>
+                      <span>{b.importedBy || '—'}</span>
+                      <span className="text-slate-300">·</span>
+                      <span>{formatSize(b.fileSize)}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1.5 text-[10.5px]">
+                      <span className="text-slate-500">Jami: <b className="text-slate-700">{b.rowsTotal}</b></span>
+                      <span className="text-emerald-600">+{b.rowsAdded}</span>
+                      {b.rowsSkipped > 0 && <span className="text-amber-600">~{b.rowsSkipped}</span>}
+                      {b.rowsErrors > 0 && <span className="text-rose-600">×{b.rowsErrors}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => handleDownload(b)}
+                      title="Excel yuklab olish"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmDel(b)}
+                      title="Bu importning barcha tranzaksiyalarini o'chirish"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Delete confirmation */}
+        <Dialog open={!!confirmDel} onOpenChange={(o) => !o && !delMut.isPending && setConfirmDel(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-rose-700">
+                <AlertTriangle className="h-5 w-5" />
+                Importni o'chirishni tasdiqlash
+              </DialogTitle>
+              <DialogDescription className="text-[12px] pt-2">
+                <b>{confirmDel?.fileName || '(nomsiz)'}</b> import bilan birga
+                {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta tranzaksiya</b> o'chiriladi.
+                Bu amal qaytarib bo'lmaydi.
+                {confirmDel?.notes && (
+                  <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 text-amber-800 text-[11px]">
+                    <b>Eslatma:</b> {confirmDel.notes}
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setConfirmDel(null)} disabled={delMut.isPending}>
+                Bekor
+              </Button>
+              <Button
+                onClick={() => confirmDel && delMut.mutate(confirmDel.id)}
+                disabled={delMut.isPending}
+                className="bg-rose-600 hover:bg-rose-700 text-white gap-2"
+              >
+                {delMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                Ha, o'chirish
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
   );
 }
 

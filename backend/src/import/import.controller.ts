@@ -1,9 +1,10 @@
 import {
-  BadRequestException, Body, Controller, Post, UploadedFile,
-  UseGuards, UseInterceptors,
+  BadRequestException, Body, Controller, Delete, Get, Param, Post, Res,
+  UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
@@ -27,6 +28,37 @@ export class ImportController {
     @CurrentUser('email') email?: string,
   ) {
     if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
-    return this.svc.importExcel(file.buffer, email);
+    return this.svc.importExcel(file.buffer, email, file?.originalname);
+  }
+
+  // ─── Batch management ───────────────────────────────────────────────
+
+  @Get('batches')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: "Import batch'lari ro'yxati (tarix)" })
+  async listBatches() {
+    // Eski import'larni (batch'siz) avto-guruhlash — bir martalik
+    await this.svc.backfillLegacyBatch();
+    return this.svc.listBatches();
+  }
+
+  @Delete('batches/:id')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: "Batchni va undagi barcha tranzaksiyalarni o'chirish" })
+  async deleteBatch(@Param('id') id: string) {
+    return this.svc.deleteBatch(id);
+  }
+
+  @Get('batches/:id/export')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: "Batchdagi tranzaksiyalarni Excel'ga eksport qilish" })
+  async exportBatch(@Param('id') id: string, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.exportBatch(id);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 }

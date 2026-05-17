@@ -121,6 +121,9 @@ model Transaction {
   // Qo'lda import qilinganda — kim import qilgan va qachon
   importedBy             String?  @map("imported_by") @db.VarChar(190)
   importedAt             DateTime? @map("imported_at")
+  // Import batch (tarix + ko'plab tranzaksiyalarni bitta yozuv bilan o'chirish/eksport qilish)
+  importBatchId          String?   @map("import_batch_id")
+  importBatch            ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   // Bog'lanishlar
   bankId        String?      @map("bank_id")
@@ -171,7 +174,32 @@ model Transaction {
   @@index([subcategoryId])
   @@index([contractNumber])
   @@index([source])
+  @@index([importBatchId])
   @@map("transactions")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// IMPORT BATCH — har bir Excel import sessiyasi alohida yozuv
+// Tarix, yuklab olish (re-export), o'chirish uchun
+// ─────────────────────────────────────────────────────────────────
+model ImportBatch {
+  id           String        @id @default(cuid())
+  kind         String        @db.VarChar(32)              // 'transactions' | 'counterparties' (kelajakda)
+  fileName     String?       @map("file_name") @db.VarChar(255)
+  fileSize     Int?          @map("file_size")             // bayt
+  importedBy   String?       @map("imported_by") @db.VarChar(190)
+  importedAt   DateTime      @default(now()) @map("imported_at")
+  rowsTotal    Int           @default(0) @map("rows_total")
+  rowsAdded    Int           @default(0) @map("rows_added")
+  rowsSkipped  Int           @default(0) @map("rows_skipped")
+  rowsErrors   Int           @default(0) @map("rows_errors")
+  notes        String?       @db.Text                       // 'Legacy import' kabi izoh
+
+  transactions Transaction[]
+
+  @@index([importedAt])
+  @@index([kind])
+  @@map("import_batches")
 }
 
 enum MatchStatus {
