@@ -423,13 +423,22 @@ export class CategorizationService {
     opts?: { force?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
   ): Promise<CategorizeResult> {
     // Skip — agar allaqachon kategoriyalangan va force=false
+    // LEKIN: agar shartnoma raqami bor lekin CRM tekshirilmagan bo'lsa — CRM lookup qilamiz
     if (!opts?.force && tx.categoryId) {
+      // Mavjud shartnoma bor bo'lsa, CRM keshini tekshiramiz (cache hit/miss, agar yo'q bo'lsa lookup qilinadi)
+      if (tx.contractNumber) {
+        try {
+          await this.crmCache.lookup(tx.contractNumber);
+        } catch (e: any) {
+          this.log.warn(`CRM lookup xato (${tx.id}, ${tx.contractNumber}): ${e?.message}`);
+        }
+      }
       return {
         ok: true,
         categoryCode: 'EXISTING',
         subcategoryCode: null,
         contractNumber: tx.contractNumber,
-        reason: 'allaqachon kategoriyalangan',
+        reason: 'allaqachon kategoriyalangan (shartnoma CRM tekshirildi)',
       };
     }
 
@@ -609,7 +618,11 @@ export class CategorizationService {
     this.runAllRecentErrors = [];
 
     try {
-      const where: any = opts?.onlyUncategorized === false ? {} : { categoryId: null };
+      // Default: kategoriya YOKI shartnoma raqami yo'qlar (har biri alohida tekshiriladi)
+      // Force (all=true): hamma tranzaksiyalar qayta hisoblanadi
+      const where: any = opts?.onlyUncategorized === false
+        ? {}
+        : { OR: [{ categoryId: null }, { contractNumber: null }] };
       const total = await this.prisma.transaction.count({ where });
       const take = opts?.limit && opts.limit > 0 ? opts.limit : total;
       this.runAllProgress = { done: 0, total: Math.min(take, total), matched: 0, errors: 0 };
