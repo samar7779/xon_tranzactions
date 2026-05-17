@@ -328,10 +328,12 @@ export default function TransactionsPage() {
   // 30-day KPI
   const inSum = (stats?.groups || []).filter((g: any) => g.direction === 'IN').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
   const outSum = (stats?.groups || []).filter((g: any) => g.direction === 'OUT').reduce((s: number, g: any) => s + Number(g._sum?.amount || 0), 0);
-  // stats.total — backend'dan to'g'ridan-to'g'ri count; groups[]._count raqam (obyekt emas)
-  // TRANZAKSIYA SONI — DB'dagi jami (joriy filterlar bilan), 30 kunlik emas
-  // Bu importga to'g'ri javob beradi (eski yillardan kelganlar ham hisoblanadi)
-  const txnCount = data?.total ?? stats?.total ?? 0;
+  // TRANZAKSIYA SONI:
+  //   - CLIENT/DEBITORKA rejimida → stats.total (faqat CLIENT kategoriya, shu oy)
+  //   - Aks holda → data.total (DB'dagi jami, joriy filterlar bilan)
+  const txnCount = kpiMode === 'CLIENT'
+    ? (stats?.total ?? 0)
+    : (data?.total ?? stats?.total ?? 0);
   const net = inSum - outSum;
 
   // Mock sparkline data (for visual continuity until backend serves daily breakdown)
