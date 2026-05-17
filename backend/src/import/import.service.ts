@@ -192,90 +192,119 @@ export class ImportService {
     });
     const existingIds = new Set(existing.map((e) => e.externalId));
 
-    // 5) Har bir qatorni qo'shamiz
-    for (const r of rowsToProcess) {
+    // 5) Yangi qatorlarni filterlash (dublikat — externalId DB'da bor)
+    const newRows = rowsToProcess.filter((r) => {
+      if (existingIds.has(r.externalId)) {
+        result.skipped++;
+        return false;
+      }
+      return true;
+    });
+
+    if (newRows.length === 0) {
+      this.log.log(`Import: jami ${result.total}, hammasi dublikat — skip ${result.skipped}`);
+      return result;
+    }
+
+    // 6) BULK INSERT — createMany bilan (per-row create'dan 50-100x tezroq)
+    // 1000+ qatorlarda nginx 60s timeout'iga sig'maslik muammosini hal qiladi
+    const importedAt = new Date();
+    const BATCH_SIZE = 500;
+
+    const txnData = newRows.map((r) => {
+      const acc = accByNo.get(r.accountNo);
+      const direction: TxnDirection = r.credit > 0 ? 'IN' : 'OUT';
+      const amount = r.credit > 0 ? r.credit : r.debit;
+      const matchedCat = r.categoryText ? catByName.get(r.categoryText.toLowerCase()) : null;
+      return {
+        externalId: r.externalId,
+        type: 'OTHER' as TxnType,
+        status: 'COMPLETED' as TxnStatus,
+        direction,
+        amount: new Prisma.Decimal(amount),
+        currency: 'UZS',
+        fromAccount: direction === 'OUT' ? r.accountNo : null,
+        fromName: direction === 'OUT' ? r.accountNameText || null : r.counterpartyText || null,
+        toAccount: direction === 'IN' ? r.accountNo : null,
+        toName: direction === 'IN' ? r.accountNameText || null : r.counterpartyText || null,
+        description: r.purpose || null,
+        contractNumber: r.contractNumber || null,
+        bankId: acc?.bankId ?? null,
+        accountId: acc?.id ?? null,
+        categoryId: matchedCat?.id ?? null,
+        source: 'IMPORT' as TxnSource,
+        importCategoryText: r.categoryText || null,
+        importCounterpartyText: r.counterpartyText || null,
+        importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),
+        importedBy: importedBy || null,
+        importedAt,
+        txnDate: r.txnDate,
+      };
+    });
+
+    // Batch createMany
+    for (let i = 0; i < txnData.length; i += BATCH_SIZE) {
+      const batch = txnData.slice(i, i + BATCH_SIZE);
       try {
-        // Dublikat — skip
-        if (existingIds.has(r.externalId)) {
-          result.skipped++;
-          continue;
-        }
-
-        const acc = accByNo.get(r.accountNo);
-        // Hisob topilmadi — bankIdsiz tashlab ketamiz emas, lekin importBankNameText'ni saqlaymiz
-        const bankId = acc?.bankId ?? null;
-        const accountId = acc?.id ?? null;
-
-        // Yo'nalish
-        const direction: TxnDirection = r.credit > 0 ? 'IN' : 'OUT';
-        const amount = r.credit > 0 ? r.credit : r.debit;
-
-        // Kategoriya
-        const matchedCat = r.categoryText
-          ? catByName.get(r.categoryText.toLowerCase())
-          : null;
-
-        const tx = await this.prisma.transaction.create({
-          data: {
-            externalId: r.externalId,
-            type: 'OTHER' as TxnType, // qo'lda import — turini noma'lum deb belgilaymiz
-            status: 'COMPLETED' as TxnStatus,
-            direction,
-            amount: new Prisma.Decimal(amount),
-            currency: 'UZS',
-
-            // Yo'nalish bo'yicha hisob raqamlari to'ldiriladi
-            fromAccount: direction === 'OUT' ? r.accountNo : null,
-            fromName: direction === 'OUT' ? r.accountNameText || null : r.counterpartyText || null,
-            toAccount: direction === 'IN' ? r.accountNo : null,
-            toName: direction === 'IN' ? r.accountNameText || null : r.counterpartyText || null,
-
-            description: r.purpose || null,
-            contractNumber: r.contractNumber || null,
-
-            bankId,
-            accountId,
-            categoryId: matchedCat?.id ?? null,
-
-            // Import metadata
-            source: 'IMPORT' as TxnSource,
-            importCategoryText: r.categoryText || null,
-            importCounterpartyText: r.counterpartyText || null,
-            importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),
-            importedBy: importedBy || null,
-            importedAt: new Date(),
-
-            txnDate: r.txnDate,
-          },
+        const r = await this.prisma.transaction.createMany({
+          data: batch,
+          skipDuplicates: true, // externalId @unique uchun himoya
         });
+        result.added += r.count;
+      } catch (e: any) {
+        // Butun batch fail bo'lsa — fallback: bittadan urinib ko'ramiz
+        this.log.warn(`Batch createMany xato (${i}-${i + batch.length}): ${e?.message?.slice(0, 200)}`);
+        for (let j = 0; j < batch.length; j++) {
+          try {
+            await this.prisma.transaction.create({ data: batch[j] });
+            result.added++;
+          } catch (e2: any) {
+            result.errors++;
+            result.errorRows.push({
+              row: newRows[i + j].rowNum,
+              reason: e2?.message?.slice(0, 200) || "Noma'lum xato",
+            });
+          }
+        }
+      }
+    }
 
-        // Tarix yozuvi — kim qachon import qilgani ko'rinib tursin
+    // 7) Tarix yozuvlari — bulk insert (kim qachon import qilgani uchun)
+    try {
+      const inserted = await this.prisma.transaction.findMany({
+        where: { externalId: { in: newRows.map((r) => r.externalId) }, source: 'IMPORT' },
+        select: { id: true, externalId: true, categoryId: true, category: { select: { name: true } } },
+      });
+      const txByExtId = new Map(inserted.map((t) => [t.externalId, t]));
+
+      const historyData = newRows
+        .map((r) => {
+          const tx = txByExtId.get(r.externalId);
+          if (!tx) return null;
+          return {
+            txId: tx.id,
+            action: 'import',
+            actorName: importedBy || 'import',
+            newCategoryId: tx.categoryId ?? null,
+            newCategoryName: tx.category?.name ?? (r.categoryText || null),
+            contractNumber: r.contractNumber || null,
+            reason: `Qo'lda Excel'dan import qilindi (qator ${r.rowNum})`,
+          };
+        })
+        .filter((h): h is NonNullable<typeof h> => h !== null);
+
+      for (let i = 0; i < historyData.length; i += BATCH_SIZE) {
         try {
-          await this.prisma.transactionCategoryHistory.create({
-            data: {
-              txId: tx.id,
-              action: 'import',
-              actorName: importedBy || 'import',
-              newCategoryId: matchedCat?.id ?? null,
-              newCategoryName: matchedCat?.name ?? (r.categoryText || null),
-              contractNumber: r.contractNumber || null,
-              reason: `Qo'lda Excel'dan import qilindi (qator ${r.rowNum})`,
-            },
+          await this.prisma.transactionCategoryHistory.createMany({
+            data: historyData.slice(i, i + BATCH_SIZE),
           });
         } catch (e: any) {
-          // History yozuv xato bo'lsa, asosiy ish to'xtamasin
-          this.log.warn(`History yozuv xato (${r.externalId}): ${e?.message}`);
+          this.log.warn(`History batch xato: ${e?.message?.slice(0, 200)}`);
         }
-
-        result.added++;
-        existingIds.add(r.externalId); // shu batch ichida ham takror chiqmasligi uchun
-      } catch (e: any) {
-        result.errors++;
-        result.errorRows.push({
-          row: r.rowNum,
-          reason: e?.message?.slice(0, 200) || "Noma'lum xato",
-        });
       }
+    } catch (e: any) {
+      // History asosiy ishni to'xtatmasin
+      this.log.warn(`History yozuv umumiy xato: ${e?.message}`);
     }
 
     this.log.log(
