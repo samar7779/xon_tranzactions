@@ -61,17 +61,32 @@ export class ImportService {
     return String(v).trim();
   }
 
-  async importExcel(buffer: Buffer, importedBy?: string): Promise<{
+  async importExcel(
+    buffer: Buffer,
+    importedBy?: string,
+    fileName?: string,
+  ): Promise<{
     total: number;
     added: number;
     skipped: number;
     errors: number;
     errorRows: Array<{ row: number; reason: string }>;
+    batchId?: string;
   }> {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer as any);
     const ws = wb.worksheets[0];
     if (!ws) throw new BadRequestException("Excel bo'sh");
+
+    // Import batch — tarix uchun
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        kind: 'transactions',
+        fileName: fileName?.slice(0, 255) || null,
+        fileSize: buffer.length,
+        importedBy: importedBy?.slice(0, 190) || null,
+      },
+    });
 
     const result = {
       total: 0,
@@ -242,6 +257,7 @@ export class ImportService {
         importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),   // Text — unlimited
         importedBy: trunc(importedBy || null, 190),                        // VarChar(190)
         importedAt,
+        importBatchId: batch.id,                                           // ← batch'ga link
         txnDate: r.txnDate,
       };
     });
@@ -311,9 +327,180 @@ export class ImportService {
       this.log.warn(`History yozuv umumiy xato: ${e?.message}`);
     }
 
+    // Batch statistikasini yangilash
+    await this.prisma.importBatch.update({
+      where: { id: batch.id },
+      data: {
+        rowsTotal: result.total,
+        rowsAdded: result.added,
+        rowsSkipped: result.skipped,
+        rowsErrors: result.errors,
+      },
+    });
+
     this.log.log(
-      `Import: jami ${result.total}, qo'shildi ${result.added}, skip ${result.skipped}, xato ${result.errors}`,
+      `Import: batch ${batch.id} — jami ${result.total}, qo'shildi ${result.added}, skip ${result.skipped}, xato ${result.errors}`,
     );
-    return result;
+    return { ...result, batchId: batch.id };
+  }
+
+  // ═══ BATCH MANAGEMENT ═══════════════════════════════════════════════
+
+  /** Barcha import batch'lar (yangi avval) — frontend tarix uchun */
+  async listBatches() {
+    const batches = await this.prisma.importBatch.findMany({
+      orderBy: { importedAt: 'desc' },
+      take: 200,
+    });
+    return { ok: true, items: batches };
+  }
+
+  /**
+   * Batchni o'chirish — undagi tranzaksiyalarni ham (CASCADE).
+   * Faqat source=IMPORT bo'lganlar o'chiriladi (sync data tegmaydi).
+   */
+  async deleteBatch(batchId: string) {
+    const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new BadRequestException('Batch topilmadi');
+
+    // Tranzaksiyalarni topish (source IMPORT bo'lganlar)
+    const txns = await this.prisma.transaction.findMany({
+      where: { importBatchId: batchId, source: 'IMPORT' },
+      select: { id: true },
+    });
+    const ids = txns.map((t) => t.id);
+
+    // Bog'liq history va payment yozuvlarini avval o'chirish (FK)
+    if (ids.length > 0) {
+      await this.prisma.transactionCategoryHistory.deleteMany({
+        where: { txId: { in: ids } },
+      });
+      await this.prisma.payment.deleteMany({
+        where: { transactionId: { in: ids } },
+      });
+      await this.prisma.transaction.deleteMany({
+        where: { id: { in: ids } },
+      });
+    }
+
+    // Batchni o'chirish
+    await this.prisma.importBatch.delete({ where: { id: batchId } });
+
+    this.log.log(`Batch ${batchId} o'chirildi: ${ids.length} ta tranzaksiya`);
+    return { ok: true, deleted: ids.length };
+  }
+
+  /**
+   * Batchdagi tranzaksiyalarni Excel'ga eksport qilish.
+   * Format: import'ga teskari (rus sarlavhalar bilan, foydalanuvchi qayta import qila olishi uchun)
+   */
+  async exportBatch(batchId: string): Promise<{ buffer: Buffer; filename: string }> {
+    const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new BadRequestException('Batch topilmadi');
+
+    const txns = await this.prisma.transaction.findMany({
+      where: { importBatchId: batchId, source: 'IMPORT' },
+      include: { bank: true, account: true, category: true },
+      orderBy: { txnDate: 'asc' },
+    });
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar — Import Backup';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Tranzaksiyalar');
+
+    ws.columns = [
+      { header: 'Р/С',                key: 'rs',         width: 26 },
+      { header: 'Банк Названия',      key: 'bank',       width: 22 },
+      { header: 'ДАТА',               key: 'date',       width: 12 },
+      { header: 'Наименование счета', key: 'accName',    width: 32 },
+      { header: 'Контрагент',         key: 'cp',         width: 32 },
+      { header: 'Категория',          key: 'cat',        width: 24 },
+      { header: '№Заявка/Дог',        key: 'contract',   width: 18 },
+      { header: 'ОборотДебет',        key: 'debit',      width: 16 },
+      { header: 'ОборотКредит',       key: 'credit',     width: 16 },
+      { header: 'Назначение платежа', key: 'purpose',    width: 50 },
+      { header: 'ID',                 key: 'id',         width: 30 },
+    ];
+    const head = ws.getRow(1);
+    head.font = { bold: true, size: 10 };
+    head.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    const fmtDate = (d: Date) => {
+      const dd = String(d.getDate()).padStart(2, '0');
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      return `${dd}.${mm}.${d.getFullYear()}`;
+    };
+
+    for (const t of txns) {
+      const isOut = t.direction === 'OUT';
+      const accountNo = isOut ? t.fromAccount : t.toAccount;
+      const accountName = isOut ? t.fromName : t.toName;
+      const counterparty = isOut ? t.toName : t.fromName;
+      const cat = t.category?.name || t.importCategoryText || '';
+
+      ws.addRow({
+        rs: accountNo || t.account?.accountNo || '',
+        bank: t.importBankNameText || t.bank?.name || t.account?.bank?.name || '',
+        date: t.txnDate ? fmtDate(new Date(t.txnDate)) : '',
+        accName: accountName || '',
+        cp: t.importCounterpartyText || counterparty || '',
+        cat,
+        contract: t.contractNumber || '',
+        debit: isOut ? Number(t.amount) : '',
+        credit: isOut ? '' : Number(t.amount),
+        purpose: t.description || '',
+        id: t.externalId || '',
+      });
+    }
+
+    const raw = await wb.xlsx.writeBuffer();
+    const buffer: Buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw as ArrayBuffer);
+    const safeName = (batch.fileName || `import-${batch.id}`).replace(/\.xlsx?$/i, '');
+    const filename = `${safeName}_backup.xlsx`;
+    return { buffer, filename };
+  }
+
+  /**
+   * Eski importlarni (batch'siz) bitta 'Legacy' batch'ga guruhlash.
+   * Idempotent — qayta ishga tushirish xavfsiz.
+   */
+  async backfillLegacyBatch(): Promise<{ batchId: string | null; linked: number }> {
+    const orphans = await this.prisma.transaction.count({
+      where: { source: 'IMPORT', importBatchId: null },
+    });
+    if (orphans === 0) return { batchId: null, linked: 0 };
+
+    // Birinchi va oxirgi importedAt sanalarini olish
+    const earliest = await this.prisma.transaction.findFirst({
+      where: { source: 'IMPORT', importBatchId: null },
+      orderBy: { importedAt: 'asc' },
+      select: { importedAt: true, importedBy: true },
+    });
+
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        kind: 'transactions',
+        fileName: 'legacy-import',
+        importedBy: earliest?.importedBy || null,
+        importedAt: earliest?.importedAt || new Date(),
+        rowsTotal: orphans,
+        rowsAdded: orphans,
+        notes: 'Eski import (batch tarixsiz) — avtomatik guruhlangan',
+      },
+    });
+
+    // Barcha orphan'larni shu batch'ga bog'lash
+    const r = await this.prisma.transaction.updateMany({
+      where: { source: 'IMPORT', importBatchId: null },
+      data: { importBatchId: batch.id },
+    });
+
+    this.log.log(`Legacy batch ${batch.id}: ${r.count} ta tranzaksiya bog'landi`);
+    return { batchId: batch.id, linked: r.count };
   }
 }
