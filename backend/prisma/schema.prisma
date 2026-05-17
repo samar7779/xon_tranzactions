@@ -390,12 +390,12 @@ model TransactionCategoryHistory {
 // Har tranzaksiyada CRM'ga so'rov yubormaslik uchun.
 // ─────────────────────────────────────────────────────────────────
 model CrmContract {
-  contractNumber  String   @id @map("contract_number") @db.VarChar(32)
-  customerName    String?  @map("customer_name") @db.VarChar(255)
-  status          String?  @db.VarChar(64)              // CRM'dan kelgan status (active/реинвестиция/фиктивный)
-  objectName      String?  @map("object_name") @db.VarChar(128)  // VATAN RESIDENCE va h.k.
-  apartmentNumber String?  @map("apartment_number") @db.VarChar(32)
-  phone           String?  @db.VarChar(32)
+  contractNumber  String   @id @map("contract_number") @db.VarChar(128)  // Transaction bilan teng
+  customerName    String?  @map("customer_name") @db.Text                  // uzun org nomlari uchun
+  status          String?  @db.VarChar(128)
+  objectName      String?  @map("object_name") @db.VarChar(255)
+  apartmentNumber String?  @map("apartment_number") @db.VarChar(64)
+  phone           String?  @db.VarChar(64)
   rawSnapshot     Json?    @map("raw_snapshot")          // CRM javobining qisqartmasi
   found           Boolean  @default(true)                // false → CRM'da topilmadi, kelajakda yana urinma
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")

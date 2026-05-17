@@ -102,16 +102,23 @@ export class CrmContractCacheService {
             if (name) return name;
             return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || null;
           };
-          const customerName = buildName(detail.client) || detail.fio || null;
-          const status = String(detail.status || detail.contract_status || '').toLowerCase() || null;
-          const objectName = detail.object_name || detail.client?.object_name || null;
-          const apartmentNumber = detail.apartment_number || detail.client?.apartment_number || null;
-          const phone = detail.client?.phone_primary || detail.client?.phone || null;
+          // Xavfsiz qisqartirish — DB VarChar cheklovlariga sig'sin
+          const trunc = (s: any, max: number): string | null => {
+            if (s == null) return null;
+            const str = String(s);
+            return str.length > max ? str.slice(0, max) : str;
+          };
+          const customerName = buildName(detail.client) || detail.fio || null; // Text — limit yo'q
+          const status = trunc(String(detail.status || detail.contract_status || '').toLowerCase() || null, 128);
+          const objectName = trunc(detail.object_name || detail.client?.object_name || null, 255);
+          const apartmentNumber = trunc(detail.apartment_number || detail.client?.apartment_number || null, 64);
+          const phone = trunc(detail.client?.phone_primary || detail.client?.phone || null, 64);
+          const contractKey = trunc(v.toUpperCase(), 128) as string;
 
           const saved = await this.prisma.crmContract.upsert({
-            where: { contractNumber: v.toUpperCase() },
+            where: { contractNumber: contractKey },
             create: {
-              contractNumber: v.toUpperCase(),
+              contractNumber: contractKey,
               customerName, status, objectName, apartmentNumber, phone,
               rawSnapshot: pickSnapshot(detail),
               found: true,
@@ -132,10 +139,11 @@ export class CrmContractCacheService {
     }
 
     // CRM'da topilmadi — keshga "found=false" yozib qo'yamiz, qayta urinmaymiz (NOT_FOUND_RETRY_AFTER_MS davomida)
+    const safeKey = key.length > 128 ? key.slice(0, 128) : key;
     const saved = await this.prisma.crmContract.upsert({
-      where: { contractNumber: key },
+      where: { contractNumber: safeKey },
       create: {
-        contractNumber: key,
+        contractNumber: safeKey,
         found: false,
         lastError: 'Topilmadi',
       },
