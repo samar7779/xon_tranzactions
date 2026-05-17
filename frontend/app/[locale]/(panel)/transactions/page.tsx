@@ -10,9 +10,9 @@ import {
   Search, Wand2, Link2Off, EyeOff, MoreHorizontal, Download,
   ArrowDownLeft, ArrowUpRight, TrendingUp, ChevronLeft, ChevronRight,
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
-  Hash, Receipt, Link2, History, Loader2, AlertCircle,
+  Hash, Receipt, Link2, History, Loader2, AlertCircle, AlertTriangle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
-  Filter as FilterIcon, Briefcase,
+  Filter as FilterIcon, Briefcase, Sparkles, Activity,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -28,7 +28,7 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
 } from '@/components/ui/dropdown-menu';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
 import { Sparkline } from '@/components/sparkline';
 import { Skeleton } from '@/components/skeleton';
@@ -183,10 +183,12 @@ export default function TransactionsPage() {
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
+  // Recategorize progress modal — live polling bilan ko'rsatadi
+  const [recategorizeOpen, setRecategorizeOpen] = useState(false);
   const recategorizeAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
     onSuccess: (r: any) => {
-      toast.success(r?.message || 'Kategoriyalash fonda boshlandi');
+      setRecategorizeOpen(true); // modal ochish (toast o'rniga)
       setTimeout(() => qc.invalidateQueries({ queryKey: ['transactions'] }), 30_000);
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
@@ -916,6 +918,9 @@ export default function TransactionsPage() {
       {/* ═══ ESKI TARIXNI YUKLASH (BACKFILL) ═══ */}
       <BackfillDialog open={backfillOpen} onOpenChange={setBackfillOpen} banks={banks?.items || []} />
 
+      {/* ═══ KATEGORIYALASH JARAYONI (LIVE) ═══ */}
+      <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
+
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
         row={categoryEditRow}
@@ -1440,6 +1445,219 @@ function FilterChip({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// RECATEGORIZE PROGRESS — kategoriyalash jarayoni live modal
+// ═══════════════════════════════════════════════════════════════════════
+function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const qc = useQueryClient();
+  const [errorsOpen, setErrorsOpen] = useState(false);
+
+  // Live polling — har 2 soniyada
+  const { data } = useQuery({
+    queryKey: ['categorize-status'],
+    queryFn: () => api.get<any>('/categorization/run-all/status'),
+    enabled: open,
+    refetchInterval: open ? 2000 : false,
+  });
+
+  const running = data?.running;
+  const progress = data?.progress;
+  const lastError = data?.lastError;
+  const recentErrors = data?.recentErrors || [];
+  const done = progress?.done ?? 0;
+  const total = progress?.total ?? 0;
+  const matched = progress?.matched ?? 0;
+  const errors = progress?.errors ?? 0;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const finished = !running && progress != null && done > 0;
+
+  // Tugaganda transactions list'ni yangilash
+  useEffect(() => {
+    if (finished) {
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-stats'] });
+    }
+  }, [finished, qc]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o && running) return; onOpenChange(o); }}>
+      <DialogContent className="max-w-xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className={cn(
+              'w-7 h-7 rounded-lg grid place-items-center text-white',
+              running
+                ? 'bg-gradient-to-br from-indigo-500 to-purple-600 animate-pulse'
+                : finished
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600'
+                  : 'bg-gradient-to-br from-slate-400 to-slate-500',
+            )}>
+              <Sparkles className="h-4 w-4" />
+            </div>
+            {running ? 'Kategoriyalash jarayonda...' : finished ? '✅ Kategoriyalash tugadi' : 'Kategoriyalash'}
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            {running
+              ? 'Tranzaksiyalar avtomatik kategoriyalanmoqda. Oynani yopsangiz ham jarayon fonda davom etadi.'
+              : finished
+                ? `${matched} ta tranzaksiya muvaffaqiyatli kategoriyalandi.`
+                : 'Jarayon haqida ma\'lumot...'}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {/* Progress bar — chiroyli gradient */}
+          {progress && (
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[12px] font-semibold text-slate-700 tabular-nums">
+                  {done.toLocaleString('uz-UZ')} / {total.toLocaleString('uz-UZ')}
+                </span>
+                <span className={cn(
+                  'text-[14px] font-bold tabular-nums',
+                  finished ? 'text-emerald-600' : 'text-indigo-600',
+                )}>{pct}%</span>
+              </div>
+              <div className="h-3 rounded-full bg-slate-100 overflow-hidden relative">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500 relative overflow-hidden',
+                    finished
+                      ? 'bg-gradient-to-r from-emerald-400 to-teal-500'
+                      : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-fuchsia-500',
+                  )}
+                  style={{ width: `${pct}%` }}
+                >
+                  {running && (
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-[shimmer_2s_infinite]" />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 3 ta stat — animated */}
+          <div className="grid grid-cols-3 gap-2">
+            <StatBox
+              label="Ko'rib chiqildi"
+              value={done}
+              color="indigo"
+              icon={<Activity className="h-3.5 w-3.5" />}
+              animate={running}
+            />
+            <StatBox
+              label="Kategoriyalandi"
+              value={matched}
+              color="emerald"
+              icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+              animate={running}
+            />
+            <StatBox
+              label="Xato"
+              value={errors}
+              color="rose"
+              icon={<AlertCircle className="h-3.5 w-3.5" />}
+              animate={running && errors > 0}
+            />
+          </div>
+
+          {/* Tugagan banner */}
+          {finished && (
+            <div className="px-3 py-2.5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 text-emerald-900 text-[12px] flex items-start gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <div className="font-semibold">Tugadi!</div>
+                <div className="text-emerald-700 text-[11px] mt-0.5">
+                  {matched} ta tranzaksiya kategoriyalandi ({done - matched} ta o'zgartirilmadi, qoidaga mos kelmadi)
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Boshlanmagan/kutmoqda */}
+          {!progress && (
+            <div className="flex items-center gap-2 text-slate-500 text-[12px] py-4 justify-center">
+              <Loader2 className="h-4 w-4 animate-spin" /> Jarayon boshlanmoqda...
+            </div>
+          )}
+
+          {/* Xato logi (collapsible) */}
+          {recentErrors.length > 0 && (
+            <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+              <button
+                onClick={() => setErrorsOpen((o) => !o)}
+                className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+              >
+                <span className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Oxirgi {recentErrors.length} ta xato
+                </span>
+                {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              </button>
+              {errorsOpen && (
+                <div className="max-h-64 overflow-y-auto divide-y divide-rose-100">
+                  {recentErrors.map((e: any, i: number) => (
+                    <div key={i} className="px-4 py-2 text-[10.5px] space-y-0.5">
+                      <div className="flex items-baseline gap-2">
+                        <code className="font-mono text-rose-700 text-[10px]">{e.txId.slice(0, 12)}...</code>
+                        <span className="text-slate-400 text-[9.5px] ml-auto">{formatDateTime(e.at)}</span>
+                      </div>
+                      <div className="text-slate-700 break-words">{e.reason}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Fatal error */}
+          {lastError && !running && errors === 0 && (
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div className="break-all">{lastError}</div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant={finished ? 'default' : 'outline'}
+            onClick={() => onOpenChange(false)}
+            className={finished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+          >
+            {running ? "Fonda davom etsin · yopish" : 'Yopish'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StatBox({
+  label, value, color, icon, animate,
+}: {
+  label: string;
+  value: number;
+  color: 'indigo' | 'emerald' | 'rose';
+  icon: React.ReactNode;
+  animate?: boolean;
+}) {
+  const colorMap = {
+    indigo:  'bg-indigo-50 ring-indigo-200 text-indigo-700',
+    emerald: 'bg-emerald-50 ring-emerald-200 text-emerald-700',
+    rose:    'bg-rose-50 ring-rose-200 text-rose-700',
+  };
+  return (
+    <div className={cn('rounded-xl ring-1 px-3 py-2.5 transition-all', colorMap[color], animate && 'animate-pulse')}>
+      <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold opacity-75">
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="text-2xl font-bold tabular-nums mt-1">{value.toLocaleString('uz-UZ')}</div>
+    </div>
   );
 }
 

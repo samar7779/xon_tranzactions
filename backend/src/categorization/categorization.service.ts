@@ -148,7 +148,10 @@ export class CategorizationService {
   // Lock — bir vaqtda bitta toplu run
   private runAllRunning = false;
   private runAllStartedAt: Date | null = null;
-  private runAllProgress: { done: number; total: number; matched: number } | null = null;
+  private runAllFinishedAt: Date | null = null;
+  private runAllProgress: { done: number; total: number; matched: number; errors: number } | null = null;
+  private runAllLastError: string | null = null;
+  private runAllRecentErrors: Array<{ txId: string; reason: string; at: string }> = [];
 
   // Kategoriya ID'lari keshi — har safar DB'dan o'qimaslik uchun
   private categoryRefs: CategoryRefs | null = null;
@@ -216,11 +219,14 @@ export class CategorizationService {
     };
   }
 
-  getStatus(): { running: boolean; startedAt: string | null; progress: { done: number; total: number; matched: number } | null } {
+  getStatus() {
     return {
       running: this.runAllRunning,
       startedAt: this.runAllStartedAt?.toISOString() || null,
+      finishedAt: this.runAllFinishedAt?.toISOString() || null,
       progress: this.runAllProgress,
+      lastError: this.runAllLastError,
+      recentErrors: this.runAllRecentErrors,
     };
   }
 
@@ -597,17 +603,21 @@ export class CategorizationService {
     }
     this.runAllRunning = true;
     this.runAllStartedAt = new Date();
-    this.runAllProgress = { done: 0, total: 0, matched: 0 };
+    this.runAllFinishedAt = null;
+    this.runAllProgress = { done: 0, total: 0, matched: 0, errors: 0 };
+    this.runAllLastError = null;
+    this.runAllRecentErrors = [];
 
     try {
       const where: any = opts?.onlyUncategorized === false ? {} : { categoryId: null };
       const total = await this.prisma.transaction.count({ where });
       const take = opts?.limit && opts.limit > 0 ? opts.limit : total;
-      this.runAllProgress = { done: 0, total: Math.min(take, total), matched: 0 };
+      this.runAllProgress = { done: 0, total: Math.min(take, total), matched: 0, errors: 0 };
 
       const PAGE = 500;
       let matched = 0;
       let done = 0;
+      let errors = 0;
       let cursor: string | undefined;
 
       while (done < take) {
@@ -629,20 +639,41 @@ export class CategorizationService {
             });
             if (r.categoryCode && r.categoryCode !== 'EXISTING') matched++;
           } catch (e: any) {
-            this.log.warn(`tx ${tx.id} kategoriyalashda xato: ${e?.message}`);
+            errors++;
+            const reason = (e?.message || 'noma\'lum xato').slice(0, 300);
+            this.log.warn(`tx ${tx.id} kategoriyalashda xato: ${reason}`);
+            // Oxirgi 20 xatoni eslab qolamiz (UI uchun)
+            this.runAllRecentErrors.unshift({ txId: tx.id, reason, at: new Date().toISOString() });
+            if (this.runAllRecentErrors.length > 20) this.runAllRecentErrors.length = 20;
+            this.runAllLastError = reason;
           }
           done++;
-          this.runAllProgress = { done, total: Math.min(take, total), matched };
+          this.runAllProgress = { done, total: Math.min(take, total), matched, errors };
         }
         cursor = batch[batch.length - 1].id;
       }
 
       const dur = Math.round((Date.now() - (this.runAllStartedAt?.getTime() || Date.now())) / 1000);
-      this.log.log(`runAll tugadi: ${done}/${total} ko'rib chiqildi, ${matched} ta kategoriyalandi (${dur}s)`);
+      this.log.log(`runAll tugadi: ${done}/${total} ko'rib chiqildi, ${matched} ta kategoriyalandi, ${errors} ta xato (${dur}s)`);
+    } catch (e: any) {
+      // Umumiy fatal xato — UI uchun saqlaymiz
+      this.runAllLastError = (e?.message || 'noma\'lum fatal xato').slice(0, 500);
+      this.log.error(`runInBackground fatal: ${this.runAllLastError}`);
     } finally {
+      // Tugagandan keyin 5 daqiqa progress ko'rinib tursin (UI ulgursin)
+      this.runAllFinishedAt = new Date();
       this.runAllRunning = false;
-      this.runAllStartedAt = null;
-      this.runAllProgress = null;
+      // runAllStartedAt va runAllProgress'ni saqlab qolamiz (status uchun)
+      setTimeout(() => {
+        // Yangi run boshlanmagan bo'lsa — tozalaymiz
+        if (!this.runAllRunning) {
+          this.runAllStartedAt = null;
+          this.runAllProgress = null;
+          this.runAllFinishedAt = null;
+          this.runAllLastError = null;
+          this.runAllRecentErrors = [];
+        }
+      }, 5 * 60 * 1000);
     }
   }
 
