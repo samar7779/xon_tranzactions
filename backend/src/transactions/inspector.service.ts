@@ -57,10 +57,12 @@ export class InspectorService {
         `ID format noto'g'ri (kutilgan 7 ta qism, kelgan ${parts.length}): ${rawId}`,
       );
     }
-    const [generalId, num, ddate, accCt, accDt, amountTiyin, sign] = parts;
-    if (sign !== '+' && sign !== '-') {
-      throw new BadRequestException(`Sign noto'g'ri ("${sign}") — '+' yoki '-' bo'lishi kerak`);
+    const [generalId, num, ddate, accCt, accDt, amountTiyin, signRaw] = parts;
+    if (signRaw !== '+' && signRaw !== '-') {
+      throw new BadRequestException(`Sign noto'g'ri ("${signRaw}") — '+' yoki '-' bo'lishi kerak`);
     }
+    // TS narrowing destructured string'da ishonchsiz — aniq cast
+    const sign = signRaw as '+' | '-';
     return {
       bankPrefix,
       generalId,

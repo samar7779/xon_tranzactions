@@ -400,7 +400,11 @@ export class ImportService {
 
     const txns = await this.prisma.transaction.findMany({
       where: { importBatchId: batchId, source: 'IMPORT' },
-      include: { bank: true, account: true, category: true },
+      include: {
+        bank: true,
+        account: { include: { bank: true } }, // nested — account.bank ham kerak
+        category: true,
+      },
       orderBy: { txnDate: 'asc' },
     });
 
