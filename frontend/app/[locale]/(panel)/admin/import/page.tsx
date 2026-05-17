@@ -283,6 +283,10 @@ function TransactionsImportPanel() {
       </Card>
 
       {/* ─── Import tarixi ─── */}
+      {/* v2 — force rebuild marker */}
+      <div className="text-[11px] text-fuchsia-600 font-bold uppercase tracking-wider px-2">
+        ⬇ Import tarixi bo'limi (yangi v2)
+      </div>
       <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} />
     </div>
   );
