@@ -823,7 +823,17 @@ export default function TransactionsPage() {
                           {/* Shartnoma */}
                           <td className="px-4 py-3">
                             {it.contractNumber ? (
-                              it.contractStatus === 'unverified' ? (
+                              it.contractStatus === 'manual' ? (
+                                // QO'LDA kiritilgan — amber badge (XATO emas)
+                                <div className="flex items-center gap-1.5">
+                                  <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-amber-800 bg-amber-50 ring-amber-200">
+                                    {it.contractNumber}
+                                  </code>
+                                  <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                                    qo'lda
+                                  </span>
+                                </div>
+                              ) : it.contractStatus === 'unverified' ? (
                                 // XATO holati — faqat badge + lookup icon, raqamni yashiramiz
                                 <div className="flex items-center gap-1.5">
                                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
@@ -1908,7 +1918,16 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
               label="Shartnoma"
               customValue={
                 liveRow.contractNumber ? (
-                  liveRow.contractStatus === 'unverified' ? (
+                  liveRow.contractStatus === 'manual' ? (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <code className="inline-block font-mono text-[12px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded ring-1 ring-amber-200">
+                        {liveRow.contractNumber}
+                      </code>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                        QO'LDA · CRM tekshirilmagan
+                      </span>
+                    </div>
+                  ) : liveRow.contractStatus === 'unverified' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
                         <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
@@ -1973,17 +1992,19 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                     <button
                       onClick={() => setManualContractOpen(true)}
                       title="Shartnoma raqamini qo'lda kiritish (CRM tekshirmaydi)"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white hover:shadow-md hover:shadow-amber-500/40 transition-all"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-amber-500/40 transition-all"
                     >
-                      <FileSignature className="h-3.5 w-3.5" />
+                      <FileSignature className="h-3 w-3" />
+                      Qo'lda shartnoma
                     </button>
                     {/* Ariza biriktirish */}
                     <button
                       onClick={() => setAttachmentsOpen(true)}
-                      title="Ariza biriktirish (PDF/DOCX/Image)"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
+                      title="Ariza biriktirish (PDF/DOCX/Image) — Telegram'ga xabar"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
                     >
-                      <Paperclip className="h-3.5 w-3.5" />
+                      <Paperclip className="h-3 w-3" />
+                      Ariza
                       {(liveRow._attachmentCount || 0) > 0 && (
                         <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-1 grid place-items-center">
                           {liveRow._attachmentCount}
@@ -3555,9 +3576,19 @@ function CategoryHistoryItem({ h }: { h: any }) {
     cron:         'bg-amber-100 text-amber-700',
     import:       'bg-fuchsia-100 text-fuchsia-700',
     counterparty: 'bg-teal-100 text-teal-700',
+    contract:     'bg-amber-100 text-amber-700',
+    attachment:   'bg-violet-100 text-violet-700',
+  };
+  const actionLabelMap: Record<string, string> = {
+    counterparty: 'KONTRAGENT',
+    contract:     'SHARTNOMA',
+    attachment:   'ARIZA',
   };
   const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
   const isCp = h.action === 'counterparty';
+  const isContract = h.action === 'contract';
+  const isAttach = h.action === 'attachment';
+  const isSpecial = isCp || isContract || isAttach;
 
   // Action turi: qo'shildi / o'zgartirildi / o'chirildi
   const hadOld = !!(h.oldCategoryName || h.oldSubcategoryName);
@@ -3568,13 +3599,20 @@ function CategoryHistoryItem({ h }: { h: any }) {
   else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700'; }
   else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700'; }
 
-  // Kontragent uchun maxsus chunki - nom (kategoriya emas)
-  const renderCp = (name: string | null) => (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-50 ring-1 ring-teal-200 text-teal-800 font-semibold">
-      <Briefcase className="h-3 w-3" />
-      {name || 'bo\'sh'}
-    </span>
-  );
+  // Maxsus chip render: kontragent / shartnoma / ariza uchun (kategoriya emas)
+  const renderSpecial = (name: string | null) => {
+    const cfg = isCp
+      ? { bg: 'bg-teal-50', ring: 'ring-teal-200', text: 'text-teal-800', icon: <Briefcase className="h-3 w-3" /> }
+      : isContract
+        ? { bg: 'bg-amber-50', ring: 'ring-amber-200', text: 'text-amber-800', icon: <FileSignature className="h-3 w-3" /> }
+        : { bg: 'bg-violet-50', ring: 'ring-violet-200', text: 'text-violet-800', icon: <Paperclip className="h-3 w-3" /> };
+    return (
+      <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded ring-1 font-semibold', cfg.bg, cfg.ring, cfg.text, isContract && 'font-mono')}>
+        {cfg.icon}
+        {name || 'bo\'sh'}
+      </span>
+    );
+  };
   const renderCat = (name: string | null, sub: string | null) => {
     if (!name && !sub) return <span className="text-slate-400 italic">bo'sh</span>;
     return (
@@ -3584,12 +3622,17 @@ function CategoryHistoryItem({ h }: { h: any }) {
     );
   };
 
+  const specialBgRing = isCp ? 'ring-teal-200 bg-teal-50/40'
+    : isContract ? 'ring-amber-200 bg-amber-50/40'
+    : isAttach ? 'ring-violet-200 bg-violet-50/40'
+    : 'ring-slate-100 bg-slate-50/50';
+
   return (
-    <div className={cn('rounded-lg ring-1 px-3 py-2 text-[11px] space-y-1', isCp ? 'ring-teal-200 bg-teal-50/40' : 'ring-slate-100 bg-slate-50/50')}>
+    <div className={cn('rounded-lg ring-1 px-3 py-2 text-[11px] space-y-1', specialBgRing)}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider', cls)}>
-            {isCp ? 'KONTRAGENT' : h.action}
+            {actionLabelMap[h.action] || h.action}
           </span>
           <span className="font-medium text-slate-700">{actorLabel}</span>
           {actionLabel && (
@@ -3600,18 +3643,18 @@ function CategoryHistoryItem({ h }: { h: any }) {
         </div>
         <span className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(h.createdAt)}</span>
       </div>
-      {/* Diff — kontragent yoki kategoriya */}
-      {isCp ? (
+      {/* Diff — kontragent/shartnoma/ariza yoki kategoriya */}
+      {isSpecial ? (
         hadOld && hasNew ? (
           <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-            <span className="line-through opacity-70">{renderCp(h.oldCategoryName)}</span>
+            <span className="line-through opacity-70">{renderSpecial(h.oldCategoryName)}</span>
             <span className="text-slate-400">→</span>
-            {renderCp(h.newCategoryName)}
+            {renderSpecial(h.newCategoryName)}
           </div>
         ) : hasNew ? (
-          <div className="text-[11px]">{renderCp(h.newCategoryName)}</div>
+          <div className="text-[11px]">{renderSpecial(h.newCategoryName)}</div>
         ) : (
-          <div className="text-[11px] line-through opacity-70">{renderCp(h.oldCategoryName)}</div>
+          <div className="text-[11px] line-through opacity-70">{renderSpecial(h.oldCategoryName)}</div>
         )
       ) : (
         hadOld && hasNew ? (

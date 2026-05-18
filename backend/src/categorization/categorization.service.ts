@@ -310,7 +310,10 @@ export class CategorizationService {
 
     await this.prisma.transaction.update({
       where: { id: txId },
-      data: { contractNumber: newContract },
+      data: {
+        contractNumber: newContract,
+        isContractManual: false, // CRM bilan tasdiqlangan
+      },
     });
 
     // Tarixga to'g'ridan-to'g'ri yozish (logHistory'da kategoriya o'zgarmagani uchun skip bo'lar edi)
@@ -408,7 +411,7 @@ export class CategorizationService {
   async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; contractNumber: string | null }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { contractNumber: true, categoryId: true, subcategoryId: true },
+      select: { contractNumber: true, isContractManual: true },
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
@@ -419,26 +422,28 @@ export class CategorizationService {
 
     await this.prisma.transaction.update({
       where: { id: txId },
-      data: { contractNumber: newContract },
+      data: {
+        contractNumber: newContract,
+        isContractManual: !!newContract, // qo'lda kiritildi marker
+      },
     });
 
-    // Tarixga yozish
+    // Tarixga yozish — action='contract' (frontend amber rang bilan render qiladi)
+    // old/new contract qiymatlari oldCategoryName/newCategoryName ga yoziladi (UI tushunadi)
     if (old.contractNumber !== newContract) {
       const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
       try {
         await this.prisma.transactionCategoryHistory.create({
           data: {
             txId,
-            action: 'manual',
+            action: 'contract',
             actorId,
             actorName: u?.email || null,
-            oldCategoryId: old.categoryId,
-            oldSubcategoryId: old.subcategoryId,
-            newCategoryId: old.categoryId,
-            newSubcategoryId: old.subcategoryId,
+            oldCategoryName: old.contractNumber,
+            newCategoryName: newContract,
             contractNumber: newContract,
             reason: newContract
-              ? `Shartnoma qo'lda kiritildi: ${newContract} (CRM tekshirilmagan)`
+              ? `Shartnoma qo'lda kiritildi (CRM tekshirilmagan)`
               : "Shartnoma raqami o'chirildi",
           },
         });

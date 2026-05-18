@@ -243,15 +243,19 @@ export class TransactionsService {
       const code = tx.category?.code;
 
       // Shartnoma holati + CRM mijoz nomi
-      let contractStatus: 'verified' | 'unverified' | null = null;
+      let contractStatus: 'verified' | 'unverified' | 'manual' | null = null;
       let contractCustomer: string | null = null;
       if (tx.contractNumber) {
-        const crm = crmByContract.get(tx.contractNumber);
-        if (crm) {
-          contractStatus = crm.found ? 'verified' : 'unverified';
-          contractCustomer = crm.customerName || null;
+        if (tx.isContractManual) {
+          contractStatus = 'manual'; // qo'lda kiritilgan — XATO emas
         } else {
-          contractStatus = 'unverified';
+          const crm = crmByContract.get(tx.contractNumber);
+          if (crm) {
+            contractStatus = crm.found ? 'verified' : 'unverified';
+            contractCustomer = crm.customerName || null;
+          } else {
+            contractStatus = 'unverified';
+          }
         }
       }
 
@@ -557,10 +561,12 @@ export class TransactionsService {
         : Promise.resolve(null),
     ]);
 
-    let contractStatus: 'verified' | 'unverified' | null = null;
+    let contractStatus: 'verified' | 'unverified' | 'manual' | null = null;
     let contractCustomer: string | null = null;
     if (tx.contractNumber) {
-      if (crmRow) {
+      if (tx.isContractManual) {
+        contractStatus = 'manual'; // qo'lda kiritilgan — XATO emas
+      } else if (crmRow) {
         contractStatus = crmRow.found ? 'verified' : 'unverified';
         contractCustomer = crmRow.customerName || null;
       } else {
