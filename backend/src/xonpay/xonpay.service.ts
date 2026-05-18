@@ -196,10 +196,12 @@ export class XonpayService {
 
         const raw: any = r.data?.data ?? r.data;
         const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-        const lastPage = raw?.last_page ?? page;
+        // Python skript mantiqi: last_page yo'q bo'lsa, items.length<LIMIT → tugadi
+        const apiLastPage = Number(raw?.last_page) || 0;
+        const lastPage = apiLastPage > 0 ? apiLastPage : (items.length < LIMIT ? page : page + 1);
 
         this.syncProgress.page = page;
-        this.syncProgress.lastPage = lastPage;
+        this.syncProgress.lastPage = Math.max(this.syncProgress.lastPage, lastPage);
         this.syncProgress.fetched += items.length;
 
         if (items.length === 0) {
@@ -265,7 +267,10 @@ export class XonpayService {
 
         this.log.log(`xonpay page ${page}/${lastPage}: ${items.length} keldi, ${xonpayItems.length} xonpay`);
 
-        if (page >= lastPage) break;
+        // Tugatish sharti: explicit last_page yetildi YOKI sahifa to'liq emas (items < LIMIT)
+        const reachedLastPage = apiLastPage > 0 && page >= apiLastPage;
+        const partialPage = items.length < LIMIT;
+        if (reachedLastPage || partialPage) break;
         page++;
       }
     } catch (e: any) {
