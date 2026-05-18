@@ -8,9 +8,13 @@ import { toast } from 'sonner';
 import {
   CreditCard, RefreshCw, Search, CheckCircle2, AlertCircle, XCircle, Loader2,
   TrendingUp, Hash, Calendar, ExternalLink, Play, X, History, Zap,
-  Receipt, Activity, ChevronLeft, ChevronRight,
+  Receipt, Activity, ChevronLeft, ChevronRight, Eye, Copy, FileSearch,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
+import { IdInspectorDialog } from '@/components/id-inspector-dialog';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -83,6 +87,8 @@ export default function BilingPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
   const [rechecking, setRechecking] = useState<Set<string>>(new Set());
+  const [detailRow, setDetailRow] = useState<XonpayRow | null>(null);
+  const [inspectId, setInspectId] = useState<string | null>(null);
 
   useEffect(() => { const t = setTimeout(() => setDebouncedQ(q.trim()), 350); return () => clearTimeout(t); }, [q]);
 
@@ -437,13 +443,17 @@ export default function BilingPage() {
                         <th className="text-left px-3 py-2 font-bold">Mijoz</th>
                         <th className="text-right px-3 py-2 font-bold">Summa (UZS)</th>
                         <th className="text-center px-3 py-2 font-bold">Status</th>
-                        <th className="text-left px-3 py-2 font-bold">Bank tx</th>
+                        <th className="text-center px-3 py-2 font-bold">Tx ID</th>
                         <th className="text-right px-3 py-2 font-bold">Amal</th>
                       </tr>
                     </thead>
                     <tbody>
                       {listQuery.data.items.map((it) => (
-                        <tr key={it.externalId} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <tr key={it.externalId}
+                          className="border-t border-slate-100 hover:bg-violet-50/40 cursor-pointer transition-colors"
+                          onClick={() => setDetailRow(it)}
+                          title="Tafsilotlarni ko'rish uchun bosing"
+                        >
                           <td className="px-3 py-2 font-mono tabular-nums whitespace-nowrap text-slate-700">
                             {it.datePaid?.slice(0, 10) || '—'}
                           </td>
@@ -469,22 +479,22 @@ export default function BilingPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 max-w-[260px]">
-                            {it.matchedTx ? (
-                              <Link href={`/${locale}/transactions?id=${encodeURIComponent(it.matchedTx.id)}`}
-                                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 hover:underline"
-                                title={it.matchedTx.externalId || ''}>
-                                <ExternalLink className="h-3 w-3" />
-                                <span className="font-mono text-[10px] truncate max-w-[220px]">
-                                  {it.matchedTx.externalId?.slice(0, 36)}...
-                                </span>
-                              </Link>
+                          <td className="px-3 py-2 text-center">
+                            {it.matchedTx?.externalId ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setInspectId(it.matchedTx!.externalId!); }}
+                                title={`Tranzaksiya ID inspector: ${it.matchedTx.externalId}`}
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
+                              >
+                                <FileSearch className="h-3.5 w-3.5" />
+                              </button>
                             ) : (
-                              <span className="text-slate-400 text-[10px]">—</span>
+                              <span className="text-slate-300 text-[10px]">—</span>
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            <Button variant="outline" size="sm" onClick={() => recheckOne(it.externalId)}
+                            <Button variant="outline" size="sm"
+                              onClick={(e) => { e.stopPropagation(); recheckOne(it.externalId); }}
                               disabled={rechecking.has(it.externalId)}
                               className="h-7 text-[10px] gap-1">
                               {rechecking.has(it.externalId)
@@ -527,7 +537,181 @@ export default function BilingPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* ═══ DETAIL MODAL (row click) ═══ */}
+        {detailRow && (
+          <XonpayDetailDialog
+            row={detailRow}
+            locale={locale as string}
+            onClose={() => setDetailRow(null)}
+            onInspect={(extId) => setInspectId(extId)}
+          />
+        )}
+
+        {/* ═══ ID INSPECTOR (bank tx ID tekshirish) ═══ */}
+        <IdInspectorDialog
+          hideTrigger
+          controlledOpen={!!inspectId}
+          onControlledOpenChange={(o) => { if (!o) setInspectId(null); }}
+          initialId={inspectId || ''}
+        />
       </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  XONPAY DETAIL DIALOG — row bosilganda to'liq malumot
+// ════════════════════════════════════════════════════
+function XonpayDetailDialog({
+  row, locale, onClose, onInspect,
+}: {
+  row: XonpayRow;
+  locale: string;
+  onClose: () => void;
+  onInspect: (externalId: string) => void;
+}) {
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
+              <Receipt className="h-3.5 w-3.5" />
+            </div>
+            XonPay to'lov tafsilotlari
+            {row.isMatched ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
+                <CheckCircle2 className="h-3 w-3" /> Tushgan
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-50 text-rose-700 ring-1 ring-rose-200">
+                <XCircle className="h-3 w-3" /> Topilmagan
+              </span>
+            )}
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            CRM XonPay to'lovi {row.isMatched ? "Kapitalbank ga muvaffaqiyatli tushgan" : "Kapitalbank da hali topilmagan"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {/* ── Asosiy summa karta ── */}
+          <div className="rounded-xl bg-gradient-to-br from-violet-50 to-purple-50 ring-1 ring-violet-200 p-4">
+            <div className="text-[10px] uppercase tracking-wider text-violet-600 font-bold">Summa</div>
+            <div className="text-3xl font-bold tracking-tight tabular-nums text-violet-900 mt-1">
+              {fmt(row.amount)} <span className="text-sm text-violet-600 font-normal">UZS</span>
+            </div>
+            <div className="text-[11px] text-violet-700 mt-1">
+              {row.datePaid?.slice(0, 10) || '—'} · {row.fullName || '—'}
+            </div>
+          </div>
+
+          {/* ── CRM ma'lumotlari ── */}
+          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="px-3 py-2 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+              CRM ma'lumotlari
+            </div>
+            <div className="divide-y divide-slate-100">
+              <DetailRow label="Shartnoma" value={
+                <code className="font-mono text-[12px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded ring-1 ring-indigo-200">
+                  {row.contract || '—'}
+                </code>
+              } />
+              <DetailRow label="Mijoz F.I.O." value={row.fullName || '—'} />
+              <DetailRow label="Obyekt" value={row.objectName || '—'} />
+              <DetailRow label="Type" value={row.type || '—'} />
+              <DetailRow label="Category" value={row.category || '—'} />
+              <DetailRow label="Status" value={row.status || '—'} />
+              <DetailRow label="XonPay UUID" value={
+                row.xonpayUuid ? (
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono text-[11px] text-violet-700">{row.xonpayUuid}</code>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(row.xonpayUuid!); toast.success('UUID nusxalandi'); }}
+                      className="text-slate-400 hover:text-violet-600"
+                      title="Nusxalash"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                ) : <span className="text-rose-600">UUID extract qilinmadi</span>
+              } />
+              <DetailRow label="CRM external_id" value={
+                <code className="font-mono text-[10px] text-slate-600 break-all">{row.externalId}</code>
+              } />
+              <DetailRow label="Purpose" value={
+                <div className="text-[11px] text-slate-600 leading-relaxed">{row.purpose || '—'}</div>
+              } />
+            </div>
+          </div>
+
+          {/* ── Bank tx ma'lumotlari (agar matched) ── */}
+          {row.matchedTx ? (
+            <div className="rounded-xl ring-1 ring-emerald-200 overflow-hidden">
+              <div className="px-3 py-2 bg-emerald-50 text-[11px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Kapitalbank tranzaksiyasi (topilgan)
+              </div>
+              <div className="divide-y divide-slate-100">
+                <DetailRow label="Tx ID (external)" value={
+                  <div className="flex items-center gap-2">
+                    <code className="font-mono text-[10px] text-emerald-700 break-all">{row.matchedTx.externalId || row.matchedTx.id}</code>
+                    {row.matchedTx.externalId && (
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(row.matchedTx!.externalId!); toast.success('ID nusxalandi'); }}
+                        className="text-slate-400 hover:text-emerald-600 shrink-0"
+                        title="Nusxalash"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                } />
+                <DetailRow label="Sana" value={row.matchedTx.txnDate?.slice(0, 10) || '—'} />
+                <DetailRow label="Summa" value={
+                  <span className="font-bold tabular-nums">{fmt(row.matchedTx.amount)} UZS</span>
+                } />
+                <DetailRow label="Description" value={
+                  <div className="text-[11px] text-slate-600 leading-relaxed line-clamp-3">{row.matchedTx.description || '—'}</div>
+                } />
+              </div>
+              <div className="px-3 py-2 bg-emerald-50/50 flex items-center justify-end gap-2 border-t border-emerald-100">
+                {row.matchedTx.externalId && (
+                  <Button variant="outline" size="sm" onClick={() => onInspect(row.matchedTx!.externalId!)} className="gap-1.5 h-8 text-[11px]">
+                    <FileSearch className="h-3.5 w-3.5" /> ID inspector
+                  </Button>
+                )}
+                <Link href={`/${locale}/transactions?id=${encodeURIComponent(row.matchedTx.id)}`}>
+                  <Button size="sm" className="gap-1.5 h-8 text-[11px] bg-emerald-600 hover:bg-emerald-700">
+                    <ExternalLink className="h-3.5 w-3.5" /> Tranzaksiyalar sahifasida ochish
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50 p-4 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-[12px] text-rose-800">
+                <div className="font-bold">Kapitalbank da topilmadi</div>
+                <div className="text-[11px] text-rose-700 mt-0.5">
+                  Bu to'lov XonPay'dan jo'natilgan lekin bizning bank hisoblariga hali tushmagan (yoki UUID mos kelmagan).
+                  Yuqoridagi <b>Tekshirish</b> tugmasi orqali qayta tekshiring.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-[140px_1fr] gap-3 px-3 py-2 text-[12px]">
+      <div className="text-slate-500 font-medium">{label}</div>
+      <div className="text-slate-800 min-w-0">{value}</div>
     </div>
   );
 }

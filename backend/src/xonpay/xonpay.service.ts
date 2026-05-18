@@ -196,12 +196,20 @@ export class XonpayService {
 
         const raw: any = r.data?.data ?? r.data;
         const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-        // Python skript mantiqi: last_page yo'q bo'lsa, items.length<LIMIT → tugadi
         const apiLastPage = Number(raw?.last_page) || 0;
-        const lastPage = apiLastPage > 0 ? apiLastPage : (items.length < LIMIT ? page : page + 1);
+        const apiTotal = Number(raw?.total) || 0;
+
+        // Debug log — birinchi sahifada response strukturasi
+        if (page === 1) {
+          this.log.log(`xonpay DEBUG page 1: items=${items.length} apiLastPage=${apiLastPage} apiTotal=${apiTotal} rawKeys=${Object.keys(raw || {}).join(',')}`);
+        }
+
+        // last_page MA'NOSIZ ekan (API noto'g'ri qaytaradi server tomondan) — items.length asoslanamiz
+        // Maximum: 200 sahifa (1M record) — safety
+        const estimatedLastPage = apiTotal > 0 ? Math.ceil(apiTotal / LIMIT) : (items.length < LIMIT ? page : page + 1);
 
         this.syncProgress.page = page;
-        this.syncProgress.lastPage = Math.max(this.syncProgress.lastPage, lastPage);
+        this.syncProgress.lastPage = Math.max(this.syncProgress.lastPage, estimatedLastPage);
         this.syncProgress.fetched += items.length;
 
         if (items.length === 0) {
@@ -265,12 +273,17 @@ export class XonpayService {
           }
         }
 
-        this.log.log(`xonpay page ${page}/${lastPage}: ${items.length} keldi, ${xonpayItems.length} xonpay`);
+        this.log.log(`xonpay page ${page}/${estimatedLastPage}: ${items.length} keldi, ${xonpayItems.length} xonpay`);
 
-        // Tugatish sharti: explicit last_page yetildi YOKI sahifa to'liq emas (items < LIMIT)
-        const reachedLastPage = apiLastPage > 0 && page >= apiLastPage;
-        const partialPage = items.length < LIMIT;
-        if (reachedLastPage || partialPage) break;
+        // Tugatish: sahifa to'liq emas (items < LIMIT) yoki 200 sahifadan o'tdi (safety)
+        if (items.length < LIMIT) {
+          this.log.log(`xonpay page ${page}: partial page (${items.length}<${LIMIT}), tugadi`);
+          break;
+        }
+        if (page >= 200) {
+          this.log.warn(`xonpay safety break: 200 sahifa yetildi`);
+          break;
+        }
         page++;
       }
     } catch (e: any) {
