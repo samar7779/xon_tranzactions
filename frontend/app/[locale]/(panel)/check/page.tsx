@@ -250,24 +250,99 @@ export default function CheckPage() {
 
 function SverkaLoading({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <div className="py-16 px-6 grid place-items-center">
-      <div className="flex flex-col items-center text-center max-w-md">
-        <div className="relative w-20 h-20 grid place-items-center mb-5">
-          <span className="absolute inset-0 rounded-full border-2 border-indigo-400/40 animate-ping" style={{ animationDuration: '2s' }} />
-          <span className="absolute inset-2 rounded-full border-2 border-indigo-400/30 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.4s' }} />
-          <span className="absolute w-14 h-14 rounded-full bg-indigo-500/20 blur-xl animate-pulse" />
-          <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-lg shadow-indigo-500/40">
-            <Scale className="h-7 w-7 text-white" />
+    <div>
+      {/* Yuqori status — animatsion pill */}
+      <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-indigo-50/60 via-violet-50/40 to-blue-50/60">
+        <div className="flex items-center gap-3">
+          {/* Pulsing dot bilan icon */}
+          <div className="relative w-9 h-9 grid place-items-center shrink-0">
+            <span className="absolute inset-0 rounded-xl bg-indigo-500/30 animate-ping" style={{ animationDuration: '1.5s' }} />
+            <div className="relative w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-md shadow-indigo-500/40">
+              <Scale className="h-4.5 w-4.5 text-white" strokeWidth={2.5} />
+            </div>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[13px] font-semibold text-slate-800 flex items-center gap-2">
+              {title}
+              {/* Inline dots */}
+              <span className="flex items-center gap-0.5">
+                <span className="w-1 h-1 rounded-full bg-indigo-500 sverka-dot" style={{ animationDelay: '0ms' }} />
+                <span className="w-1 h-1 rounded-full bg-violet-500 sverka-dot" style={{ animationDelay: '180ms' }} />
+                <span className="w-1 h-1 rounded-full bg-blue-500 sverka-dot" style={{ animationDelay: '360ms' }} />
+              </span>
+            </div>
+            <div className="text-[11px] text-slate-500 mt-0.5 line-clamp-1">{subtitle}</div>
           </div>
         </div>
-        <div className="text-[15px] font-semibold text-slate-800 mb-1">{title}</div>
-        <div className="text-[12px] text-slate-500 max-w-sm">{subtitle}</div>
-        <div className="mt-4 flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+        {/* Animatsion progress bar */}
+        <div className="mt-3 h-0.5 bg-white/60 rounded-full overflow-hidden">
+          <div className="h-full w-1/3 bg-gradient-to-r from-indigo-500 via-violet-500 to-indigo-500 rounded-full sverka-progress" />
         </div>
       </div>
+
+      {/* Skeleton account rows — shimmer effect bilan */}
+      <div className="divide-y divide-slate-100">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <SverkaSkeletonRow key={i} delay={i * 90} />
+        ))}
+      </div>
+
+      {/* Keyframes */}
+      <style jsx>{`
+        :global(.sverka-shimmer) {
+          background: linear-gradient(
+            90deg,
+            rgba(241, 245, 249, 0.6) 0%,
+            rgba(226, 232, 240, 0.95) 50%,
+            rgba(241, 245, 249, 0.6) 100%
+          );
+          background-size: 200% 100%;
+          animation: sverka-shimmer 1.6s ease-in-out infinite;
+        }
+        @keyframes sverka-shimmer {
+          0%   { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        :global(.sverka-progress) {
+          animation: sverka-progress 1.8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+        }
+        @keyframes sverka-progress {
+          0%   { transform: translateX(-100%); width: 30%; }
+          50%  { transform: translateX(120%); width: 50%; }
+          100% { transform: translateX(340%); width: 30%; }
+        }
+        :global(.sverka-dot) {
+          animation: sverka-dot 1s ease-in-out infinite;
+        }
+        @keyframes sverka-dot {
+          0%, 100% { opacity: 0.3; transform: scale(0.9); }
+          50%      { opacity: 1;   transform: scale(1.3); }
+        }
+        :global(.sverka-row-in) {
+          animation: sverka-row-in 0.4s ease-out both;
+        }
+        @keyframes sverka-row-in {
+          from { opacity: 0; transform: translateY(4px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function SverkaSkeletonRow({ delay }: { delay: number }) {
+  return (
+    <div className="sverka-row-in flex items-center gap-3 px-4 py-3.5" style={{ animationDelay: `${delay}ms` }}>
+      {/* Bank ikoni placeholder */}
+      <div className="w-9 h-9 rounded-lg sverka-shimmer shrink-0" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="h-3 rounded sverka-shimmer" style={{ width: `${55 + (delay % 30)}%` }} />
+        <div className="h-2.5 rounded sverka-shimmer" style={{ width: `${30 + (delay % 20)}%` }} />
+      </div>
+      {/* Status badge placeholder */}
+      <div className="h-6 w-20 rounded-full sverka-shimmer shrink-0" />
+      {/* Refresh btn placeholder */}
+      <div className="h-9 w-9 rounded-lg sverka-shimmer shrink-0" />
     </div>
   );
 }
