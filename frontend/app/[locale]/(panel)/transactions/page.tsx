@@ -3609,14 +3609,23 @@ function AttachmentsDialog({
         ) : (
           // ─── YANGI ARIZA — wizard forma ───
           <div className="space-y-4 pt-2">
-            {/* 1. Kontragent */}
+            {/* 1. Kategoriya (top + sub bitta qadamda) — to'liq ixtiyoriy */}
             <div>
               <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">1</span>
-                Kontragent
-                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                Kategoriya
+                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy — tegmay ketsa o'zgarmaydi)</span>
               </label>
               <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
+                  className={cn(
+                    'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all col-span-2',
+                    selectedTopId === null ? 'bg-slate-900 text-white ring-slate-900' : 'ring-dashed ring-slate-300 hover:ring-slate-400 text-slate-500',
+                  )}
+                >
+                  — bo'sh qoldirish (kategoriya o'zgarmaydi) —
+                </button>
                 {visibleTree.map((t: any) => {
                   const selected = selectedTopId === t.id;
                   const color = t.color || '#64748b';
@@ -3638,12 +3647,12 @@ function AttachmentsDialog({
               </div>
             </div>
 
-            {/* 2. Kategoriya (subkategoriya) — agar top tanlangan bo'lsa */}
+            {/* 2. Sub-kategoriya — agar top tanlangan va subs bor bo'lsa */}
             {selectedTop && subs.length > 0 && (
               <div className="pt-3 border-t border-slate-100">
                 <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
                   <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">2</span>
-                  Kategoriya
+                  Sub-kategoriya
                   <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
