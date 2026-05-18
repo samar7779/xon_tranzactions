@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
@@ -257,7 +258,7 @@ export class TransactionsService {
     return this.enrichAndReturn(items, total, page, perPage);
   }
 
-  private buildListArgs(where: any, page: number, perPage: number) {
+  private buildListArgs(where: any, page: number, perPage: number): Prisma.TransactionFindManyArgs {
     return {
         where,
         // Sana → ID bo'yicha kamayish: eng yangi tepada.
@@ -265,8 +266,8 @@ export class TransactionsService {
         // tartibi bo'yicha kamayish. 4 ustunli sort o'rniga 2 ustunli kompozit
         // indeks (txnDate desc, id desc) bilan tezroq.
         orderBy: [
-          { txnDate: 'desc' },
-          { id: 'desc' },
+          { txnDate: 'desc' as Prisma.SortOrder },
+          { id: 'desc' as Prisma.SortOrder },
         ],
         skip: (page - 1) * perPage,
         take: perPage,
