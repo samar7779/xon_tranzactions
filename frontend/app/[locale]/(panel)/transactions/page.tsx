@@ -824,15 +824,26 @@ export default function TransactionsPage() {
                           <td className="px-4 py-3">
                             {it.contractNumber ? (
                               it.contractStatus === 'manual' ? (
-                                // QO'LDA kiritilgan — amber badge (XATO emas)
-                                <div className="flex items-center gap-1.5">
-                                  <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-amber-800 bg-amber-50 ring-amber-200">
-                                    {it.contractNumber}
-                                  </code>
-                                  <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
-                                    qo'lda
-                                  </span>
-                                </div>
+                                // QO'LDA yoki ARIZA — ariza bo'lsa violet, aks holda amber
+                                it.hasAttachment ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-violet-800 bg-violet-50 ring-violet-200">
+                                      {it.contractNumber}
+                                    </code>
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 ring-1 ring-violet-200">
+                                      <Paperclip className="h-2.5 w-2.5" /> ariza
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5">
+                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-amber-800 bg-amber-50 ring-amber-200">
+                                      {it.contractNumber}
+                                    </code>
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                                      qo'lda
+                                    </span>
+                                  </div>
+                                )
                               ) : it.contractStatus === 'unverified' ? (
                                 // XATO holati — faqat badge + lookup icon, raqamni yashiramiz
                                 <div className="flex items-center gap-1.5">
@@ -1920,12 +1931,25 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                 liveRow.contractNumber ? (
                   liveRow.contractStatus === 'manual' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <code className="inline-block font-mono text-[12px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded ring-1 ring-amber-200">
-                        {liveRow.contractNumber}
-                      </code>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
-                        QO'LDA · CRM tekshirilmagan
-                      </span>
+                      {liveRow.hasAttachment ? (
+                        <>
+                          <code className="inline-block font-mono text-[12px] font-bold text-violet-800 bg-violet-50 px-2 py-0.5 rounded ring-1 ring-violet-200">
+                            {liveRow.contractNumber}
+                          </code>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 ring-1 ring-violet-200">
+                            <Paperclip className="h-3 w-3" /> ARIZA
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <code className="inline-block font-mono text-[12px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded ring-1 ring-amber-200">
+                            {liveRow.contractNumber}
+                          </code>
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                            QO'LDA · CRM tekshirilmagan
+                          </span>
+                        </>
+                      )}
                     </div>
                   ) : liveRow.contractStatus === 'unverified' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">

@@ -190,6 +190,7 @@ export class TransactionsService {
           category: true,
           subcategory: true,
           manualCounterparty: { select: { id: true, inn: true, name: true } },
+          _count: { select: { attachments: true } },
         },
       }),
     ]);
@@ -281,7 +282,8 @@ export class TransactionsService {
         // BANK / MINFIN / SALARY / LOAN / COUNTERPARTY_RETURN
         counterpartyDisplay = tx.category.name;
       }
-      return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
+      const hasAttachment = (tx._count?.attachments ?? 0) > 0;
+      return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, hasAttachment };
     });
 
     return { ok: true, total, page, perPage, items: enriched };
@@ -542,6 +544,7 @@ export class TransactionsService {
         category: true,
         subcategory: true,
         manualCounterparty: { select: { id: true, inn: true, name: true } },
+        _count: { select: { attachments: true } },
       },
     });
     if (!tx) return null;
@@ -588,7 +591,8 @@ export class TransactionsService {
       counterpartyDisplay = tx.category.name;
     }
 
-    return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
+    const hasAttachment = (tx._count?.attachments ?? 0) > 0;
+    return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, hasAttachment };
   }
 
   /**
