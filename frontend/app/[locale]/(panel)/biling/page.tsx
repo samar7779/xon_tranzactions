@@ -10,7 +10,7 @@ import {
   CreditCard, RefreshCw, Search, CheckCircle2, AlertCircle, XCircle, Loader2,
   TrendingUp, Hash, Calendar, ExternalLink, Play, X, History, Zap,
   Receipt, Activity, ChevronLeft, ChevronRight, Eye, Copy, FileSearch,
-  ChevronDown, ChevronUp, Home, ScanLine,
+  ChevronDown, ChevronUp, Home, ScanLine, Trash2, ArrowUpRight, ArrowDownLeft,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import {
@@ -102,6 +102,8 @@ export default function BilingPage() {
   const [progressModalOpen, setProgressModalOpen] = useState(false);
   // Foydalanuvchi qo'lda yopgan paytda — qaytadan ochmaslik uchun
   const [progressModalDismissed, setProgressModalDismissed] = useState(false);
+  // Orphan tozalash modali
+  const [cleanupModalOpen, setCleanupModalOpen] = useState(false);
   const [matched, setMatched] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -222,40 +224,41 @@ export default function BilingPage() {
     <div className="flex-1 flex flex-col">
       <Topbar title="Biling" subtitle="XonPay to'lovlar va Kapitalbank tushumlari moslashtirilishi" />
       <div className="px-6 py-6 space-y-5 max-w-[1700px] mx-auto w-full">
-        {/* ═══ HEADER (compact stats inline) ═══ */}
-        <div className="flex items-center justify-between flex-wrap gap-3 pb-2 border-b border-slate-200">
-          <div className="flex items-center gap-6 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
-                <Receipt className="h-4 w-4" />
-              </span>
-              Biling
-            </h1>
-            <div className="flex items-center gap-5 text-[13px]">
-              <Stat label="Jami" value={summary?.totalCount || 0} valueClass="text-slate-700" />
-              <Stat label="Summa" value={fmt(summary?.totalAmount)} suffix="UZS" valueClass="text-violet-700" />
-              <Stat label="Tushgan" value={summary?.matchedCount || 0} valueClass="text-emerald-700" />
-              <Stat label="Tushgan summa" value={fmt(summary?.matchedAmount)} suffix="UZS" valueClass="text-emerald-700" />
-              <Stat label="Qolgan" value={summary?.missingCount || 0} valueClass="text-rose-700" />
-              <Stat label="Qolgan summa" value={fmt(summary?.missingAmount)} suffix="UZS" valueClass="text-rose-700" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {syncRunning ? (
-              <Button variant="outline" size="sm" onClick={() => cancelSyncMut.mutate()} disabled={cancelSyncMut.isPending} className="gap-1.5">
-                <X className="h-3.5 w-3.5" /> To'xtatish
-              </Button>
-            ) : (
-              <Button size="sm" onClick={() => startSyncMut.mutate()} disabled={startSyncMut.isPending} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
-                {startSyncMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-                CRM dan sync
-              </Button>
-            )}
-            <Button variant="outline" size="sm" onClick={() => matchAllMut.mutate()} disabled={matchAllMut.isPending || matchRunning} className="gap-1.5">
-              {(matchAllMut.isPending || matchRunning) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-              Qolganlarni tekshirish
-            </Button>
-          </div>
+        {/* ═══ HEADER (chiroyli KPI kartalar) ═══ */}
+        <div className="flex items-center gap-3 mb-1">
+          <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white shadow-lg shadow-violet-500/20">
+            <Receipt className="h-5 w-5" />
+          </span>
+          <h1 className="text-2xl font-bold tracking-tight">Biling</h1>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <KpiCardModern
+            label="Jami XonPay"
+            count={summary?.totalCount || 0}
+            amount={summary?.totalAmount || '0'}
+            color="violet"
+            icon={<Receipt className="h-4 w-4" />}
+            loading={statsQuery.isLoading}
+          />
+          <KpiCardModern
+            label="Kapitalga tushgan"
+            count={summary?.matchedCount || 0}
+            amount={summary?.matchedAmount || '0'}
+            color="emerald"
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            loading={statsQuery.isLoading}
+            extra={summary && Number(summary.totalCount) > 0
+              ? `${Math.round((Number(summary.matchedCount) / Number(summary.totalCount)) * 100)}% mos`
+              : undefined}
+          />
+          <KpiCardModern
+            label="Topilmagan (qolgan)"
+            count={summary?.missingCount || 0}
+            amount={summary?.missingAmount || '0'}
+            color="rose"
+            icon={<AlertCircle className="h-4 w-4" />}
+            loading={statsQuery.isLoading}
+          />
         </div>
 
         {/* Compact inline indicator — modul yopilgan paytda ham progress ko'rinsin */}
@@ -280,7 +283,7 @@ export default function BilingPage() {
           </button>
         )}
 
-        {/* ═══ SYNC TARIXI (Cron info — header'da icon popover) ═══ */}
+        {/* ═══ SYNC TARIXI (header'da: cron info + sync + match + tozalash icon tugmalari) ═══ */}
         <Card>
           <CardContent className="p-0">
             <div className="w-full px-4 py-3 flex items-center gap-2 hover:bg-slate-50 transition-colors border-b border-slate-100">
@@ -291,19 +294,60 @@ export default function BilingPage() {
                   <span className="text-[10.5px] text-slate-500">{historyQuery.data.items.length} ta</span>
                 )}
               </button>
+
+              {/* CRM dan sync — icon tugma */}
+              {syncRunning ? (
+                <button
+                  onClick={() => cancelSyncMut.mutate()}
+                  disabled={cancelSyncMut.isPending}
+                  title="Sync ni to'xtatish"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100 transition-all"
+                >
+                  {cancelSyncMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                </button>
+              ) : (
+                <button
+                  onClick={() => startSyncMut.mutate()}
+                  disabled={startSyncMut.isPending}
+                  title="CRM dan sync"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-violet-600 text-white hover:bg-violet-700 shadow-sm hover:shadow-md hover:shadow-violet-500/30 transition-all"
+                >
+                  {startSyncMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                </button>
+              )}
+
+              {/* Qolganlarni tekshirish — icon */}
+              <button
+                onClick={() => matchAllMut.mutate()}
+                disabled={matchAllMut.isPending || matchRunning}
+                title="Qolganlarni tekshirish (match-all)"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-blue-50 text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100 transition-all disabled:opacity-50"
+              >
+                {(matchAllMut.isPending || matchRunning) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+              </button>
+
+              {/* Tozalash (orphan'lar) — icon */}
+              <button
+                onClick={() => setCleanupModalOpen(true)}
+                title="CRM da yo'q (orphan) yozuvlarni tozalash"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-orange-50 text-orange-700 ring-1 ring-orange-200 hover:bg-orange-100 transition-all"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+
               {/* Cron info — icon + popover */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Avtomatik sync (cron) haqida"
                     className={cn(
-                      'inline-flex items-center justify-center w-7 h-7 rounded-md transition-all ring-1',
+                      'inline-flex items-center justify-center w-8 h-8 rounded-md transition-all ring-1',
                       cronInfoQuery.data?.enabled
                         ? 'bg-amber-50 text-amber-700 ring-amber-200 hover:bg-amber-100'
                         : 'bg-slate-50 text-slate-500 ring-slate-200 hover:bg-slate-100',
                     )}
                   >
-                    <Zap className="h-3.5 w-3.5" />
+                    <Zap className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="p-3 w-72">
@@ -330,7 +374,8 @@ export default function BilingPage() {
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button onClick={() => setHistoryOpen(o => !o)} className="text-slate-400 hover:text-slate-700">
+
+              <button onClick={() => setHistoryOpen(o => !o)} className="text-slate-400 hover:text-slate-700 ml-1">
                 {historyOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
               </button>
             </div>
@@ -693,6 +738,11 @@ export default function BilingPage() {
             onClose={() => setDetailRow(null)}
           />
         )}
+
+        {/* ═══ CLEANUP ORPHANS MODAL ═══ */}
+        {cleanupModalOpen && (
+          <CleanupOrphansDialog onClose={() => setCleanupModalOpen(false)} />
+        )}
       </div>
     </div>
   );
@@ -1034,6 +1084,292 @@ function ProgressStat({
         {icon}
         {value}
       </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  CLEANUP ORPHANS MODAL — CRM da yo'q (orphan) yozuvlarni tozalash
+// ════════════════════════════════════════════════════
+function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [phase, setPhase] = useState<'idle' | 'scanning' | 'scanned' | 'deleting' | 'done' | 'error'>('idle');
+  const [progress, setProgress] = useState<any>(null);
+  const [samples, setSamples] = useState<any[]>([]);
+  const [lastError, setLastError] = useState<string | null>(null);
+
+  async function poll(after: 'scanning' | 'deleting') {
+    return new Promise<any>((resolve) => {
+      const t = setInterval(async () => {
+        try {
+          const s = await api.get<any>('/xonpay/admin/cleanup-orphans/status');
+          setProgress(s.progress);
+          setSamples(s.orphanSamples || []);
+          if (s.lastError) { setLastError(s.lastError); }
+          if (!s.running) {
+            clearInterval(t);
+            setPhase(after === 'scanning' ? 'scanned' : 'done');
+            resolve(s);
+          }
+        } catch (e: any) {
+          clearInterval(t);
+          setLastError(e?.message || 'Polling xato');
+          setPhase('error');
+          resolve(null);
+        }
+      }, 2000);
+    });
+  }
+
+  async function startScan() {
+    setPhase('scanning');
+    setLastError(null);
+    setProgress(null);
+    setSamples([]);
+    try {
+      const r = await api.post<{ ok: true; started: boolean; message: string }>(`/xonpay/admin/cleanup-orphans?dryRun=true`, {});
+      if (!r.started) { toast.message(r.message); }
+      await poll('scanning');
+    } catch (e: any) {
+      setLastError(e?.message || 'Xato');
+      setPhase('error');
+    }
+  }
+
+  async function startDelete() {
+    if (!confirm(`${progress?.orphanCount || 0} ta orphan yozuvni o'chirish tasdiqlaysizmi?\nBu amal qaytarib bo'lmaydi.`)) return;
+    setPhase('deleting');
+    try {
+      const r = await api.post<{ ok: true; started: boolean; message: string }>(`/xonpay/admin/cleanup-orphans?dryRun=false`, {});
+      if (!r.started) { toast.message(r.message); }
+      await poll('deleting');
+      qc.invalidateQueries({ queryKey: ['xonpay-list'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
+      toast.success(`${progress?.deleted || 0} ta orphan o'chirildi`);
+    } catch (e: any) {
+      setLastError(e?.message || 'Xato');
+      setPhase('error');
+    }
+  }
+
+  const orphanCount = progress?.orphanCount || 0;
+  const dbCount = progress?.dbCount || 0;
+  const crmCount = progress?.crmCount || 0;
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o && phase !== 'scanning' && phase !== 'deleting') onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white">
+              <Trash2 className="h-3.5 w-3.5" />
+            </div>
+            CRM dan olingan ma'lumotlarni tozalash (orphan)
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            CRM da yo'q lekin bizning DB'da bor (orphan) yozuvlarni topib o'chiradi. Avval scan, keyin o'chirish.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {phase === 'idle' && (
+            <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <b>Eski sync'larda paydo bo'lgan orphan yozuvlar.</b><br/>
+                CRM bilan solishtirib, faqat bizda bor lekin CRM da yo'q yozuvlar o'chiriladi.
+                Bog'langan bank tranzaksiyalar tegmaydi (faqat XonpayTransaction jadval).
+              </div>
+            </div>
+          )}
+
+          {(phase === 'scanning' || phase === 'deleting') && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-[12px] font-semibold text-violet-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {phase === 'scanning' ? 'Skanlashtirilmoqda...' : "O'chirilmoqda..."}
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-[11px]">
+                <InfoBox label="Faza" value={progress?.phase || '...'} />
+                <InfoBox label="Sahifa" value={progress?.pages ? `${progress.pages}` : '...'} />
+                <InfoBox label="CRM dan" value={crmCount ? fmt(crmCount) : '...'} color="violet" />
+                <InfoBox label="Bizning DB" value={dbCount ? fmt(dbCount) : '...'} color="slate" />
+                <InfoBox label="Orphan" value={fmt(orphanCount)} color={orphanCount > 0 ? 'rose' : 'emerald'} />
+                <InfoBox label="O'chirilgan" value={fmt(progress?.deleted || 0)} color="rose" />
+              </div>
+            </div>
+          )}
+
+          {phase === 'scanned' && (
+            <div className="space-y-3">
+              <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3">
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CRM da</div>
+                    <div className="text-xl font-bold tabular-nums text-violet-700 mt-0.5">{fmt(crmCount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Bizda</div>
+                    <div className="text-xl font-bold tabular-nums text-slate-700 mt-0.5">{fmt(dbCount)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Orphan</div>
+                    <div className={cn('text-xl font-bold tabular-nums mt-0.5', orphanCount > 0 ? 'text-rose-700' : 'text-emerald-700')}>
+                      {fmt(orphanCount)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {orphanCount > 0 ? (
+                <>
+                  <div className="text-[11px] text-slate-600">
+                    Birinchi {Math.min(samples.length, 20)} ta orphan namunalar (jami {orphanCount}):
+                  </div>
+                  <div className="max-h-[260px] overflow-y-auto rounded-lg ring-1 ring-slate-200">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-slate-50 sticky top-0 text-slate-600">
+                        <tr>
+                          <th className="text-left px-3 py-1.5 font-semibold">External ID</th>
+                          <th className="text-left px-3 py-1.5 font-semibold">Shartnoma</th>
+                          <th className="text-left px-3 py-1.5 font-semibold">Sana</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {samples.slice(0, 20).map((o, i) => (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="px-3 py-1 font-mono text-[10px] max-w-[300px] truncate" title={o.externalId}>{o.externalId}</td>
+                            <td className="px-3 py-1">{o.contract || '—'}</td>
+                            <td className="px-3 py-1 font-mono">{o.datePaid || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <div className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Hech qanday orphan topilmadi — DB to'liq CRM bilan mos.
+                </div>
+              )}
+            </div>
+          )}
+
+          {phase === 'done' && (
+            <div className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" />
+              <div>
+                <b>Tugadi:</b> {fmt(progress?.deleted || 0)} ta orphan o'chirildi.
+                Endi DB CRM bilan mos.
+              </div>
+            </div>
+          )}
+
+          {lastError && (
+            <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[12px] text-rose-800 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div><b>Xato:</b> {lastError}</div>
+            </div>
+          )}
+
+          {/* Tugmalar */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            {phase === 'idle' && (
+              <>
+                <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
+                <Button onClick={startScan} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
+                  <Search className="h-3.5 w-3.5" /> Scan (orphan'larni topish)
+                </Button>
+              </>
+            )}
+            {(phase === 'scanning' || phase === 'deleting') && (
+              <Button variant="outline" disabled className="gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kuting...
+              </Button>
+            )}
+            {phase === 'scanned' && orphanCount > 0 && (
+              <>
+                <Button variant="outline" onClick={onClose}>Yopish</Button>
+                <Button onClick={startDelete} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
+                  <Trash2 className="h-3.5 w-3.5" /> {fmt(orphanCount)} ta o'chirish
+                </Button>
+              </>
+            )}
+            {phase === 'scanned' && orphanCount === 0 && (
+              <Button onClick={onClose}>Yopish</Button>
+            )}
+            {(phase === 'done' || phase === 'error') && (
+              <Button onClick={onClose}>Yopish</Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InfoBox({ label, value, color }: { label: string; value: string; color?: 'violet' | 'emerald' | 'rose' | 'slate' }) {
+  const m = {
+    violet:  'text-violet-700 bg-violet-50 ring-violet-200',
+    emerald: 'text-emerald-700 bg-emerald-50 ring-emerald-200',
+    rose:    'text-rose-700 bg-rose-50 ring-rose-200',
+    slate:   'text-slate-700 bg-slate-50 ring-slate-200',
+  }[color || 'slate'];
+  return (
+    <div className={cn('rounded-md ring-1 px-2.5 py-1.5', m)}>
+      <div className="text-[9px] uppercase tracking-wider opacity-70 font-semibold">{label}</div>
+      <div className="text-[13px] font-bold tabular-nums mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  KPI KARTA — zamonaviy (gradient bg, big number, sparkle)
+// ════════════════════════════════════════════════════
+function KpiCardModern({
+  label, count, amount, color, icon, loading, extra,
+}: {
+  label: string;
+  count: number;
+  amount: string;
+  color: 'violet' | 'emerald' | 'rose';
+  icon: React.ReactNode;
+  loading: boolean;
+  extra?: string;
+}) {
+  const m = {
+    violet:  { bg: 'from-violet-500/10 to-purple-500/5', ring: 'ring-violet-200', text: 'text-violet-700', accent: 'from-violet-500 to-purple-600' },
+    emerald: { bg: 'from-emerald-500/10 to-teal-500/5',  ring: 'ring-emerald-200', text: 'text-emerald-700', accent: 'from-emerald-500 to-teal-600' },
+    rose:    { bg: 'from-rose-500/10 to-pink-500/5',     ring: 'ring-rose-200', text: 'text-rose-700', accent: 'from-rose-500 to-pink-600' },
+  }[color];
+  return (
+    <div className={cn('relative overflow-hidden rounded-2xl ring-1 bg-gradient-to-br p-4 shadow-sm', m.bg, m.ring)}>
+      <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full opacity-10 bg-gradient-to-br" />
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500">{label}</div>
+          {extra && <div className={cn('text-[10px] font-semibold mt-0.5', m.text)}>{extra}</div>}
+        </div>
+        <div className={cn('w-9 h-9 rounded-xl grid place-items-center text-white shadow-lg bg-gradient-to-br', m.accent)}>
+          {icon}
+        </div>
+      </div>
+      {loading ? (
+        <>
+          <Skeleton className="h-7 w-32 mb-1" />
+          <Skeleton className="h-3 w-20" />
+        </>
+      ) : (
+        <>
+          <div className={cn('text-2xl font-bold tracking-tight tabular-nums leading-tight', m.text)}>
+            {fmt(amount)} <span className="text-xs text-slate-500 font-normal">UZS</span>
+          </div>
+          <div className="text-[11px] text-slate-500 mt-0.5 tabular-nums font-semibold">
+            {fmt(count)} ta to'lov
+          </div>
+        </>
+      )}
     </div>
   );
 }
