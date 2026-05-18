@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -28,12 +28,32 @@ interface BulkRow {
   error?: string;
 }
 
-export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
-  const [open, setOpen] = useState(false);
+interface IdInspectorDialogProps {
+  iconOnly?: boolean;
+  // Tashqaridan boshqarish (Biling sahifa kabi joylar uchun)
+  controlledOpen?: boolean;
+  onControlledOpenChange?: (open: boolean) => void;
+  initialId?: string;
+  hideTrigger?: boolean; // Trigger tugmasini chiqarmaslik (faqat controlled rejimda)
+}
+
+export function IdInspectorDialog({
+  iconOnly,
+  controlledOpen,
+  onControlledOpenChange,
+  initialId,
+  hideTrigger,
+}: IdInspectorDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = (o: boolean) => {
+    if (onControlledOpenChange) onControlledOpenChange(o);
+    else setInternalOpen(o);
+  };
   const [mode, setMode] = useState<Mode>('single');
 
   // single
-  const [id, setId] = useState('');
+  const [id, setId] = useState(initialId || '');
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +72,17 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
     onSuccess: (r: any) => { setResult(r); setError(null); },
     onError: (e: any) => { setError(e?.message || 'Xato'); setResult(null); },
   });
+
+  // initialId tashqaridan kelsa — avtomatik qidirish
+  useEffect(() => {
+    if (open && initialId && initialId.trim() && initialId !== id) {
+      setId(initialId);
+      setResult(null);
+      setError(null);
+      mut.mutate(initialId.trim());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialId]);
 
   function submit(e?: React.FormEvent) {
     e?.preventDefault();
@@ -180,22 +211,24 @@ export function IdInspectorDialog({ iconOnly }: { iconOnly?: boolean }) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <button
-          title="ID bo'yicha bankdan qidirish"
-          className={cn(
-            'inline-flex items-center justify-center rounded-xl shrink-0',
-            'bg-gradient-to-br from-indigo-500 to-purple-600 text-white',
-            'shadow-sm hover:shadow-lg hover:shadow-indigo-500/30',
-            'transition-all duration-200 hover:scale-105 active:scale-95',
-            'ring-1 ring-indigo-400/30',
-            iconOnly ? 'w-10 h-10' : 'h-9 px-3 gap-2 text-[12px] font-semibold',
-          )}
-        >
-          <ScanLine className={iconOnly ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-          {!iconOnly && <span>ID tekshirish</span>}
-        </button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <button
+            title="ID bo'yicha bankdan qidirish"
+            className={cn(
+              'inline-flex items-center justify-center rounded-xl shrink-0',
+              'bg-gradient-to-br from-indigo-500 to-purple-600 text-white',
+              'shadow-sm hover:shadow-lg hover:shadow-indigo-500/30',
+              'transition-all duration-200 hover:scale-105 active:scale-95',
+              'ring-1 ring-indigo-400/30',
+              iconOnly ? 'w-10 h-10' : 'h-9 px-3 gap-2 text-[12px] font-semibold',
+            )}
+          >
+            <ScanLine className={iconOnly ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
+            {!iconOnly && <span>ID tekshirish</span>}
+          </button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
