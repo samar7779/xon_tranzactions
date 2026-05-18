@@ -210,7 +210,7 @@ export function AccountDrilldown({
                 )}
                 <div className="text-[13px] font-semibold">
                   {data.status === 'ok'
-                    ? 'Mos keldi — bank va DB to\'liq muvofiq'
+                    ? "Mos keldi — bank va AllTranzactions to'liq muvofiq"
                     : 'Farq aniqlandi — quyidagi jadvalda ko\'rib chiqing'}
                 </div>
                 {data.partial && (
@@ -238,7 +238,7 @@ export function AccountDrilldown({
                     <Search className="h-5 w-5 text-indigo-600" />
                     <div className="flex-1">
                       <div className="text-[13px] font-semibold text-slate-900">Farq sababini topish</div>
-                      <div className="text-[11px] text-slate-500">Bankdagi har bir tranzaksiyani DB bilan solishtiramiz va yetishmayotgan/ortiqcha yozuvlarni topamiz</div>
+                      <div className="text-[11px] text-slate-500">Bankdagi har bir tranzaksiyani AllTranzactions bilan solishtiramiz va yetishmayotgan/ortiqcha yozuvlarni topamiz</div>
                     </div>
                     <Button
                       size="sm"
@@ -284,7 +284,7 @@ function ReconcileTable({ data }: { data: ReconcileData }) {
           <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
             <th className="text-left px-4 py-2.5">Ko'rsatkich</th>
             <th className="text-right px-4 py-2.5">Bank</th>
-            <th className="text-right px-4 py-2.5">Bizning DB</th>
+            <th className="text-right px-4 py-2.5">AllTranzactions</th>
             <th className="text-right px-4 py-2.5">Farq</th>
           </tr>
         </thead>
@@ -342,7 +342,7 @@ function DiagnoseResult({
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-[12px] text-slate-600">
         <span>Bankda: <b className="text-slate-900">{data.bankCount}</b></span>
-        <span>DB da: <b className="text-slate-900">{data.dbCount}</b></span>
+        <span>AllTranzactions: <b className="text-slate-900">{data.dbCount}</b></span>
         <span>Mos: <b className="text-emerald-700">{data.matchedCount}</b></span>
       </div>
 
@@ -354,7 +354,7 @@ function DiagnoseResult({
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DiagPanel
-            title="Bankda bor — DB da yo'q"
+            title="Bankda bor — AllTranzactions'da yo'q"
             icon={<Inbox className="h-4 w-4" />}
             tone="amber"
             items={data.bankOnly}
@@ -365,7 +365,7 @@ function DiagnoseResult({
             onFixed={onFixed}
           />
           <DiagPanel
-            title="DB da bor — bankda yo'q"
+            title="AllTranzactions'da bor — bankda yo'q"
             icon={<Database className="h-4 w-4" />}
             tone="rose"
             items={data.dbOnly}
@@ -509,7 +509,7 @@ function DiagItem({
           ) : (
             <Download className="h-3 w-3" />
           )}
-          {fixing ? "Qo'shilmoqda..." : "DB ga qo'shish"}
+          {fixing ? "Qo'shilmoqda..." : "AllTranzactions'ga qo'shish"}
         </button>
       )}
       {fixed && (
@@ -545,9 +545,9 @@ function DailyBreakdown({
             <tr>
               <th className="text-left px-4 py-2">Sana</th>
               <th className="text-right px-4 py-2">Bank kirim</th>
-              <th className="text-right px-4 py-2">DB kirim</th>
+              <th className="text-right px-4 py-2">AllTranzactions kirim</th>
               <th className="text-right px-4 py-2">Bank chiqim</th>
-              <th className="text-right px-4 py-2">DB chiqim</th>
+              <th className="text-right px-4 py-2">AllTranzactions chiqim</th>
               <th className="text-right px-4 py-2">Farq</th>
               <th className="text-center px-4 py-2"></th>
             </tr>
