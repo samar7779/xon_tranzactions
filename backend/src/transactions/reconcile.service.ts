@@ -385,6 +385,7 @@ export class ReconcileService {
     // DB dan o'sha kun uchun tranzaksiyalarni olamiz
     const dayStart = new Date(`${date}T00:00:00+05:00`);
     const dayEnd = new Date(`${date}T23:59:59.999+05:00`);
+    // 1) Bu kun uchun saqlangan tx'lar — bankOnly/matched tahlili uchun
     const dbItems = await this.prisma.transaction.findMany({
       where: { accountId, txnDate: { gte: dayStart, lte: dayEnd } },
       select: {
@@ -400,8 +401,35 @@ export class ReconcileService {
         toName: true,
         description: true,
         docNumber: true,
+        txnDate: true,
       },
     });
+
+    // 2) Boshqa sanalardagi tx'lar — bank b2_id/general_id bo'yicha (eski sync paytida
+    // boshqa sana ostida saqlangan bo'lishi mumkin). Bank items dan b2_id'larni
+    // yig'ib, ulardan tashqarisi (today emas) bo'lganlarini olamiz.
+    const bankB2Ids = bankItems.map((i) => i.b2_id).filter(Boolean) as string[];
+    const bankGenIds = bankItems.map((i) => i.general_id).filter(Boolean) as string[];
+    const offDateItems = (bankB2Ids.length > 0 || bankGenIds.length > 0)
+      ? await this.prisma.transaction.findMany({
+          where: {
+            accountId,
+            OR: [
+              bankB2Ids.length > 0 ? { bankB2Id: { in: bankB2Ids } } : { id: '__never__' },
+              bankGenIds.length > 0 ? { bankGeneralId: { in: bankGenIds } } : { id: '__never__' },
+            ],
+            // Faqat shu kunga teglanmagan yozuvlar
+            NOT: { txnDate: { gte: dayStart, lte: dayEnd } },
+          },
+          select: { id: true, externalId: true, bankB2Id: true, bankGeneralId: true, txnDate: true },
+        })
+      : [];
+
+    const offDateMap = new Map<string, typeof offDateItems[number]>();
+    for (const tx of offDateItems) {
+      if (tx.bankB2Id) offDateMap.set(`b2:${tx.bankB2Id}`, tx);
+      if (tx.bankGeneralId) offDateMap.set(`gen:${tx.bankGeneralId}`, tx);
+    }
 
     // Indekslar — externalId / b2_id / general_id orqali tezda topish
     const dbByKey = new Map<string, typeof dbItems[number]>();
@@ -409,19 +437,39 @@ export class ReconcileService {
       if (tx.externalId) dbByKey.set(tx.externalId, tx);
       if (tx.bankB2Id) dbByKey.set(`b2:${tx.bankB2Id}`, tx);
       if (tx.bankGeneralId) dbByKey.set(`gen:${tx.bankGeneralId}`, tx);
+      // Legacy: ba'zi eski yozuvlarda b2_id/general_id externalId sifatida saqlangan
     }
     const matchedDbIds = new Set<string>();
 
     const bankOnly: any[] = [];
     for (const item of bankItems) {
+      // Composite externalId — eski tx'larda bankB2Id null bo'lishi mumkin,
+      // shuning uchun composite key bilan ham qidirib ko'ramiz
+      const composite = this.sync.makeCompositeId(item, account.accountNo, bank.code);
       const keys = [
         item.b2_id ? `b2:${item.b2_id}` : null,
         item.general_id ? `gen:${item.general_id}` : null,
+        composite,
+        item.b2_id || null,        // legacy: b2_id saved as externalId
+        item.general_id || null,   // legacy: general_id saved as externalId
       ].filter(Boolean) as string[];
       let found: typeof dbItems[number] | undefined;
       for (const k of keys) {
         const m = dbByKey.get(k);
         if (m) { found = m; break; }
+      }
+
+      // Boshqa sanada saqlanganmi tekshiramiz
+      const offDateKeys = [
+        item.b2_id ? `b2:${item.b2_id}` : null,
+        item.general_id ? `gen:${item.general_id}` : null,
+      ].filter(Boolean) as string[];
+      let offDateMatch: typeof offDateItems[number] | undefined;
+      if (!found) {
+        for (const k of offDateKeys) {
+          const m = offDateMap.get(k);
+          if (m) { offDateMatch = m; break; }
+        }
       }
       if (found) {
         matchedDbIds.add(found.id);
@@ -439,6 +487,10 @@ export class ReconcileService {
           toAccount: item.acc_ct,
           toName: item.name_ct,
           purpose: item.purpose,
+          // Agar shu tx boshqa sana ostida saqlangan bo'lsa — uni ko'rsatamiz
+          // (user "qo'shish" tugmasini bosmasligi uchun — chunki dublikat bo'lmaydi)
+          existsOnDate: offDateMatch?.txnDate ? offDateMatch.txnDate.toISOString().slice(0, 10) : undefined,
+          existingTxId: offDateMatch?.id,
         });
       }
     }

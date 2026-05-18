@@ -30,6 +30,8 @@ interface DiagnoseItem {
   purpose?: string | null;
   description?: string | null;
   id?: string;
+  existsOnDate?: string;  // Boshqa sana ostida saqlangan (qo'shish tugmasini hide qilamiz)
+  existingTxId?: string;
 }
 
 interface BulkResult {
@@ -433,15 +435,18 @@ function DiagPanel({
     : 'border-rose-200 bg-rose-50/40';
   const headCls = tone === 'amber' ? 'text-amber-800' : 'text-rose-800';
 
+  // Faqat haqiqatdan qo'shilishi mumkin bo'lgan item'lar (boshqa sana ostida
+  // saqlanmaganlar) — bulk button uchun
+  const insertableItems = items.filter((it) => !it.existsOnDate && (it.b2Id || it.generalId));
+
   async function handleFixAll() {
-    if (!accountId || !date || items.length === 0) return;
+    if (!accountId || !date || insertableItems.length === 0) return;
     setBulkLoading(true);
     try {
       const r = await api.post<BulkResult>('/transactions/reconcile/fix-all-missing', {
         accountId,
         date,
-        items: items
-          .filter((it) => it.b2Id || it.generalId)
+        items: insertableItems
           .map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined })),
       });
       setBulkResult(r);
@@ -469,7 +474,7 @@ function DiagPanel({
         {icon}
         <span>{title}</span>
         <span className="tabular-nums">{items.length}</span>
-        {fixable && items.length > 1 && (
+        {fixable && insertableItems.length > 1 && (
           <button
             onClick={handleFixAll}
             disabled={bulkLoading}
@@ -482,7 +487,7 @@ function DiagPanel({
             ) : (
               <Download className="h-3 w-3" />
             )}
-            {bulkLoading ? `Qo'shilmoqda ${items.length} ta...` : `Hammasini qo'shish · ${items.length}`}
+            {bulkLoading ? `Qo'shilmoqda ${insertableItems.length} ta...` : `Hammasini qo'shish · ${insertableItems.length}`}
           </button>
         )}
       </div>
@@ -601,7 +606,24 @@ function DiagItem({
           {it.b2Id ? `b2:${it.b2Id}` : it.externalId}
         </div>
       )}
-      {fixable && !fixed && (
+      {/* Agar tx boshqa sana ostida saqlangan bo'lsa — duplikat bo'lmaslik uchun
+          qo'shish tugmasini chiqarmaymiz, faqat ogohlantirish */}
+      {it.existsOnDate && (
+        <div className="mt-2 rounded-md bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 text-[10px] text-amber-900 flex items-start gap-1.5">
+          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">
+              AllTranzactions'da boshqa sana ostida saqlangan
+            </div>
+            <div className="text-amber-700 mt-0.5">
+              Sana: <span className="font-mono">{it.existsOnDate}</span> ·
+              Qo'shsangiz dublikat bo'lmaydi. Buni sync sana noto'g'ri saqlagan —
+              shu sababli farq qolyapti.
+            </div>
+          </div>
+        </div>
+      )}
+      {fixable && !fixed && !it.existsOnDate && (
         <button
           onClick={handleFix}
           disabled={fixing}
