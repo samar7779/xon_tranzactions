@@ -92,7 +92,12 @@ export class TransactionsService {
         { toAccount: { contains: q } },
         { contractNumber: { contains: q, mode: 'insensitive' } },
         { id: { equals: q } },
-        { externalId: { equals: q } },
+        // externalId — composite "general_id_num_ddate_acc_acc_amount_sign":
+        // contains'dan foydalanamiz, qismi (masalan general_id) bilan ham topadi.
+        { externalId: { contains: q } },
+        { bankGeneralId: { contains: q } },
+        { bankB2Id: { contains: q } },
+        { docNumber: { contains: q } },
       ];
     }
 
