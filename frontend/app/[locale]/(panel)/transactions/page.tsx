@@ -1718,6 +1718,22 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
+  const setCounterpartyMut = useMutation({
+    mutationFn: (counterpartyId: string | null) =>
+      api.post<{ ok: boolean; counterparty: { id: string; inn: string; name: string } | null }>(
+        `/categorization/transactions/${row.id}/set-counterparty`,
+        { counterpartyId },
+      ),
+    onSuccess: (r) => {
+      toast.success(r.counterparty ? `Kontragent: ${r.counterparty.name}` : 'Kontragent o\'chirildi');
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      liveQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
   const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'raw'];
   const allOpen = SECTION_KEYS.every((k) => openSections.has(k));
 
@@ -2081,8 +2097,10 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           onClose={() => setManualEditOpen(false)}
           onSaveCategory={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
           onSaveContract={(contract) => setContractMut.mutate(contract)}
+          onSaveCounterparty={(counterpartyId) => setCounterpartyMut.mutate(counterpartyId)}
           savingCategory={setCategoryMut.isPending}
           savingContract={setContractMut.isPending}
+          savingCounterparty={setCounterpartyMut.isPending}
         />
       )}
 
@@ -2776,16 +2794,35 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
 
 // ═══ BIRLASHTIRILGAN TAHRIR — Sequential 3 step: Kontragent → Kategoriya → Shartnoma
 function CombinedEditDialog({
-  row, tree, onClose, onSaveCategory, onSaveContract, savingCategory, savingContract,
+  row, tree, onClose,
+  onSaveCategory, onSaveContract, onSaveCounterparty,
+  savingCategory, savingContract, savingCounterparty,
 }: {
   row: any;
   tree: any[];
   onClose: () => void;
   onSaveCategory: (categoryId: string | null, subcategoryId: string | null) => void;
   onSaveContract: (contract: string | null) => void;
+  onSaveCounterparty: (counterpartyId: string | null) => void;
   savingCategory: boolean;
   savingContract: boolean;
+  savingCounterparty: boolean;
 }) {
+  // Counterparty picker state
+  const [cpSearch, setCpSearch] = useState('');
+  const [cpDebounced, setCpDebounced] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setCpDebounced(cpSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [cpSearch]);
+
+  const cpQuery = useQuery({
+    queryKey: ['cp-search', cpDebounced],
+    queryFn: () => api.get<{ items: any[]; total: number }>(`/counterparties?q=${encodeURIComponent(cpDebounced)}&perPage=15`),
+    enabled: cpDebounced.length >= 2,
+    staleTime: 60_000,
+  });
+  const cpItems = cpQuery.data?.items || [];
   // Step 1: Kontragent (top kategoriya)
   const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
   // Step 2: Kategoriya (subkategoriya — top'dan filterlangan)
@@ -2867,6 +2904,67 @@ function CombinedEditDialog({
                 );
               })}
             </div>
+
+            {/* ─── Kontragentlar (Counterparty jadvali) — INN yoki nom bo'yicha qidirish ─── */}
+            <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
+              {row.manualCounterparty ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 ring-1 ring-emerald-200">
+                  <Briefcase className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-semibold text-emerald-900 truncate">{row.manualCounterparty.name}</div>
+                    <div className="text-[10px] font-mono text-emerald-700">INN {row.manualCounterparty.inn}</div>
+                  </div>
+                  <button
+                    onClick={() => onSaveCounterparty(null)}
+                    disabled={savingCounterparty}
+                    className="text-[10px] text-rose-600 hover:text-rose-700 font-medium px-2 py-1"
+                  >
+                    {savingCounterparty ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Tozalash'}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1.5">
+                    Yoki kontragent tanlash (INN/nom)
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      value={cpSearch}
+                      onChange={(e) => setCpSearch(e.target.value)}
+                      placeholder="Masalan: 309334946 yoki XONSAROY"
+                      className="pl-8 h-9 text-[12px]"
+                    />
+                  </div>
+                  {cpDebounced.length >= 2 && (
+                    <div className="mt-1.5 rounded-lg ring-1 ring-slate-200 overflow-hidden max-h-52 overflow-y-auto bg-white">
+                      {cpQuery.isLoading ? (
+                        <div className="px-3 py-3 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Qidirilmoqda...
+                        </div>
+                      ) : cpItems.length === 0 ? (
+                        <div className="px-3 py-3 text-center text-[11px] text-slate-400">Topilmadi</div>
+                      ) : (
+                        cpItems.map((c: any) => (
+                          <button
+                            key={c.id}
+                            onClick={() => { onSaveCounterparty(c.id); setCpSearch(''); }}
+                            disabled={savingCounterparty}
+                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 text-left border-b border-slate-50 last:border-b-0"
+                          >
+                            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[12px] font-medium text-slate-800 truncate">{c.name}</div>
+                              <div className="text-[10px] font-mono text-slate-500">INN {c.inn}</div>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
 
           {/* ═══ STEP 2: KATEGORIYA (subkategoriya — faqat top tanlangan bo'lsa) ═══ */}
@@ -2937,8 +3035,8 @@ function CombinedEditDialog({
             </div>
           )}
 
-          {/* ═══ STEP 3: SHARTNOMA — faqat CLIENT yoki TRANSFER (Переброска) uchun ═══ */}
-          {selectedTop && (selectedTop.code === 'CLIENT' || selectedTop.code === 'TRANSFER') && (
+          {/* ═══ STEP 3: SHARTNOMA — faqat CLIENT yoki TRANSFER uchun, va kontragent qo'lda tanlanmagan bo'lsa ═══ */}
+          {!row.manualCounterparty && selectedTop && (selectedTop.code === 'CLIENT' || selectedTop.code === 'TRANSFER') && (
             <div className="pt-4 border-t border-indigo-200">
               <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">3</span>
