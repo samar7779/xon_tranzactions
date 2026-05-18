@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -366,10 +367,24 @@ function DiagnoseResult({
       </div>
 
       {data.bankOnly.length === 0 && data.dbOnly.length === 0 ? (
-        <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4" />
-          Yozuvlar to'liq mos — farq, ehtimol, yaxlitlash xatosi yoki kalit indekslar muammosi
-        </div>
+        data.bankCount === 0 && data.dbCount === 0 ? (
+          <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3 text-[12px] text-amber-900 flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-semibold">Bank tranzaksiyalar ro'yxati bo'sh</div>
+              <div className="mt-0.5 text-amber-800">
+                Bank shu kun uchun faqat oborot va saldo qaytardi, individual tranzaksiyalar (content[]) yo'q.
+                Bu odatda dam olish/non-operatsion kunda bo'ladi. AllTranzactions'da ham hech narsa yo'q.
+                Farq qaerdandir oldingi kunlardan keladi — boshqa kunlarni tekshirib ko'ring.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Yozuvlar to'liq mos — farq, ehtimol, yaxlitlash xatosi yoki kalit indekslar muammosi
+          </div>
+        )
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DiagPanel
@@ -697,8 +712,10 @@ function BulkResultModal({
 }) {
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOne, setCopiedOne] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -736,9 +753,11 @@ function BulkResultModal({
     }
   }
 
-  return (
+  if (!mounted) return null;
+
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[60] bg-slate-900/75 backdrop-blur-md grid place-items-center px-4"
+      className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-md grid place-items-center px-4"
       onClick={onClose}
     >
       <div
@@ -898,4 +917,8 @@ function BulkResultModal({
       </div>
     </div>
   );
+
+  // Portal — document.body'ga render — drilldown stacking context'idan chiqib,
+  // har doim eng ustda turadi (xira ko'rinish bo'lmaydi)
+  return createPortal(modalContent, document.body);
 }
