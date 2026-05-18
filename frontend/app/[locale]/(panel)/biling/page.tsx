@@ -234,7 +234,7 @@ export default function BilingPage() {
 
   return (
     <div className="flex-1 flex flex-col">
-      <Topbar />
+      <Topbar title="Biling" subtitle="XonPay tranzaksiyalar va mijoz mosligi" />
       <div className="px-6 py-6 space-y-6 max-w-[1600px] mx-auto w-full">
         {/* ═══ HEADER ═══ */}
         <div className="flex items-center justify-between flex-wrap gap-3">
