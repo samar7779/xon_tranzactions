@@ -36,6 +36,13 @@ export class XonpayController {
     return this.svc.cancelSync();
   }
 
+  @Post('sync/history/:logId/cancel')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: "Sync tarixidan ma'lum bir running entry'ni bekor qilish (orphan ham)" })
+  cancelSyncById(@Param('logId') logId: string) {
+    return this.svc.cancelSyncById(logId);
+  }
+
   @Get('sync/status')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   syncStatus() {
