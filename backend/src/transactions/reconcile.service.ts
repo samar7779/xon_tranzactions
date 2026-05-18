@@ -164,4 +164,202 @@ export class ReconcileService {
   private fmtDate(d: Date): string {
     return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
   }
+
+  /** Tashkent bugungi sanasini YYYY-MM-DD shaklida qaytaradi */
+  private todayTashkent(): string {
+    const now = new Date(Date.now() + 5 * 60 * 60 * 1000);
+    return now.toISOString().slice(0, 10);
+  }
+
+  /**
+   * Barcha aktiv hisoblar uchun bugungi (yoki ko'rsatilgan) sverka — parallel
+   * (concurrency=3, bank API ni overload qilmaslik uchun). Farq summasi
+   * bo'yicha kamayish tartibida qaytaradi (eng katta muammo tepada).
+   */
+  async reconcileToday(date?: string) {
+    const targetDate = date || this.todayTashkent();
+
+    // Faqat aktiv KB hisoblar
+    const accounts = await this.prisma.bankAccount.findMany({
+      where: {
+        isActive: true,
+        credential: { bank: { apiKind: 'KAPITALBANK_V3' } },
+      },
+      include: {
+        bank: { select: { id: true, name: true, code: true } },
+        credential: { include: { bank: true } },
+      },
+      orderBy: { ownerName: 'asc' },
+    });
+
+    const CONCURRENCY = 3;
+    const results: any[] = [];
+    for (let i = 0; i < accounts.length; i += CONCURRENCY) {
+      const batch = accounts.slice(i, i + CONCURRENCY);
+      const chunk = await Promise.all(
+        batch.map((a) =>
+          this.reconcile(a.id, targetDate, targetDate).catch((e) => ({
+            ok: false,
+            accountId: a.id,
+            accountNo: a.accountNo,
+            ownerName: a.ownerName,
+            bankName: a.bank?.name,
+            error: e?.message || "noma'lum xato",
+            status: 'error' as const,
+          })),
+        ),
+      );
+      results.push(...chunk);
+    }
+
+    // Sort: error → eng tepada; mismatch → diff bo'yicha kamayish; ok → eng pastda
+    const score = (r: any) => {
+      if (r.status === 'error') return Number.POSITIVE_INFINITY;
+      if (r.status === 'mismatch') {
+        const d = Math.abs(Number(r.diff?.credit || 0)) + Math.abs(Number(r.diff?.debit || 0));
+        return d;
+      }
+      return -1; // ok
+    };
+    results.sort((a, b) => score(b) - score(a));
+
+    const summary = {
+      total: results.length,
+      ok: results.filter((r) => r.status === 'ok').length,
+      mismatch: results.filter((r) => r.status === 'mismatch').length,
+      error: results.filter((r) => r.status === 'error').length,
+    };
+    return { ok: true, date: targetDate, summary, items: results };
+  }
+
+  /**
+   * Bir kun ichidagi farqning sababini topadi: bankdagi har bir tranzaksiya
+   * (GetDoc1C content[]) ni bizning DB bilan solishtiradi va:
+   *   - bankOnly: bankda bor, bizda yo'q
+   *   - dbOnly: bizda bor, bankda yo'q
+   * larini qaytaradi. Frontend ularni ko'rsatib, foydalanuvchi muammoni biladi.
+   */
+  async diagnoseDay(accountId: string, date: string) {
+    if (!accountId) throw new BadRequestException('accountId kerak');
+    if (!date) throw new BadRequestException('date kerak (YYYY-MM-DD)');
+
+    const account = await this.prisma.bankAccount.findUnique({
+      where: { id: accountId },
+      include: { bank: true, credential: { include: { bank: true } } },
+    });
+    if (!account) throw new NotFoundException('Hisob topilmadi');
+    const cred = account.credential;
+    if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
+    const bank = cred.bank;
+    if (bank.apiKind !== 'KAPITALBANK_V3') {
+      throw new BadRequestException('Diagnostika hozircha faqat KAPITALBANK_V3 banklar uchun');
+    }
+    if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
+
+    const password = this.crypto.decrypt(cred.passwordEnc);
+    const login = (cred.loginPrefix || '') + cred.loginName;
+    const dateDmy = this.fmtDate(new Date(`${date}T00:00:00+05:00`));
+
+    // Bankdan ushbu kun uchun barcha tranzaksiyalarni olamiz
+    const bankRes = await this.kb.getDoc1C({
+      baseUrl: bank.apiBaseUrl,
+      login,
+      password,
+      branch: account.branch,
+      account: account.accountNo,
+      date: dateDmy,
+      useProxy: cred.useProxy === true,
+    });
+    const bankItems = bankRes?.content || [];
+
+    // DB dan o'sha kun uchun tranzaksiyalarni olamiz
+    const dayStart = new Date(`${date}T00:00:00+05:00`);
+    const dayEnd = new Date(`${date}T23:59:59.999+05:00`);
+    const dbItems = await this.prisma.transaction.findMany({
+      where: { accountId, txnDate: { gte: dayStart, lte: dayEnd } },
+      select: {
+        id: true,
+        externalId: true,
+        bankB2Id: true,
+        bankGeneralId: true,
+        amount: true,
+        direction: true,
+        fromAccount: true,
+        toAccount: true,
+        fromName: true,
+        toName: true,
+        description: true,
+        docNumber: true,
+      },
+    });
+
+    // Indekslar — externalId / b2_id / general_id orqali tezda topish
+    const dbByKey = new Map<string, typeof dbItems[number]>();
+    for (const tx of dbItems) {
+      if (tx.externalId) dbByKey.set(tx.externalId, tx);
+      if (tx.bankB2Id) dbByKey.set(`b2:${tx.bankB2Id}`, tx);
+      if (tx.bankGeneralId) dbByKey.set(`gen:${tx.bankGeneralId}`, tx);
+    }
+    const matchedDbIds = new Set<string>();
+
+    const bankOnly: any[] = [];
+    for (const item of bankItems) {
+      const keys = [
+        item.b2_id ? `b2:${item.b2_id}` : null,
+        item.general_id ? `gen:${item.general_id}` : null,
+      ].filter(Boolean) as string[];
+      let found: typeof dbItems[number] | undefined;
+      for (const k of keys) {
+        const m = dbByKey.get(k);
+        if (m) { found = m; break; }
+      }
+      if (found) {
+        matchedDbIds.add(found.id);
+      } else {
+        bankOnly.push({
+          b2Id: item.b2_id,
+          generalId: item.general_id,
+          docNumber: item.num,
+          ddate: item.ddate,
+          time: item.time,
+          direction: item.dir === 1 ? 'OUT' : item.dir === 2 ? 'IN' : null,
+          amount: (item.amount ?? 0) / 100,
+          fromAccount: item.acc_dt,
+          fromName: item.name_dt,
+          toAccount: item.acc_ct,
+          toName: item.name_ct,
+          purpose: item.purpose,
+        });
+      }
+    }
+
+    const dbOnly = dbItems
+      .filter((tx) => !matchedDbIds.has(tx.id))
+      .map((tx) => ({
+        id: tx.id,
+        externalId: tx.externalId,
+        b2Id: tx.bankB2Id,
+        generalId: tx.bankGeneralId,
+        docNumber: tx.docNumber,
+        direction: tx.direction,
+        amount: Number(tx.amount),
+        fromAccount: tx.fromAccount,
+        fromName: tx.fromName,
+        toAccount: tx.toAccount,
+        toName: tx.toName,
+        description: tx.description,
+      }));
+
+    return {
+      ok: true,
+      date,
+      accountId,
+      accountNo: account.accountNo,
+      bankCount: bankItems.length,
+      dbCount: dbItems.length,
+      matchedCount: matchedDbIds.size,
+      bankOnly,
+      dbOnly,
+    };
+  }
 }

@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Scale, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
-  ChevronDown, Search, X,
+  Search, X, ChevronRight, Wifi,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -17,145 +17,164 @@ import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
+import { AccountDrilldown } from './_drilldown';
 
-type RowState = {
-  status: 'idle' | 'loading' | 'done' | 'error';
-  data?: any;
+interface TodayItem {
+  ok?: boolean;
+  status: 'ok' | 'mismatch' | 'error';
+  accountId: string;
+  accountNo: string;
+  ownerName: string | null;
+  bankName: string | null;
   error?: string;
-};
+  partial?: boolean;
+  failedDays?: number;
+  bank?: { opening: number; closing: number; debit: number; credit: number };
+  db?: { inflow: number; outflow: number; inCount: number; outCount: number };
+  diff?: { credit: number; debit: number; formula: number; computedClosing: number };
+}
 
-function monthStartIso() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+interface TodayResponse {
+  ok: true;
+  date: string;
+  summary: { total: number; ok: number; mismatch: number; error: number };
+  items: TodayItem[];
 }
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
+
+// 20 minutda live refetch
+const AUTO_REFETCH_MS = 20 * 60 * 1000;
 
 export default function CheckPage() {
   const t = useTranslations('check');
-  const [dateFrom, setDateFrom] = useState(monthStartIso());
-  const [dateTo, setDateTo] = useState(todayIso());
   const [q, setQ] = useState('');
-  const [results, setResults] = useState<Record<string, RowState>>({});
-  const [expanded, setExpanded] = useState<string | null>(null);
-  const [allRunning, setAllRunning] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
+  const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
 
-  const { data: accounts, isLoading } = useQuery({
-    queryKey: ['bank-accounts'],
-    queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+  // Bugungi sverka (avtomatik, 20 min)
+  const todayQuery = useQuery<TodayResponse>({
+    queryKey: ['reconcile-today'],
+    queryFn: () => api.get('/transactions/reconcile/today'),
+    refetchInterval: AUTO_REFETCH_MS,
+    refetchOnWindowFocus: false,
   });
 
-  const filtered = useMemo(() => {
-    const all = accounts?.items || [];
-    const ql = q.trim().toLowerCase();
-    if (!ql) return all;
-    return all.filter((a: any) =>
-      a.accountNo?.toLowerCase().includes(ql) ||
-      a.ownerName?.toLowerCase().includes(ql) ||
-      a.bank?.name?.toLowerCase().includes(ql),
-    );
-  }, [accounts, q]);
+  // Manual refresh — barcha
+  async function refreshAll() {
+    toast.message('Bugungi sverka yangilanmoqda...');
+    await todayQuery.refetch();
+    toast.success('Yangilandi');
+  }
 
-  async function checkOne(accountId: string): Promise<void> {
-    setResults((r) => ({ ...r, [accountId]: { status: 'loading' } }));
+  // Manual refresh — bitta hisob
+  async function refreshOne(accountId: string) {
+    const next = new Set(singleLoading);
+    next.add(accountId);
+    setSingleLoading(next);
     try {
-      const data = await api.post<any>('/transactions/reconcile', { accountId, dateFrom, dateTo });
-      setResults((r) => ({ ...r, [accountId]: { status: 'done', data } }));
+      const today = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const data = await api.post<TodayItem>('/transactions/reconcile', {
+        accountId, dateFrom: today, dateTo: today,
+      });
+      setSingleResults((r) => ({ ...r, [accountId]: data }));
     } catch (e: any) {
-      setResults((r) => ({ ...r, [accountId]: { status: 'error', error: e?.message || 'Xato' } }));
-    }
-  }
-
-  async function checkAll() {
-    if (!dateFrom || !dateTo) return toast.error("Sana oralig'ini tanlang");
-    setAllRunning(true);
-    try {
-      for (const a of filtered) {
-        await checkOne(a.id);
-      }
-      toast.success('Sverka yakunlandi');
+      setSingleResults((r) => ({
+        ...r,
+        [accountId]: {
+          status: 'error', accountId, accountNo: '', ownerName: null, bankName: null,
+          error: e?.message || 'Xato',
+        },
+      }));
     } finally {
-      setAllRunning(false);
+      setSingleLoading((s) => {
+        const n = new Set(s); n.delete(accountId); return n;
+      });
     }
   }
 
-  // Umumiy hisob
-  const summary = useMemo(() => {
-    const vals = Object.values(results);
-    return {
-      ok: vals.filter((v) => v.status === 'done' && v.data?.status === 'ok').length,
-      mismatch: vals.filter((v) => v.status === 'done' && v.data?.status === 'mismatch').length,
-      error: vals.filter((v) => v.status === 'error').length,
-      checked: vals.filter((v) => v.status === 'done' || v.status === 'error').length,
-    };
-  }, [results]);
+  // Manual natijani umumiy list bilan birlashtirish
+  const items = useMemo(() => {
+    const base = todayQuery.data?.items || [];
+    return base.map((it) => singleResults[it.accountId] || it);
+  }, [todayQuery.data, singleResults]);
+
+  // Search filter
+  const filtered = useMemo(() => {
+    const ql = q.trim().toLowerCase();
+    if (!ql) return items;
+    return items.filter((it) =>
+      it.accountNo?.toLowerCase().includes(ql) ||
+      it.ownerName?.toLowerCase().includes(ql) ||
+      it.bankName?.toLowerCase().includes(ql),
+    );
+  }, [items, q]);
+
+  const summary = useMemo(() => ({
+    total: items.length,
+    ok: items.filter((i) => i.status === 'ok').length,
+    mismatch: items.filter((i) => i.status === 'mismatch').length,
+    error: items.filter((i) => i.status === 'error').length,
+  }), [items]);
+
+  const selectedAccount = useMemo(
+    () => items.find((it) => it.accountId === selectedAccountId) || null,
+    [items, selectedAccountId],
+  );
+
+  const isLoading = todayQuery.isLoading;
+  const isRefreshing = todayQuery.isFetching && !todayQuery.isLoading;
 
   return (
     <>
-      <Topbar
-        title={t('title')}
-        subtitle={t('subtitle')}
-      />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
-        {/* ═══ Boshqaruv paneli ═══ */}
+        {/* ═══ Top bar: search + refresh ═══ */}
         <Card className="border-0 shadow-soft">
           <CardContent className="p-4">
-            <div className="flex items-end gap-3 flex-wrap">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-600">Sanadan</label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="relative flex-1 min-w-[240px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                  type="date"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="h-10 w-[160px] rounded-xl"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-slate-600">Sanagacha</label>
-                <Input
-                  type="date"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="h-10 w-[160px] rounded-xl"
-                />
-              </div>
-              <div className="relative flex-1 min-w-[200px] space-y-1">
-                <label className="text-[11px] font-medium text-slate-600">Qidirish</label>
-                <Search className="absolute left-3 top-[34px] h-4 w-4 text-slate-400" />
-                <Input
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60"
-                  placeholder="Hisob, egasi yoki bank..."
+                  className="pl-9 h-11 rounded-xl bg-slate-50/60"
+                  placeholder="Hisob raqami, egasi yoki bank..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
                 {q && (
                   <button
-                    className="absolute right-2.5 top-[34px] text-slate-400 hover:text-slate-700"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                     onClick={() => setQ('')}
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-4 w-4" />
                   </button>
                 )}
               </div>
+
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                <Wifi className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Avto-yangilanish · har 20 daqiqada</span>
+              </div>
+
               <Button
-                onClick={checkAll}
-                disabled={allRunning || filtered.length === 0}
-                className="h-10 rounded-xl font-semibold"
+                onClick={refreshAll}
+                disabled={isRefreshing}
+                className="h-11 rounded-xl font-semibold"
               >
-                {allRunning ? (
-                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Tekshirilmoqda...</>
+                {isRefreshing ? (
+                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Yangilanmoqda...</>
                 ) : (
-                  <><RefreshCw className="h-4 w-4 mr-1.5" /> Hammasini tekshir</>
+                  <><RefreshCw className="h-4 w-4 mr-1.5" /> Hammasini yangilash · bugun</>
                 )}
               </Button>
             </div>
 
-            {/* Umumiy natija */}
-            {summary.checked > 0 && (
+            {/* Umumiy holat */}
+            {summary.total > 0 && (
               <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 text-[12px]">
+                <span className="text-slate-500">Bugun · {todayQuery.data?.date || '—'}</span>
+                <span className="text-slate-300">·</span>
                 <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                   <CheckCircle2 className="h-3.5 w-3.5" /> {summary.ok} mos
                 </span>
@@ -167,176 +186,140 @@ export default function CheckPage() {
                     <X className="h-3.5 w-3.5" /> {summary.error} xato
                   </span>
                 )}
-                <span className="text-slate-400">·</span>
-                <span className="text-slate-500">{summary.checked} / {filtered.length} tekshirildi</span>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-500">{summary.total} hisob</span>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* ═══ Hisoblar ro'yxati ═══ */}
+        {/* ═══ Hisoblar — farq summasi bo'yicha sortlangan ═══ */}
         <Card className="border-0 shadow-soft">
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-4 space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12" />)}
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
               </div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon={Scale} title="Hisoblar topilmadi" />
+              <EmptyState icon={Scale} title="Hisob topilmadi" />
             ) : (
               <div className="divide-y divide-slate-100">
-                {filtered.map((a: any) => {
-                  const st = results[a.id];
-                  const isOpen = expanded === a.id;
-                  return (
-                    <div key={a.id}>
-                      {/* Qator */}
-                      <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50/60 transition-colors">
-                        <button
-                          className="flex items-center gap-3 min-w-0 flex-1 text-left"
-                          onClick={() => setExpanded(isOpen ? null : a.id)}
-                        >
-                          <ChevronDown className={cn(
-                            "h-4 w-4 text-slate-400 shrink-0 transition-transform",
-                            isOpen && "rotate-180",
-                            !st?.data && "opacity-0",
-                          )} />
-                          <div className="min-w-0">
-                            <div className="text-[13px] font-semibold text-slate-900 truncate">
-                              {a.bank?.name || '—'} · <span className="font-mono">{a.accountNo}</span>
-                            </div>
-                            <div className="text-[11px] text-slate-500 truncate">
-                              {a.ownerName || '— egasi ko\'rsatilmagan'}
-                            </div>
-                          </div>
-                        </button>
-
-                        <StatusBadge state={st} />
-
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 rounded-lg shrink-0"
-                          disabled={st?.status === 'loading' || allRunning}
-                          onClick={() => checkOne(a.id)}
-                        >
-                          {st?.status === 'loading'
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            : 'Tekshir'}
-                        </Button>
-                      </div>
-
-                      {/* Tafsilot */}
-                      {isOpen && st?.data && (
-                        <div className="px-4 pb-4 pt-1 bg-slate-50/40">
-                          <ReconcileDetail data={st.data} />
-                        </div>
-                      )}
-                      {isOpen && st?.status === 'error' && (
-                        <div className="px-4 pb-3 text-[12px] text-rose-700 bg-rose-50/40">
-                          {st.error}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {filtered.map((it) => (
+                  <AccountRow
+                    key={it.accountId}
+                    item={it}
+                    loading={singleLoading.has(it.accountId)}
+                    onClick={() => setSelectedAccountId(it.accountId)}
+                    onRefresh={() => refreshOne(it.accountId)}
+                  />
+                ))}
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      {/* Drill-down modal */}
+      {selectedAccount && (
+        <AccountDrilldown
+          item={selectedAccount}
+          onClose={() => setSelectedAccountId(null)}
+          onUpdated={(updated) => setSingleResults((r) => ({ ...r, [selectedAccount.accountId]: updated }))}
+        />
+      )}
     </>
   );
 }
 
-function StatusBadge({ state }: { state?: RowState }) {
-  if (!state || state.status === 'idle') {
-    return <span className="text-[11px] text-slate-400 px-2">tekshirilmagan</span>;
-  }
-  if (state.status === 'loading') {
+function AccountRow({
+  item, loading, onClick, onRefresh,
+}: {
+  item: TodayItem;
+  loading: boolean;
+  onClick: () => void;
+  onRefresh: () => void;
+}) {
+  const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
+  const totalDiff = Math.abs((item.diff?.credit || 0)) + Math.abs((item.diff?.debit || 0));
+
+  return (
+    <div
+      className={cn(
+        'group flex items-center gap-3 px-4 py-3.5 transition-colors cursor-pointer',
+        item.status === 'mismatch' && 'bg-amber-50/40 hover:bg-amber-50/70',
+        item.status === 'error' && 'bg-rose-50/40 hover:bg-rose-50/70',
+        item.status === 'ok' && 'hover:bg-slate-50/60',
+      )}
+      onClick={onClick}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="text-[13px] font-semibold text-slate-900 truncate">
+          {item.bankName || '—'} · <span className="font-mono text-slate-700">{item.accountNo}</span>
+        </div>
+        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+          {item.ownerName || '— egasi ko\'rsatilmagan'}
+        </div>
+        {item.status === 'mismatch' && item.diff && (
+          <div className="mt-1.5 flex items-center gap-3 text-[11px]">
+            <span className="text-emerald-700">
+              Kirim farq: <span className="font-bold tabular-nums">{m(item.diff.credit)}</span>
+            </span>
+            <span className="text-rose-700">
+              Chiqim farq: <span className="font-bold tabular-nums">{m(item.diff.debit)}</span>
+            </span>
+            {item.partial && (
+              <span className="text-amber-600">⚠ {item.failedDays} kun ma'lumotsiz</span>
+            )}
+          </div>
+        )}
+        {item.status === 'error' && (
+          <div className="mt-1 text-[11px] text-rose-700 truncate">
+            {item.error}
+          </div>
+        )}
+      </div>
+
+      <StatusBadge item={item} totalDiff={totalDiff} />
+
+      <Button
+        size="sm"
+        variant="outline"
+        className="h-9 rounded-lg shrink-0"
+        disabled={loading}
+        onClick={(e) => { e.stopPropagation(); onRefresh(); }}
+        title="Manual yangilash"
+      >
+        {loading ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        ) : (
+          <RefreshCw className="h-3.5 w-3.5" />
+        )}
+      </Button>
+
+      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 shrink-0" />
+    </div>
+  );
+}
+
+function StatusBadge({ item, totalDiff }: { item: TodayItem; totalDiff: number }) {
+  if (item.status === 'error') {
     return (
-      <span className="flex items-center gap-1 text-[11px] text-slate-500 px-2">
-        <Loader2 className="h-3 w-3 animate-spin" /> tekshirilmoqda
-      </span>
-    );
-  }
-  if (state.status === 'error') {
-    return (
-      <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 ring-1 ring-rose-200 px-2 py-1 rounded-full">
+      <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 ring-1 ring-rose-200 px-2.5 py-1.5 rounded-full shrink-0">
         <X className="h-3 w-3" /> Xato
       </span>
     );
   }
-  const ok = state.data?.status === 'ok';
+  if (item.status === 'mismatch') {
+    return (
+      <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 rounded-full shrink-0 tabular-nums">
+        <AlertTriangle className="h-3 w-3" />
+        Farq {formatMoney(totalDiff).replace(' UZS', '')}
+      </span>
+    );
+  }
   return (
-    <span className={cn(
-      "flex items-center gap-1 text-[11px] font-semibold px-2 py-1 rounded-full ring-1",
-      ok
-        ? "text-emerald-700 bg-emerald-50 ring-emerald-200"
-        : "text-amber-700 bg-amber-50 ring-amber-200",
-    )}>
-      {ok ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
-      {ok ? 'Mos' : 'Farq bor'}
-      {state.data?.partial && <span className="text-[9px] opacity-70">(qisman)</span>}
+    <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-2.5 py-1.5 rounded-full shrink-0">
+      <CheckCircle2 className="h-3 w-3" /> Mos
     </span>
-  );
-}
-
-function ReconcileDetail({ data }: { data: any }) {
-  const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
-  const diffCls = (n: number) =>
-    Math.abs(n) < 1 ? 'text-emerald-700' : 'text-amber-700';
-
-  return (
-    <div className="rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden">
-      <table className="w-full text-[12px]">
-        <thead>
-          <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
-            <th className="text-left px-3 py-2">Ko'rsatkich</th>
-            <th className="text-right px-3 py-2">Bank</th>
-            <th className="text-right px-3 py-2">Bizning baza</th>
-            <th className="text-right px-3 py-2">Farq</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100 tabular-nums">
-          <tr>
-            <td className="px-3 py-2 text-slate-600">Kirim oboroti</td>
-            <td className="px-3 py-2 text-right font-semibold text-emerald-700">{m(data.bank.credit)}</td>
-            <td className="px-3 py-2 text-right font-semibold text-emerald-700">
-              {m(data.db.inflow)} <span className="text-[10px] text-slate-400">· {data.db.inCount} ta</span>
-            </td>
-            <td className={cn("px-3 py-2 text-right font-bold", diffCls(data.diff.credit))}>{m(data.diff.credit)}</td>
-          </tr>
-          <tr>
-            <td className="px-3 py-2 text-slate-600">Chiqim oboroti</td>
-            <td className="px-3 py-2 text-right font-semibold text-rose-700">{m(data.bank.debit)}</td>
-            <td className="px-3 py-2 text-right font-semibold text-rose-700">
-              {m(data.db.outflow)} <span className="text-[10px] text-slate-400">· {data.db.outCount} ta</span>
-            </td>
-            <td className={cn("px-3 py-2 text-right font-bold", diffCls(data.diff.debit))}>{m(data.diff.debit)}</td>
-          </tr>
-          <tr className="bg-slate-50/60">
-            <td className="px-3 py-2 text-slate-600">Ochilish saldosi</td>
-            <td className="px-3 py-2 text-right font-semibold">{m(data.bank.opening)}</td>
-            <td className="px-3 py-2 text-right text-slate-400">—</td>
-            <td className="px-3 py-2 text-right text-slate-400">—</td>
-          </tr>
-          <tr>
-            <td className="px-3 py-2 text-slate-600">
-              Yopilish saldosi
-              <div className="text-[10px] text-slate-400">ochilish + kirim − chiqim</div>
-            </td>
-            <td className="px-3 py-2 text-right font-semibold">{m(data.bank.closing)}</td>
-            <td className="px-3 py-2 text-right font-semibold">{m(data.diff.computedClosing)}</td>
-            <td className={cn("px-3 py-2 text-right font-bold", diffCls(data.diff.formula))}>{m(data.diff.formula)}</td>
-          </tr>
-        </tbody>
-      </table>
-      {data.partial && (
-        <div className="px-3 py-2 text-[11px] text-amber-700 bg-amber-50/60 border-t border-amber-100">
-          ⚠ Ba'zi kunlar uchun bankdan ma'lumot olinmadi ({data.failedDays} kun) — natija to'liq bo'lmasligi mumkin
-        </div>
-      )}
-    </div>
   );
 }
