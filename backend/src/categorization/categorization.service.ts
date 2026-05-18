@@ -153,6 +153,13 @@ export class CategorizationService {
   private runAllLastError: string | null = null;
   private runAllRecentErrors: Array<{ txId: string; reason: string; at: string }> = [];
 
+  // XATO shartnomalarni qayta tekshirish progress'i
+  private recheckRunning = false;
+  private recheckStartedAt: Date | null = null;
+  private recheckFinishedAt: Date | null = null;
+  private recheckProgress: { done: number; total: number; fixed: number; stillXato: number; errors: number } | null = null;
+  private recheckLastError: string | null = null;
+
   // Kategoriya ID'lari keshi — har safar DB'dan o'qimaslik uchun
   private categoryRefs: CategoryRefs | null = null;
   // O'z hisob raqamlarimiz keshi (Переброска aniqlash uchun)
@@ -228,6 +235,107 @@ export class CategorizationService {
       lastError: this.runAllLastError,
       recentErrors: this.runAllRecentErrors,
     };
+  }
+
+  /**
+   * XATO shartnomalarni qayta tekshirish — fonda ishlaydi.
+   * Logika:
+   *   1) DB'dan barcha uniq XATO shartnomalarni topadi (contractNumber bor, lekin CrmContract.found=false yoki yo'q)
+   *   2) Har biri uchun crmCache.lookup() ni majburiy yangilaydi (cache'ni shu shartnoma uchun bekor qilib)
+   *   3) Yangi natija topilsa — cache yangilanadi, frontend tx'ni qayta o'qisa 'verified' bo'ladi
+   *
+   * Kategoriya va shartnoma raqamlariga TEGMAYDI.
+   */
+  recheckXatoContracts(): { ok: true; started: boolean; message: string } {
+    if (this.recheckRunning) {
+      const since = this.recheckStartedAt;
+      const mins = since ? Math.floor((Date.now() - since.getTime()) / 60000) : 0;
+      const p = this.recheckProgress;
+      const progStr = p ? ` (${p.done}/${p.total}, tuzatildi: ${p.fixed})` : '';
+      return {
+        ok: true,
+        started: false,
+        message: `Qayta tekshirish allaqachon ishlamoqda${progStr} — ${mins} daqiqadan beri.`,
+      };
+    }
+    this.runRecheckInBackground().catch((e) => {
+      this.log.error(`recheckXato xato: ${e?.message || e}`);
+    });
+    return { ok: true, started: true, message: 'XATO shartnomalarni qayta tekshirish fonda boshlandi.' };
+  }
+
+  getRecheckStatus() {
+    return {
+      running: this.recheckRunning,
+      startedAt: this.recheckStartedAt?.toISOString() || null,
+      finishedAt: this.recheckFinishedAt?.toISOString() || null,
+      progress: this.recheckProgress,
+      lastError: this.recheckLastError,
+    };
+  }
+
+  private async runRecheckInBackground(): Promise<void> {
+    this.recheckRunning = true;
+    this.recheckStartedAt = new Date();
+    this.recheckFinishedAt = null;
+    this.recheckLastError = null;
+    this.recheckProgress = { done: 0, total: 0, fixed: 0, stillXato: 0, errors: 0 };
+
+    try {
+      // 1) Verified shartnomalar ro'yxati (bularni o'tkazib yuboramiz)
+      const verified = await this.prisma.crmContract.findMany({
+        where: { found: true },
+        select: { contractNumber: true },
+      });
+      const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+
+      // 2) DB'dan uniq XATO shartnomalarni topamiz
+      // (transaction.contractNumber bor + verifiedSet'da yo'q)
+      const allTxContracts = await this.prisma.transaction.findMany({
+        where: { contractNumber: { not: null } },
+        select: { contractNumber: true },
+        distinct: ['contractNumber'],
+      });
+      const xatoContracts = allTxContracts
+        .map((t) => t.contractNumber!)
+        .filter((c) => !verifiedSet.has(c));
+
+      this.recheckProgress.total = xatoContracts.length;
+      this.log.log(`recheckXato: ${xatoContracts.length} ta uniq XATO shartnoma tekshiriladi`);
+
+      // 3) Har birini cache'dan o'chirib (force refresh uchun), lookup chaqiramiz
+      const CONCURRENCY = 3; // CRM API rate limit uchun ehtiyot
+      for (let i = 0; i < xatoContracts.length; i += CONCURRENCY) {
+        const batch = xatoContracts.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(
+          batch.map(async (contract) => {
+            try {
+              // Avval keshdan o'chiramiz — fresh lookup uchun
+              await this.prisma.crmContract.deleteMany({
+                where: { contractNumber: contract, found: false },
+              });
+              const result = await this.crmCache.lookup(contract);
+              if (result?.found) {
+                this.recheckProgress!.fixed++;
+              } else {
+                this.recheckProgress!.stillXato++;
+              }
+            } catch (e: any) {
+              this.recheckProgress!.errors++;
+              this.log.warn(`recheckXato shartnoma xato (${contract}): ${e?.message}`);
+            }
+          }),
+        );
+        this.recheckProgress.done = Math.min(i + CONCURRENCY, xatoContracts.length);
+      }
+    } catch (e: any) {
+      this.recheckLastError = e?.message || String(e);
+      this.log.error(`recheckXato umumiy xato: ${this.recheckLastError}`);
+    } finally {
+      this.recheckRunning = false;
+      this.recheckFinishedAt = new Date();
+      this.log.log(`recheckXato yakunlandi: ${JSON.stringify(this.recheckProgress)}`);
+    }
   }
 
   /**

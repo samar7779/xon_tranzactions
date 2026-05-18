@@ -118,6 +118,26 @@ export class CategorizationController {
     return this.svc.getStatus();
   }
 
+  // ─── XATO shartnomalarni qayta tekshirish (CRM cache refresh) ───
+  @Post('recheck-xato')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "XATO shartnomalarni qayta tekshirish — uniq shartnomalarni CRM'dan qayta so'raydi",
+    description:
+      "Kategoriya/shartnoma raqamiga TEGMAYDI. Faqat CrmContract cache'ni yangilaydi. " +
+      'Yangi natija topilsa, sahifa yangilangach contractStatus avtomatik verified bo\'ladi.',
+  })
+  recheckXato() {
+    return this.svc.recheckXatoContracts();
+  }
+
+  @Get('recheck-xato/status')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
+  @ApiOperation({ summary: 'Qayta tekshirish holati' })
+  recheckStatus() {
+    return this.svc.getRecheckStatus();
+  }
+
   @Get('transactions/:id/history')
   @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
   @ApiOperation({ summary: 'Tranzaksiya kategoriya tarixi — kim qachon nimani o\'zgartirdi' })
