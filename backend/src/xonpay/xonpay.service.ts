@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -37,8 +37,30 @@ function parseDate(s: string | null | undefined): Date | null {
 }
 
 @Injectable()
-export class XonpayService {
+export class XonpayService implements OnModuleInit {
   private readonly log = new Logger(XonpayService.name);
+
+  /**
+   * Server qayta ishga tushgan paytda — DB'dagi orphan 'running' sync log larini
+   * 'failed' deb belgilaymiz (chunki haqiqatda jarayon yo'q endi).
+   */
+  async onModuleInit() {
+    try {
+      const orphans = await this.prisma.xonpaySyncLog.updateMany({
+        where: { status: 'running' },
+        data: {
+          status: 'failed',
+          errorMessage: 'Server restart — orphan running entry',
+          finishedAt: new Date(),
+        },
+      });
+      if (orphans.count > 0) {
+        this.log.warn(`xonpay orphan running entries: ${orphans.count} ta 'failed' deb belgilandi`);
+      }
+    } catch (e: any) {
+      this.log.error(`xonpay onModuleInit cleanup xato: ${e?.message}`);
+    }
+  }
 
   // ── Sync state ──
   private syncRunning = false;
@@ -47,6 +69,8 @@ export class XonpayService {
   private syncFinishedAt: Date | null = null;
   private syncProgress: { page: number; lastPage: number; fetched: number; xonpay: number; inserted: number; updated: number; matched: number; errors: number } | null = null;
   private syncLastError: string | null = null;
+  // Joriy aktiv sync uchun log id — per-log cancel da ishlatamiz
+  private currentSyncLogId: string | null = null;
 
   // ── Match state ──
   private matchRunning = false;
@@ -129,8 +153,55 @@ export class XonpayService {
         message: `Sync allaqachon ishlamoqda${p ? ` (page ${p.page}/${p.lastPage}, xonpay: ${p.xonpay})` : ''} — ${mins} daqiqadan beri.`,
       };
     }
-    this.runSyncInBackground(opts).catch((e) => this.log.error(`xonpay sync xato: ${e?.message}`));
+    // ATOMIC LOCK — boshqa sync (cron yoki qo'lda) parallel boshlanmasin
+    this.syncRunning = true;
+    this.syncStartedAt = new Date();
+    this.runSyncInBackground(opts).catch((e) => {
+      this.log.error(`xonpay sync xato: ${e?.message}`);
+      this.syncRunning = false; // xato bo'lsa lock'ni darrov ochish
+    });
     return { ok: true, started: true, message: "XonPay sync fonda boshlandi." };
+  }
+
+  /**
+   * Sync log id bo'yicha bekor qilish — running entry'ni 'cancelled' deb belgilaydi.
+   * Agar shu entry hozir haqiqatdan ishlayotgan sync bo'lsa, in-memory cancel ham chaqiriladi.
+   */
+  async cancelSyncById(logId: string): Promise<{ ok: true; cancelled: boolean; message: string }> {
+    const entry = await this.prisma.xonpaySyncLog.findUnique({ where: { id: logId } });
+    if (!entry) {
+      return { ok: true, cancelled: false, message: 'Topilmadi' };
+    }
+    if (entry.status !== 'running') {
+      return { ok: true, cancelled: false, message: `Bu entry hozir ${entry.status} — bekor qilib bo'lmaydi` };
+    }
+
+    // Agar bu joriy haqiqiy sync bo'lsa — in-memory cancel ham chaqiramiz
+    let activeStopped = false;
+    if (this.syncRunning && this.currentSyncLogId === logId) {
+      this.syncCancelRequested = true;
+      activeStopped = true;
+    }
+
+    // DB entry'ni darrov 'cancelled' deb belgilaymiz (orphan bo'lsa ham)
+    await this.prisma.xonpaySyncLog.update({
+      where: { id: logId },
+      data: {
+        status: 'cancelled',
+        finishedAt: new Date(),
+        errorMessage: activeStopped
+          ? "Foydalanuvchi bekor qildi (active sync)"
+          : "Foydalanuvchi bekor qildi (orphan/stale entry)",
+      },
+    });
+
+    return {
+      ok: true,
+      cancelled: true,
+      message: activeStopped
+        ? "Sync to'xtatildi (joriy batch tugagandan keyin)"
+        : "Stale entry 'cancelled' deb belgilandi",
+    };
   }
 
   cancelSync(): { ok: true; cancelled: boolean } {
@@ -174,6 +245,7 @@ export class XonpayService {
         },
       });
       logId = logRow.id;
+      this.currentSyncLogId = logId;
     } catch (e: any) {
       this.log.warn(`sync log yaratish xato: ${e?.message}`);
     }
@@ -332,12 +404,33 @@ export class XonpayService {
       this.syncRunning = false;
       this.syncCancelRequested = false;
       this.syncFinishedAt = new Date();
+      this.currentSyncLogId = null;
       this.log.log(`xonpay sync yakunlandi (${finalStatus}): ${JSON.stringify(this.syncProgress)}`);
 
       // Log yakunlash
       if (logId) {
         try {
           const startedAt = this.syncStartedAt!;
+          // Agar entry allaqachon 'cancelled' deb belgilangan bo'lsa (cancelById tomonidan) — uni tegmaymiz
+          const cur = await this.prisma.xonpaySyncLog.findUnique({ where: { id: logId }, select: { status: true } });
+          if (cur?.status === 'cancelled') {
+            // Allaqachon cancel qilingan — faqat metric'larni yangilash (status'ni o'zgartirmaslik)
+            await this.prisma.xonpaySyncLog.update({
+              where: { id: logId },
+              data: {
+                pages: this.syncProgress?.page || 0,
+                fetched: this.syncProgress?.fetched || 0,
+                xonpay: this.syncProgress?.xonpay || 0,
+                inserted: this.syncProgress?.inserted || 0,
+                updated: this.syncProgress?.updated || 0,
+                matched: this.syncProgress?.matched || 0,
+                errors: this.syncProgress?.errors || 0,
+                finishedAt: this.syncFinishedAt,
+                durationMs: this.syncFinishedAt.getTime() - startedAt.getTime(),
+              },
+            });
+            return;
+          }
           await this.prisma.xonpaySyncLog.update({
             where: { id: logId },
             data: {
