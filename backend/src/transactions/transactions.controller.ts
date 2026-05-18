@@ -73,13 +73,16 @@ export class TransactionsController {
   }
 
   @Get('stats')
-  @ApiOperation({ summary: 'Statistika: jami, IN/OUT, banklar bo\'yicha (categoryCode bilan filterlash mumkin)' })
+  @ApiOperation({ summary: 'Statistika: jami, IN/OUT, banklar bo\'yicha (categoryCode/bankId/accountId/direction bilan filterlash mumkin)' })
   stats(
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('categoryCode') categoryCode?: string,
+    @Query('bankId') bankId?: string,
+    @Query('accountId') accountId?: string,
+    @Query('direction') direction?: string,
   ) {
-    return this.svc.stats(from, to, categoryCode);
+    return this.svc.stats(from, to, categoryCode, bankId, accountId, direction);
   }
 
   @Get('daily')

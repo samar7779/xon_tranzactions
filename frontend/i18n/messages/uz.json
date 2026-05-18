@@ -305,6 +305,8 @@
     "searchPlaceholder": "Yuboruvchi, qabul qiluvchi, STIR, izoh, shartnoma raqami, ID...",
     "kpiIn30": "Kirim · 30 kun",
     "kpiOut30": "Chiqim · 30 kun",
+    "kpiIn": "Kirim · filtr",
+    "kpiOut": "Chiqim · filtr",
     "kpiNet": "Sof oqim",
     "kpiCount": "Tranzaksiya soni",
     "tools": "Asboblar",

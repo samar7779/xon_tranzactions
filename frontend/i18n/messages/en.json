@@ -305,6 +305,8 @@
     "searchPlaceholder": "Sender, receiver, TIN, description, contract no., ID...",
     "kpiIn30": "Inflow · 30 days",
     "kpiOut30": "Outflow · 30 days",
+    "kpiIn": "Inflow · filter",
+    "kpiOut": "Outflow · filter",
     "kpiNet": "Net flow",
     "kpiCount": "Transaction count",
     "tools": "Tools",
