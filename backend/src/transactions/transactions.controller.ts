@@ -120,6 +120,16 @@ export class TransactionsController {
     return this.reconcileSvc.fixMissing(body?.accountId, body?.b2Id, body?.generalId, body?.date);
   }
 
+  @Post('reconcile/fix-all-missing')
+  @ApiOperation({ summary: "Bir nechta yo'qolgan tranzaksiyalarni bitta zaprosda DB ga qo'shadi" })
+  fixAllMissing(@Body() body: {
+    accountId: string;
+    date: string;
+    items: Array<{ b2Id?: string; generalId?: string }>;
+  }) {
+    return this.reconcileSvc.fixAllMissing(body?.accountId, body?.date, body?.items || []);
+  }
+
   @Get('export')
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(

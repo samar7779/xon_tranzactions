@@ -507,19 +507,17 @@ export class ReconcileService {
       bank.code,
     );
 
-    // Qo'shilgan (yoki avvaldan mavjud) tranzaksiyani topib externalId qaytaramiz —
-    // foydalanuvchi UI'da copy qiladi.
-    const found = await this.prisma.transaction.findFirst({
-      where: {
-        accountId,
-        OR: [
-          b2Id ? { bankB2Id: b2Id } : { id: '__never__' },
-          generalId ? { bankGeneralId: generalId } : { id: '__never__' },
-        ],
-      },
-      select: { id: true, externalId: true },
-      orderBy: { createdAt: 'desc' },
-    });
+    // Qo'shilgan tranzaksiyani topib externalId qaytaramiz — UI'da copy uchun
+    const orConds: any[] = [];
+    if (b2Id) orConds.push({ bankB2Id: b2Id });
+    if (generalId) orConds.push({ bankGeneralId: generalId });
+    const found = orConds.length > 0
+      ? await this.prisma.transaction.findFirst({
+          where: { accountId, OR: orConds },
+          select: { id: true, externalId: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
 
     return {
       ok: true,
@@ -529,6 +527,131 @@ export class ReconcileService {
         : "Tranzaksiya allaqachon AllTranzactions'da mavjud edi",
       transactionId: found?.id || null,
       externalId: found?.externalId || null,
+    };
+  }
+
+  /**
+   * Bir nechta yo'qolgan tranzaksiyani bitta zaprosda DB ga qo'shish.
+   * Bank'dan ma'lumotni 1 marta oladi (har bir item uchun alohida emas),
+   * keyin har birini upsertOne bilan inserts qiladi va natijalar ro'yxatini
+   * qaytaradi — qaysisi muvaffaqiyatli, qaysisi xato bilan + sababi.
+   */
+  async fixAllMissing(
+    accountId: string,
+    date: string,
+    items: Array<{ b2Id?: string; generalId?: string }>,
+  ) {
+    if (!accountId) throw new BadRequestException('accountId kerak');
+    if (!date) throw new BadRequestException('date kerak (YYYY-MM-DD)');
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException("Items bo'sh — qo'shish uchun hech narsa yo'q");
+    }
+
+    const account = await this.prisma.bankAccount.findUnique({
+      where: { id: accountId },
+      include: { bank: true, credential: { include: { bank: true } } },
+    });
+    if (!account) throw new NotFoundException('Hisob topilmadi');
+    const cred = account.credential;
+    if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
+    const bank = cred.bank;
+    if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'IPAK_YOLI_V1') {
+      throw new BadRequestException("Faqat Kapitalbank va Ipak Yo'li banklar uchun");
+    }
+    if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
+
+    const password = this.crypto.decrypt(cred.passwordEnc);
+    const login = (cred.loginPrefix || '') + cred.loginName;
+    const dateDmy = this.fmtDate(new Date(`${date}T00:00:00+05:00`));
+
+    // Bankdan ushbu kun uchun barcha tranzaksiyalarni BIR MARTA olamiz
+    let bankItems: any[] = [];
+    try {
+      const res = await this.kb.getDoc1C({
+        baseUrl: bank.apiBaseUrl,
+        login,
+        password,
+        branch: account.branch,
+        account: account.accountNo,
+        date: dateDmy,
+        useProxy: cred.useProxy === true,
+      });
+      bankItems = res?.content || [];
+    } catch (e: any) {
+      throw new BadRequestException(`Bankdan ma'lumot olinmadi: ${e?.message || "noma'lum xato"}`);
+    }
+
+    const results: Array<{
+      b2Id?: string | null; generalId?: string | null;
+      ok: boolean; inserted: boolean;
+      transactionId: string | null; externalId: string | null;
+      error?: string;
+    }> = [];
+
+    let okCount = 0;
+    let errCount = 0;
+
+    for (const wanted of items) {
+      try {
+        const target = bankItems.find(
+          (i) =>
+            (wanted.b2Id && i.b2_id === wanted.b2Id) ||
+            (wanted.generalId && i.general_id === wanted.generalId),
+        );
+        if (!target) {
+          results.push({
+            b2Id: wanted.b2Id, generalId: wanted.generalId,
+            ok: false, inserted: false,
+            transactionId: null, externalId: null,
+            error: 'Bankda topilmadi (ehtimol, o\'chirilgan)',
+          });
+          errCount++;
+          continue;
+        }
+        const inserted = await this.sync.upsertOne(
+          target,
+          accountId,
+          account.accountNo,
+          account.bankId,
+          bank.code,
+        );
+        // Topib qaytaramiz
+        const orConds: any[] = [];
+        if (wanted.b2Id) orConds.push({ bankB2Id: wanted.b2Id });
+        if (wanted.generalId) orConds.push({ bankGeneralId: wanted.generalId });
+        const found = orConds.length > 0
+          ? await this.prisma.transaction.findFirst({
+              where: { accountId, OR: orConds },
+              select: { id: true, externalId: true },
+              orderBy: { createdAt: 'desc' },
+            })
+          : null;
+        results.push({
+          b2Id: wanted.b2Id, generalId: wanted.generalId,
+          ok: true, inserted,
+          transactionId: found?.id || null,
+          externalId: found?.externalId || null,
+        });
+        okCount++;
+      } catch (e: any) {
+        results.push({
+          b2Id: wanted.b2Id, generalId: wanted.generalId,
+          ok: false, inserted: false,
+          transactionId: null, externalId: null,
+          error: e?.message || "noma'lum xato",
+        });
+        errCount++;
+      }
+    }
+
+    return {
+      ok: true,
+      summary: {
+        total: items.length,
+        ok: okCount,
+        error: errCount,
+      },
+      results,
     };
   }
 }
