@@ -42,7 +42,7 @@ export function ScrollToTop({
       aria-label="Yuqoriga"
       title="Yuqoriga"
       className={cn(
-        'fixed bottom-6 right-6 z-40',
+        'fixed bottom-24 right-6 z-40',
         'w-11 h-11 rounded-full',
         'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
         'shadow-[0_10px_30px_-6px_rgba(99,102,241,0.55),inset_0_1px_0_rgba(255,255,255,0.25)]',
