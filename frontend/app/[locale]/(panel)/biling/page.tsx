@@ -1137,20 +1137,17 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  async function truncateAndResync() {
-    if (!confirm("XAVFLI! BARCHA XonPay yozuvlari (~19k ta) o'chiriladi va qaytadan CRM dan sync qilinadi.\n\nBu eng tez yo'l (orphan scan'dan ko'ra). Davom etilsinmi?")) return;
+  async function truncateOnly() {
+    if (!confirm("XAVFLI! BARCHA XonPay yozuvlari o'chiriladi.\n\nKeyin keraq bo'lsa qo'lda 'CRM dan sync' bosishingiz mumkin.\n\nDavom etilsinmi?")) return;
     setPhase('truncating');
     setLastError(null);
     try {
       const tr = await api.post<{ ok: true; deleted: number }>('/xonpay/admin/truncate', {});
       setTruncateResult(tr);
-      toast.success(`${tr.deleted} ta yozuv o'chirildi. Endi sync boshlanmoqda...`);
-      // Sync boshlash
-      await api.post('/xonpay/sync', {});
-      toast.message("Sync fonda boshlandi — Biling sahifasida progressni ko'ring");
+      toast.success(`${tr.deleted} ta yozuv o'chirildi`);
       qc.invalidateQueries({ queryKey: ['xonpay-list'] });
       qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
-      qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-history'] });
       setPhase('done');
       // Modal yopiladi 2 sek keyin
       setTimeout(() => onClose(), 2000);
@@ -1217,16 +1214,16 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
                     <Search className="h-3 w-3" /> Scan
                   </Button>
                 </div>
-                {/* Variant 2: Truncate + re-sync */}
+                {/* Variant 2: Truncate ONLY (sync alohida) */}
                 <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[11.5px] text-rose-900">
                   <div className="font-bold flex items-center gap-1 mb-1.5">
-                    <Trash2 className="h-3.5 w-3.5" /> Hammasini o'chirish + sync
+                    <Trash2 className="h-3.5 w-3.5" /> Hammasini o'chirish (TRUNCATE)
                   </div>
                   <div className="text-[10.5px] text-rose-700 mb-2">
-                    TRUNCATE jadval + qaytadan sync. Eng tez (~1-2 min). Tavsiya etiladi.
+                    Jadvalni butunlay tozalaydi. Keyin xohlaganingizda qo'lda <b>'CRM dan sync'</b> bosib qaytadan to'ldirasiz.
                   </div>
-                  <Button size="sm" onClick={truncateAndResync} className="w-full gap-1.5 bg-rose-600 hover:bg-rose-700 text-[11px] h-8">
-                    <Trash2 className="h-3 w-3" /> Truncate + Sync
+                  <Button size="sm" onClick={truncateOnly} className="w-full gap-1.5 bg-rose-600 hover:bg-rose-700 text-[11px] h-8">
+                    <Trash2 className="h-3 w-3" /> Hammasini o'chirish
                   </Button>
                 </div>
               </div>
@@ -1237,7 +1234,7 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-[12px] font-semibold text-rose-700">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Hammasini tozalanmoqda + sync boshlanmoqda...
+                Tozalanmoqda...
               </div>
               {truncateResult && (
                 <div className="text-[11.5px] text-emerald-700 flex items-center gap-2">
