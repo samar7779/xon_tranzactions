@@ -341,6 +341,60 @@ export class CategorizationService {
     return { ok: true, verified, customerName };
   }
 
+  /**
+   * Kontragentni qo'lda biriktirish (Counterparty jadvalidan).
+   * INN avto-lookup ustidan ishlaydi — list/detail display'da bu birikma ustun.
+   * null bo'lsa — biriktirish o'chiriladi (qaytadan avto-lookup).
+   */
+  async setCounterparty(txId: string, counterpartyId: string | null, actorId: string): Promise<{ ok: true; counterparty: { id: string; inn: string; name: string } | null }> {
+    const old = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { manualCounterpartyId: true, categoryId: true, subcategoryId: true },
+    });
+    if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
+
+    let cp: { id: string; inn: string; name: string } | null = null;
+    if (counterpartyId) {
+      const found = await this.prisma.counterparty.findUnique({
+        where: { id: counterpartyId },
+        select: { id: true, inn: true, name: true },
+      });
+      if (!found) throw new BadRequestException('Kontragent topilmadi');
+      cp = found;
+    }
+
+    await this.prisma.transaction.update({
+      where: { id: txId },
+      data: { manualCounterpartyId: counterpartyId },
+    });
+
+    // Tarixga yozish
+    if (old.manualCounterpartyId !== counterpartyId) {
+      const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+      try {
+        await this.prisma.transactionCategoryHistory.create({
+          data: {
+            txId,
+            action: 'manual',
+            actorId,
+            actorName: u?.email || null,
+            oldCategoryId: old.categoryId,
+            oldSubcategoryId: old.subcategoryId,
+            newCategoryId: old.categoryId,
+            newSubcategoryId: old.subcategoryId,
+            reason: cp
+              ? `Kontragent qo'lda: ${cp.name} (INN ${cp.inn})`
+              : "Kontragent biriktirilishi o'chirildi",
+          },
+        });
+      } catch (e: any) {
+        this.log.warn(`setCounterparty history yozishda xato (${txId}): ${e?.message}`);
+      }
+    }
+
+    return { ok: true, counterparty: cp };
+  }
+
   /** Tranzaksiya kategoriya tarixi (eng yangidan oldingiga) */
   async getHistory(txId: string, limit = 50) {
     const items = await this.prisma.transactionCategoryHistory.findMany({

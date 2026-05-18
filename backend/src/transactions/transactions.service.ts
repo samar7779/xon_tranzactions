@@ -189,6 +189,7 @@ export class TransactionsService {
           },
           category: true,
           subcategory: true,
+          manualCounterparty: { select: { id: true, inn: true, name: true } },
         },
       }),
     ]);
@@ -263,7 +264,10 @@ export class TransactionsService {
       //      "Банк", "Клиент / Физ.Л / Юр.Л", "Молия Вазирлиги", "Зарплата"
       //   3) Kategoriya ham yo'q → null
       let counterpartyDisplay: string | null = null;
-      if (code === 'CLIENT') {
+      // 0) PRIORITY: qo'lda biriktirilgan kontragent (har qanday boshqa logikadan ustun)
+      if (tx.manualCounterparty?.name) {
+        counterpartyDisplay = tx.manualCounterparty.name;
+      } else if (code === 'CLIENT') {
         counterpartyDisplay = contractCustomer || tx.category?.name || null;
       } else if (code === 'TRANSFER') {
         counterpartyDisplay = (acc && accByNo.get(acc)) || tx.category?.name || null;
@@ -533,6 +537,7 @@ export class TransactionsService {
         account: true,
         category: true,
         subcategory: true,
+        manualCounterparty: { select: { id: true, inn: true, name: true } },
       },
     });
     if (!tx) return null;
@@ -564,7 +569,8 @@ export class TransactionsService {
     }
 
     let counterpartyDisplay: string | null = null;
-    if (code === 'CLIENT') counterpartyDisplay = contractCustomer || null;
+    if (tx.manualCounterparty?.name) counterpartyDisplay = tx.manualCounterparty.name;
+    else if (code === 'CLIENT') counterpartyDisplay = contractCustomer || null;
     else if (code === 'TRANSFER') counterpartyDisplay = accRow?.ownerName || null;
     else if (code === 'COUNTERPARTY') counterpartyDisplay = cpRow?.name || null;
 

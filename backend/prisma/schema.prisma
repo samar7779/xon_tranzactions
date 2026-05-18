@@ -150,6 +150,11 @@ model Transaction {
   matchStatus   MatchStatus @default(UNMATCHED) @map("match_status")
   matchedAt     DateTime?   @map("matched_at")
 
+  // Qo'lda tanlangan kontragent (Counterparty jadvali bo'yicha) — INN avto-lookup ustidan
+  // Foydalanuvchi tahrirlash dialogida qidirib tanlaganda
+  manualCounterpartyId String?    @map("manual_counterparty_id")
+  manualCounterparty   Counterparty? @relation("ManualCounterparty", fields: [manualCounterpartyId], references: [id])
+
   // To'lov bosqichlariga taqsimlanishi (bitta tranzaksiya = bir nechta payment)
   payments      Payment[]
 
@@ -175,6 +180,7 @@ model Transaction {
   @@index([contractNumber])
   @@index([source])
   @@index([importBatchId])
+  @@index([manualCounterpartyId])
   @@map("transactions")
 }
 
@@ -651,6 +657,9 @@ model Counterparty {
 
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  // Back-relation: qaysi tranzaksiyalar shu kontragent'ga qo'lda bog'langan
+  manualTransactions Transaction[] @relation("ManualCounterparty")
 
   @@index([name])
   @@index([rating])

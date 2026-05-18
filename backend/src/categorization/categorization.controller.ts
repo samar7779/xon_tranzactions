@@ -71,6 +71,18 @@ export class CategorizationController {
     return this.svc.setContract(id, body.contractNumber, userId);
   }
 
+  // ─── Kontragentni qo'lda tanlash (Counterparty jadvalidan) ───
+  @Post('transactions/:id/set-counterparty')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: 'Tranzaksiyaga Counterparty\'ni qo\'lda biriktirish (INN avto-lookup ustidan)' })
+  setCounterparty(
+    @Param('id') id: string,
+    @Body() body: { counterpartyId: string | null },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.setCounterparty(id, body.counterpartyId, userId);
+  }
+
   // ─── Hammasini qayta hisoblash ─────────────────────────────────
   @Post('run-all')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
