@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
@@ -20,6 +20,8 @@ const EPSILON = 1;
  */
 @Injectable()
 export class ReconcileService {
+  private readonly log = new Logger(ReconcileService.name);
+
   constructor(
     private prisma: PrismaService,
     private crypto: CryptoService,
@@ -241,6 +243,7 @@ export class ReconcileService {
    */
   async reconcileToday(date?: string) {
     const targetDate = date || this.todayTashkent();
+    const tStart = Date.now();
 
     // Barcha aktiv KB hisoblar — syncEnabled cheklamasdan (foydalanuvchi
     // ataylab o'chirib qo'ygan bo'lsa ham sverka ko'rinishi uchun)
@@ -254,14 +257,31 @@ export class ReconcileService {
       },
       orderBy: { ownerName: 'asc' },
     });
+    this.log.log(`reconcileToday: ${accounts.length} ta hisob topildi, sverka ${targetDate}`);
 
-    const CONCURRENCY = 3;
+    // Parallelism kuchaytirildi — 3 → 10 (100+ hisob bo'lsa Nginx timeout
+    // urinmaslik uchun). Har bir akkaunt uchun 25s qattiq timeout — hangup
+    // bo'lgan bank zaprosi butun sverkani bog'lab qo'ymasligi uchun.
+    const CONCURRENCY = 10;
+    const PER_ACCOUNT_TIMEOUT_MS = 25_000;
+
+    const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
+      new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error(`Timeout (${ms}ms): ${label}`)), ms);
+        p.then((v) => { clearTimeout(t); resolve(v); })
+         .catch((e) => { clearTimeout(t); reject(e); });
+      });
+
     const results: any[] = [];
     for (let i = 0; i < accounts.length; i += CONCURRENCY) {
       const batch = accounts.slice(i, i + CONCURRENCY);
       const chunk = await Promise.all(
         batch.map((a) =>
-          this.reconcile(a.id, targetDate, targetDate).catch((e) => ({
+          withTimeout(
+            this.reconcile(a.id, targetDate, targetDate),
+            PER_ACCOUNT_TIMEOUT_MS,
+            `${a.bank?.name} · ${a.accountNo}`,
+          ).catch((e) => ({
             ok: false,
             accountId: a.id,
             accountNo: a.accountNo,
@@ -292,6 +312,11 @@ export class ReconcileService {
       mismatch: results.filter((r) => r.status === 'mismatch').length,
       error: results.filter((r) => r.status === 'error').length,
     };
+    this.log.log(
+      `reconcileToday yakunlandi: ${summary.total} ta hisob ` +
+      `(${summary.ok} mos, ${summary.mismatch} farqli, ${summary.error} xato) ` +
+      `· ${((Date.now() - tStart) / 1000).toFixed(1)}s`,
+    );
     return { ok: true, date: targetDate, summary, items: results };
   }
 
