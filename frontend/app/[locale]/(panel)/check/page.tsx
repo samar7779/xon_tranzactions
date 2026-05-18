@@ -51,14 +51,17 @@ export default function CheckPage() {
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
   const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
 
-  // Bugungi sverka — live: 5 minutda avto + window focus'da yangilanadi
+  // Bugungi sverka — live: 20 minutda avto + window focus'da yangilanadi
   const todayQuery = useQuery<TodayResponse>({
     queryKey: ['reconcile-today'],
     queryFn: () => api.get('/transactions/reconcile/today'),
     refetchInterval: AUTO_REFETCH_MS,
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
-    staleTime: 60_000, // 1 minut ichida fresh hisoblanadi (tab orasida yelvirashlarda qayta o'qimaydi)
+    staleTime: 60_000,
+    // Sverka so'rovi qimmat — xato bo'lganda 3 marta qayta urinmaymiz,
+    // foydalanuvchi xato tafsilotini ko'rib o'zi "Qayta urinish" bosadi.
+    retry: false,
   });
 
   // Manual refresh — barcha
