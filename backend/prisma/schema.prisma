@@ -171,6 +171,9 @@ model Transaction {
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@index([txnDate])
+  // Kompozit indeks list orderBy [txnDate desc, id desc] uchun.
+  // Postgres'ga index scan + range filter + LIMIT'ni tez bajarishga imkon beradi.
+  @@index([txnDate(sort: Desc), id(sort: Desc)])
   @@index([status])
   @@index([type, direction])
   @@index([bankId])
