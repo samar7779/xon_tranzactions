@@ -102,6 +102,18 @@ export class TransactionsController {
     return this.reconcileSvc.reconcile(body?.accountId, body?.dateFrom, body?.dateTo);
   }
 
+  @Get('reconcile/today')
+  @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka (farq summasi bo'yicha sortlangan)" })
+  reconcileToday(@Query('date') date?: string) {
+    return this.reconcileSvc.reconcileToday(date);
+  }
+
+  @Post('reconcile/diagnose')
+  @ApiOperation({ summary: 'Farq sababini topish — bankdagi va DB dagi tranzaksiyalarni taqqoslab, yetishmayotgan/ortiqcha yozuvlarni qaytaradi' })
+  diagnose(@Body() body: { accountId: string; date: string }) {
+    return this.reconcileSvc.diagnoseDay(body?.accountId, body?.date);
+  }
+
   @Get('export')
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(
