@@ -199,12 +199,13 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany({
         where,
-        // Sana → vaqt → ID bo'yicha kamayish: eng yangi tepada
+        // Sana → ID bo'yicha kamayish: eng yangi tepada.
+        // CUID id'lar vaqt-prefiksli, shu sababli id desc — aslida yaratilish
+        // tartibi bo'yicha kamayish. 4 ustunli sort o'rniga 2 ustunli kompozit
+        // indeks (txnDate desc, id desc) bilan tezroq.
         orderBy: [
           { txnDate: 'desc' },
-          { inputAt: 'desc' },
-          { operationTime: 'desc' },
-          { createdAt: 'desc' },
+          { id: 'desc' },
         ],
         skip: (page - 1) * perPage,
         take: perPage,
