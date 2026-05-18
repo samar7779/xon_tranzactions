@@ -507,12 +507,28 @@ export class ReconcileService {
       bank.code,
     );
 
+    // Qo'shilgan (yoki avvaldan mavjud) tranzaksiyani topib externalId qaytaramiz —
+    // foydalanuvchi UI'da copy qiladi.
+    const found = await this.prisma.transaction.findFirst({
+      where: {
+        accountId,
+        OR: [
+          b2Id ? { bankB2Id: b2Id } : { id: '__never__' },
+          generalId ? { bankGeneralId: generalId } : { id: '__never__' },
+        ],
+      },
+      select: { id: true, externalId: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
     return {
       ok: true,
       inserted,
       message: inserted
-        ? 'Tranzaksiya DB ga qo\'shildi'
-        : 'Tranzaksiya allaqachon DB da mavjud edi',
+        ? "Tranzaksiya AllTranzactions'ga qo'shildi"
+        : "Tranzaksiya allaqachon AllTranzactions'da mavjud edi",
+      transactionId: found?.id || null,
+      externalId: found?.externalId || null,
     };
   }
 }
