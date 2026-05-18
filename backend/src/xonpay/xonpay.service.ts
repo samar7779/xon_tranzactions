@@ -103,6 +103,14 @@ export class XonpayService implements OnModuleInit {
   // Joriy aktiv sync uchun log id — per-log cancel da ishlatamiz
   private currentSyncLogId: string | null = null;
 
+  // Cleanup orphans state (background job)
+  private cleanupRunning = false;
+  private cleanupStartedAt: Date | null = null;
+  private cleanupFinishedAt: Date | null = null;
+  private cleanupProgress: { phase: string; pages: number; crmCount: number; dbCount: number; orphanCount: number; deleted: number } | null = null;
+  private cleanupLastError: string | null = null;
+  private cleanupOrphanSamples: Array<{ externalId: string; contract: string | null; datePaid: string | null }> = [];
+
   // ── Match state ──
   private matchRunning = false;
   private matchProgress: { done: number; total: number; matched: number } | null = null;
@@ -491,75 +499,106 @@ export class XonpayService implements OnModuleInit {
   }
 
   /**
-   * Orphan tozalash — CRM dan barcha XonPay external_id larni olib,
-   * bizning DB'dagi CRM da yo'q rowlarni topadi (optional o'chiradi).
-   * @param dryRun true bo'lsa — faqat hisoblaydi, o'chirmaydi (default)
+   * Orphan tozalashni fonda boshlash. Avval boshlasin → status poll qilinsin.
    */
-  async cleanupOrphans(dryRun = true): Promise<{
-    ok: true;
-    crmCount: number;
-    dbCount: number;
-    orphanCount: number;
-    orphanSamples: Array<{ externalId: string; contract: string | null; datePaid: string | null }>;
-    deleted: number;
-  }> {
-    // 1) CRM dan barcha XonPay external_id larni jamlaymiz
-    const crmIds = new Set<string>();
-    let page = 1;
-    while (page <= 200) {
-      const r = await this.crm.getPaymentHistory(page, 5000);
-      if (!r.ok) break;
-      const raw: any = r.data?.data ?? r.data;
-      const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
-      if (items.length === 0) break;
-      for (const p of items) {
-        const m = p.payment_method;
-        const mStr = typeof m === 'string' ? m : getRu(m, '');
-        if (!/xon\s*pay/i.test(mStr)) continue;
-        const id = String(p.external_id || '').trim();
-        if (id) crmIds.add(id);
-      }
-      if (items.length < 5000) break;
-      page++;
+  startCleanupOrphans(dryRun = true): { ok: true; started: boolean; message: string } {
+    if (this.cleanupRunning) {
+      return { ok: true, started: false, message: 'Cleanup allaqachon ishlamoqda' };
     }
-    this.log.log(`cleanupOrphans: CRM da ${crmIds.size} ta XonPay external_id topildi`);
+    this.cleanupRunning = true;
+    this.cleanupStartedAt = new Date();
+    this.cleanupFinishedAt = null;
+    this.cleanupLastError = null;
+    this.cleanupProgress = { phase: 'starting', pages: 0, crmCount: 0, dbCount: 0, orphanCount: 0, deleted: 0 };
+    this.cleanupOrphanSamples = [];
 
-    // 2) Bizning DB dan barcha external_id larni olamiz
-    const dbRows = await this.prisma.xonpayTransaction.findMany({
-      select: { externalId: true, contract: true, datePaid: true },
+    this.runCleanupInBackground(dryRun).catch((e) => {
+      this.log.error(`cleanup orphans xato: ${e?.message}`);
+      this.cleanupLastError = e?.message || String(e);
+      this.cleanupRunning = false;
     });
-    this.log.log(`cleanupOrphans: bizning DB da ${dbRows.length} ta XonPay row`);
 
-    // 3) Orphan'lar — bizda bor lekin CRM da yo'q
-    const orphans = dbRows.filter((r) => !crmIds.has(r.externalId));
-    const samples = orphans.slice(0, 20).map((o) => ({
-      externalId: o.externalId,
-      contract: o.contract,
-      datePaid: o.datePaid?.toISOString().slice(0, 10) || null,
-    }));
+    return { ok: true, started: true, message: `Cleanup fonda boshlandi (${dryRun ? 'dry-run' : 'O\'CHIRADI'})` };
+  }
 
-    // 4) O'chirish (faqat dryRun=false bo'lsa)
-    let deleted = 0;
-    if (!dryRun && orphans.length > 0) {
-      // 500 tadan chunk qilib o'chiramiz
-      for (let i = 0; i < orphans.length; i += 500) {
-        const chunk = orphans.slice(i, i + 500).map((o) => o.externalId);
-        const r = await this.prisma.xonpayTransaction.deleteMany({
-          where: { externalId: { in: chunk } },
-        });
-        deleted += r.count;
-      }
-      this.log.log(`cleanupOrphans: ${deleted} ta orphan o'chirildi`);
-    }
-
+  getCleanupStatus() {
     return {
-      ok: true,
-      crmCount: crmIds.size,
-      dbCount: dbRows.length,
-      orphanCount: orphans.length,
-      orphanSamples: samples,
-      deleted,
+      running: this.cleanupRunning,
+      startedAt: this.cleanupStartedAt?.toISOString() || null,
+      finishedAt: this.cleanupFinishedAt?.toISOString() || null,
+      progress: this.cleanupProgress,
+      lastError: this.cleanupLastError,
+      orphanSamples: this.cleanupOrphanSamples,
     };
+  }
+
+  private async runCleanupInBackground(dryRun: boolean): Promise<void> {
+    try {
+      // 1) CRM dan barcha XonPay external_id larni jamlaymiz
+      this.cleanupProgress!.phase = 'fetching CRM';
+      const crmIds = new Set<string>();
+      let page = 1;
+      while (page <= 200) {
+        const r = await this.crm.getPaymentHistory(page, 5000);
+        if (!r.ok) break;
+        const raw: any = r.data?.data ?? r.data;
+        const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+        if (items.length === 0) break;
+        for (const p of items) {
+          const m = p.payment_method;
+          const mStr = typeof m === 'string' ? m : getRu(m, '');
+          if (!/xon\s*pay/i.test(mStr)) continue;
+          const id = String(p.external_id || '').trim();
+          if (id) crmIds.add(id);
+        }
+        this.cleanupProgress!.pages = page;
+        this.cleanupProgress!.crmCount = crmIds.size;
+        if (items.length < 5000) break;
+        page++;
+      }
+      this.log.log(`cleanupOrphans: CRM da ${crmIds.size} ta XonPay external_id topildi`);
+
+      // 2) Bizning DB dan barcha external_id larni olamiz
+      this.cleanupProgress!.phase = 'fetching DB';
+      const dbRows = await this.prisma.xonpayTransaction.findMany({
+        select: { externalId: true, contract: true, datePaid: true },
+      });
+      this.cleanupProgress!.dbCount = dbRows.length;
+      this.log.log(`cleanupOrphans: bizning DB da ${dbRows.length} ta XonPay row`);
+
+      // 3) Orphan'lar
+      this.cleanupProgress!.phase = 'finding orphans';
+      const orphans = dbRows.filter((r) => !crmIds.has(r.externalId));
+      this.cleanupProgress!.orphanCount = orphans.length;
+      this.cleanupOrphanSamples = orphans.slice(0, 50).map((o) => ({
+        externalId: o.externalId,
+        contract: o.contract,
+        datePaid: o.datePaid?.toISOString().slice(0, 10) || null,
+      }));
+
+      // 4) O'chirish
+      if (!dryRun && orphans.length > 0) {
+        this.cleanupProgress!.phase = 'deleting';
+        let deleted = 0;
+        for (let i = 0; i < orphans.length; i += 500) {
+          const chunk = orphans.slice(i, i + 500).map((o) => o.externalId);
+          const r = await this.prisma.xonpayTransaction.deleteMany({
+            where: { externalId: { in: chunk } },
+          });
+          deleted += r.count;
+          this.cleanupProgress!.deleted = deleted;
+        }
+        this.log.log(`cleanupOrphans: ${deleted} ta orphan o'chirildi`);
+      }
+      this.cleanupProgress!.phase = 'done';
+    } catch (e: any) {
+      this.cleanupLastError = e?.message || String(e);
+      this.cleanupProgress!.phase = 'error';
+      this.log.error(`cleanup xato: ${this.cleanupLastError}`);
+    } finally {
+      this.cleanupRunning = false;
+      this.cleanupFinishedAt = new Date();
+    }
   }
 
   /**
