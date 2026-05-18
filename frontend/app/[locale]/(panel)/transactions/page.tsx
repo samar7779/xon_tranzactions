@@ -1836,12 +1836,18 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             <InfoRow
               icon={<Briefcase className="h-3.5 w-3.5" />}
               label="Kontragent"
-              // Faqat biz qoygan kontragent (manualCounterparty yoki kategoriya orqali)
-              // Raw bank fromName/toName ko'rsatilmaydi
-              value={liveRow.counterpartyDisplay}
+              // Faqat biz qoygan kontragent:
+              //   1) manualCounterparty.name (qo'lda tanlagan)
+              //   2) YOKI kategoriya nomi (CLIENT/BANK/MINFIN/...)
+              // CRM mijoz nomi (contractCustomer) bu yerga TUSHMAYDI — SHARTNOMA qatorida bor
+              value={
+                liveRow.manualCounterparty?.name
+                  || liveRow.category?.name
+                  || null
+              }
               subValue={
-                liveRow.counterpartyDisplay && counterpartyInn
-                  ? `STIR ${counterpartyInn}`
+                liveRow.manualCounterparty?.inn
+                  ? `STIR ${liveRow.manualCounterparty.inn}`
                   : null
               }
               docNumber={row.docNumber}
