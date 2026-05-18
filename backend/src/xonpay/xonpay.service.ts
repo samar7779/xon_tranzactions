@@ -91,6 +91,17 @@ export class XonpayService implements OnModuleInit {
     } catch (e: any) {
       this.log.error(`xonpay onModuleInit cleanup xato: ${e?.message}`);
     }
+
+    // Cron holatini DB dan yuklaymiz (server restart paytida sozlama saqlangani uchun)
+    try {
+      const setting = await this.prisma.setting.findUnique({ where: { key: 'xonpay.cron.enabled' } });
+      if (setting?.value === 'false') {
+        this.cronEnabled = false;
+        this.log.log('xonpay cron holati DB dan: OCHIRILGAN');
+      }
+    } catch (e: any) {
+      this.log.warn(`cron holati yuklash xato: ${e?.message}`);
+    }
   }
 
   // ── Sync state ──
@@ -162,9 +173,19 @@ export class XonpayService implements OnModuleInit {
     }
   }
 
-  /** Cron'ni o'chirish/yoqish (kelajakda admin UI uchun) */
-  setCronEnabled(enabled: boolean) {
+  /** Cron'ni o'chirish/yoqish — Setting jadvalga saqlanadi (restart paytida ham saqlanadi) */
+  async setCronEnabled(enabled: boolean): Promise<void> {
     this.cronEnabled = enabled;
+    try {
+      await this.prisma.setting.upsert({
+        where: { key: 'xonpay.cron.enabled' },
+        create: { key: 'xonpay.cron.enabled', value: enabled ? 'true' : 'false' },
+        update: { value: enabled ? 'true' : 'false' },
+      });
+      this.log.log(`xonpay cron: ${enabled ? 'YOQILDI' : 'OCHIRILDI'}`);
+    } catch (e: any) {
+      this.log.warn(`cron holati saqlash xato: ${e?.message}`);
+    }
   }
 
   getCronInfo() {

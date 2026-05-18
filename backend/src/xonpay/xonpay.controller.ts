@@ -59,6 +59,14 @@ export class XonpayController {
     return this.svc.getCronInfo();
   }
 
+  @Post('cron/toggle')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: "Cron sync ni yoqish/o'chirish (?enabled=true/false)" })
+  async cronToggle(@Query('enabled') enabled?: string) {
+    await this.svc.setCronEnabled(enabled === 'true');
+    return this.svc.getCronInfo();
+  }
+
   @Get('sync/history')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({ summary: 'Sync tarixi — filterlar bilan (q, status, dateFrom, dateTo)' })

@@ -170,6 +170,15 @@ export default function BilingPage() {
     mutationFn: () => api.post('/xonpay/sync/cancel', {}),
     onSuccess: () => { toast.message("Sync bekor qilish so'raldi"); qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] }); },
   });
+  const cronToggleMut = useMutation({
+    mutationFn: (enabled: boolean) => api.post<any>(`/xonpay/cron/toggle?enabled=${enabled}`, {}),
+    onSuccess: (r) => {
+      toast.success(r.enabled ? 'Avtomatik sync YOQILDI' : "Avtomatik sync O'CHIRILDI");
+      qc.invalidateQueries({ queryKey: ['xonpay-cron-info'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
   const cancelByIdMut = useMutation({
     mutationFn: (logId: string) => api.post<{ ok: true; cancelled: boolean; message: string }>(`/xonpay/sync/history/${logId}/cancel`, {}),
     onSuccess: (r) => {
@@ -354,11 +363,16 @@ export default function BilingPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <Zap className="h-3.5 w-3.5 text-amber-600" />
                     <h4 className="text-[12px] font-bold">Avtomatik sync (cron)</h4>
-                    {cronInfoQuery.data?.enabled && (
-                      <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-                        <CheckCircle2 className="h-2.5 w-2.5" /> Yoqilgan
-                      </span>
-                    )}
+                    <span className={cn(
+                      "ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ring-1",
+                      cronInfoQuery.data?.enabled
+                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                        : "bg-slate-100 text-slate-600 ring-slate-200",
+                    )}>
+                      {cronInfoQuery.data?.enabled
+                        ? <><CheckCircle2 className="h-2.5 w-2.5" /> Yoqilgan</>
+                        : <><XCircle className="h-2.5 w-2.5" /> O'chirilgan</>}
+                    </span>
                   </div>
                   <div className="text-[11px] text-slate-600 space-y-1.5">
                     <div><span className="text-slate-400">Jadval:</span> <div className="font-mono text-[10.5px] mt-0.5">{cronInfoQuery.data?.schedule || '—'}</div></div>
@@ -370,6 +384,31 @@ export default function BilingPage() {
                     </div>
                     {cronInfoQuery.data?.lastSkipReason && (
                       <div className="text-amber-700 text-[10.5px] flex items-start gap-1 pt-1 border-t border-slate-100"><AlertCircle className="h-3 w-3 shrink-0 mt-0.5" /> {cronInfoQuery.data.lastSkipReason}</div>
+                    )}
+                  </div>
+                  {/* Toggle tugma */}
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    {cronInfoQuery.data?.enabled ? (
+                      <Button
+                        onClick={() => cronToggleMut.mutate(false)}
+                        disabled={cronToggleMut.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="w-full gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        {cronToggleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                        Avtomatik sync ni o'chirish
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => cronToggleMut.mutate(true)}
+                        disabled={cronToggleMut.isPending}
+                        size="sm"
+                        className="w-full gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                      >
+                        {cronToggleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        Avtomatik sync ni yoqish
+                      </Button>
                     )}
                   </div>
                 </DropdownMenuContent>
