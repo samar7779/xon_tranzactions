@@ -779,7 +779,7 @@ function SyncProgressDialog({
   open: boolean;
   syncRunning: boolean;
   matchRunning: boolean;
-  syncProgress: SyncStatus['progress'];
+  syncProgress: SyncStatus['progress'] | undefined;
   matchProgress: { done: number; total: number; matched: number } | null | undefined;
   syncStartedAt: string | null;
   syncFinishedAt: string | null;
