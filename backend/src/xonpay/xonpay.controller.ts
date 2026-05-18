@@ -105,6 +105,16 @@ export class XonpayController {
     return this.svc.getCleanupStatus();
   }
 
+  @Post('admin/truncate')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: 'HAMMASINI tozalash (TRUNCATE) — keyin qaytadan sync qilish kerak',
+    description: "XAVFLI: barcha xonpay_transactions yozuvlari o'chiriladi. Match links Transaction'dan SetNull bo'ladi.",
+  })
+  truncateAll() {
+    return this.svc.truncateAll();
+  }
+
   // ── MATCH ──
   @Post('match-all')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
