@@ -63,9 +63,13 @@ export class ReconcileService {
     let failedDays = 0;
     let lastError: any = null;
 
+    // Kunma-kun bank totallari — multi-day range'da qaysi kun farqli ekanini ko'rsatish uchun
+    const bankByDay = new Map<string, { credit: number; debit: number; failed: boolean }>();
+
     for (let i = 0; i < days; i++) {
       const day = new Date(from.getTime() + i * DAY_MS);
       const dateStr = this.fmtDate(day);
+      const isoKey = day.toISOString().slice(0, 10);
       try {
         const result = await this.kb.getDoc1C({
           baseUrl: bank.apiBaseUrl,
@@ -80,12 +84,19 @@ export class ReconcileService {
           saldoInTiyin = Number(result.saldo_in);
         }
         if (result?.saldo_out != null) saldoOutTiyin = Number(result.saldo_out);
-        if (result?.total_debit != null) totalDebitTiyin += Number(result.total_debit);
-        if (result?.total_credit != null) totalCreditTiyin += Number(result.total_credit);
+        const dayCredit = Number(result?.total_credit || 0);
+        const dayDebit = Number(result?.total_debit || 0);
+        totalDebitTiyin += dayDebit;
+        totalCreditTiyin += dayCredit;
+        bankByDay.set(isoKey, {
+          credit: dayCredit / 100,
+          debit: dayDebit / 100,
+          failed: false,
+        });
       } catch (e: any) {
-        // Dam olish/non-operatsion kunlar xato berishi mumkin — o'tkazib yuboramiz
         failedDays++;
         lastError = e;
+        bankByDay.set(isoKey, { credit: 0, debit: 0, failed: true });
       }
     }
     if (failedDays === days) {
@@ -117,6 +128,55 @@ export class ReconcileService {
       } else if (g.direction === 'OUT') {
         dbOutflow = Number(g._sum.amount || 0);
         dbOutCount = g._count;
+      }
+    }
+
+    // ── DB kunma-kun: dailyBreakdown uchun (faqat range > 1 kun bo'lganda foydali) ──
+    const dbByDay = new Map<string, { inflow: number; outflow: number }>();
+    if (days > 1) {
+      const dayTxns = await this.prisma.transaction.findMany({
+        where: { accountId, txnDate: { gte: start, lte: end } },
+        select: { txnDate: true, direction: true, amount: true },
+      });
+      const TZ = 5 * 60 * 60 * 1000;
+      for (const t of dayTxns) {
+        const key = new Date(t.txnDate.getTime() + TZ).toISOString().slice(0, 10);
+        const e = dbByDay.get(key) || { inflow: 0, outflow: 0 };
+        const amt = Number(t.amount);
+        if (t.direction === 'IN') e.inflow += amt;
+        else e.outflow += amt;
+        dbByDay.set(key, e);
+      }
+    }
+
+    // dailyBreakdown — har bir kun uchun bank vs DB
+    let dailyBreakdown: Array<{
+      date: string; bankCredit: number; bankDebit: number; dbInflow: number; dbOutflow: number;
+      creditDiff: number; debitDiff: number; failed: boolean; status: 'ok' | 'mismatch' | 'failed';
+    }> | undefined;
+    if (days > 1) {
+      dailyBreakdown = [];
+      for (let i = 0; i < days; i++) {
+        const day = new Date(from.getTime() + i * DAY_MS);
+        const key = day.toISOString().slice(0, 10);
+        const b = bankByDay.get(key) || { credit: 0, debit: 0, failed: false };
+        const d = dbByDay.get(key) || { inflow: 0, outflow: 0 };
+        const cDiff = b.credit - d.inflow;
+        const dDiff = b.debit - d.outflow;
+        const dayStatus: 'ok' | 'mismatch' | 'failed' = b.failed
+          ? 'failed'
+          : (Math.abs(cDiff) < EPSILON && Math.abs(dDiff) < EPSILON ? 'ok' : 'mismatch');
+        dailyBreakdown.push({
+          date: key,
+          bankCredit: b.credit,
+          bankDebit: b.debit,
+          dbInflow: d.inflow,
+          dbOutflow: d.outflow,
+          creditDiff: cDiff,
+          debitDiff: dDiff,
+          failed: b.failed,
+          status: dayStatus,
+        });
       }
     }
 
@@ -160,6 +220,7 @@ export class ReconcileService {
         computedClosing,
       },
       status: ok ? 'ok' : 'mismatch',
+      dailyBreakdown,
     };
   }
 

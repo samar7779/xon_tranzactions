@@ -42,6 +42,17 @@ interface ReconcileData {
   partial?: boolean;
   failedDays?: number;
   error?: string;
+  dailyBreakdown?: Array<{
+    date: string;
+    bankCredit: number;
+    bankDebit: number;
+    dbInflow: number;
+    dbOutflow: number;
+    creditDiff: number;
+    debitDiff: number;
+    failed: boolean;
+    status: 'ok' | 'mismatch' | 'failed';
+  }>;
 }
 
 function todayIso() {
@@ -211,6 +222,14 @@ export function AccountDrilldown({
 
               {/* Solishtirish jadvali */}
               <ReconcileTable data={data} />
+
+              {/* Kunlik breakdown — faqat ko'p kunli oraliqda */}
+              {data.dailyBreakdown && data.dailyBreakdown.length > 1 && (
+                <DailyBreakdown
+                  rows={data.dailyBreakdown}
+                  onPickDay={(d) => { setDateFrom(d); setDateTo(d); }}
+                />
+              )}
 
               {/* Diagnostika tugmasi va natija */}
               {data.status === 'mismatch' && isSingleDay && (
@@ -460,6 +479,14 @@ function DiagItem({
             {it.purpose || it.description}
           </div>
         )}
+        {(it.ddate || it.time) && (
+          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
+            <span className="inline-block w-1 h-1 rounded-full bg-slate-300" />
+            <span className="font-mono tabular-nums">
+              {it.ddate || ''} {it.time || ''}
+            </span>
+          </div>
+        )}
       </div>
       {(it.b2Id || it.externalId) && (
         <div className="text-[10px] text-slate-400 font-mono truncate">
@@ -487,6 +514,80 @@ function DiagItem({
           <CheckCircle2 className="h-3 w-3" /> Qo'shildi
         </div>
       )}
+    </div>
+  );
+}
+
+function DailyBreakdown({
+  rows, onPickDay,
+}: {
+  rows: NonNullable<ReconcileData['dailyBreakdown']>;
+  onPickDay: (date: string) => void;
+}) {
+  const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
+  const mismatches = rows.filter((r) => r.status === 'mismatch');
+
+  return (
+    <div className="rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-[12px] font-semibold text-slate-700">
+        <Calendar className="h-4 w-4 text-indigo-600" />
+        <span>Kunma-kun</span>
+        <span className="ml-auto text-[11px] font-normal text-slate-500">
+          {mismatches.length > 0 ? `${mismatches.length} ta kun farqli` : 'Hammasi mos'}
+        </span>
+      </div>
+      <div className="max-h-[320px] overflow-y-auto">
+        <table className="w-full text-[12px]">
+          <thead className="bg-slate-50/60 text-[10px] uppercase tracking-wider text-slate-500 font-semibold sticky top-0">
+            <tr>
+              <th className="text-left px-4 py-2">Sana</th>
+              <th className="text-right px-4 py-2">Bank kirim</th>
+              <th className="text-right px-4 py-2">DB kirim</th>
+              <th className="text-right px-4 py-2">Bank chiqim</th>
+              <th className="text-right px-4 py-2">DB chiqim</th>
+              <th className="text-right px-4 py-2">Farq</th>
+              <th className="text-center px-4 py-2"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 tabular-nums">
+            {rows.map((r) => {
+              const totalDiff = Math.abs(r.creditDiff) + Math.abs(r.debitDiff);
+              return (
+                <tr
+                  key={r.date}
+                  className={cn(
+                    'transition-colors',
+                    r.status === 'mismatch' && 'bg-amber-50/60',
+                    r.status === 'failed' && 'bg-rose-50/40 text-rose-700',
+                  )}
+                >
+                  <td className="px-4 py-2 font-mono text-slate-600">{r.date}</td>
+                  <td className="px-4 py-2 text-right text-emerald-700">{m(r.bankCredit)}</td>
+                  <td className="px-4 py-2 text-right text-emerald-700">{m(r.dbInflow)}</td>
+                  <td className="px-4 py-2 text-right text-rose-700">{m(r.bankDebit)}</td>
+                  <td className="px-4 py-2 text-right text-rose-700">{m(r.dbOutflow)}</td>
+                  <td className={cn(
+                    'px-4 py-2 text-right font-bold',
+                    r.status === 'ok' ? 'text-emerald-700' : r.status === 'mismatch' ? 'text-amber-700' : 'text-rose-700',
+                  )}>
+                    {r.failed ? '— xato —' : m(totalDiff)}
+                  </td>
+                  <td className="px-4 py-2 text-center">
+                    {r.status === 'mismatch' && (
+                      <button
+                        onClick={() => onPickDay(r.date)}
+                        className="text-[10px] px-2 py-1 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700"
+                      >
+                        Ochish
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
