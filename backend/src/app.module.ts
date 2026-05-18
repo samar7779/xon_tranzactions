@@ -24,6 +24,7 @@ import { CounterpartiesModule } from './counterparties/counterparties.module';
 import { CategorizationModule } from './categorization/categorization.module';
 import { ImportModule } from './import/import.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { XonpayModule } from './xonpay/xonpay.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
     CategorizationModule,
     ImportModule,
     AttachmentsModule,
+    XonpayModule,
   ],
 })
 export class AppModule {}

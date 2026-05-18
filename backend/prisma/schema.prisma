@@ -160,6 +160,7 @@ model Transaction {
 
   // Biriktirilgan fayllar (ariza, hujjat va h.k.)
   attachments   TransactionAttachment[]
+  xonpayMatches XonpayTransaction[]
 
   // To'lov bosqichlariga taqsimlanishi (bitta tranzaksiya = bir nechta payment)
   payments      Payment[]
@@ -446,6 +447,54 @@ model CrmContract {
   @@index([lastVerifiedAt])
   @@index([status])
   @@map("crm_contracts")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// XONPAY TRANSACTIONS — Biling moduli
+// XonSaroy CRM dan faqat payment_method='Xon Pay' to'lovlar.
+// Reconcile: purpose ichidagi UUID (XONPAY:(...)) orqali bank Transaction
+// description'dagi UUID bilan moslashtirilib, matchedTxId ga link qo'yiladi.
+// Maqsad: qancha XonPay'dan keldi vs qancha Kapitalbankka tushdi.
+// ─────────────────────────────────────────────────────────────────
+model XonpayTransaction {
+  externalId           String   @id @map("external_id") @db.VarChar(255)  // CRM external_id
+  xonpayUuid           String?  @map("xonpay_uuid") @db.VarChar(64)       // purpose'dan extract: XONPAY:(UUID)
+  crmId                BigInt?  @map("crm_id")
+  crmUuid              String?  @map("crm_uuid") @db.VarChar(64)
+  orderId              BigInt?  @map("order_id")
+  contract             String?  @db.VarChar(128)
+  amount               BigInt   @default(0)
+  datePaid             DateTime? @map("date_paid") @db.Date
+  type                 String?  @db.VarChar(128)
+  category             String?  @db.VarChar(128)
+  status               String?  @db.VarChar(64)
+  purpose              String?  @db.Text
+  fullName             String?  @map("full_name") @db.Text
+  objectName           String?  @map("object_name") @db.VarChar(255)
+  isProblematic        Boolean  @default(false) @map("is_problematic")
+  isReceivedFromBank   Boolean  @default(false) @map("is_received_from_bank")
+  crmCreatedAt         DateTime? @map("crm_created_at")
+  crmUpdatedAt         DateTime? @map("crm_updated_at")
+
+  // ── Reconciliation ──
+  matchedTxId          String?  @map("matched_tx_id")
+  matchedTx            Transaction? @relation(fields: [matchedTxId], references: [id], onDelete: SetNull)
+  matchedExternalId    String?  @map("matched_external_id") @db.VarChar(255)
+  matchedAmount        BigInt?  @map("matched_amount")
+  matchedDate          DateTime? @map("matched_date") @db.Date
+  isMatched            Boolean  @default(false) @map("is_matched")
+  matchedAt            DateTime? @map("matched_at")
+  lastCheckedAt        DateTime? @map("last_checked_at")
+
+  syncedAt             DateTime @default(now()) @map("synced_at")
+  updatedAt            DateTime @updatedAt @map("updated_at_local")
+
+  @@index([contract])
+  @@index([datePaid])
+  @@index([xonpayUuid])
+  @@index([isMatched, datePaid])
+  @@index([matchedTxId])
+  @@map("xonpay_transactions")
 }
 
 // ─────────────────────────────────────────────────────────────────
