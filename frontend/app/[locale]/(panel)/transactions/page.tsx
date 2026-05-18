@@ -2,6 +2,7 @@
 // rebuild trigger — frontend force redeploy uchun
 
 import { useState, useMemo, useEffect, useRef, useLayoutEffect } from 'react';
+import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -197,8 +198,8 @@ export default function TransactionsPage() {
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
-  async function searchById() {
-    const id = idQuery.trim();
+  async function searchById(forceId?: string) {
+    const id = (forceId || idQuery).trim();
     if (!id) return;
     setIdSearching(true);
     try {
@@ -216,6 +217,22 @@ export default function TransactionsPage() {
       setIdSearching(false);
     }
   }
+
+  // URL'da ?searchId=X bo'lsa avtomatik qidiramiz (Biling sahifadan link uchun)
+  const _searchParams = useSearchParams();
+  const _router = useRouter();
+  const _pathname = usePathname();
+  useEffect(() => {
+    const sid = _searchParams.get('searchId');
+    if (sid && sid.trim()) {
+      searchById(sid.trim());
+      // URL'dan param olib tashlash (qayta yangilashda double-trigger bo'lmasin)
+      const params = new URLSearchParams(_searchParams.toString());
+      params.delete('searchId');
+      _router.replace(_pathname + (params.toString() ? '?' + params.toString() : ''));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_searchParams]);
 
   // Active filter count
   const activeFilters = useMemo(() => {

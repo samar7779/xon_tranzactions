@@ -179,6 +179,35 @@ export class XonpayService {
     }
 
     let finalStatus: 'success' | 'failed' | 'cancelled' = 'success';
+
+    // 100% matched kunlarni topamiz — bu kunlar uchun upsert+match qilmaymiz (skip)
+    const skipDates = new Set<string>();
+    try {
+      const grouped = await this.prisma.xonpayTransaction.groupBy({
+        by: ['datePaid', 'isMatched'],
+        _count: true,
+      });
+      const byDay = new Map<string, { total: number; matched: number }>();
+      for (const g of grouped) {
+        const d = g.datePaid?.toISOString().slice(0, 10);
+        if (!d) continue;
+        const row = byDay.get(d) || { total: 0, matched: 0 };
+        row.total += g._count;
+        if (g.isMatched) row.matched += g._count;
+        byDay.set(d, row);
+      }
+      for (const [d, r] of byDay) {
+        // Faqat bugundan oldingi to'liq tugagan kunlar (bugun hali davom etishi mumkin)
+        const today = new Date().toISOString().slice(0, 10);
+        if (r.total > 0 && r.matched === r.total && d < today) {
+          skipDates.add(d);
+        }
+      }
+      this.log.log(`xonpay sync: ${skipDates.size} ta kun 100% matched — skip qilinadi`);
+    } catch (e: any) {
+      this.log.warn(`skipDates hisoblashda xato: ${e?.message}`);
+    }
+
     try {
       while (true) {
         if (this.syncCancelRequested) {
@@ -226,10 +255,18 @@ export class XonpayService {
         this.syncProgress.xonpay += xonpayItems.length;
 
         // Bulk upsert (har biri alohida — Postgres limit'lardan ehtiyot bo'lib)
+        let pageSkipped = 0;
         for (const p of xonpayItems) {
           try {
             const externalId = String(p.external_id || '').trim();
             if (!externalId) continue;
+
+            // 100% matched kun — skip
+            const dpStr = (p.date_paid || '').slice(0, 10);
+            if (dpStr && skipDates.has(dpStr)) {
+              pageSkipped++;
+              continue;
+            }
 
             const xonpayUuid = extractUuid(p.purpose);
             const data = {
@@ -273,7 +310,7 @@ export class XonpayService {
           }
         }
 
-        this.log.log(`xonpay page ${page}/${estimatedLastPage}: ${items.length} keldi, ${xonpayItems.length} xonpay`);
+        this.log.log(`xonpay page ${page}/${estimatedLastPage}: ${items.length} keldi, ${xonpayItems.length} xonpay${pageSkipped > 0 ? `, ${pageSkipped} skip (100% matched kun)` : ''}`);
 
         // Tugatish: sahifa to'liq emas (items < LIMIT) yoki 200 sahifadan o'tdi (safety)
         if (items.length < LIMIT) {
