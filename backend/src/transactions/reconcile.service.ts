@@ -179,11 +179,11 @@ export class ReconcileService {
   async reconcileToday(date?: string) {
     const targetDate = date || this.todayTashkent();
 
-    // Faqat aktiv KB hisoblar
+    // Faqat sync yoqilgan KB hisoblar (BankAccount.syncEnabled + Bank.isActive)
     const accounts = await this.prisma.bankAccount.findMany({
       where: {
-        isActive: true,
-        credential: { bank: { apiKind: 'KAPITALBANK_V3' } },
+        syncEnabled: true,
+        bank: { isActive: true, apiKind: 'KAPITALBANK_V3' },
       },
       include: {
         bank: { select: { id: true, name: true, code: true } },
