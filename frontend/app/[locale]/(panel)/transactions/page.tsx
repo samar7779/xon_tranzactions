@@ -2191,12 +2191,15 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
         />
       )}
 
-      {/* Arizalar (fayllar) — biriktirish/ko'rish/o'chirish */}
+      {/* Arizalar (fayllar) — wizard: kontragent + kategoriya + shartnoma + fayl */}
       {attachmentsOpen && (
         <AttachmentsDialog
           txId={row.id}
-          contractNumber={liveRow.contractNumber}
+          row={liveRow}
+          tree={categoriesTree}
           onClose={() => setAttachmentsOpen(false)}
+          onSaveCategory={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
+          onSaveContractManual={(contract) => setContractManualMut.mutate(contract)}
         />
       )}
 
@@ -3390,53 +3393,102 @@ function ManualContractDialog({
 // ATTACHMENTS DIALOG — Ariza biriktirish + ro'yxat + yuklab olish + o'chirish
 // ═══════════════════════════════════════════════════════════════════════
 function AttachmentsDialog({
-  txId, contractNumber, onClose,
+  txId, row, tree, onClose, onSaveCategory, onSaveContractManual,
 }: {
   txId: string;
-  contractNumber: string | null;
+  row: any;
+  tree: any[];
   onClose: () => void;
+  onSaveCategory: (categoryId: string | null, subcategoryId: string | null) => void;
+  onSaveContractManual: (contract: string | null) => void;
 }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  // Forma state — yangi ariza uchun
+  const [selectedTopId, setSelectedTopId] = useState<string | null>(null); // Kontragent boshda tanlanmagan
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(null);
+  const [contract, setContract] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['tx-attachments', txId],
     queryFn: () => api.get<{ ok: boolean; items: any[] }>(`/transactions/${txId}/attachments`),
   });
   const items = data?.items || [];
+  const existing = items[0]; // Bitta ariza per tx — birinchisini olamiz
 
-  async function handleUpload(file: File) {
-    if (file.size > 25 * 1024 * 1024) {
+  const HIDDEN_KONTRAGENTS = ['COUNTERPARTY_RETURN', 'COUNTERPARTY'];
+  const visibleTree = tree.filter((t: any) => !HIDDEN_KONTRAGENTS.includes(t.code));
+  const selectedTop = tree.find((t) => t.id === selectedTopId);
+  const subs = selectedTop?.children || [];
+  const topColor = selectedTop?.color || '#6366f1';
+
+  function handlePickFile(f: File) {
+    if (f.size > 25 * 1024 * 1024) {
       toast.error('Fayl 25 MB dan oshmasligi kerak');
+      return;
+    }
+    setFile(f);
+  }
+
+  async function handleSave() {
+    if (!file) {
+      toast.error('Fayl biriktirilishi shart');
       return;
     }
     setUploading(true);
     try {
+      // 1) Kategoriya saqlash (agar tanlangan bo'lsa)
+      if (selectedTopId && (selectedTopId !== row.categoryId || selectedSubId !== row.subcategoryId)) {
+        await api.post(`/categorization/transactions/${txId}/set`, {
+          categoryId: selectedTopId,
+          subcategoryId: selectedSubId,
+        });
+      }
+      // 2) Shartnoma saqlash (qo'lda — CRM tekshirmasdan)
+      const trimmedContract = contract.trim().toUpperCase();
+      if (trimmedContract && trimmedContract !== (row.contractNumber || '')) {
+        await api.post(`/categorization/transactions/${txId}/set-contract-manual`, {
+          contractNumber: trimmedContract,
+        });
+      }
+      // 3) Faylni yuklash
       const fd = new FormData();
       fd.append('file', file);
-      if (contractNumber) fd.append('contractNumber', contractNumber);
+      if (trimmedContract) fd.append('contractNumber', trimmedContract);
       fd.append('type', 'ariza');
       await api.postForm(`/transactions/${txId}/attachments`, fd, { timeout: 120_000 });
-      toast.success('Ariza biriktirildi · Telegram\'ga xabar yuborildi');
+
+      toast.success("Ariza saqlandi · Telegram'ga xabar yuborildi");
       refetch();
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-detail', txId] });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', txId] });
+      // Forma reset
+      setSelectedTopId(null);
+      setSelectedSubId(null);
+      setContract('');
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = '';
     } catch (e: any) {
-      toast.error(e?.message || 'Yuklash xato');
+      toast.error(e?.message || 'Saqlash xato');
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = '';
     }
   }
 
   async function handleDelete(attId: string) {
-    if (!confirm("Faylni o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.")) return;
+    if (!confirm("Arizani o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.")) return;
     setDeletingId(attId);
     try {
       await api.delete(`/transactions/${txId}/attachments/${attId}`);
-      toast.success("Fayl o'chirildi · Telegram'ga xabar yuborildi");
+      toast.success("Ariza o'chirildi · Telegram'ga xabar yuborildi");
       refetch();
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', txId] });
     } catch (e: any) {
       toast.error(e?.message || "O'chirish xato");
     } finally {
@@ -3459,108 +3511,225 @@ function AttachmentsDialog({
   }
 
   return (
-    <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={true} onOpenChange={(o) => { if (!o && !uploading) onClose(); }}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
               <Paperclip className="h-3.5 w-3.5" />
             </div>
-            Arizalar va biriktirilgan fayllar
+            Ariza orqali to'g'rilash
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            Ariza, hujjat, rasm biriktiring (PDF, DOCX, JPG, PNG — max 25 MB). Har o'zgartirish Telegram'ga yuboriladi.
+            Mijoz ariz bilan biriktirib tranzaksiyani to'g'rilash uchun. Har o'zgartirish Telegram'ga yuboriladi.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 pt-2">
-          {/* Upload */}
-          <div className="flex items-center gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleUpload(f);
-              }}
-              className="hidden"
-            />
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-slate-400 text-[12px]">
+            <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
+          </div>
+        ) : existing ? (
+          // ─── MAVJUD ARIZA — ko'rsatish + delete ───
+          <div className="space-y-3 pt-2">
+            <div className="rounded-xl ring-1 ring-violet-200 bg-violet-50/40 p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-12 h-12 rounded-xl bg-violet-100 grid place-items-center shrink-0">
+                  <FileIcon className="h-5 w-5 text-violet-700" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-violet-900 truncate" title={existing.filename}>
+                    {existing.filename}
+                  </div>
+                  <div className="text-[11px] text-violet-700 flex items-center gap-2 flex-wrap mt-0.5">
+                    <span>{formatSize(existing.fileSize)}</span>
+                    <span className="text-violet-400">·</span>
+                    <span>{formatDateTime(existing.uploadedAt)}</span>
+                    {existing.uploadedBy && (<>
+                      <span className="text-violet-400">·</span>
+                      <span>{existing.uploadedBy}</span>
+                    </>)}
+                  </div>
+                  {existing.contractNumber && (
+                    <div className="text-[10.5px] text-slate-600 mt-1">
+                      Shartnoma: <code className="font-mono text-indigo-700">{existing.contractNumber}</code>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => handleDownload(existing)}
+                    title="Yuklab olish"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(existing.id)}
+                    disabled={deletingId === existing.id}
+                    title="O'chirish"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100"
+                  >
+                    {deletingId === existing.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-amber-800 text-[11px]">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div>
+                Yangi ariza qo'shish uchun avval mavjudini o'chirib, qaytadan biriktiring.
+              </div>
+            </div>
+          </div>
+        ) : (
+          // ─── YANGI ARIZA — wizard forma ───
+          <div className="space-y-4 pt-2">
+            {/* 1. Kontragent */}
+            <div>
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">1</span>
+                Kontragent
+                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+              </label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {visibleTree.map((t: any) => {
+                  const selected = selectedTopId === t.id;
+                  const color = t.color || '#64748b';
+                  return (
+                    <button
+                      key={t.id}
+                      onClick={() => { setSelectedTopId(t.id); setSelectedSubId(null); }}
+                      className={cn(
+                        'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
+                        selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                      )}
+                      style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                    >
+                      {t.name}
+                      {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 2. Kategoriya (subkategoriya) — agar top tanlangan bo'lsa */}
+            {selectedTop && subs.length > 0 && (
+              <div className="pt-3 border-t border-slate-100">
+                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">2</span>
+                  Kategoriya
+                  <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setSelectedSubId(null)}
+                    className={cn(
+                      'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                      !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
+                    )}
+                  >
+                    — yo'q —
+                  </button>
+                  {subs.map((s: any) => {
+                    const selected = selectedSubId === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => setSelectedSubId(s.id)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                          selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 text-slate-700',
+                        )}
+                        style={selected ? { backgroundColor: `${topColor}15`, color: topColor, borderColor: topColor } : {}}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 3. Shartnoma raqami */}
+            <div className="pt-3 border-t border-slate-100">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">3</span>
+                Shartnoma raqami
+                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+              </label>
+              <div className="relative">
+                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input
+                  value={contract}
+                  onChange={(e) => setContract(e.target.value)}
+                  placeholder="Masalan: 12345VTN26MP (CRM tekshirilmasdan saqlanadi)"
+                  className="pl-9 font-mono text-[11px]"
+                />
+              </div>
+              <div className="text-[10.5px] text-amber-700 mt-1">
+                CRM tekshirilmaydi — qo'lda kiritilgan deb belgilanadi
+              </div>
+            </div>
+
+            {/* 4. Fayl */}
+            <div className="pt-3 border-t border-slate-100">
+              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[9px]">4</span>
+                Ariza fayli
+                <span className="text-rose-600 font-normal normal-case tracking-normal ml-1 font-bold">*MAJBURIY</span>
+              </label>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handlePickFile(f);
+                }}
+                className="hidden"
+              />
+              {file ? (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 ring-1 ring-violet-200">
+                  <FileIcon className="h-4 w-4 text-violet-700 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-semibold text-violet-900 truncate">{file.name}</div>
+                    <div className="text-[10.5px] text-violet-700">{formatSize(file.size)}</div>
+                  </div>
+                  <button
+                    onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
+                    className="text-[10px] text-rose-600 hover:text-rose-700 font-medium px-2"
+                  >
+                    Bekor
+                  </button>
+                </div>
+              ) : (
+                <Button
+                  onClick={() => fileRef.current?.click()}
+                  variant="outline"
+                  className="w-full h-10 border-dashed gap-2 text-slate-600 hover:text-violet-700 hover:border-violet-300"
+                >
+                  <UploadIcon className="h-4 w-4" /> Fayl tanlash (PDF/DOCX/JPG/PNG · max 25 MB)
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose} disabled={uploading}>Yopish</Button>
+          {!existing && (
             <Button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="h-10 px-4 gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white"
+              onClick={handleSave}
+              disabled={uploading || !file}
+              className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
             >
               {uploading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...</>
-                : <><UploadIcon className="h-4 w-4" /> Fayl tanlash</>}
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Saqlanmoqda...</>
+                : <><Check className="h-4 w-4" /> Saqlash va biriktirish</>}
             </Button>
-            {contractNumber && (
-              <span className="text-[10.5px] text-slate-500">
-                Shartnoma: <code className="font-mono text-indigo-700">{contractNumber}</code>
-              </span>
-            )}
-          </div>
-
-          {/* Files list */}
-          {isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-[12px]">
-              <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
-            </div>
-          ) : items.length === 0 ? (
-            <div className="text-center text-[12px] text-slate-400 py-8 rounded-xl ring-1 ring-dashed ring-slate-200">
-              Hozircha hech qanday fayl biriktirilmagan
-            </div>
-          ) : (
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden divide-y divide-slate-100">
-              {items.map((a) => (
-                <div key={a.id} className="px-3 py-2.5 flex items-center gap-3 hover:bg-slate-50/60">
-                  <div className="w-9 h-9 rounded-lg bg-violet-50 grid place-items-center shrink-0">
-                    <FileIcon className="h-4 w-4 text-violet-600" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-semibold text-slate-800 truncate" title={a.filename}>
-                      {a.filename}
-                    </div>
-                    <div className="text-[10.5px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
-                      <span>{formatSize(a.fileSize)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span>{formatDateTime(a.uploadedAt)}</span>
-                      {a.uploadedBy && (<>
-                        <span className="text-slate-300">·</span>
-                        <span>{a.uploadedBy}</span>
-                      </>)}
-                      {a.contractNumber && (<>
-                        <span className="text-slate-300">·</span>
-                        <code className="text-indigo-600">{a.contractNumber}</code>
-                      </>)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button
-                      onClick={() => handleDownload(a)}
-                      title="Yuklab olish"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(a.id)}
-                      disabled={deletingId === a.id}
-                      title="O'chirish"
-                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100"
-                    >
-                      {deletingId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
           )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Yopish</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
