@@ -1836,15 +1836,24 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             <InfoRow
               icon={<Briefcase className="h-3.5 w-3.5" />}
               label="Kontragent"
-              value={liveRow.counterpartyDisplay || counterpartyName}
+              // Faqat biz qoygan kontragent (manualCounterparty yoki kategoriya orqali)
+              // Raw bank fromName/toName ko'rsatilmaydi
+              value={liveRow.counterpartyDisplay}
               subValue={
-                liveRow.counterpartyDisplay
-                  ? `${counterpartyName || '—'}${counterpartyInn ? ` · STIR ${counterpartyInn}` : ''}`
-                  : counterpartyInn ? `STIR ${counterpartyInn}` : null
+                liveRow.counterpartyDisplay && counterpartyInn
+                  ? `STIR ${counterpartyInn}`
+                  : null
               }
               docNumber={row.docNumber}
-              showClear={canManage && !!liveRow.category}
-              onClear={() => setCategoryMut.mutate({ categoryId: null, subcategoryId: null })}
+              emptyText="Tayinlanmagan"
+              showClear={canManage && (!!liveRow.category || !!liveRow.manualCounterparty)}
+              onClear={() => {
+                if (liveRow.manualCounterparty) {
+                  setCounterpartyMut.mutate(null);
+                } else {
+                  setCategoryMut.mutate({ categoryId: null, subcategoryId: null });
+                }
+              }}
             />
 
             {/* Kategoriya qatori */}
