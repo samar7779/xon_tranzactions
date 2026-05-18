@@ -133,9 +133,16 @@ export class CategorizationController {
 
   @Get('recheck-xato/status')
   @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
-  @ApiOperation({ summary: 'Qayta tekshirish holati' })
+  @ApiOperation({ summary: 'Qayta tekshirish holati (progress + oxirgi 20 ta tuzatilgan)' })
   recheckStatus() {
     return this.svc.getRecheckStatus();
+  }
+
+  @Get('recheck-xato/fixed')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
+  @ApiOperation({ summary: "Tuzatilgan shartnomalar to'liq ro'yxati (txCount bilan)" })
+  recheckFixedList(@Query('limit') limit?: string) {
+    return this.svc.getRecheckFixedList(limit ? Number(limit) : 5000);
   }
 
   @Get('transactions/:id/history')
