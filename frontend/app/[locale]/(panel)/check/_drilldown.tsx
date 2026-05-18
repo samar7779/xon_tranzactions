@@ -181,7 +181,7 @@ export function AccountDrilldown({
               />
             </div>
             <Button
-              onClick={runCheck}
+              onClick={() => runCheck()}
               disabled={loading}
               className="h-10 rounded-xl font-semibold"
             >
