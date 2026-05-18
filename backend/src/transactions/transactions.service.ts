@@ -26,6 +26,7 @@ export interface ExportFilters {
   subcategoryIds?: string;
   directions?: string;
   contractStatuses?: string;
+  contractSources?: string;
   amountMin?: number;
   amountMax?: number;
   hisobNomi?: string;
@@ -46,7 +47,7 @@ export class TransactionsService {
   private buildWhere(query: ListTransactionsDto): any {
     const {
       type, status, direction, bankId, accountId, dateFrom, dateTo, q,
-      bankIds, accountIds, categoryIds, subcategoryIds, directions, contractStatuses,
+      bankIds, accountIds, categoryIds, subcategoryIds, directions, contractStatuses, contractSources,
       amountMin, amountMax, hisobNomi,
     } = query;
     const where: any = {};
@@ -102,6 +103,34 @@ export class TransactionsService {
       where.amount = {};
       if (amountMin != null) where.amount.gte = amountMin;
       if (amountMax != null) where.amount.lte = amountMax;
+    }
+
+    // contractSources — qo'lda kiritilgan / ariza orqali biriktirilgan filtri (vergul bilan: manual,ariza)
+    //   manual: isContractManual=true AND attachments.none
+    //   ariza : attachments.some (kamida 1 ta biriktirilgan)
+    //   ikkala: OR (uchchasi ham, ikkalasidan birortasi)
+    const csrcList = this.parseList(contractSources);
+    if (csrcList && csrcList.length > 0) {
+      const wantManual = csrcList.includes('manual');
+      const wantAriza  = csrcList.includes('ariza');
+      const conds: any[] = [];
+      if (wantManual) {
+        conds.push({ AND: [{ isContractManual: true }, { attachments: { none: {} } }] });
+      }
+      if (wantAriza) {
+        conds.push({ attachments: { some: {} } });
+      }
+      if (conds.length > 0) {
+        const srcOr = conds.length === 1 ? conds[0] : { OR: conds };
+        if (where.AND) {
+          where.AND.push(srcOr);
+        } else if (where.OR) {
+          where.AND = [{ OR: where.OR }, srcOr];
+          delete where.OR;
+        } else {
+          Object.assign(where, srcOr);
+        }
+      }
     }
 
     // contractStatuses / contractNumbers — shartnoma raqamlari (vergul bilan)
@@ -273,7 +302,8 @@ export class TransactionsService {
       if (tx.manualCounterparty?.name) {
         counterpartyDisplay = tx.manualCounterparty.name;
       } else if (code === 'CLIENT') {
-        counterpartyDisplay = contractCustomer || tx.category?.name || null;
+        // CLIENT — har doim kategoriya nomi (CRM customer ismi YO'Q)
+        counterpartyDisplay = tx.category?.name || null;
       } else if (code === 'TRANSFER') {
         counterpartyDisplay = (acc && accByNo.get(acc)) || tx.category?.name || null;
       } else if (code === 'COUNTERPARTY') {
@@ -581,7 +611,8 @@ export class TransactionsService {
     if (tx.manualCounterparty?.name) {
       counterpartyDisplay = tx.manualCounterparty.name;
     } else if (code === 'CLIENT') {
-      counterpartyDisplay = contractCustomer || tx.category?.name || null;
+      // CLIENT — har doim kategoriya nomi (CRM customer ismi YO'Q)
+      counterpartyDisplay = tx.category?.name || null;
     } else if (code === 'TRANSFER') {
       counterpartyDisplay = accRow?.ownerName || tx.category?.name || null;
     } else if (code === 'COUNTERPARTY') {

@@ -97,6 +97,8 @@ export default function TransactionsPage() {
   // Google Sheets'ga o'xshash per-ustun filterlash
   const [columnFilterMode, setColumnFilterMode] = useState(false);
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+  // Shartnoma manbasi filtri — manual/ariza (multi-select)
+  const [contractSources, setContractSources] = useState<Set<'manual' | 'ariza'>>(new Set());
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
 
   // ─── localStorage persistance — mount paytida o'qish ───
@@ -222,11 +224,12 @@ export default function TransactionsPage() {
     if (bankId !== 'all') c++;
     if (dateFrom) c++;
     if (dateTo) c++;
+    if (contractSources.size > 0) c++;
     for (const k of Object.keys(columnFilters)) {
       if (columnFilters[k]?.size > 0) c++;
     }
     return c;
-  }, [direction, bankId, dateFrom, dateTo, columnFilters]);
+  }, [direction, bankId, dateFrom, dateTo, columnFilters, contractSources]);
 
   // Column filter -> URL param map (vergul bilan ajratilgan)
   const COLUMN_TO_PARAM: Record<string, string> = {
@@ -250,6 +253,8 @@ export default function TransactionsPage() {
     const set = columnFilters[col];
     if (set && set.size > 0) params.set(paramName, Array.from(set).join(','));
   }
+  // Shartnoma manbasi (qo'lda/ariza)
+  if (contractSources.size > 0) params.set('contractSources', Array.from(contractSources).join(','));
 
   // columnFilters Set object — JSON serialization uchun array'ga aylantiramiz
   const columnFiltersKey = JSON.stringify(
@@ -269,11 +274,13 @@ export default function TransactionsPage() {
       const set = columnFilters[col];
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
+    if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
     return p.toString();
   })();
 
+  const contractSourcesKey = Array.from(contractSources).sort().join(',');
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey],
+    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -417,6 +424,7 @@ export default function TransactionsPage() {
     setDirection('all'); setMatchStatus('all'); setBankId('all');
     setDateFrom(''); setDateTo(''); setQ(''); setPage(1);
     setColumnFilters({});
+    setContractSources(new Set());
     try { localStorage.removeItem('tx-column-filters-v1'); } catch { /* ignore */ }
   }
 
@@ -633,6 +641,97 @@ export default function TransactionsPage() {
               >
                 <FilterIcon className="h-4 w-4" />
               </button>
+
+              {/* Shartnoma manbasi filtri — qo'lda / ariza (multi-select) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Qo'lda yoki ariza orqali kiritilganlarni filtr qilish"
+                    className={cn(
+                      'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
+                      contractSources.size > 0
+                        ? 'bg-violet-600 text-white shadow-md shadow-violet-500/30'
+                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+                    )}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    {contractSources.size > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">
+                        {contractSources.size}
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="p-2 w-64">
+                  <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 px-2 py-1.5">
+                    Shartnoma manbasi
+                  </div>
+                  <button
+                    onClick={() => {
+                      setContractSources((prev) => {
+                        const next = new Set(prev);
+                        if (next.has('manual')) next.delete('manual'); else next.add('manual');
+                        return next;
+                      });
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all',
+                      contractSources.has('manual')
+                        ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
+                        : 'hover:bg-slate-50 text-slate-700',
+                    )}
+                  >
+                    <span className={cn(
+                      'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
+                      contractSources.has('manual') ? 'bg-amber-500 border-amber-500' : 'border-slate-300',
+                    )}>
+                      {contractSources.has('manual') && <CheckCircle2 className="h-3 w-3 text-white" />}
+                    </span>
+                    <span className="flex-1 text-left">Qo'lda kiritilgan</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-amber-700 bg-amber-100">
+                      qo'lda
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setContractSources((prev) => {
+                        const next = new Set(prev);
+                        if (next.has('ariza')) next.delete('ariza'); else next.add('ariza');
+                        return next;
+                      });
+                      setPage(1);
+                    }}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all mt-0.5',
+                      contractSources.has('ariza')
+                        ? 'bg-violet-50 text-violet-800 ring-1 ring-violet-200'
+                        : 'hover:bg-slate-50 text-slate-700',
+                    )}
+                  >
+                    <span className={cn(
+                      'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
+                      contractSources.has('ariza') ? 'bg-violet-600 border-violet-600' : 'border-slate-300',
+                    )}>
+                      {contractSources.has('ariza') && <CheckCircle2 className="h-3 w-3 text-white" />}
+                    </span>
+                    <span className="flex-1 text-left">Ariza orqali</span>
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-violet-700 bg-violet-100">
+                      <Paperclip className="h-2.5 w-2.5 mr-0.5" /> ariza
+                    </span>
+                  </button>
+                  {contractSources.size > 0 && (
+                    <div className="border-t border-slate-100 mt-1 pt-1">
+                      <button
+                        onClick={() => { setContractSources(new Set()); setPage(1); }}
+                        className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 hover:bg-slate-50 rounded-md"
+                      >
+                        Tozalash
+                      </button>
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
                 <DropdownMenuTrigger asChild>
@@ -3026,6 +3125,87 @@ function CombinedEditDialog({
                   </button>
                 );
               })}
+            </div>
+
+            {/* ─── Maxsus kontragent qidirish (GREATCITY, BARAKAT...) ─── */}
+            <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
+              <div className="text-[10.5px] text-slate-500 mb-1.5 flex items-center gap-1">
+                <Search className="h-3 w-3" />
+                <span>Yoki maxsus kontragentni topish (firma nomi/INN):</span>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input
+                  value={cpSearch}
+                  onChange={(e) => setCpSearch(e.target.value)}
+                  placeholder="Misol: GREATCITY, BARAKAT, 305..."
+                  className="pl-8 h-9 text-[12px]"
+                />
+                {cpSearch && (
+                  <button
+                    onClick={() => setCpSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {cpDebounced.length >= 2 && (
+                <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg ring-1 ring-slate-200 bg-white">
+                  {cpQuery.isLoading ? (
+                    <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-[11px]">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Qidirilmoqda...
+                    </div>
+                  ) : cpItems.length === 0 ? (
+                    <div className="px-3 py-3 text-center text-[11px] text-slate-400">
+                      "{cpDebounced}" topilmadi
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100">
+                      {cpItems.map((cp: any) => {
+                        const selected = row?.manualCounterpartyId === cp.id;
+                        return (
+                          <button
+                            key={cp.id}
+                            onClick={() => {
+                              onSaveCounterparty(cp.id);
+                              setCpSearch('');
+                            }}
+                            disabled={savingCounterparty}
+                            className={cn(
+                              'w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-start gap-2',
+                              selected && 'bg-emerald-50',
+                            )}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[12px] font-semibold text-slate-800 truncate">{cp.name}</div>
+                              {cp.inn && (
+                                <div className="text-[10px] text-slate-500 font-mono">INN: {cp.inn}</div>
+                              )}
+                            </div>
+                            {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {row?.manualCounterparty && (
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-md px-2 py-1.5">
+                  <CheckCircle2 className="h-3 w-3 shrink-0" />
+                  <span className="flex-1 truncate">
+                    Joriy: <b>{row.manualCounterparty.name}</b>
+                  </span>
+                  <button
+                    onClick={() => onSaveCounterparty(null)}
+                    disabled={savingCounterparty}
+                    className="text-rose-600 hover:text-rose-700 font-medium shrink-0"
+                  >
+                    Olib tashlash
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
