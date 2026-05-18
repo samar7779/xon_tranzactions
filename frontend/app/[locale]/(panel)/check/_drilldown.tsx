@@ -502,35 +502,36 @@ function DiagItem({
   const qc = useQueryClient();
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState(false);
-  const [insertedInfo, setInsertedInfo] = useState<{
-    inserted: boolean;
-    transactionId: string | null;
-    externalId: string | null;
-  } | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
 
   async function handleFix() {
     if (!accountId || !date) return;
     setFixing(true);
     try {
-      const r = await api.post<{
-        ok: true; inserted: boolean; message: string;
-        transactionId: string | null; externalId: string | null;
-      }>(
-        '/transactions/reconcile/fix-missing',
-        { accountId, b2Id: it.b2Id || undefined, generalId: it.generalId || undefined, date },
-      );
-      setFixed(true);
-      setInsertedInfo({
-        inserted: r.inserted,
-        transactionId: r.transactionId,
-        externalId: r.externalId,
+      // Single insert ham bulk endpoint orqali — bitta umumiy modal ishlatish uchun
+      const r = await api.post<BulkResult>('/transactions/reconcile/fix-all-missing', {
+        accountId,
+        date,
+        items: [{ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined }],
       });
-      if (r.inserted) {
+      setBulkResult(r);
+      setFixed(r.summary.ok > 0);
+      if (r.summary.ok > 0) {
         onFixed?.();
         qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       }
     } catch (e: any) {
-      toast.error(e?.message || "Qo'shilmadi");
+      // Tarmoq xato — modal'da sabab ko'rsatamiz
+      setBulkResult({
+        ok: true,
+        summary: { total: 1, ok: 0, error: 1 },
+        results: [{
+          b2Id: it.b2Id, generalId: it.generalId,
+          ok: false, inserted: false,
+          transactionId: null, externalId: null,
+          error: e?.message || "Tarmoq xato",
+        }],
+      });
     } finally {
       setFixing(false);
     }
@@ -594,136 +595,10 @@ function DiagItem({
         </div>
       )}
 
-      {/* Insert natijasi modali — externalId copy uchun */}
-      {insertedInfo && (
-        <InsertedModal
-          info={insertedInfo}
-          onClose={() => setInsertedInfo(null)}
-        />
+      {/* Natija modali — bulk modal bilan birxil */}
+      {bulkResult && (
+        <BulkResultModal result={bulkResult} onClose={() => setBulkResult(null)} />
       )}
-    </div>
-  );
-}
-
-function InsertedModal({
-  info, onClose,
-}: {
-  info: { inserted: boolean; transactionId: string | null; externalId: string | null };
-  onClose: () => void;
-}) {
-  const [copied, setCopied] = useState<'tx' | 'ext' | null>(null);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  async function copy(text: string, which: 'tx' | 'ext') {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(which);
-      toast.success('Nusxa olindi');
-      setTimeout(() => setCopied(null), 1500);
-    } catch {
-      toast.error("Nusxa olishda xato");
-    }
-  }
-
-  return (
-    <div
-      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm grid place-items-center px-4"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-start gap-3 p-5 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500 grid place-items-center shrink-0 shadow-md shadow-emerald-500/30">
-            <CheckCircle2 className="h-5 w-5 text-white" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-bold text-emerald-900">
-              {info.inserted
-                ? "Tranzaksiya AllTranzactions'ga qo'shildi"
-                : "Tranzaksiya allaqachon mavjud edi"}
-            </div>
-            <div className="text-[11px] text-emerald-700 mt-0.5">
-              Quyidagi ID'larni copy qilib boshqa joyda ishlatishingiz mumkin
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-white/80 hover:text-rose-700 transition"
-            aria-label="Yopish"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {/* externalId (composite, foydalanuvchi so'ragan format) */}
-          {info.externalId && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-                Tranzaksiya ID (External · composite)
-              </div>
-              <div className="flex items-stretch gap-2">
-                <div className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 ring-1 ring-slate-200
-                                font-mono text-[12px] text-slate-800 break-all select-all">
-                  {info.externalId}
-                </div>
-                <button
-                  onClick={() => copy(info.externalId!, 'ext')}
-                  className="px-3 rounded-lg bg-indigo-600 text-white text-[12px] font-semibold
-                             hover:bg-indigo-700 active:scale-95 transition flex items-center gap-1.5 shrink-0"
-                >
-                  {copied === 'ext' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied === 'ext' ? 'Olindi' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* DB ichki id */}
-          {info.transactionId && (
-            <div>
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
-                AllTranzactions ID (ichki)
-              </div>
-              <div className="flex items-stretch gap-2">
-                <div className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 ring-1 ring-slate-200
-                                font-mono text-[12px] text-slate-800 break-all select-all">
-                  {info.transactionId}
-                </div>
-                <button
-                  onClick={() => copy(info.transactionId!, 'tx')}
-                  className="px-3 rounded-lg bg-slate-200 text-slate-800 text-[12px] font-semibold
-                             hover:bg-slate-300 active:scale-95 transition flex items-center gap-1.5 shrink-0"
-                >
-                  {copied === 'tx' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                  {copied === 'tx' ? 'Olindi' : 'Copy'}
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex justify-end">
-          <button
-            onClick={onClose}
-            className="px-4 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-semibold transition"
-          >
-            Yopish
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -817,7 +692,9 @@ function BulkResultModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const successes = result.results.filter((r) => r.ok && r.externalId);
+  // Hamma muvaffaqiyatli natijani ko'rsatamiz — externalId yo'q bo'lsa ham
+  // (transactionId yoki "—" ko'rsatiladi)
+  const successes = result.results.filter((r) => r.ok);
   const failures = result.results.filter((r) => !r.ok);
 
   async function copy(text: string, key: string) {
@@ -832,8 +709,11 @@ function BulkResultModal({
   }
 
   async function copyAll() {
-    const ids = successes.map((r) => r.externalId).filter(Boolean).join('\n');
-    if (!ids) return;
+    const ids = successes
+      .map((r) => r.externalId || r.transactionId)
+      .filter(Boolean)
+      .join('\n');
+    if (!ids) { toast.error("Copy uchun ID topilmadi"); return; }
     try {
       await navigator.clipboard.writeText(ids);
       setCopiedAll(true);
@@ -846,7 +726,7 @@ function BulkResultModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm grid place-items-center px-4"
+      className="fixed inset-0 z-[60] bg-slate-900/75 backdrop-blur-md grid place-items-center px-4"
       onClick={onClose}
     >
       <div
@@ -899,27 +779,66 @@ function BulkResultModal({
                 </button>
               </div>
               <div className="divide-y divide-emerald-100/60 max-h-[50vh] overflow-y-auto">
-                {successes.map((r) => {
-                  const key = r.externalId || r.transactionId || '';
+                {successes.map((r, i) => {
+                  const idToCopy = r.externalId || r.transactionId || '';
+                  const key = idToCopy || `s-${i}`;
                   return (
                     <div key={key} className="p-3 text-[11px] space-y-1.5">
-                      <div className="flex items-stretch gap-2">
-                        <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
-                                          font-mono text-[11px] text-slate-800 break-all select-all">
-                          {r.externalId || r.transactionId}
-                        </code>
-                        <button
-                          onClick={() => copy(r.externalId || r.transactionId || '', key)}
-                          className="px-2 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-semibold transition shrink-0"
-                        >
-                          {copiedOne === key ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                        </button>
-                      </div>
-                      {!r.inserted && (
-                        <div className="text-[10px] text-amber-600">
-                          ⚠ Avvaldan mavjud edi
+                      {r.externalId && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                            External · composite
+                          </div>
+                          <div className="flex items-stretch gap-2">
+                            <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
+                                              font-mono text-[11px] text-slate-800 break-all select-all">
+                              {r.externalId}
+                            </code>
+                            <button
+                              onClick={() => copy(r.externalId!, `${key}-ext`)}
+                              className="px-2 rounded bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition shrink-0"
+                            >
+                              {copiedOne === `${key}-ext` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </div>
                         </div>
                       )}
+                      {r.transactionId && (
+                        <div>
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                            AllTranzactions ID
+                          </div>
+                          <div className="flex items-stretch gap-2">
+                            <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
+                                              font-mono text-[11px] text-slate-800 break-all select-all">
+                              {r.transactionId}
+                            </code>
+                            <button
+                              onClick={() => copy(r.transactionId!, `${key}-tx`)}
+                              className="px-2 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-semibold transition shrink-0"
+                            >
+                              {copiedOne === `${key}-tx` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {!r.externalId && !r.transactionId && (
+                        <div className="text-[11px] text-amber-700">
+                          ⚠ Qo'shildi, lekin ID topilmadi (DB lookup'da yo'q)
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 text-[10px]">
+                        {r.inserted ? (
+                          <span className="text-emerald-700 font-semibold">✓ Yangi qo'shildi</span>
+                        ) : (
+                          <span className="text-amber-700">⚠ Avvaldan mavjud edi</span>
+                        )}
+                        {(r.b2Id || r.generalId) && (
+                          <span className="text-slate-400 font-mono truncate">
+                            · {r.b2Id ? `b2:${r.b2Id}` : `gen:${r.generalId}`}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
