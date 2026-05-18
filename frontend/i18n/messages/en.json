@@ -604,7 +604,9 @@
   },
   "check": {
     "title": "Reconciliation",
-    "subtitle": "Match bank balance against system records"
+    "subtitle": "Match bank balance against system records",
+    "loadingTitle": "Checking accounts...",
+    "loadingSubtitle": "Comparing today's inflow/outflow between the bank and our DB for each account. This takes a few seconds."
   },
   "common": {
     "save": "Save",
