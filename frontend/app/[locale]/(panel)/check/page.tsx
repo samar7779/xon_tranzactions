@@ -50,6 +50,7 @@ export default function CheckPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
   const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
+  const [showErrors, setShowErrors] = useState(false);
 
   // Bugungi sverka — live: 20 minutda avto + window focus'da yangilanadi
   const todayQuery = useQuery<TodayResponse>({
@@ -113,6 +114,10 @@ export default function CheckPage() {
       it.bankName?.toLowerCase().includes(ql),
     );
   }, [items, q]);
+
+  // Xato qatorlar yashirin — alohida bo'limga ajratamiz
+  const nonErrors = useMemo(() => filtered.filter((i) => i.status !== 'error'), [filtered]);
+  const errorRows = useMemo(() => filtered.filter((i) => i.status === 'error'), [filtered]);
 
   const summary = useMemo(() => ({
     total: items.length,
@@ -223,17 +228,62 @@ export default function CheckPage() {
                 description={q ? undefined : "Bank yoki hisoblar aktiv emas — Setup → Banklarda tekshiring"}
               />
             ) : (
-              <div className="divide-y divide-slate-100">
-                {filtered.map((it) => (
-                  <AccountRow
-                    key={it.accountId}
-                    item={it}
-                    loading={singleLoading.has(it.accountId)}
-                    onClick={() => setSelectedAccountId(it.accountId)}
-                    onRefresh={() => refreshOne(it.accountId)}
-                  />
-                ))}
-              </div>
+              <>
+                {/* Asosiy ro'yxat — xato bo'lmaganlar (Mos + Farqli) */}
+                <div className="divide-y divide-slate-100">
+                  {nonErrors.map((it) => (
+                    <AccountRow
+                      key={it.accountId}
+                      item={it}
+                      loading={singleLoading.has(it.accountId)}
+                      onClick={() => setSelectedAccountId(it.accountId)}
+                      onRefresh={() => refreshOne(it.accountId)}
+                    />
+                  ))}
+                </div>
+
+                {/* Xato qatorlar — yashirin, bossa ochiladi */}
+                {errorRows.length > 0 && (
+                  <div className="border-t-2 border-rose-100">
+                    <button
+                      onClick={() => setShowErrors((s) => !s)}
+                      className="w-full flex items-center gap-3 px-4 py-3 bg-rose-50/40 hover:bg-rose-50/70 transition group"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-rose-100 grid place-items-center text-rose-700 shrink-0">
+                        <X className="h-4 w-4" />
+                      </div>
+                      <div className="text-left min-w-0 flex-1">
+                        <div className="text-[13px] font-semibold text-rose-900">
+                          {errorRows.length} ta xato hisob
+                        </div>
+                        <div className="text-[11px] text-rose-700/80 truncate">
+                          {showErrors
+                            ? "Yashirish uchun bosing"
+                            : "Tafsilotini ko'rish uchun bosing — odatda 'bu klientga ruxsat yo'q' xatolari"}
+                        </div>
+                      </div>
+                      <ChevronRight className={cn(
+                        "h-5 w-5 text-rose-400 transition-transform",
+                        showErrors && "rotate-90",
+                      )} />
+                    </button>
+
+                    {showErrors && (
+                      <div className="divide-y divide-rose-100/50">
+                        {errorRows.map((it) => (
+                          <AccountRow
+                            key={it.accountId}
+                            item={it}
+                            loading={singleLoading.has(it.accountId)}
+                            onClick={() => setSelectedAccountId(it.accountId)}
+                            onRefresh={() => refreshOne(it.accountId)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
