@@ -1,4 +1,5 @@
 'use client';
+// build: sverka v2 (live today + per-account drill-down)
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
