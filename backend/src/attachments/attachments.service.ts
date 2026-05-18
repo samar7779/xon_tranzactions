@@ -93,10 +93,27 @@ export class AttachmentsService {
       data: { storagePath: diskPath },
     });
 
-    // Telegram xabar
+    // TransactionCategoryHistory yozuvi
+    try {
+      await this.prisma.transactionCategoryHistory.create({
+        data: {
+          txId,
+          action: 'attachment',
+          actorName: opts.uploadedBy || null,
+          newCategoryName: safeName, // fayl nomini ko'rsatish uchun
+          contractNumber: att.contractNumber,
+          reason: `Ariza biriktirildi: ${safeName} (${(file.size / 1024).toFixed(1)} KB)`,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`Attachment history xato: ${e?.message}`);
+    }
+
+    // Telegram xabar (file ham bilan)
     void this.notifyTelegram('uploaded', {
       attachment: { ...att, storagePath: diskPath },
       transaction: tx,
+      filePath: diskPath,
     });
 
     return { ok: true, item: { ...att, storagePath: diskPath } };
@@ -133,7 +150,23 @@ export class AttachmentsService {
 
     await this.prisma.transactionAttachment.delete({ where: { id: attId } });
 
-    // Telegram xabar
+    // TransactionCategoryHistory yozuvi
+    try {
+      await this.prisma.transactionCategoryHistory.create({
+        data: {
+          txId,
+          action: 'attachment',
+          actorName: deletedBy || null,
+          oldCategoryName: att.filename, // o'chirilgan fayl nomi
+          contractNumber: att.contractNumber,
+          reason: `Ariza o'chirildi: ${att.filename}`,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`Attachment delete history xato: ${e?.message}`);
+    }
+
+    // Telegram xabar (faylsiz — o'chirilgan)
     void this.notifyTelegram('deleted', {
       attachment: att,
       transaction: att.transaction,
@@ -143,11 +176,12 @@ export class AttachmentsService {
     return { ok: true, deleted: att.filename };
   }
 
-  /** Telegram notification — uploaded/deleted */
+  /** Telegram notification — uploaded'da fayl ham yuboriladi (rasm yoki document) */
   private async notifyTelegram(action: 'uploaded' | 'deleted', payload: {
     attachment: any;
     transaction: { id: string; contractNumber: string | null; externalId: string | null };
     deletedBy?: string;
+    filePath?: string;
   }) {
     if (!this.tgToken || !this.tgChat) return;
     try {
@@ -164,7 +198,7 @@ export class AttachmentsService {
       });
 
       const txUrl = `${this.appUrl}/uz/transactions?id=${encodeURIComponent(t.id)}`;
-      const text = [
+      const caption = [
         `${icon} <b>Ariza ${verb}</b>`,
         ``,
         `📄 <code>${this.escape(a.filename)}</code> · ${sizeKb} KB`,
@@ -176,12 +210,41 @@ export class AttachmentsService {
         `<a href="${txUrl}">↗ Tranzaksiyani ochish</a>`,
       ].filter(Boolean).join('\n');
 
+      // Uploaded + fayl bor → rasm/document sifatida yuboramiz
+      if (action === 'uploaded' && payload.filePath) {
+        const isImage = (a.mimeType || '').startsWith('image/');
+        const isPdf   = (a.mimeType || '').includes('pdf');
+        const endpoint = isImage ? 'sendPhoto' : 'sendDocument';
+        const fileField = isImage ? 'photo' : 'document';
+
+        // Multipart form bilan yuborish — Node.js fs stream + FormData (axios native)
+        const fs = await import('fs');
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('chat_id', this.tgChat);
+        form.append('caption', caption);
+        form.append('parse_mode', 'HTML');
+        form.append(fileField, fs.createReadStream(payload.filePath), {
+          filename: a.filename,
+          contentType: a.mimeType || 'application/octet-stream',
+        });
+        await firstValueFrom(
+          this.http.post(
+            `https://api.telegram.org/bot${this.tgToken}/${endpoint}`,
+            form,
+            { headers: form.getHeaders(), timeout: 30000, maxBodyLength: 50 * 1024 * 1024 },
+          ),
+        );
+        return;
+      }
+
+      // Aks holda (deleted yoki fayl yo'q) — oddiy matn
       await firstValueFrom(
         this.http.post(
           `https://api.telegram.org/bot${this.tgToken}/sendMessage`,
           {
             chat_id: this.tgChat,
-            text,
+            text: caption,
             parse_mode: 'HTML',
             disable_web_page_preview: true,
           },
