@@ -23,6 +23,7 @@ const NAV: NavItem[] = [
   { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
   { href: '/crm',          key: 'crm',          icon: BookUser,        group: 'main',  permission: PERMS.CRM_VIEW },
+  // Biling — XonPay reconciliation (Kapitalbank vs CRM)
   { href: '/biling',       key: 'biling',       icon: CreditCard,       group: 'main',  permission: PERMS.CRM_VIEW },
 
   { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
