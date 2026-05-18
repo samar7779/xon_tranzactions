@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, RefreshCw, Loader2, Calendar, AlertTriangle, CheckCircle2,
-  ArrowDownLeft, ArrowUpRight, Search, Inbox, Database,
+  ArrowDownLeft, ArrowUpRight, Search, Inbox, Database, Download,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -235,7 +235,12 @@ export function AccountDrilldown({
                   </div>
 
                   {showDiagnose && diagnoseData && (
-                    <DiagnoseResult data={diagnoseData} />
+                    <DiagnoseResult
+                      data={diagnoseData}
+                      accountId={item.accountId}
+                      date={dateFrom}
+                      onFixed={() => { refetchDiagnose(); runCheck(); }}
+                    />
                   )}
                 </div>
               )}
@@ -307,9 +312,12 @@ function ReconcileTable({ data }: { data: ReconcileData }) {
 }
 
 function DiagnoseResult({
-  data,
+  data, accountId, date, onFixed,
 }: {
   data: { bankCount: number; dbCount: number; matchedCount: number; bankOnly: DiagnoseItem[]; dbOnly: DiagnoseItem[] };
+  accountId: string;
+  date: string;
+  onFixed: () => void;
 }) {
   return (
     <div className="space-y-3">
@@ -326,15 +334,17 @@ function DiagnoseResult({
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {/* Bankda bor, DB da yo'q */}
           <DiagPanel
             title="Bankda bor — DB da yo'q"
             icon={<Inbox className="h-4 w-4" />}
             tone="amber"
             items={data.bankOnly}
             empty="Yo'qolgan yozuvlar yo'q"
+            fixable
+            accountId={accountId}
+            date={date}
+            onFixed={onFixed}
           />
-          {/* DB da bor, bankda yo'q */}
           <DiagPanel
             title="DB da bor — bankda yo'q"
             icon={<Database className="h-4 w-4" />}
@@ -349,13 +359,17 @@ function DiagnoseResult({
 }
 
 function DiagPanel({
-  title, icon, tone, items, empty,
+  title, icon, tone, items, empty, fixable, accountId, date, onFixed,
 }: {
   title: string;
   icon: React.ReactNode;
   tone: 'amber' | 'rose';
   items: DiagnoseItem[];
   empty: string;
+  fixable?: boolean;
+  accountId?: string;
+  date?: string;
+  onFixed?: () => void;
 }) {
   const toneCls = tone === 'amber'
     ? 'border-amber-200 bg-amber-50/40'
@@ -374,35 +388,103 @@ function DiagPanel({
       ) : (
         <div className="divide-y divide-slate-100 max-h-[320px] overflow-y-auto">
           {items.map((it, i) => (
-            <div key={it.id || it.b2Id || it.externalId || i} className="p-3 text-[11px] space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className={cn(
-                  'font-bold tabular-nums',
-                  it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
-                )}>
-                  {it.direction === 'IN' ? '+' : '−'}{formatMoney(Number(it.amount || 0)).replace(' UZS', '')}
-                </span>
-                {it.docNumber && (
-                  <span className="text-[10px] text-slate-500 font-mono">#{it.docNumber}</span>
-                )}
-              </div>
-              <div className="text-slate-700">
-                <div className="truncate">
-                  <span className="text-slate-400">Kim:</span> {it.fromName || it.toName || '—'}
-                </div>
-                {(it.purpose || it.description) && (
-                  <div className="text-slate-500 line-clamp-2 mt-0.5">
-                    {it.purpose || it.description}
-                  </div>
-                )}
-              </div>
-              {(it.b2Id || it.externalId) && (
-                <div className="text-[10px] text-slate-400 font-mono truncate">
-                  {it.b2Id ? `b2:${it.b2Id}` : it.externalId}
-                </div>
-              )}
-            </div>
+            <DiagItem
+              key={it.id || it.b2Id || it.externalId || i}
+              it={it}
+              fixable={fixable}
+              accountId={accountId}
+              date={date}
+              onFixed={onFixed}
+            />
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiagItem({
+  it, fixable, accountId, date, onFixed,
+}: {
+  it: DiagnoseItem;
+  fixable?: boolean;
+  accountId?: string;
+  date?: string;
+  onFixed?: () => void;
+}) {
+  const [fixing, setFixing] = useState(false);
+  const [fixed, setFixed] = useState(false);
+
+  async function handleFix() {
+    if (!accountId || !date) return;
+    setFixing(true);
+    try {
+      const r = await api.post<{ ok: true; inserted: boolean; message: string }>(
+        '/transactions/reconcile/fix-missing',
+        { accountId, b2Id: it.b2Id || undefined, generalId: it.generalId || undefined, date },
+      );
+      if (r.inserted) {
+        toast.success(r.message);
+        setFixed(true);
+        onFixed?.();
+      } else {
+        toast.message(r.message);
+        setFixed(true);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Qo\'shilmadi');
+    } finally {
+      setFixing(false);
+    }
+  }
+
+  return (
+    <div className={cn('p-3 text-[11px] space-y-1', fixed && 'opacity-50')}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn(
+          'font-bold tabular-nums',
+          it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
+        )}>
+          {it.direction === 'IN' ? '+' : '−'}{formatMoney(Number(it.amount || 0)).replace(' UZS', '')}
+        </span>
+        {it.docNumber && (
+          <span className="text-[10px] text-slate-500 font-mono">#{it.docNumber}</span>
+        )}
+      </div>
+      <div className="text-slate-700">
+        <div className="truncate">
+          <span className="text-slate-400">Kim:</span> {it.fromName || it.toName || '—'}
+        </div>
+        {(it.purpose || it.description) && (
+          <div className="text-slate-500 line-clamp-2 mt-0.5">
+            {it.purpose || it.description}
+          </div>
+        )}
+      </div>
+      {(it.b2Id || it.externalId) && (
+        <div className="text-[10px] text-slate-400 font-mono truncate">
+          {it.b2Id ? `b2:${it.b2Id}` : it.externalId}
+        </div>
+      )}
+      {fixable && !fixed && (
+        <button
+          onClick={handleFix}
+          disabled={fixing}
+          className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                     bg-indigo-600 text-white text-[11px] font-semibold
+                     hover:bg-indigo-700 disabled:opacity-60 transition"
+        >
+          {fixing ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Download className="h-3 w-3" />
+          )}
+          {fixing ? "Qo'shilmoqda..." : "DB ga qo'shish"}
+        </button>
+      )}
+      {fixed && (
+        <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold">
+          <CheckCircle2 className="h-3 w-3" /> Qo'shildi
         </div>
       )}
     </div>

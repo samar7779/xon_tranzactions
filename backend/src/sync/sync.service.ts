@@ -373,7 +373,11 @@ export class SyncService {
    * Barcha 29 field saqlanadi (alohida column'lar) + bilmagan fieldlar rawExtra JSON'ga.
    * Hech qanday ma'lumot yo'qolmaydi.
    */
-  private async upsertOne(
+  /**
+   * Public: bitta KB tranzaksiya item'ini DB ga insert qiladi (mavjud bo'lsa skip).
+   * Sync flow ham, sverka "Qo'shish" tugmasi ham ishlatadi.
+   */
+  async upsertOne(
     item: KbDoc1CItem,
     accountId: string,
     accountNo: string,

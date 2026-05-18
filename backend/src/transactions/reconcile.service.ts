@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
+import { SyncService } from '../sync/sync.service';
 
 const DAY_MS = 86_400_000;
 const MAX_DAYS = 92;
@@ -23,6 +24,7 @@ export class ReconcileService {
     private prisma: PrismaService,
     private crypto: CryptoService,
     private kb: KapitalbankClient,
+    private sync: SyncService,
   ) {}
 
   async reconcile(accountId: string, dateFrom: string, dateTo: string) {
@@ -360,6 +362,71 @@ export class ReconcileService {
       matchedCount: matchedDbIds.size,
       bankOnly,
       dbOnly,
+    };
+  }
+
+  /**
+   * Diagnose'da topilgan yo'qolgan tranzaksiyani DB ga qo'shadi.
+   * Bankdan ushbu kun uchun ma'lumotni qaytadan oladi (eski cache emas, fresh),
+   * b2_id yoki general_id orqali kerakli item'ni topib SyncService.upsertOne
+   * orqali to'liq logika bilan inserts qiladi (auto-match + categorization
+   * shu yerda ham ishlaydi).
+   */
+  async fixMissing(accountId: string, b2Id?: string, generalId?: string, date?: string) {
+    if (!accountId) throw new BadRequestException('accountId kerak');
+    if (!b2Id && !generalId) throw new BadRequestException('b2Id yoki generalId kerak');
+    if (!date) throw new BadRequestException('date kerak (YYYY-MM-DD)');
+
+    const account = await this.prisma.bankAccount.findUnique({
+      where: { id: accountId },
+      include: { bank: true, credential: { include: { bank: true } } },
+    });
+    if (!account) throw new NotFoundException('Hisob topilmadi');
+    const cred = account.credential;
+    if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
+    const bank = cred.bank;
+    if (bank.apiKind !== 'KAPITALBANK_V3') {
+      throw new BadRequestException('Faqat KAPITALBANK_V3 banklar uchun');
+    }
+    if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
+
+    const password = this.crypto.decrypt(cred.passwordEnc);
+    const login = (cred.loginPrefix || '') + cred.loginName;
+    const dateDmy = this.fmtDate(new Date(`${date}T00:00:00+05:00`));
+
+    const res = await this.kb.getDoc1C({
+      baseUrl: bank.apiBaseUrl,
+      login,
+      password,
+      branch: account.branch,
+      account: account.accountNo,
+      date: dateDmy,
+      useProxy: cred.useProxy === true,
+    });
+    const items = res?.content || [];
+    const target = items.find(
+      (i) => (b2Id && i.b2_id === b2Id) || (generalId && i.general_id === generalId),
+    );
+    if (!target) {
+      throw new NotFoundException(
+        `Bankda topilmadi: b2Id=${b2Id || '—'}, generalId=${generalId || '—'}. Ehtimol, bank tomondan o'chirilgan.`,
+      );
+    }
+
+    const inserted = await this.sync.upsertOne(
+      target,
+      accountId,
+      account.accountNo,
+      account.bankId,
+      bank.code,
+    );
+
+    return {
+      ok: true,
+      inserted,
+      message: inserted
+        ? 'Tranzaksiya DB ga qo\'shildi'
+        : 'Tranzaksiya allaqachon DB da mavjud edi',
     };
   }
 }
