@@ -242,10 +242,10 @@ export class ReconcileService {
   async reconcileToday(date?: string) {
     const targetDate = date || this.todayTashkent();
 
-    // Faqat sync yoqilgan KB hisoblar (BankAccount.syncEnabled + Bank.isActive)
+    // Barcha aktiv KB hisoblar — syncEnabled cheklamasdan (foydalanuvchi
+    // ataylab o'chirib qo'ygan bo'lsa ham sverka ko'rinishi uchun)
     const accounts = await this.prisma.bankAccount.findMany({
       where: {
-        syncEnabled: true,
         bank: { isActive: true, apiKind: 'KAPITALBANK_V3' },
       },
       include: {

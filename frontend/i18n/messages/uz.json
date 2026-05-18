@@ -604,7 +604,9 @@
   },
   "check": {
     "title": "Sverka",
-    "subtitle": "Bank qoldig'i va tizim hisobi muvofiqligini tekshirish"
+    "subtitle": "Bank qoldig'i va tizim hisobi muvofiqligini tekshirish",
+    "loadingTitle": "Hisoblar tekshirilmoqda...",
+    "loadingSubtitle": "Har bir bank hisobi uchun bugungi kunning kirim/chiqim oborotini bank va DB bo'yicha solishtirib chiqamiz. Bir necha soniya kuting."
   },
   "common": {
     "save": "Saqlash",

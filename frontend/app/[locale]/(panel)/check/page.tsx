@@ -14,7 +14,6 @@ import { TransactionsTabs } from '@/components/transactions-tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
@@ -198,9 +197,7 @@ export default function CheckPage() {
         <Card className="border-0 shadow-soft">
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-4 space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16" />)}
-              </div>
+              <SverkaLoading title={t('loadingTitle')} subtitle={t('loadingSubtitle')} />
             ) : filtered.length === 0 ? (
               <EmptyState icon={Scale} title="Hisob topilmadi" />
             ) : (
@@ -229,6 +226,30 @@ export default function CheckPage() {
         />
       )}
     </>
+  );
+}
+
+function SverkaLoading({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="py-16 px-6 grid place-items-center">
+      <div className="flex flex-col items-center text-center max-w-md">
+        <div className="relative w-20 h-20 grid place-items-center mb-5">
+          <span className="absolute inset-0 rounded-full border-2 border-indigo-400/40 animate-ping" style={{ animationDuration: '2s' }} />
+          <span className="absolute inset-2 rounded-full border-2 border-indigo-400/30 animate-ping" style={{ animationDuration: '2.5s', animationDelay: '0.4s' }} />
+          <span className="absolute w-14 h-14 rounded-full bg-indigo-500/20 blur-xl animate-pulse" />
+          <div className="relative w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-lg shadow-indigo-500/40">
+            <Scale className="h-7 w-7 text-white" />
+          </div>
+        </div>
+        <div className="text-[15px] font-semibold text-slate-800 mb-1">{title}</div>
+        <div className="text-[12px] text-slate-500 max-w-sm">{subtitle}</div>
+        <div className="mt-4 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-violet-500 animate-bounce" style={{ animationDelay: '150ms' }} />
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+        </div>
+      </div>
+    </div>
   );
 }
 
