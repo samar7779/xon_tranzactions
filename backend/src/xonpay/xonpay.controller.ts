@@ -88,6 +88,17 @@ export class XonpayController {
     return this.svc.fixDateShift();
   }
 
+  @Post('admin/cleanup-orphans')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: 'Orphan tozalash — CRM da yoq lekin bizda bor rowlar',
+    description: '?dryRun=true (default) faqat sanaydi. ?dryRun=false ochiradi.',
+  })
+  cleanupOrphans(@Query('dryRun') dryRun?: string) {
+    // Default xavfsiz: dryRun=true. Faqat ?dryRun=false bilan o'chiradi
+    return this.svc.cleanupOrphans(dryRun === 'false' ? false : true);
+  }
+
   // ── MATCH ──
   @Post('match-all')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)

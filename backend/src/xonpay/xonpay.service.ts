@@ -491,6 +491,78 @@ export class XonpayService implements OnModuleInit {
   }
 
   /**
+   * Orphan tozalash — CRM dan barcha XonPay external_id larni olib,
+   * bizning DB'dagi CRM da yo'q rowlarni topadi (optional o'chiradi).
+   * @param dryRun true bo'lsa — faqat hisoblaydi, o'chirmaydi (default)
+   */
+  async cleanupOrphans(dryRun = true): Promise<{
+    ok: true;
+    crmCount: number;
+    dbCount: number;
+    orphanCount: number;
+    orphanSamples: Array<{ externalId: string; contract: string | null; datePaid: string | null }>;
+    deleted: number;
+  }> {
+    // 1) CRM dan barcha XonPay external_id larni jamlaymiz
+    const crmIds = new Set<string>();
+    let page = 1;
+    while (page <= 200) {
+      const r = await this.crm.getPaymentHistory(page, 5000);
+      if (!r.ok) break;
+      const raw: any = r.data?.data ?? r.data;
+      const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+      if (items.length === 0) break;
+      for (const p of items) {
+        const m = p.payment_method;
+        const mStr = typeof m === 'string' ? m : getRu(m, '');
+        if (!/xon\s*pay/i.test(mStr)) continue;
+        const id = String(p.external_id || '').trim();
+        if (id) crmIds.add(id);
+      }
+      if (items.length < 5000) break;
+      page++;
+    }
+    this.log.log(`cleanupOrphans: CRM da ${crmIds.size} ta XonPay external_id topildi`);
+
+    // 2) Bizning DB dan barcha external_id larni olamiz
+    const dbRows = await this.prisma.xonpayTransaction.findMany({
+      select: { externalId: true, contract: true, datePaid: true },
+    });
+    this.log.log(`cleanupOrphans: bizning DB da ${dbRows.length} ta XonPay row`);
+
+    // 3) Orphan'lar — bizda bor lekin CRM da yo'q
+    const orphans = dbRows.filter((r) => !crmIds.has(r.externalId));
+    const samples = orphans.slice(0, 20).map((o) => ({
+      externalId: o.externalId,
+      contract: o.contract,
+      datePaid: o.datePaid?.toISOString().slice(0, 10) || null,
+    }));
+
+    // 4) O'chirish (faqat dryRun=false bo'lsa)
+    let deleted = 0;
+    if (!dryRun && orphans.length > 0) {
+      // 500 tadan chunk qilib o'chiramiz
+      for (let i = 0; i < orphans.length; i += 500) {
+        const chunk = orphans.slice(i, i + 500).map((o) => o.externalId);
+        const r = await this.prisma.xonpayTransaction.deleteMany({
+          where: { externalId: { in: chunk } },
+        });
+        deleted += r.count;
+      }
+      this.log.log(`cleanupOrphans: ${deleted} ta orphan o'chirildi`);
+    }
+
+    return {
+      ok: true,
+      crmCount: crmIds.size,
+      dbCount: dbRows.length,
+      orphanCount: orphans.length,
+      orphanSamples: samples,
+      deleted,
+    };
+  }
+
+  /**
    * Mavjud ma'lumotlarni 1 kunga oldinga shift qilish — TZ bug fix uchun.
    * Eski parseDate'da datePaid UTC bo'lganidan keyin 1 kun kam yozilgan edi.
    * Bu metod barcha datePaid'ga +1 kun qo'shadi.
