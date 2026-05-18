@@ -159,6 +159,8 @@ export class CategorizationService {
   private recheckFinishedAt: Date | null = null;
   private recheckProgress: { done: number; total: number; fixed: number; stillXato: number; errors: number } | null = null;
   private recheckLastError: string | null = null;
+  // Tuzatilgan shartnomalar ro'yxati (tekshirish uchun)
+  private recheckFixedContracts: Array<{ contractNumber: string; customerName: string | null; objectName: string | null; fixedAt: string }> = [];
 
   // Kategoriya ID'lari keshi — har safar DB'dan o'qimaslik uchun
   private categoryRefs: CategoryRefs | null = null;
@@ -271,6 +273,55 @@ export class CategorizationService {
       finishedAt: this.recheckFinishedAt?.toISOString() || null,
       progress: this.recheckProgress,
       lastError: this.recheckLastError,
+      fixedCount: this.recheckFixedContracts.length,
+      // Faqat oxirgi 20 ta — preview uchun
+      recentFixed: this.recheckFixedContracts.slice(-20).reverse(),
+    };
+  }
+
+  /**
+   * Tuzatilgan shartnomalarning to'liq ro'yxati (CSV export uchun ham mos).
+   * @param limit max 5000 (xavfsizlik)
+   */
+  async getRecheckFixedList(limit = 5000): Promise<{
+    ok: true;
+    total: number;
+    items: Array<{
+      contractNumber: string;
+      customerName: string | null;
+      objectName: string | null;
+      fixedAt: string;
+      txCount: number;
+    }>;
+  }> {
+    const safeLimit = Math.min(Math.max(limit, 1), 5000);
+    const fixed = this.recheckFixedContracts.slice(-safeLimit).reverse();
+
+    // Har bir shartnoma uchun nechta tx borligini hisoblaymiz
+    const contracts = fixed.map((f) => f.contractNumber);
+    let txCounts = new Map<string, number>();
+    if (contracts.length > 0) {
+      // Katta IN — 500 tadan bo'lib so'raymiz
+      for (let i = 0; i < contracts.length; i += 500) {
+        const chunk = contracts.slice(i, i + 500);
+        const grouped = await this.prisma.transaction.groupBy({
+          by: ['contractNumber'],
+          where: { contractNumber: { in: chunk } },
+          _count: true,
+        });
+        for (const g of grouped) {
+          if (g.contractNumber) txCounts.set(g.contractNumber, g._count);
+        }
+      }
+    }
+
+    return {
+      ok: true,
+      total: this.recheckFixedContracts.length,
+      items: fixed.map((f) => ({
+        ...f,
+        txCount: txCounts.get(f.contractNumber) || 0,
+      })),
     };
   }
 
@@ -280,6 +331,7 @@ export class CategorizationService {
     this.recheckFinishedAt = null;
     this.recheckLastError = null;
     this.recheckProgress = { done: 0, total: 0, fixed: 0, stillXato: 0, errors: 0 };
+    this.recheckFixedContracts = []; // yangi run — eski ro'yxatni tozalaymiz
 
     try {
       // 1) Verified shartnomalar ro'yxati (bularni o'tkazib yuboramiz)
@@ -317,6 +369,12 @@ export class CategorizationService {
               const result = await this.crmCache.lookup(contract);
               if (result?.found) {
                 this.recheckProgress!.fixed++;
+                this.recheckFixedContracts.push({
+                  contractNumber: contract,
+                  customerName: result.customerName || null,
+                  objectName: result.objectName || null,
+                  fixedAt: new Date().toISOString(),
+                });
               } else {
                 this.recheckProgress!.stillXato++;
               }
