@@ -1,4 +1,5 @@
 'use client';
+// rebuild trigger — biling v2 (obyekt + collapsible + skip 100%)
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
