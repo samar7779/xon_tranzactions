@@ -639,22 +639,31 @@ export class ReconcileService {
           account.bankId,
           bank.code,
         );
-        // Topib qaytaramiz
-        const orConds: any[] = [];
-        if (wanted.b2Id) orConds.push({ bankB2Id: wanted.b2Id });
-        if (wanted.generalId) orConds.push({ bankGeneralId: wanted.generalId });
-        const found = orConds.length > 0
-          ? await this.prisma.transaction.findFirst({
-              where: { accountId, OR: orConds },
-              select: { id: true, externalId: true },
-              orderBy: { createdAt: 'desc' },
-            })
-          : null;
+        // Topib qaytaramiz — eski tx'larda bankB2Id/bankGeneralId null bo'lishi mumkin,
+        // shuning uchun composite externalId orqali ham qidiramiz
+        const composite = this.sync.makeCompositeId(target, account.accountNo, bank.code);
+        const orConds: any[] = [{ externalId: composite }];
+        if (wanted.b2Id) {
+          orConds.push({ bankB2Id: wanted.b2Id });
+          orConds.push({ externalId: wanted.b2Id });
+        }
+        if (wanted.generalId) {
+          orConds.push({ bankGeneralId: wanted.generalId });
+          orConds.push({ externalId: wanted.generalId });
+        }
+        const found = await this.prisma.transaction.findFirst({
+          where: { accountId, OR: orConds },
+          select: { id: true, externalId: true, txnDate: true },
+          orderBy: { createdAt: 'desc' },
+        });
         results.push({
           b2Id: wanted.b2Id, generalId: wanted.generalId,
           ok: true, inserted,
           transactionId: found?.id || null,
-          externalId: found?.externalId || null,
+          externalId: found?.externalId || composite,
+          existingDate: !inserted && found?.txnDate
+            ? found.txnDate.toISOString().slice(0, 10)
+            : undefined,
         });
         okCount++;
       } catch (e: any) {

@@ -78,7 +78,8 @@ export class SyncService {
    * Bank prefiksi (oldida): Ipak Yo'li tranzaksiyalari IP_ bilan boshlanadi
    *   — Kapitalbank ID'lari bilan ajratish uchun (ba'zan bir xil ko'rinishda kelishi mumkin)
    */
-  private makeCompositeId(item: KbDoc1CItem, ourAccount: string, bankCode?: string): string {
+  /** Public — sverka fixMissing flow ham composite id'ni ishlatadi */
+  makeCompositeId(item: KbDoc1CItem, ourAccount: string, bankCode?: string): string {
     const sign = item.acc_dt === ourAccount ? '+' : '-';
     const prefix = bankCode === 'IPAK_YULI' ? 'IP_' : '';
     return prefix + [
