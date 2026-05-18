@@ -21,13 +21,14 @@ export class XonpayController {
   startSync(
     @Query('limit') limit?: string,
     @Query('noSkip') noSkip?: string,
-    @CurrentUser() user?: { id?: string; email?: string },
+    @CurrentUser() user?: { id?: string; email?: string; fullName?: string },
   ) {
     return this.svc.startSync({
       limit: limit ? Number(limit) : undefined,
       trigger: 'manual',
       actorId: user?.id,
       actorEmail: user?.email,
+      actorName: user?.fullName,
       noSkip: noSkip === 'true',
     });
   }
@@ -60,9 +61,21 @@ export class XonpayController {
 
   @Get('sync/history')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
-  @ApiOperation({ summary: 'Sync tarixi — manual va cron — barchasi' })
-  syncHistory(@Query('limit') limit?: string) {
-    return this.svc.getSyncHistory(limit ? Number(limit) : 50);
+  @ApiOperation({ summary: 'Sync tarixi — filterlar bilan (q, status, dateFrom, dateTo)' })
+  syncHistory(
+    @Query('limit') limit?: string,
+    @Query('q') q?: string,
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.svc.getSyncHistory({
+      limit: limit ? Number(limit) : 50,
+      q,
+      status,
+      dateFrom,
+      dateTo,
+    });
   }
 
   @Post('admin/fix-date-shift')
