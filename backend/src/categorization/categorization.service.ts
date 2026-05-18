@@ -281,9 +281,12 @@ export class CategorizationService {
 
   /**
    * Tuzatilgan shartnomalarning to'liq ro'yxati (CSV export uchun ham mos).
+   * Har bir shartnomaga taalluqli tx ID lari (internal + external) ham qaytariladi.
    * @param limit max 5000 (xavfsizlik)
+   * @param withTxIds  true (default) — har bir shartnoma uchun tx ID larni ham qaytaradi
+   * @param maxTxPerContract  har bir shartnomaga max nechta tx ID (default 50)
    */
-  async getRecheckFixedList(limit = 5000): Promise<{
+  async getRecheckFixedList(limit = 5000, withTxIds = true, maxTxPerContract = 50): Promise<{
     ok: true;
     total: number;
     items: Array<{
@@ -292,16 +295,18 @@ export class CategorizationService {
       objectName: string | null;
       fixedAt: string;
       txCount: number;
+      txIds?: Array<{ id: string; externalId: string | null; txnDate: string | null; amount: string }>;
     }>;
   }> {
     const safeLimit = Math.min(Math.max(limit, 1), 5000);
     const fixed = this.recheckFixedContracts.slice(-safeLimit).reverse();
 
-    // Har bir shartnoma uchun nechta tx borligini hisoblaymiz
     const contracts = fixed.map((f) => f.contractNumber);
-    let txCounts = new Map<string, number>();
+    const txCounts = new Map<string, number>();
+    const txsByContract = new Map<string, Array<{ id: string; externalId: string | null; txnDate: string | null; amount: string }>>();
+
     if (contracts.length > 0) {
-      // Katta IN — 500 tadan bo'lib so'raymiz
+      // 1) Count: groupBy 500/chunk
       for (let i = 0; i < contracts.length; i += 500) {
         const chunk = contracts.slice(i, i + 500);
         const grouped = await this.prisma.transaction.groupBy({
@@ -313,6 +318,31 @@ export class CategorizationService {
           if (g.contractNumber) txCounts.set(g.contractNumber, g._count);
         }
       }
+
+      // 2) Tx ID lar (har shartnoma uchun maxTxPerContract tagacha)
+      if (withTxIds) {
+        for (let i = 0; i < contracts.length; i += 500) {
+          const chunk = contracts.slice(i, i + 500);
+          const txs = await this.prisma.transaction.findMany({
+            where: { contractNumber: { in: chunk } },
+            select: { id: true, externalId: true, txnDate: true, amount: true, contractNumber: true },
+            orderBy: { txnDate: 'desc' },
+          });
+          for (const tx of txs) {
+            if (!tx.contractNumber) continue;
+            const list = txsByContract.get(tx.contractNumber) || [];
+            if (list.length < maxTxPerContract) {
+              list.push({
+                id: tx.id,
+                externalId: tx.externalId,
+                txnDate: tx.txnDate?.toISOString().slice(0, 10) || null,
+                amount: tx.amount.toString(),
+              });
+              txsByContract.set(tx.contractNumber, list);
+            }
+          }
+        }
+      }
     }
 
     return {
@@ -321,6 +351,7 @@ export class CategorizationService {
       items: fixed.map((f) => ({
         ...f,
         txCount: txCounts.get(f.contractNumber) || 0,
+        ...(withTxIds ? { txIds: txsByContract.get(f.contractNumber) || [] } : {}),
       })),
     };
   }
