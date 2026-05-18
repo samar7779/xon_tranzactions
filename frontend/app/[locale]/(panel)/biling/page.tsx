@@ -88,6 +88,10 @@ export default function BilingPage() {
   const [cronOpen, setCronOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [dailyOpen, setDailyOpen] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  // Foydalanuvchi qo'lda yopgan paytda — qaytadan ochmaslik uchun
+  const [progressModalDismissed, setProgressModalDismissed] = useState(false);
   const [matched, setMatched] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -167,14 +171,23 @@ export default function BilingPage() {
     }
   }
 
-  // Refetch after sync/match finishes
+  // Sync/match ishlay boshlasa — modul'ni avtomatik ochamiz (foydalanuvchi yopmagan bo'lsa)
   useEffect(() => {
-    if (!syncRunning && syncStatusQuery.data?.finishedAt) {
+    if ((syncRunning || matchRunning) && !progressModalDismissed) {
+      setProgressModalOpen(true);
+    }
+    // Tugagach modul yopilmaydi (foydalanuvchi xohlaganda yopadi)
+  }, [syncRunning, matchRunning, progressModalDismissed]);
+
+  // Sync/match tugagach dismissed flag ni reset qilamiz (keyingi sync uchun)
+  useEffect(() => {
+    if (!syncRunning && !matchRunning && syncStatusQuery.data?.finishedAt) {
       qc.invalidateQueries({ queryKey: ['xonpay-list'] });
       qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
       qc.invalidateQueries({ queryKey: ['xonpay-history'] });
+      setProgressModalDismissed(false);
     }
-  }, [syncRunning, syncStatusQuery.data?.finishedAt, qc]);
+  }, [syncRunning, matchRunning, syncStatusQuery.data?.finishedAt, qc]);
 
   const summary = statsQuery.data?.summary;
   const totalPages = listQuery.data ? Math.max(1, Math.ceil(listQuery.data.total / perPage)) : 1;
@@ -219,31 +232,23 @@ export default function BilingPage() {
           </div>
         </div>
 
-        {/* ═══ PROGRESS PANEL ═══ */}
-        {(syncRunning || matchRunning) && (
-          <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 px-4 py-2.5 text-[12px] space-y-1">
-            {syncRunning && syncStatusQuery.data?.progress && (
-              <div className="flex items-center gap-3 flex-wrap">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600" />
-                <span className="font-semibold text-violet-900">
-                  Sync: page {syncStatusQuery.data.progress.page}/{syncStatusQuery.data.progress.lastPage || '?'}
-                </span>
-                <span className="text-violet-700">keldi {fmt(syncStatusQuery.data.progress.fetched)}</span>
-                <span className="text-violet-700">xonpay {fmt(syncStatusQuery.data.progress.xonpay)}</span>
-                <span className="text-emerald-700">+{syncStatusQuery.data.progress.inserted} yangi</span>
-                <span className="text-amber-700">~{syncStatusQuery.data.progress.updated} update</span>
-                <span className="text-blue-700">{syncStatusQuery.data.progress.matched} matched</span>
-                {syncStatusQuery.data.progress.errors > 0 && <span className="text-rose-700">{syncStatusQuery.data.progress.errors} xato</span>}
-              </div>
-            )}
-            {matchRunning && matchStatusQuery.data?.progress && (
-              <div className="flex items-center gap-3 flex-wrap">
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
-                <span className="font-semibold text-blue-900">Match: {matchStatusQuery.data.progress.done}/{matchStatusQuery.data.progress.total}</span>
-                <span className="text-emerald-700">topildi: {matchStatusQuery.data.progress.matched}</span>
-              </div>
-            )}
-          </div>
+        {/* Compact inline indicator — modul yopilgan paytda ham progress ko'rinsin */}
+        {(syncRunning || matchRunning) && !progressModalOpen && (
+          <button onClick={() => { setProgressModalOpen(true); setProgressModalDismissed(false); }}
+            className="w-full rounded-lg ring-1 ring-violet-200 bg-violet-50 hover:bg-violet-100 transition-colors px-4 py-2.5 text-[12px] flex items-center gap-3">
+            <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600 shrink-0" />
+            <span className="font-semibold text-violet-900">
+              {syncRunning ? 'Sync ishlamoqda' : 'Match ishlamoqda'} —
+            </span>
+            <span className="text-violet-700">
+              {syncRunning && syncStatusQuery.data?.progress
+                ? `page ${syncStatusQuery.data.progress.page}, +${syncStatusQuery.data.progress.inserted} yangi, ${syncStatusQuery.data.progress.matched} matched`
+                : matchRunning && matchStatusQuery.data?.progress
+                  ? `${matchStatusQuery.data.progress.done}/${matchStatusQuery.data.progress.total}`
+                  : ''}
+            </span>
+            <span className="ml-auto text-[11px] text-violet-600 underline">batafsil ko'rsatish →</span>
+          </button>
         )}
 
         {/* ═══ CRON + SYNC TARIXI (collapsible) ═══ */}
@@ -420,10 +425,11 @@ export default function BilingPage() {
           </CardContent>
         </Card>
 
-        {/* ═══ FILTRLAR + RO'YXAT ═══ */}
+        {/* ═══ FILTRLAR + RO'YXAT (collapsible) ═══ */}
         <Card>
           <CardContent className="p-0">
-            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between gap-3 flex-wrap">
+            <button onClick={() => setListOpen(o => !o)}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
               <h2 className="text-[13px] font-bold flex items-center gap-2">
                 <Hash className="h-3.5 w-3.5 text-violet-600" />
                 XonPay to'lovlar ro'yxati
@@ -431,6 +437,10 @@ export default function BilingPage() {
                   <span className="text-[11px] text-slate-500 font-normal">({fmt(listQuery.data.total)} ta)</span>
                 )}
               </h2>
+              {listOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+            </button>
+            {listOpen && (<>
+            <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-end gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -568,8 +578,24 @@ export default function BilingPage() {
                 </div>
               </>
             )}
+            </>)}
           </CardContent>
         </Card>
+
+        {/* ═══ SYNC PROGRESS MODAL ═══ */}
+        <SyncProgressDialog
+          open={progressModalOpen}
+          syncRunning={syncRunning}
+          matchRunning={matchRunning}
+          syncProgress={syncStatusQuery.data?.progress}
+          matchProgress={matchStatusQuery.data?.progress}
+          syncStartedAt={syncStatusQuery.data?.startedAt || null}
+          syncFinishedAt={syncStatusQuery.data?.finishedAt || null}
+          syncLastError={syncStatusQuery.data?.lastError || null}
+          onClose={() => { setProgressModalOpen(false); setProgressModalDismissed(true); }}
+          onCancelSync={() => cancelSyncMut.mutate()}
+          cancelPending={cancelSyncMut.isPending}
+        />
 
         {/* ═══ DETAIL MODAL (row click) ═══ */}
         {detailRow && (
@@ -738,6 +764,188 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
     <div className="grid grid-cols-[140px_1fr] gap-3 px-3 py-2 text-[12px]">
       <div className="text-slate-500 font-medium">{label}</div>
       <div className="text-slate-800 min-w-0">{value}</div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  SYNC PROGRESS DIALOG — modul ko'rinishida, to'xtatish ham mavjud
+// ════════════════════════════════════════════════════
+function SyncProgressDialog({
+  open, syncRunning, matchRunning, syncProgress, matchProgress,
+  syncStartedAt, syncFinishedAt, syncLastError,
+  onClose, onCancelSync, cancelPending,
+}: {
+  open: boolean;
+  syncRunning: boolean;
+  matchRunning: boolean;
+  syncProgress: SyncStatus['progress'];
+  matchProgress: { done: number; total: number; matched: number } | null | undefined;
+  syncStartedAt: string | null;
+  syncFinishedAt: string | null;
+  syncLastError: string | null;
+  onClose: () => void;
+  onCancelSync: () => void;
+  cancelPending: boolean;
+}) {
+  const isActive = syncRunning || matchRunning;
+  const elapsedSec = syncStartedAt
+    ? Math.floor((Date.now() - new Date(syncStartedAt).getTime()) / 1000)
+    : 0;
+  const elapsedStr = elapsedSec >= 60
+    ? `${Math.floor(elapsedSec / 60)} daq ${elapsedSec % 60}s`
+    : `${elapsedSec}s`;
+
+  // Sync progress %
+  const sp = syncProgress;
+  const pct = sp && sp.lastPage > 0 ? Math.min(100, Math.round((sp.page / sp.lastPage) * 100)) : 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <div className={cn(
+              'w-7 h-7 rounded-lg grid place-items-center text-white',
+              isActive ? 'bg-gradient-to-br from-violet-500 to-purple-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+            )}>
+              {isActive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+            </div>
+            {syncRunning && 'Sync ishlamoqda'}
+            {matchRunning && !syncRunning && 'Match ishlamoqda'}
+            {!isActive && (syncFinishedAt ? 'Sync tugadi' : 'Sync holati')}
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            {syncRunning && `CRM dan XonPay to'lovlari yuklanmoqda · ${elapsedStr}`}
+            {matchRunning && !syncRunning && 'Topilmagan to\'lovlar Kapitalbank bilan moslashtirilmoqda'}
+            {!isActive && syncFinishedAt && `Yakunlandi: ${new Date(syncFinishedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}`}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 pt-2">
+          {/* ── SYNC PROGRESS ── */}
+          {sp && (
+            <div className="space-y-3">
+              {/* Progress bar */}
+              <div>
+                <div className="flex items-center justify-between text-[11px] mb-1.5">
+                  <span className="font-semibold text-slate-700">
+                    Sahifa {sp.page} / {sp.lastPage || '?'}
+                  </span>
+                  <span className="text-violet-700 font-bold">{pct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-violet-100 overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500',
+                      syncRunning ? 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500 animate-pulse' : 'bg-emerald-500',
+                    )}
+                    style={{ width: `${Math.max(pct, 2)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Statistika grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <ProgressStat label="CRM dan keldi" value={fmt(sp.fetched)} color="slate" />
+                <ProgressStat label="XonPay" value={fmt(sp.xonpay)} color="violet" />
+                <ProgressStat label="Yangi" value={`+${fmt(sp.inserted)}`} color="emerald" />
+                <ProgressStat label="Yangilangan" value={`~${fmt(sp.updated)}`} color="amber" />
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <ProgressStat label="Matched" value={fmt(sp.matched)} color="blue" icon={<CheckCircle2 className="h-3 w-3" />} />
+                <ProgressStat label="Xatolar" value={fmt(sp.errors)} color={sp.errors > 0 ? 'rose' : 'slate'} icon={sp.errors > 0 ? <XCircle className="h-3 w-3" /> : undefined} />
+                <ProgressStat label="Vaqt" value={elapsedStr} color="slate" icon={<Activity className="h-3 w-3" />} />
+                <ProgressStat label="Holat" value={syncRunning ? 'ishlamoqda' : 'tugadi'} color={syncRunning ? 'violet' : 'emerald'} />
+              </div>
+            </div>
+          )}
+
+          {/* ── MATCH PROGRESS ── */}
+          {matchRunning && matchProgress && (
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between text-[11px] mb-1.5">
+                <span className="font-semibold text-blue-700 flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Match: {matchProgress.done}/{matchProgress.total}
+                </span>
+                <span className="text-emerald-700 font-bold">{matchProgress.matched} topildi</span>
+              </div>
+              <div className="h-2 rounded-full bg-blue-100 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 animate-pulse transition-all"
+                  style={{ width: `${matchProgress.total > 0 ? Math.min(100, Math.round((matchProgress.done / matchProgress.total) * 100)) : 0}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* ── XATO ── */}
+          {syncLastError && !syncRunning && (
+            <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[11.5px] text-rose-800 flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div><b>Xato:</b> {syncLastError}</div>
+            </div>
+          )}
+
+          {/* ── INFO ── */}
+          {syncRunning && (
+            <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[11px] text-amber-800 flex items-start gap-2">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+              <div>
+                Sync fonda davom etadi. Bu modul yopilsa ham sync to'xtamaydi.
+                <br />
+                <b>100% matched kunlar avtomatik skip qilinadi</b> — qaytadan tekshirilmaydi.
+              </div>
+            </div>
+          )}
+
+          {/* ── TUGMALAR ── */}
+          <div className="flex items-center justify-end gap-2 pt-2 border-t">
+            {syncRunning && (
+              <Button
+                variant="outline"
+                onClick={onCancelSync}
+                disabled={cancelPending}
+                className="gap-1.5 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              >
+                {cancelPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                Sync ni to'xtatish
+              </Button>
+            )}
+            <Button variant="outline" onClick={onClose}>
+              {isActive ? 'Modulni yopish (sync davom etadi)' : 'Yopish'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ProgressStat({
+  label, value, color, icon,
+}: {
+  label: string;
+  value: string;
+  color: 'violet' | 'emerald' | 'rose' | 'amber' | 'blue' | 'slate';
+  icon?: React.ReactNode;
+}) {
+  const m = {
+    violet:  { bg: 'bg-violet-50',  text: 'text-violet-700',  ring: 'ring-violet-200' },
+    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-700', ring: 'ring-emerald-200' },
+    rose:    { bg: 'bg-rose-50',    text: 'text-rose-700',    ring: 'ring-rose-200' },
+    amber:   { bg: 'bg-amber-50',   text: 'text-amber-700',   ring: 'ring-amber-200' },
+    blue:    { bg: 'bg-blue-50',    text: 'text-blue-700',    ring: 'ring-blue-200' },
+    slate:   { bg: 'bg-slate-50',   text: 'text-slate-700',   ring: 'ring-slate-200' },
+  }[color];
+  return (
+    <div className={cn('rounded-lg ring-1 ring-inset px-3 py-2', m.bg, m.ring)}>
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
+      <div className={cn('text-base font-bold tabular-nums flex items-center gap-1', m.text)}>
+        {icon}
+        {value}
+      </div>
     </div>
   );
 }
