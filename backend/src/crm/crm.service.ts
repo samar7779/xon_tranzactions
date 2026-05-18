@@ -3,6 +3,8 @@ import * as mysql from 'mysql2/promise';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 const XONSAROY_BASE_URL = process.env.XONSAROY_API_URL || 'https://app-api.xonsaroy.uz/api/v4/client/order';
+// payment-history endpoint /client/order DAN tashqarida — /client/payment-history
+const XONSAROY_CLIENT_BASE = process.env.XONSAROY_CLIENT_BASE || 'https://app-api.xonsaroy.uz/api/v4/client';
 const XONSAROY_KEY = process.env.XONSAROY_API_KEY || 'G0C2kwSk3e3AnEZUMJhq067ZM5s9Wkuc';
 const XONSAROY_SECRET = process.env.XONSAROY_API_SECRET || 'w1qBTE76Y4PKsbLeLjd2gt8UDDSHYJl0';
 
@@ -50,14 +52,23 @@ export class CrmService {
   }
 
   private async call(path: string, body: Record<string, any>) {
+    return this.callUrl(`${XONSAROY_BASE_URL}${path}`, body, 20_000);
+  }
+
+  /** /client base bilan chaqirish (order'siz) — payment-history kabi endpointlar uchun */
+  private async callClient(path: string, body: Record<string, any>, timeoutMs = 60_000) {
+    return this.callUrl(`${XONSAROY_CLIENT_BASE}${path}`, body, timeoutMs);
+  }
+
+  private async callUrl(url: string, body: Record<string, any>, timeoutMs: number) {
     const form = new URLSearchParams();
     for (const [k, v] of Object.entries(body)) {
       if (v != null) form.set(k, String(v));
     }
     const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), 20_000);
+    const tm = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(`${XONSAROY_BASE_URL}${path}`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': this.auth(),
@@ -68,7 +79,7 @@ export class CrmService {
       });
       const text = await res.text();
       if (!res.ok) {
-        this.log.warn(`XonSaroy ${path} -> ${res.status}: ${text.slice(0, 200)}`);
+        this.log.warn(`XonSaroy ${url} -> ${res.status}: ${text.slice(0, 200)}`);
         return { ok: false, status: res.status, error: text };
       }
       try {
@@ -77,11 +88,20 @@ export class CrmService {
         return { ok: false, status: 200, error: 'Invalid JSON', raw: text };
       }
     } catch (e: any) {
-      this.log.error(`XonSaroy ${path} error: ${e?.message}`);
+      this.log.error(`XonSaroy ${url} error: ${e?.message}`);
       return { ok: false, error: e?.message || 'Network error' };
     } finally {
       clearTimeout(tm);
     }
+  }
+
+  /**
+   * Bulk payment history — XonSaroy CRM dan to'lovlar ro'yxati (paginatsiya bilan).
+   * Python skriptdagi /payment-history/excel endpointi.
+   * Bir sahifada 5000 tagacha qaytaradi (limit parametri).
+   */
+  async getPaymentHistory(page = 1, limit = 5000) {
+    return this.callClient('/payment-history/excel', { page, limit }, 60_000);
   }
 
   /**
