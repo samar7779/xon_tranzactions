@@ -190,7 +190,13 @@ export default function BilingPage() {
   });
   const matchAllMut = useMutation({
     mutationFn: () => api.post<{ ok: true; message: string }>('/xonpay/match-all?onlyUnmatched=true', {}),
-    onSuccess: (r) => { toast.message(r.message); qc.invalidateQueries({ queryKey: ['xonpay-match-status'] }); },
+    onSuccess: (r) => {
+      toast.message(r.message);
+      qc.invalidateQueries({ queryKey: ['xonpay-match-status'] });
+      // Modul'ni darrov ochamiz
+      setProgressModalOpen(true);
+      setProgressModalDismissed(false);
+    },
     onError: (e: any) => toast.error(e?.message || 'Match boshlanmadi'),
   });
 
@@ -984,17 +990,19 @@ function SyncProgressDialog({
           <DialogTitle className="flex items-center gap-2 text-base">
             <div className={cn(
               'w-7 h-7 rounded-lg grid place-items-center text-white',
-              isActive ? 'bg-gradient-to-br from-violet-500 to-purple-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600',
+              syncRunning ? 'bg-gradient-to-br from-violet-500 to-purple-600' :
+              matchRunning ? 'bg-gradient-to-br from-blue-500 to-cyan-600' :
+              'bg-gradient-to-br from-emerald-500 to-teal-600',
             )}>
               {isActive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             </div>
-            {syncRunning && 'Sync ishlamoqda'}
-            {matchRunning && !syncRunning && 'Match ishlamoqda'}
-            {!isActive && (syncFinishedAt ? 'Sync tugadi' : 'Sync holati')}
+            {syncRunning && 'CRM dan sync ishlamoqda'}
+            {matchRunning && !syncRunning && 'Qolganlarni tekshirish (match)'}
+            {!isActive && (syncFinishedAt ? 'Sync tugadi' : 'Holat')}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
             {syncRunning && `CRM dan XonPay to'lovlari yuklanmoqda · ${elapsedStr}`}
-            {matchRunning && !syncRunning && 'Topilmagan to\'lovlar Kapitalbank bilan moslashtirilmoqda'}
+            {matchRunning && !syncRunning && "Topilmagan XonPay to'lovlari uchun Kapitalbank tx qidirilmoqda (UUID bo'yicha)"}
             {!isActive && syncFinishedAt && `Yakunlandi: ${new Date(syncFinishedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}`}
           </DialogDescription>
         </DialogHeader>
@@ -1039,19 +1047,47 @@ function SyncProgressDialog({
           )}
 
           {/* ── MATCH PROGRESS ── */}
-          {matchRunning && matchProgress && (
-            <div className="border-t pt-3">
-              <div className="flex items-center justify-between text-[11px] mb-1.5">
-                <span className="font-semibold text-blue-700 flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Match: {matchProgress.done}/{matchProgress.total}
-                </span>
-                <span className="text-emerald-700 font-bold">{matchProgress.matched} topildi</span>
+          {(matchRunning || (!syncRunning && matchProgress)) && matchProgress && (
+            <div className={cn('space-y-3', syncRunning && 'border-t pt-3')}>
+              <div>
+                <div className="flex items-center justify-between text-[11px] mb-1.5">
+                  <span className="font-semibold text-blue-700 flex items-center gap-1.5">
+                    {matchRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+                    Match (Topilmaganlarni Kapitalbank bilan moslashtirish)
+                  </span>
+                  <span className="text-blue-700 font-bold tabular-nums">
+                    {matchProgress.total > 0 ? Math.round((matchProgress.done / matchProgress.total) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="h-2.5 rounded-full bg-blue-100 overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full rounded-full transition-all duration-500',
+                      matchRunning
+                        ? 'bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 animate-pulse'
+                        : 'bg-emerald-500',
+                    )}
+                    style={{ width: `${matchProgress.total > 0 ? Math.max(2, Math.min(100, Math.round((matchProgress.done / matchProgress.total) * 100))) : 0}%` }}
+                  />
+                </div>
               </div>
-              <div className="h-2 rounded-full bg-blue-100 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 animate-pulse transition-all"
-                  style={{ width: `${matchProgress.total > 0 ? Math.min(100, Math.round((matchProgress.done / matchProgress.total) * 100)) : 0}%` }}
+              <div className="grid grid-cols-3 gap-2">
+                <ProgressStat
+                  label="Tekshirildi"
+                  value={`${fmt(matchProgress.done)} / ${fmt(matchProgress.total)}`}
+                  color="blue"
+                  icon={<Activity className="h-3 w-3" />}
+                />
+                <ProgressStat
+                  label="Topildi (matched)"
+                  value={fmt(matchProgress.matched)}
+                  color="emerald"
+                  icon={<CheckCircle2 className="h-3 w-3" />}
+                />
+                <ProgressStat
+                  label="Holat"
+                  value={matchRunning ? 'ishlamoqda' : 'tugadi'}
+                  color={matchRunning ? 'blue' : 'emerald'}
                 />
               </div>
             </div>
