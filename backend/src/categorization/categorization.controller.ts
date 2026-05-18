@@ -125,10 +125,20 @@ export class CategorizationController {
     summary: "XATO shartnomalarni qayta tekshirish — uniq shartnomalarni CRM'dan qayta so'raydi",
     description:
       "Kategoriya/shartnoma raqamiga TEGMAYDI. Faqat CrmContract cache'ni yangilaydi. " +
-      'Yangi natija topilsa, sahifa yangilangach contractStatus avtomatik verified bo\'ladi.',
+      "Sana filtri: ?dateFrom=2026-01-01&dateTo=2026-04-30 — faqat shu oraliqdagi tx larning shartnomalari.",
   })
-  recheckXato() {
-    return this.svc.recheckXatoContracts();
+  recheckXato(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.svc.recheckXatoContracts({ dateFrom, dateTo });
+  }
+
+  @Post('recheck-xato/cancel')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: "Joriy qayta tekshirishni bekor qilish (joriy batch tugagandan keyin to'xtaydi)" })
+  recheckXatoCancel() {
+    return this.svc.cancelRecheck();
   }
 
   @Get('recheck-xato/status')

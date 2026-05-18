@@ -155,10 +155,12 @@ export class CategorizationService {
 
   // XATO shartnomalarni qayta tekshirish progress'i
   private recheckRunning = false;
+  private recheckCancelRequested = false;
   private recheckStartedAt: Date | null = null;
   private recheckFinishedAt: Date | null = null;
   private recheckProgress: { done: number; total: number; fixed: number; stillXato: number; errors: number } | null = null;
   private recheckLastError: string | null = null;
+  private recheckFilter: { dateFrom?: string; dateTo?: string } | null = null;
   // Tuzatilgan shartnomalar ro'yxati (tekshirish uchun)
   private recheckFixedContracts: Array<{ contractNumber: string; customerName: string | null; objectName: string | null; fixedAt: string }> = [];
 
@@ -248,7 +250,7 @@ export class CategorizationService {
    *
    * Kategoriya va shartnoma raqamlariga TEGMAYDI.
    */
-  recheckXatoContracts(): { ok: true; started: boolean; message: string } {
+  recheckXatoContracts(opts?: { dateFrom?: string; dateTo?: string }): { ok: true; started: boolean; message: string } {
     if (this.recheckRunning) {
       const since = this.recheckStartedAt;
       const mins = since ? Math.floor((Date.now() - since.getTime()) / 60000) : 0;
@@ -257,20 +259,34 @@ export class CategorizationService {
       return {
         ok: true,
         started: false,
-        message: `Qayta tekshirish allaqachon ishlamoqda${progStr} — ${mins} daqiqadan beri.`,
+        message: `Qayta tekshirish allaqachon ishlamoqda${progStr} — ${mins} daqiqadan beri. Avval /cancel chaqiring.`,
       };
     }
+    this.recheckFilter = opts && (opts.dateFrom || opts.dateTo) ? opts : null;
     this.runRecheckInBackground().catch((e) => {
       this.log.error(`recheckXato xato: ${e?.message || e}`);
     });
-    return { ok: true, started: true, message: 'XATO shartnomalarni qayta tekshirish fonda boshlandi.' };
+    const dateMsg = this.recheckFilter
+      ? ` (${this.recheckFilter.dateFrom || '...'} → ${this.recheckFilter.dateTo || '...'})`
+      : '';
+    return { ok: true, started: true, message: `XATO shartnomalarni qayta tekshirish fonda boshlandi${dateMsg}.` };
+  }
+
+  cancelRecheck(): { ok: true; cancelled: boolean; message: string } {
+    if (!this.recheckRunning) {
+      return { ok: true, cancelled: false, message: 'Qayta tekshirish ishlamayapti.' };
+    }
+    this.recheckCancelRequested = true;
+    return { ok: true, cancelled: true, message: "Bekor qilish so'raldi — joriy batch tugagandan keyin to'xtaydi (~3-5 sek)." };
   }
 
   getRecheckStatus() {
     return {
       running: this.recheckRunning,
+      cancelRequested: this.recheckCancelRequested,
       startedAt: this.recheckStartedAt?.toISOString() || null,
       finishedAt: this.recheckFinishedAt?.toISOString() || null,
+      filter: this.recheckFilter,
       progress: this.recheckProgress,
       lastError: this.recheckLastError,
       fixedCount: this.recheckFixedContracts.length,
@@ -358,6 +374,7 @@ export class CategorizationService {
 
   private async runRecheckInBackground(): Promise<void> {
     this.recheckRunning = true;
+    this.recheckCancelRequested = false;
     this.recheckStartedAt = new Date();
     this.recheckFinishedAt = null;
     this.recheckLastError = null;
@@ -372,10 +389,19 @@ export class CategorizationService {
       });
       const verifiedSet = new Set(verified.map((c) => c.contractNumber));
 
-      // 2) DB'dan uniq XATO shartnomalarni topamiz
-      // (transaction.contractNumber bor + verifiedSet'da yo'q)
+      // 2) DB'dan uniq XATO shartnomalarni topamiz — sana filtri bilan
+      const txWhere: any = { contractNumber: { not: null } };
+      if (this.recheckFilter?.dateFrom || this.recheckFilter?.dateTo) {
+        txWhere.txnDate = {};
+        if (this.recheckFilter.dateFrom) {
+          txWhere.txnDate.gte = new Date(`${this.recheckFilter.dateFrom}T00:00:00+05:00`);
+        }
+        if (this.recheckFilter.dateTo) {
+          txWhere.txnDate.lte = new Date(`${this.recheckFilter.dateTo}T23:59:59.999+05:00`);
+        }
+      }
       const allTxContracts = await this.prisma.transaction.findMany({
-        where: { contractNumber: { not: null } },
+        where: txWhere,
         select: { contractNumber: true },
         distinct: ['contractNumber'],
       });
@@ -384,11 +410,19 @@ export class CategorizationService {
         .filter((c) => !verifiedSet.has(c));
 
       this.recheckProgress.total = xatoContracts.length;
-      this.log.log(`recheckXato: ${xatoContracts.length} ta uniq XATO shartnoma tekshiriladi`);
+      this.log.log(
+        `recheckXato: ${xatoContracts.length} ta uniq XATO shartnoma tekshiriladi` +
+        (this.recheckFilter ? ` (filter: ${this.recheckFilter.dateFrom || '...'} → ${this.recheckFilter.dateTo || '...'})` : ''),
+      );
 
       // 3) Har birini cache'dan o'chirib (force refresh uchun), lookup chaqiramiz
       const CONCURRENCY = 3; // CRM API rate limit uchun ehtiyot
       for (let i = 0; i < xatoContracts.length; i += CONCURRENCY) {
+        // CANCEL CHECK — har batch boshlanishidan oldin
+        if (this.recheckCancelRequested) {
+          this.log.log(`recheckXato bekor qilindi (${this.recheckProgress.done}/${this.recheckProgress.total})`);
+          break;
+        }
         const batch = xatoContracts.slice(i, i + CONCURRENCY);
         await Promise.allSettled(
           batch.map(async (contract) => {
@@ -422,6 +456,7 @@ export class CategorizationService {
       this.log.error(`recheckXato umumiy xato: ${this.recheckLastError}`);
     } finally {
       this.recheckRunning = false;
+      this.recheckCancelRequested = false;
       this.recheckFinishedAt = new Date();
       this.log.log(`recheckXato yakunlandi: ${JSON.stringify(this.recheckProgress)}`);
     }
