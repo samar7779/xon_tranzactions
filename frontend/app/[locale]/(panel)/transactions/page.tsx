@@ -892,10 +892,23 @@ export default function TransactionsPage() {
                                 : <><ArrowUpRight className="h-3 w-3" /> {t('dirOut')}</>}
                             </span>
                           </td>
-                          {/* Kontragent — import bo'lsa importCounterpartyText fallback */}
+                          {/* Kontragent — import bo'lsa importCounterpartyText fallback,
+                              lekin agar u KATEGORIYA bilan dublikat bo'lsa (sub/cat/importCategoryText), bo'shatamiz */}
                           <td className="px-4 py-3 max-w-[160px]">
                             <KontragentChip
-                              display={it.counterpartyDisplay || (it.source === 'IMPORT' ? it.importCounterpartyText : null)}
+                              display={(() => {
+                                if (it.counterpartyDisplay) return it.counterpartyDisplay;
+                                if (it.source === 'IMPORT' && it.importCounterpartyText) {
+                                  const t = it.importCounterpartyText.trim();
+                                  const subName  = it.subcategory?.name?.trim();
+                                  const catName  = it.category?.name?.trim();
+                                  const impCat   = it.importCategoryText?.trim();
+                                  // Import matni KATEGORIYA bilan bir xil — Kontragent ustuni bo'sh qolsin
+                                  if (t === subName || t === catName || t === impCat) return null;
+                                  return t;
+                                }
+                                return it.category?.name || null;
+                              })()}
                               category={it.category}
                               onClick={() => {}}
                               canEdit={false}
