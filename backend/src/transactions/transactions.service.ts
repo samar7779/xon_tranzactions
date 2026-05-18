@@ -90,6 +90,9 @@ export class TransactionsService {
         { reference: { contains: q, mode: 'insensitive' } },
         { fromAccount: { contains: q } },
         { toAccount: { contains: q } },
+        { contractNumber: { contains: q, mode: 'insensitive' } },
+        { id: { equals: q } },
+        { externalId: { equals: q } },
       ];
     }
 

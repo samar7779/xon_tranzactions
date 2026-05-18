@@ -302,7 +302,7 @@
     "exportXlsx": "Excel (XLSX)",
     "searchById": "Tranzaksiya ID bo'yicha qidirish",
     "history": "Tarix",
-    "searchPlaceholder": "Yuboruvchi, qabul qiluvchi, STIR, izoh...",
+    "searchPlaceholder": "Yuboruvchi, qabul qiluvchi, STIR, izoh, shartnoma raqami, ID...",
     "kpiIn30": "Kirim · 30 kun",
     "kpiOut30": "Chiqim · 30 kun",
     "kpiNet": "Sof oqim",
