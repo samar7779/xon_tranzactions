@@ -114,6 +114,12 @@ export class TransactionsController {
     return this.reconcileSvc.diagnoseDay(body?.accountId, body?.date);
   }
 
+  @Post('reconcile/fix-missing')
+  @ApiOperation({ summary: "Bankda bor lekin DB da yo'q tranzaksiyani qayta sync qilib DB ga qo'shadi" })
+  fixMissing(@Body() body: { accountId: string; b2Id?: string; generalId?: string; date: string }) {
+    return this.reconcileSvc.fixMissing(body?.accountId, body?.b2Id, body?.generalId, body?.date);
+  }
+
   @Get('export')
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(
