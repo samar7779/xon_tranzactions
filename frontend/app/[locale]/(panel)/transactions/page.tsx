@@ -3289,13 +3289,15 @@ function CategoryHistorySection({ txId }: { txId: string }) {
 function CategoryHistoryItem({ h }: { h: any }) {
   const actorLabel = h.actorName || h.action;
   const actionColor: Record<string, string> = {
-    manual: 'bg-indigo-100 text-indigo-700',
-    sync:   'bg-emerald-100 text-emerald-700',
-    auto:   'bg-violet-100 text-violet-700',
-    cron:   'bg-amber-100 text-amber-700',
-    import: 'bg-fuchsia-100 text-fuchsia-700',
+    manual:       'bg-indigo-100 text-indigo-700',
+    sync:         'bg-emerald-100 text-emerald-700',
+    auto:         'bg-violet-100 text-violet-700',
+    cron:         'bg-amber-100 text-amber-700',
+    import:       'bg-fuchsia-100 text-fuchsia-700',
+    counterparty: 'bg-teal-100 text-teal-700',
   };
   const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
+  const isCp = h.action === 'counterparty';
 
   // Action turi: qo'shildi / o'zgartirildi / o'chirildi
   const hadOld = !!(h.oldCategoryName || h.oldSubcategoryName);
@@ -3306,6 +3308,13 @@ function CategoryHistoryItem({ h }: { h: any }) {
   else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700'; }
   else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700'; }
 
+  // Kontragent uchun maxsus chunki - nom (kategoriya emas)
+  const renderCp = (name: string | null) => (
+    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-teal-50 ring-1 ring-teal-200 text-teal-800 font-semibold">
+      <Briefcase className="h-3 w-3" />
+      {name || 'bo\'sh'}
+    </span>
+  );
   const renderCat = (name: string | null, sub: string | null) => {
     if (!name && !sub) return <span className="text-slate-400 italic">bo'sh</span>;
     return (
@@ -3314,12 +3323,13 @@ function CategoryHistoryItem({ h }: { h: any }) {
       </span>
     );
   };
+
   return (
-    <div className="rounded-lg ring-1 ring-slate-100 bg-slate-50/50 px-3 py-2 text-[11px] space-y-1">
+    <div className={cn('rounded-lg ring-1 px-3 py-2 text-[11px] space-y-1', isCp ? 'ring-teal-200 bg-teal-50/40' : 'ring-slate-100 bg-slate-50/50')}>
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn('px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider', cls)}>
-            {h.action}
+            {isCp ? 'KONTRAGENT' : h.action}
           </span>
           <span className="font-medium text-slate-700">{actorLabel}</span>
           {actionLabel && (
@@ -3330,25 +3340,39 @@ function CategoryHistoryItem({ h }: { h: any }) {
         </div>
         <span className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(h.createdAt)}</span>
       </div>
-      {/* Diff — faqat o'zgartirildi (eski + yangi) holatda ko'rsatish, qo'shildi/o'chirildi'da bittasi yetadi */}
-      {hadOld && hasNew ? (
-        <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-          <span className="line-through text-rose-600/80">
-            {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
-          </span>
-          <span className="text-slate-400">→</span>
-          <span className="text-emerald-700">
-            {renderCat(h.newCategoryName, h.newSubcategoryName)}
-          </span>
-        </div>
-      ) : hasNew ? (
-        <div className="text-[11px] text-emerald-700">
-          {renderCat(h.newCategoryName, h.newSubcategoryName)}
-        </div>
+      {/* Diff — kontragent yoki kategoriya */}
+      {isCp ? (
+        hadOld && hasNew ? (
+          <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+            <span className="line-through opacity-70">{renderCp(h.oldCategoryName)}</span>
+            <span className="text-slate-400">→</span>
+            {renderCp(h.newCategoryName)}
+          </div>
+        ) : hasNew ? (
+          <div className="text-[11px]">{renderCp(h.newCategoryName)}</div>
+        ) : (
+          <div className="text-[11px] line-through opacity-70">{renderCp(h.oldCategoryName)}</div>
+        )
       ) : (
-        <div className="text-[11px] text-rose-700 line-through">
-          {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
-        </div>
+        hadOld && hasNew ? (
+          <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
+            <span className="line-through text-rose-600/80">
+              {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
+            </span>
+            <span className="text-slate-400">→</span>
+            <span className="text-emerald-700">
+              {renderCat(h.newCategoryName, h.newSubcategoryName)}
+            </span>
+          </div>
+        ) : hasNew ? (
+          <div className="text-[11px] text-emerald-700">
+            {renderCat(h.newCategoryName, h.newSubcategoryName)}
+          </div>
+        ) : (
+          <div className="text-[11px] text-rose-700 line-through">
+            {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
+          </div>
+        )
       )}
       {h.reason && (
         <div className="text-[10px] text-slate-500 italic">{h.reason}</div>

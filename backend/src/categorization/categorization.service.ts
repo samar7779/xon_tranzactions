@@ -349,7 +349,10 @@ export class CategorizationService {
   async setCounterparty(txId: string, counterpartyId: string | null, actorId: string): Promise<{ ok: true; counterparty: { id: string; inn: string; name: string } | null }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { manualCounterpartyId: true, categoryId: true, subcategoryId: true },
+      select: {
+        manualCounterpartyId: true,
+        manualCounterparty: { select: { id: true, inn: true, name: true } },
+      },
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
@@ -368,22 +371,24 @@ export class CategorizationService {
       data: { manualCounterpartyId: counterpartyId },
     });
 
-    // Tarixga yozish
+    // Tarixga yozish — action='counterparty' (frontend alohida render qiladi)
+    // Eski/yangi nomlar oldCategoryName/newCategoryName ga yoziladi (schema o'zgarishsiz)
     if (old.manualCounterpartyId !== counterpartyId) {
       const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+      const oldName = old.manualCounterparty?.name || null;
+      const newName = cp?.name || null;
       try {
         await this.prisma.transactionCategoryHistory.create({
           data: {
             txId,
-            action: 'manual',
+            action: 'counterparty',
             actorId,
             actorName: u?.email || null,
-            oldCategoryId: old.categoryId,
-            oldSubcategoryId: old.subcategoryId,
-            newCategoryId: old.categoryId,
-            newSubcategoryId: old.subcategoryId,
+            // Counterparty nomini category name maydoniga yozamiz (schema o'zgartirmasdan, UI tushunadi)
+            oldCategoryName: oldName,
+            newCategoryName: newName,
             reason: cp
-              ? `Kontragent qo'lda: ${cp.name} (INN ${cp.inn})`
+              ? `Kontragent biriktirildi (INN ${cp.inn})`
               : "Kontragent biriktirilishi o'chirildi",
           },
         });
