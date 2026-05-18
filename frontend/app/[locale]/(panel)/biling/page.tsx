@@ -1093,241 +1093,102 @@ function ProgressStat({
 // ════════════════════════════════════════════════════
 function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<'idle' | 'scanning' | 'scanned' | 'deleting' | 'truncating' | 'done' | 'error'>('idle');
-  const [progress, setProgress] = useState<any>(null);
-  const [samples, setSamples] = useState<any[]>([]);
+  const [phase, setPhase] = useState<'idle' | 'confirm' | 'truncating' | 'done' | 'error'>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
-  const [truncateResult, setTruncateResult] = useState<{ deleted: number } | null>(null);
+  const [deletedCount, setDeletedCount] = useState<number | null>(null);
 
-  async function poll(after: 'scanning' | 'deleting') {
-    return new Promise<any>((resolve) => {
-      const t = setInterval(async () => {
-        try {
-          const s = await api.get<any>('/xonpay/admin/cleanup-orphans/status');
-          setProgress(s.progress);
-          setSamples(s.orphanSamples || []);
-          if (s.lastError) { setLastError(s.lastError); }
-          if (!s.running) {
-            clearInterval(t);
-            setPhase(after === 'scanning' ? 'scanned' : 'done');
-            resolve(s);
-          }
-        } catch (e: any) {
-          clearInterval(t);
-          setLastError(e?.message || 'Polling xato');
-          setPhase('error');
-          resolve(null);
-        }
-      }, 2000);
-    });
-  }
-
-  async function startScan() {
-    setPhase('scanning');
-    setLastError(null);
-    setProgress(null);
-    setSamples([]);
-    try {
-      const r = await api.post<{ ok: true; started: boolean; message: string }>(`/xonpay/admin/cleanup-orphans?dryRun=true`, {});
-      if (!r.started) { toast.message(r.message); }
-      await poll('scanning');
-    } catch (e: any) {
-      setLastError(e?.message || 'Xato');
-      setPhase('error');
-    }
-  }
-
-  async function truncateOnly() {
-    if (!confirm("XAVFLI! BARCHA XonPay yozuvlari o'chiriladi.\n\nKeyin keraq bo'lsa qo'lda 'CRM dan sync' bosishingiz mumkin.\n\nDavom etilsinmi?")) return;
+  async function doTruncate() {
     setPhase('truncating');
     setLastError(null);
     try {
       const tr = await api.post<{ ok: true; deleted: number }>('/xonpay/admin/truncate', {});
-      setTruncateResult(tr);
-      toast.success(`${tr.deleted} ta yozuv o'chirildi`);
+      setDeletedCount(tr.deleted);
       qc.invalidateQueries({ queryKey: ['xonpay-list'] });
       qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
       qc.invalidateQueries({ queryKey: ['xonpay-history'] });
       setPhase('done');
-      // Modal yopiladi 2 sek keyin
-      setTimeout(() => onClose(), 2000);
     } catch (e: any) {
       setLastError(e?.message || 'Xato');
       setPhase('error');
     }
   }
 
-  async function startDelete() {
-    if (!confirm(`${progress?.orphanCount || 0} ta orphan yozuvni o'chirish tasdiqlaysizmi?\nBu amal qaytarib bo'lmaydi.`)) return;
-    setPhase('deleting');
-    try {
-      const r = await api.post<{ ok: true; started: boolean; message: string }>(`/xonpay/admin/cleanup-orphans?dryRun=false`, {});
-      if (!r.started) { toast.message(r.message); }
-      await poll('deleting');
-      qc.invalidateQueries({ queryKey: ['xonpay-list'] });
-      qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
-      toast.success(`${progress?.deleted || 0} ta orphan o'chirildi`);
-    } catch (e: any) {
-      setLastError(e?.message || 'Xato');
-      setPhase('error');
-    }
-  }
-
-  const orphanCount = progress?.orphanCount || 0;
-  const dbCount = progress?.dbCount || 0;
-  const crmCount = progress?.crmCount || 0;
+  const busy = phase === 'truncating';
 
   return (
-    <Dialog open={true} onOpenChange={(o) => { if (!o && phase !== 'scanning' && phase !== 'deleting' && phase !== 'truncating') onClose(); }}>
-      <DialogContent className="max-w-2xl">
+    <Dialog open={true} onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
+      <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 grid place-items-center text-white">
-              <Trash2 className="h-3.5 w-3.5" />
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center text-white shadow-lg shadow-rose-500/30">
+              <Trash2 className="h-4 w-4" />
             </div>
-            CRM dan olingan ma'lumotlarni tozalash (orphan)
+            XonPay ma'lumotlarini tozalash
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            CRM da yo'q lekin bizning DB'da bor (orphan) yozuvlarni topib o'chiradi. Avval scan, keyin o'chirish.
+            Jadvalni to'liq tozalaydi (TRUNCATE). Bog'langan bank tx'lar tegmaydi.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
+          {/* ── IDLE: warning + confirm trigger ── */}
           {phase === 'idle' && (
-            <div className="space-y-3">
-              <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div>
-                  Eski sync'larda paydo bo'lgan orphan yozuvlar. 2 ta variant:
+            <>
+              <div className="rounded-2xl ring-1 ring-rose-200 bg-gradient-to-br from-rose-50 to-pink-50 p-5 text-center">
+                <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center text-white shadow-lg shadow-rose-500/30 mb-3">
+                  <AlertCircle className="h-7 w-7" />
+                </div>
+                <div className="text-[14px] font-bold text-rose-900 mb-1">Diqqat — xavfli amal</div>
+                <div className="text-[12px] text-rose-700">
+                  Barcha <b>XonpayTransaction</b> yozuvlari (taxminan ~19k ta) butunlay o'chiriladi.
+                  Bog'langan Transaction'lar (bank tx) saqlanadi, faqat <code className="font-mono text-[11px] bg-white/60 px-1 rounded">matched_tx_id</code> link uzipladi.
                 </div>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Variant 1: Scan + delete */}
-                <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3 text-[11.5px] text-violet-900">
-                  <div className="font-bold flex items-center gap-1 mb-1.5">
-                    <Search className="h-3.5 w-3.5" /> Scan + faqat orphan
-                  </div>
-                  <div className="text-[10.5px] text-violet-700 mb-2">
-                    CRM dan barcha yozuvlarni olib solishtiradi. Faqat orphan'larni o'chiradi. Sekinroq (~2-3 min).
-                  </div>
-                  <Button size="sm" onClick={startScan} className="w-full gap-1.5 bg-violet-600 hover:bg-violet-700 text-[11px] h-8">
-                    <Search className="h-3 w-3" /> Scan
-                  </Button>
-                </div>
-                {/* Variant 2: Truncate ONLY (sync alohida) */}
-                <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[11.5px] text-rose-900">
-                  <div className="font-bold flex items-center gap-1 mb-1.5">
-                    <Trash2 className="h-3.5 w-3.5" /> Hammasini o'chirish (TRUNCATE)
-                  </div>
-                  <div className="text-[10.5px] text-rose-700 mb-2">
-                    Jadvalni butunlay tozalaydi. Keyin xohlaganingizda qo'lda <b>'CRM dan sync'</b> bosib qaytadan to'ldirasiz.
-                  </div>
-                  <Button size="sm" onClick={truncateOnly} className="w-full gap-1.5 bg-rose-600 hover:bg-rose-700 text-[11px] h-8">
-                    <Trash2 className="h-3 w-3" /> Hammasini o'chirish
-                  </Button>
-                </div>
+              <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[11.5px] text-amber-800 flex items-start gap-2">
+                <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <div>Tozalangandan keyin <b>"CRM dan sync"</b> tugmasini bosib qaytadan to'ldirishingiz mumkin (avtomatik boshlanmaydi).</div>
+              </div>
+            </>
+          )}
+
+          {/* ── CONFIRM step ── */}
+          {phase === 'confirm' && (
+            <div className="rounded-2xl ring-2 ring-rose-300 bg-rose-50 p-5 text-center">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-600 grid place-items-center text-white shadow-lg shadow-rose-500/40 mb-3 animate-pulse">
+                <AlertCircle className="h-7 w-7" />
+              </div>
+              <div className="text-[14px] font-bold text-rose-900 mb-2">Aniqmi?</div>
+              <div className="text-[12px] text-rose-700">
+                Bu amal qaytarib bo'lmaydi. "Ha, o'chirish" tugmasini bosing tasdiqlash uchun.
               </div>
             </div>
           )}
 
+          {/* ── TRUNCATING ── */}
           {phase === 'truncating' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-rose-700">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Tozalanmoqda...
-              </div>
-              {truncateResult && (
-                <div className="text-[11.5px] text-emerald-700 flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  <span>{fmt(truncateResult.deleted)} ta yozuv o'chirildi</span>
-                </div>
-              )}
+            <div className="rounded-2xl ring-1 ring-violet-200 bg-violet-50 p-5 text-center">
+              <Loader2 className="h-10 w-10 mx-auto animate-spin text-violet-600 mb-3" />
+              <div className="text-[13px] font-bold text-violet-900">Tozalanmoqda...</div>
+              <div className="text-[11px] text-violet-600 mt-1">Bir necha soniya...</div>
             </div>
           )}
 
-          {(phase === 'scanning' || phase === 'deleting') && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-[12px] font-semibold text-violet-700">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {phase === 'scanning' ? 'Skanlashtirilmoqda...' : "O'chirilmoqda..."}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px]">
-                <InfoBox label="Faza" value={progress?.phase || '...'} />
-                <InfoBox label="Sahifa" value={progress?.pages ? `${progress.pages}` : '...'} />
-                <InfoBox label="CRM dan" value={crmCount ? fmt(crmCount) : '...'} color="violet" />
-                <InfoBox label="Bizning DB" value={dbCount ? fmt(dbCount) : '...'} color="slate" />
-                <InfoBox label="Orphan" value={fmt(orphanCount)} color={orphanCount > 0 ? 'rose' : 'emerald'} />
-                <InfoBox label="O'chirilgan" value={fmt(progress?.deleted || 0)} color="rose" />
-              </div>
-            </div>
-          )}
-
-          {phase === 'scanned' && (
-            <div className="space-y-3">
-              <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3">
-                <div className="grid grid-cols-3 gap-3 text-center">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CRM da</div>
-                    <div className="text-xl font-bold tabular-nums text-violet-700 mt-0.5">{fmt(crmCount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Bizda</div>
-                    <div className="text-xl font-bold tabular-nums text-slate-700 mt-0.5">{fmt(dbCount)}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Orphan</div>
-                    <div className={cn('text-xl font-bold tabular-nums mt-0.5', orphanCount > 0 ? 'text-rose-700' : 'text-emerald-700')}>
-                      {fmt(orphanCount)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {orphanCount > 0 ? (
-                <>
-                  <div className="text-[11px] text-slate-600">
-                    Birinchi {Math.min(samples.length, 20)} ta orphan namunalar (jami {orphanCount}):
-                  </div>
-                  <div className="max-h-[260px] overflow-y-auto rounded-lg ring-1 ring-slate-200">
-                    <table className="w-full text-[11px]">
-                      <thead className="bg-slate-50 sticky top-0 text-slate-600">
-                        <tr>
-                          <th className="text-left px-3 py-1.5 font-semibold">External ID</th>
-                          <th className="text-left px-3 py-1.5 font-semibold">Shartnoma</th>
-                          <th className="text-left px-3 py-1.5 font-semibold">Sana</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {samples.slice(0, 20).map((o, i) => (
-                          <tr key={i} className="border-t border-slate-100">
-                            <td className="px-3 py-1 font-mono text-[10px] max-w-[300px] truncate" title={o.externalId}>{o.externalId}</td>
-                            <td className="px-3 py-1">{o.contract || '—'}</td>
-                            <td className="px-3 py-1 font-mono">{o.datePaid || '—'}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </>
-              ) : (
-                <div className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Hech qanday orphan topilmadi — DB to'liq CRM bilan mos.
-                </div>
-              )}
-            </div>
-          )}
-
+          {/* ── DONE ── */}
           {phase === 'done' && (
-            <div className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              <div>
-                <b>Tugadi:</b> {fmt(progress?.deleted || 0)} ta orphan o'chirildi.
-                Endi DB CRM bilan mos.
+            <div className="rounded-2xl ring-1 ring-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-5 text-center">
+              <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-lg shadow-emerald-500/30 mb-3">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <div className="text-[14px] font-bold text-emerald-900 mb-1">Tugadi!</div>
+              <div className="text-[24px] font-bold text-emerald-700 tabular-nums">{fmt(deletedCount || 0)}</div>
+              <div className="text-[11px] text-emerald-600 mt-0.5">ta yozuv o'chirildi</div>
+              <div className="text-[11px] text-emerald-700 mt-3">
+                Endi "CRM dan sync" tugmasini bosib qaytadan to'ldiring.
               </div>
             </div>
           )}
 
+          {/* ── ERROR ── */}
           {lastError && (
             <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[12px] text-rose-800 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -1335,26 +1196,28 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
             </div>
           )}
 
-          {/* Tugmalar */}
+          {/* ── Tugmalar ── */}
           <div className="flex items-center justify-end gap-2 pt-2 border-t">
             {phase === 'idle' && (
-              <Button variant="outline" onClick={onClose}>Yopish</Button>
-            )}
-            {(phase === 'scanning' || phase === 'deleting' || phase === 'truncating') && (
-              <Button variant="outline" disabled className="gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kuting...
-              </Button>
-            )}
-            {phase === 'scanned' && orphanCount > 0 && (
               <>
-                <Button variant="outline" onClick={onClose}>Yopish</Button>
-                <Button onClick={startDelete} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
-                  <Trash2 className="h-3.5 w-3.5" /> {fmt(orphanCount)} ta o'chirish
+                <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
+                <Button onClick={() => setPhase('confirm')} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
+                  <Trash2 className="h-3.5 w-3.5" /> O'chirish
                 </Button>
               </>
             )}
-            {phase === 'scanned' && orphanCount === 0 && (
-              <Button onClick={onClose}>Yopish</Button>
+            {phase === 'confirm' && (
+              <>
+                <Button variant="outline" onClick={() => setPhase('idle')}>Orqaga</Button>
+                <Button onClick={doTruncate} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
+                  <Trash2 className="h-3.5 w-3.5" /> Ha, o'chirish
+                </Button>
+              </>
+            )}
+            {busy && (
+              <Button variant="outline" disabled className="gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kuting...
+              </Button>
             )}
             {(phase === 'done' || phase === 'error') && (
               <Button onClick={onClose}>Yopish</Button>
