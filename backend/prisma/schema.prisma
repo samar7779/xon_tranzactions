@@ -155,6 +155,9 @@ model Transaction {
   manualCounterpartyId String?    @map("manual_counterparty_id")
   manualCounterparty   Counterparty? @relation("ManualCounterparty", fields: [manualCounterpartyId], references: [id])
 
+  // Biriktirilgan fayllar (ariza, hujjat va h.k.)
+  attachments   TransactionAttachment[]
+
   // To'lov bosqichlariga taqsimlanishi (bitta tranzaksiya = bir nechta payment)
   payments      Payment[]
 
@@ -182,6 +185,32 @@ model Transaction {
   @@index([importBatchId])
   @@index([manualCounterpartyId])
   @@map("transactions")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TRANSACTION ATTACHMENT — tranzaksiyaga biriktirilgan fayllar
+// (ariza, hujjat, rasm). To'lov ariz orqali to'g'rilash uchun.
+// ─────────────────────────────────────────────────────────────────
+model TransactionAttachment {
+  id            String      @id @default(cuid())
+  txId          String      @map("tx_id")
+  transaction   Transaction @relation(fields: [txId], references: [id], onDelete: Cascade)
+
+  type          String      @db.VarChar(32)              // 'ariza' | 'document' | 'image' (kelajakda)
+  filename      String      @db.VarChar(255)              // foydalanuvchi ko'rgan nom
+  mimeType      String      @map("mime_type") @db.VarChar(128)
+  fileSize      Int         @map("file_size")             // bayt
+  storagePath   String      @map("storage_path") @db.VarChar(500)  // server diskdagi yo'l
+
+  contractNumber String?    @map("contract_number") @db.VarChar(128)  // qaysi shartnomaga tegishli
+  notes         String?     @db.Text                       // izoh
+
+  uploadedBy    String?     @map("uploaded_by") @db.VarChar(190)     // email
+  uploadedAt    DateTime    @default(now()) @map("uploaded_at")
+
+  @@index([txId])
+  @@index([uploadedAt])
+  @@map("transaction_attachments")
 }
 
 // ─────────────────────────────────────────────────────────────────

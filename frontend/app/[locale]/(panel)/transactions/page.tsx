@@ -12,7 +12,8 @@ import {
   X, Calendar, Wallet, FileText, Eye, FileSpreadsheet, Copy, Check,
   Hash, Receipt, Link2, History, Loader2, AlertCircle, AlertTriangle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
-  Filter as FilterIcon, Briefcase, Sparkles, Activity,
+  Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
+  Upload as UploadIcon, Trash2, FileIcon,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -1667,6 +1668,8 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
   const [manualEditOpen, setManualEditOpen] = useState(false);
+  const [manualContractOpen, setManualContractOpen] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const [lookupContractDetail, setLookupContractDetail] = useState<{ contract: string; description: string | null } | null>(null);
 
   // Tafsilot uchun jonli ma'lumot — categorize/setManual'dan keyin yangilanadi
@@ -1728,6 +1731,23 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
       toast.success(r.counterparty ? `Kontragent: ${r.counterparty.name}` : 'Kontragent o\'chirildi');
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
+      qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      liveQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  // Qo'lda shartnoma kiritish (CRM tekshirmaydi)
+  const setContractManualMut = useMutation({
+    mutationFn: (contractNumber: string | null) =>
+      api.post<{ ok: boolean; contractNumber: string | null }>(
+        `/categorization/transactions/${row.id}/set-contract-manual`,
+        { contractNumber },
+      ),
+    onSuccess: (r) => {
+      toast.success(r.contractNumber ? `Shartnoma saqlandi: ${r.contractNumber}` : 'Shartnoma o\'chirildi');
+      setManualContractOpen(false);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
       liveQuery.refetch();
     },
@@ -1949,6 +1969,27 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                       <FileText className="h-3 w-3" />
                       Qo'lda tahrirlash
                     </button>
+                    {/* Shartnomani qo'lda (CRM tekshirmasdan) */}
+                    <button
+                      onClick={() => setManualContractOpen(true)}
+                      title="Shartnoma raqamini qo'lda kiritish (CRM tekshirmaydi)"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white hover:shadow-md hover:shadow-amber-500/40 transition-all"
+                    >
+                      <FileSignature className="h-3.5 w-3.5" />
+                    </button>
+                    {/* Ariza biriktirish */}
+                    <button
+                      onClick={() => setAttachmentsOpen(true)}
+                      title="Ariza biriktirish (PDF/DOCX/Image)"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
+                    >
+                      <Paperclip className="h-3.5 w-3.5" />
+                      {(liveRow._attachmentCount || 0) > 0 && (
+                        <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-1 grid place-items-center">
+                          {liveRow._attachmentCount}
+                        </span>
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -2116,6 +2157,25 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
           savingCategory={setCategoryMut.isPending}
           savingContract={setContractMut.isPending}
           savingCounterparty={setCounterpartyMut.isPending}
+        />
+      )}
+
+      {/* Shartnomani qo'lda kiritish (CRM tekshirmasdan) */}
+      {manualContractOpen && (
+        <ManualContractDialog
+          row={liveRow}
+          onClose={() => setManualContractOpen(false)}
+          onSave={(contract) => setContractManualMut.mutate(contract)}
+          saving={setContractManualMut.isPending}
+        />
+      )}
+
+      {/* Arizalar (fayllar) — biriktirish/ko'rish/o'chirish */}
+      {attachmentsOpen && (
+        <AttachmentsDialog
+          txId={row.id}
+          contractNumber={liveRow.contractNumber}
+          onClose={() => setAttachmentsOpen(false)}
         />
       )}
 
@@ -3228,6 +3288,261 @@ function CategoryHistorySection({ txId }: { txId: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MANUAL CONTRACT DIALOG — CRM tekshirmasdan shartnoma raqami kiritish
+// ═══════════════════════════════════════════════════════════════════════
+function ManualContractDialog({
+  row, onClose, onSave, saving,
+}: {
+  row: any;
+  onClose: () => void;
+  onSave: (contractNumber: string | null) => void;
+  saving: boolean;
+}) {
+  const [contract, setContract] = useState(row?.contractNumber || '');
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white">
+              <FileSignature className="h-3.5 w-3.5" />
+            </div>
+            Shartnomani qo'lda kiritish
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            CRM tekshirilmaydi — foydalanuvchi javobgar. Yangi yoki CRM'da bo'lmagan shartnomalar uchun.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-2">
+          <div className="space-y-1.5">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              Shartnoma raqami
+            </label>
+            <Input
+              value={contract}
+              onChange={(e) => setContract(e.target.value)}
+              placeholder="Masalan: 12345VTN26MP"
+              className="font-mono"
+              autoFocus
+            />
+            <div className="text-[10.5px] text-amber-700 bg-amber-50 px-2 py-1.5 rounded-md ring-1 ring-amber-200 flex items-start gap-1.5">
+              <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
+              <span>Bu shartnoma CRM da tekshirilmaydi — siz to'g'ri ekanligini tasdiqlayasiz</span>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          {row?.contractNumber && (
+            <Button
+              variant="outline"
+              onClick={() => onSave(null)}
+              disabled={saving}
+              className="text-rose-700 border-rose-200 hover:bg-rose-50"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+              O'chirish
+            </Button>
+          )}
+          <Button variant="outline" onClick={onClose} disabled={saving}>Bekor</Button>
+          <Button
+            onClick={() => onSave(contract.trim() || null)}
+            disabled={saving || !contract.trim() || contract.trim() === (row?.contractNumber || '')}
+            className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            Saqlash
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// ATTACHMENTS DIALOG — Ariza biriktirish + ro'yxat + yuklab olish + o'chirish
+// ═══════════════════════════════════════════════════════════════════════
+function AttachmentsDialog({
+  txId, contractNumber, onClose,
+}: {
+  txId: string;
+  contractNumber: string | null;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ['tx-attachments', txId],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>(`/transactions/${txId}/attachments`),
+  });
+  const items = data?.items || [];
+
+  async function handleUpload(file: File) {
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Fayl 25 MB dan oshmasligi kerak');
+      return;
+    }
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      if (contractNumber) fd.append('contractNumber', contractNumber);
+      fd.append('type', 'ariza');
+      await api.postForm(`/transactions/${txId}/attachments`, fd, { timeout: 120_000 });
+      toast.success('Ariza biriktirildi · Telegram\'ga xabar yuborildi');
+      refetch();
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklash xato');
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function handleDelete(attId: string) {
+    if (!confirm("Faylni o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.")) return;
+    setDeletingId(attId);
+    try {
+      await api.delete(`/transactions/${txId}/attachments/${attId}`);
+      toast.success("Fayl o'chirildi · Telegram'ga xabar yuborildi");
+      refetch();
+    } catch (e: any) {
+      toast.error(e?.message || "O'chirish xato");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  async function handleDownload(att: any) {
+    try {
+      await apiDownload(`/transactions/${txId}/attachments/${att.id}/download`, att.filename);
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab olish xato');
+    }
+  }
+
+  function formatSize(b: number): string {
+    if (b < 1024) return `${b} B`;
+    if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+    return `${(b / 1024 / 1024).toFixed(1)} MB`;
+  }
+
+  return (
+    <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
+              <Paperclip className="h-3.5 w-3.5" />
+            </div>
+            Arizalar va biriktirilgan fayllar
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            Ariza, hujjat, rasm biriktiring (PDF, DOCX, JPG, PNG — max 25 MB). Har o'zgartirish Telegram'ga yuboriladi.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-2">
+          {/* Upload */}
+          <div className="flex items-center gap-2">
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f);
+              }}
+              className="hidden"
+            />
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="h-10 px-4 gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white"
+            >
+              {uploading
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...</>
+                : <><UploadIcon className="h-4 w-4" /> Fayl tanlash</>}
+            </Button>
+            {contractNumber && (
+              <span className="text-[10.5px] text-slate-500">
+                Shartnoma: <code className="font-mono text-indigo-700">{contractNumber}</code>
+              </span>
+            )}
+          </div>
+
+          {/* Files list */}
+          {isLoading ? (
+            <div className="flex items-center justify-center gap-2 py-6 text-slate-400 text-[12px]">
+              <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
+            </div>
+          ) : items.length === 0 ? (
+            <div className="text-center text-[12px] text-slate-400 py-8 rounded-xl ring-1 ring-dashed ring-slate-200">
+              Hozircha hech qanday fayl biriktirilmagan
+            </div>
+          ) : (
+            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden divide-y divide-slate-100">
+              {items.map((a) => (
+                <div key={a.id} className="px-3 py-2.5 flex items-center gap-3 hover:bg-slate-50/60">
+                  <div className="w-9 h-9 rounded-lg bg-violet-50 grid place-items-center shrink-0">
+                    <FileIcon className="h-4 w-4 text-violet-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[12px] font-semibold text-slate-800 truncate" title={a.filename}>
+                      {a.filename}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 flex items-center gap-2 flex-wrap mt-0.5">
+                      <span>{formatSize(a.fileSize)}</span>
+                      <span className="text-slate-300">·</span>
+                      <span>{formatDateTime(a.uploadedAt)}</span>
+                      {a.uploadedBy && (<>
+                        <span className="text-slate-300">·</span>
+                        <span>{a.uploadedBy}</span>
+                      </>)}
+                      {a.contractNumber && (<>
+                        <span className="text-slate-300">·</span>
+                        <code className="text-indigo-600">{a.contractNumber}</code>
+                      </>)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleDownload(a)}
+                      title="Yuklab olish"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      disabled={deletingId === a.id}
+                      title="O'chirish"
+                      className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100"
+                    >
+                      {deletingId === a.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Yopish</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

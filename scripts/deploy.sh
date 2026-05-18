@@ -182,6 +182,13 @@ if [ -d "$REPO/backend" ]; then
   if [ -n "${BANK_FORWARDER_SECRET:-}" ]; then
     ensure_env_var "$REPO/backend/.env" "BANK_FORWARDER_SECRET" "$BANK_FORWARDER_SECRET"
   fi
+  # Attachments — fayl yuklash va Telegram xabar
+  ensure_env_var "$REPO/backend/.env" "UPLOADS_DIR" "/var/www/xon_tranzactions/uploads"
+  ensure_env_var "$REPO/backend/.env" "ATTACHMENTS_NOTIFY_CHAT" "-5150947522"
+  ensure_env_var "$REPO/backend/.env" "APP_URL" "https://transactions.xonapps.uz"
+  # Uploads papkasini yaratish (idempotent)
+  mkdir -p "/var/www/xon_tranzactions/uploads/attachments" 2>/dev/null || true
+  chown -R www-data:www-data "/var/www/xon_tranzactions/uploads" 2>/dev/null || true
 fi
 
 # 1. Kodni tortib olish
