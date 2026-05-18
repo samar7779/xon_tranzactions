@@ -225,8 +225,11 @@ export class TransactionsService {
     where = await this.applyXatoFilter(where);
 
     // Count — keshdan yoki bazadan. Filtr o'zgarmasa, sahifalashda qayta hisoblamaymiz.
+    // Search (q) bo'lganda kesh bypass — natijalar juda o'zgaruvchan, har safar fresh
+    // bo'lishi kerak (eski qisman natija ko'rsatilmasligi uchun).
+    const useCache = !query.q;
     const cacheKey = JSON.stringify(where);
-    const cachedTotal = getCachedCount(cacheKey);
+    const cachedTotal = useCache ? getCachedCount(cacheKey) : null;
 
     // 2 ta holat: count keshda bor — clamp qilib darrov findMany; yo'q —
     // count va findMany'ni parallel ishga tushiramiz, lekin page'ni clamp
@@ -252,7 +255,7 @@ export class TransactionsService {
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany(this.buildListArgs(where, safePage, perPage)),
     ]);
-    setCachedCount(cacheKey, total);
+    if (useCache) setCachedCount(cacheKey, total);
 
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const page = Math.max(1, Math.min(rawPage, totalPages));
