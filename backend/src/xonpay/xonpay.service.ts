@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 
@@ -52,6 +53,7 @@ export class XonpayService {
   private matchProgress: { done: number; total: number; matched: number } | null = null;
 
   // ── Cron state (auto-sync) ──
+  private cronEnabled = true;
   private lastCronRunAt: Date | null = null;
   private lastCronFinishedAt: Date | null = null;
   private lastCronSkipReason: string | null = null;
@@ -308,7 +310,7 @@ export class XonpayService {
   async getSyncHistory(limit = 50) {
     const safeLimit = Math.min(Math.max(limit, 1), 500);
     const items = await this.prisma.xonpaySyncLog.findMany({
-      orderBy: { startedAt: 'desc' },
+      orderBy: { startedAt: 'desc' as Prisma.SortOrder },
       take: safeLimit,
     });
     return { ok: true, items };
@@ -335,7 +337,7 @@ export class XonpayService {
     const tx = await this.prisma.transaction.findFirst({
       where: { description: { contains: uuid, mode: 'insensitive' } },
       select: { id: true, externalId: true, amount: true, txnDate: true },
-      orderBy: { txnDate: 'desc' },
+      orderBy: { txnDate: 'desc' as Prisma.SortOrder },
     });
 
     if (!tx) {
@@ -449,7 +451,10 @@ export class XonpayService {
       this.prisma.xonpayTransaction.count({ where }),
       this.prisma.xonpayTransaction.findMany({
         where,
-        orderBy: [{ datePaid: 'desc' }, { syncedAt: 'desc' }],
+        orderBy: [
+          { datePaid: 'desc' as Prisma.SortOrder },
+          { syncedAt: 'desc' as Prisma.SortOrder },
+        ],
         skip: (page - 1) * perPage,
         take: perPage,
         include: {
