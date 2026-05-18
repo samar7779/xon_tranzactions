@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { XonpayService } from './xonpay.service';
 
@@ -16,9 +17,17 @@ export class XonpayController {
   // ── SYNC ──
   @Post('sync')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
-  @ApiOperation({ summary: "XonPay sync — CRM dan to'lovlarni olib DB ga yozadi" })
-  startSync(@Query('limit') limit?: string) {
-    return this.svc.startSync({ limit: limit ? Number(limit) : undefined });
+  @ApiOperation({ summary: "XonPay sync — CRM dan to'lovlarni olib DB ga yozadi (qo'lda)" })
+  startSync(
+    @Query('limit') limit?: string,
+    @CurrentUser() user?: { id?: string; email?: string },
+  ) {
+    return this.svc.startSync({
+      limit: limit ? Number(limit) : undefined,
+      trigger: 'manual',
+      actorId: user?.id,
+      actorEmail: user?.email,
+    });
   }
 
   @Post('sync/cancel')
@@ -31,6 +40,20 @@ export class XonpayController {
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   syncStatus() {
     return this.svc.getSyncStatus();
+  }
+
+  @Get('cron/info')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: 'Avtomatik cron sync ma\'lumotlari (07:00-23:00 har soat)' })
+  cronInfo() {
+    return this.svc.getCronInfo();
+  }
+
+  @Get('sync/history')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: 'Sync tarixi — manual va cron — barchasi' })
+  syncHistory(@Query('limit') limit?: string) {
+    return this.svc.getSyncHistory(limit ? Number(limit) : 50);
   }
 
   // ── MATCH ──

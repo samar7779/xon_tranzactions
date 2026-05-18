@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 
@@ -50,13 +51,73 @@ export class XonpayService {
   private matchRunning = false;
   private matchProgress: { done: number; total: number; matched: number } | null = null;
 
+  // ── Cron state (auto-sync) ──
+  private lastCronRunAt: Date | null = null;
+  private lastCronFinishedAt: Date | null = null;
+  private lastCronSkipReason: string | null = null;
+  private lastCronResult: { inserted: number; updated: number; matched: number; errors: number } | null = null;
+
   constructor(private prisma: PrismaService, private crm: CrmService) {}
+
+  /**
+   * Avtomatik sync — 07:00 dan 23:00 gacha har soat boshida.
+   * Telegram'ga xabar yubormaydi. Boshqa sync ishlayotgan bo'lsa skip qiladi
+   * (boshqa progresslarga xalaqit qilmaslik uchun).
+   */
+  @Cron('0 0 7-23 * * *', { name: 'xonpay-auto-sync', timeZone: 'Asia/Tashkent' })
+  async cronAutoSync() {
+    if (!this.cronEnabled) {
+      this.lastCronSkipReason = 'Cron o\'chirilgan';
+      return;
+    }
+    if (this.syncRunning) {
+      this.lastCronSkipReason = "Avvalgi sync hali ishlamoqda (skip)";
+      this.log.log('xonpay cron skip: sync already running');
+      return;
+    }
+    this.lastCronRunAt = new Date();
+    this.lastCronSkipReason = null;
+    this.log.log('xonpay cron: avto-sync boshlanmoqda');
+
+    try {
+      // Background sync — trigger='cron' bilan, log jadvalga ham yoziladi
+      await this.runSyncInBackground({ limit: 5000, trigger: 'cron' });
+      this.lastCronFinishedAt = new Date();
+      if (this.syncProgress) {
+        this.lastCronResult = {
+          inserted: this.syncProgress.inserted,
+          updated: this.syncProgress.updated,
+          matched: this.syncProgress.matched,
+          errors: this.syncProgress.errors,
+        };
+      }
+      this.log.log(`xonpay cron: yakunlandi ${JSON.stringify(this.lastCronResult)}`);
+    } catch (e: any) {
+      this.log.error(`xonpay cron xato: ${e?.message}`);
+    }
+  }
+
+  /** Cron'ni o'chirish/yoqish (kelajakda admin UI uchun) */
+  setCronEnabled(enabled: boolean) {
+    this.cronEnabled = enabled;
+  }
+
+  getCronInfo() {
+    return {
+      enabled: this.cronEnabled,
+      schedule: '07:00–23:00, har soat boshida (Asia/Tashkent)',
+      lastRunAt: this.lastCronRunAt?.toISOString() || null,
+      lastFinishedAt: this.lastCronFinishedAt?.toISOString() || null,
+      lastSkipReason: this.lastCronSkipReason,
+      lastResult: this.lastCronResult,
+    };
+  }
 
   // ════════════════════════════════════════════════════
   //  SYNC (CRM → DB)
   // ════════════════════════════════════════════════════
 
-  startSync(opts?: { limit?: number }): { ok: true; started: boolean; message: string } {
+  startSync(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string }): { ok: true; started: boolean; message: string } {
     if (this.syncRunning) {
       const mins = this.syncStartedAt ? Math.floor((Date.now() - this.syncStartedAt.getTime()) / 60000) : 0;
       const p = this.syncProgress;
@@ -87,7 +148,7 @@ export class XonpayService {
     };
   }
 
-  private async runSyncInBackground(opts?: { limit?: number }): Promise<void> {
+  private async runSyncInBackground(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string }): Promise<void> {
     this.syncRunning = true;
     this.syncCancelRequested = false;
     this.syncStartedAt = new Date();
@@ -96,8 +157,26 @@ export class XonpayService {
     this.syncProgress = { page: 0, lastPage: 0, fetched: 0, xonpay: 0, inserted: 0, updated: 0, matched: 0, errors: 0 };
 
     const LIMIT = opts?.limit || 5000;
+    const trigger = opts?.trigger || 'manual';
     let page = 1;
 
+    // Log yozish boshlanishi
+    let logId: string | null = null;
+    try {
+      const logRow = await this.prisma.xonpaySyncLog.create({
+        data: {
+          trigger,
+          actorId: opts?.actorId || null,
+          actorEmail: opts?.actorEmail || null,
+          status: 'running',
+        },
+      });
+      logId = logRow.id;
+    } catch (e: any) {
+      this.log.warn(`sync log yaratish xato: ${e?.message}`);
+    }
+
+    let finalStatus: 'success' | 'failed' | 'cancelled' = 'success';
     try {
       while (true) {
         if (this.syncCancelRequested) {
@@ -190,12 +269,49 @@ export class XonpayService {
     } catch (e: any) {
       this.syncLastError = e?.message || String(e);
       this.log.error(`xonpay sync umumiy xato: ${this.syncLastError}`);
+      finalStatus = 'failed';
     } finally {
+      if (this.syncCancelRequested) finalStatus = 'cancelled';
       this.syncRunning = false;
       this.syncCancelRequested = false;
       this.syncFinishedAt = new Date();
-      this.log.log(`xonpay sync yakunlandi: ${JSON.stringify(this.syncProgress)}`);
+      this.log.log(`xonpay sync yakunlandi (${finalStatus}): ${JSON.stringify(this.syncProgress)}`);
+
+      // Log yakunlash
+      if (logId) {
+        try {
+          const startedAt = this.syncStartedAt!;
+          await this.prisma.xonpaySyncLog.update({
+            where: { id: logId },
+            data: {
+              status: finalStatus,
+              pages: this.syncProgress?.page || 0,
+              fetched: this.syncProgress?.fetched || 0,
+              xonpay: this.syncProgress?.xonpay || 0,
+              inserted: this.syncProgress?.inserted || 0,
+              updated: this.syncProgress?.updated || 0,
+              matched: this.syncProgress?.matched || 0,
+              errors: this.syncProgress?.errors || 0,
+              errorMessage: this.syncLastError,
+              finishedAt: this.syncFinishedAt,
+              durationMs: this.syncFinishedAt.getTime() - startedAt.getTime(),
+            },
+          });
+        } catch (e: any) {
+          this.log.warn(`sync log update xato: ${e?.message}`);
+        }
+      }
     }
+  }
+
+  /** Sync tarixi — manual va cron — barchasi (default oxirgi 50) */
+  async getSyncHistory(limit = 50) {
+    const safeLimit = Math.min(Math.max(limit, 1), 500);
+    const items = await this.prisma.xonpaySyncLog.findMany({
+      orderBy: { startedAt: 'desc' },
+      take: safeLimit,
+    });
+    return { ok: true, items };
   }
 
   // ════════════════════════════════════════════════════
