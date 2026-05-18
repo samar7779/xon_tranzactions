@@ -1,3 +1,4 @@
+// Backend rebuild marker: xonpay v3 (cron/toggle endpoint)
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
