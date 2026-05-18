@@ -20,6 +20,7 @@ export class XonpayController {
   @ApiOperation({ summary: "XonPay sync — CRM dan to'lovlarni olib DB ga yozadi (qo'lda)" })
   startSync(
     @Query('limit') limit?: string,
+    @Query('noSkip') noSkip?: string,
     @CurrentUser() user?: { id?: string; email?: string },
   ) {
     return this.svc.startSync({
@@ -27,6 +28,7 @@ export class XonpayController {
       trigger: 'manual',
       actorId: user?.id,
       actorEmail: user?.email,
+      noSkip: noSkip === 'true',
     });
   }
 
@@ -61,6 +63,16 @@ export class XonpayController {
   @ApiOperation({ summary: 'Sync tarixi — manual va cron — barchasi' })
   syncHistory(@Query('limit') limit?: string) {
     return this.svc.getSyncHistory(limit ? Number(limit) : 50);
+  }
+
+  @Post('admin/fix-date-shift')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "TZ bug fix: barcha datePaid ga +1 kun qoshish (FAQAT BIR MARTA!)",
+    description: "Eski parseDate UTC bo'lganidan keyin sana 1 kun kam yozilgan edi. Bu endpoint bir marta chaqirilib, hammasi tuzatiladi.",
+  })
+  fixDateShift() {
+    return this.svc.fixDateShift();
   }
 
   // ── MATCH ──

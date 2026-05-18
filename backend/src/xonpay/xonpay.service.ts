@@ -30,10 +30,41 @@ function getRu(obj: any, fallback = ''): string {
   return fallback;
 }
 
-function parseDate(s: string | null | undefined): Date | null {
+/**
+ * CRM sanasini parse qilish — Tashkent vaqti deb hisoblanadi.
+ * Date-only field uchun (datePaid @db.Date): UTC noon ga set qilamiz —
+ *   bu Postgres @db.Date ga to'g'ri date saqlanadi (TZ shift yo'q).
+ * Datetime uchun (crm_created_at va h.k.): "+05:00" suffix qo'shamiz.
+ */
+function parseDateOnly(s: string | null | undefined): Date | null {
   if (!s) return null;
-  const d = new Date(s.length >= 10 ? s : s + 'T00:00:00');
+  const datePart = String(s).slice(0, 10); // "2026-05-18"
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePart)) return null;
+  // UTC 12:00 — TZ shift bo'lmasin uchun (Postgres @db.Date kun bo'yicha saqlaydi)
+  const d = new Date(`${datePart}T12:00:00Z`);
   return isNaN(d.getTime()) ? null : d;
+}
+
+function parseDateTime(s: string | null | undefined): Date | null {
+  if (!s) return null;
+  const t = String(s).trim();
+  if (!t) return null;
+  // Faqat date — UTC noon bilan
+  if (t.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    return new Date(`${t}T12:00:00Z`);
+  }
+  // Datetime — agar TZ yo'q bo'lsa, Tashkent +05:00 deb qabul qilamiz
+  if (!/[+-]\d{2}:?\d{2}$|Z$/.test(t)) {
+    const iso = t.replace(' ', 'T');
+    return new Date(iso + '+05:00');
+  }
+  const d = new Date(t);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Eski nom (boshqa joylarda ishlatilsa)
+function parseDate(s: string | null | undefined): Date | null {
+  return parseDateOnly(s);
 }
 
 @Injectable()
@@ -143,7 +174,7 @@ export class XonpayService implements OnModuleInit {
   //  SYNC (CRM → DB)
   // ════════════════════════════════════════════════════
 
-  startSync(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string }): { ok: true; started: boolean; message: string } {
+  startSync(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; noSkip?: boolean }): { ok: true; started: boolean; message: string } {
     if (this.syncRunning) {
       const mins = this.syncStartedAt ? Math.floor((Date.now() - this.syncStartedAt.getTime()) / 60000) : 0;
       const p = this.syncProgress;
@@ -221,7 +252,7 @@ export class XonpayService implements OnModuleInit {
     };
   }
 
-  private async runSyncInBackground(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string }): Promise<void> {
+  private async runSyncInBackground(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; noSkip?: boolean }): Promise<void> {
     this.syncRunning = true;
     this.syncCancelRequested = false;
     this.syncStartedAt = new Date();
@@ -253,7 +284,11 @@ export class XonpayService implements OnModuleInit {
     let finalStatus: 'success' | 'failed' | 'cancelled' = 'success';
 
     // 100% matched kunlarni topamiz — bu kunlar uchun upsert+match qilmaymiz (skip)
+    // noSkip=true bo'lsa — hamma kun qayta tekshiriladi (sana fix uchun)
     const skipDates = new Set<string>();
+    if (opts?.noSkip) {
+      this.log.log(`xonpay sync: noSkip=true — barcha kunlar qayta tekshiriladi`);
+    } else
     try {
       const grouped = await this.prisma.xonpayTransaction.groupBy({
         by: ['datePaid', 'isMatched'],
@@ -349,7 +384,7 @@ export class XonpayService implements OnModuleInit {
               orderId: p.order_id ? BigInt(p.order_id) : null,
               contract: p.contract || null,
               amount: BigInt(p.amount || 0),
-              datePaid: parseDate(p.date_paid),
+              datePaid: parseDateOnly(p.date_paid),
               type: getRu(p.type) || null,
               category: getRu(p.category) || null,
               status: getRu(p.status) || null,
@@ -358,8 +393,8 @@ export class XonpayService implements OnModuleInit {
               objectName: p.object_name || null,
               isProblematic: !!p.is_problematic,
               isReceivedFromBank: !!p.is_received_from_bank,
-              crmCreatedAt: parseDate(p.created_at),
-              crmUpdatedAt: parseDate(p.updated_at),
+              crmCreatedAt: parseDateTime(p.created_at),
+              crmUpdatedAt: parseDateTime(p.updated_at),
             };
 
             const existing = await this.prisma.xonpayTransaction.findUnique({ where: { externalId } });
@@ -452,6 +487,19 @@ export class XonpayService implements OnModuleInit {
         }
       }
     }
+  }
+
+  /**
+   * Mavjud ma'lumotlarni 1 kunga oldinga shift qilish — TZ bug fix uchun.
+   * Eski parseDate'da datePaid UTC bo'lganidan keyin 1 kun kam yozilgan edi.
+   * Bu metod barcha datePaid'ga +1 kun qo'shadi.
+   * FAQAT BIR MARTA chaqirib, keyin endpoint'ni o'chirib qoyish kerak!
+   */
+  async fixDateShift(): Promise<{ ok: true; updated: number }> {
+    const result = await this.prisma.$executeRawUnsafe(
+      `UPDATE xonpay_transactions SET date_paid = date_paid + INTERVAL '1 day' WHERE date_paid IS NOT NULL`,
+    );
+    return { ok: true, updated: Number(result) };
   }
 
   /** Sync tarixi — manual va cron — barchasi (default oxirgi 50) */
