@@ -224,38 +224,13 @@ export class TransactionsService {
     let where = this.buildWhere(query);
     where = await this.applyXatoFilter(where);
 
-    // Count — keshdan yoki bazadan. Filtr o'zgarmasa, sahifalashda qayta hisoblamaymiz.
-    // Search (q) bo'lganda kesh bypass — natijalar juda o'zgaruvchan, har safar fresh
-    // bo'lishi kerak (eski qisman natija ko'rsatilmasligi uchun).
-    const useCache = !query.q;
-    const cacheKey = JSON.stringify(where);
-    const cachedTotal = useCache ? getCachedCount(cacheKey) : null;
-
-    // 2 ta holat: count keshda bor — clamp qilib darrov findMany; yo'q —
-    // count va findMany'ni parallel ishga tushiramiz, lekin page'ni clamp
-    // qilolmaymiz (yana 1 ta keshlanmagan count uchun yarim sekund yo'qotmaymiz).
-    let total: number;
-    let items: any[];
-
-    if (cachedTotal !== null) {
-      total = cachedTotal;
-      const totalPages = Math.max(1, Math.ceil(total / perPage));
-      const page = Math.max(1, Math.min(rawPage, totalPages));
-      if (total === 0) {
-        return { ok: true, total: 0, page, perPage, items: [] };
-      }
-      items = await this.prisma.transaction.findMany(this.buildListArgs(where, page, perPage));
-      return this.enrichAndReturn(items, total, page, perPage);
-    }
-
-    // Cache miss — page'ni katta sonlar uchun qattiq cheklash (xavfsizlik):
-    // 100K dan oshiq skip'ni rad etamiz, frontend uchun esa keyin clamp qilamiz.
+    // Page'ni katta sonlar uchun cheklash (xavfsizlik) — frontend stale state
+    // page=19859 yuborsa OFFSET million bo'lib ketmasligi uchun.
     const safePage = Math.min(rawPage, 4000); // 4000 * 250 = 1M skip — yetarli chegara
-    [total, items] = await Promise.all([
+    let [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany(this.buildListArgs(where, safePage, perPage)),
     ]);
-    if (useCache) setCachedCount(cacheKey, total);
 
     const totalPages = Math.max(1, Math.ceil(total / perPage));
     const page = Math.max(1, Math.min(rawPage, totalPages));
@@ -264,6 +239,10 @@ export class TransactionsService {
     // to'g'ri sahifani qayta yuklaymiz.
     if (page !== safePage && total > 0) {
       items = await this.prisma.transaction.findMany(this.buildListArgs(where, page, perPage));
+    }
+
+    if (total === 0) {
+      return { ok: true, total: 0, page, perPage, items: [] };
     }
 
     return this.enrichAndReturn(items, total, page, perPage);
