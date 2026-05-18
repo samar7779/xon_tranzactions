@@ -40,6 +40,7 @@ interface BulkResult {
     inserted: boolean;
     transactionId: string | null;
     externalId: string | null;
+    existingDate?: string;  // Avvaldan mavjud bo'lsa — qaysi sana ostida saqlangan
     error?: string;
   }>;
 }
@@ -95,9 +96,9 @@ export function AccountDrilldown({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  async function runCheck() {
+  async function runCheck(opts?: { keepDiagnose?: boolean }) {
     setLoading(true);
-    setShowDiagnose(false);
+    if (!opts?.keepDiagnose) setShowDiagnose(false);
     try {
       const result = await api.post<ReconcileData>('/transactions/reconcile', {
         accountId: item.accountId, dateFrom, dateTo,
@@ -272,7 +273,11 @@ export function AccountDrilldown({
                       data={diagnoseData}
                       accountId={item.accountId}
                       date={dateFrom}
-                      onFixed={() => { refetchDiagnose(); runCheck(); }}
+                      onFixed={async () => {
+                        // Diagnose panelini ochiq qoldiramiz va parallel fresh ma'lumotlarni olamiz
+                        await Promise.all([refetchDiagnose(), runCheck({ keepDiagnose: true })]);
+                        toast.success("Sverka yangilandi");
+                      }}
                     />
                   )}
                 </div>
@@ -834,11 +839,14 @@ function BulkResultModal({
                           ⚠ Qo'shildi, lekin ID topilmadi (DB lookup'da yo'q)
                         </div>
                       )}
-                      <div className="flex items-center gap-2 text-[10px]">
+                      <div className="flex items-center gap-2 text-[10px] flex-wrap">
                         {r.inserted ? (
                           <span className="text-emerald-700 font-semibold">✓ Yangi qo'shildi</span>
                         ) : (
-                          <span className="text-amber-700">⚠ Avvaldan mavjud edi</span>
+                          <span className="text-amber-700 font-semibold">
+                            ⚠ Avvaldan mavjud edi
+                            {r.existingDate && <span className="font-normal"> · sana: {r.existingDate}</span>}
+                          </span>
                         )}
                         {(r.b2Id || r.generalId) && (
                           <span className="text-slate-400 font-mono truncate">
