@@ -174,7 +174,7 @@ export class XonpayService implements OnModuleInit {
   //  SYNC (CRM → DB)
   // ════════════════════════════════════════════════════
 
-  startSync(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; noSkip?: boolean }): { ok: true; started: boolean; message: string } {
+  startSync(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; actorName?: string; noSkip?: boolean }): { ok: true; started: boolean; message: string } {
     if (this.syncRunning) {
       const mins = this.syncStartedAt ? Math.floor((Date.now() - this.syncStartedAt.getTime()) / 60000) : 0;
       const p = this.syncProgress;
@@ -252,7 +252,7 @@ export class XonpayService implements OnModuleInit {
     };
   }
 
-  private async runSyncInBackground(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; noSkip?: boolean }): Promise<void> {
+  private async runSyncInBackground(opts?: { limit?: number; trigger?: 'manual' | 'cron'; actorId?: string; actorEmail?: string; actorName?: string; noSkip?: boolean }): Promise<void> {
     this.syncRunning = true;
     this.syncCancelRequested = false;
     this.syncStartedAt = new Date();
@@ -272,6 +272,7 @@ export class XonpayService implements OnModuleInit {
           trigger,
           actorId: opts?.actorId || null,
           actorEmail: opts?.actorEmail || null,
+          actorName: opts?.actorName || null,
           status: 'running',
         },
       });
@@ -502,10 +503,33 @@ export class XonpayService implements OnModuleInit {
     return { ok: true, updated: Number(result) };
   }
 
-  /** Sync tarixi — manual va cron — barchasi (default oxirgi 50) */
-  async getSyncHistory(limit = 50) {
-    const safeLimit = Math.min(Math.max(limit, 1), 500);
+  /** Sync tarixi — filterlar bilan */
+  async getSyncHistory(opts: {
+    limit?: number;
+    q?: string;
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  } = {}) {
+    const safeLimit = Math.min(Math.max(opts.limit || 50, 1), 500);
+    const where: any = {};
+    if (opts.status && opts.status !== 'all') {
+      where.status = opts.status;
+    }
+    if (opts.dateFrom || opts.dateTo) {
+      where.startedAt = {};
+      if (opts.dateFrom) where.startedAt.gte = new Date(`${opts.dateFrom}T00:00:00+05:00`);
+      if (opts.dateTo)   where.startedAt.lte = new Date(`${opts.dateTo}T23:59:59.999+05:00`);
+    }
+    if (opts.q && opts.q.trim()) {
+      const q = opts.q.trim();
+      where.OR = [
+        { actorEmail: { contains: q, mode: 'insensitive' } },
+        { actorName:  { contains: q, mode: 'insensitive' } },
+      ];
+    }
     const items = await this.prisma.xonpaySyncLog.findMany({
+      where,
       orderBy: { startedAt: 'desc' as Prisma.SortOrder },
       take: safeLimit,
     });

@@ -458,6 +458,7 @@ model XonpaySyncLog {
   trigger     String    @db.VarChar(16)  // 'manual' | 'cron'
   actorId     String?   @map("actor_id")
   actorEmail  String?   @map("actor_email") @db.VarChar(190)
+  actorName   String?   @map("actor_name") @db.VarChar(190)  // To'liq ism (User.fullName)
   status      String    @db.VarChar(16)  // 'running' | 'success' | 'failed' | 'cancelled'
   pages       Int       @default(0)
   fetched     Int       @default(0)

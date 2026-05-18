@@ -89,6 +89,14 @@ export default function BilingPage() {
 
   // Collapsible holatlar (default yopiq — bosgnda ochiladi)
   const [historyOpen, setHistoryOpen] = useState(false);
+  // Sync tarixi filterlari
+  const [histQ, setHistQ] = useState('');
+  const [histQDeb, setHistQDeb] = useState('');
+  const [histStatus, setHistStatus] = useState<'all' | 'running' | 'success' | 'failed' | 'cancelled'>('all');
+  const [histDateFrom, setHistDateFrom] = useState('');
+  const [histDateTo, setHistDateTo] = useState('');
+
+  useEffect(() => { const t = setTimeout(() => setHistQDeb(histQ.trim()), 300); return () => clearTimeout(t); }, [histQ]);
   const [dailyOpen, setDailyOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [progressModalOpen, setProgressModalOpen] = useState(false);
@@ -126,8 +134,15 @@ export default function BilingPage() {
   });
 
   const historyQuery = useQuery<{ ok: true; items: any[] }>({
-    queryKey: ['xonpay-history'],
-    queryFn: () => api.get('/xonpay/sync/history?limit=20'),
+    queryKey: ['xonpay-history', histQDeb, histStatus, histDateFrom, histDateTo],
+    queryFn: () => {
+      const p = new URLSearchParams({ limit: '50' });
+      if (histQDeb) p.set('q', histQDeb);
+      if (histStatus !== 'all') p.set('status', histStatus);
+      if (histDateFrom) p.set('dateFrom', histDateFrom);
+      if (histDateTo) p.set('dateTo', histDateTo);
+      return api.get(`/xonpay/sync/history?${p.toString()}`);
+    },
     refetchInterval: 30000,
   });
 
@@ -321,6 +336,40 @@ export default function BilingPage() {
             </div>
               {historyOpen && (
                 <>
+              {/* Filter qator */}
+              <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2 flex-wrap bg-slate-50/50">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
+                  <Input
+                    value={histQ}
+                    onChange={(e) => setHistQ(e.target.value)}
+                    placeholder="Ism yoki email..."
+                    className="pl-7 h-8 w-52 text-[11px]"
+                  />
+                </div>
+                <Select value={histStatus} onValueChange={(v: any) => setHistStatus(v)}>
+                  <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Barcha status</SelectItem>
+                    <SelectItem value="running">Running</SelectItem>
+                    <SelectItem value="success">Success</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input type="date" value={histDateFrom} max={histDateTo || today}
+                  onChange={(e) => setHistDateFrom(e.target.value)}
+                  className="h-8 w-36 text-[11px]" />
+                <span className="text-slate-400 text-[10px]">—</span>
+                <Input type="date" value={histDateTo} min={histDateFrom} max={today}
+                  onChange={(e) => setHistDateTo(e.target.value)}
+                  className="h-8 w-36 text-[11px]" />
+                {(histQ || histStatus !== 'all' || histDateFrom || histDateTo) && (
+                  <Button variant="ghost" size="sm" onClick={() => { setHistQ(''); setHistStatus('all'); setHistDateFrom(''); setHistDateTo(''); }} className="h-8 text-[11px] text-slate-500">
+                    Tozalash
+                  </Button>
+                )}
+              </div>
               {historyQuery.isLoading ? (
                 <div className="p-3 space-y-1"><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-full" /></div>
               ) : !historyQuery.data?.items?.length ? (
@@ -357,7 +406,9 @@ export default function BilingPage() {
                                 {h.trigger === 'cron' ? <><Zap className="h-2.5 w-2.5" /> cron</> : <><Activity className="h-2.5 w-2.5" /> qo'lda</>}
                               </span>
                             </td>
-                            <td className="px-3 py-1.5 max-w-[140px] truncate" title={h.actorEmail || ''}>{h.actorEmail || (h.trigger === 'cron' ? 'system' : '—')}</td>
+                            <td className="px-3 py-1.5 max-w-[180px] truncate" title={`${h.actorName || ''} (${h.actorEmail || ''})`}>
+                              {h.actorName || h.actorEmail || (h.trigger === 'cron' ? 'system' : '—')}
+                            </td>
                             <td className="px-2 py-1.5 text-center">
                               <span className={cn(
                                 'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase',
