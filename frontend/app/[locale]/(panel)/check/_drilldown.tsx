@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, RefreshCw, Loader2, Calendar, AlertTriangle, CheckCircle2,
@@ -431,6 +431,7 @@ function DiagItem({
   date?: string;
   onFixed?: () => void;
 }) {
+  const qc = useQueryClient();
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState(false);
 
@@ -446,6 +447,8 @@ function DiagItem({
         toast.success(r.message);
         setFixed(true);
         onFixed?.();
+        // Asosiy sverka listni darrov yangilash — qator yashil mosga o'tadi
+        qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       } else {
         toast.message(r.message);
         setFixed(true);

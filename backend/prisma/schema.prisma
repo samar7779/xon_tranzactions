@@ -305,6 +305,7 @@ model Bank {
 
 enum BankApiKind {
   KAPITALBANK_V3
+  IPAK_YOLI_V1   // Ipak Yo'li — Kapitalbank bilan bir xil OpenAPI 24/7 framework (mb.ipakyulibank.uz)
   GENERIC
 }
 
