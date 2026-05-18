@@ -41,8 +41,8 @@ interface TodayResponse {
   items: TodayItem[];
 }
 
-// Live refetch: 5 minutda avtomatik + window focus'da darrov yangilanadi
-const AUTO_REFETCH_MS = 5 * 60 * 1000;
+// Live refetch: 20 minutda avtomatik + window focus'da darrov yangilanadi
+const AUTO_REFETCH_MS = 20 * 60 * 1000;
 
 export default function CheckPage() {
   const t = useTranslations('check');
@@ -156,7 +156,7 @@ export default function CheckPage() {
 
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Avto-yangilanish · har 5 daqiqada {isRefreshing && '· hozir...'}</span>
+                <span>Avto-yangilanish · har 20 daqiqada {isRefreshing && '· hozir...'}</span>
               </div>
 
               <Button
@@ -200,8 +200,25 @@ export default function CheckPage() {
           <CardContent className="p-0">
             {isLoading ? (
               <SverkaLoading title={t('loadingTitle')} subtitle={t('loadingSubtitle')} />
+            ) : todayQuery.error ? (
+              <div className="p-8 text-center space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-50 ring-1 ring-rose-200 text-rose-700 text-[12px] font-semibold">
+                  <X className="h-3.5 w-3.5" />
+                  So'rovda xato yuz berdi
+                </div>
+                <div className="text-[12px] text-slate-600 max-w-md mx-auto">
+                  {(todayQuery.error as any)?.message || "noma'lum xato"}
+                </div>
+                <Button variant="outline" size="sm" onClick={refreshAll} className="mt-2 rounded-lg">
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Qayta urinish
+                </Button>
+              </div>
             ) : filtered.length === 0 ? (
-              <EmptyState icon={Scale} title="Hisob topilmadi" />
+              <EmptyState
+                icon={Scale}
+                title={q ? "Qidiruv bo'yicha hisob topilmadi" : "Aktiv hisoblar topilmadi"}
+                description={q ? undefined : "Bank yoki hisoblar aktiv emas — Setup → Banklarda tekshiring"}
+              />
             ) : (
               <div className="divide-y divide-slate-100">
                 {filtered.map((it) => (
