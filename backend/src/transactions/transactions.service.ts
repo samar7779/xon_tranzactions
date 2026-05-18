@@ -569,10 +569,18 @@ export class TransactionsService {
     }
 
     let counterpartyDisplay: string | null = null;
-    if (tx.manualCounterparty?.name) counterpartyDisplay = tx.manualCounterparty.name;
-    else if (code === 'CLIENT') counterpartyDisplay = contractCustomer || null;
-    else if (code === 'TRANSFER') counterpartyDisplay = accRow?.ownerName || null;
-    else if (code === 'COUNTERPARTY') counterpartyDisplay = cpRow?.name || null;
+    if (tx.manualCounterparty?.name) {
+      counterpartyDisplay = tx.manualCounterparty.name;
+    } else if (code === 'CLIENT') {
+      counterpartyDisplay = contractCustomer || tx.category?.name || null;
+    } else if (code === 'TRANSFER') {
+      counterpartyDisplay = accRow?.ownerName || tx.category?.name || null;
+    } else if (code === 'COUNTERPARTY') {
+      counterpartyDisplay = cpRow?.name || tx.category?.name || null;
+    } else if (tx.category?.name) {
+      // BANK / MINFIN / SALARY / LOAN / COUNTERPARTY_RETURN — kategoriya nomi
+      counterpartyDisplay = tx.category.name;
+    }
 
     return { ...tx, counterpartyDisplay, contractStatus, contractCustomer };
   }
