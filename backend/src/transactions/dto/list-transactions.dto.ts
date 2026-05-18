@@ -89,6 +89,10 @@ export class ListTransactionsDto {
   @IsOptional() @IsString()
   contractStatuses?: string;
 
+  @ApiPropertyOptional({ description: 'Shartnoma manbasi (vergul bilan: manual,ariza)' })
+  @IsOptional() @IsString()
+  contractSources?: string;
+
   @ApiPropertyOptional({ description: 'Summa pastki chegara' })
   @IsOptional() @Type(() => Number)
   amountMin?: number;
