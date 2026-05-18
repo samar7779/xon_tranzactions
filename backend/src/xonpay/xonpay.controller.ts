@@ -60,10 +60,25 @@ export class XonpayController {
     return this.svc.getCronInfo();
   }
 
+  // Routing diagnostic — backend deploy bo'lganini tekshirish
+  @Get('cron/ping')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  cronPing() {
+    return { ok: true, version: 'xonpay-v3-cron-toggle', timestamp: new Date().toISOString() };
+  }
+
   @Post('cron/toggle')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({ summary: "Cron sync ni yoqish/o'chirish (?enabled=true/false)" })
   async cronToggle(@Query('enabled') enabled?: string) {
+    await this.svc.setCronEnabled(enabled === 'true');
+    return this.svc.getCronInfo();
+  }
+
+  // GET alternative (POST muammo bo'lsa)
+  @Get('cron/toggle')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  async cronToggleGet(@Query('enabled') enabled?: string) {
     await this.svc.setCronEnabled(enabled === 'true');
     return this.svc.getCronInfo();
   }
