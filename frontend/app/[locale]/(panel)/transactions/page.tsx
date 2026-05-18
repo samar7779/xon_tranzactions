@@ -1128,7 +1128,7 @@ export default function TransactionsPage() {
               placeholder={t('idDialogPlaceholder')}
               className="font-mono text-xs"
             />
-            <Button onClick={searchById} disabled={idSearching || !idQuery.trim()} className="shrink-0">
+            <Button onClick={() => searchById()} disabled={idSearching || !idQuery.trim()} className="shrink-0">
               {idSearching ? '...' : t('findBtn')}
             </Button>
           </div>
