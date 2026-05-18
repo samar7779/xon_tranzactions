@@ -499,6 +499,27 @@ export class XonpayService implements OnModuleInit {
   }
 
   /**
+   * Hammasini tozalash — TRUNCATE xonpay_transactions.
+   * Re-sync uchun mavjud bo'lsa ham bog'lanmagan deleteMany ham bor.
+   * Match links Transaction'da SetNull bilan tushadi (bank tx tegmaydi).
+   * Tezroq variant: scan/orphan emas, hammasini olib qaytadan sync.
+   */
+  async truncateAll(): Promise<{ ok: true; deleted: number }> {
+    const before = await this.prisma.xonpayTransaction.count();
+    // TRUNCATE — eng tez (constraint'lar bilan)
+    try {
+      await this.prisma.$executeRawUnsafe(`TRUNCATE TABLE xonpay_transactions CASCADE`);
+      this.log.log(`truncateAll: ${before} ta row TRUNCATE qilindi`);
+      return { ok: true, deleted: before };
+    } catch (e: any) {
+      // TRUNCATE muvaffaqiyatsiz bo'lsa, deleteMany bilan urinish
+      this.log.warn(`TRUNCATE xato, deleteMany ishlatamiz: ${e?.message}`);
+      const r = await this.prisma.xonpayTransaction.deleteMany({});
+      return { ok: true, deleted: r.count };
+    }
+  }
+
+  /**
    * Orphan tozalashni fonda boshlash. Avval boshlasin → status poll qilinsin.
    */
   startCleanupOrphans(dryRun = true): { ok: true; started: boolean; message: string } {

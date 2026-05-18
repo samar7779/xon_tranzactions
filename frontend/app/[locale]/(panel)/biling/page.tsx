@@ -1093,10 +1093,11 @@ function ProgressStat({
 // ════════════════════════════════════════════════════
 function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
-  const [phase, setPhase] = useState<'idle' | 'scanning' | 'scanned' | 'deleting' | 'done' | 'error'>('idle');
+  const [phase, setPhase] = useState<'idle' | 'scanning' | 'scanned' | 'deleting' | 'truncating' | 'done' | 'error'>('idle');
   const [progress, setProgress] = useState<any>(null);
   const [samples, setSamples] = useState<any[]>([]);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [truncateResult, setTruncateResult] = useState<{ deleted: number } | null>(null);
 
   async function poll(after: 'scanning' | 'deleting') {
     return new Promise<any>((resolve) => {
@@ -1136,6 +1137,29 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  async function truncateAndResync() {
+    if (!confirm("XAVFLI! BARCHA XonPay yozuvlari (~19k ta) o'chiriladi va qaytadan CRM dan sync qilinadi.\n\nBu eng tez yo'l (orphan scan'dan ko'ra). Davom etilsinmi?")) return;
+    setPhase('truncating');
+    setLastError(null);
+    try {
+      const tr = await api.post<{ ok: true; deleted: number }>('/xonpay/admin/truncate', {});
+      setTruncateResult(tr);
+      toast.success(`${tr.deleted} ta yozuv o'chirildi. Endi sync boshlanmoqda...`);
+      // Sync boshlash
+      await api.post('/xonpay/sync', {});
+      toast.message("Sync fonda boshlandi — Biling sahifasida progressni ko'ring");
+      qc.invalidateQueries({ queryKey: ['xonpay-list'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
+      qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] });
+      setPhase('done');
+      // Modal yopiladi 2 sek keyin
+      setTimeout(() => onClose(), 2000);
+    } catch (e: any) {
+      setLastError(e?.message || 'Xato');
+      setPhase('error');
+    }
+  }
+
   async function startDelete() {
     if (!confirm(`${progress?.orphanCount || 0} ta orphan yozuvni o'chirish tasdiqlaysizmi?\nBu amal qaytarib bo'lmaydi.`)) return;
     setPhase('deleting');
@@ -1157,7 +1181,7 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
   const crmCount = progress?.crmCount || 0;
 
   return (
-    <Dialog open={true} onOpenChange={(o) => { if (!o && phase !== 'scanning' && phase !== 'deleting') onClose(); }}>
+    <Dialog open={true} onOpenChange={(o) => { if (!o && phase !== 'scanning' && phase !== 'deleting' && phase !== 'truncating') onClose(); }}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
@@ -1173,13 +1197,54 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
 
         <div className="space-y-4 pt-2">
           {phase === 'idle' && (
-            <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800 flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <b>Eski sync'larda paydo bo'lgan orphan yozuvlar.</b><br/>
-                CRM bilan solishtirib, faqat bizda bor lekin CRM da yo'q yozuvlar o'chiriladi.
-                Bog'langan bank tranzaksiyalar tegmaydi (faqat XonpayTransaction jadval).
+            <div className="space-y-3">
+              <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  Eski sync'larda paydo bo'lgan orphan yozuvlar. 2 ta variant:
+                </div>
               </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Variant 1: Scan + delete */}
+                <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3 text-[11.5px] text-violet-900">
+                  <div className="font-bold flex items-center gap-1 mb-1.5">
+                    <Search className="h-3.5 w-3.5" /> Scan + faqat orphan
+                  </div>
+                  <div className="text-[10.5px] text-violet-700 mb-2">
+                    CRM dan barcha yozuvlarni olib solishtiradi. Faqat orphan'larni o'chiradi. Sekinroq (~2-3 min).
+                  </div>
+                  <Button size="sm" onClick={startScan} className="w-full gap-1.5 bg-violet-600 hover:bg-violet-700 text-[11px] h-8">
+                    <Search className="h-3 w-3" /> Scan
+                  </Button>
+                </div>
+                {/* Variant 2: Truncate + re-sync */}
+                <div className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-3 text-[11.5px] text-rose-900">
+                  <div className="font-bold flex items-center gap-1 mb-1.5">
+                    <Trash2 className="h-3.5 w-3.5" /> Hammasini o'chirish + sync
+                  </div>
+                  <div className="text-[10.5px] text-rose-700 mb-2">
+                    TRUNCATE jadval + qaytadan sync. Eng tez (~1-2 min). Tavsiya etiladi.
+                  </div>
+                  <Button size="sm" onClick={truncateAndResync} className="w-full gap-1.5 bg-rose-600 hover:bg-rose-700 text-[11px] h-8">
+                    <Trash2 className="h-3 w-3" /> Truncate + Sync
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {phase === 'truncating' && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-[12px] font-semibold text-rose-700">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Hammasini tozalanmoqda + sync boshlanmoqda...
+              </div>
+              {truncateResult && (
+                <div className="text-[11.5px] text-emerald-700 flex items-center gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>{fmt(truncateResult.deleted)} ta yozuv o'chirildi</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -1276,14 +1341,9 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
           {/* Tugmalar */}
           <div className="flex items-center justify-end gap-2 pt-2 border-t">
             {phase === 'idle' && (
-              <>
-                <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
-                <Button onClick={startScan} className="gap-1.5 bg-violet-600 hover:bg-violet-700">
-                  <Search className="h-3.5 w-3.5" /> Scan (orphan'larni topish)
-                </Button>
-              </>
+              <Button variant="outline" onClick={onClose}>Yopish</Button>
             )}
-            {(phase === 'scanning' || phase === 'deleting') && (
+            {(phase === 'scanning' || phase === 'deleting' || phase === 'truncating') && (
               <Button variant="outline" disabled className="gap-1.5">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kuting...
               </Button>
