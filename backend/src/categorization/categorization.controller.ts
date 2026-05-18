@@ -140,9 +140,17 @@ export class CategorizationController {
 
   @Get('recheck-xato/fixed')
   @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
-  @ApiOperation({ summary: "Tuzatilgan shartnomalar to'liq ro'yxati (txCount bilan)" })
-  recheckFixedList(@Query('limit') limit?: string) {
-    return this.svc.getRecheckFixedList(limit ? Number(limit) : 5000);
+  @ApiOperation({ summary: "Tuzatilgan shartnomalar to'liq ro'yxati + tx ID lari" })
+  recheckFixedList(
+    @Query('limit') limit?: string,
+    @Query('withTxIds') withTxIds?: string,
+    @Query('maxTxPerContract') maxTxPerContract?: string,
+  ) {
+    return this.svc.getRecheckFixedList(
+      limit ? Number(limit) : 5000,
+      withTxIds !== 'false', // default true
+      maxTxPerContract ? Number(maxTxPerContract) : 50,
+    );
   }
 
   @Get('transactions/:id/history')
