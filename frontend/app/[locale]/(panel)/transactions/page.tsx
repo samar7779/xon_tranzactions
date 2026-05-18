@@ -482,7 +482,7 @@ export default function TransactionsPage() {
             />
             <StatCard
               label={t('kpiCount')}
-              value={String(txnCount)}
+              value={txnCount.toLocaleString('ru-RU')}
               icon={Wallet}
               color="amber"
               spark={spark(0.6)}
