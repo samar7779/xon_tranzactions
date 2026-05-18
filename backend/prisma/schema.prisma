@@ -450,6 +450,32 @@ model CrmContract {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// XONPAY SYNC LOG — har bir sync (manual + cron) tarixi
+// ─────────────────────────────────────────────────────────────────
+model XonpaySyncLog {
+  id          String    @id @default(cuid())
+  trigger     String    @db.VarChar(16)  // 'manual' | 'cron'
+  actorId     String?   @map("actor_id")
+  actorEmail  String?   @map("actor_email") @db.VarChar(190)
+  status      String    @db.VarChar(16)  // 'running' | 'success' | 'failed' | 'cancelled'
+  pages       Int       @default(0)
+  fetched     Int       @default(0)
+  xonpay      Int       @default(0)
+  inserted    Int       @default(0)
+  updated     Int       @default(0)
+  matched     Int       @default(0)
+  errors      Int       @default(0)
+  errorMessage String?  @map("error_message") @db.Text
+  startedAt   DateTime  @default(now()) @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  durationMs  Int?      @map("duration_ms")
+
+  @@index([startedAt])
+  @@index([trigger, startedAt])
+  @@map("xonpay_sync_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // XONPAY TRANSACTIONS — Biling moduli
 // XonSaroy CRM dan faqat payment_method='Xon Pay' to'lovlar.
 // Reconcile: purpose ichidagi UUID (XONPAY:(...)) orqali bank Transaction
