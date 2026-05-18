@@ -1,4 +1,5 @@
 'use client';
+// build marker: sverka v3 (Portal modal + bulk fix + diagnose stay-open)
 
 import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
