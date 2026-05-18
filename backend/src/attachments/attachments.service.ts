@@ -133,13 +133,21 @@ export class AttachmentsService {
     return { stream: createReadStream(att.storagePath), att };
   }
 
-  /** Faylni o'chirish — diskdan ham, DB'dan ham. Telegram'ga xabar. */
+  /** Faylni o'chirish — diskdan ham, DB'dan ham. Telegram'ga xabar (fayl bilan). */
   async delete(txId: string, attId: string, deletedBy?: string) {
     const att = await this.prisma.transactionAttachment.findFirst({
       where: { id: attId, txId },
       include: { transaction: { select: { id: true, contractNumber: true, externalId: true } } },
     });
     if (!att) throw new NotFoundException('Fayl topilmadi');
+
+    // Faylni avval bufferga o'qib olamiz (o'chirishdan oldin) — Telegram'ga yuborish uchun
+    let fileBuffer: Buffer | null = null;
+    try {
+      fileBuffer = await fs.readFile(att.storagePath);
+    } catch (e: any) {
+      this.log.warn(`Disk fayl o'qilmadi (${att.storagePath}): ${e?.message}`);
+    }
 
     // Diskdan o'chirish
     try {
@@ -166,22 +174,24 @@ export class AttachmentsService {
       this.log.warn(`Attachment delete history xato: ${e?.message}`);
     }
 
-    // Telegram xabar (faylsiz — o'chirilgan)
+    // Telegram xabar — fayl ham yuboriladi (buffer bilan)
     void this.notifyTelegram('deleted', {
       attachment: att,
       transaction: att.transaction,
       deletedBy,
+      fileBuffer,
     });
 
     return { ok: true, deleted: att.filename };
   }
 
-  /** Telegram notification — uploaded'da fayl ham yuboriladi (rasm yoki document) */
+  /** Telegram notification — uploaded va deleted ikkalasida ham fayl yuboriladi */
   private async notifyTelegram(action: 'uploaded' | 'deleted', payload: {
     attachment: any;
     transaction: { id: string; contractNumber: string | null; externalId: string | null };
     deletedBy?: string;
     filePath?: string;
+    fileBuffer?: Buffer | null;
   }) {
     if (!this.tgToken || !this.tgChat) return;
     try {
@@ -210,21 +220,26 @@ export class AttachmentsService {
         `<a href="${txUrl}">↗ Tranzaksiyani ochish</a>`,
       ].filter(Boolean).join('\n');
 
-      // Uploaded + fayl bor → rasm/document sifatida yuboramiz
-      if (action === 'uploaded' && payload.filePath) {
+      // Fayl bor (path yoki buffer) → rasm/document sifatida yuboramiz
+      const hasFile = !!(payload.filePath || payload.fileBuffer);
+      if (hasFile) {
         const isImage = (a.mimeType || '').startsWith('image/');
-        const isPdf   = (a.mimeType || '').includes('pdf');
         const endpoint = isImage ? 'sendPhoto' : 'sendDocument';
         const fileField = isImage ? 'photo' : 'document';
 
-        // Multipart form bilan yuborish — Node.js fs stream + FormData (axios native)
-        const fs = await import('fs');
+        // Multipart form bilan yuborish — buffer yoki stream
+        const fsMod = await import('fs');
         const FormData = (await import('form-data')).default;
         const form = new FormData();
         form.append('chat_id', this.tgChat);
         form.append('caption', caption);
         form.append('parse_mode', 'HTML');
-        form.append(fileField, fs.createReadStream(payload.filePath), {
+
+        const fileSource = payload.fileBuffer
+          ? payload.fileBuffer
+          : fsMod.createReadStream(payload.filePath!);
+
+        form.append(fileField, fileSource, {
           filename: a.filename,
           contentType: a.mimeType || 'application/octet-stream',
         });
@@ -238,7 +253,7 @@ export class AttachmentsService {
         return;
       }
 
-      // Aks holda (deleted yoki fayl yo'q) — oddiy matn
+      // Aks holda (fayl yo'q) — oddiy matn
       await firstValueFrom(
         this.http.post(
           `https://api.telegram.org/bot${this.tgToken}/sendMessage`,
