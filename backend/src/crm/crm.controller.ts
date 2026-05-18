@@ -26,4 +26,16 @@ export class CrmController {
   show(@Query('contract') contract?: string, @Query('id') id?: string) {
     return this.svc.show({ contract, id });
   }
+
+  @Get('payment-history')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({
+    summary: "XonSaroy CRM bulk to'lovlar ro'yxati (paginatsiya)",
+    description:
+      "?page=1&limit=5000 — bulk endpoint, /client/payment-history/excel ga proxy. " +
+      "Console test uchun. Har payment'da payment_method bor (XonPay/Bank/...) — filtr asoslari.",
+  })
+  paymentHistory(@Query('page') page?: string, @Query('limit') limit?: string) {
+    return this.svc.getPaymentHistory(page ? Number(page) : 1, limit ? Number(limit) : 5000);
+  }
 }
