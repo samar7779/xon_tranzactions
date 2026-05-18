@@ -2919,67 +2919,6 @@ function CombinedEditDialog({
                 );
               })}
             </div>
-
-            {/* ─── Kontragentlar (Counterparty jadvali) — INN yoki nom bo'yicha qidirish ─── */}
-            <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
-              {row.manualCounterparty ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 ring-1 ring-emerald-200">
-                  <Briefcase className="h-3.5 w-3.5 text-emerald-700 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-semibold text-emerald-900 truncate">{row.manualCounterparty.name}</div>
-                    <div className="text-[10px] font-mono text-emerald-700">INN {row.manualCounterparty.inn}</div>
-                  </div>
-                  <button
-                    onClick={() => onSaveCounterparty(null)}
-                    disabled={savingCounterparty}
-                    className="text-[10px] text-rose-600 hover:text-rose-700 font-medium px-2 py-1"
-                  >
-                    {savingCounterparty ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Tozalash'}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1.5">
-                    Yoki kontragent tanlash (INN/nom)
-                  </div>
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                    <Input
-                      value={cpSearch}
-                      onChange={(e) => setCpSearch(e.target.value)}
-                      placeholder="Masalan: 309334946 yoki XONSAROY"
-                      className="pl-8 h-9 text-[12px]"
-                    />
-                  </div>
-                  {cpDebounced.length >= 2 && (
-                    <div className="mt-1.5 rounded-lg ring-1 ring-slate-200 overflow-hidden max-h-52 overflow-y-auto bg-white">
-                      {cpQuery.isLoading ? (
-                        <div className="px-3 py-3 text-center text-[11px] text-slate-400 flex items-center justify-center gap-1.5">
-                          <Loader2 className="h-3 w-3 animate-spin" /> Qidirilmoqda...
-                        </div>
-                      ) : cpItems.length === 0 ? (
-                        <div className="px-3 py-3 text-center text-[11px] text-slate-400">Topilmadi</div>
-                      ) : (
-                        cpItems.map((c: any) => (
-                          <button
-                            key={c.id}
-                            onClick={() => { onSaveCounterparty(c.id); setCpSearch(''); }}
-                            disabled={savingCounterparty}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 text-left border-b border-slate-50 last:border-b-0"
-                          >
-                            <Briefcase className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-medium text-slate-800 truncate">{c.name}</div>
-                              <div className="text-[10px] font-mono text-slate-500">INN {c.inn}</div>
-                            </div>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
           </div>
 
           {/* ═══ STEP 2: KATEGORIYA (subkategoriya — faqat top tanlangan bo'lsa) ═══ */}
