@@ -8,7 +8,7 @@ import { CreateBankDto, UpdateBankDto } from './dto/bank.dto';
 const DEFAULT_BANKS = [
   // Aktiv — bank24.uz protokoli (KapitalBank V3 oilasi)
   { code: 'KAPITALBANK',  name: 'Kapitalbank',           apiBaseUrl: process.env.KAPITALBANK_API_URL || 'https://m.bank24.uz:2713/Mobile.svc',  apiKind: 'KAPITALBANK_V3' as const, isActive: true },
-  { code: 'IPAK_YULI',    name: "Ipak Yo'li banki",      apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',                              apiKind: 'KAPITALBANK_V3' as const, isActive: true },
+  { code: 'IPAK_YULI',    name: "Ipak Yo'li banki",      apiBaseUrl: 'https://mb.ipakyulibank.uz:2713/Mobile.svc',                              apiKind: 'IPAK_YOLI_V1' as const, isActive: true },
 
   // Aktiv emas — kelajakda integratsiya bo'ladi
   { code: 'NBU',          name: 'NBU — Milliy bank',     apiBaseUrl: null,  apiKind: 'KAPITALBANK_V3' as const, isActive: false },

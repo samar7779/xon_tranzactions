@@ -41,8 +41,8 @@ interface TodayResponse {
   items: TodayItem[];
 }
 
-// 20 minutda live refetch
-const AUTO_REFETCH_MS = 20 * 60 * 1000;
+// Live refetch: 5 minutda avtomatik + window focus'da darrov yangilanadi
+const AUTO_REFETCH_MS = 5 * 60 * 1000;
 
 export default function CheckPage() {
   const t = useTranslations('check');
@@ -51,12 +51,14 @@ export default function CheckPage() {
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
   const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
 
-  // Bugungi sverka (avtomatik, 20 min)
+  // Bugungi sverka — live: 5 minutda avto + window focus'da yangilanadi
   const todayQuery = useQuery<TodayResponse>({
     queryKey: ['reconcile-today'],
     queryFn: () => api.get('/transactions/reconcile/today'),
     refetchInterval: AUTO_REFETCH_MS,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
+    staleTime: 60_000, // 1 minut ichida fresh hisoblanadi (tab orasida yelvirashlarda qayta o'qimaydi)
   });
 
   // Manual refresh — barcha
@@ -154,7 +156,7 @@ export default function CheckPage() {
 
               <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
                 <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Avto-yangilanish · har 20 daqiqada</span>
+                <span>Avto-yangilanish · har 5 daqiqada {isRefreshing && '· hozir...'}</span>
               </div>
 
               <Button

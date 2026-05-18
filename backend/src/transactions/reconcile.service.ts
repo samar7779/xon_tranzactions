@@ -40,8 +40,8 @@ export class ReconcileService {
     const cred = account.credential;
     if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
     const bank = cred.bank;
-    if (bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException('Sverka hozircha faqat KAPITALBANK_V3 banklar uchun');
+    if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'IPAK_YOLI_V1') {
+      throw new BadRequestException("Sverka faqat Kapitalbank va Ipak Yo'li banklar uchun");
     }
     if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
 
@@ -246,7 +246,7 @@ export class ReconcileService {
     // ataylab o'chirib qo'ygan bo'lsa ham sverka ko'rinishi uchun)
     const accounts = await this.prisma.bankAccount.findMany({
       where: {
-        bank: { isActive: true, apiKind: 'KAPITALBANK_V3' },
+        bank: { isActive: true, apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] } },
       },
       include: {
         bank: { select: { id: true, name: true, code: true } },
@@ -314,8 +314,8 @@ export class ReconcileService {
     const cred = account.credential;
     if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
     const bank = cred.bank;
-    if (bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException('Diagnostika hozircha faqat KAPITALBANK_V3 banklar uchun');
+    if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'IPAK_YOLI_V1') {
+      throw new BadRequestException("Diagnostika faqat Kapitalbank va Ipak Yo'li banklar uchun");
     }
     if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
 
@@ -446,8 +446,8 @@ export class ReconcileService {
     const cred = account.credential;
     if (!cred) throw new BadRequestException('Hisobga bank ulanishi biriktirilmagan');
     const bank = cred.bank;
-    if (bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new BadRequestException('Faqat KAPITALBANK_V3 banklar uchun');
+    if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'IPAK_YOLI_V1') {
+      throw new BadRequestException("Faqat Kapitalbank va Ipak Yo'li banklar uchun");
     }
     if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
 

@@ -116,7 +116,7 @@ export class SyncService {
     });
 
     const creds = await this.prisma.bankCredential.findMany({
-      where: { isActive: true, bank: { apiKind: 'KAPITALBANK_V3', isActive: true } },
+      where: { isActive: true, bank: { apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] }, isActive: true } },
       include: { bank: true, accounts: { where: { syncEnabled: true } } },
     });
     if (creds.length === 0) {
@@ -233,8 +233,8 @@ export class SyncService {
     if (!cred) throw new Error('Credential topilmadi');
     const acc = await this.prisma.bankAccount.findUnique({ where: { id: accountId } });
     if (!acc) throw new Error('Hisob topilmadi');
-    if (cred.bank.apiKind !== 'KAPITALBANK_V3') {
-      throw new Error('Hozircha faqat KAPITALBANK_V3 qo\'llab-quvvatlanadi');
+    if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1') {
+      throw new Error("Hozircha faqat Kapitalbank va Ipak Yo'li qo'llab-quvvatlanadi");
     }
 
     const isBackfill = !!opts?.dates?.length;
