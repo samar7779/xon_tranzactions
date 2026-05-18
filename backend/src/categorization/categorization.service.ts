@@ -400,6 +400,56 @@ export class CategorizationService {
     return { ok: true, counterparty: cp };
   }
 
+  /**
+   * Shartnoma raqamini qo'lda kiritish — CRM tekshirilmaydi.
+   * setContract() dan farqi: CRM'da bo'lmasa ham qabul qiladi.
+   * Foydalanuvchi javobgar (masalan, CRM'ga hali qo'shilmagan yangi shartnoma).
+   */
+  async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; contractNumber: string | null }> {
+    const old = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { contractNumber: true, categoryId: true, subcategoryId: true },
+    });
+    if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
+
+    const newContract = contractNumber?.trim().toUpperCase() || null;
+    if (newContract && newContract.length > 128) {
+      throw new BadRequestException('Shartnoma raqami juda uzun (max 128 belgi)');
+    }
+
+    await this.prisma.transaction.update({
+      where: { id: txId },
+      data: { contractNumber: newContract },
+    });
+
+    // Tarixga yozish
+    if (old.contractNumber !== newContract) {
+      const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+      try {
+        await this.prisma.transactionCategoryHistory.create({
+          data: {
+            txId,
+            action: 'manual',
+            actorId,
+            actorName: u?.email || null,
+            oldCategoryId: old.categoryId,
+            oldSubcategoryId: old.subcategoryId,
+            newCategoryId: old.categoryId,
+            newSubcategoryId: old.subcategoryId,
+            contractNumber: newContract,
+            reason: newContract
+              ? `Shartnoma qo'lda kiritildi: ${newContract} (CRM tekshirilmagan)`
+              : "Shartnoma raqami o'chirildi",
+          },
+        });
+      } catch (e: any) {
+        this.log.warn(`setContractManual history yozishda xato (${txId}): ${e?.message}`);
+      }
+    }
+
+    return { ok: true, contractNumber: newContract };
+  }
+
   /** Tranzaksiya kategoriya tarixi (eng yangidan oldingiga) */
   async getHistory(txId: string, limit = 50) {
     const items = await this.prisma.transactionCategoryHistory.findMany({

@@ -83,6 +83,18 @@ export class CategorizationController {
     return this.svc.setCounterparty(id, body.counterpartyId, userId);
   }
 
+  // ─── Shartnomani qo'lda kiritish (CRM tekshirmasdan) ───
+  @Post('transactions/:id/set-contract-manual')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: 'Shartnoma raqamini qo\'lda kiritish (CRM tekshirmaydi)' })
+  setContractManual(
+    @Param('id') id: string,
+    @Body() body: { contractNumber: string | null },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.setContractManual(id, body.contractNumber, userId);
+  }
+
   // ─── Hammasini qayta hisoblash ─────────────────────────────────
   @Post('run-all')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)

@@ -23,6 +23,7 @@ import { CrmModule } from './crm/crm.module';
 import { CounterpartiesModule } from './counterparties/counterparties.module';
 import { CategorizationModule } from './categorization/categorization.module';
 import { ImportModule } from './import/import.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { ImportModule } from './import/import.module';
     CounterpartiesModule,
     CategorizationModule,
     ImportModule,
+    AttachmentsModule,
   ],
 })
 export class AppModule {}
