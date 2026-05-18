@@ -424,21 +424,21 @@ function DiagPanel({
           .map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined })),
       });
       setBulkResult(r);
-      if (r.summary.ok > 0) {
-        onFixed?.();
-        qc.invalidateQueries({ queryKey: ['reconcile-today'] });
-      }
-      if (r.summary.error === 0) {
-        toast.success(`${r.summary.ok} ta tranzaksiya qo'shildi`);
-      } else if (r.summary.ok === 0) {
-        toast.error(`${r.summary.error} ta xato — hech qaysisi qo'shilmadi`);
-      } else {
-        toast.message(`${r.summary.ok} qo'shildi, ${r.summary.error} xato`);
-      }
+      // Refetch'ni modal yopilgandan keyin qilamiz — aks holda DiagPanel
+      // unmount bo'lib modal yo'qoladi.
     } catch (e: any) {
       toast.error(e?.message || "Qo'shilmadi");
     } finally {
       setBulkLoading(false);
+    }
+  }
+
+  function handleCloseBulkModal() {
+    const hadSuccess = bulkResult && bulkResult.summary.ok > 0;
+    setBulkResult(null);
+    if (hadSuccess) {
+      onFixed?.();
+      qc.invalidateQueries({ queryKey: ['reconcile-today'] });
     }
   }
 
@@ -484,7 +484,7 @@ function DiagPanel({
 
       {/* Bulk natija modali */}
       {bulkResult && (
-        <BulkResultModal result={bulkResult} onClose={() => setBulkResult(null)} />
+        <BulkResultModal result={bulkResult} onClose={handleCloseBulkModal} />
       )}
     </div>
   );
@@ -516,12 +516,9 @@ function DiagItem({
       });
       setBulkResult(r);
       setFixed(r.summary.ok > 0);
-      if (r.summary.ok > 0) {
-        onFixed?.();
-        qc.invalidateQueries({ queryKey: ['reconcile-today'] });
-      }
+      // Refetch'ni modal yopilgandan keyin (onClose'da) qilamiz — aks holda
+      // diagnose qayta yuklanib DiagItem unmount bo'ladi va modal yo'qoladi.
     } catch (e: any) {
-      // Tarmoq xato — modal'da sabab ko'rsatamiz
       setBulkResult({
         ok: true,
         summary: { total: 1, ok: 0, error: 1 },
@@ -534,6 +531,16 @@ function DiagItem({
       });
     } finally {
       setFixing(false);
+    }
+  }
+
+  function handleCloseModal() {
+    const hadSuccess = bulkResult && bulkResult.summary.ok > 0;
+    setBulkResult(null);
+    if (hadSuccess) {
+      // Endi xavfsiz refetch — modal yopilgan
+      onFixed?.();
+      qc.invalidateQueries({ queryKey: ['reconcile-today'] });
     }
   }
 
@@ -597,7 +604,7 @@ function DiagItem({
 
       {/* Natija modali — bulk modal bilan birxil */}
       {bulkResult && (
-        <BulkResultModal result={bulkResult} onClose={() => setBulkResult(null)} />
+        <BulkResultModal result={bulkResult} onClose={handleCloseModal} />
       )}
     </div>
   );
