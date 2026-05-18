@@ -9,9 +9,9 @@ import {
   CreditCard, RefreshCw, Search, CheckCircle2, AlertCircle, XCircle, Loader2,
   TrendingUp, Hash, Calendar, ExternalLink, Play, X, History, Zap,
   Receipt, Activity, ChevronLeft, ChevronRight, Eye, Copy, FileSearch,
+  ChevronDown, ChevronUp, Home, ScanLine,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
-import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
@@ -77,10 +77,16 @@ export default function BilingPage() {
   const qc = useQueryClient();
   const { locale } = useParams<{ locale: string }>();
   const today = new Date().toISOString().slice(0, 10);
-  const defaultFrom = (() => { const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().slice(0, 10); })();
+  // Default: boshidan bugungacha — barchasini ko'rsatish
+  const defaultFrom = '2024-01-01';
 
   const [dateFrom, setDateFrom] = useState(defaultFrom);
   const [dateTo, setDateTo] = useState(today);
+
+  // Collapsible holatlar (default yopiq — bosgnda ochiladi)
+  const [cronOpen, setCronOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [dailyOpen, setDailyOpen] = useState(false);
   const [matched, setMatched] = useState<'all' | 'matched' | 'unmatched'>('all');
   const [q, setQ] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
@@ -88,7 +94,6 @@ export default function BilingPage() {
   const [perPage, setPerPage] = useState(50);
   const [rechecking, setRechecking] = useState<Set<string>>(new Set());
   const [detailRow, setDetailRow] = useState<XonpayRow | null>(null);
-  const [inspectId, setInspectId] = useState<string | null>(null);
 
   useEffect(() => { const t = setTimeout(() => setDebouncedQ(q.trim()), 350); return () => clearTimeout(t); }, [q]);
 
@@ -240,41 +245,53 @@ export default function BilingPage() {
           </div>
         )}
 
-        {/* ═══ CRON + SYNC TARIXI ═══ */}
+        {/* ═══ CRON + SYNC TARIXI (collapsible) ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <Card className="lg:col-span-1">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
+            <CardContent className="p-0">
+              <button onClick={() => setCronOpen(o => !o)}
+                className="w-full px-4 py-3 flex items-center gap-2 hover:bg-slate-50 transition-colors">
                 <Zap className="h-3.5 w-3.5 text-amber-600" />
-                <h3 className="text-[13px] font-bold">Avtomatik sync</h3>
+                <h3 className="text-[13px] font-bold flex-1 text-left">Avtomatik sync</h3>
                 {cronInfoQuery.data?.enabled && (
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                     <CheckCircle2 className="h-2.5 w-2.5" /> Yoqilgan
                   </span>
                 )}
-              </div>
-              <div className="text-[11px] text-slate-600 space-y-1">
-                <div><span className="text-slate-400">Jadval:</span> <span className="font-mono">{cronInfoQuery.data?.schedule || '—'}</span></div>
-                <div>
-                  <span className="text-slate-400">Oxirgi:</span>{' '}
-                  {cronInfoQuery.data?.lastRunAt
-                    ? <span className="font-mono">{new Date(cronInfoQuery.data.lastRunAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}</span>
-                    : <span className="text-slate-400">hali yo'q</span>}
+                {cronOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+              </button>
+              {cronOpen && (
+                <div className="px-4 pb-4 border-t border-slate-100">
+                  <div className="text-[11px] text-slate-600 space-y-1 pt-2">
+                    <div><span className="text-slate-400">Jadval:</span> <span className="font-mono">{cronInfoQuery.data?.schedule || '—'}</span></div>
+                    <div>
+                      <span className="text-slate-400">Oxirgi:</span>{' '}
+                      {cronInfoQuery.data?.lastRunAt
+                        ? <span className="font-mono">{new Date(cronInfoQuery.data.lastRunAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}</span>
+                        : <span className="text-slate-400">hali yo'q</span>}
+                    </div>
+                    {cronInfoQuery.data?.lastSkipReason && (
+                      <div className="text-amber-700 text-[10.5px] flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {cronInfoQuery.data.lastSkipReason}</div>
+                    )}
+                  </div>
                 </div>
-                {cronInfoQuery.data?.lastSkipReason && (
-                  <div className="text-amber-700 text-[10.5px] flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {cronInfoQuery.data.lastSkipReason}</div>
-                )}
-              </div>
+              )}
             </CardContent>
           </Card>
 
           <Card className="lg:col-span-2">
             <CardContent className="p-0">
-              <div className="px-4 py-2.5 border-b border-slate-100 flex items-center gap-2">
+              <button onClick={() => setHistoryOpen(o => !o)}
+                className="w-full px-4 py-3 flex items-center gap-2 hover:bg-slate-50 transition-colors border-b border-slate-100">
                 <History className="h-3.5 w-3.5 text-violet-600" />
-                <h3 className="text-[13px] font-bold">Sync tarixi</h3>
-                <span className="text-[10px] text-slate-400">(qo'lda + cron)</span>
-              </div>
+                <h3 className="text-[13px] font-bold flex-1 text-left">Sync tarixi <span className="text-[10px] text-slate-400 font-normal">(qo'lda + cron)</span></h3>
+                {historyQuery.data?.items?.length != null && (
+                  <span className="text-[10.5px] text-slate-500">{historyQuery.data.items.length} ta</span>
+                )}
+                {historyOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+              </button>
+              {historyOpen && (
+                <>
               {historyQuery.isLoading ? (
                 <div className="p-3 space-y-1"><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-full" /></div>
               ) : !historyQuery.data?.items?.length ? (
@@ -331,17 +348,24 @@ export default function BilingPage() {
                   </table>
                 </div>
               )}
+              </>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* ═══ KUNLIK STATISTIKA ═══ */}
+        {/* ═══ KUNLIK STATISTIKA (collapsible) ═══ */}
         <Card>
           <CardContent className="p-0">
-            <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
+            <button onClick={() => setDailyOpen(o => !o)}
+              className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors border-b border-slate-100">
               <h2 className="text-[13px] font-bold flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5 text-violet-600" /> Kunlik statistika</h2>
-              <div className="text-[11px] text-slate-500">{statsQuery.data?.days?.length || 0} kun</div>
-            </div>
+              <div className="flex items-center gap-3">
+                <div className="text-[11px] text-slate-500">{statsQuery.data?.days?.length || 0} kun</div>
+                {dailyOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
+              </div>
+            </button>
+            {dailyOpen && <>
             {statsQuery.isLoading ? (
               <div className="p-3 space-y-1.5">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-7 w-full" />)}</div>
             ) : !statsQuery.data?.days?.length ? (
@@ -391,6 +415,7 @@ export default function BilingPage() {
                 </table>
               </div>
             )}
+            </>}
           </CardContent>
         </Card>
 
@@ -439,11 +464,12 @@ export default function BilingPage() {
                     <thead className="bg-slate-50 text-slate-600 uppercase text-[10px] tracking-wider">
                       <tr>
                         <th className="text-left px-3 py-2 font-bold">Sana</th>
+                        <th className="text-left px-3 py-2 font-bold">Obyekt</th>
                         <th className="text-left px-3 py-2 font-bold">Shartnoma</th>
                         <th className="text-left px-3 py-2 font-bold">Mijoz</th>
                         <th className="text-right px-3 py-2 font-bold">Summa (UZS)</th>
                         <th className="text-center px-3 py-2 font-bold">Status</th>
-                        <th className="text-center px-3 py-2 font-bold">Tx ID</th>
+                        <th className="text-center px-3 py-2 font-bold">Tx</th>
                         <th className="text-right px-3 py-2 font-bold">Amal</th>
                       </tr>
                     </thead>
@@ -456,6 +482,11 @@ export default function BilingPage() {
                         >
                           <td className="px-3 py-2 font-mono tabular-nums whitespace-nowrap text-slate-700">
                             {it.datePaid?.slice(0, 10) || '—'}
+                          </td>
+                          <td className="px-3 py-2 max-w-[180px] truncate" title={it.objectName || ''}>
+                            {it.objectName
+                              ? <span className="text-[11.5px] text-slate-700">{it.objectName}</span>
+                              : <span className="text-slate-300 text-[10px]">—</span>}
                           </td>
                           <td className="px-3 py-2">
                             <code className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded ring-1 ring-indigo-200">
@@ -481,13 +512,14 @@ export default function BilingPage() {
                           </td>
                           <td className="px-3 py-2 text-center">
                             {it.matchedTx?.externalId ? (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setInspectId(it.matchedTx!.externalId!); }}
-                                title={`Tranzaksiya ID inspector: ${it.matchedTx.externalId}`}
+                              <Link
+                                href={`/${locale}/transactions?searchId=${encodeURIComponent(it.matchedTx.externalId)}`}
+                                onClick={(e) => e.stopPropagation()}
+                                title={`Tranzaksiyalar sahifasida ochish: ${it.matchedTx.externalId}`}
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                               >
-                                <FileSearch className="h-3.5 w-3.5" />
-                              </button>
+                                <ScanLine className="h-3.5 w-3.5" />
+                              </Link>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
@@ -544,17 +576,8 @@ export default function BilingPage() {
             row={detailRow}
             locale={locale as string}
             onClose={() => setDetailRow(null)}
-            onInspect={(extId) => setInspectId(extId)}
           />
         )}
-
-        {/* ═══ ID INSPECTOR (bank tx ID tekshirish) ═══ */}
-        <IdInspectorDialog
-          hideTrigger
-          controlledOpen={!!inspectId}
-          onControlledOpenChange={(o) => { if (!o) setInspectId(null); }}
-          initialId={inspectId || ''}
-        />
       </div>
     </div>
   );
@@ -564,12 +587,11 @@ export default function BilingPage() {
 //  XONPAY DETAIL DIALOG — row bosilganda to'liq malumot
 // ════════════════════════════════════════════════════
 function XonpayDetailDialog({
-  row, locale, onClose, onInspect,
+  row, locale, onClose,
 }: {
   row: XonpayRow;
   locale: string;
   onClose: () => void;
-  onInspect: (externalId: string) => void;
 }) {
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -613,13 +635,19 @@ function XonpayDetailDialog({
               CRM ma'lumotlari
             </div>
             <div className="divide-y divide-slate-100">
+              <DetailRow label="Obyekt" value={
+                row.objectName
+                  ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium text-slate-700 bg-slate-50 ring-1 ring-slate-200">
+                      <Home className="h-3 w-3 text-slate-500" /> {row.objectName}
+                    </span>
+                  : '—'
+              } />
               <DetailRow label="Shartnoma" value={
                 <code className="font-mono text-[12px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded ring-1 ring-indigo-200">
                   {row.contract || '—'}
                 </code>
               } />
               <DetailRow label="Mijoz F.I.O." value={row.fullName || '—'} />
-              <DetailRow label="Obyekt" value={row.objectName || '—'} />
               <DetailRow label="Type" value={row.type || '—'} />
               <DetailRow label="Category" value={row.category || '—'} />
               <DetailRow label="Status" value={row.status || '—'} />
@@ -678,15 +706,12 @@ function XonpayDetailDialog({
               </div>
               <div className="px-3 py-2 bg-emerald-50/50 flex items-center justify-end gap-2 border-t border-emerald-100">
                 {row.matchedTx.externalId && (
-                  <Button variant="outline" size="sm" onClick={() => onInspect(row.matchedTx!.externalId!)} className="gap-1.5 h-8 text-[11px]">
-                    <FileSearch className="h-3.5 w-3.5" /> ID inspector
-                  </Button>
+                  <Link href={`/${locale}/transactions?searchId=${encodeURIComponent(row.matchedTx.externalId)}`}>
+                    <Button size="sm" className="gap-1.5 h-8 text-[11px] bg-emerald-600 hover:bg-emerald-700">
+                      <ScanLine className="h-3.5 w-3.5" /> Tranzaksiyani ochish
+                    </Button>
+                  </Link>
                 )}
-                <Link href={`/${locale}/transactions?id=${encodeURIComponent(row.matchedTx.id)}`}>
-                  <Button size="sm" className="gap-1.5 h-8 text-[11px] bg-emerald-600 hover:bg-emerald-700">
-                    <ExternalLink className="h-3.5 w-3.5" /> Tranzaksiyalar sahifasida ochish
-                  </Button>
-                </Link>
               </div>
             </div>
           ) : (
