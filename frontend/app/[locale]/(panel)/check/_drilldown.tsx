@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, RefreshCw, Loader2, Calendar, AlertTriangle, CheckCircle2,
-  ArrowDownLeft, ArrowUpRight, Search, Inbox, Database, Download,
+  ArrowDownLeft, ArrowUpRight, Search, Inbox, Database, Download, Copy, Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -434,27 +434,35 @@ function DiagItem({
   const qc = useQueryClient();
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState(false);
+  const [insertedInfo, setInsertedInfo] = useState<{
+    inserted: boolean;
+    transactionId: string | null;
+    externalId: string | null;
+  } | null>(null);
 
   async function handleFix() {
     if (!accountId || !date) return;
     setFixing(true);
     try {
-      const r = await api.post<{ ok: true; inserted: boolean; message: string }>(
+      const r = await api.post<{
+        ok: true; inserted: boolean; message: string;
+        transactionId: string | null; externalId: string | null;
+      }>(
         '/transactions/reconcile/fix-missing',
         { accountId, b2Id: it.b2Id || undefined, generalId: it.generalId || undefined, date },
       );
+      setFixed(true);
+      setInsertedInfo({
+        inserted: r.inserted,
+        transactionId: r.transactionId,
+        externalId: r.externalId,
+      });
       if (r.inserted) {
-        toast.success(r.message);
-        setFixed(true);
         onFixed?.();
-        // Asosiy sverka listni darrov yangilash — qator yashil mosga o'tadi
         qc.invalidateQueries({ queryKey: ['reconcile-today'] });
-      } else {
-        toast.message(r.message);
-        setFixed(true);
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Qo\'shilmadi');
+      toast.error(e?.message || "Qo'shilmadi");
     } finally {
       setFixing(false);
     }
@@ -517,6 +525,137 @@ function DiagItem({
           <CheckCircle2 className="h-3 w-3" /> Qo'shildi
         </div>
       )}
+
+      {/* Insert natijasi modali — externalId copy uchun */}
+      {insertedInfo && (
+        <InsertedModal
+          info={insertedInfo}
+          onClose={() => setInsertedInfo(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function InsertedModal({
+  info, onClose,
+}: {
+  info: { inserted: boolean; transactionId: string | null; externalId: string | null };
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState<'tx' | 'ext' | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  async function copy(text: string, which: 'tx' | 'ext') {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(which);
+      toast.success('Nusxa olindi');
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      toast.error("Nusxa olishda xato");
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm grid place-items-center px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 p-5 bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500 grid place-items-center shrink-0 shadow-md shadow-emerald-500/30">
+            <CheckCircle2 className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px] font-bold text-emerald-900">
+              {info.inserted
+                ? "Tranzaksiya AllTranzactions'ga qo'shildi"
+                : "Tranzaksiya allaqachon mavjud edi"}
+            </div>
+            <div className="text-[11px] text-emerald-700 mt-0.5">
+              Quyidagi ID'larni copy qilib boshqa joyda ishlatishingiz mumkin
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-white/80 hover:text-rose-700 transition"
+            aria-label="Yopish"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5 space-y-4">
+          {/* externalId (composite, foydalanuvchi so'ragan format) */}
+          {info.externalId && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                Tranzaksiya ID (External · composite)
+              </div>
+              <div className="flex items-stretch gap-2">
+                <div className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 ring-1 ring-slate-200
+                                font-mono text-[12px] text-slate-800 break-all select-all">
+                  {info.externalId}
+                </div>
+                <button
+                  onClick={() => copy(info.externalId!, 'ext')}
+                  className="px-3 rounded-lg bg-indigo-600 text-white text-[12px] font-semibold
+                             hover:bg-indigo-700 active:scale-95 transition flex items-center gap-1.5 shrink-0"
+                >
+                  {copied === 'ext' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied === 'ext' ? 'Olindi' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* DB ichki id */}
+          {info.transactionId && (
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">
+                AllTranzactions ID (ichki)
+              </div>
+              <div className="flex items-stretch gap-2">
+                <div className="flex-1 px-3 py-2.5 rounded-lg bg-slate-50 ring-1 ring-slate-200
+                                font-mono text-[12px] text-slate-800 break-all select-all">
+                  {info.transactionId}
+                </div>
+                <button
+                  onClick={() => copy(info.transactionId!, 'tx')}
+                  className="px-3 rounded-lg bg-slate-200 text-slate-800 text-[12px] font-semibold
+                             hover:bg-slate-300 active:scale-95 transition flex items-center gap-1.5 shrink-0"
+                >
+                  {copied === 'tx' ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied === 'tx' ? 'Olindi' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-semibold transition"
+          >
+            Yopish
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
