@@ -30,6 +30,20 @@ interface DiagnoseItem {
   id?: string;
 }
 
+interface BulkResult {
+  ok: true;
+  summary: { total: number; ok: number; error: number };
+  results: Array<{
+    b2Id?: string | null;
+    generalId?: string | null;
+    ok: boolean;
+    inserted: boolean;
+    transactionId: string | null;
+    externalId: string | null;
+    error?: string;
+  }>;
+}
+
 interface ReconcileData {
   status: 'ok' | 'mismatch' | 'error';
   accountId: string;
@@ -390,17 +404,66 @@ function DiagPanel({
   date?: string;
   onFixed?: () => void;
 }) {
+  const qc = useQueryClient();
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
   const toneCls = tone === 'amber'
     ? 'border-amber-200 bg-amber-50/40'
     : 'border-rose-200 bg-rose-50/40';
   const headCls = tone === 'amber' ? 'text-amber-800' : 'text-rose-800';
+
+  async function handleFixAll() {
+    if (!accountId || !date || items.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const r = await api.post<BulkResult>('/transactions/reconcile/fix-all-missing', {
+        accountId,
+        date,
+        items: items
+          .filter((it) => it.b2Id || it.generalId)
+          .map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined })),
+      });
+      setBulkResult(r);
+      if (r.summary.ok > 0) {
+        onFixed?.();
+        qc.invalidateQueries({ queryKey: ['reconcile-today'] });
+      }
+      if (r.summary.error === 0) {
+        toast.success(`${r.summary.ok} ta tranzaksiya qo'shildi`);
+      } else if (r.summary.ok === 0) {
+        toast.error(`${r.summary.error} ta xato — hech qaysisi qo'shilmadi`);
+      } else {
+        toast.message(`${r.summary.ok} qo'shildi, ${r.summary.error} xato`);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || "Qo'shilmadi");
+    } finally {
+      setBulkLoading(false);
+    }
+  }
 
   return (
     <div className={cn('rounded-lg border', toneCls)}>
       <div className={cn('px-3 py-2 border-b border-current/10 flex items-center gap-2 text-[12px] font-semibold', headCls)}>
         {icon}
         <span>{title}</span>
-        <span className="ml-auto tabular-nums">{items.length}</span>
+        <span className="tabular-nums">{items.length}</span>
+        {fixable && items.length > 1 && (
+          <button
+            onClick={handleFixAll}
+            disabled={bulkLoading}
+            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-md
+                       bg-indigo-600 text-white text-[11px] font-semibold
+                       hover:bg-indigo-700 disabled:opacity-60 transition"
+          >
+            {bulkLoading ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            {bulkLoading ? `Qo'shilmoqda ${items.length} ta...` : `Hammasini qo'shish · ${items.length}`}
+          </button>
+        )}
       </div>
       {items.length === 0 ? (
         <div className="p-3 text-[11px] text-slate-500">{empty}</div>
@@ -417,6 +480,11 @@ function DiagPanel({
             />
           ))}
         </div>
+      )}
+
+      {/* Bulk natija modali */}
+      {bulkResult && (
+        <BulkResultModal result={bulkResult} onClose={() => setBulkResult(null)} />
       )}
     </div>
   );
@@ -729,6 +797,170 @@ function DailyBreakdown({
             })}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function BulkResultModal({
+  result, onClose,
+}: {
+  result: BulkResult;
+  onClose: () => void;
+}) {
+  const [copiedAll, setCopiedAll] = useState(false);
+  const [copiedOne, setCopiedOne] = useState<string | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose(); }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const successes = result.results.filter((r) => r.ok && r.externalId);
+  const failures = result.results.filter((r) => !r.ok);
+
+  async function copy(text: string, key: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedOne(key);
+      toast.success('Nusxa olindi');
+      setTimeout(() => setCopiedOne(null), 1500);
+    } catch {
+      toast.error('Nusxa olishda xato');
+    }
+  }
+
+  async function copyAll() {
+    const ids = successes.map((r) => r.externalId).filter(Boolean).join('\n');
+    if (!ids) return;
+    try {
+      await navigator.clipboard.writeText(ids);
+      setCopiedAll(true);
+      toast.success(`${successes.length} ta ID nusxa olindi`);
+      setTimeout(() => setCopiedAll(false), 1500);
+    } catch {
+      toast.error('Nusxa olishda xato');
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm grid place-items-center px-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start gap-3 p-5 bg-gradient-to-r from-emerald-50 via-amber-50 to-rose-50 border-b border-slate-200">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500 grid place-items-center shrink-0 shadow-md shadow-indigo-500/30">
+            <Download className="h-5 w-5 text-white" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[14px] font-bold text-slate-900">
+              Bulk natija
+            </div>
+            <div className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-3 flex-wrap">
+              <span>Jami: <b>{result.summary.total}</b></span>
+              <span className="text-emerald-700">✓ Qo'shildi: <b>{result.summary.ok}</b></span>
+              {result.summary.error > 0 && (
+                <span className="text-rose-700">✗ Xato: <b>{result.summary.error}</b></span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-white/80 hover:text-rose-700 transition"
+            aria-label="Yopish"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {/* Muvaffaqiyatli — Copy All tugmasi bilan */}
+          {successes.length > 0 && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-emerald-100 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                <span className="text-[12px] font-semibold text-emerald-900">
+                  Qo'shilgan tranzaksiyalar · {successes.length}
+                </span>
+                <button
+                  onClick={copyAll}
+                  className="ml-auto inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                             bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition"
+                >
+                  {copiedAll ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                  {copiedAll ? 'Olindi' : "Hammasini copy"}
+                </button>
+              </div>
+              <div className="divide-y divide-emerald-100/60 max-h-[50vh] overflow-y-auto">
+                {successes.map((r) => {
+                  const key = r.externalId || r.transactionId || '';
+                  return (
+                    <div key={key} className="p-3 text-[11px] space-y-1.5">
+                      <div className="flex items-stretch gap-2">
+                        <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
+                                          font-mono text-[11px] text-slate-800 break-all select-all">
+                          {r.externalId || r.transactionId}
+                        </code>
+                        <button
+                          onClick={() => copy(r.externalId || r.transactionId || '', key)}
+                          className="px-2 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-semibold transition shrink-0"
+                        >
+                          {copiedOne === key ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </button>
+                      </div>
+                      {!r.inserted && (
+                        <div className="text-[10px] text-amber-600">
+                          ⚠ Avvaldan mavjud edi
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Xato bo'lganlar — sababi bilan */}
+          {failures.length > 0 && (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/40 overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-rose-100 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-700" />
+                <span className="text-[12px] font-semibold text-rose-900">
+                  Qo'shilmadi · {failures.length}
+                </span>
+              </div>
+              <div className="divide-y divide-rose-100/60 max-h-[40vh] overflow-y-auto">
+                {failures.map((r, i) => (
+                  <div key={`${r.b2Id || r.generalId || i}`} className="p-3 text-[11px] space-y-1">
+                    <div className="font-mono text-[10px] text-slate-500 truncate">
+                      {r.b2Id ? `b2:${r.b2Id}` : r.generalId ? `gen:${r.generalId}` : '—'}
+                    </div>
+                    <div className="text-rose-800">
+                      <span className="font-semibold">Sabab:</span> {r.error || "noma'lum xato"}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-4 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-semibold transition"
+          >
+            Yopish
+          </button>
+        </div>
       </div>
     </div>
   );
