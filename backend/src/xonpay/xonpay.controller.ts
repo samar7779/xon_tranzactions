@@ -91,12 +91,18 @@ export class XonpayController {
   @Post('admin/cleanup-orphans')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({
-    summary: 'Orphan tozalash — CRM da yoq lekin bizda bor rowlar',
-    description: '?dryRun=true (default) faqat sanaydi. ?dryRun=false ochiradi.',
+    summary: 'Orphan tozalashni fonda boshlash (504 timeout bo\'lmasin)',
+    description: '?dryRun=true (default) faqat sanaydi. ?dryRun=false ochiradi. Progress: GET /admin/cleanup-orphans/status',
   })
   cleanupOrphans(@Query('dryRun') dryRun?: string) {
-    // Default xavfsiz: dryRun=true. Faqat ?dryRun=false bilan o'chiradi
-    return this.svc.cleanupOrphans(dryRun === 'false' ? false : true);
+    return this.svc.startCleanupOrphans(dryRun === 'false' ? false : true);
+  }
+
+  @Get('admin/cleanup-orphans/status')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: 'Cleanup orphans progress' })
+  cleanupOrphansStatus() {
+    return this.svc.getCleanupStatus();
   }
 
   // ── MATCH ──
