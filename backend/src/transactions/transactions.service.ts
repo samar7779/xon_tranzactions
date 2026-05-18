@@ -9,6 +9,26 @@ import { ListTransactionsDto } from './dto/list-transactions.dto';
 const parseDayStartTashkent = (d: string) => new Date(`${d}T00:00:00+05:00`);
 const parseDayEndTashkent   = (d: string) => new Date(`${d}T23:59:59.999+05:00`);
 
+// Count keshi — bir xil filtr uchun COUNT(*) ni 30 sekund saqlab turamiz.
+// 20K+ rows uchun COUNT eng sekin so'rov, ko'pincha sahifalashda o'zgarmaydi.
+const COUNT_TTL_MS = 30_000;
+const countCache = new Map<string, { value: number; expiresAt: number }>();
+
+function getCachedCount(key: string): number | null {
+  const entry = countCache.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) { countCache.delete(key); return null; }
+  return entry.value;
+}
+function setCachedCount(key: string, value: number) {
+  countCache.set(key, { value, expiresAt: Date.now() + COUNT_TTL_MS });
+  // Sodda chegara — kesh juda o'sib ketmasligi uchun
+  if (countCache.size > 200) {
+    const firstKey = countCache.keys().next().value;
+    if (firstKey !== undefined) countCache.delete(firstKey);
+  }
+}
+
 export interface ExportFilters {
   q?: string;
   direction?: string;
@@ -191,13 +211,54 @@ export class TransactionsService {
   }
 
   async list(query: ListTransactionsDto) {
-    const { page = 1, perPage = 50 } = query;
+    const { page: rawPage = 1, perPage = 50 } = query;
     let where = this.buildWhere(query);
     where = await this.applyXatoFilter(where);
 
-    const [total, items] = await Promise.all([
+    // Count — keshdan yoki bazadan. Filtr o'zgarmasa, sahifalashda qayta hisoblamaymiz.
+    const cacheKey = JSON.stringify(where);
+    const cachedTotal = getCachedCount(cacheKey);
+
+    // 2 ta holat: count keshda bor — clamp qilib darrov findMany; yo'q —
+    // count va findMany'ni parallel ishga tushiramiz, lekin page'ni clamp
+    // qilolmaymiz (yana 1 ta keshlanmagan count uchun yarim sekund yo'qotmaymiz).
+    let total: number;
+    let items: any[];
+
+    if (cachedTotal !== null) {
+      total = cachedTotal;
+      const totalPages = Math.max(1, Math.ceil(total / perPage));
+      const page = Math.max(1, Math.min(rawPage, totalPages));
+      if (total === 0) {
+        return { ok: true, total: 0, page, perPage, items: [] };
+      }
+      items = await this.prisma.transaction.findMany(this.buildListArgs(where, page, perPage));
+      return this.enrichAndReturn(items, total, page, perPage);
+    }
+
+    // Cache miss — page'ni katta sonlar uchun qattiq cheklash (xavfsizlik):
+    // 100K dan oshiq skip'ni rad etamiz, frontend uchun esa keyin clamp qilamiz.
+    const safePage = Math.min(rawPage, 4000); // 4000 * 250 = 1M skip — yetarli chegara
+    [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),
-      this.prisma.transaction.findMany({
+      this.prisma.transaction.findMany(this.buildListArgs(where, safePage, perPage)),
+    ]);
+    setCachedCount(cacheKey, total);
+
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    const page = Math.max(1, Math.min(rawPage, totalPages));
+
+    // Agar safePage clamp qilingan bo'lsa va u haqiqiy oxirgi sahifadan farq qilsa,
+    // to'g'ri sahifani qayta yuklaymiz.
+    if (page !== safePage && total > 0) {
+      items = await this.prisma.transaction.findMany(this.buildListArgs(where, page, perPage));
+    }
+
+    return this.enrichAndReturn(items, total, page, perPage);
+  }
+
+  private buildListArgs(where: any, page: number, perPage: number) {
+    return {
         where,
         // Sana → ID bo'yicha kamayish: eng yangi tepada.
         // CUID id'lar vaqt-prefiksli, shu sababli id desc — aslida yaratilish
@@ -222,9 +283,11 @@ export class TransactionsService {
           manualCounterparty: { select: { id: true, inn: true, name: true } },
           _count: { select: { attachments: true } },
         },
-      }),
-    ]);
+      };
+  }
 
+  /** Yig'ilgan items'larni counterpartyDisplay + contractStatus bilan boyitib qaytaradi. */
+  private async enrichAndReturn(items: any[], total: number, page: number, perPage: number) {
     // ── Enrichment: counterpartyDisplay (firma nomi) + contractStatus
     // 1) Boshqa tomon INN/account/shartnomalarini yig'amiz
     const otherInns = new Set<string>();
