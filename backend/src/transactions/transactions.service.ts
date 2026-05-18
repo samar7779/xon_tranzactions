@@ -890,13 +890,23 @@ export class TransactionsService {
     return { buffer, filename, count: items.length };
   }
 
-  async stats(dateFrom?: string, dateTo?: string, categoryCode?: string) {
+  async stats(
+    dateFrom?: string,
+    dateTo?: string,
+    categoryCode?: string,
+    bankId?: string,
+    accountId?: string,
+    direction?: string,
+  ) {
     const where: any = {};
     if (dateFrom || dateTo) {
       where.txnDate = {};
       if (dateFrom) where.txnDate.gte = parseDayStartTashkent(dateFrom);
       if (dateTo) where.txnDate.lte = parseDayEndTashkent(dateTo);
     }
+    if (bankId) where.bankId = bankId;
+    if (accountId) where.accountId = accountId;
+    if (direction) where.direction = direction;
     // Kategoriya bo'yicha filter (masalan: CLIENT — faqat Klient/Fiz.L/Yur.L tranzaksiyalari)
     if (categoryCode) {
       const cat = await this.prisma.category.findUnique({
