@@ -18,6 +18,12 @@ const EPSILON = 1;
  *
  * Birliklar: bank API tiyin qaytaradi (×100), bizning DB so'mda saqlaydi.
  */
+// reconcileToday natijasini 5 minutga keshlash — har bir foydalanuvchi
+// alohida bank fan-out qilmasin (140 ta hisob bo'lsa, har bir kishi
+// alohida 30s+ kutib o'tirmasin).
+const TODAY_CACHE_TTL_MS = 5 * 60 * 1000;
+let todayCache: { date: string; expiresAt: number; data: any } | null = null;
+
 @Injectable()
 export class ReconcileService {
   private readonly log = new Logger(ReconcileService.name);
@@ -243,10 +249,16 @@ export class ReconcileService {
    */
   async reconcileToday(date?: string) {
     const targetDate = date || this.todayTashkent();
+
+    // Kesh tekshirish — 5 min ichida bir xil sana so'ralsa, darrov qaytaramiz
+    if (todayCache && todayCache.date === targetDate && todayCache.expiresAt > Date.now()) {
+      this.log.log(`reconcileToday: kesh urildi (${targetDate})`);
+      return todayCache.data;
+    }
+
     const tStart = Date.now();
 
-    // Barcha aktiv KB hisoblar — syncEnabled cheklamasdan (foydalanuvchi
-    // ataylab o'chirib qo'ygan bo'lsa ham sverka ko'rinishi uchun)
+    // Barcha aktiv KB+Ipak hisoblar
     const accounts = await this.prisma.bankAccount.findMany({
       where: {
         bank: { isActive: true, apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] } },
@@ -257,13 +269,13 @@ export class ReconcileService {
       },
       orderBy: { ownerName: 'asc' },
     });
-    this.log.log(`reconcileToday: ${accounts.length} ta hisob topildi, sverka ${targetDate}`);
+    this.log.log(`reconcileToday: ${accounts.length} ta hisob, sverka ${targetDate}`);
 
-    // Parallelism kuchaytirildi — 3 → 10 (100+ hisob bo'lsa Nginx timeout
-    // urinmaslik uchun). Har bir akkaunt uchun 25s qattiq timeout — hangup
-    // bo'lgan bank zaprosi butun sverkani bog'lab qo'ymasligi uchun.
-    const CONCURRENCY = 10;
-    const PER_ACCOUNT_TIMEOUT_MS = 25_000;
+    // Worker pool — batch o'rniga. Batch bilan: bitta sekin item butun batchni
+    // 25s ushlab turardi. Pool bilan: tez worker'lar darrov yangi item oladi,
+    // faqat sekin worker o'z item'ini kutadi.
+    const CONCURRENCY = 15;
+    const PER_ACCOUNT_TIMEOUT_MS = 12_000;
 
     const withTimeout = <T,>(p: Promise<T>, ms: number, label: string): Promise<T> =>
       new Promise((resolve, reject) => {
@@ -272,16 +284,21 @@ export class ReconcileService {
          .catch((e) => { clearTimeout(t); reject(e); });
       });
 
-    const results: any[] = [];
-    for (let i = 0; i < accounts.length; i += CONCURRENCY) {
-      const batch = accounts.slice(i, i + CONCURRENCY);
-      const chunk = await Promise.all(
-        batch.map((a) =>
-          withTimeout(
+    const results: any[] = new Array(accounts.length);
+    let nextIdx = 0;
+    const worker = async () => {
+      while (true) {
+        const myIdx = nextIdx++;
+        if (myIdx >= accounts.length) return;
+        const a = accounts[myIdx];
+        try {
+          results[myIdx] = await withTimeout(
             this.reconcile(a.id, targetDate, targetDate),
             PER_ACCOUNT_TIMEOUT_MS,
             `${a.bank?.name} · ${a.accountNo}`,
-          ).catch((e) => ({
+          );
+        } catch (e: any) {
+          results[myIdx] = {
             ok: false,
             accountId: a.id,
             accountNo: a.accountNo,
@@ -289,11 +306,11 @@ export class ReconcileService {
             bankName: a.bank?.name,
             error: e?.message || "noma'lum xato",
             status: 'error' as const,
-          })),
-        ),
-      );
-      results.push(...chunk);
-    }
+          };
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, accounts.length) }, worker));
 
     // Sort: error → eng tepada; mismatch → diff bo'yicha kamayish; ok → eng pastda
     const score = (r: any) => {
@@ -317,8 +334,13 @@ export class ReconcileService {
       `(${summary.ok} mos, ${summary.mismatch} farqli, ${summary.error} xato) ` +
       `· ${((Date.now() - tStart) / 1000).toFixed(1)}s`,
     );
-    return { ok: true, date: targetDate, summary, items: results };
+    const payload = { ok: true, date: targetDate, summary, items: results };
+    todayCache = { date: targetDate, expiresAt: Date.now() + TODAY_CACHE_TTL_MS, data: payload };
+    return payload;
   }
+
+  /** Manual refresh — keshni o'chiradi va qaytadan hisoblaydi */
+  invalidateTodayCache() { todayCache = null; }
 
   /**
    * Bir kun ichidagi farqning sababini topadi: bankdagi har bir tranzaksiya
@@ -519,6 +541,8 @@ export class ReconcileService {
         })
       : null;
 
+    if (inserted) this.invalidateTodayCache();
+
     return {
       ok: true,
       inserted,
@@ -643,6 +667,8 @@ export class ReconcileService {
         errCount++;
       }
     }
+
+    if (okCount > 0) this.invalidateTodayCache();
 
     return {
       ok: true,
