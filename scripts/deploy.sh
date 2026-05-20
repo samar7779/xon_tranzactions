@@ -238,64 +238,134 @@ $(printf '%s' "$DEPLOY_FILES" | tr ',' '\n' | head -20 | sed 's/^/• /')"
   exit 0
 fi
 
-# 3. Backend build (ovozsiz — telegram'ga oxirida bitta xabar)
-if [ "$need_be" = "1" ]; then
-  if [ -d "$REPO/backend" ]; then
-    pushd "$REPO/backend" > /dev/null
-    if ! run "backend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
-      tg_fail "❌ <b>xon.transactions</b> · backend npm install muvaffaqiyatsiz"
-      exit 1
-    fi
-    run "backend prisma generate" npx prisma generate || true
-    if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
-      if ! run "backend prisma migrate deploy" npx prisma migrate deploy; then
-        tg_fail "❌ <b>xon.transactions</b> · prisma migrate muvaffaqiyatsiz"
-        exit 1
-      fi
+# ── OPTIMIZATION HELPERS ──
+# npm install ni faqat package.json/package-lock.json o'zgargan bo'lsa ishlatamiz.
+# Markerlar .npm-install-marker faylida saqlanadi.
+need_npm_install() {
+  local dir="$1"; local marker="$dir/.npm-install-marker"
+  if [ ! -d "$dir/node_modules" ]; then return 0; fi
+  if [ ! -f "$marker" ]; then return 0; fi
+  # package.json yoki lock fayl marker'dan yangi bo'lsa — kerak
+  for f in "$dir/package.json" "$dir/package-lock.json" "$dir/yarn.lock" "$dir/pnpm-lock.yaml"; do
+    if [ -f "$f" ] && [ "$f" -nt "$marker" ]; then return 0; fi
+  done
+  return 1
+}
+touch_npm_marker() {
+  touch "$1/.npm-install-marker" 2>/dev/null || true
+}
+
+# ── BACKEND + FRONTEND BUILD — PARALLEL (vaqt tejash uchun) ──
+BE_BUILD_LOG="/tmp/xon-deploy-be-$$.log"
+FE_BUILD_LOG="/tmp/xon-deploy-fe-$$.log"
+BE_BUILD_RC=0
+FE_BUILD_RC=0
+
+build_backend() {
+  local rc=0
+  pushd "$REPO/backend" > /dev/null
+  {
+    if need_npm_install "$REPO/backend"; then
+      log "[BE] npm ci kerak (package o'zgargan yoki yo'q)"
+      if ! npm install --silent --no-audit --no-fund --include=dev; then rc=1; fi
+      touch_npm_marker "$REPO/backend"
     else
-      if ! run "backend prisma db push" npx prisma db push --accept-data-loss --skip-generate; then
-        tg_fail "❌ <b>xon.transactions</b> · prisma db push muvaffaqiyatsiz"
-        exit 1
+      log "[BE] npm install skip (cache)"
+    fi
+    [ $rc -eq 0 ] && npx prisma generate || true
+    [ $rc -eq 0 ] && {
+      if [ -d "prisma/migrations" ] && [ -n "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+        if ! npx prisma migrate deploy; then rc=2; fi
+      else
+        if ! npx prisma db push --accept-data-loss --skip-generate; then rc=2; fi
       fi
+    }
+    [ $rc -eq 0 ] && (npm run seed || true)
+    [ $rc -eq 0 ] && {
+      if ! npm run build; then rc=3; fi
+    }
+  } >> "$BE_BUILD_LOG" 2>&1
+  popd > /dev/null
+  echo $rc > "/tmp/xon-deploy-be-rc-$$"
+}
+
+build_frontend() {
+  local rc=0
+  pushd "$REPO/frontend" > /dev/null
+  {
+    if need_npm_install "$REPO/frontend"; then
+      log "[FE] npm ci kerak (package o'zgargan yoki yo'q)"
+      if ! npm install --silent --no-audit --no-fund --include=dev; then rc=1; fi
+      touch_npm_marker "$REPO/frontend"
+    else
+      log "[FE] npm install skip (cache)"
     fi
-    # Seed — banklar, rollar, admin (idempotent — har deploy'da xavfsiz)
-    run "backend prisma seed" npm run seed || log "⚠ seed xatosi (jiddiy emas)"
-    if ! run "backend build" npm run build; then
-      tg_fail "❌ <b>xon.transactions</b> · backend build muvaffaqiyatsiz"
-      exit 1
-    fi
-    popd > /dev/null
-  fi
+    # .next/cache saqlanmaydi rm -rf .next bilan — atomic swap uchun,
+    # lekin biz alohida saqlaymiz: build oldidan move qilib, build keyin qaytaramiz
+    [ $rc -eq 0 ] && {
+      rm -rf .next-build .next-old
+      # Eski .next/cache ni .next-build/cache ga ko'chirib qo'yamiz (incremental)
+      if [ -d ".next/cache" ]; then
+        mkdir -p .next-build
+        cp -r .next/cache .next-build/cache 2>/dev/null || true
+      fi
+      if ! env NEXT_DIST_DIR=.next-build npm run build; then
+        rc=3; rm -rf .next-build
+      fi
+    }
+    # Atomic swap
+    [ $rc -eq 0 ] && {
+      [ -d .next ] && mv .next .next-old
+      mv .next-build .next
+      sudo -n /bin/systemctl restart "$FE_SVC" 2>/dev/null || true
+      rm -rf .next-old
+    }
+  } >> "$FE_BUILD_LOG" 2>&1
+  popd > /dev/null
+  echo $rc > "/tmp/xon-deploy-fe-rc-$$"
+}
+
+# Parallel ishga tushirish
+> "$BE_BUILD_LOG"
+> "$FE_BUILD_LOG"
+if [ "$need_be" = "1" ] && [ "$need_fe" = "1" ]; then
+  log "🚀 Backend va Frontend PARALLEL build (vaqt tejash uchun)"
+  build_backend &
+  BE_PID=$!
+  build_frontend &
+  FE_PID=$!
+  wait $BE_PID
+  wait $FE_PID
+elif [ "$need_be" = "1" ]; then
+  build_backend
+elif [ "$need_fe" = "1" ]; then
+  build_frontend
 fi
 
-# 4. Frontend build (ovozsiz)
-# MUHIM: temp papkaga (.next-build) build qilamiz — eski .next buzilmaydi,
-# shuning uchun build davomida (1-2 min) sayt STILDA ishlab turadi.
-# Build tugagach atomik almashtiramiz va darrov restart qilamiz.
-if [ "$need_fe" = "1" ]; then
-  if [ -d "$REPO/frontend" ]; then
-    pushd "$REPO/frontend" > /dev/null
-    if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
-      tg_fail "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz"
-      exit 1
-    fi
-    # Eski temp build qoldiqlarini tozalash
-    rm -rf .next-build .next-old
-    # Temp papkaga build — eski .next tegilmaydi
-    if ! run "frontend build (→ .next-build)" env NEXT_DIST_DIR=.next-build npm run build; then
-      tg_fail "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz"
-      rm -rf .next-build
-      exit 1
-    fi
-    # Atomik almashtirish — eski .next'ni chetga surib, yangisini qo'yamiz
-    [ -d .next ] && mv .next .next-old
-    mv .next-build .next
-    log "✓ frontend .next almashtirildi"
-    # Darrov restart — eski server yangi .next bilan ishlamasligi uchun
-    run "restart $FE_SVC" sudo -n /bin/systemctl restart "$FE_SVC" || true
-    rm -rf .next-old
-    popd > /dev/null
-  fi
+BE_BUILD_RC=$(cat /tmp/xon-deploy-be-rc-$$ 2>/dev/null || echo 0)
+FE_BUILD_RC=$(cat /tmp/xon-deploy-fe-rc-$$ 2>/dev/null || echo 0)
+rm -f /tmp/xon-deploy-be-rc-$$ /tmp/xon-deploy-fe-rc-$$ 2>/dev/null
+
+# Loglarni asosiy log'ga ko'chirish
+[ -s "$BE_BUILD_LOG" ] && cat "$BE_BUILD_LOG" >> "$LOG"
+[ -s "$FE_BUILD_LOG" ] && cat "$FE_BUILD_LOG" >> "$LOG"
+rm -f "$BE_BUILD_LOG" "$FE_BUILD_LOG" 2>/dev/null
+
+# Xato bo'lsa Telegram'ga xabar va exit
+if [ "$BE_BUILD_RC" != "0" ]; then
+  case $BE_BUILD_RC in
+    1) tg_fail "❌ <b>xon.transactions</b> · backend npm install muvaffaqiyatsiz" ;;
+    2) tg_fail "❌ <b>xon.transactions</b> · prisma muvaffaqiyatsiz" ;;
+    3) tg_fail "❌ <b>xon.transactions</b> · backend build muvaffaqiyatsiz" ;;
+  esac
+  exit 1
+fi
+if [ "$FE_BUILD_RC" != "0" ]; then
+  case $FE_BUILD_RC in
+    1) tg_fail "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz" ;;
+    3) tg_fail "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz" ;;
+  esac
+  exit 1
 fi
 
 # 6. Bitta yakuniy xabar — sizning format bo'yicha
