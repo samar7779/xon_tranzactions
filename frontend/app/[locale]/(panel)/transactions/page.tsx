@@ -4561,11 +4561,21 @@ function TodayStatsInline() {
   const today = new Date();
   // Tashkent vaqti
   const tashkentToday = new Date(today.getTime() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  // Umumiy statistika
   const { data, isLoading } = useQuery<any>({
     queryKey: ['today-stats-inline', tashkentToday],
     queryFn: () => api.get(`/transactions/stats?from=${tashkentToday}&to=${tashkentToday}`),
     staleTime: 30_000,
   });
+  // Debetorka — uy uchun to'lov (CLIENT kategoriya)
+  const { data: clientData, isLoading: clientLoading } = useQuery<any>({
+    queryKey: ['today-stats-client-inline', tashkentToday],
+    queryFn: () => api.get(`/transactions/stats?from=${tashkentToday}&to=${tashkentToday}&categoryCode=CLIENT`),
+    staleTime: 30_000,
+  });
+
+  const fmt = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
 
   const inflow = data?.groups?.find?.((g: any) => g.direction === 'IN');
   const outflow = data?.groups?.find?.((g: any) => g.direction === 'OUT');
@@ -4575,39 +4585,74 @@ function TodayStatsInline() {
   const outSum = Number(outflow?._sum?.amount || 0);
   const total = inCount + outCount;
 
-  const fmt = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
+  // Debetorka — CLIENT kategoriya kirim (uy uchun)
+  const clientInflow = clientData?.groups?.find?.((g: any) => g.direction === 'IN');
+  const debCount = Number(clientInflow?._count?._all || clientInflow?._count || 0);
+  const debSum = Number(clientInflow?._sum?.amount || 0);
+
+  // Bugungi sana — chiroyli format
+  const dateLabel = new Date(tashkentToday + 'T12:00:00').toLocaleDateString('uz-UZ', {
+    day: '2-digit', month: 'long', weekday: 'short',
+  });
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-3 gap-2">
-        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
-        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
-        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
+      <div className="space-y-2">
+        <div className="h-4 w-32 rounded bg-white/15 animate-pulse" />
+        <div className="grid grid-cols-2 gap-1.5">
+          {[0,1].map(i => <div key={i} className="h-16 rounded-xl bg-white/10 animate-pulse" />)}
+        </div>
+        <div className="h-14 rounded-xl bg-white/10 animate-pulse" />
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
-      <div className="text-[10px] text-white/80 font-mono">{tashkentToday}</div>
-      <div className="grid grid-cols-3 gap-1.5">
-        <div className="bg-white/15 backdrop-blur-sm rounded-lg p-2 text-center">
-          <div className="text-[8.5px] text-white/80 uppercase tracking-wider font-semibold">Tx soni</div>
-          <div className="text-lg font-bold tabular-nums leading-tight">{fmt(total)}</div>
+      {/* Sana + jami tx soni — header */}
+      <div className="flex items-center justify-between">
+        <div className="text-[10.5px] text-white/90 font-medium">{dateLabel}</div>
+        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 backdrop-blur-sm ring-1 ring-white/30">
+          <Activity className="h-2.5 w-2.5" />
+          <span className="text-[10px] font-bold tabular-nums">{fmt(total)} tx</span>
         </div>
-        <div className="bg-emerald-400/25 backdrop-blur-sm rounded-lg p-2 text-center">
-          <div className="text-[8.5px] text-white/90 uppercase tracking-wider font-semibold flex items-center justify-center gap-0.5">
-            <ArrowDownLeft className="h-2.5 w-2.5" /> Kirim
+      </div>
+
+      {/* KIRIM + CHIQIM — 2 ta katta karta */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-600/25 backdrop-blur-sm ring-1 ring-emerald-300/40 p-2.5 shadow-sm">
+          <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
+            <ArrowDownLeft className="h-3 w-3" /> Kirim
           </div>
-          <div className="text-[10.5px] font-bold tabular-nums leading-tight mt-0.5">{fmt(inSum)}</div>
-          <div className="text-[8.5px] text-white/70">{fmt(inCount)} ta</div>
+          <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(inSum)}</div>
+          <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(inCount)} ta</div>
         </div>
-        <div className="bg-rose-400/25 backdrop-blur-sm rounded-lg p-2 text-center">
-          <div className="text-[8.5px] text-white/90 uppercase tracking-wider font-semibold flex items-center justify-center gap-0.5">
-            <ArrowUpRight className="h-2.5 w-2.5" /> Chiqim
+        <div className="rounded-xl bg-gradient-to-br from-rose-500/35 to-pink-600/25 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 shadow-sm">
+          <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
+            <ArrowUpRight className="h-3 w-3" /> Chiqim
           </div>
-          <div className="text-[10.5px] font-bold tabular-nums leading-tight mt-0.5">{fmt(outSum)}</div>
-          <div className="text-[8.5px] text-white/70">{fmt(outCount)} ta</div>
+          <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(outSum)}</div>
+          <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(outCount)} ta</div>
+        </div>
+      </div>
+
+      {/* DEBETORKA — uy uchun to'lov (CLIENT kategoriya, faqat kirim) */}
+      <div className="rounded-xl bg-gradient-to-br from-amber-400/40 to-orange-500/30 backdrop-blur-sm ring-1 ring-amber-300/50 p-2.5 flex items-center gap-2.5 shadow-sm">
+        <div className="w-9 h-9 rounded-xl bg-amber-300/50 grid place-items-center shrink-0 ring-1 ring-white/20">
+          <Briefcase className="h-4 w-4" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[9px] uppercase tracking-wider font-bold text-white/95">
+            Debetorka · uy to'lovi
+          </div>
+          {clientLoading ? (
+            <div className="h-4 w-24 rounded bg-white/20 animate-pulse mt-1" />
+          ) : (
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-[14px] font-bold tabular-nums leading-tight">{fmt(debSum)}</span>
+              <span className="text-[9.5px] text-white/85 font-mono">· {fmt(debCount)} ta</span>
+            </div>
+          )}
         </div>
       </div>
     </div>
