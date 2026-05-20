@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Scale, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
@@ -55,6 +55,7 @@ export default function CheckPage() {
   const [showErrors, setShowErrors] = useState(false);
 
   // Bugungi sverka — live: 20 minutda avto + window focus'da yangilanadi
+  // Default: sync'siz (tez). Manual refresh'da syncMismatched=true ishlatamiz.
   const todayQuery = useQuery<TodayResponse>({
     queryKey: ['reconcile-today'],
     queryFn: () => api.get('/transactions/reconcile/today'),
@@ -62,17 +63,25 @@ export default function CheckPage() {
     refetchOnWindowFocus: true,
     refetchOnReconnect: true,
     staleTime: 60_000,
-    // Sverka so'rovi qimmat — xato bo'lganda 3 marta qayta urinmaymiz,
-    // foydalanuvchi xato tafsilotini ko'rib o'zi "Qayta urinish" bosadi.
     retry: false,
   });
 
-  // Manual refresh — barcha
+  // Manual refresh — barcha hisoblarni qaytadan tekshirib, FARQLILARNI sync qiladi
   async function refreshAll() {
-    toast.message('Bugungi sverka yangilanmoqda...');
-    await todayQuery.refetch();
-    toast.success('Yangilandi');
+    toast.message('Sverka yangilanmoqda + farqli hisoblar uchun sync...');
+    try {
+      // 2-pass: avval sverka, keyin faqat farqlilar uchun sync+qayta sverka
+      const data = await api.get<TodayResponse>('/transactions/reconcile/today?syncMismatched=true', { timeout: 120_000 });
+      // Cache'ni qo'lda yangilash (refetch react-query default URL ishlatadi)
+      qc.setQueryData(['reconcile-today'], data);
+      const m = data.summary.mismatch;
+      const ok = data.summary.ok;
+      toast.success(`Yangilandi · ${ok} mos, ${m} farqli`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Xato');
+    }
   }
+  const qc = useQueryClient();
 
   // Manual refresh — bitta hisob
   async function refreshOne(accountId: string) {

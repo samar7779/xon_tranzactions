@@ -267,11 +267,12 @@ export class ReconcileService {
    * (concurrency=3, bank API ni overload qilmaslik uchun). Farq summasi
    * bo'yicha kamayish tartibida qaytaradi (eng katta muammo tepada).
    */
-  async reconcileToday(date?: string) {
+  async reconcileToday(date?: string, opts?: { syncMismatched?: boolean }) {
     const targetDate = date || this.todayTashkent();
 
     // Kesh tekshirish — 5 min ichida bir xil sana so'ralsa, darrov qaytaramiz
-    if (todayCache && todayCache.date === targetDate && todayCache.expiresAt > Date.now()) {
+    // syncMismatched=true bo'lsa kesh ishlatilmaydi (yangi sync kerak)
+    if (!opts?.syncMismatched && todayCache && todayCache.date === targetDate && todayCache.expiresAt > Date.now()) {
       this.log.log(`reconcileToday: kesh urildi (${targetDate})`);
       return todayCache.data;
     }
@@ -334,6 +335,42 @@ export class ReconcileService {
       }
     };
     await Promise.all(Array.from({ length: Math.min(CONCURRENCY, accounts.length) }, worker));
+
+    // ── 2-PASS: faqat farqli hisoblar uchun sync qilib qayta sverka ──
+    // (User taklif qilgan: "sverkada faqat farq bergan xisoblar uchun sync qilsangchi?")
+    // Bank API ga juda kam yuk — 55 ta o'rniga faqat 5-7 ta call ketadi
+    if (opts?.syncMismatched) {
+      const mismatched: number[] = [];
+      results.forEach((r, idx) => {
+        if (r?.status === 'mismatch') mismatched.push(idx);
+      });
+      if (mismatched.length > 0) {
+        this.log.log(`reconcileToday: 2-pass — ${mismatched.length} ta farqli hisob uchun sync+qayta sverka`);
+        const SYNC_CONCURRENCY = 3; // bank API'ga ehtiyot
+        let nextMisIdx = 0;
+        const syncWorker = async () => {
+          while (true) {
+            const k = nextMisIdx++;
+            if (k >= mismatched.length) return;
+            const idx = mismatched[k];
+            const a = accounts[idx];
+            try {
+              // Sync + qayta sverka
+              const res = await withTimeout(
+                this.reconcile(a.id, targetDate, targetDate, { withSync: true }),
+                30_000,
+                `2pass ${a.bank?.name} · ${a.accountNo}`,
+              );
+              results[idx] = res;
+            } catch (e: any) {
+              this.log.warn(`2pass xato (${a.accountNo}): ${e?.message}`);
+              // Eski natijani saqlaymiz — yangi xato bo'lsa eski mismatch'ni bekor qilmaymiz
+            }
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(SYNC_CONCURRENCY, mismatched.length) }, syncWorker));
+      }
+    }
 
     // Sort: error → eng tepada; mismatch → diff bo'yicha kamayish; ok → eng pastda
     const score = (r: any) => {
