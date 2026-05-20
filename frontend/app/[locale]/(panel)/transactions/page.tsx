@@ -308,7 +308,7 @@ export default function TransactionsPage() {
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction],
+    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey],
     queryFn: () => {
       // Foydalanuvchi sana filtri qo'ygan bo'lsa — shu davr; aks holda 30 kun (yoki CLIENT uchun joriy oy)
       let fromStr: string;
@@ -333,6 +333,13 @@ export default function TransactionsPage() {
       if (kpiMode === 'CLIENT') p.set('categoryCode', 'CLIENT');
       if (bankId && bankId !== 'all') p.set('bankId', bankId);
       if (direction && direction !== 'all') p.set('direction', direction);
+      if (q) p.set('q', q);
+      // Kolonna (Google Sheets stilidagi) filterlar — KPI ham jadval bilan bir xil bo'lishi uchun
+      for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+        const set = columnFilters[col];
+        if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+      }
+      if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
       return api.get<any>(`/transactions/stats?${p.toString()}`);
     },
   });
