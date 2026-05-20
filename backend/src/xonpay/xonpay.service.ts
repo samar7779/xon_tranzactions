@@ -1,8 +1,24 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
+import { SchedulerRegistry } from '@nestjs/schedule';
+import { CronJob } from 'cron';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
+
+/**
+ * Cron interval (daqiqada) → cron expression.
+ * 1..59 → har N daqiqada (har soatda)
+ * 60 → har soat boshida
+ * 120 → har 2 soat boshida (0:00, 2:00, ...)
+ * Aks holda 60 ga teng deb hisoblanadi.
+ */
+function intervalToCron(minutes: number): string {
+  const m = Math.max(1, Math.floor(minutes));
+  if (m < 60) return `0 */${m} 7-23 * * *`;
+  if (m === 60) return `0 0 7-23 * * *`;
+  const hours = Math.floor(m / 60);
+  return `0 0 7-23/${hours} * * *`;
+}
 
 /**
  * Biling moduli — XonSaroy CRM dan XonPay to'lovlarini sync qiladi va
@@ -92,16 +108,44 @@ export class XonpayService implements OnModuleInit {
       this.log.error(`xonpay onModuleInit cleanup xato: ${e?.message}`);
     }
 
-    // Cron holatini DB dan yuklaymiz (server restart paytida sozlama saqlangani uchun)
+    // Cron holatini va intervalni DB dan yuklaymiz
     try {
-      const setting = await this.prisma.setting.findUnique({ where: { key: 'xonpay.cron.enabled' } });
-      if (setting?.value === 'false') {
+      const enabledSetting = await this.prisma.setting.findUnique({ where: { key: 'xonpay.cron.enabled' } });
+      if (enabledSetting?.value === 'false') {
         this.cronEnabled = false;
         this.log.log('xonpay cron holati DB dan: OCHIRILGAN');
       }
+      const intervalSetting = await this.prisma.setting.findUnique({ where: { key: 'xonpay.cron.intervalMinutes' } });
+      if (intervalSetting?.value) {
+        const n = parseInt(intervalSetting.value, 10);
+        if (Number.isFinite(n) && n >= 1 && n <= 1440) {
+          this.cronIntervalMinutes = n;
+          this.log.log(`xonpay cron interval DB dan: ${n} daqiqa`);
+        }
+      }
     } catch (e: any) {
-      this.log.warn(`cron holati yuklash xato: ${e?.message}`);
+      this.log.warn(`cron sozlamalarini yuklash xato: ${e?.message}`);
     }
+
+    // Cron job'ni yaratamiz/qaytadan ro'yxatga olamiz
+    this.registerCronJob();
+  }
+
+  /** Cron job'ni joriy interval bo'yicha yaratadi (eski bo'lsa o'chirib qayta) */
+  private registerCronJob() {
+    try {
+      this.scheduler.deleteCronJob(XonpayService.CRON_NAME);
+    } catch { /* ilk marta — yo'q */ }
+    const cronExpr = intervalToCron(this.cronIntervalMinutes);
+    const job = new CronJob(
+      cronExpr,
+      () => this.cronAutoSync(),
+      null,
+      true,
+      'Asia/Tashkent',
+    );
+    this.scheduler.addCronJob(XonpayService.CRON_NAME, job as any);
+    this.log.log(`xonpay cron ro'yxatga olindi: "${cronExpr}" (${this.cronIntervalMinutes} daqiqa)`);
   }
 
   // ── Sync state ──
@@ -133,14 +177,21 @@ export class XonpayService implements OnModuleInit {
   private lastCronSkipReason: string | null = null;
   private lastCronResult: { inserted: number; updated: number; matched: number; errors: number } | null = null;
 
-  constructor(private prisma: PrismaService, private crm: CrmService) {}
+  // Cron interval (daqiqada) — DB Setting dan yuklanadi (default: 60 = har soat)
+  private cronIntervalMinutes = 60;
+
+  constructor(
+    private prisma: PrismaService,
+    private crm: CrmService,
+    private scheduler: SchedulerRegistry,
+  ) {}
+
+  private static readonly CRON_NAME = 'xonpay-auto-sync';
 
   /**
-   * Avtomatik sync — 07:00 dan 23:00 gacha har soat boshida.
-   * Telegram'ga xabar yubormaydi. Boshqa sync ishlayotgan bo'lsa skip qiladi
-   * (boshqa progresslarga xalaqit qilmaslik uchun).
+   * Avtomatik sync. Endi @Cron decorator emas — SchedulerRegistry orqali
+   * dinamik ro'yxatga olinadi, shu sababli frontdan interval o'zgartirilishi mumkin.
    */
-  @Cron('0 0 7-23 * * *', { name: 'xonpay-auto-sync', timeZone: 'Asia/Tashkent' })
   async cronAutoSync() {
     if (!this.cronEnabled) {
       this.lastCronSkipReason = 'Cron o\'chirilgan';
@@ -173,6 +224,25 @@ export class XonpayService implements OnModuleInit {
     }
   }
 
+  /** Cron intervalini o'zgartirish (1..1440 daqiqa). DB ga saqlanadi + job qayta ro'yxatga olinadi */
+  async setCronInterval(minutes: number): Promise<{ ok: true; minutes: number; cronExpr: string }> {
+    if (!Number.isFinite(minutes) || minutes < 1 || minutes > 1440) {
+      throw new Error('Interval 1 dan 1440 daqiqagacha bo\'lishi kerak');
+    }
+    this.cronIntervalMinutes = Math.floor(minutes);
+    await this.prisma.setting.upsert({
+      where: { key: 'xonpay.cron.intervalMinutes' },
+      create: { key: 'xonpay.cron.intervalMinutes', value: String(this.cronIntervalMinutes) },
+      update: { value: String(this.cronIntervalMinutes) },
+    });
+    this.registerCronJob();
+    return {
+      ok: true,
+      minutes: this.cronIntervalMinutes,
+      cronExpr: intervalToCron(this.cronIntervalMinutes),
+    };
+  }
+
   /** Cron'ni o'chirish/yoqish — Setting jadvalga saqlanadi (restart paytida ham saqlanadi) */
   async setCronEnabled(enabled: boolean): Promise<void> {
     this.cronEnabled = enabled;
@@ -189,9 +259,17 @@ export class XonpayService implements OnModuleInit {
   }
 
   getCronInfo() {
+    const m = this.cronIntervalMinutes;
+    const human = m < 60
+      ? `Har ${m} daqiqada`
+      : m === 60
+        ? 'Har soat boshida'
+        : `Har ${Math.floor(m / 60)} soatda`;
     return {
       enabled: this.cronEnabled,
-      schedule: '07:00–23:00, har soat boshida (Asia/Tashkent)',
+      intervalMinutes: m,
+      cronExpr: intervalToCron(m),
+      schedule: `${human} (07:00–23:00, Asia/Tashkent)`,
       lastRunAt: this.lastCronRunAt?.toISOString() || null,
       lastFinishedAt: this.lastCronFinishedAt?.toISOString() || null,
       lastSkipReason: this.lastCronSkipReason,

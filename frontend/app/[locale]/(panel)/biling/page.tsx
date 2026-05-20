@@ -129,10 +129,19 @@ export default function BilingPage() {
   });
   const matchRunning = !!matchStatusQuery.data?.running;
 
-  const cronInfoQuery = useQuery<{ enabled: boolean; schedule: string; lastRunAt: string | null; lastFinishedAt: string | null; lastSkipReason: string | null; lastResult: any }>({
+  const cronInfoQuery = useQuery<{ enabled: boolean; intervalMinutes?: number; cronExpr?: string; schedule: string; lastRunAt: string | null; lastFinishedAt: string | null; lastSkipReason: string | null; lastResult: any }>({
     queryKey: ['xonpay-cron-info'],
     queryFn: () => api.get('/xonpay/cron/info'),
     refetchInterval: 60000,
+  });
+
+  const setCronIntervalMut = useMutation({
+    mutationFn: (minutes: number) => api.post<any>(`/xonpay/cron/interval?minutes=${minutes}`, {}),
+    onSuccess: (r: any) => {
+      toast.success(`Interval ${r.intervalMinutes} daqiqaga o'rnatildi`);
+      qc.invalidateQueries({ queryKey: ['xonpay-cron-info'] });
+    },
+    onError: (e: any) => toast.error(e?.message || "O'rnatib bo'lmadi"),
   });
 
   const historyQuery = useQuery<{ ok: true; items: any[] }>({
@@ -391,6 +400,34 @@ export default function BilingPage() {
                     {cronInfoQuery.data?.lastSkipReason && (
                       <div className="text-amber-700 text-[10.5px] flex items-start gap-1 pt-1 border-t border-slate-100"><AlertCircle className="h-3 w-3 shrink-0 mt-0.5" /> {cronInfoQuery.data.lastSkipReason}</div>
                     )}
+                  </div>
+
+                  {/* Interval o'zgartirish */}
+                  <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+                    <div className="text-[10.5px] uppercase tracking-wider text-slate-500 font-semibold">
+                      Interval (daqiqada)
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[15, 30, 60, 120, 180, 360].map((m) => {
+                        const active = cronInfoQuery.data?.intervalMinutes === m;
+                        return (
+                          <button
+                            key={m}
+                            onClick={(e) => { e.stopPropagation(); setCronIntervalMut.mutate(m); }}
+                            disabled={setCronIntervalMut.isPending}
+                            className={cn(
+                              'h-7 text-[11px] font-semibold rounded-md transition',
+                              active
+                                ? 'bg-indigo-600 text-white shadow-sm'
+                                : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+                              setCronIntervalMut.isPending && 'opacity-60 cursor-not-allowed',
+                            )}
+                          >
+                            {m < 60 ? `${m} daq` : m === 60 ? '1 soat' : `${Math.floor(m / 60)} soat`}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                   {/* Toggle tugma */}
                   <div className="mt-3 pt-3 border-t border-slate-100">

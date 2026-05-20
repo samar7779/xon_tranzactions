@@ -83,6 +83,15 @@ export class XonpayController {
     return this.svc.getCronInfo();
   }
 
+  @Post('cron/interval')
+  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @ApiOperation({ summary: "Cron sync intervalini o'zgartirish (?minutes=60 — har soatda; 30 — har 30 daqiqada)" })
+  async cronInterval(@Query('minutes') minutes?: string) {
+    const n = parseInt(minutes || '', 10);
+    await this.svc.setCronInterval(n);
+    return this.svc.getCronInfo();
+  }
+
   @Get('sync/history')
   @RequirePermissions(PERMISSIONS.CRM_VIEW)
   @ApiOperation({ summary: 'Sync tarixi — filterlar bilan (q, status, dateFrom, dateTo)' })
