@@ -2354,9 +2354,12 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
       {manualContractOpen && (
         <ManualContractDialog
           row={liveRow}
+          tree={categoriesTree}
           onClose={() => setManualContractOpen(false)}
-          onSave={(contract) => setContractManualMut.mutate(contract)}
-          saving={setContractManualMut.isPending}
+          onSaveContract={(contract) => setContractManualMut.mutate(contract)}
+          onSaveCategory={(categoryId, subcategoryId) => setCategoryMut.mutate({ categoryId, subcategoryId })}
+          savingContract={setContractManualMut.isPending}
+          savingCategory={setCategoryMut.isPending}
         />
       )}
 
@@ -3569,18 +3572,36 @@ function CategoryHistorySection({ txId }: { txId: string }) {
 // MANUAL CONTRACT DIALOG — CRM tekshirmasdan shartnoma raqami kiritish
 // ═══════════════════════════════════════════════════════════════════════
 function ManualContractDialog({
-  row, onClose, onSave, saving,
+  row, tree, onClose, onSaveContract, onSaveCategory, savingContract, savingCategory,
 }: {
   row: any;
+  tree: any[];
   onClose: () => void;
-  onSave: (contractNumber: string | null) => void;
-  saving: boolean;
+  onSaveContract: (contractNumber: string | null) => void;
+  onSaveCategory: (categoryId: string | null, subcategoryId: string | null) => void;
+  savingContract: boolean;
+  savingCategory: boolean;
 }) {
   const [contract, setContract] = useState(row?.contractNumber || '');
+  const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
+
+  const HIDDEN_KONTRAGENTS = ['COUNTERPARTY_RETURN', 'COUNTERPARTY'];
+  const visibleTree = (tree || []).filter((t: any) => !HIDDEN_KONTRAGENTS.includes(t.code));
+
+  const saving = savingContract || savingCategory;
+  const contractTrimmed = contract.trim();
+  const contractChanged = contractTrimmed !== (row?.contractNumber || '');
+  const categoryChanged = selectedTopId !== (row?.categoryId || null);
+  const canSave = !!selectedTopId && !!contractTrimmed && (contractChanged || categoryChanged);
+
+  function handleSave() {
+    if (categoryChanged) onSaveCategory(selectedTopId, null);
+    if (contractChanged) onSaveContract(contractTrimmed || null);
+  }
 
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o && !saving) onClose(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white">
@@ -3589,13 +3610,44 @@ function ManualContractDialog({
             Shartnomani qo'lda kiritish
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            CRM tekshirilmaydi — foydalanuvchi javobgar. Yangi yoki CRM'da bo'lmagan shartnomalar uchun.
+            CRM tekshirilmaydi — foydalanuvchi javobgar. Kontragent va shartnoma raqamini belgilang.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3 pt-2">
-          <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+        <div className="space-y-4 pt-2">
+          {/* ═══ KONTRAGENT (top kategoriya) ═══ */}
+          <div>
+            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">1</span>
+              Kontragent
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {visibleTree.map((t: any) => {
+                const selected = selectedTopId === t.id;
+                const color = t.color || '#64748b';
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTopId(t.id)}
+                    disabled={saving}
+                    className={cn(
+                      'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
+                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                    )}
+                    style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                  >
+                    {t.name}
+                    {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ═══ SHARTNOMA RAQAMI ═══ */}
+          <div className="space-y-1.5 pt-3 border-t border-slate-100">
+            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">2</span>
               Shartnoma raqami
             </label>
             <Input
@@ -3616,18 +3668,18 @@ function ManualContractDialog({
           {row?.contractNumber && (
             <Button
               variant="outline"
-              onClick={() => onSave(null)}
+              onClick={() => onSaveContract(null)}
               disabled={saving}
               className="text-rose-700 border-rose-200 hover:bg-rose-50"
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              O'chirish
+              Shartnomani o'chirish
             </Button>
           )}
           <Button variant="outline" onClick={onClose} disabled={saving}>Bekor</Button>
           <Button
-            onClick={() => onSave(contract.trim() || null)}
-            disabled={saving || !contract.trim() || contract.trim() === (row?.contractNumber || '')}
+            onClick={handleSave}
+            disabled={saving || !canSave}
             className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
