@@ -407,18 +407,27 @@ export class ReconcileService {
       },
     });
 
-    // 2) Boshqa sanalardagi tx'lar — bank b2_id/general_id bo'yicha (eski sync paytida
-    // boshqa sana ostida saqlangan bo'lishi mumkin). Bank items dan b2_id'larni
-    // yig'ib, ulardan tashqarisi (today emas) bo'lganlarini olamiz.
+    // 2) Boshqa sanalardagi tx'lar — bank b2_id/general_id/composite externalId bo'yicha
+    // (eski sync paytida boshqa sana ostida saqlangan bo'lishi mumkin).
+    // Eski tx'larda bankB2Id/bankGeneralId NULL bo'lishi mumkin — externalId orqali ham qidiramiz.
     const bankB2Ids = bankItems.map((i) => i.b2_id).filter(Boolean) as string[];
     const bankGenIds = bankItems.map((i) => i.general_id).filter(Boolean) as string[];
-    const offDateItems = (bankB2Ids.length > 0 || bankGenIds.length > 0)
+    // Composite externalId'lar (eski sync ko'pincha shu format'da saqlagan)
+    const bankComposites = bankItems
+      .map((i) => this.sync.makeCompositeId(i, account.accountNo, account.bank.code))
+      .filter(Boolean) as string[];
+    // Legacy: b2_id yoki general_id'ni o'zi externalId sifatida saqlagan eski yozuvlar
+    const legacyExternalIds = [...bankB2Ids, ...bankGenIds];
+    const allExternalIds = [...new Set([...bankComposites, ...legacyExternalIds])];
+
+    const offDateItems = (bankB2Ids.length > 0 || bankGenIds.length > 0 || allExternalIds.length > 0)
       ? await this.prisma.transaction.findMany({
           where: {
             accountId,
             OR: [
               bankB2Ids.length > 0 ? { bankB2Id: { in: bankB2Ids } } : { id: '__never__' },
               bankGenIds.length > 0 ? { bankGeneralId: { in: bankGenIds } } : { id: '__never__' },
+              allExternalIds.length > 0 ? { externalId: { in: allExternalIds } } : { id: '__never__' },
             ],
             // Faqat shu kunga teglanmagan yozuvlar
             NOT: { txnDate: { gte: dayStart, lte: dayEnd } },
@@ -431,6 +440,7 @@ export class ReconcileService {
     for (const tx of offDateItems) {
       if (tx.bankB2Id) offDateMap.set(`b2:${tx.bankB2Id}`, tx);
       if (tx.bankGeneralId) offDateMap.set(`gen:${tx.bankGeneralId}`, tx);
+      if (tx.externalId) offDateMap.set(`ext:${tx.externalId}`, tx);
     }
 
     // Indekslar — externalId / b2_id / general_id orqali tezda topish
@@ -462,9 +472,13 @@ export class ReconcileService {
       }
 
       // Boshqa sanada saqlanganmi tekshiramiz
+      // (b2_id/general_id + composite externalId + legacy externalId variantlari)
       const offDateKeys = [
         item.b2_id ? `b2:${item.b2_id}` : null,
         item.general_id ? `gen:${item.general_id}` : null,
+        composite ? `ext:${composite}` : null,
+        item.b2_id ? `ext:${item.b2_id}` : null,           // legacy
+        item.general_id ? `ext:${item.general_id}` : null, // legacy
       ].filter(Boolean) as string[];
       let offDateMatch: typeof offDateItems[number] | undefined;
       if (!found) {
