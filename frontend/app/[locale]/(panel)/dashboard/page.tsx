@@ -4,9 +4,9 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
-  Wallet, Building2,
+  Wallet, Building2, BarChart3,
   RefreshCw, TrendingUp, ArrowRight, ChevronRight,
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
@@ -129,6 +129,16 @@ export default function DashboardPage() {
       weekend: isWeekend(d.date),
     }));
   }, [daily]);
+
+  // ─── 3 ta grafik kartasi uchun collapse holatlari (default: yashirin) ───
+  const [kunmaOpen, setKunmaOpen] = useState(false);
+  const [kunmaBarOpen, setKunmaBarOpen] = useState(false);
+  const [clientOpen, setClientOpen] = useState(false);
+
+  // Ref'lar — PNG eksport uchun (faqat grafik DOM tugun)
+  const kunmaChartRef = useRef<HTMLDivElement>(null);
+  const kunmaBarChartRef = useRef<HTMLDivElement>(null);
+  const clientChartRef = useRef<HTMLDivElement>(null);
 
   // ─── KLIENT TO'LOVLARI (CLIENT kategoriya) — mustaqil grafik ───
   const [cliRange, setCliRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
@@ -275,11 +285,19 @@ export default function DashboardPage() {
         <div className="bg-white border border-slate-200 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
-            <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => setKunmaOpen((o) => !o)}
+              className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
+            >
+              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !kunmaOpen && '-rotate-90')} />
               <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('dailyChart')}</div>
               <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
-            </div>
+            </button>
             <div className="flex items-center gap-2 flex-wrap">
+              <DownloadIconBtn
+                onClick={() => downloadChartPng(kunmaChartRef.current, `kunma-kun_${chartFrom || 'all'}_${chartTo || 'all'}.png`)}
+              />
               {/* Bank filtri — aktivlar boshida, effekt bilan */}
               <Select
                 value={chartBankId}
@@ -369,73 +387,110 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Body: jami + grafik */}
-          <div className="p-4">
-            {/* Jami kirim/chiqim/sof */}
-            <div className="flex items-center gap-5 mb-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalIn')}</span>
-                <span className="text-[13px] font-bold tabular-nums text-emerald-700">
-                  {formatMoney(Number(daily?.totalIn || 0)).replace(' UZS', '')}
-                </span>
+          {/* Body: jami + grafik — kollaps qilingan */}
+          {kunmaOpen && (
+            <div className="p-4">
+              {/* Jami kirim/chiqim/sof */}
+              <div className="flex items-center gap-5 mb-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalIn')}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                    {formatMoney(Number(daily?.totalIn || 0)).replace(' UZS', '')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOut')}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                    {formatMoney(Number(daily?.totalOut || 0)).replace(' UZS', '')}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlow')}</span>
+                  <span className={cn(
+                    "text-[13px] font-bold tabular-nums",
+                    Number(daily?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700",
+                  )}>
+                    {Number(daily?.net || 0) >= 0 ? '+' : ''}{formatMoney(Number(daily?.net || 0)).replace(' UZS', '')}
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOut')}</span>
-                <span className="text-[13px] font-bold tabular-nums text-rose-700">
-                  {formatMoney(Number(daily?.totalOut || 0)).replace(' UZS', '')}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlow')}</span>
-                <span className={cn(
-                  "text-[13px] font-bold tabular-nums",
-                  Number(daily?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700",
-                )}>
-                  {Number(daily?.net || 0) >= 0 ? '+' : ''}{formatMoney(Number(daily?.net || 0)).replace(' UZS', '')}
-                </span>
+
+              {/* Grafik (PNG eksport uchun ref shu yerda) */}
+              <div ref={kunmaChartRef} className="bg-white">
+                {range === 'custom' && (!customFrom || !customTo) ? (
+                  <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                    {t('selectDateRange')}
+                  </div>
+                ) : dailyLoading ? (
+                  <Skeleton className="h-[260px] w-full" />
+                ) : (
+                  <DualAreaChart data={chartData} height={260} />
+                )}
               </div>
             </div>
+          )}
+        </div>
 
-            {/* Grafik */}
-            {range === 'custom' && (!customFrom || !customTo) ? (
-              <div className="h-[260px] grid place-items-center text-xs text-slate-400">
-                {t('selectDateRange')}
+        {/* ═══ KUNMA-KUN USTUNLI GRAFIK — alohida karta ═══ */}
+        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+            <button
+              type="button"
+              onClick={() => setKunmaBarOpen((o) => !o)}
+              className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
+            >
+              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !kunmaBarOpen && '-rotate-90')} />
+              <div className="w-6 h-6 rounded bg-amber-600 grid place-items-center text-white">
+                <BarChart3 className="h-3.5 w-3.5" />
               </div>
-            ) : dailyLoading ? (
-              <Skeleton className="h-[260px] w-full" />
-            ) : (
-              <DualAreaChart data={chartData} height={260} />
-            )}
-
-            {/* Ustunli grafik — yopiq holatda, bosilganda ochiladi */}
-            {!(range === 'custom' && (!customFrom || !customTo)) && !dailyLoading && (
-              <details className="group mt-3 pt-3 border-t border-slate-100">
-                <summary className="cursor-pointer select-none flex items-center gap-1.5 text-[11px] font-semibold text-slate-600 hover:text-slate-900">
-                  <ChevronRight className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />
-                  {t('barChart')}
-                </summary>
-                <div className="mt-3">
-                  <DailyBarChart data={barData} height={280} />
-                </div>
-              </details>
-            )}
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('barChart')}</div>
+              <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
+            </button>
+            <div className="flex items-center gap-2">
+              <DownloadIconBtn
+                onClick={() => downloadChartPng(kunmaBarChartRef.current, `kunma-kun-ustunli_${chartFrom || 'all'}_${chartTo || 'all'}.png`)}
+              />
+            </div>
           </div>
+          {kunmaBarOpen && (
+            <div className="p-4">
+              <div ref={kunmaBarChartRef} className="bg-white">
+                {range === 'custom' && (!customFrom || !customTo) ? (
+                  <div className="h-[280px] grid place-items-center text-xs text-slate-400">
+                    {t('selectDateRange')}
+                  </div>
+                ) : dailyLoading ? (
+                  <Skeleton className="h-[280px] w-full" />
+                ) : (
+                  <DailyBarChart data={barData} height={280} />
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ═══ KLIENT TO'LOVLARI — Клиент / Физ.Л / Юр.Л kategoriya bo'yicha ═══ */}
         <div className="bg-white border border-slate-200 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/60 to-white">
-            <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={() => setClientOpen((o) => !o)}
+              className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
+            >
+              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !clientOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-indigo-600 grid place-items-center text-white">
                 <TrendingUp className="h-3.5 w-3.5" />
               </div>
               <div className="text-[12px] font-bold text-slate-900 tracking-tight">Klient to'lovlari</div>
               <div className="text-[10px] text-slate-500 truncate">· Клиент / Физ.Л / Юр.Л · {cliFrom || '—'} → {cliTo || '—'}</div>
-            </div>
+            </button>
             <div className="flex items-center gap-2 flex-wrap">
+              <DownloadIconBtn
+                onClick={() => downloadChartPng(clientChartRef.current, `klient-tolovlari_${cliFrom || 'all'}_${cliTo || 'all'}.png`)}
+              />
               {/* Bank filtri */}
               <Select
                 value={cliBankId}
@@ -524,83 +579,89 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Subkategoriya tablari */}
-          <div className="px-4 pt-3 pb-2 flex items-center gap-1.5 flex-wrap border-b border-slate-100">
-            <button
-              onClick={() => setCliSubCode('__all__')}
-              className={cn(
-                'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
-                cliSubCode === '__all__'
-                  ? 'bg-indigo-600 text-white ring-indigo-600'
-                  : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
-              )}
-            >
-              Hammasi
-              <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
-                {formatShort(Number(clientDaily?.totalIn || 0))}
-              </span>
-            </button>
-            {(clientDaily?.subcategories || []).map((s: any) => {
-              const active = cliSubCode === s.code;
-              const color = s.color || '#6366f1';
-              return (
+          {clientOpen && (
+            <>
+              {/* Subkategoriya tablari */}
+              <div className="px-4 pt-3 pb-2 flex items-center gap-1.5 flex-wrap border-b border-slate-100">
                 <button
-                  key={s.code}
-                  onClick={() => setCliSubCode(s.code)}
+                  onClick={() => setCliSubCode('__all__')}
                   className={cn(
                     'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
-                    active ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+                    cliSubCode === '__all__'
+                      ? 'bg-indigo-600 text-white ring-indigo-600'
+                      : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
                   )}
-                  style={active ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
-                  title={`KIRIM: ${formatMoney(s.totalIn)} · CHIQIM: ${formatMoney(s.totalOut)} · ${s.count} ta`}
                 >
-                  {s.name}
+                  Hammasi
                   <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
-                    {formatShort(Number(s.totalIn || 0))}
+                    {formatShort(Number(clientDaily?.totalIn || 0))}
                   </span>
                 </button>
-              );
-            })}
-          </div>
+                {(clientDaily?.subcategories || []).map((s: any) => {
+                  const active = cliSubCode === s.code;
+                  const color = s.color || '#6366f1';
+                  return (
+                    <button
+                      key={s.code}
+                      onClick={() => setCliSubCode(s.code)}
+                      className={cn(
+                        'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
+                        active ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+                      )}
+                      style={active ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                      title={`KIRIM: ${formatMoney(s.totalIn)} · CHIQIM: ${formatMoney(s.totalOut)} · ${s.count} ta`}
+                    >
+                      {s.name}
+                      <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
+                        {formatShort(Number(s.totalIn || 0))}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Body: jami + grafik */}
-          <div className="p-4">
-            <div className="flex items-center gap-5 mb-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">KIRIM</span>
-                <span className="text-[13px] font-bold tabular-nums text-emerald-700">
-                  {formatMoney(clientTotals.totalIn).replace(' UZS', '')}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CHIQIM</span>
-                <span className="text-[13px] font-bold tabular-nums text-rose-700">
-                  {formatMoney(clientTotals.totalOut).replace(' UZS', '')}
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">SOF</span>
-                <span className={cn(
-                  "text-[13px] font-bold tabular-nums",
-                  clientTotals.net >= 0 ? "text-emerald-700" : "text-rose-700",
-                )}>
-                  {clientTotals.net >= 0 ? '+' : ''}{formatMoney(clientTotals.net).replace(' UZS', '')}
-                </span>
-              </div>
-            </div>
+              {/* Body: jami + grafik */}
+              <div className="p-4">
+                <div className="flex items-center gap-5 mb-3 flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">KIRIM</span>
+                    <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                      {formatMoney(clientTotals.totalIn).replace(' UZS', '')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CHIQIM</span>
+                    <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                      {formatMoney(clientTotals.totalOut).replace(' UZS', '')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">SOF</span>
+                    <span className={cn(
+                      "text-[13px] font-bold tabular-nums",
+                      clientTotals.net >= 0 ? "text-emerald-700" : "text-rose-700",
+                    )}>
+                      {clientTotals.net >= 0 ? '+' : ''}{formatMoney(clientTotals.net).replace(' UZS', '')}
+                    </span>
+                  </div>
+                </div>
 
-            {cliRange === 'custom' && (!cliCustomFrom || !cliCustomTo) ? (
-              <div className="h-[260px] grid place-items-center text-xs text-slate-400">
-                {t('selectDateRange')}
+                <div ref={clientChartRef} className="bg-white">
+                  {cliRange === 'custom' && (!cliCustomFrom || !cliCustomTo) ? (
+                    <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                      {t('selectDateRange')}
+                    </div>
+                  ) : clientLoading ? (
+                    <Skeleton className="h-[260px] w-full" />
+                  ) : (
+                    <DualAreaChart data={clientChartData} height={260} />
+                  )}
+                </div>
               </div>
-            ) : clientLoading ? (
-              <Skeleton className="h-[260px] w-full" />
-            ) : (
-              <DualAreaChart data={clientChartData} height={260} />
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* ═══ MAIN GRID: 3 columns ═══ */}
@@ -898,6 +959,38 @@ function formatShort(n: number): string {
   if (abs >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (abs >= 1e3) return (n / 1e3).toFixed(0) + 'K';
   return n.toFixed(0);
+}
+
+// DOM tugunini PNG sifatida yuklab olish (html-to-image dynamic import — SSR'ga kirmaydi)
+async function downloadChartPng(node: HTMLElement | null, filename: string) {
+  if (!node) return;
+  try {
+    const { toPng } = await import('html-to-image');
+    const dataUrl = await toPng(node, {
+      backgroundColor: '#ffffff',
+      pixelRatio: 2,
+      cacheBust: true,
+    });
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    link.click();
+  } catch (e) {
+    console.error('PNG eksport xatoligi:', e);
+  }
+}
+
+// Kichkina yumaloq icon tugma — kartochka header'iga PNG yuklab olish uchun
+function DownloadIconBtn({ onClick, title = 'PNG sifatida yuklab olish' }: { onClick: () => void; title?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="h-8 w-8 grid place-items-center bg-white border border-slate-200 rounded hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 transition-colors"
+    >
+      <Download className="h-3.5 w-3.5" />
+    </button>
+  );
 }
 
 function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
