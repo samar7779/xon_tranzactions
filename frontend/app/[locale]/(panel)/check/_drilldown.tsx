@@ -442,10 +442,15 @@ function DiagPanel({
   const fixableDateItems = items.filter((it) => it.existsOnDate && it.existingTxId);
   const [fixDateLoading, setFixDateLoading] = useState(false);
   const [fixDateResult, setFixDateResult] = useState<any>(null);
+  const [fixDateConfirmOpen, setFixDateConfirmOpen] = useState(false);
 
   async function handleFixAllDates() {
     if (!date || fixableDateItems.length === 0) return;
-    if (!confirm(`${fixableDateItems.length} ta tx'ning sanasini ${date} ga tuzatish kerakmi?\n\nFaqat sana o'zgaradi — kategoriya/shartnoma/h.k. tegmaydi.`)) return;
+    setFixDateConfirmOpen(true);
+  }
+
+  async function executeFixAllDates() {
+    setFixDateConfirmOpen(false);
     setFixDateLoading(true);
     try {
       const r = await api.post<any>('/transactions/reconcile/fix-all-tx-date', {
@@ -566,6 +571,16 @@ function DiagPanel({
       {/* Sana tuzatish natija modali */}
       {fixDateResult && (
         <FixDateResultModal result={fixDateResult} onClose={handleCloseFixDateModal} />
+      )}
+
+      {/* Sana tuzatishni tasdiqlash modali */}
+      {fixDateConfirmOpen && (
+        <FixDateConfirmModal
+          count={fixableDateItems.length}
+          newDate={date || ''}
+          onConfirm={executeFixAllDates}
+          onCancel={() => setFixDateConfirmOpen(false)}
+        />
       )}
     </div>
   );
@@ -1118,6 +1133,70 @@ function FixDateResultModal({
 
         <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end">
           <Button onClick={onClose}>Yopish</Button>
+        </div>
+      </div>
+    </div>
+  );
+  return createPortal(modalContent, document.body);
+}
+
+// ════════════════════════════════════════════════════
+//  SANA TUZATISH — TASDIQLASH MODALI
+// ════════════════════════════════════════════════════
+function FixDateConfirmModal({
+  count, newDate, onConfirm, onCancel,
+}: {
+  count: number;
+  newDate: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 grid place-items-center text-white shadow-lg shadow-amber-500/20">
+            <AlertTriangle className="h-4 w-4" />
+          </div>
+          <div className="flex-1">
+            <div className="text-[14px] font-bold">Sana tuzatishni tasdiqlang</div>
+            <div className="text-[11px] text-slate-500">Bu amalni qaytarib bo'lmaydi</div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="rounded-xl ring-1 ring-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-4">
+            <div className="text-center">
+              <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold mb-1">Tuzatiladi</div>
+              <div className="text-3xl font-bold text-emerald-700 tabular-nums">{count}</div>
+              <div className="text-[11px] text-emerald-600 mt-0.5">ta tranzaksiya</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3 flex items-center gap-3">
+            <Calendar className="h-4 w-4 text-violet-600 shrink-0" />
+            <div className="flex-1 text-[12px]">
+              <div className="text-slate-500">Yangi sana:</div>
+              <div className="font-mono font-bold text-violet-900">{newDate}</div>
+            </div>
+          </div>
+
+          <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 flex items-start gap-2 text-[11px] text-amber-800">
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+            <div>
+              <b>Faqat <code className="font-mono">txnDate</code> o'zgaradi.</b><br/>
+              Kategoriya, shartnoma, kontragent va boshqa ma'lumotlar tegmaydi.
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2">
+          <Button variant="outline" onClick={onCancel}>Bekor qilish</Button>
+          <Button onClick={onConfirm} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
+            <CheckCircle2 className="h-3.5 w-3.5" /> Ha, tuzatish
+          </Button>
         </div>
       </div>
     </div>
