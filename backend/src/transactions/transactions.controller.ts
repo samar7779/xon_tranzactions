@@ -119,9 +119,14 @@ export class TransactionsController {
   }
 
   @Get('reconcile/today')
-  @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka (farq summasi bo'yicha sortlangan)" })
-  reconcileToday(@Query('date') date?: string) {
-    return this.reconcileSvc.reconcileToday(date);
+  @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka. syncMismatched=true bo'lsa farqli hisoblar uchun avto-sync+qayta sverka qiladi (smart 2-pass)" })
+  reconcileToday(
+    @Query('date') date?: string,
+    @Query('syncMismatched') syncMismatched?: string,
+  ) {
+    return this.reconcileSvc.reconcileToday(date, {
+      syncMismatched: syncMismatched === 'true',
+    });
   }
 
   @Post('reconcile/diagnose')
