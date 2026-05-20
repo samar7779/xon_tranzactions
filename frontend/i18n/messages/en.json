@@ -402,7 +402,14 @@
     "copy": "Copy",
     "copied": "Copied",
     "labelCopied": "{label} copied",
-    "txIdCopied": "Transaction ID copied"
+    "txIdCopied": "Transaction ID copied",
+    "manualContractTitle": "Enter contract manually",
+    "manualContractDesc": "CRM not checked — user is responsible. Specify counterparty and contract number.",
+    "manualContractWarning": "This contract is not verified in CRM — you confirm its correctness",
+    "contractDelete": "Delete contract",
+    "kontragent": "Counterparty",
+    "contractNumberLabel": "Contract number",
+    "contractNumberPlaceholder": "e.g. 12345VTN26MP"
   },
   "accounts": {
     "title": "Bank accounts",
