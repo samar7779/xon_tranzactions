@@ -91,6 +91,7 @@ export default function TransactionsPage() {
   const [idSearchOpen, setIdSearchOpen] = useState(false);
   const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
   const [todayStatsOpen, setTodayStatsOpen] = useState(false);
+  const [extraToolsOpen, setExtraToolsOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
   const [idSearching, setIdSearching] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
@@ -546,36 +547,38 @@ export default function TransactionsPage() {
                 <TodayStatsInline />
               </div>
               <div className="p-1">
-                <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
-                  <History className="h-4 w-4 mr-2 text-indigo-600" />
-                  <span className="flex-1">{t('toolBackfill') || 'Tarixni yuklash'}</span>
-                </DropdownMenuItem>
-                {canManageCategories && (
-                  <DropdownMenuItem
-                    onClick={() => recategorizeAllMut.mutate()}
-                    disabled={recategorizeAllMut.isPending}
-                    className="cursor-pointer"
-                  >
-                    {recategorizeAllMut.isPending
-                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
-                      : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
-                    <span className="flex-1">Kategoriyalash</span>
-                  </DropdownMenuItem>
+                {/* Qoshimcha amallar — collapsible, default'da yopiq */}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setExtraToolsOpen((v) => !v); }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 text-[11px] uppercase tracking-wider font-semibold text-slate-500 transition-colors"
+                >
+                  <span className="flex-1 text-left">Qoshimcha amallar</span>
+                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', extraToolsOpen && 'rotate-180')} />
+                </button>
+                {extraToolsOpen && (
+                  <div className="mt-0.5">
+                    <DropdownMenuItem
+                      onSelect={(e) => { e.preventDefault(); setBackfillOpen(true); }}
+                      className="cursor-pointer"
+                    >
+                      <History className="h-4 w-4 mr-2 text-indigo-600" />
+                      <span className="flex-1">{t('toolBackfill') || 'Tarixni yuklash'}</span>
+                    </DropdownMenuItem>
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); recategorizeAllMut.mutate(); }}
+                        disabled={recategorizeAllMut.isPending}
+                        className="cursor-pointer"
+                      >
+                        {recategorizeAllMut.isPending
+                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
+                          : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
+                        <span className="flex-1">Kategoriyalash</span>
+                      </DropdownMenuItem>
+                    )}
+                  </div>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">Export</DropdownMenuLabel>
-                <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
-                  <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-                  <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
-                  <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
-                  <span className="flex-1">CSV (joriy sahifa)</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
-                  <Printer className="h-4 w-4 mr-2 text-slate-600" />
-                  <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
-                </DropdownMenuItem>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -585,6 +588,39 @@ export default function TransactionsPage() {
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 lg:p-5">
             <div className="flex items-center gap-3 flex-wrap">
+              {/* EXPORT — alohida icon dropdown, searchdan oldin */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Export — Excel / CSV / Chop etish"
+                    className={cn(
+                      'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
+                      'bg-gradient-to-br from-emerald-500 to-teal-600 text-white',
+                      'shadow-sm hover:shadow-lg hover:shadow-emerald-500/30',
+                      'transition-all duration-200 hover:scale-105 active:scale-95',
+                      'ring-1 ring-emerald-400/30',
+                    )}
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-56">
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Export</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                    <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
+                    <span className="flex-1">CSV (joriy sahifa)</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
+                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
+                    <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {/* Qidiruv — fokuslanganda animatsion gradient halqa + glow */}
               <div className="relative flex-1 min-w-[240px] group/search">
                 {/* Tashqi gradient halqa — fokuslanganda paydo bo'ladi */}
