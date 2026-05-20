@@ -220,10 +220,22 @@
     "loginSubtitle": "Admin panelga email va parol bilan kiring",
     "email": "Email",
     "password": "Parol",
+    "emailLabel": "EMAIL",
+    "passwordLabel": "PAROL",
     "submit": "Kirish",
     "submitting": "Tekshirilmoqda...",
+    "processing": "TEKSHIRILMOQDA",
     "invalidCredentials": "Email yoki parol noto'g'ri",
-    "welcome": "Xush kelibsiz"
+    "welcome": "Xush kelibsiz",
+    "identityVerify": "Shaxsni tasdiqlash",
+    "capsLockOn": "Caps Lock yoqilgan",
+    "encrypted": "Shifrlangan",
+    "authRequired": "TIZIMGA KIRISH TALAB ETILADI",
+    "pressEscToClose": "yopish uchun bosing",
+    "showPassword": "Ko'rsatish",
+    "hidePassword": "Yashirish",
+    "systemOnline": "TIZIM · ONLINE",
+    "tashkent": "TOSHKENT"
   },
   "dashboard": {
     "title": "Bosh sahifa",

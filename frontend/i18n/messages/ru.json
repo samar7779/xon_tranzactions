@@ -220,10 +220,22 @@
     "loginSubtitle": "Введите email и пароль администратора",
     "email": "Email",
     "password": "Пароль",
+    "emailLabel": "EMAIL",
+    "passwordLabel": "ПАРОЛЬ",
     "submit": "Войти",
     "submitting": "Проверка...",
+    "processing": "ПРОВЕРКА",
     "invalidCredentials": "Неверный email или пароль",
-    "welcome": "Добро пожаловать"
+    "welcome": "Добро пожаловать",
+    "identityVerify": "Проверка личности",
+    "capsLockOn": "Caps Lock включён",
+    "encrypted": "Зашифровано",
+    "authRequired": "ТРЕБУЕТСЯ АУТЕНТИФИКАЦИЯ",
+    "pressEscToClose": "чтобы закрыть",
+    "showPassword": "Показать",
+    "hidePassword": "Скрыть",
+    "systemOnline": "СИСТЕМА · ONLINE",
+    "tashkent": "ТАШКЕНТ"
   },
   "dashboard": {
     "title": "Главная",

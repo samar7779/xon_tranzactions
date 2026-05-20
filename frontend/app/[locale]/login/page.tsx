@@ -89,7 +89,7 @@ export default function LoginPage() {
       <div className="absolute top-5 right-5 z-30 flex items-center gap-4">
         <div className="text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
           <div className="tabular-nums text-cyan-200">{clock}</div>
-          <div className="text-cyan-400/40">TASHKENT</div>
+          <div className="text-cyan-400/40">{t('tashkent')}</div>
         </div>
         <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
           <LanguageSwitcher />
@@ -103,7 +103,7 @@ export default function LoginPage() {
             <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
           </span>
-          <span>SYS · ONLINE</span>
+          <span>{t('systemOnline')}</span>
         </div>
         <div className="mt-1 text-cyan-400/40">{tApp('title').toUpperCase()}</div>
       </div>
@@ -204,7 +204,7 @@ export default function LoginPage() {
                 <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
                 <span className="relative rounded-full h-1 w-1 bg-cyan-400" />
               </span>
-              <span>Identity verify</span>
+              <span>{t('identityVerify')}</span>
             </div>
           </div>
 
@@ -213,7 +213,7 @@ export default function LoginPage() {
             <div style={{ animation: open ? 'login-stagger 0.6s 0.25s both' : 'none' }}>
               <HudField
                 id="email"
-                label="EMAIL"
+                label={t('emailLabel')}
                 type="email"
                 value={email}
                 onChange={(v) => { setEmail(v); setErrorMsg(null); }}
@@ -225,7 +225,7 @@ export default function LoginPage() {
             <div style={{ animation: open ? 'login-stagger 0.6s 0.35s both' : 'none' }}>
               <HudField
                 id="password"
-                label="PASSWORD"
+                label={t('passwordLabel')}
                 type={showPwd ? 'text' : 'password'}
                 value={password}
                 onChange={(v) => { setPassword(v); setErrorMsg(null); }}
@@ -237,7 +237,7 @@ export default function LoginPage() {
                     onClick={() => setShowPwd((s) => !s)}
                     className="text-cyan-400/50 hover:text-cyan-300 transition"
                     tabIndex={-1}
-                    aria-label={showPwd ? 'Hide' : 'Show'}
+                    aria-label={showPwd ? t('hidePassword') : t('showPassword')}
                   >
                     {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -248,7 +248,7 @@ export default function LoginPage() {
             {capsOn && (
               <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
                 <AlertCircle className="h-3 w-3" />
-                Caps Lock · ON
+                {t('capsLockOn')}
               </div>
             )}
 
@@ -288,7 +288,7 @@ export default function LoginPage() {
                 {busy ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="relative">PROCESSING</span>
+                    <span className="relative">{t('processing')}</span>
                   </>
                 ) : (
                   <>
@@ -300,7 +300,7 @@ export default function LoginPage() {
 
               {/* ESC hint */}
               <div className="text-center mt-3 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
-                Press <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> to close
+                <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> {t('pressEscToClose')}
               </div>
             </div>
           </form>
@@ -310,7 +310,7 @@ export default function LoginPage() {
                           text-[9px] tracking-[0.25em] uppercase text-cyan-400/50 font-mono">
             <span className="flex items-center gap-1.5">
               <span className="w-1 h-1 rounded-full bg-cyan-400 animate-pulse" />
-              Encrypted
+              {t('encrypted')}
             </span>
             <span className="tabular-nums text-cyan-300/70">{clock}</span>
             <span>AES-256</span>
@@ -337,7 +337,7 @@ export default function LoginPage() {
       {/* Pastki readout */}
       <div className="absolute bottom-5 left-5 right-5 z-30
                       flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none">
-        <span>· AUTHENTICATION REQUIRED ·</span>
+        <span>· {t('authRequired')} ·</span>
         <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
       </div>
     </div>
