@@ -258,7 +258,7 @@ export default function CheckPage() {
                     <AccountRow
                       key={it.accountId}
                       item={it}
-                      loading={singleLoading.has(it.accountId)}
+                      loading={singleLoading.has(it.accountId) || isRefreshing}
                       onClick={() => setSelectedAccountId(it.accountId)}
                       onRefresh={() => refreshOne(it.accountId)}
                     />
@@ -297,7 +297,7 @@ export default function CheckPage() {
                           <AccountRow
                             key={it.accountId}
                             item={it}
-                            loading={singleLoading.has(it.accountId)}
+                            loading={singleLoading.has(it.accountId) || isRefreshing}
                             onClick={() => setSelectedAccountId(it.accountId)}
                             onRefresh={() => refreshOne(it.accountId)}
                           />
@@ -464,9 +464,17 @@ function AccountRow({
         item.status === 'error' && 'bg-rose-50/30 hover:from-rose-50 hover:to-pink-50/40',
         item.status === 'ok' && 'hover:from-slate-50 hover:to-emerald-50/30',
         borderAccent,
+        // Loading paytida — yumshoq pulse + dim
+        loading && 'animate-pulse bg-gradient-to-r from-violet-50/40 via-fuchsia-50/30 to-violet-50/40',
       )}
       onClick={onClick}
     >
+      {/* Loading paytida — yuqori chiziq (progress indicator) */}
+      {loading && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 overflow-hidden">
+          <div className="h-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-violet-500 animate-pulse" />
+        </div>
+      )}
       {/* Bank logo — haqiqiy logo (Kapital/Ipak rasmi yoki abbreviation gradient) */}
       <div className="relative shrink-0 transition-transform group-hover:scale-105">
         <BankLogo
@@ -541,12 +549,14 @@ function AccountRow({
         title="Manual yangilash"
         className={cn(
           'inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0 transition-all',
-          'bg-white ring-1 ring-slate-200 hover:ring-violet-300 hover:bg-violet-50 hover:scale-105',
-          'disabled:opacity-50 disabled:scale-100',
+          loading
+            ? 'bg-violet-100 ring-1 ring-violet-300 shadow-md shadow-violet-200'
+            : 'bg-white ring-1 ring-slate-200 hover:ring-violet-300 hover:bg-violet-50 hover:scale-105',
+          'disabled:scale-100',
         )}
       >
         {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600" />
+          <RefreshCw className="h-3.5 w-3.5 text-violet-600 animate-spin" />
         ) : (
           <RefreshCw className="h-3.5 w-3.5 text-slate-500 group-hover:text-violet-600" />
         )}
