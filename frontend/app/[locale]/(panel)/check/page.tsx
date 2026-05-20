@@ -151,7 +151,7 @@ export default function CheckPage() {
       <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
-      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full max-w-[1700px] mx-auto">
+      <div className="flex-1 px-4 py-5 lg:px-6 lg:py-6 space-y-4 w-full">
         {/* ═══ HEADER: ICON + TITLE ═══ */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
