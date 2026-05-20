@@ -282,7 +282,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
-        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div ref={kunmaChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
             <button
@@ -290,13 +290,20 @@ export default function DashboardPage() {
               onClick={() => setKunmaOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !kunmaOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !kunmaOpen && '-rotate-90')} />
+              <div className="w-6 h-6 rounded bg-emerald-600 grid place-items-center text-white">
+                <Activity className="h-3.5 w-3.5" />
+              </div>
               <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('dailyChart')}</div>
               <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
-                onClick={() => downloadChartPng(kunmaChartRef.current, `kunma-kun_${chartFrom || 'all'}_${chartTo || 'all'}.png`)}
+                onClick={async () => {
+                  if (!kunmaOpen) setKunmaOpen(true);
+                  await new Promise((r) => setTimeout(r, 150));
+                  downloadChartPng(kunmaChartRef.current, `kunma-kun_${chartFrom || 'all'}_${chartTo || 'all'}.png`);
+                }}
               />
               {/* Bank filtri — aktivlar boshida, effekt bilan */}
               <Select
@@ -417,8 +424,8 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Grafik (PNG eksport uchun ref shu yerda) */}
-              <div ref={kunmaChartRef} className="bg-white">
+              {/* Grafik */}
+              <div className="bg-white">
                 {range === 'custom' && (!customFrom || !customTo) ? (
                   <div className="h-[260px] grid place-items-center text-xs text-slate-400">
                     {t('selectDateRange')}
@@ -434,14 +441,14 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KUNMA-KUN USTUNLI GRAFIK — alohida karta ═══ */}
-        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div ref={kunmaBarChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
             <button
               type="button"
               onClick={() => setKunmaBarOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !kunmaBarOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !kunmaBarOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-amber-600 grid place-items-center text-white">
                 <BarChart3 className="h-3.5 w-3.5" />
               </div>
@@ -450,13 +457,17 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-2">
               <DownloadIconBtn
-                onClick={() => downloadChartPng(kunmaBarChartRef.current, `kunma-kun-ustunli_${chartFrom || 'all'}_${chartTo || 'all'}.png`)}
+                onClick={async () => {
+                  if (!kunmaBarOpen) setKunmaBarOpen(true);
+                  await new Promise((r) => setTimeout(r, 150));
+                  downloadChartPng(kunmaBarChartRef.current, `kunma-kun-ustunli_${chartFrom || 'all'}_${chartTo || 'all'}.png`);
+                }}
               />
             </div>
           </div>
           {kunmaBarOpen && (
             <div className="p-4">
-              <div ref={kunmaBarChartRef} className="bg-white">
+              <div className="bg-white">
                 {range === 'custom' && (!customFrom || !customTo) ? (
                   <div className="h-[280px] grid place-items-center text-xs text-slate-400">
                     {t('selectDateRange')}
@@ -472,7 +483,7 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KLIENT TO'LOVLARI — Клиент / Физ.Л / Юр.Л kategoriya bo'yicha ═══ */}
-        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div ref={clientChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/60 to-white">
             <button
@@ -480,7 +491,7 @@ export default function DashboardPage() {
               onClick={() => setClientOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('h-4 w-4 text-slate-500 transition-transform', !clientOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !clientOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-indigo-600 grid place-items-center text-white">
                 <TrendingUp className="h-3.5 w-3.5" />
               </div>
@@ -489,7 +500,11 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
-                onClick={() => downloadChartPng(clientChartRef.current, `klient-tolovlari_${cliFrom || 'all'}_${cliTo || 'all'}.png`)}
+                onClick={async () => {
+                  if (!clientOpen) setClientOpen(true);
+                  await new Promise((r) => setTimeout(r, 150));
+                  downloadChartPng(clientChartRef.current, `klient-tolovlari_${cliFrom || 'all'}_${cliTo || 'all'}.png`);
+                }}
               />
               {/* Bank filtri */}
               <Select
@@ -648,7 +663,7 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div ref={clientChartRef} className="bg-white">
+                <div className="bg-white">
                   {cliRange === 'custom' && (!cliCustomFrom || !cliCustomTo) ? (
                     <div className="h-[260px] grid place-items-center text-xs text-slate-400">
                       {t('selectDateRange')}
@@ -962,6 +977,7 @@ function formatShort(n: number): string {
 }
 
 // DOM tugunini PNG sifatida yuklab olish (html-to-image dynamic import — SSR'ga kirmaydi)
+// 'no-export' klassli elementlar PNG'da chiqarilmaydi (chevron, download tugma, va h.k.)
 async function downloadChartPng(node: HTMLElement | null, filename: string) {
   if (!node) return;
   try {
@@ -970,6 +986,10 @@ async function downloadChartPng(node: HTMLElement | null, filename: string) {
       backgroundColor: '#ffffff',
       pixelRatio: 2,
       cacheBust: true,
+      filter: (el) => {
+        if (!(el instanceof HTMLElement)) return true;
+        return !el.classList.contains('no-export');
+      },
     });
     const link = document.createElement('a');
     link.download = filename;
@@ -986,7 +1006,7 @@ function DownloadIconBtn({ onClick, title = 'PNG sifatida yuklab olish' }: { onC
     <button
       onClick={onClick}
       title={title}
-      className="h-8 w-8 grid place-items-center bg-white border border-slate-200 rounded hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 transition-colors"
+      className="no-export h-8 w-8 grid place-items-center bg-white border border-slate-200 rounded hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 transition-colors"
     >
       <Download className="h-3.5 w-3.5" />
     </button>
