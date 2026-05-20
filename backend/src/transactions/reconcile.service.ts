@@ -35,7 +35,7 @@ export class ReconcileService {
     private sync: SyncService,
   ) {}
 
-  async reconcile(accountId: string, dateFrom: string, dateTo: string) {
+  async reconcile(accountId: string, dateFrom: string, dateTo: string, opts?: { withSync?: boolean }) {
     if (!accountId) throw new BadRequestException('accountId kerak');
     if (!dateFrom || !dateTo) throw new BadRequestException('dateFrom va dateTo kerak');
 
@@ -51,6 +51,25 @@ export class ReconcileService {
     if (bank.apiKind !== 'KAPITALBANK_V3' && bank.apiKind !== 'IPAK_YOLI_V1') {
       throw new BadRequestException("Sverka faqat Kapitalbank va Ipak Yo'li banklar uchun");
     }
+
+    // Sverka oldidan sync qilish — withSync=true bo'lsa
+    // Sana oraliqdagi har bir kun uchun syncAccount chaqiriladi (DB ga eng so'nggi
+    // ma'lumotlarni yozadi) — keyin sverka aniqroq bo'ladi.
+    if (opts?.withSync) {
+      try {
+        const dates: string[] = [];
+        const start = new Date(`${dateFrom}T00:00:00+05:00`);
+        const end = new Date(`${dateTo}T00:00:00+05:00`);
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dates.push(d.toISOString().slice(0, 10));
+        }
+        await this.sync.syncAccount(cred.id, account.id, { dates });
+        this.log.log(`reconcile(withSync): ${account.accountNo} → ${dates.length} kun sync qilindi`);
+      } catch (e: any) {
+        this.log.warn(`reconcile(withSync) xato: ${e?.message} — sync'siz davom etamiz`);
+      }
+    }
+
     if (!bank.apiBaseUrl) throw new BadRequestException('Bank API manzili sozlanmagan');
 
     // Sana stringlari (YYYY-MM-DD) Tashkent kunlari sifatida talqin qilinadi

@@ -106,7 +106,8 @@ export function AccountDrilldown({
     try {
       const result = await api.post<ReconcileData>('/transactions/reconcile', {
         accountId: item.accountId, dateFrom, dateTo,
-      });
+        withSync: true,  // Avval sync — DB eski bo'lsa farq xato chiqmaydi
+      }, { timeout: 60_000 });
       setData(result);
       // Agar bugun bo'lsa, asosiy listni ham yangilaymiz
       if (dateFrom === todayIso() && dateTo === todayIso()) {
