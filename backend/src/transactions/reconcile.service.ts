@@ -258,9 +258,11 @@ export class ReconcileService {
 
     const tStart = Date.now();
 
-    // Barcha aktiv KB+Ipak hisoblar
+    // Faqat sync YOQILGAN aktiv KB+Ipak hisoblar
+    // (syncEnabled=false bo'lgan hisoblarni sverka qilmaymiz)
     const accounts = await this.prisma.bankAccount.findMany({
       where: {
+        syncEnabled: true,
         bank: { isActive: true, apiKind: { in: ['KAPITALBANK_V3', 'IPAK_YOLI_V1'] } },
       },
       include: {
