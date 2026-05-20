@@ -973,32 +973,43 @@ export class TransactionsService {
     return { buffer, filename, count: items.length };
   }
 
-  async stats(
-    dateFrom?: string,
-    dateTo?: string,
-    categoryCode?: string,
-    bankId?: string,
-    accountId?: string,
-    direction?: string,
-  ) {
-    const where: any = {};
-    if (dateFrom || dateTo) {
-      where.txnDate = {};
-      if (dateFrom) where.txnDate.gte = parseDayStartTashkent(dateFrom);
-      if (dateTo) where.txnDate.lte = parseDayEndTashkent(dateTo);
-    }
-    if (bankId) where.bankId = bankId;
-    if (accountId) where.accountId = accountId;
-    if (direction) where.direction = direction;
+  async stats(opts: {
+    from?: string;
+    to?: string;
+    categoryCode?: string;
+    bankId?: string;
+    accountId?: string;
+    direction?: string;
+    q?: string;
+    bankIds?: string;
+    accountIds?: string;
+    categoryIds?: string;
+    subcategoryIds?: string;
+    directions?: string;
+    contractStatuses?: string;
+    contractSources?: string;
+    hisobNomi?: string;
+  } = {}) {
+    // from/to → dateFrom/dateTo aliasi (buildWhere uchun)
+    let where: any = this.buildWhere({
+      ...opts,
+      dateFrom: opts.from,
+      dateTo: opts.to,
+    } as any);
+
     // Kategoriya bo'yicha filter (masalan: CLIENT — faqat Klient/Fiz.L/Yur.L tranzaksiyalari)
-    if (categoryCode) {
+    // categoryCode aniqroq — agar column filter (categoryIds) ham bo'lsa, uni ustun bilan almashtiramiz
+    if (opts.categoryCode) {
       const cat = await this.prisma.category.findUnique({
-        where: { code: categoryCode },
+        where: { code: opts.categoryCode },
         select: { id: true },
       });
       if (cat) where.categoryId = cat.id;
-      else where.categoryId = '__nonexistent__'; // 0 ta yozuv qaytarish uchun
+      else where.categoryId = '__nonexistent__';
     }
+
+    where = await this.applyXatoFilter(where);
+
     const [grouped, total, byBank] = await Promise.all([
       this.prisma.transaction.groupBy({
         by: ['direction', 'status'],
