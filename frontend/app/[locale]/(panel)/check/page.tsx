@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Scale, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
-  Search, X, ChevronRight, Wifi,
+  Search, X, ChevronRight, Wifi, Building2, TrendingUp, Receipt,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -139,67 +139,88 @@ export default function CheckPage() {
       <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
-      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
-        {/* ═══ Top bar: search + refresh ═══ */}
-        <Card className="border-0 shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  className="pl-9 h-11 rounded-xl bg-slate-50/60"
-                  placeholder="Hisob raqami, egasi yoki bank..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-                {q && (
-                  <button
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                    onClick={() => setQ('')}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full max-w-[1700px] mx-auto">
+        {/* ═══ HEADER: ICON + TITLE ═══ */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <span className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-purple-600 grid place-items-center text-white shadow-lg shadow-violet-500/30">
+              <Scale className="h-5 w-5" strokeWidth={2.2} />
+            </span>
+            <div>
+              <h1 className="text-[20px] font-bold tracking-tight">Sverka</h1>
+              <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+                <Wifi className="h-3 w-3 text-emerald-500" />
+                Avto-yangilanish · 20 daq {isRefreshing && '· hozir...'}
+                {todayQuery.data?.date && <> · <span className="font-mono">{todayQuery.data.date}</span></>}
               </div>
-
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-500">
-                <Wifi className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Avto-yangilanish · har 20 daqiqada {isRefreshing && '· hozir...'}</span>
-              </div>
-
-              <Button
-                onClick={refreshAll}
-                disabled={isRefreshing}
-                className="h-11 rounded-xl font-semibold"
-              >
-                {isRefreshing ? (
-                  <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Yangilanmoqda...</>
-                ) : (
-                  <><RefreshCw className="h-4 w-4 mr-1.5" /> Hammasini yangilash · bugun</>
-                )}
-              </Button>
             </div>
-
-            {/* Umumiy holat */}
-            {summary.total > 0 && (
-              <div className="flex items-center gap-4 mt-4 pt-3 border-t border-slate-100 text-[12px]">
-                <span className="text-slate-500">Bugun · {todayQuery.data?.date || '—'}</span>
-                <span className="text-slate-300">·</span>
-                <span className="flex items-center gap-1.5 text-emerald-700 font-semibold">
-                  <CheckCircle2 className="h-3.5 w-3.5" /> {summary.ok} mos
-                </span>
-                <span className="flex items-center gap-1.5 text-amber-700 font-semibold">
-                  <AlertTriangle className="h-3.5 w-3.5" /> {summary.mismatch} farqli
-                </span>
-                {summary.error > 0 && (
-                  <span className="flex items-center gap-1.5 text-rose-700 font-semibold">
-                    <X className="h-3.5 w-3.5" /> {summary.error} xato
-                  </span>
-                )}
-                <span className="text-slate-300">·</span>
-                <span className="text-slate-500">{summary.total} hisob</span>
-              </div>
+          </div>
+          <Button
+            onClick={refreshAll}
+            disabled={isRefreshing}
+            className="h-10 rounded-xl font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 gap-1.5 shadow-md shadow-violet-500/20"
+          >
+            {isRefreshing ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Yangilanmoqda...</>
+            ) : (
+              <><RefreshCw className="h-4 w-4" /> Hammasini yangilash</>
             )}
+          </Button>
+        </div>
+
+        {/* ═══ KPI KARTALAR ═══ */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <SverkaKpi
+            label="Jami hisoblar"
+            value={summary.total}
+            color="violet"
+            icon={<Building2 className="h-4 w-4" />}
+            loading={isLoading}
+          />
+          <SverkaKpi
+            label="Mos"
+            value={summary.ok}
+            color="emerald"
+            icon={<CheckCircle2 className="h-4 w-4" />}
+            loading={isLoading}
+            extra={summary.total > 0 ? `${Math.round((summary.ok / summary.total) * 100)}%` : undefined}
+          />
+          <SverkaKpi
+            label="Farqli"
+            value={summary.mismatch}
+            color={summary.mismatch > 0 ? 'amber' : 'slate'}
+            icon={<AlertTriangle className="h-4 w-4" />}
+            loading={isLoading}
+          />
+          <SverkaKpi
+            label="Xato"
+            value={summary.error}
+            color={summary.error > 0 ? 'rose' : 'slate'}
+            icon={<X className="h-4 w-4" />}
+            loading={isLoading}
+          />
+        </div>
+
+        {/* ═══ Search bar ═══ */}
+        <Card className="border-0 shadow-soft">
+          <CardContent className="p-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                className="pl-9 h-11 rounded-xl bg-slate-50/60"
+                placeholder="Hisob raqami, egasi yoki bank..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              {q && (
+                <button
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  onClick={() => setQ('')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -490,5 +511,47 @@ function StatusBadge({ item, totalDiff }: { item: TodayItem; totalDiff: number }
     <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-2.5 py-1.5 rounded-full shrink-0">
       <CheckCircle2 className="h-3 w-3" /> Mos
     </span>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  SVERKA KPI KARTASI — zamonaviy gradient karta
+// ════════════════════════════════════════════════════
+function SverkaKpi({
+  label, value, color, icon, loading, extra,
+}: {
+  label: string;
+  value: number;
+  color: 'violet' | 'emerald' | 'amber' | 'rose' | 'slate';
+  icon: React.ReactNode;
+  loading?: boolean;
+  extra?: string;
+}) {
+  const m = {
+    violet:  { bg: 'from-violet-500/10 to-purple-500/5',   ring: 'ring-violet-200',  text: 'text-violet-700',  accent: 'from-violet-500 to-purple-600' },
+    emerald: { bg: 'from-emerald-500/10 to-teal-500/5',    ring: 'ring-emerald-200', text: 'text-emerald-700', accent: 'from-emerald-500 to-teal-600' },
+    amber:   { bg: 'from-amber-500/10 to-orange-500/5',    ring: 'ring-amber-200',   text: 'text-amber-700',   accent: 'from-amber-500 to-orange-600' },
+    rose:    { bg: 'from-rose-500/10 to-pink-500/5',       ring: 'ring-rose-200',    text: 'text-rose-700',    accent: 'from-rose-500 to-pink-600' },
+    slate:   { bg: 'from-slate-300/10 to-slate-400/5',     ring: 'ring-slate-200',   text: 'text-slate-700',   accent: 'from-slate-400 to-slate-500' },
+  }[color];
+  return (
+    <div className={cn('relative overflow-hidden rounded-2xl ring-1 bg-gradient-to-br p-4 shadow-sm', m.bg, m.ring)}>
+      <div className="flex items-start justify-between mb-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-500">{label}</div>
+          {extra && <div className={cn('text-[10px] font-semibold mt-0.5', m.text)}>{extra}</div>}
+        </div>
+        <div className={cn('w-8 h-8 rounded-xl grid place-items-center text-white shadow-md bg-gradient-to-br', m.accent)}>
+          {icon}
+        </div>
+      </div>
+      {loading ? (
+        <div className="h-8 w-16 rounded-md bg-slate-200/60 animate-pulse" />
+      ) : (
+        <div className={cn('text-3xl font-bold tracking-tight tabular-nums leading-none', m.text)}>
+          {value.toLocaleString('ru-RU')}
+        </div>
+      )}
+    </div>
   );
 }
