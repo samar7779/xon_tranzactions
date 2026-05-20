@@ -130,6 +130,15 @@ export class TransactionsController {
     return this.reconcileSvc.fixAllMissing(body?.accountId, body?.date, body?.items || []);
   }
 
+  @Post('reconcile/fix-tx-date')
+  @ApiOperation({
+    summary: "Bitta tx'ning sanasini tuzatish (foydalanuvchi tasdiqi bilan)",
+    description: "Sverka diagnose'da 'boshqa sanada bor' deb topilgan tx uchun ishlatiladi. Faqat txnDate tegadi, boshqa hech narsa o'zgarmaydi.",
+  })
+  fixTxDate(@Body() body: { txId: string; newDate: string }) {
+    return this.reconcileSvc.fixTxDate(body?.txId, body?.newDate);
+  }
+
   @Get('export')
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(
