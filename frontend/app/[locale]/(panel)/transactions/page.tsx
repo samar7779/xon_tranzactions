@@ -4561,6 +4561,8 @@ function TodayStatsInline() {
   const today = new Date();
   // Tashkent vaqti
   const tashkentToday = new Date(today.getTime() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Tab tanlash — 'umumiy' yoki 'debetorka'
+  const [activeTab, setActiveTab] = useState<'umumiy' | 'debetorka'>('umumiy');
 
   // Umumiy statistika
   const { data, isLoading } = useQuery<any>({
@@ -4573,6 +4575,7 @@ function TodayStatsInline() {
     queryKey: ['today-stats-client-inline', tashkentToday],
     queryFn: () => api.get(`/transactions/stats?from=${tashkentToday}&to=${tashkentToday}&categoryCode=CLIENT`),
     staleTime: 30_000,
+    enabled: activeTab === 'debetorka',
   });
 
   const fmt = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
@@ -4585,76 +4588,135 @@ function TodayStatsInline() {
   const outSum = Number(outflow?._sum?.amount || 0);
   const total = inCount + outCount;
 
-  // Debetorka — CLIENT kategoriya kirim (uy uchun)
-  const clientInflow = clientData?.groups?.find?.((g: any) => g.direction === 'IN');
-  const debCount = Number(clientInflow?._count?._all || clientInflow?._count || 0);
-  const debSum = Number(clientInflow?._sum?.amount || 0);
+  // Debetorka — CLIENT kategoriya (kirim + chiqim alohida)
+  const debInflow = clientData?.groups?.find?.((g: any) => g.direction === 'IN');
+  const debOutflow = clientData?.groups?.find?.((g: any) => g.direction === 'OUT');
+  const debInCount = Number(debInflow?._count?._all || debInflow?._count || 0);
+  const debOutCount = Number(debOutflow?._count?._all || debOutflow?._count || 0);
+  const debInSum = Number(debInflow?._sum?.amount || 0);
+  const debOutSum = Number(debOutflow?._sum?.amount || 0);
+  const debTotal = debInCount + debOutCount;
 
   // Bugungi sana — chiroyli format
   const dateLabel = new Date(tashkentToday + 'T12:00:00').toLocaleDateString('uz-UZ', {
     day: '2-digit', month: 'long', weekday: 'short',
   });
 
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        <div className="h-4 w-32 rounded bg-white/15 animate-pulse" />
-        <div className="grid grid-cols-2 gap-1.5">
-          {[0,1].map(i => <div key={i} className="h-16 rounded-xl bg-white/10 animate-pulse" />)}
-        </div>
-        <div className="h-14 rounded-xl bg-white/10 animate-pulse" />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-2">
-      {/* Sana + jami tx soni — header */}
+    <div className="space-y-2.5">
+      {/* Header: sana + tx soni */}
       <div className="flex items-center justify-between">
         <div className="text-[10.5px] text-white/90 font-medium">{dateLabel}</div>
         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 backdrop-blur-sm ring-1 ring-white/30">
           <Activity className="h-2.5 w-2.5" />
-          <span className="text-[10px] font-bold tabular-nums">{fmt(total)} tx</span>
+          <span className="text-[10px] font-bold tabular-nums">
+            {fmt(activeTab === 'debetorka' ? debTotal : total)} tx
+          </span>
         </div>
       </div>
 
-      {/* KIRIM + CHIQIM — 2 ta katta karta */}
-      <div className="grid grid-cols-2 gap-1.5">
-        <div className="rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-600/25 backdrop-blur-sm ring-1 ring-emerald-300/40 p-2.5 shadow-sm">
-          <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
-            <ArrowDownLeft className="h-3 w-3" /> Kirim
-          </div>
-          <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(inSum)}</div>
-          <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(inCount)} ta</div>
-        </div>
-        <div className="rounded-xl bg-gradient-to-br from-rose-500/35 to-pink-600/25 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 shadow-sm">
-          <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
-            <ArrowUpRight className="h-3 w-3" /> Chiqim
-          </div>
-          <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(outSum)}</div>
-          <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(outCount)} ta</div>
-        </div>
-      </div>
-
-      {/* DEBETORKA — uy uchun to'lov (CLIENT kategoriya, faqat kirim) */}
-      <div className="rounded-xl bg-gradient-to-br from-amber-400/40 to-orange-500/30 backdrop-blur-sm ring-1 ring-amber-300/50 p-2.5 flex items-center gap-2.5 shadow-sm">
-        <div className="w-9 h-9 rounded-xl bg-amber-300/50 grid place-items-center shrink-0 ring-1 ring-white/20">
-          <Briefcase className="h-4 w-4" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[9px] uppercase tracking-wider font-bold text-white/95">
-            Debetorka · uy to'lovi
-          </div>
-          {clientLoading ? (
-            <div className="h-4 w-24 rounded bg-white/20 animate-pulse mt-1" />
-          ) : (
-            <div className="flex items-baseline gap-1.5 mt-0.5">
-              <span className="text-[14px] font-bold tabular-nums leading-tight">{fmt(debSum)}</span>
-              <span className="text-[9.5px] text-white/85 font-mono">· {fmt(debCount)} ta</span>
-            </div>
+      {/* TAB SWITCHER */}
+      <div className="flex items-center gap-1 p-0.5 bg-white/15 backdrop-blur-sm rounded-lg ring-1 ring-white/20">
+        <button
+          onClick={() => setActiveTab('umumiy')}
+          className={cn(
+            'flex-1 px-2 py-1.5 rounded-md text-[10.5px] font-bold uppercase tracking-wider transition-all',
+            activeTab === 'umumiy'
+              ? 'bg-white text-violet-700 shadow-md'
+              : 'text-white/80 hover:text-white hover:bg-white/10',
           )}
-        </div>
+        >
+          Umumiy
+        </button>
+        <button
+          onClick={() => setActiveTab('debetorka')}
+          className={cn(
+            'flex-1 px-2 py-1.5 rounded-md text-[10.5px] font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-1',
+            activeTab === 'debetorka'
+              ? 'bg-white text-amber-700 shadow-md'
+              : 'text-white/80 hover:text-white hover:bg-white/10',
+          )}
+        >
+          <Briefcase className="h-2.5 w-2.5" />
+          Debetorka
+        </button>
       </div>
+
+      {/* TAB CONTENT */}
+      {activeTab === 'umumiy' ? (
+        isLoading ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            {[0,1].map(i => <div key={i} className="h-20 rounded-xl bg-white/10 animate-pulse" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-600/25 backdrop-blur-sm ring-1 ring-emerald-300/40 p-2.5 shadow-sm">
+              <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
+                <ArrowDownLeft className="h-3 w-3" /> Kirim
+              </div>
+              <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(inSum)}</div>
+              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(inCount)} ta</div>
+            </div>
+            <div className="rounded-xl bg-gradient-to-br from-rose-500/35 to-pink-600/25 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 shadow-sm">
+              <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
+                <ArrowUpRight className="h-3 w-3" /> Chiqim
+              </div>
+              <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(outSum)}</div>
+              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(outCount)} ta</div>
+            </div>
+          </div>
+        )
+      ) : (
+        // DEBETORKA TAB
+        clientLoading ? (
+          <div className="space-y-1.5">
+            <div className="h-20 rounded-xl bg-white/10 animate-pulse" />
+            <div className="grid grid-cols-2 gap-1.5">
+              {[0,1].map(i => <div key={i} className="h-14 rounded-xl bg-white/10 animate-pulse" />)}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {/* Asosiy katta karta — Kirim (uy to'lovi) */}
+            <div className="rounded-xl bg-gradient-to-br from-amber-400/40 to-orange-500/30 backdrop-blur-sm ring-1 ring-amber-300/50 p-3 shadow-sm">
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-7 h-7 rounded-lg bg-amber-300/50 grid place-items-center ring-1 ring-white/20">
+                  <Briefcase className="h-3.5 w-3.5" />
+                </div>
+                <div className="text-[9.5px] uppercase tracking-wider font-bold text-white/95">
+                  Uy uchun to'lov · CLIENT
+                </div>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-[18px] font-bold tabular-nums leading-tight">{fmt(debInSum)}</span>
+                <span className="text-[10px] text-white/80 font-mono">UZS</span>
+              </div>
+              <div className="text-[10px] text-white/75 mt-0.5">{fmt(debInCount)} ta tranzaksiya</div>
+            </div>
+
+            {/* Pastda: chiqim (qaytarish) ham bo'lsa ko'rsatish */}
+            {debOutCount > 0 && (
+              <div className="rounded-xl bg-gradient-to-br from-rose-500/30 to-pink-600/20 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 flex items-center gap-2">
+                <ArrowUpRight className="h-3.5 w-3.5 text-white/90 shrink-0" />
+                <div className="flex-1 text-[10px]">
+                  <div className="text-white/85 uppercase tracking-wider font-bold text-[9px]">Qaytarish</div>
+                  <div className="flex items-baseline gap-1.5 mt-0.5">
+                    <span className="text-[13px] font-bold tabular-nums">{fmt(debOutSum)}</span>
+                    <span className="text-white/70 font-mono">· {fmt(debOutCount)} ta</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Foiz — debetorka umumiy kirimning qancha qismi */}
+            {inSum > 0 && (
+              <div className="text-[9.5px] text-white/75 text-center pt-0.5">
+                Bugungi kirimning <b className="text-white/95">{Math.round((debInSum / inSum) * 100)}%</b> uy to'lovi
+              </div>
+            )}
+          </div>
+        )
+      )}
     </div>
   );
 }
