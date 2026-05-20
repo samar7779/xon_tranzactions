@@ -14,7 +14,7 @@ import {
   Hash, Receipt, Link2, History, Loader2, AlertCircle, AlertTriangle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
-  Upload as UploadIcon, Trash2, FileIcon,
+  Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -89,6 +89,8 @@ export default function TransactionsPage() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [detailRow, setDetailRow] = useState<any>(null);
   const [idSearchOpen, setIdSearchOpen] = useState(false);
+  const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
+  const [todayStatsOpen, setTodayStatsOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
   const [idSearching, setIdSearching] = useState(false);
   const [backfillOpen, setBackfillOpen] = useState(false);
@@ -523,35 +525,58 @@ export default function TransactionsPage() {
               : <ChevronLeft className="h-4 w-4" />}
           </button>
 
-          {/* Action menu — bitta tugma, ichida 2 ta amal (KPI'dan tashqari, o'ng pastki burchak) */}
+          {/* AI Sparkles — bugungi statistika + qoshimcha amallar (KPI'dan tashqari, o'ng pastki burchak) */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                title="Amallar"
-                className="absolute -bottom-4 -right-3 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-indigo-500/40 transition-all"
+                title="AI yordamchi — bugungi statistika va amallar"
+                className="absolute -bottom-4 -right-3 z-10 inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-fuchsia-500/40 transition-all"
               >
                 {recategorizeAllMut.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin" />
-                  : <Wand2 className="h-4 w-4" />}
+                  : <Sparkles className="h-4 w-4" />}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
-                <History className="h-4 w-4 mr-2 text-indigo-600" />
-                <span className="flex-1">{t('toolBackfill')}</span>
-              </DropdownMenuItem>
-              {canManageCategories && (
-                <DropdownMenuItem
-                  onClick={() => recategorizeAllMut.mutate()}
-                  disabled={recategorizeAllMut.isPending}
-                  className="cursor-pointer"
-                >
-                  {recategorizeAllMut.isPending
-                    ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
-                    : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
-                  <span className="flex-1">Kategoriyalash</span>
+            <DropdownMenuContent align="end" className="w-72 p-0">
+              {/* Today stats panel — gradient header */}
+              <div className="rounded-t-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 p-3 text-white">
+                <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold uppercase tracking-wider opacity-90">
+                  <Sparkles className="h-3.5 w-3.5" /> Bugungi statistika
+                </div>
+                <TodayStatsInline />
+              </div>
+              <div className="p-1">
+                <DropdownMenuItem onClick={() => setBackfillOpen(true)} className="cursor-pointer">
+                  <History className="h-4 w-4 mr-2 text-indigo-600" />
+                  <span className="flex-1">{t('toolBackfill') || 'Tarixni yuklash'}</span>
                 </DropdownMenuItem>
-              )}
+                {canManageCategories && (
+                  <DropdownMenuItem
+                    onClick={() => recategorizeAllMut.mutate()}
+                    disabled={recategorizeAllMut.isPending}
+                    className="cursor-pointer"
+                  >
+                    {recategorizeAllMut.isPending
+                      ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
+                      : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
+                    <span className="flex-1">Kategoriyalash</span>
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider">Export</DropdownMenuLabel>
+                <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                  <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
+                  <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
+                  <span className="flex-1">CSV (joriy sahifa)</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
+                  <Printer className="h-4 w-4 mr-2 text-slate-600" />
+                  <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
+                </DropdownMenuItem>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -610,77 +635,51 @@ export default function TransactionsPage() {
                 `}</style>
               </div>
 
-              {/* Yuklab olish — Download icon (Tarix/Recategorize endi KPI yonida) */}
+              {/* SETTINGS — barcha qo'shimcha tools birlashtirilgan (ID, ID inspector, filter mode, ...) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title="Yuklab olish"
+                    title="Sozlamalar va tools"
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
-                      'bg-gradient-to-br from-indigo-500 to-violet-600 text-white',
-                      'shadow-sm hover:shadow-lg hover:shadow-indigo-500/30',
+                      'bg-gradient-to-br from-slate-700 to-slate-900 text-white',
+                      'shadow-sm hover:shadow-lg hover:shadow-slate-500/30',
                       'transition-all duration-200 hover:scale-105 active:scale-95',
-                      'ring-1 ring-indigo-400/30',
+                      'ring-1 ring-slate-600/30',
                     )}
                   >
-                    <Download className="h-4 w-4" />
+                    <Settings className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('exportByFilter')}</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="flex-1">{t('exportExcelAll')}</span>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Tools</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
+                    <Hash className="h-4 w-4 mr-2 text-fuchsia-600" />
+                    <span className="flex-1">{t('toolIdSearch') || 'ID orqali qidirish'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIdInspectorTrigger(Date.now())} className="cursor-pointer">
+                    <ScanLine className="h-4 w-4 mr-2 text-indigo-600" />
+                    <span className="flex-1">Bank ID inspector</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('currentPage')}</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
-                    <span className="flex-1">CSV</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportJson} className="cursor-pointer">
-                    <FileText className="h-4 w-4 mr-2 text-blue-600" />
-                    <span className="flex-1">JSON</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
-                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
-                    <span className="flex-1">{t('exportPrint')}</span>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filterlar</DropdownMenuLabel>
+                  <DropdownMenuItem
+                    onClick={() => setColumnFilterMode((v) => !v)}
+                    className="cursor-pointer"
+                  >
+                    <FilterIcon className={cn('h-4 w-4 mr-2', columnFilterMode ? 'text-indigo-600' : 'text-slate-500')} />
+                    <span className="flex-1">{columnFilterMode ? "Ustun filter: yoqilgan" : "Ustun filter rejimi"}</span>
+                    {columnFilterMode && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* ID orqali qidirish — gradient tugma (ID matn bilan) */}
-              <button
-                onClick={() => setIdSearchOpen(true)}
-                title={t('toolIdSearch')}
-                className={cn(
-                  'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
-                  'bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white',
-                  'shadow-sm hover:shadow-lg hover:shadow-fuchsia-500/40',
-                  'transition-all duration-200 hover:scale-105 active:scale-95',
-                  'ring-1 ring-fuchsia-400/30',
-                  'font-black text-[11px] tracking-widest',
-                )}
-              >
-                ID
-              </button>
-
-              {/* Bank ID inspector (composite ID → bankdan tekshirish) */}
-              <IdInspectorDialog iconOnly />
-
-              {/* Filter mode toggle — faqat icon */}
-              <button
-                onClick={() => setColumnFilterMode((v) => !v)}
-                title={columnFilterMode ? "Filter rejimini o'chirish" : "Har ustunga filter qo'yish"}
-                className={cn(
-                  "inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all",
-                  columnFilterMode
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200',
-                )}
-              >
-                <FilterIcon className="h-4 w-4" />
-              </button>
+              {/* IdInspectorDialog — controlled, dropdowndan ochiladi */}
+              <IdInspectorDialog
+                hideTrigger
+                controlledOpen={idInspectorTrigger > 0}
+                onControlledOpenChange={(o) => { if (!o) setIdInspectorTrigger(0); }}
+              />
 
               {/* Shartnoma manbasi filtri — qo'lda / ariza (multi-select) */}
               <DropdownMenu>
@@ -4551,5 +4550,66 @@ function CategoryEditDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ════════════════════════════════════════════════════
+//  TODAY STATS INLINE — bugungi tranzaksiyalar mini-paneli
+//  AI Sparkles dropdown ichida ko'rsatiladi (gradient karta)
+// ════════════════════════════════════════════════════
+function TodayStatsInline() {
+  const today = new Date();
+  // Tashkent vaqti
+  const tashkentToday = new Date(today.getTime() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ['today-stats-inline', tashkentToday],
+    queryFn: () => api.get(`/transactions/stats?from=${tashkentToday}&to=${tashkentToday}`),
+    staleTime: 30_000,
+  });
+
+  const inflow = data?.groups?.find?.((g: any) => g.direction === 'IN');
+  const outflow = data?.groups?.find?.((g: any) => g.direction === 'OUT');
+  const inCount = Number(inflow?._count?._all || inflow?._count || 0);
+  const outCount = Number(outflow?._count?._all || outflow?._count || 0);
+  const inSum = Number(inflow?._sum?.amount || 0);
+  const outSum = Number(outflow?._sum?.amount || 0);
+  const total = inCount + outCount;
+
+  const fmt = (n: number) => new Intl.NumberFormat('ru-RU').format(Math.round(n));
+
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
+        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
+        <div className="h-14 rounded-lg bg-white/10 animate-pulse" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] text-white/80 font-mono">{tashkentToday}</div>
+      <div className="grid grid-cols-3 gap-1.5">
+        <div className="bg-white/15 backdrop-blur-sm rounded-lg p-2 text-center">
+          <div className="text-[8.5px] text-white/80 uppercase tracking-wider font-semibold">Tx soni</div>
+          <div className="text-lg font-bold tabular-nums leading-tight">{fmt(total)}</div>
+        </div>
+        <div className="bg-emerald-400/25 backdrop-blur-sm rounded-lg p-2 text-center">
+          <div className="text-[8.5px] text-white/90 uppercase tracking-wider font-semibold flex items-center justify-center gap-0.5">
+            <ArrowDownLeft className="h-2.5 w-2.5" /> Kirim
+          </div>
+          <div className="text-[10.5px] font-bold tabular-nums leading-tight mt-0.5">{fmt(inSum)}</div>
+          <div className="text-[8.5px] text-white/70">{fmt(inCount)} ta</div>
+        </div>
+        <div className="bg-rose-400/25 backdrop-blur-sm rounded-lg p-2 text-center">
+          <div className="text-[8.5px] text-white/90 uppercase tracking-wider font-semibold flex items-center justify-center gap-0.5">
+            <ArrowUpRight className="h-2.5 w-2.5" /> Chiqim
+          </div>
+          <div className="text-[10.5px] font-bold tabular-nums leading-tight mt-0.5">{fmt(outSum)}</div>
+          <div className="text-[8.5px] text-white/70">{fmt(outCount)} ta</div>
+        </div>
+      </div>
+    </div>
   );
 }
