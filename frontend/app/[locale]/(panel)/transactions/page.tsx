@@ -469,7 +469,7 @@ export default function TransactionsPage() {
       <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
-      <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
+      <div className="flex-1 p-3 sm:p-6 lg:p-8 space-y-5 w-full">
 
         {/* ═══ KPI ROW (toggle: all / CLIENT only) ═══ */}
         <div className="relative">

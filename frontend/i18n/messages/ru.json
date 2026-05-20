@@ -275,7 +275,13 @@
     "accountsShort": "сч",
     "attention": "Внимание",
     "syncErrors": "{n} ошибок sync",
-    "netFlow30": "Чистый поток · 30 дней"
+    "netFlow30": "Чистый поток · 30 дней",
+    "clientPayments": "Платежи клиентов",
+    "allCategory": "Все",
+    "subcategoryNone": "(без подкатегории)",
+    "totalInShort": "ПРИХОД",
+    "totalOutShort": "РАСХОД",
+    "netFlowShort": "ЧИСТЫЙ"
   },
   "transactions": {
     "title": "Транзакции",

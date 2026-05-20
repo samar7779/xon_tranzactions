@@ -4,9 +4,10 @@ import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
-  UserCircle, LogOut, ChevronDown, Bell, AlertCircle, CheckCircle2, ChevronRight,
+  UserCircle, LogOut, ChevronDown, Bell, AlertCircle, CheckCircle2, ChevronRight, Menu,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useUI } from '@/lib/ui';
 import { PERMS } from '@/lib/permissions';
 import { api } from '@/lib/api';
 import {
@@ -29,6 +30,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
+  const toggleMobileNav = useUI((s) => s.toggleMobileNav);
   const initial = (user?.fullName || user?.email || '?').charAt(0).toUpperCase();
 
   const canSeeSync = !!user?.permissions?.includes(PERMS.SYNC_VIEW);
@@ -47,10 +49,18 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
         <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
         <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/15 blur-3xl pointer-events-none animate-float-slow" />
 
-        <div className="relative flex h-20 items-center justify-between px-6 lg:px-8 text-white gap-4">
-          <div className="min-w-0">
-            <h1 className="text-xl lg:text-2xl font-bold tracking-tight truncate">{title}</h1>
-            {subtitle && <p className="text-[13px] text-white/85 truncate mt-0.5">{subtitle}</p>}
+        <div className="relative flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8 text-white gap-3 sm:gap-4">
+          {/* Mobil hamburger tugmasi — faqat lg dan kichik ekranlarda */}
+          <button
+            onClick={toggleMobileNav}
+            className="lg:hidden w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm grid place-items-center text-white transition-colors shrink-0"
+            aria-label="Menyu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight truncate">{title}</h1>
+            {subtitle && <p className="text-[11px] sm:text-[13px] text-white/85 truncate mt-0.5">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {actions}

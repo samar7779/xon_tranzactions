@@ -275,7 +275,13 @@
     "accountsShort": "acc",
     "attention": "Attention",
     "syncErrors": "{n} sync errors",
-    "netFlow30": "Net flow · 30 days"
+    "netFlow30": "Net flow · 30 days",
+    "clientPayments": "Client payments",
+    "allCategory": "All",
+    "subcategoryNone": "(no subcategory)",
+    "totalInShort": "IN",
+    "totalOutShort": "OUT",
+    "netFlowShort": "NET"
   },
   "transactions": {
     "title": "Transactions",

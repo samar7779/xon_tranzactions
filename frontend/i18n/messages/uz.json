@@ -275,7 +275,13 @@
     "accountsShort": "hsb",
     "attention": "Diqqat",
     "syncErrors": "{n} ta sync xatosi",
-    "netFlow30": "Sof pul oqimi · 30 kun"
+    "netFlow30": "Sof pul oqimi · 30 kun",
+    "clientPayments": "Klient to'lovlari",
+    "allCategory": "Hammasi",
+    "subcategoryNone": "(subkategoriyasiz)",
+    "totalInShort": "KIRIM",
+    "totalOutShort": "CHIQIM",
+    "netFlowShort": "SOF"
   },
   "transactions": {
     "title": "Tranzaksiyalar",
