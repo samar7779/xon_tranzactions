@@ -588,39 +588,6 @@ export default function TransactionsPage() {
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 lg:p-5">
             <div className="flex items-center gap-3 flex-wrap">
-              {/* EXPORT — alohida icon dropdown, searchdan oldin */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    title="Export — Excel / CSV / Chop etish"
-                    className={cn(
-                      'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
-                      'bg-gradient-to-br from-emerald-500 to-teal-600 text-white',
-                      'shadow-sm hover:shadow-lg hover:shadow-emerald-500/30',
-                      'transition-all duration-200 hover:scale-105 active:scale-95',
-                      'ring-1 ring-emerald-400/30',
-                    )}
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Export</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
-                    <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
-                    <span className="flex-1">CSV (joriy sahifa)</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
-                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
-                    <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
               {/* Qidiruv — fokuslanganda animatsion gradient halqa + glow */}
               <div className="relative flex-1 min-w-[240px] group/search">
                 {/* Tashqi gradient halqa — fokuslanganda paydo bo'ladi */}
@@ -716,6 +683,33 @@ export default function TransactionsPage() {
                 controlledOpen={idInspectorTrigger > 0}
                 onControlledOpenChange={(o) => { if (!o) setIdInspectorTrigger(0); }}
               />
+
+              {/* EXPORT — paperclip stilida, settingsdan keyin */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Export — Excel / CSV / Chop etish"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200 shrink-0"
+                  >
+                    <Download className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Export</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                    <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
+                    <span className="flex-1">CSV (joriy sahifa)</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
+                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
+                    <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {/* Shartnoma manbasi filtri — qo'lda / ariza (multi-select) */}
               <DropdownMenu>
