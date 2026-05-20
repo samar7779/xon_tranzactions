@@ -577,6 +577,59 @@ export class ReconcileService {
   }
 
   /**
+   * Bir nechta tx'ning sanasini birdaniga tuzatish (bulk).
+   * Foydalanuvchi sverka diagnose'da bir nechta "boshqa sanada bor" item ko'rganda
+   * "Hammasini bir tugma bilan tuzatish" tugmasini bosadi.
+   * Har biri uchun faqat txnDate UPDATE, boshqa fieldlar tegmaydi.
+   */
+  async fixAllTxDate(items: Array<{ txId: string; newDate: string }>): Promise<{
+    ok: true;
+    summary: { total: number; updated: number; skipped: number; errors: number };
+    results: Array<{ txId: string; updated: boolean; oldDate?: string; newDate: string; externalId?: string | null; error?: string }>;
+  }> {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException("Items bo'sh");
+    }
+    let updated = 0, skipped = 0, errors = 0;
+    const results = [];
+    for (const it of items) {
+      try {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(it.newDate)) {
+          results.push({ txId: it.txId, updated: false, newDate: it.newDate, error: 'noto\'g\'ri sana' });
+          errors++;
+          continue;
+        }
+        const tx = await this.prisma.transaction.findUnique({
+          where: { id: it.txId },
+          select: { id: true, txnDate: true, externalId: true },
+        });
+        if (!tx) {
+          results.push({ txId: it.txId, updated: false, newDate: it.newDate, error: 'tx topilmadi' });
+          errors++;
+          continue;
+        }
+        const oldDate = tx.txnDate.toISOString().slice(0, 10);
+        if (oldDate === it.newDate) {
+          results.push({ txId: it.txId, updated: false, oldDate, newDate: it.newDate, externalId: tx.externalId });
+          skipped++;
+          continue;
+        }
+        await this.prisma.transaction.update({
+          where: { id: it.txId },
+          data: { txnDate: new Date(`${it.newDate}T12:00:00Z`) },
+        });
+        results.push({ txId: it.txId, updated: true, oldDate, newDate: it.newDate, externalId: tx.externalId });
+        updated++;
+      } catch (e: any) {
+        results.push({ txId: it.txId, updated: false, newDate: it.newDate, error: e?.message || "xato" });
+        errors++;
+      }
+    }
+    if (updated > 0) this.invalidateTodayCache();
+    return { ok: true, summary: { total: items.length, updated, skipped, errors }, results };
+  }
+
+  /**
    * Diagnose'da topilgan yo'qolgan tranzaksiyani DB ga qo'shadi.
    * Bankdan ushbu kun uchun ma'lumotni qaytadan oladi (eski cache emas, fresh),
    * b2_id yoki general_id orqali kerakli item'ni topib SyncService.upsertOne

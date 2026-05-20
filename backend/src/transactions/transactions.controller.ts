@@ -86,14 +86,15 @@ export class TransactionsController {
   }
 
   @Get('daily')
-  @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob filtri bilan)' })
+  @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob/kategoriya filtri bilan)' })
   daily(
     @Query('from') from?: string,
     @Query('to') to?: string,
     @Query('bankId') bankId?: string,
     @Query('accountId') accountId?: string,
+    @Query('categoryCode') categoryCode?: string,
   ) {
-    return this.svc.daily(from, to, bankId, accountId);
+    return this.svc.daily(from, to, bankId, accountId, categoryCode);
   }
 
   @Post('reconcile')
@@ -137,6 +138,15 @@ export class TransactionsController {
   })
   fixTxDate(@Body() body: { txId: string; newDate: string }) {
     return this.reconcileSvc.fixTxDate(body?.txId, body?.newDate);
+  }
+
+  @Post('reconcile/fix-all-tx-date')
+  @ApiOperation({
+    summary: "Bir nechta tx'ning sanalarini birdaniga tuzatish (bulk)",
+    description: "Faqat txnDate UPDATE, boshqa fieldlar tegmaydi. Har biri uchun natija (updated/skipped/error) qaytadi.",
+  })
+  fixAllTxDate(@Body() body: { items: Array<{ txId: string; newDate: string }> }) {
+    return this.reconcileSvc.fixAllTxDate(body?.items || []);
   }
 
   @Get('export')

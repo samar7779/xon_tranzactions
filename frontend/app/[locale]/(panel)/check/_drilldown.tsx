@@ -438,6 +438,35 @@ function DiagPanel({
   // Faqat haqiqatdan qo'shilishi mumkin bo'lgan item'lar (boshqa sana ostida
   // saqlanmaganlar) — bulk button uchun
   const insertableItems = items.filter((it) => !it.existsOnDate && (it.b2Id || it.generalId));
+  // Boshqa sana ostida saqlangan item'lar — bulk SANA TUZATISH uchun
+  const fixableDateItems = items.filter((it) => it.existsOnDate && it.existingTxId);
+  const [fixDateLoading, setFixDateLoading] = useState(false);
+  const [fixDateResult, setFixDateResult] = useState<any>(null);
+
+  async function handleFixAllDates() {
+    if (!date || fixableDateItems.length === 0) return;
+    if (!confirm(`${fixableDateItems.length} ta tx'ning sanasini ${date} ga tuzatish kerakmi?\n\nFaqat sana o'zgaradi — kategoriya/shartnoma/h.k. tegmaydi.`)) return;
+    setFixDateLoading(true);
+    try {
+      const r = await api.post<any>('/transactions/reconcile/fix-all-tx-date', {
+        items: fixableDateItems.map(it => ({ txId: it.existingTxId!, newDate: date })),
+      });
+      setFixDateResult(r);
+    } catch (e: any) {
+      toast.error(e?.message || "Xato");
+    } finally {
+      setFixDateLoading(false);
+    }
+  }
+
+  function handleCloseFixDateModal() {
+    const hadUpdates = fixDateResult?.summary?.updated > 0;
+    setFixDateResult(null);
+    if (hadUpdates) {
+      onFixed?.();
+      qc.invalidateQueries({ queryKey: ['reconcile-today'] });
+    }
+  }
 
   async function handleFixAll() {
     if (!accountId || !date || insertableItems.length === 0) return;
@@ -470,26 +499,47 @@ function DiagPanel({
 
   return (
     <div className={cn('rounded-lg border', toneCls)}>
-      <div className={cn('px-3 py-2 border-b border-current/10 flex items-center gap-2 text-[12px] font-semibold', headCls)}>
+      <div className={cn('px-3 py-2 border-b border-current/10 flex items-center gap-2 text-[12px] font-semibold flex-wrap', headCls)}>
         {icon}
         <span>{title}</span>
         <span className="tabular-nums">{items.length}</span>
-        {fixable && insertableItems.length > 1 && (
-          <button
-            onClick={handleFixAll}
-            disabled={bulkLoading}
-            className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 rounded-md
-                       bg-indigo-600 text-white text-[11px] font-semibold
-                       hover:bg-indigo-700 disabled:opacity-60 transition"
-          >
-            {bulkLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Download className="h-3 w-3" />
-            )}
-            {bulkLoading ? `Qo'shilmoqda ${insertableItems.length} ta...` : `Hammasini qo'shish · ${insertableItems.length}`}
-          </button>
-        )}
+        <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+          {/* Hammasini sanani tuzatish (existsOnDate item'lar uchun) */}
+          {fixable && fixableDateItems.length > 0 && (
+            <button
+              onClick={handleFixAllDates}
+              disabled={fixDateLoading}
+              title={`${fixableDateItems.length} ta tx'ni ${date} ga tuzatish`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md
+                         bg-emerald-600 text-white text-[11px] font-semibold
+                         hover:bg-emerald-700 disabled:opacity-60 transition"
+            >
+              {fixDateLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3 w-3" />
+              )}
+              {fixDateLoading ? `Tuzatilmoqda ${fixableDateItems.length} ta...` : `Sanani tuzatish · ${fixableDateItems.length}`}
+            </button>
+          )}
+          {/* Hammasini qo'shish (yangi tx'lar uchun) */}
+          {fixable && insertableItems.length > 1 && (
+            <button
+              onClick={handleFixAll}
+              disabled={bulkLoading}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md
+                         bg-indigo-600 text-white text-[11px] font-semibold
+                         hover:bg-indigo-700 disabled:opacity-60 transition"
+            >
+              {bulkLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Download className="h-3 w-3" />
+              )}
+              {bulkLoading ? `Qo'shilmoqda ${insertableItems.length} ta...` : `Hammasini qo'shish · ${insertableItems.length}`}
+            </button>
+          )}
+        </div>
       </div>
       {items.length === 0 ? (
         <div className="p-3 text-[11px] text-slate-500">{empty}</div>
@@ -511,6 +561,11 @@ function DiagPanel({
       {/* Bulk natija modali */}
       {bulkResult && (
         <BulkResultModal result={bulkResult} onClose={handleCloseBulkModal} />
+      )}
+
+      {/* Sana tuzatish natija modali */}
+      {fixDateResult && (
+        <FixDateResultModal result={fixDateResult} onClose={handleCloseFixDateModal} />
       )}
     </div>
   );
@@ -959,5 +1014,113 @@ function BulkResultModal({
 
   // Portal — document.body'ga render — drilldown stacking context'idan chiqib,
   // har doim eng ustda turadi (xira ko'rinish bo'lmaydi)
+  return createPortal(modalContent, document.body);
+}
+
+// ════════════════════════════════════════════════════
+//  FIX-DATE NATIJA MODALI — bulk sana tuzatishdan keyin
+// ════════════════════════════════════════════════════
+function FixDateResultModal({
+  result, onClose,
+}: {
+  result: { summary: { total: number; updated: number; skipped: number; errors: number }; results: Array<{ txId: string; updated: boolean; oldDate?: string; newDate: string; externalId?: string | null; error?: string }> };
+  onClose: () => void;
+}) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  function copyAll() {
+    const ids = result.results.filter(r => r.updated).map(r => r.externalId || r.txId).join('\n');
+    navigator.clipboard.writeText(ids);
+    toast.success(`${result.summary.updated} ta ID nusxalandi`);
+  }
+  function copyOne(id: string) {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 1500);
+  }
+
+  const updated = result.results.filter(r => r.updated);
+  const failed = result.results.filter(r => !r.updated && r.error);
+
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-lg shadow-emerald-500/20">
+            <CheckCircle2 className="h-4 w-4" />
+          </div>
+          <div className="flex-1">
+            <div className="text-[14px] font-bold">Sana tuzatish natijasi</div>
+            <div className="text-[11px] text-slate-500">
+              Jami: <b>{result.summary.total}</b> · ✅ Tuzatildi: <b className="text-emerald-700">{result.summary.updated}</b>
+              {result.summary.skipped > 0 && <> · ⏭ O'zgarmadi: <b>{result.summary.skipped}</b></>}
+              {result.summary.errors > 0 && <> · ❌ Xato: <b className="text-rose-700">{result.summary.errors}</b></>}
+            </div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 hover:bg-slate-200">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {updated.length > 0 && (
+          <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-emerald-50/50">
+            <div className="text-[12px] font-semibold text-emerald-700 flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Tuzatilgan tranzaksiyalar · {updated.length}
+            </div>
+            <button onClick={copyAll}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[10.5px] font-semibold hover:bg-emerald-700">
+              <Copy className="h-3 w-3" /> Hammasini copy
+            </button>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto px-5 py-3 space-y-2">
+          {updated.map((r) => {
+            const id = r.externalId || r.txId;
+            const isCopied = copiedId === id;
+            return (
+              <div key={r.txId} className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50/40 p-2.5">
+                <div className="flex items-center gap-2 text-[11px] mb-1.5">
+                  <span className="font-mono text-emerald-700 font-semibold">{r.oldDate} → {r.newDate}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <code className="flex-1 font-mono text-[10px] bg-white px-2 py-1 rounded ring-1 ring-slate-200 break-all">
+                    {id}
+                  </code>
+                  <button onClick={() => copyOne(id)}
+                    title="ID nusxalash"
+                    className={cn(
+                      "shrink-0 w-7 h-7 rounded-md grid place-items-center transition-all",
+                      isCopied ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+                    )}>
+                    {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {failed.length > 0 && (
+            <>
+              <div className="text-[11px] font-semibold text-rose-700 mt-2 mb-1">❌ Xatoliklar ({failed.length})</div>
+              {failed.map((r, i) => (
+                <div key={i} className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-2 text-[10.5px] text-rose-800">
+                  <div className="font-mono text-rose-600 truncate">{r.txId}</div>
+                  <div>{r.error}</div>
+                </div>
+              ))}
+            </>
+          )}
+          {updated.length === 0 && failed.length === 0 && (
+            <div className="text-center text-[12px] text-slate-400 py-8">Hech narsa o'zgarmadi</div>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end">
+          <Button onClick={onClose}>Yopish</Button>
+        </div>
+      </div>
+    </div>
+  );
   return createPortal(modalContent, document.body);
 }

@@ -683,10 +683,12 @@ export class TransactionsService {
 
   /**
    * Kunma-kun kirim/chiqim — dashboard diagrammasi uchun.
-   * Sana oralig'i berilmasa — oxirgi 30 kun. bankId/accountId bilan filtrlanadi.
+   * Sana oralig'i berilmasa — oxirgi 30 kun. bankId/accountId/categoryCode bilan filtrlanadi.
    * Har bir kun to'ldiriladi (tranzaksiyasiz kunlar ham 0 bilan), grafik uzluksiz bo'lishi uchun.
+   * categoryCode berilsa — har kun bo'yicha subkategoriya bo'linishi (bySub) va umumiy
+   * subkategoriya statistikasi (subcategories) ham qaytariladi.
    */
-  async daily(from?: string, to?: string, bankId?: string, accountId?: string) {
+  async daily(from?: string, to?: string, bankId?: string, accountId?: string, categoryCode?: string) {
     // Tashkent kuni asosida ishlaymiz — backend serveri qaysi TZ'da bo'lishidan qat'i nazar
     const TZ_OFFSET_MS = 5 * 60 * 60 * 1000; // UTC+5
     const tashkentToday = (() => {
@@ -707,38 +709,119 @@ export class TransactionsService {
     if (bankId) where.bankId = bankId;
     if (accountId) where.accountId = accountId;
 
+    // Kategoriya filtri (top-kategoriya bo'yicha) — subkategoriyalar bilan birga
+    let category: { id: string; children: { id: string; code: string; name: string; color: string | null }[] } | null = null;
+    if (categoryCode) {
+      category = await this.prisma.category.findUnique({
+        where: { code: categoryCode },
+        select: {
+          id: true,
+          children: { select: { id: true, code: true, name: true, color: true } },
+        },
+      });
+      if (category) where.categoryId = category.id;
+      else where.categoryId = '__nonexistent__';
+    }
+
     const txns = await this.prisma.transaction.findMany({
       where,
-      select: { txnDate: true, direction: true, amount: true },
+      select: { txnDate: true, direction: true, amount: true, subcategoryId: true },
     });
 
     // Bucket key — Tashkent kun (YYYY-MM-DD), UTC emas
     const toTashkentKey = (d: Date) => new Date(d.getTime() + TZ_OFFSET_MS).toISOString().slice(0, 10);
 
-    const map = new Map<string, { inflow: number; outflow: number; count: number }>();
+    // Subcategory id → code mapping (filter qilingan kategoriya uchun)
+    const subById = new Map<string, { code: string; name: string; color: string | null }>();
+    if (category) {
+      for (const c of category.children) subById.set(c.id, { code: c.code, name: c.name, color: c.color });
+    }
+    const NO_SUB = '__none__';
+
+    type SubAgg = { inflow: number; outflow: number; count: number };
+    type DayAgg = { inflow: number; outflow: number; count: number; bySub: Map<string, SubAgg> };
+
+    const map = new Map<string, DayAgg>();
     for (const t of txns) {
       const key = toTashkentKey(t.txnDate);
-      const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
+      let e = map.get(key);
+      if (!e) { e = { inflow: 0, outflow: 0, count: 0, bySub: new Map() }; map.set(key, e); }
       const amt = Number(t.amount);
       if (t.direction === 'IN') e.inflow += amt;
       else e.outflow += amt;
       e.count += 1;
-      map.set(key, e);
+      if (categoryCode) {
+        const subCode = t.subcategoryId
+          ? (subById.get(t.subcategoryId)?.code ?? NO_SUB)
+          : NO_SUB;
+        let s = e.bySub.get(subCode);
+        if (!s) { s = { inflow: 0, outflow: 0, count: 0 }; e.bySub.set(subCode, s); }
+        if (t.direction === 'IN') s.inflow += amt;
+        else s.outflow += amt;
+        s.count += 1;
+      }
     }
 
-    const days: { date: string; inflow: number; outflow: number; net: number; count: number }[] = [];
+    const days: any[] = [];
     let cursor = new Date(`${startStr}T00:00:00+05:00`);
     const limit = new Date(`${endStr}T00:00:00+05:00`);
     while (cursor <= limit) {
       const key = toTashkentKey(cursor);
-      const e = map.get(key) || { inflow: 0, outflow: 0, count: 0 };
-      days.push({ date: key, inflow: e.inflow, outflow: e.outflow, net: e.inflow - e.outflow, count: e.count });
+      const e = map.get(key);
+      const inflow = e?.inflow || 0;
+      const outflow = e?.outflow || 0;
+      const count = e?.count || 0;
+      const day: any = { date: key, inflow, outflow, net: inflow - outflow, count };
+      if (categoryCode) {
+        const bySub: Record<string, SubAgg> = {};
+        if (e) for (const [k, v] of e.bySub) bySub[k] = v;
+        day.bySub = bySub;
+      }
+      days.push(day);
       cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000);
     }
 
     const totalIn = days.reduce((s, d) => s + d.inflow, 0);
     const totalOut = days.reduce((s, d) => s + d.outflow, 0);
-    return { ok: true, from: startStr, to: endStr, totalIn, totalOut, net: totalIn - totalOut, days };
+
+    const result: any = {
+      ok: true,
+      from: startStr,
+      to: endStr,
+      totalIn,
+      totalOut,
+      net: totalIn - totalOut,
+      days,
+    };
+
+    if (categoryCode && category) {
+      const cat = category;
+      const subTotals = new Map<string, { code: string; name: string; color: string | null; totalIn: number; totalOut: number; count: number }>();
+      for (const day of days) {
+        for (const [code, v] of Object.entries(day.bySub || {}) as [string, SubAgg][]) {
+          let entry = subTotals.get(code);
+          if (!entry) {
+            const child = cat.children.find((c) => c.code === code);
+            entry = {
+              code,
+              name: child?.name || (code === NO_SUB ? '— (subkategoriyasiz)' : code),
+              color: child?.color || null,
+              totalIn: 0,
+              totalOut: 0,
+              count: 0,
+            };
+            subTotals.set(code, entry);
+          }
+          entry.totalIn += v.inflow;
+          entry.totalOut += v.outflow;
+          entry.count += v.count;
+        }
+      }
+      result.subcategories = Array.from(subTotals.values())
+        .sort((a, b) => (b.totalIn + b.totalOut) - (a.totalIn + a.totalOut));
+    }
+
+    return result;
   }
 
   /**
