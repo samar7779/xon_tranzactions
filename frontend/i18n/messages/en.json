@@ -220,10 +220,22 @@
     "loginSubtitle": "Enter admin email and password",
     "email": "Email",
     "password": "Password",
+    "emailLabel": "EMAIL",
+    "passwordLabel": "PASSWORD",
     "submit": "Sign in",
     "submitting": "Checking...",
+    "processing": "PROCESSING",
     "invalidCredentials": "Invalid email or password",
-    "welcome": "Welcome"
+    "welcome": "Welcome",
+    "identityVerify": "Identity verify",
+    "capsLockOn": "Caps Lock is ON",
+    "encrypted": "Encrypted",
+    "authRequired": "AUTHENTICATION REQUIRED",
+    "pressEscToClose": "to close",
+    "showPassword": "Show",
+    "hidePassword": "Hide",
+    "systemOnline": "SYS · ONLINE",
+    "tashkent": "TASHKENT"
   },
   "dashboard": {
     "title": "Dashboard",
