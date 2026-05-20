@@ -111,9 +111,11 @@ export class TransactionsController {
   }
 
   @Post('reconcile')
-  @ApiOperation({ summary: "Hisob sverkasi — bank qoldig'i va oborotini DB bilan solishtiradi" })
-  reconcile(@Body() body: { accountId: string; dateFrom: string; dateTo: string }) {
-    return this.reconcileSvc.reconcile(body?.accountId, body?.dateFrom, body?.dateTo);
+  @ApiOperation({ summary: "Hisob sverkasi — bank qoldig'i va oborotini DB bilan solishtiradi (withSync=true bo'lsa avval sync qilinadi)" })
+  reconcile(@Body() body: { accountId: string; dateFrom: string; dateTo: string; withSync?: boolean }) {
+    return this.reconcileSvc.reconcile(body?.accountId, body?.dateFrom, body?.dateTo, {
+      withSync: !!body?.withSync,
+    });
   }
 
   @Get('reconcile/today')

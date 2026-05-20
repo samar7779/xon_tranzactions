@@ -83,7 +83,8 @@ export default function CheckPage() {
       const today = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const data = await api.post<TodayItem>('/transactions/reconcile', {
         accountId, dateFrom: today, dateTo: today,
-      });
+        withSync: true,  // Avval sync qilamiz — DB eski bo'lsa farq xato chiqmaydi
+      }, { timeout: 60_000 });  // sync uzun bo'lishi mumkin
       setSingleResults((r) => ({ ...r, [accountId]: data }));
     } catch (e: any) {
       setSingleResults((r) => ({
@@ -434,26 +435,11 @@ function AccountRow({
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const totalDiff = Math.abs((item.diff?.credit || 0)) + Math.abs((item.diff?.debit || 0));
 
-  // Bank rangini va ikonkasini status'ga qarab tanlash
-  const bankAccent = {
-    ok:       'from-emerald-500 to-teal-600',
-    mismatch: 'from-amber-500 to-orange-600',
-    error:    'from-rose-500 to-pink-600',
-  }[item.status] || 'from-slate-400 to-slate-600';
-
   const borderAccent = {
     ok:       'border-l-4 border-l-emerald-400/0 group-hover:border-l-emerald-400',
     mismatch: 'border-l-4 border-l-amber-400',
     error:    'border-l-4 border-l-rose-400',
   }[item.status] || '';
-
-  // Owner ismidan birinchi 2 ta harf — avatar uchun
-  const ownerInitials = (item.ownerName || '?')
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase() || '')
-    .join('') || '?';
 
   return (
     <div
@@ -475,27 +461,14 @@ function AccountRow({
           <div className="h-full bg-gradient-to-r from-violet-500 via-fuchsia-500 to-violet-500 animate-pulse" />
         </div>
       )}
-      {/* Bank logo — haqiqiy logo (Kapital/Ipak rasmi yoki abbreviation gradient) */}
-      <div className="relative shrink-0 transition-transform group-hover:scale-105">
+      {/* Bank logo — toza ko'rinish, qo'shimcha doiralar yo'q */}
+      <div className="shrink-0 transition-transform group-hover:scale-105">
         <BankLogo
           code={item.bankCode || ''}
           name={item.bankName || ''}
           size={40}
           rounded="rounded-xl"
         />
-        {/* Pulse animation for mismatch/error — kichkina dot, logo ustida emas, yuqori chap chetda */}
-        {(item.status === 'mismatch' || item.status === 'error') && (
-          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center">
-            <span className={cn(
-              'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
-              item.status === 'mismatch' ? 'bg-amber-400' : 'bg-rose-400',
-            )} />
-            <span className={cn(
-              'relative inline-flex rounded-full h-3 w-3 ring-2 ring-white',
-              item.status === 'mismatch' ? 'bg-amber-500' : 'bg-rose-500',
-            )} />
-          </span>
-        )}
       </div>
 
       <div className="min-w-0 flex-1">
@@ -508,15 +481,8 @@ function AccountRow({
             {item.accountNo}
           </code>
         </div>
-        <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5">
-          {/* Owner avatar */}
-          <span className={cn(
-            'inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold text-white bg-gradient-to-br shrink-0',
-            bankAccent,
-          )}>
-            {ownerInitials}
-          </span>
-          <span className="truncate">{item.ownerName || "— egasi ko'rsatilmagan"}</span>
+        <div className="text-[11px] text-slate-500 truncate">
+          {item.ownerName || "— egasi ko'rsatilmagan"}
         </div>
         {item.status === 'mismatch' && item.diff && (
           <div className="mt-1.5 flex items-center gap-3 text-[11px]">
