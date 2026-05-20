@@ -609,18 +609,34 @@ function DiagItem({
       {/* Agar tx boshqa sana ostida saqlangan bo'lsa — duplikat bo'lmaslik uchun
           qo'shish tugmasini chiqarmaymiz, faqat ogohlantirish */}
       {it.existsOnDate && (
-        <div className="mt-2 rounded-md bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 text-[10px] text-amber-900 flex items-start gap-1.5">
-          <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
-          <div>
-            <div className="font-semibold">
-              AllTranzactions'da boshqa sana ostida saqlangan
-            </div>
-            <div className="text-amber-700 mt-0.5">
-              Sana: <span className="font-mono">{it.existsOnDate}</span> ·
-              Qo'shsangiz dublikat bo'lmaydi. Buni sync sana noto'g'ri saqlagan —
-              shu sababli farq qolyapti.
+        <div className="mt-2 rounded-md bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 text-[10px] text-amber-900">
+          <div className="flex items-start gap-1.5">
+            <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold">
+                AllTranzactions'da boshqa sana ostida saqlangan
+              </div>
+              <div className="text-amber-700 mt-0.5">
+                Sana: <span className="font-mono">{it.existsOnDate}</span> · joriy: <span className="font-mono">{date}</span>
+              </div>
             </div>
           </div>
+          {it.existingTxId && (
+            <button
+              onClick={async () => {
+                if (!confirm(`Sanani tuzatishni tasdiqlaysizmi?\n\n${it.existsOnDate} → ${date}\n\nFaqat sana o'zgaradi, boshqa malumotlar (kategoriya, shartnoma) tegmaydi.`)) return;
+                try {
+                  await api.post('/transactions/reconcile/fix-tx-date', { txId: it.existingTxId, newDate: date });
+                  toast.success(`Sana tuzatildi: ${it.existsOnDate} → ${date}`);
+                  onFixed?.();
+                } catch (e: any) { toast.error(e?.message || 'Xato'); }
+              }}
+              className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[10.5px] font-semibold hover:bg-emerald-700 transition"
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              Sanani {date} ga tuzatish
+            </button>
+          )}
         </div>
       )}
       {fixable && !fixed && !it.existsOnDate && (

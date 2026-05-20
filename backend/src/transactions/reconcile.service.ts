@@ -542,6 +542,41 @@ export class ReconcileService {
   }
 
   /**
+   * Tx sana'sini tuzatish — sverka diagnose'da "boshqa sanada bor" deb topilgan
+   * tx'larga foydalanuvchi tasdiqlab sana tuzatadi. Faqat txnDate yangilanadi,
+   * boshqa fieldlar (categoryId, contractNumber, manualCounterpartyId, ...) tegmaydi.
+   *
+   * Xavfsiz: bitta tx uchun, foydalanuvchi tasdiqi bilan, faqat sana update.
+   */
+  async fixTxDate(txId: string, newDate: string): Promise<{ ok: true; updated: boolean; oldDate: string; newDate: string }> {
+    if (!txId) throw new BadRequestException('txId kerak');
+    if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      throw new BadRequestException('newDate YYYY-MM-DD formatda bo\'lishi kerak');
+    }
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { id: true, txnDate: true, externalId: true },
+    });
+    if (!tx) throw new NotFoundException('Tx topilmadi');
+
+    const oldDate = tx.txnDate.toISOString().slice(0, 10);
+    if (oldDate === newDate) {
+      return { ok: true, updated: false, oldDate, newDate };
+    }
+
+    // UTC noon — Postgres @db.Date'ga to'g'ri date saqlash uchun (TZ shift bo'lmasin)
+    const newDateObj = new Date(`${newDate}T12:00:00Z`);
+
+    await this.prisma.transaction.update({
+      where: { id: txId },
+      data: { txnDate: newDateObj },
+    });
+    this.invalidateTodayCache();
+    this.log.log(`fixTxDate: tx=${txId} ${oldDate} → ${newDate} (externalId=${tx.externalId?.slice(0, 50)})`);
+    return { ok: true, updated: true, oldDate, newDate };
+  }
+
+  /**
    * Diagnose'da topilgan yo'qolgan tranzaksiyani DB ga qo'shadi.
    * Bankdan ushbu kun uchun ma'lumotni qaytadan oladi (eski cache emas, fresh),
    * b2_id yoki general_id orqali kerakli item'ni topib SyncService.upsertOne
