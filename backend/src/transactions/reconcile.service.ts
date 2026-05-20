@@ -663,6 +663,7 @@ export class ReconcileService {
       b2Id?: string | null; generalId?: string | null;
       ok: boolean; inserted: boolean;
       transactionId: string | null; externalId: string | null;
+      existingDate?: string;
       error?: string;
     }> = [];
 
