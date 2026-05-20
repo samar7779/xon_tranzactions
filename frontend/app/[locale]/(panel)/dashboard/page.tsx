@@ -130,6 +130,88 @@ export default function DashboardPage() {
     }));
   }, [daily]);
 
+  // ─── KLIENT TO'LOVLARI (CLIENT kategoriya) — mustaqil grafik ───
+  const [cliRange, setCliRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
+  const [cliCustomFrom, setCliCustomFrom] = useState('');
+  const [cliCustomTo, setCliCustomTo] = useState('');
+  const [cliBankId, setCliBankId] = useState('all');
+  const [cliAccountId, setCliAccountId] = useState('all');
+  const [cliAccSearch, setCliAccSearch] = useState('');
+  const [cliSubCode, setCliSubCode] = useState<string>('__all__');
+
+  const { from: cliFrom, to: cliTo } = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    if (cliRange === 'custom') return { from: cliCustomFrom, to: cliCustomTo };
+    if (cliRange === 'today') return { from: fmt(today), to: fmt(today) };
+    const back = cliRange === '7d' ? 6 : 29;
+    const f = new Date(today);
+    f.setDate(f.getDate() - back);
+    return { from: fmt(f), to: fmt(today) };
+  }, [cliRange, cliCustomFrom, cliCustomTo]);
+
+  const cliParams = new URLSearchParams();
+  if (cliFrom) cliParams.set('from', cliFrom);
+  if (cliTo) cliParams.set('to', cliTo);
+  if (cliBankId !== 'all') cliParams.set('bankId', cliBankId);
+  if (cliAccountId !== 'all') cliParams.set('accountId', cliAccountId);
+  cliParams.set('categoryCode', 'CLIENT');
+
+  const { data: clientDaily, isLoading: clientLoading } = useQuery({
+    queryKey: ['daily-client', cliFrom, cliTo, cliBankId, cliAccountId],
+    queryFn: () => api.get<any>(`/transactions/daily?${cliParams}`),
+    enabled: cliRange !== 'custom' || (!!cliCustomFrom && !!cliCustomTo),
+  });
+
+  // Tanlangan bankka tegishli hisoblar (klient filtri uchun)
+  const cliChartAccounts = useMemo(() => {
+    const all = accounts?.items || [];
+    const byBank = cliBankId === 'all' ? all : all.filter((a: any) => a.bankId === cliBankId);
+    const q = cliAccSearch.trim().toLowerCase();
+    if (!q) return byBank;
+    return byBank.filter((a: any) =>
+      a.accountNo?.toLowerCase().includes(q) ||
+      a.ownerName?.toLowerCase().includes(q),
+    );
+  }, [accounts, cliBankId, cliAccSearch]);
+
+  // Tanlangan subkategoriya bo'yicha (yoki hammasi) — kunma-kun chart data
+  const clientChartData = useMemo(() => {
+    const days = clientDaily?.days || [];
+    if (cliSubCode === '__all__') {
+      return days.map((d: any) => ({
+        label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
+        inflow: Number(d.inflow || 0),
+        outflow: Number(d.outflow || 0),
+        weekend: isWeekend(d.date),
+      }));
+    }
+    return days.map((d: any) => {
+      const sub = (d.bySub || {})[cliSubCode] || { inflow: 0, outflow: 0 };
+      return {
+        label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
+        inflow: Number(sub.inflow || 0),
+        outflow: Number(sub.outflow || 0),
+        weekend: isWeekend(d.date),
+      };
+    });
+  }, [clientDaily, cliSubCode]);
+
+  // Tanlangan sub bo'yicha jami (yoki hammasi)
+  const clientTotals = useMemo(() => {
+    if (cliSubCode === '__all__') {
+      return {
+        totalIn: Number(clientDaily?.totalIn || 0),
+        totalOut: Number(clientDaily?.totalOut || 0),
+        net: Number(clientDaily?.net || 0),
+      };
+    }
+    const sub = (clientDaily?.subcategories || []).find((s: any) => s.code === cliSubCode);
+    const ti = Number(sub?.totalIn || 0);
+    const to = Number(sub?.totalOut || 0);
+    return { totalIn: ti, totalOut: to, net: ti - to };
+  }, [clientDaily, cliSubCode]);
+
   // KPI computations
   const totalBalance = (accounts?.items || []).reduce((s, a) => s + Number(a.balance || 0), 0);
   const totalAccounts = accounts?.items?.length || 0;
@@ -338,6 +420,185 @@ export default function DashboardPage() {
                   <DailyBarChart data={barData} height={280} />
                 </div>
               </details>
+            )}
+          </div>
+        </div>
+
+        {/* ═══ KLIENT TO'LOVLARI — Клиент / Физ.Л / Юр.Л kategoriya bo'yicha ═══ */}
+        <div className="bg-white border border-slate-200 rounded overflow-hidden">
+          {/* Header + boshqaruv */}
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/60 to-white">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-6 h-6 rounded bg-indigo-600 grid place-items-center text-white">
+                <TrendingUp className="h-3.5 w-3.5" />
+              </div>
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Klient to'lovlari</div>
+              <div className="text-[10px] text-slate-500 truncate">· Клиент / Физ.Л / Юр.Л · {cliFrom || '—'} → {cliTo || '—'}</div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {/* Bank filtri */}
+              <Select
+                value={cliBankId}
+                onValueChange={(v) => { setCliBankId(v); setCliAccountId('all'); }}
+              >
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white border-slate-200">
+                  <SelectValue placeholder={t('allBanks')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t('allBanks')}</SelectItem>
+                  {sortedChartBanks.filter((b: any) => b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      <span className="flex items-center gap-1.5">
+                        <span className="relative flex h-1.5 w-1.5">
+                          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
+                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+                        </span>
+                        {b.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                  {sortedChartBanks.filter((b: any) => !b.isActive).length > 0 && (
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                      {t('inactiveBanks')}
+                    </div>
+                  )}
+                  {sortedChartBanks.filter((b: any) => !b.isActive).map((b: any) => (
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Hisob filtri */}
+              <Select value={cliAccountId} onValueChange={setCliAccountId}>
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
+                  <SelectValue placeholder={t('allAccounts')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                    <Input
+                      value={cliAccSearch}
+                      onChange={(e) => setCliAccSearch(e.target.value)}
+                      onKeyDown={(e) => e.stopPropagation()}
+                      placeholder={t('accountSearch')}
+                      className="h-8 text-[11px]"
+                    />
+                  </div>
+                  <SelectItem value="all">{t('allAccounts')}</SelectItem>
+                  {cliChartAccounts.length === 0 ? (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">{t('notFound')}</div>
+                  ) : (
+                    cliChartAccounts.slice(0, 100).map((a: any) => (
+                      <SelectItem key={a.id} value={a.id}>
+                        {a.accountNo} {a.ownerName ? `· ${a.ownerName}` : ''}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+
+              {/* Sana oralig'i */}
+              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+                <RangeBtn active={cliRange === 'today'} onClick={() => setCliRange('today')}>{t('rangeToday')}</RangeBtn>
+                <RangeBtn active={cliRange === '7d'} onClick={() => setCliRange('7d')}>{t('range7d')}</RangeBtn>
+                <RangeBtn active={cliRange === '30d'} onClick={() => setCliRange('30d')}>{t('range30d')}</RangeBtn>
+                <RangeBtn active={cliRange === 'custom'} onClick={() => setCliRange('custom')}>{t('rangeCustom')}</RangeBtn>
+              </div>
+
+              {cliRange === 'custom' && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={cliCustomFrom}
+                    onChange={(e) => setCliCustomFrom(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-indigo-400"
+                  />
+                  <span className="text-slate-400 text-[11px]">→</span>
+                  <input
+                    type="date"
+                    value={cliCustomTo}
+                    onChange={(e) => setCliCustomTo(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-indigo-400"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Subkategoriya tablari */}
+          <div className="px-4 pt-3 pb-2 flex items-center gap-1.5 flex-wrap border-b border-slate-100">
+            <button
+              onClick={() => setCliSubCode('__all__')}
+              className={cn(
+                'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
+                cliSubCode === '__all__'
+                  ? 'bg-indigo-600 text-white ring-indigo-600'
+                  : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+              )}
+            >
+              Hammasi
+              <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
+                {formatShort(Number(clientDaily?.totalIn || 0))}
+              </span>
+            </button>
+            {(clientDaily?.subcategories || []).map((s: any) => {
+              const active = cliSubCode === s.code;
+              const color = s.color || '#6366f1';
+              return (
+                <button
+                  key={s.code}
+                  onClick={() => setCliSubCode(s.code)}
+                  className={cn(
+                    'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
+                    active ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+                  )}
+                  style={active ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
+                  title={`KIRIM: ${formatMoney(s.totalIn)} · CHIQIM: ${formatMoney(s.totalOut)} · ${s.count} ta`}
+                >
+                  {s.name}
+                  <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
+                    {formatShort(Number(s.totalIn || 0))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Body: jami + grafik */}
+          <div className="p-4">
+            <div className="flex items-center gap-5 mb-3 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">KIRIM</span>
+                <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                  {formatMoney(clientTotals.totalIn).replace(' UZS', '')}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CHIQIM</span>
+                <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                  {formatMoney(clientTotals.totalOut).replace(' UZS', '')}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">SOF</span>
+                <span className={cn(
+                  "text-[13px] font-bold tabular-nums",
+                  clientTotals.net >= 0 ? "text-emerald-700" : "text-rose-700",
+                )}>
+                  {clientTotals.net >= 0 ? '+' : ''}{formatMoney(clientTotals.net).replace(' UZS', '')}
+                </span>
+              </div>
+            </div>
+
+            {cliRange === 'custom' && (!cliCustomFrom || !cliCustomTo) ? (
+              <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                {t('selectDateRange')}
+              </div>
+            ) : clientLoading ? (
+              <Skeleton className="h-[260px] w-full" />
+            ) : (
+              <DualAreaChart data={clientChartData} height={260} />
             )}
           </div>
         </div>
@@ -629,6 +890,14 @@ function DataPanel({
       )}
     </div>
   );
+}
+
+function formatShort(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (abs >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (abs >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+  return n.toFixed(0);
 }
 
 function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
