@@ -432,38 +432,99 @@ function AccountRow({
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const totalDiff = Math.abs((item.diff?.credit || 0)) + Math.abs((item.diff?.debit || 0));
 
+  // Bank rangini va ikonkasini status'ga qarab tanlash
+  const bankAccent = {
+    ok:       'from-emerald-500 to-teal-600',
+    mismatch: 'from-amber-500 to-orange-600',
+    error:    'from-rose-500 to-pink-600',
+  }[item.status] || 'from-slate-400 to-slate-600';
+
+  const borderAccent = {
+    ok:       'border-l-4 border-l-emerald-400/0 group-hover:border-l-emerald-400',
+    mismatch: 'border-l-4 border-l-amber-400',
+    error:    'border-l-4 border-l-rose-400',
+  }[item.status] || '';
+
+  // Owner ismidan birinchi 2 ta harf — avatar uchun
+  const ownerInitials = (item.ownerName || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() || '')
+    .join('') || '?';
+
   return (
     <div
       className={cn(
-        'group flex items-center gap-3 px-4 py-3.5 transition-colors cursor-pointer',
-        item.status === 'mismatch' && 'bg-amber-50/40 hover:bg-amber-50/70',
-        item.status === 'error' && 'bg-rose-50/40 hover:bg-rose-50/70',
-        item.status === 'ok' && 'hover:bg-slate-50/60',
+        'group relative flex items-center gap-3 px-4 py-3.5 cursor-pointer transition-all duration-200',
+        'hover:bg-gradient-to-r hover:shadow-sm',
+        item.status === 'mismatch' && 'bg-amber-50/30 hover:from-amber-50 hover:to-orange-50/40',
+        item.status === 'error' && 'bg-rose-50/30 hover:from-rose-50 hover:to-pink-50/40',
+        item.status === 'ok' && 'hover:from-slate-50 hover:to-emerald-50/30',
+        borderAccent,
       )}
       onClick={onClick}
     >
-      <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-semibold text-slate-900 truncate">
-          {item.bankName || '—'} · <span className="font-mono text-slate-700">{item.accountNo}</span>
+      {/* Bank logo / accent dot */}
+      <div className="relative shrink-0">
+        <div className={cn(
+          'w-10 h-10 rounded-xl bg-gradient-to-br grid place-items-center text-white shadow-md transition-transform group-hover:scale-105',
+          bankAccent,
+        )}>
+          <Building2 className="h-4 w-4" strokeWidth={2.2} />
         </div>
-        <div className="text-[11px] text-slate-500 truncate mt-0.5">
-          {item.ownerName || '— egasi ko\'rsatilmagan'}
+        {/* Pulse animation for mismatch/error */}
+        {(item.status === 'mismatch' || item.status === 'error') && (
+          <span className={cn(
+            'absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white',
+            item.status === 'mismatch' ? 'bg-amber-500' : 'bg-rose-500',
+          )}>
+            <span className={cn(
+              'absolute inset-0 rounded-full animate-ping',
+              item.status === 'mismatch' ? 'bg-amber-400' : 'bg-rose-400',
+            )} />
+          </span>
+        )}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-[13px] font-bold text-slate-900 truncate">
+            {item.bankName || '—'}
+          </span>
+          <span className="text-slate-300 text-[11px]">·</span>
+          <code className="text-[11px] font-mono text-slate-600 bg-slate-100/60 px-1.5 py-0.5 rounded">
+            {item.accountNo}
+          </code>
+        </div>
+        <div className="text-[11px] text-slate-500 truncate flex items-center gap-1.5">
+          {/* Owner avatar */}
+          <span className={cn(
+            'inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold text-white bg-gradient-to-br shrink-0',
+            bankAccent,
+          )}>
+            {ownerInitials}
+          </span>
+          <span className="truncate">{item.ownerName || "— egasi ko'rsatilmagan"}</span>
         </div>
         {item.status === 'mismatch' && item.diff && (
           <div className="mt-1.5 flex items-center gap-3 text-[11px]">
-            <span className="text-emerald-700">
-              Kirim farq: <span className="font-bold tabular-nums">{m(item.diff.credit)}</span>
+            <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200">
+              <TrendingUp className="h-2.5 w-2.5" />
+              Kirim: <span className="font-bold tabular-nums">{m(item.diff.credit)}</span>
             </span>
-            <span className="text-rose-700">
-              Chiqim farq: <span className="font-bold tabular-nums">{m(item.diff.debit)}</span>
+            <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded ring-1 ring-rose-200">
+              <TrendingUp className="h-2.5 w-2.5 rotate-180" />
+              Chiqim: <span className="font-bold tabular-nums">{m(item.diff.debit)}</span>
             </span>
             {item.partial && (
-              <span className="text-amber-600">⚠ {item.failedDays} kun ma'lumotsiz</span>
+              <span className="text-amber-600 text-[10px]">⚠ {item.failedDays} kun ma'lumotsiz</span>
             )}
           </div>
         )}
         {item.status === 'error' && (
-          <div className="mt-1 text-[11px] text-rose-700 truncate">
+          <div className="mt-1 text-[11px] text-rose-700 truncate flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3 shrink-0" />
             {item.error}
           </div>
         )}
@@ -471,22 +532,24 @@ function AccountRow({
 
       <StatusBadge item={item} totalDiff={totalDiff} />
 
-      <Button
-        size="sm"
-        variant="outline"
-        className="h-9 rounded-lg shrink-0"
+      <button
         disabled={loading}
         onClick={(e) => { e.stopPropagation(); onRefresh(); }}
         title="Manual yangilash"
+        className={cn(
+          'inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0 transition-all',
+          'bg-white ring-1 ring-slate-200 hover:ring-violet-300 hover:bg-violet-50 hover:scale-105',
+          'disabled:opacity-50 disabled:scale-100',
+        )}
       >
         {loading ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600" />
         ) : (
-          <RefreshCw className="h-3.5 w-3.5" />
+          <RefreshCw className="h-3.5 w-3.5 text-slate-500 group-hover:text-violet-600" />
         )}
-      </Button>
+      </button>
 
-      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 shrink-0" />
+      <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-violet-500 group-hover:translate-x-1 shrink-0 transition-all" />
     </div>
   );
 }
@@ -494,21 +557,21 @@ function AccountRow({
 function StatusBadge({ item, totalDiff }: { item: TodayItem; totalDiff: number }) {
   if (item.status === 'error') {
     return (
-      <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 ring-1 ring-rose-200 px-2.5 py-1.5 rounded-full shrink-0">
+      <span className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-gradient-to-r from-rose-50 to-pink-50 ring-1 ring-rose-300 px-3 py-1.5 rounded-full shrink-0 shadow-sm shadow-rose-200">
         <X className="h-3 w-3" /> Xato
       </span>
     );
   }
   if (item.status === 'mismatch') {
     return (
-      <span className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 rounded-full shrink-0 tabular-nums">
+      <span className="flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-gradient-to-r from-amber-50 to-orange-50 ring-1 ring-amber-300 px-3 py-1.5 rounded-full shrink-0 tabular-nums shadow-sm shadow-amber-200">
         <AlertTriangle className="h-3 w-3" />
         Farq {formatMoney(totalDiff).replace(' UZS', '')}
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-2.5 py-1.5 rounded-full shrink-0">
+    <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-gradient-to-r from-emerald-50 to-teal-50 ring-1 ring-emerald-300 px-3 py-1.5 rounded-full shrink-0 shadow-sm shadow-emerald-200">
       <CheckCircle2 className="h-3 w-3" /> Mos
     </span>
   );
@@ -528,27 +591,38 @@ function SverkaKpi({
   extra?: string;
 }) {
   const m = {
-    violet:  { bg: 'from-violet-500/10 to-purple-500/5',   ring: 'ring-violet-200',  text: 'text-violet-700',  accent: 'from-violet-500 to-purple-600' },
-    emerald: { bg: 'from-emerald-500/10 to-teal-500/5',    ring: 'ring-emerald-200', text: 'text-emerald-700', accent: 'from-emerald-500 to-teal-600' },
-    amber:   { bg: 'from-amber-500/10 to-orange-500/5',    ring: 'ring-amber-200',   text: 'text-amber-700',   accent: 'from-amber-500 to-orange-600' },
-    rose:    { bg: 'from-rose-500/10 to-pink-500/5',       ring: 'ring-rose-200',    text: 'text-rose-700',    accent: 'from-rose-500 to-pink-600' },
-    slate:   { bg: 'from-slate-300/10 to-slate-400/5',     ring: 'ring-slate-200',   text: 'text-slate-700',   accent: 'from-slate-400 to-slate-500' },
+    violet:  { bg: 'from-violet-500/15 to-purple-500/10',   ring: 'ring-violet-300/60',  text: 'text-violet-700',  accent: 'from-violet-500 to-purple-600', glow: 'shadow-violet-500/20' },
+    emerald: { bg: 'from-emerald-500/15 to-teal-500/10',    ring: 'ring-emerald-300/60', text: 'text-emerald-700', accent: 'from-emerald-500 to-teal-600', glow: 'shadow-emerald-500/20' },
+    amber:   { bg: 'from-amber-500/15 to-orange-500/10',    ring: 'ring-amber-300/60',   text: 'text-amber-700',   accent: 'from-amber-500 to-orange-600', glow: 'shadow-amber-500/20' },
+    rose:    { bg: 'from-rose-500/15 to-pink-500/10',       ring: 'ring-rose-300/60',    text: 'text-rose-700',    accent: 'from-rose-500 to-pink-600', glow: 'shadow-rose-500/20' },
+    slate:   { bg: 'from-slate-200/40 to-slate-300/20',     ring: 'ring-slate-200',      text: 'text-slate-500',   accent: 'from-slate-400 to-slate-500', glow: 'shadow-slate-300/20' },
   }[color];
+  const isZero = value === 0;
   return (
-    <div className={cn('relative overflow-hidden rounded-2xl ring-1 bg-gradient-to-br p-4 shadow-sm', m.bg, m.ring)}>
-      <div className="flex items-start justify-between mb-2">
+    <div className={cn(
+      'group relative overflow-hidden rounded-2xl ring-1 bg-gradient-to-br p-3.5 shadow-md transition-all hover:scale-[1.02] hover:shadow-lg',
+      m.bg, m.ring, m.glow,
+      isZero && color !== 'emerald' && 'opacity-70',
+    )}>
+      {/* Dekorativ glow effekt — fon dairasi */}
+      <div className={cn(
+        'absolute -right-6 -top-6 w-24 h-24 rounded-full opacity-20 blur-2xl bg-gradient-to-br transition-opacity group-hover:opacity-40',
+        m.accent,
+      )} />
+
+      <div className="relative flex items-start justify-between mb-2">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-500">{label}</div>
-          {extra && <div className={cn('text-[10px] font-semibold mt-0.5', m.text)}>{extra}</div>}
+          <div className="text-[9.5px] uppercase tracking-[0.15em] font-bold text-slate-600">{label}</div>
+          {extra && <div className={cn('text-[10.5px] font-bold mt-0.5', m.text)}>{extra}</div>}
         </div>
-        <div className={cn('w-8 h-8 rounded-xl grid place-items-center text-white shadow-md bg-gradient-to-br', m.accent)}>
+        <div className={cn('w-9 h-9 rounded-xl grid place-items-center text-white shadow-lg bg-gradient-to-br', m.accent, m.glow)}>
           {icon}
         </div>
       </div>
       {loading ? (
-        <div className="h-8 w-16 rounded-md bg-slate-200/60 animate-pulse" />
+        <div className="relative h-9 w-20 rounded-md bg-slate-200/60 animate-pulse" />
       ) : (
-        <div className={cn('text-3xl font-bold tracking-tight tabular-nums leading-none', m.text)}>
+        <div className={cn('relative text-3xl font-bold tracking-tight tabular-nums leading-none', m.text)}>
           {value.toLocaleString('ru-RU')}
         </div>
       )}
