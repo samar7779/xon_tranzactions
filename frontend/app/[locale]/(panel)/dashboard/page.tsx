@@ -269,7 +269,7 @@ export default function DashboardPage() {
         })}
       />
 
-      <div className="flex-1 px-6 py-5 space-y-4 w-full">
+      <div className="flex-1 px-3 sm:px-6 py-4 sm:py-5 space-y-4 w-full">
 
         {/* ═══ KPI STRIP — Enterprise dense ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -495,7 +495,7 @@ export default function DashboardPage() {
               <div className="w-6 h-6 rounded bg-indigo-600 grid place-items-center text-white">
                 <TrendingUp className="h-3.5 w-3.5" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Klient to'lovlari</div>
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('clientPayments')}</div>
               <div className="text-[10px] text-slate-500 truncate">· Клиент / Физ.Л / Юр.Л · {cliFrom || '—'} → {cliTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
@@ -607,7 +607,7 @@ export default function DashboardPage() {
                       : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
                   )}
                 >
-                  Hammasi
+                  {t('allCategory')}
                   <span className="ml-1.5 text-[10px] opacity-80 tabular-nums">
                     {formatShort(Number(clientDaily?.totalIn || 0))}
                   </span>
@@ -640,20 +640,20 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-5 mb-3 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">KIRIM</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalInShort')}</span>
                     <span className="text-[13px] font-bold tabular-nums text-emerald-700">
                       {formatMoney(clientTotals.totalIn).replace(' UZS', '')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">CHIQIM</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOutShort')}</span>
                     <span className="text-[13px] font-bold tabular-nums text-rose-700">
                       {formatMoney(clientTotals.totalOut).replace(' UZS', '')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">SOF</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlowShort')}</span>
                     <span className={cn(
                       "text-[13px] font-bold tabular-nums",
                       clientTotals.net >= 0 ? "text-emerald-700" : "text-rose-700",

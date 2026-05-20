@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, BookUser, CreditCard,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, BookUser, CreditCard, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { useUI } from '@/lib/ui';
 import { PERMS } from '@/lib/permissions';
+import { useEffect } from 'react';
 
 interface NavItem {
   href: string;
@@ -37,7 +39,7 @@ const GROUP_KEY: Record<string, string> = {
   system: 'groupSystem',
 };
 
-export function Sidebar() {
+function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
   const t = useTranslations('nav');
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
@@ -53,15 +55,15 @@ export function Sidebar() {
   const groups = Array.from(new Set(visibleItems.map((i) => i.group || 'main')));
 
   return (
-    <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white border-r border-slate-200/80 relative">
+    <>
       {/* Brand — premium wordmark */}
       <Link
         href={`/${locale}/dashboard`}
         aria-label={t('home')}
+        onClick={onItemClick}
         className="group relative block px-5 pt-6 pb-5 border-b border-slate-100"
       >
         <div className="relative flex items-center gap-3">
-          {/* XON SAROY logo */}
           <span className="relative w-12 h-12 shrink-0 grid place-items-center">
             <span className="absolute inset-0 bg-amber-400/20 blur-xl rounded-full" />
             <Image
@@ -72,13 +74,10 @@ export function Sidebar() {
               priority
               className="relative w-full h-full object-contain drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]"
             />
-            {/* Live dot */}
             <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
               <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
             </span>
           </span>
-
-          {/* Wordmark */}
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-black tracking-[0.05em] uppercase
                             bg-gradient-to-br from-amber-600 via-amber-700 to-amber-800
@@ -93,12 +92,9 @@ export function Sidebar() {
             </div>
           </div>
         </div>
-
-        {/* Animated underline accent */}
         <span className="absolute left-5 right-5 bottom-0 h-px bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
       </Link>
 
-      {/* Nav */}
       <nav className="flex-1 px-3 pt-4 pb-4 space-y-5 overflow-y-auto">
         {groups.map((g) => {
           const items = visibleItems.filter((i) => (i.group || 'main') === g);
@@ -117,6 +113,7 @@ export function Sidebar() {
                     <Link
                       key={item.href}
                       href={href}
+                      onClick={onItemClick}
                       className={cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all',
                         active
@@ -137,6 +134,67 @@ export function Sidebar() {
           );
         })}
       </nav>
-    </aside>
+    </>
+  );
+}
+
+export function Sidebar() {
+  const mobileNavOpen = useUI((s) => s.mobileNavOpen);
+  const setMobileNavOpen = useUI((s) => s.setMobileNavOpen);
+  const pathname = usePathname();
+
+  // Yo'l o'zgarganda mobil drawer'ni yopish
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname, setMobileNavOpen]);
+
+  // Drawer ochiq paytda body scroll'ni bloklash
+  useEffect(() => {
+    if (mobileNavOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileNavOpen]);
+
+  return (
+    <>
+      {/* Desktop sidebar — lg dan boshlab */}
+      <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white border-r border-slate-200/80 relative">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobil overlay backdrop */}
+      <div
+        className={cn(
+          'lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity',
+          mobileNavOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
+        )}
+        onClick={() => setMobileNavOpen(false)}
+        aria-hidden="true"
+      />
+
+      {/* Mobil drawer — chap tomondan sirpanib chiqadi */}
+      <aside
+        className={cn(
+          'lg:hidden fixed top-0 left-0 bottom-0 w-[280px] max-w-[85vw] bg-white shadow-2xl z-50',
+          'flex flex-col transform transition-transform duration-300 ease-out',
+          mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
+        )}
+        aria-label="Mobile navigation"
+      >
+        <button
+          onClick={() => setMobileNavOpen(false)}
+          className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          aria-label="Yopish"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <SidebarContent onItemClick={() => setMobileNavOpen(false)} />
+      </aside>
+    </>
   );
 }

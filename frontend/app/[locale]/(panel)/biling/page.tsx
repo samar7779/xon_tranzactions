@@ -247,7 +247,7 @@ export default function BilingPage() {
   return (
     <div className="flex-1 flex flex-col">
       <Topbar title="Biling" subtitle="XonPay to'lovlar va Kapitalbank tushumlari moslashtirilishi" />
-      <div className="px-6 py-6 space-y-5 max-w-[1700px] mx-auto w-full">
+      <div className="px-3 sm:px-6 py-4 sm:py-6 space-y-5 max-w-[1700px] mx-auto w-full">
         {/* ═══ HEADER (chiroyli KPI kartalar) ═══ */}
         <div className="flex items-center gap-3 mb-1">
           <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white shadow-lg shadow-violet-500/20">

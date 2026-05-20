@@ -239,7 +239,7 @@ export default function CrmPage() {
     <>
       <Topbar title={t('title')} subtitle={t('subtitle')} />
 
-      <div className="flex-1 p-6 lg:p-8 w-full">
+      <div className="flex-1 p-3 sm:p-6 lg:p-8 w-full">
         <div className="w-full space-y-6">
 
           {/* ═══ Search bar — clean elevated card with autocomplete ═══ */}
