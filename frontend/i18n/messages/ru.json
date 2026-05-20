@@ -402,7 +402,14 @@
     "copy": "Копировать",
     "copied": "Скопировано",
     "labelCopied": "{label} скопирован",
-    "txIdCopied": "ID транзакции скопирован"
+    "txIdCopied": "ID транзакции скопирован",
+    "manualContractTitle": "Ручной ввод договора",
+    "manualContractDesc": "CRM не проверяется — ответственность на пользователе. Укажите контрагента и номер договора.",
+    "manualContractWarning": "Этот договор не проверяется в CRM — вы подтверждаете его корректность",
+    "contractDelete": "Удалить договор",
+    "kontragent": "Контрагент",
+    "contractNumberLabel": "Номер договора",
+    "contractNumberPlaceholder": "Например: 12345VTN26MP"
   },
   "accounts": {
     "title": "Банковские счета",

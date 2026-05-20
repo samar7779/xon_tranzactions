@@ -3618,6 +3618,8 @@ function ManualContractDialog({
   savingContract: boolean;
   savingCategory: boolean;
 }) {
+  const tc = useTranslations('common');
+  const t = useTranslations('transactions');
   const [contract, setContract] = useState(row?.contractNumber || '');
   const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
 
@@ -3643,10 +3645,10 @@ function ManualContractDialog({
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white">
               <FileSignature className="h-3.5 w-3.5" />
             </div>
-            Shartnomani qo'lda kiritish
+            {t('manualContractTitle')}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            CRM tekshirilmaydi — foydalanuvchi javobgar. Kontragent va shartnoma raqamini belgilang.
+            {t('manualContractDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -3655,7 +3657,7 @@ function ManualContractDialog({
           <div>
             <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">1</span>
-              Kontragent
+              {t('kontragent')}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
               {visibleTree.map((t: any) => {
@@ -3684,18 +3686,18 @@ function ManualContractDialog({
           <div className="space-y-1.5 pt-3 border-t border-slate-100">
             <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">2</span>
-              Shartnoma raqami
+              {t('contractNumberLabel')}
             </label>
             <Input
               value={contract}
               onChange={(e) => setContract(e.target.value)}
-              placeholder="Masalan: 12345VTN26MP"
+              placeholder={t('contractNumberPlaceholder')}
               className="font-mono"
               autoFocus
             />
             <div className="text-[10.5px] text-amber-700 bg-amber-50 px-2 py-1.5 rounded-md ring-1 ring-amber-200 flex items-start gap-1.5">
               <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
-              <span>Bu shartnoma CRM da tekshirilmaydi — siz to'g'ri ekanligini tasdiqlayasiz</span>
+              <span>{t('manualContractWarning')}</span>
             </div>
           </div>
         </div>
@@ -3709,17 +3711,17 @@ function ManualContractDialog({
               className="text-rose-700 border-rose-200 hover:bg-rose-50"
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-              Shartnomani o'chirish
+              {t('contractDelete')}
             </Button>
           )}
-          <Button variant="outline" onClick={onClose} disabled={saving}>Bekor</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{tc('cancel')}</Button>
           <Button
             onClick={handleSave}
             disabled={saving || !canSave}
             className="bg-amber-600 hover:bg-amber-700 text-white gap-2"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-            Saqlash
+            {tc('save')}
           </Button>
         </DialogFooter>
       </DialogContent>

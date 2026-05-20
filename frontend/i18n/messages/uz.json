@@ -402,7 +402,14 @@
     "copy": "Nusxalash",
     "copied": "Nusxalandi",
     "labelCopied": "{label} nusxalandi",
-    "txIdCopied": "Tranzaksiya ID nusxalandi"
+    "txIdCopied": "Tranzaksiya ID nusxalandi",
+    "manualContractTitle": "Shartnomani qo'lda kiritish",
+    "manualContractDesc": "CRM tekshirilmaydi — foydalanuvchi javobgar. Kontragent va shartnoma raqamini belgilang.",
+    "manualContractWarning": "Bu shartnoma CRM da tekshirilmaydi — siz to'g'ri ekanligini tasdiqlayasiz",
+    "contractDelete": "Shartnomani o'chirish",
+    "kontragent": "Kontragent",
+    "contractNumberLabel": "Shartnoma raqami",
+    "contractNumberPlaceholder": "Masalan: 12345VTN26MP"
   },
   "accounts": {
     "title": "Bank hisoblari",
