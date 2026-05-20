@@ -458,12 +458,12 @@ export class TransactionsService {
         if (ids.length === 0) return { ok: true, values: [] };
         const subs = await this.prisma.category.findMany({
           where: { id: { in: ids } },
-          select: { id: true, name: true, parent: { select: { name: true } }, sortOrder: true },
+          select: { id: true, name: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
         });
         return {
           ok: true,
-          values: subs.map((s) => ({ id: s.id, name: s.parent ? `${s.parent.name} / ${s.name}` : s.name })),
+          values: subs.map((s) => ({ id: s.id, name: s.name })),
         };
       }
       case 'direction': {
