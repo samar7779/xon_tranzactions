@@ -205,6 +205,7 @@ export class ReconcileService {
       accountNo: account.accountNo,
       ownerName: account.ownerName,
       bankName: bank.name,
+      bankCode: bank.code,
       dateFrom,
       dateTo,
       partial: failedDays > 0,
@@ -306,6 +307,7 @@ export class ReconcileService {
             accountNo: a.accountNo,
             ownerName: a.ownerName,
             bankName: a.bank?.name,
+            bankCode: a.bank?.code,
             error: e?.message || "noma'lum xato",
             status: 'error' as const,
           };

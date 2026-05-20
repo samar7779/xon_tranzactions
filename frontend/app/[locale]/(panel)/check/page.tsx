@@ -15,6 +15,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { EmptyState } from '@/components/empty-state';
+import { BankLogo } from '@/components/bank-logo';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 import { AccountDrilldown } from './_drilldown';
@@ -26,6 +27,7 @@ interface TodayItem {
   accountNo: string;
   ownerName: string | null;
   bankName: string | null;
+  bankCode?: string | null;
   error?: string;
   partial?: boolean;
   failedDays?: number;
@@ -465,23 +467,24 @@ function AccountRow({
       )}
       onClick={onClick}
     >
-      {/* Bank logo / accent dot */}
-      <div className="relative shrink-0">
-        <div className={cn(
-          'w-10 h-10 rounded-xl bg-gradient-to-br grid place-items-center text-white shadow-md transition-transform group-hover:scale-105',
-          bankAccent,
-        )}>
-          <Building2 className="h-4 w-4" strokeWidth={2.2} />
-        </div>
-        {/* Pulse animation for mismatch/error */}
+      {/* Bank logo — haqiqiy logo (Kapital/Ipak rasmi yoki abbreviation gradient) */}
+      <div className="relative shrink-0 transition-transform group-hover:scale-105">
+        <BankLogo
+          code={item.bankCode || ''}
+          name={item.bankName || ''}
+          size={40}
+          rounded="rounded-xl"
+        />
+        {/* Pulse animation for mismatch/error — kichkina dot, logo ustida emas, yuqori chap chetda */}
         {(item.status === 'mismatch' || item.status === 'error') && (
-          <span className={cn(
-            'absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-white',
-            item.status === 'mismatch' ? 'bg-amber-500' : 'bg-rose-500',
-          )}>
+          <span className="absolute -top-1 -right-1 inline-flex items-center justify-center">
             <span className={cn(
-              'absolute inset-0 rounded-full animate-ping',
+              'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
               item.status === 'mismatch' ? 'bg-amber-400' : 'bg-rose-400',
+            )} />
+            <span className={cn(
+              'relative inline-flex rounded-full h-3 w-3 ring-2 ring-white',
+              item.status === 'mismatch' ? 'bg-amber-500' : 'bg-rose-500',
             )} />
           </span>
         )}
