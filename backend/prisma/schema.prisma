@@ -828,6 +828,7 @@ model OplataKv {
   updatedAt         DateTime @updatedAt @map("updated_at")
   createdById       String?  @map("created_by_id") @db.VarChar(50)       // AdminUser.id
   createdByName     String?  @map("created_by_name") @db.VarChar(190)    // muzlatib qo'yilgan ism
+  importBatchId     String?  @map("import_batch_id") @db.VarChar(50)     // ImportBatch.id (agar import bilan kelgan bo'lsa)
 
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
@@ -837,6 +838,7 @@ model OplataKv {
   @@index([client])
   @@index([object])
   @@index([paymentCategory])
+  @@index([importBatchId])
   @@map("oplata_kv")
 }
 

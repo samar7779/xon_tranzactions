@@ -366,11 +366,44 @@ export class ImportService {
     const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new BadRequestException('Batch topilmadi');
 
+    // ─── ОплатыКв batch ──────────────────────────────────────
+    if (batch.kind === 'oplata-kv') {
+      const CHUNK = 500;
+      let totalDeleted = 0;
+      while (true) {
+        const rows = await this.prisma.oplataKv.findMany({
+          where: { importBatchId: batchId },
+          select: { id: true },
+          take: CHUNK,
+        });
+        if (rows.length === 0) break;
+        const ids = rows.map((r) => r.id);
+
+        // Audit history yozish
+        const historyData = ids.map((id) => ({
+          oplataKvId: id,
+          action: 'deleted',
+          actorType: 'system' as const,
+          actorId: null,
+          actorName: `import-batch-delete (${batchId.slice(0, 8)})`,
+          fieldsChanged: ['*'],
+          changes: { reason: 'Import batch o\'chirildi' } as any,
+          note: `Import batch ${batchId.slice(0, 8)} bilan birga o'chirildi`,
+        }));
+        await this.prisma.oplataKvHistory.createMany({ data: historyData });
+
+        const r = await this.prisma.oplataKv.deleteMany({ where: { id: { in: ids } } });
+        totalDeleted += r.count;
+      }
+      await this.prisma.importBatch.delete({ where: { id: batchId } });
+      this.log.log(`ОплатыКв batch ${batchId} o'chirildi: jami ${totalDeleted}`);
+      return { ok: true, deleted: totalDeleted };
+    }
+
+    // ─── Transactions batch (default) ─────────────────────────
     const CHUNK = 500;
     let totalDeleted = 0;
 
-    // Cycle: 500 ta IDni topib, har birini bog'liq jadvallar bilan birga o'chiramiz
-    // Tugaguncha takrorlanadi
     while (true) {
       const txns = await this.prisma.transaction.findMany({
         where: { importBatchId: batchId, source: 'IMPORT' },
@@ -380,7 +413,6 @@ export class ImportService {
       const ids = txns.map((t) => t.id);
       if (ids.length === 0) break;
 
-      // Bog'liq history va payment yozuvlarini avval o'chirish (FK)
       await this.prisma.transactionCategoryHistory.deleteMany({
         where: { txId: { in: ids } },
       });
@@ -394,9 +426,7 @@ export class ImportService {
       this.log.log(`Batch ${batchId}: ${totalDeleted} ta o'chirildi (chunk ${ids.length})`);
     }
 
-    // Batchni o'chirish
     await this.prisma.importBatch.delete({ where: { id: batchId } });
-
     this.log.log(`Batch ${batchId} o'chirildi: jami ${totalDeleted} ta tranzaksiya`);
     return { ok: true, deleted: totalDeleted };
   }

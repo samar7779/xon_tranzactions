@@ -1,6 +1,8 @@
 import {
-  Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards,
+  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query,
+  UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -72,5 +74,25 @@ export class OplataKvController {
   @ApiOperation({ summary: 'Qatorni o\'chirish (history saqlanadi)' })
   remove(@Param('id') id: string, @CurrentUser() user?: AuthUser) {
     return this.svc.remove(id, actorFrom(user));
+  }
+
+  // ─── Import ───────────────────────────────────────────────
+  @Post('import')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: "Excel'dan ОплатыКв qatorlarini import qilish (dublikat ID skip)" })
+  async importExcel(
+    @UploadedFile() file: any,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
+    return this.svc.importExcel(file.buffer, actorFrom(user), file?.originalname);
+  }
+
+  @Delete('import-batch/:id')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Import batch'ni va undagi barcha qatorlarni o'chirish" })
+  async deleteImportBatch(@Param('id') id: string) {
+    return this.svc.deleteImportBatch(id);
   }
 }
