@@ -76,13 +76,27 @@ export default function LoginPage() {
 
   return (
     <div className="relative w-screen h-screen overflow-hidden font-sans text-white">
-      {/* Background: showcase animatsiyasi */}
-      <div className={`absolute inset-0 transition-all duration-700 ease-out
+      {/* Background: faqat md+ ekranlarda showcase animatsiyasi.
+          Telefonda sodda gradient fon — chiroyli, lekin chalg'itmaydi */}
+      <div className={`hidden md:block absolute inset-0 transition-all duration-700 ease-out
                        ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
         <ShowcaseStage />
       </div>
-      {/* Vignette overlay — panel ochilganda chap tomon biroz qoraytadi */}
-      <div className={`absolute inset-0 pointer-events-none transition-opacity duration-700
+      {/* Mobil fon — sodda gradient + ozgina HUD effekti */}
+      <div className="md:hidden absolute inset-0 bg-gradient-to-br from-[#031020] via-[#06182d] to-[#020912]">
+        {/* Yengil to'r */}
+        <div className="absolute inset-0 opacity-[0.08]"
+             style={{
+               backgroundImage:
+                 'linear-gradient(rgba(34,211,238,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.5) 1px, transparent 1px)',
+               backgroundSize: '32px 32px',
+             }} />
+        {/* Markaziy yorug'lik */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
+        <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full bg-amber-500/15 blur-3xl" />
+      </div>
+      {/* Vignette overlay — panel ochilganda chap tomon biroz qoraytadi (faqat desktop) */}
+      <div className={`hidden md:block absolute inset-0 pointer-events-none transition-opacity duration-700
                        ${open ? 'opacity-100' : 'opacity-0'}`}
            style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
@@ -109,13 +123,33 @@ export default function LoginPage() {
         <div className="mt-1 text-cyan-400/40 hidden sm:block">{tApp('title').toUpperCase()}</div>
       </div>
 
+      {/* Mobil markaziy brand — faqat md dan kichik ekranlarda, showcase yo'q joyiga */}
+      <div className={`md:hidden absolute left-1/2 top-[28%] -translate-x-1/2 z-30 transition-all duration-500 text-center px-6 ${
+        open ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100'
+      }`}>
+        <div className="text-[36px] font-black tracking-[0.06em] uppercase
+                        bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700
+                        bg-clip-text text-transparent leading-none
+                        drop-shadow-[0_0_30px_rgba(245,158,11,0.4)]">
+          XON SAROY
+        </div>
+        <div className="mt-3 text-[11px] tracking-[0.3em] uppercase text-cyan-300/80 font-mono">
+          {tApp('tagline')}
+        </div>
+        <div className="mt-6 flex items-center justify-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60 font-mono">
+          <span className="w-6 h-px bg-cyan-400/40" />
+          <span>· REAL-TIME ·</span>
+          <span className="w-6 h-px bg-cyan-400/40" />
+        </div>
+      </div>
+
       {/* Kirish CTA — markazda pastda, faqat panel yopiq bo'lganda ko'rinadi */}
-      <div className={`absolute bottom-8 sm:bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
+      <div className={`absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
         open ? 'opacity-0 translate-y-8 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <button
           onClick={() => setOpen(true)}
-          className="group relative px-6 sm:px-8 h-12 sm:h-14 rounded-full overflow-hidden
+          className="group relative px-10 sm:px-8 h-14 sm:h-14 rounded-full overflow-hidden
                      bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
                      ring-2 ring-amber-200/60
                      shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
