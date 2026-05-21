@@ -113,7 +113,7 @@ export class OplataKvService {
         actorId: actor.id ?? null,
         actorName: actor.name ?? null,
         fieldsChanged: Object.keys(data).filter((k) => k !== 'createdById' && k !== 'createdByName'),
-        changes: this.serializeForHistory(data),
+        changes: this.serializeForHistory(data) as any,
         note: 'Yangi qator yaratildi',
       },
     });
