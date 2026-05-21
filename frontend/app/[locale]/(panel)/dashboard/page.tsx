@@ -792,68 +792,35 @@ export default function DashboardPage() {
                   {t('selectDateRange')}
                 </div>
               ) : xonpayLoading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Skeleton className="h-[140px]" />
-                  <Skeleton className="h-[140px]" />
-                </div>
+                <Skeleton className="h-[160px] w-full" />
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* TUSHGAN — XonPay'dan Kapital bankka tushgan */}
-                  <div className="relative overflow-hidden rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-emerald-50/40 to-white p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-emerald-700 mb-1">TUSHGAN</div>
-                        <div className="text-[10.5px] text-emerald-600/80">XonPay → Kapital bank</div>
-                      </div>
-                      <div className="w-10 h-10 rounded-xl bg-emerald-100 grid place-items-center shrink-0">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                      </div>
+                /* DEBITOR — XonPay'da bor lekin Kapital bankka tushmagan */
+                <div className="relative overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-50/40 to-white p-5 sm:p-6">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="text-[11px] sm:text-[12px] font-bold uppercase tracking-[0.15em] text-rose-700 mb-1">DEBITOR</div>
+                      <div className="text-[11px] sm:text-[12px] text-rose-600/80">XonPay'da bor, Kapital bankka kelmagan</div>
                     </div>
-                    <div className="text-[22px] sm:text-[26px] font-bold tabular-nums text-emerald-700 leading-tight">
-                      {formatMoney(xonpayTotals.matched).replace(' UZS', '')}
+                    <div className="w-11 h-11 rounded-xl bg-rose-100 grid place-items-center shrink-0">
+                      <AlertCircle className="h-5 w-5 text-rose-600 animate-pulse" />
                     </div>
-                    <div className="text-[11px] text-emerald-700/80 mt-2 flex items-center justify-between gap-2">
-                      <span>
-                        <span className="font-bold tabular-nums">{xonpayTotals.matchedCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya
-                      </span>
-                      {xonpayTotals.total > 0 && (
-                        <span className="font-bold tabular-nums bg-emerald-600 text-white px-2 py-0.5 rounded-full text-[10px]">
-                          {Math.round((xonpayTotals.matched / xonpayTotals.total) * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    {/* Decorative orbs */}
-                    <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-emerald-400/20 blur-3xl pointer-events-none" />
-                    <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-emerald-300/15 blur-2xl pointer-events-none" />
                   </div>
-
-                  {/* DEBITOR — XonPay'da bor lekin Kapital bankka tushmagan */}
-                  <div className="relative overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-50/40 to-white p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-rose-700 mb-1">DEBITOR</div>
-                        <div className="text-[10.5px] text-rose-600/80">XonPay'da bor, Kapital'ga kelmagan</div>
-                      </div>
-                      <div className="w-10 h-10 rounded-xl bg-rose-100 grid place-items-center shrink-0">
-                        <AlertCircle className="h-5 w-5 text-rose-600 animate-pulse" />
-                      </div>
-                    </div>
-                    <div className="text-[22px] sm:text-[26px] font-bold tabular-nums text-rose-700 leading-tight">
-                      {formatMoney(xonpayTotals.missing).replace(' UZS', '')}
-                    </div>
-                    <div className="text-[11px] text-rose-700/80 mt-2 flex items-center justify-between gap-2">
-                      <span>
-                        <span className="font-bold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya
-                      </span>
-                      {xonpayTotals.total > 0 && (
-                        <span className="font-bold tabular-nums bg-rose-600 text-white px-2 py-0.5 rounded-full text-[10px]">
-                          {Math.round((xonpayTotals.missing / xonpayTotals.total) * 100)}%
-                        </span>
-                      )}
-                    </div>
-                    <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-rose-400/20 blur-3xl pointer-events-none" />
-                    <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-rose-300/15 blur-2xl pointer-events-none" />
+                  <div className="text-[28px] sm:text-[34px] font-bold tabular-nums text-rose-700 leading-tight">
+                    {formatMoney(xonpayTotals.missing).replace(' UZS', '')}
                   </div>
+                  <div className="text-[12px] text-rose-700/80 mt-3 flex items-center gap-3 flex-wrap">
+                    <span>
+                      <span className="font-bold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya kutilmoqda
+                    </span>
+                    {xonpayTotals.total > 0 && (
+                      <span className="font-bold tabular-nums bg-rose-600 text-white px-2.5 py-1 rounded-full text-[10.5px]">
+                        Jamining {Math.round((xonpayTotals.missing / xonpayTotals.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  {/* Decorative orbs */}
+                  <div className="absolute -top-8 -right-8 w-40 h-40 rounded-full bg-rose-400/20 blur-3xl pointer-events-none" />
+                  <div className="absolute -bottom-6 -left-6 w-32 h-32 rounded-full bg-rose-300/15 blur-2xl pointer-events-none" />
                 </div>
               )}
             </div>
