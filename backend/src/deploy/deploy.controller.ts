@@ -23,6 +23,12 @@ export class DeployController {
     return this.svc.health();
   }
 
+  @Get('status')
+  @ApiOperation({ summary: 'Joriy deploy holati (Telegram\'siz, UI uchun)' })
+  status() {
+    return this.svc.status();
+  }
+
   @Get('log')
   @UseGuards(JwtAuthGuard, PermissionsGuard)
   @RequirePermissions(PERMISSIONS.SYSTEM_DEPLOY)

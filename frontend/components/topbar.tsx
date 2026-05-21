@@ -15,6 +15,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { LanguageSwitcher } from './language-switcher';
+import { DeployStatusBadge } from './deploy-status';
 
 interface TopbarProps {
   title: string;
@@ -64,6 +65,9 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {actions}
+
+            {/* Deploy holati — har 5 sekundda yangilanadi */}
+            <DeployStatusBadge />
 
             {/* Bildirishnomalar */}
             {canSeeSync && (
