@@ -44,7 +44,7 @@ async function bootstrap() {
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Xon Tranzaksiyalar API')
     .setDescription('Xon Saroy — banklar tranzaksiyalari monitoring tizimi')
-    .setVersion('0.1.0')
+    .setVersion('0.1.1')
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
