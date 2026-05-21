@@ -150,6 +150,25 @@ export class DeployService {
   }
 
   /**
+   * Har faza uchun taxminiy davomiylik (sekund). Jami ~75 sek.
+   * Bu raqamlar real deploy'lardan o'rta hisobida olingan.
+   */
+  private readonly PHASE_DURATIONS: Record<string, number> = {
+    'git fetch': 2,
+    'git reset': 1,
+    'backend npm ci': 5,
+    'backend prisma generate': 2,
+    'backend prisma db push': 2,
+    'backend prisma migrate deploy': 3,
+    'backend prisma seed': 3,
+    'backend build': 5,
+    'frontend npm ci': 10,
+    'frontend build': 40,
+    'restart xon-tranzactions-frontend': 2,
+    'restart xon-tranzactions-backend': 1,
+  };
+
+  /**
    * Log'ning oxirgi yozuvlaridan deploy holatini aniqlaydi.
    * Telegram bilan ulanish bo'lmasa ham, UI shu yerdan status ola oladi.
    */
@@ -160,8 +179,8 @@ export class DeployService {
       const last500 = lines.slice(-500);
 
       // Oxirgi DEPLOY START, OK yoki FAIL'ni topamiz
-      let lastStart: { time: string; raw: string } | null = null;
-      let lastEnd: { time: string; status: 'success' | 'failed'; message: string; raw: string } | null = null;
+      let lastStart: { time: string; raw: string; idx: number } | null = null;
+      let lastEnd: { time: string; status: 'success' | 'failed'; message: string; raw: string; idx: number } | null = null;
       let lastError: string | null = null;
 
       for (let i = last500.length - 1; i >= 0; i--) {
@@ -169,20 +188,19 @@ export class DeployService {
         if (!lastEnd) {
           const okMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*DEPLOY OK\s*·?\s*(\d+s)?/);
           if (okMatch) {
-            lastEnd = { time: okMatch[1], status: 'success', message: `Tugadi ${okMatch[2] || ''}`.trim(), raw: line };
+            lastEnd = { time: okMatch[1], status: 'success', message: `Tugadi ${okMatch[2] || ''}`.trim(), raw: line, idx: i };
             continue;
           }
           const failMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*✗ FAIL:\s*(.+)/);
           if (failMatch) {
-            lastEnd = { time: failMatch[1], status: 'failed', message: failMatch[2], raw: line };
+            lastEnd = { time: failMatch[1], status: 'failed', message: failMatch[2], raw: line, idx: i };
             continue;
           }
         }
         if (!lastStart) {
           const startMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*DEPLOY START/);
           if (startMatch) {
-            lastStart = { time: startMatch[1], raw: line };
-            // Topdik — oxirgi start
+            lastStart = { time: startMatch[1], raw: line, idx: i };
           }
         }
         if (lastEnd && lastStart) break;
@@ -205,12 +223,44 @@ export class DeployService {
       const endTs = lastEnd ? new Date(lastEnd.time).getTime() : 0;
 
       if (lastStart && startTs > endTs) {
-        // Start oxirgi event — hali davom etyapti (yoki crashed)
         const age = (Date.now() - startTs) / 1000;
         if (age < 600) state = 'running';
         else state = lastEnd?.status || 'idle';
       } else if (lastEnd) {
         state = lastEnd.status;
+      }
+
+      // ─── Faza va progress (running state uchun) ───
+      let currentPhase: string | null = null;
+      let completedPhases: string[] = [];
+      let elapsedSeconds = 0;
+      let estimatedRemainingSeconds: number | null = null;
+      let progressPercent: number | null = null;
+
+      if (state === 'running' && lastStart) {
+        elapsedSeconds = Math.round((Date.now() - startTs) / 1000);
+
+        // START dan keyingi qatorlarni tahlil qilamiz
+        const afterStart = last500.slice(lastStart.idx + 1);
+        for (const line of afterStart) {
+          // "→ <phase>" — yangi faza boshlandi
+          const startPhase = line.match(/\[deploy\]\s*→\s*(.+?)(?:\s*$|\s*\(.*\))/);
+          if (startPhase) currentPhase = startPhase[1].trim();
+          // "✓ <phase>" — faza tugadi
+          const donePhase = line.match(/\[deploy\]\s*✓\s*(.+?)(?:\s*$|\s*\(.*\))/);
+          if (donePhase) {
+            const ph = donePhase[1].trim();
+            completedPhases.push(ph);
+            if (currentPhase === ph) currentPhase = null;
+          }
+        }
+
+        // Estimated total = tugagan + joriy + qolgan
+        const completedTime = completedPhases.reduce((s, ph) => s + (this.PHASE_DURATIONS[ph] || 0), 0);
+        const allPhasesTotal = Object.values(this.PHASE_DURATIONS).reduce((s, v) => s + v, 0);
+        const estimatedTotal = Math.max(allPhasesTotal, elapsedSeconds + 10);
+        estimatedRemainingSeconds = Math.max(0, estimatedTotal - elapsedSeconds);
+        progressPercent = Math.min(99, Math.max(1, Math.round((completedTime / allPhasesTotal) * 100)));
       }
 
       // Joriy git HEAD
@@ -234,6 +284,12 @@ export class DeployService {
         finishedAt: lastEnd?.time || null,
         message: lastEnd?.message || null,
         error: lastError,
+        // Running state uchun qoshimcha
+        currentPhase,
+        completedPhases,
+        elapsedSeconds,
+        estimatedRemainingSeconds,
+        progressPercent,
       };
     } catch (e: any) {
       return {

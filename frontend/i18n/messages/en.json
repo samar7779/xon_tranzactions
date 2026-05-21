@@ -80,6 +80,36 @@
     "syncError": "Sync error",
     "viewAll": "View all"
   },
+  "deploy": {
+    "deploying": "System is updating",
+    "deployingDesc": "Loading new features. Please wait.",
+    "phase": "Current phase",
+    "elapsed": "Elapsed",
+    "remaining": "Approximately remaining",
+    "second": "s",
+    "newVersionTitle": "New version is ready!",
+    "newVersionDesc": "The system has been updated. Refresh the page to use new features and fixes.",
+    "newVersionBtn": "Refresh now",
+    "newVersionLater": "Later",
+    "newVersionCommit": "Version",
+    "failedTitle": "Deploy failed",
+    "failedDesc": "New version was not deployed. The old version continues to work. Contact administrator.",
+    "closeBtn": "Close",
+    "phases": {
+      "git fetch": "Fetching code",
+      "git reset": "Setting up code",
+      "backend npm ci": "Backend libraries",
+      "backend prisma generate": "Database model",
+      "backend prisma db push": "Database sync",
+      "backend prisma migrate deploy": "Database migration",
+      "backend prisma seed": "Initial data",
+      "backend build": "Backend build",
+      "frontend npm ci": "Frontend libraries",
+      "frontend build": "Frontend build (longest phase)",
+      "restart xon-tranzactions-frontend": "Restarting frontend",
+      "restart xon-tranzactions-backend": "Restarting backend"
+    }
+  },
   "admin": {
     "title": "Admin panel",
     "subtitle": "Users, roles, sync and API management",

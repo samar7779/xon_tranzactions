@@ -80,6 +80,36 @@
     "syncError": "Ошибка sync",
     "viewAll": "Посмотреть все"
   },
+  "deploy": {
+    "deploying": "Система обновляется",
+    "deployingDesc": "Загружаются новые возможности. Пожалуйста, подождите.",
+    "phase": "Текущий этап",
+    "elapsed": "Прошло",
+    "remaining": "Осталось примерно",
+    "second": "с",
+    "newVersionTitle": "Новая версия готова!",
+    "newVersionDesc": "Система обновлена. Для использования новых функций и исправлений обновите страницу.",
+    "newVersionBtn": "Обновить сейчас",
+    "newVersionLater": "Позже",
+    "newVersionCommit": "Версия",
+    "failedTitle": "Деплой не удался",
+    "failedDesc": "Новая версия не установлена. Старая версия продолжает работать. Обратитесь к администратору.",
+    "closeBtn": "Закрыть",
+    "phases": {
+      "git fetch": "Обновление кода",
+      "git reset": "Установка кода",
+      "backend npm ci": "Backend библиотеки",
+      "backend prisma generate": "Модель базы",
+      "backend prisma db push": "Синхронизация базы",
+      "backend prisma migrate deploy": "Миграции базы",
+      "backend prisma seed": "Начальные данные",
+      "backend build": "Сборка backend",
+      "frontend npm ci": "Frontend библиотеки",
+      "frontend build": "Сборка frontend (самый длинный этап)",
+      "restart xon-tranzactions-frontend": "Перезапуск frontend",
+      "restart xon-tranzactions-backend": "Перезапуск backend"
+    }
+  },
   "admin": {
     "title": "Админ панель",
     "subtitle": "Пользователи, роли, sync и управление API",

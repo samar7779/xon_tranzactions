@@ -1,9 +1,6 @@
 'use client';
-// rebuild trigger — deploy status badge ko'rinishi uchun
 
-import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { toast } from 'sonner';
 import { Loader2, CheckCircle2, AlertCircle, GitCommit } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -18,39 +15,19 @@ interface DeployStatus {
   error?: string | null;
 }
 
+/**
+ * Topbar'dagi kichik badge — joriy deploy holatini bildirib turadi.
+ * Asosiy bildirishnoma DeployModal komponentida (toast emas, katta modal).
+ */
 export function DeployStatusBadge() {
-  const lastStateRef = useRef<string>('idle');
-
   const { data } = useQuery({
     queryKey: ['deploy-status'],
     queryFn: () => api.get<DeployStatus>('/_deploy/status'),
-    refetchInterval: 5_000, // har 5 sekundda
+    refetchInterval: 5_000,
   });
 
-  const state = data?.state || 'idle';
-
-  // Holat o'zgarganda toast ko'rsatamiz (web bildirishnoma)
-  useEffect(() => {
-    const prev = lastStateRef.current;
-    if (prev !== state) {
-      if (prev === 'running' && state === 'success') {
-        toast.success(`Deploy muvaffaqiyatli (${data?.currentCommit || ''})`, {
-          icon: '✅',
-          duration: 6000,
-        });
-      } else if (prev === 'running' && state === 'failed') {
-        toast.error(`Deploy muvaffaqiyatsiz: ${data?.message || 'noma\'lum xato'}`, {
-          icon: '❌',
-          duration: 12000,
-        });
-      } else if (state === 'running') {
-        toast(`Deploy boshlandi`, { icon: '🟡', duration: 3000 });
-      }
-      lastStateRef.current = state;
-    }
-  }, [state, data?.currentCommit, data?.message]);
-
   if (!data) return null;
+  const state = data.state || 'idle';
 
   const cfg = {
     idle:    { color: 'bg-slate-500/20 text-white/80 ring-white/20', icon: <GitCommit className="h-3 w-3" />,            label: 'idle' },
