@@ -130,15 +130,17 @@ export default function DashboardPage() {
     }));
   }, [daily]);
 
-  // ─── 3 ta grafik kartasi uchun collapse holatlari (default: yashirin) ───
+  // ─── 4 ta grafik kartasi uchun collapse holatlari (default: yashirin) ───
   const [kunmaOpen, setKunmaOpen] = useState(false);
   const [kunmaBarOpen, setKunmaBarOpen] = useState(false);
   const [clientOpen, setClientOpen] = useState(false);
+  const [xonpayOpen, setXonpayOpen] = useState(false);
 
   // Ref'lar — PNG eksport uchun (faqat grafik DOM tugun)
   const kunmaChartRef = useRef<HTMLDivElement>(null);
   const kunmaBarChartRef = useRef<HTMLDivElement>(null);
   const clientChartRef = useRef<HTMLDivElement>(null);
+  const xonpayChartRef = useRef<HTMLDivElement>(null);
 
   // ─── KLIENT TO'LOVLARI (CLIENT kategoriya) — mustaqil grafik ───
   const [cliRange, setCliRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
@@ -221,6 +223,61 @@ export default function DashboardPage() {
     const to = Number(sub?.totalOut || 0);
     return { totalIn: ti, totalOut: to, net: ti - to };
   }, [clientDaily, cliSubCode]);
+
+  // ─── XONPAY DEBITOR — XonPay'da ro'yxatda lekin bankka kelmagan to'lovlar ───
+  const [xonpayRange, setXonpayRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
+  const [xonpayCustomFrom, setXonpayCustomFrom] = useState('');
+  const [xonpayCustomTo, setXonpayCustomTo] = useState('');
+
+  const { from: xonpayFrom, to: xonpayTo } = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    if (xonpayRange === 'custom') return { from: xonpayCustomFrom, to: xonpayCustomTo };
+    if (xonpayRange === 'today') return { from: fmt(today), to: fmt(today) };
+    const back = xonpayRange === '7d' ? 6 : 29;
+    const f = new Date(today);
+    f.setDate(f.getDate() - back);
+    return { from: fmt(f), to: fmt(today) };
+  }, [xonpayRange, xonpayCustomFrom, xonpayCustomTo]);
+
+  const { data: xonpayDaily, isLoading: xonpayLoading } = useQuery({
+    queryKey: ['xonpay-daily', xonpayFrom, xonpayTo],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (xonpayFrom) p.set('dateFrom', xonpayFrom);
+      if (xonpayTo) p.set('dateTo', xonpayTo);
+      return api.get<any>(`/xonpay/stats/daily?${p}`);
+    },
+    enabled: xonpayRange !== 'custom' || (!!xonpayCustomFrom && !!xonpayCustomTo),
+  });
+
+  // Chart uchun (matched=yashil, missing=qizil sof debitor)
+  const xonpayChartData = useMemo(() => {
+    const days = xonpayDaily?.days || [];
+    // dailyStats teskari tartibda qaytaradi (eng yangi tepada); biz xronologik qilamiz
+    return [...days].reverse().map((d: any) => ({
+      label: `${d.date.slice(8, 10)}.${d.date.slice(5, 7)}`,
+      // 'inflow' = matched (bankka kelgan), 'outflow' = missing (debitor)
+      inflow: Number(d.matchedAmount || 0),
+      outflow: Number(d.missingAmount || 0),
+      weekend: isWeekend(d.date),
+    }));
+  }, [xonpayDaily]);
+
+  const xonpayTotals = useMemo(() => {
+    const days = xonpayDaily?.days || [];
+    let total = 0, matched = 0, missing = 0;
+    let totalCount = 0, matchedCount = 0, missingCount = 0;
+    for (const d of days) {
+      total += Number(d.totalAmount || 0);
+      matched += Number(d.matchedAmount || 0);
+      missing += Number(d.missingAmount || 0);
+      totalCount += Number(d.totalCount || 0);
+      matchedCount += Number(d.matchedCount || 0);
+      missingCount += Number(d.missingCount || 0);
+    }
+    return { total, matched, missing, totalCount, matchedCount, missingCount };
+  }, [xonpayDaily]);
 
   // KPI computations
   const totalBalance = (accounts?.items || []).reduce((s, a) => s + Number(a.balance || 0), 0);
@@ -676,6 +733,117 @@ export default function DashboardPage() {
                 </div>
               </div>
             </>
+          )}
+        </div>
+
+        {/* ═══ XONPAY DEBITOR — XonPay'da ro'yxatda lekin bankga kelmagan to'lovlar ═══ */}
+        <div ref={xonpayChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-violet-50/60 to-white">
+            <button
+              type="button"
+              onClick={() => setXonpayOpen((o) => !o)}
+              className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
+            >
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !xonpayOpen && '-rotate-90')} />
+              <div className="w-7 h-7 rounded-md overflow-hidden bg-white ring-1 ring-slate-200 grid place-items-center shrink-0">
+                <img src="/xonpay.jpg" alt="XonPay" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Kutilayotgan to'lovlar (XonPay)</div>
+              <div className="text-[10px] text-slate-500 truncate">· debitor · {xonpayFrom || '—'} → {xonpayTo || '—'}</div>
+            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <DownloadIconBtn
+                onClick={async () => {
+                  if (!xonpayOpen) setXonpayOpen(true);
+                  await new Promise((r) => setTimeout(r, 150));
+                  downloadChartPng(xonpayChartRef.current, `xonpay-debitor_${xonpayFrom || 'all'}_${xonpayTo || 'all'}.png`);
+                }}
+              />
+              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+                <RangeBtn active={xonpayRange === 'today'} onClick={() => setXonpayRange('today')}>{t('rangeToday')}</RangeBtn>
+                <RangeBtn active={xonpayRange === '7d'} onClick={() => setXonpayRange('7d')}>{t('range7d')}</RangeBtn>
+                <RangeBtn active={xonpayRange === '30d'} onClick={() => setXonpayRange('30d')}>{t('range30d')}</RangeBtn>
+                <RangeBtn active={xonpayRange === 'custom'} onClick={() => setXonpayRange('custom')}>{t('rangeCustom')}</RangeBtn>
+              </div>
+              {xonpayRange === 'custom' && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="date"
+                    value={xonpayCustomFrom}
+                    onChange={(e) => setXonpayCustomFrom(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-violet-400"
+                  />
+                  <span className="text-slate-400 text-[11px]">→</span>
+                  <input
+                    type="date"
+                    value={xonpayCustomTo}
+                    onChange={(e) => setXonpayCustomTo(e.target.value)}
+                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-violet-400"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {xonpayOpen && (
+            <div className="p-4">
+              {/* Jami: Total / Tushgan / Kutilayotgan */}
+              <div className="flex items-center gap-5 mb-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">JAMI</span>
+                  <span className="text-[13px] font-bold tabular-nums text-slate-800">
+                    {formatMoney(xonpayTotals.total).replace(' UZS', '')}
+                  </span>
+                  <span className="text-[10px] text-slate-400 tabular-nums">({xonpayTotals.totalCount} ta)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">TUSHGAN</span>
+                  <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                    {formatMoney(xonpayTotals.matched).replace(' UZS', '')}
+                  </span>
+                  <span className="text-[10px] text-emerald-600/70 tabular-nums">({xonpayTotals.matchedCount} ta)</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">DEBITOR</span>
+                  <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                    {formatMoney(xonpayTotals.missing).replace(' UZS', '')}
+                  </span>
+                  <span className="text-[10px] text-rose-600/70 tabular-nums">({xonpayTotals.missingCount} ta)</span>
+                </div>
+              </div>
+
+              {/* Grafik */}
+              <div className="bg-white">
+                {xonpayRange === 'custom' && (!xonpayCustomFrom || !xonpayCustomTo) ? (
+                  <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                    {t('selectDateRange')}
+                  </div>
+                ) : xonpayLoading ? (
+                  <Skeleton className="h-[260px] w-full" />
+                ) : xonpayChartData.length === 0 ? (
+                  <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                    Ma'lumot yo'q
+                  </div>
+                ) : (
+                  <DualAreaChart data={xonpayChartData} height={260} />
+                )}
+              </div>
+
+              {/* Legend tushuntirish */}
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4 flex-wrap text-[10.5px] text-slate-500">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>Tushgan — XonPay'dan bankka kelgan</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-500" />
+                  <span>Debitor — XonPay'da bor, bankka hali tushmagan</span>
+                </span>
+              </div>
+            </div>
           )}
         </div>
 
