@@ -93,7 +93,7 @@ export class OplataKvService {
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
     const orderBy: Prisma.OplataKvOrderByWithRelationInput = { [sortBy]: sortDir } as any;
 
-    const [items, total, sums] = await Promise.all([
+    const [items, total, sums, countPayment, countFirst, countMonthly] = await Promise.all([
       this.prisma.oplataKv.findMany({
         where, orderBy,
         skip: (page - 1) * perPage,
@@ -104,6 +104,9 @@ export class OplataKvService {
         where,
         _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
       }),
+      this.prisma.oplataKv.count({ where: { ...where, paymentAmount:    { gt: 0 } } }),
+      this.prisma.oplataKv.count({ where: { ...where, firstInstallment: { gt: 0 } } }),
+      this.prisma.oplataKv.count({ where: { ...where, monthlyAmount:    { gt: 0 } } }),
     ]);
 
     return {
@@ -115,6 +118,11 @@ export class OplataKvService {
         paymentAmount:    Number(sums._sum.paymentAmount    ?? 0),
         firstInstallment: Number(sums._sum.firstInstallment ?? 0),
         monthlyAmount:    Number(sums._sum.monthlyAmount    ?? 0),
+      },
+      counts: {
+        paymentAmount:    countPayment,
+        firstInstallment: countFirst,
+        monthlyAmount:    countMonthly,
       },
     };
   }
