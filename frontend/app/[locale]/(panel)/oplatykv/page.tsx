@@ -143,6 +143,11 @@ export default function OplataKvPage() {
   return (
     <div className="flex-1 p-3 sm:p-6 lg:p-8 w-full">
       <div className="w-full space-y-5">
+        {/* DEPLOY MARKER — agar bu band ko'rinsa = yangi build live */}
+        <div className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2.5 text-sm font-semibold flex items-center justify-between">
+          <span>✓ ОплатыКв jadval — yangi build (build 334a4ed · {new Date().toLocaleString('ru-RU')})</span>
+          <span className="text-[11px] opacity-80">Agar bu yashil band ko'rinmasa, deploy hali tushmagan — Ctrl+F5 bosing</span>
+        </div>
         {/* ═══ KPI / Sums ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <SumCard label="Сумма оплаты" value={sums.paymentAmount} color="indigo" />
