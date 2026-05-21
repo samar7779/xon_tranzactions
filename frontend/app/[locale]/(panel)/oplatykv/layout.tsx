@@ -2,19 +2,24 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { BookUser, CreditCard } from 'lucide-react';
+import { BookUser, CreditCard, Home } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { key: 'crm',     href: '/oplatykv/crm',     label: 'CRM',     icon: BookUser },
-  { key: 'billing', href: '/oplatykv/billing', label: 'Billing', icon: CreditCard },
+  { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', icon: Home,       exact: true  },
+  { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      icon: BookUser,   exact: false },
+  { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  icon: CreditCard, exact: false },
 ];
 
 export default function OplatyKvLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
-  const activeKey = TABS.find((t) => pathname.startsWith(`/${locale}${t.href}`))?.key || 'crm';
+  const activeKey = (() => {
+    if (pathname === `/${locale}/oplatykv`) return 'overview';
+    const match = TABS.find((t) => !t.exact && pathname.startsWith(`/${locale}${t.href}`));
+    return match?.key || 'overview';
+  })();
 
   return (
     <>
