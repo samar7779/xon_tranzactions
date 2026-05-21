@@ -33,6 +33,9 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/check', permission: PERMS.TRANSACTIONS_VIEW },
   { prefix: '/customers', permission: PERMS.CUSTOMERS_VIEW },
   { prefix: '/contracts', permission: PERMS.CONTRACTS_VIEW },
+  { prefix: '/oplatykv/crm', permission: PERMS.CRM_VIEW },
+  { prefix: '/oplatykv/billing', permission: PERMS.CRM_VIEW },
+  { prefix: '/oplatykv', permission: PERMS.OPLATAKV_VIEW },
 ];
 
 export function RouteGuard({ children }: { children: React.ReactNode }) {
