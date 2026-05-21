@@ -24,6 +24,7 @@ const ALL_PERMS = [
   'crm:view',
   'counterparties:view', 'counterparties:manage',
   'categories:view', 'categories:manage',
+  'oplatakv:view', 'oplatakv:manage',
 ];
 
 async function main() {
