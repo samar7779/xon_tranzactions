@@ -128,7 +128,6 @@ export default function OplataKvPage() {
       page: number; perPage: number; total: number; pageCount: number;
       items: OplataKvItem[];
       sums: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
-      counts?: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
     }>(`/oplata-kv?${qs}`),
     placeholderData: (prev) => prev,
   });
@@ -140,16 +139,16 @@ export default function OplataKvPage() {
   const total = listQuery.data?.total || 0;
   const pageCount = listQuery.data?.pageCount || 1;
   const sums = listQuery.data?.sums || { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 };
-  const counts = listQuery.data?.counts || { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 };
 
   return (
     <div className="flex-1 p-3 sm:p-6 lg:p-8 w-full">
       <div className="w-full space-y-5">
         {/* ═══ KPI / Sums ═══ */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <SumCard label="Сумма оплаты" value={sums.paymentAmount}    count={counts.paymentAmount}    color="indigo" />
-          <SumCard label="1 взнос"       value={sums.firstInstallment} count={counts.firstInstallment} color="amber" />
-          <SumCard label="ежемесячный"   value={sums.monthlyAmount}    count={counts.monthlyAmount}    color="sky" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <SumCard label="Сумма оплаты" value={sums.paymentAmount}    color="indigo" />
+          <SumCard label="1 взнос"       value={sums.firstInstallment} color="amber" />
+          <SumCard label="ежемесячный"   value={sums.monthlyAmount}    color="sky" />
+          <CountCard label="Жами yozuv"  count={total} />
         </div>
 
         {/* ═══ Filter bar ═══ */}
@@ -382,16 +381,11 @@ function IconBtn({ children, title, onClick, color }: {
   );
 }
 
-function SumCard({ label, value, count, color }: { label: string; value: number; count?: number; color: 'indigo' | 'amber' | 'sky' }) {
+function SumCard({ label, value, color }: { label: string; value: number; color: 'indigo' | 'amber' | 'sky' }) {
   const cls = {
     indigo: 'from-indigo-500 to-violet-600 shadow-indigo-500/20',
     amber:  'from-amber-500 to-orange-600 shadow-amber-500/20',
     sky:    'from-sky-500 to-cyan-600 shadow-sky-500/20',
-  }[color];
-  const badgeCls = {
-    indigo: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
-    amber:  'bg-amber-50 text-amber-700 ring-amber-200',
-    sky:    'bg-sky-50 text-sky-700 ring-sky-200',
   }[color];
   const icon = {
     indigo: <Receipt className="h-5 w-5" />,
@@ -405,16 +399,27 @@ function SumCard({ label, value, count, color }: { label: string; value: number;
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
-            {count !== undefined && (
-              <span className={cn('text-[10px] font-bold px-1.5 py-0.5 rounded-md ring-1 tabular-nums', badgeCls)}>
-                {count.toLocaleString('ru-RU')} ta
-              </span>
-            )}
-          </div>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
           <div className={cn('text-xl font-bold tabular-nums mt-0.5', value < 0 ? 'text-rose-600' : 'text-slate-900')}>
-            {formatMoney(value)}
+            {formatMoney(value, '')}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CountCard({ label, count }: { label: string; count: number }) {
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <CardContent className="p-4 flex items-center gap-3">
+        <span className="w-10 h-10 rounded-xl grid place-items-center text-white bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md shadow-emerald-500/20 shrink-0">
+          <Hash className="h-5 w-5" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-900">
+            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400">ta</span>
           </div>
         </div>
       </CardContent>
