@@ -42,7 +42,6 @@ const KINDS: KindDef[] = [
   { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va Nom bo\'yicha (dublikat skip)',     available: true },
   { key: 'oplata-kv',      label: 'ОплатыКв',        icon: Home,           description: 'Kvartira to\'lovlari (ID bo\'yicha dublikat skip)', available: true },
   { key: 'customers',      label: 'Mijozlar',        icon: Users,          description: 'CRM mijozlarini import (kelajakda)',       available: false },
-  { key: 'contracts',      label: 'Shartnomalar',    icon: FileSignature,  description: 'Shartnomalar tarixi (kelajakda)',          available: false },
 ];
 
 export default function ImportPage() {
