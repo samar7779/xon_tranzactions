@@ -22,7 +22,9 @@ interface ImportResult {
   added: number;
   skipped: number;
   errors: number;
-  errorRows: Array<{ row: number; reason: string }>;
+  errorRows: Array<{ row: number; reason: string; id?: string; contractNo?: string }>;
+  skippedRows?: Array<{ row: number; id: string; contractNo: string; reason: string }>;
+  duration?: number;
 }
 
 type ImportKind = 'transactions' | 'counterparties' | 'oplata-kv' | 'customers' | 'contracts';
@@ -280,7 +282,7 @@ function TransactionsImportPanel() {
       </Card>
 
       {/* ─── Import tarixi ─── */}
-      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} />
+      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} kind="transactions" />
     </div>
   );
 }
@@ -302,27 +304,34 @@ interface ImportBatch {
   notes: string | null;
 }
 
-function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
+function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: string }) {
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false); // hidden by default — ustga bosilganda ochiladi
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['import-batches', refreshKey],
-    queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>('/import/batches'),
+    queryKey: ['import-batches', refreshKey, kind || 'all'],
+    queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>(
+      kind ? `/import/batches?kind=${encodeURIComponent(kind)}` : '/import/batches',
+    ),
     enabled: expanded, // faqat bo'lim ochilganda fetch qiladi
   });
 
+  const itemLabel = kind === 'oplata-kv' ? 'qator' : 'tranzaksiya';
   const delMut = useMutation({
     // 60k+ qator ham normal o'chsin uchun 5 minut timeout
     mutationFn: (id: string) => api.delete<{ ok: boolean; deleted: number }>(`/import/batches/${id}`, { timeout: 300_000 }),
     onSuccess: (r) => {
-      toast.success(`${r.deleted} ta tranzaksiya o'chirildi`);
+      toast.success(`${r.deleted} ta ${itemLabel} o'chirildi`);
       setConfirmDel(null);
       qc.invalidateQueries({ queryKey: ['import-batches'] });
-      qc.invalidateQueries({ queryKey: ['transactions'] });
-      qc.invalidateQueries({ queryKey: ['tx-stats'] });
+      if (kind === 'oplata-kv') {
+        qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      } else {
+        qc.invalidateQueries({ queryKey: ['transactions'] });
+        qc.invalidateQueries({ queryKey: ['tx-stats'] });
+      }
       refetch();
     },
     onError: (e: any) => toast.error(e?.message || "O'chirish xato"),
@@ -462,7 +471,7 @@ function BatchHistorySection({ refreshKey }: { refreshKey: number }) {
             </DialogTitle>
             <DialogDescription className="text-[12px] pt-2">
               <b>{confirmDel?.fileName || '(nomsiz)'}</b> import bilan birga
-              {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta tranzaksiya</b> o'chiriladi.
+              {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta {itemLabel}</b> o'chiriladi.
               Bu amal qaytarib bo'lmaydi.
               {confirmDel?.notes && (
                 <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 text-amber-800 text-[11px]">
@@ -788,6 +797,11 @@ function OplataKvImportPanel() {
                 <Stat label="Dublikat skip"   value={result.skipped} color="amber" />
                 <Stat label="Xato"            value={result.errors}  color="rose" />
               </div>
+              {typeof result.duration === 'number' && (
+                <div className="text-[11px] text-slate-500">
+                  ⏱ Tugadi: {result.duration} sekund · ~{result.total > 0 ? Math.round(result.total / Math.max(1, result.duration)) : 0} qator/sek
+                </div>
+              )}
               {result.errors > 0 && (
                 <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
                   <button
@@ -796,21 +810,50 @@ function OplataKvImportPanel() {
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
-                      {result.errors} ta xato qatorlar
+                      {result.errors} ta xato qator (birinchi 200 tasi ko'rsatilgan)
                     </span>
                     {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {errorsOpen && (
                     <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
                       {result.errorRows.map((e, i) => (
-                        <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
-                          <span className="font-mono text-rose-700 shrink-0">Qator {e.row}:</span>
-                          <span className="text-slate-700">{e.reason}</span>
+                        <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
+                          <span className="font-mono text-rose-700 shrink-0">Qator {e.row}</span>
+                          <div className="space-y-0.5">
+                            <div className="text-slate-700">{e.reason}</div>
+                            {(e.id || e.contractNo) && (
+                              <div className="text-[10px] text-slate-500 font-mono">
+                                {e.contractNo && <>Дог №: <b className="text-slate-700">{e.contractNo}</b></>}
+                                {e.contractNo && e.id && <span className="mx-2">·</span>}
+                                {e.id && <>ID: <b className="text-slate-700">{e.id}</b></>}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   )}
                 </div>
+              )}
+              {result.skippedRows && result.skippedRows.length > 0 && (
+                <details className="rounded-xl ring-1 ring-amber-200 bg-amber-50/40 overflow-hidden">
+                  <summary className="cursor-pointer px-4 py-2.5 text-[12px] font-semibold text-amber-900 hover:bg-amber-50 flex items-center gap-2">
+                    <Info className="h-4 w-4" />
+                    {result.skipped} ta dublikat skip ({Math.min(result.skipped, 100)} ta ko'rsatilgan)
+                  </summary>
+                  <div className="max-h-72 overflow-y-auto divide-y divide-amber-100">
+                    {result.skippedRows.map((s, i) => (
+                      <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
+                        <span className="font-mono text-amber-700 shrink-0">Qator {s.row}</span>
+                        <div className="font-mono text-[10px] text-slate-600">
+                          Дог №: <b className="text-slate-800">{s.contractNo}</b>
+                          <span className="mx-2">·</span>
+                          ID: <b className="text-slate-800">{s.id}</b>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               )}
             </div>
           )}
@@ -867,9 +910,8 @@ function OplataKvImportPanel() {
         )}
       </Card>
 
-      {/* Import tarixi — bu komponent allaqachon barcha kind'larni ko'rsatadi.
-          oplata-kv kind'i frontendda alohida filter qilinmaydi (xohlasak `kind` filter qo'shish mumkin) */}
-      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} />
+      {/* Import tarixi — faqat oplata-kv kind'i */}
+      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} kind="oplata-kv" />
     </div>
   );
 }

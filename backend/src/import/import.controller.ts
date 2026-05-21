@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, Param, Post, Res,
+  BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -35,11 +35,13 @@ export class ImportController {
 
   @Get('batches')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @ApiOperation({ summary: "Import batch'lari ro'yxati (tarix)" })
-  async listBatches() {
-    // Eski import'larni (batch'siz) avto-guruhlash — bir martalik
-    await this.svc.backfillLegacyBatch();
-    return this.svc.listBatches();
+  @ApiOperation({ summary: "Import batch'lari ro'yxati (tarix) — ?kind= filter bilan" })
+  async listBatches(@Query('kind') kind?: string) {
+    // Eski import'larni (batch'siz) avto-guruhlash — bir martalik (faqat transactions uchun)
+    if (!kind || kind === 'transactions') {
+      await this.svc.backfillLegacyBatch();
+    }
+    return this.svc.listBatches(kind);
   }
 
   @Delete('batches/:id')

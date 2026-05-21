@@ -347,8 +347,9 @@ export class ImportService {
   // ═══ BATCH MANAGEMENT ═══════════════════════════════════════════════
 
   /** Barcha import batch'lar (yangi avval) — frontend tarix uchun */
-  async listBatches() {
+  async listBatches(kind?: string) {
     const batches = await this.prisma.importBatch.findMany({
+      where: kind ? { kind } : undefined,
       orderBy: { importedAt: 'desc' },
       take: 200,
     });

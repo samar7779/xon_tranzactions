@@ -13,8 +13,10 @@ export interface ImportResult {
   added: number;
   skipped: number;
   errors: number;
-  errorRows: Array<{ row: number; reason: string }>;
+  errorRows: Array<{ row: number; reason: string; id?: string; contractNo?: string }>;
+  skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }>;
   batchId?: string;
+  duration: number; // sekund
 }
 
 @Injectable()
@@ -259,14 +261,40 @@ export class OplataKvService {
       },
     });
 
+    const startTs = Date.now();
     const result: ImportResult = {
       total: 0, added: 0, skipped: 0, errors: 0,
       errorRows: [],
+      skippedRows: [],
       batchId: batch.id,
+      duration: 0,
     };
 
     // Birinchi qator — sarlavha, o'tkazib yuboramiz
     const rowCount = ws.actualRowCount || ws.rowCount;
+
+    // Performance optimizatsiya: barcha ID'larni avval to'plab, bitta zaprosda
+    // mavjudligini tekshiramiz (har bir qator uchun alohida findUnique chaqirilmaydi).
+    const allIds: Array<{ row: number; id: string }> = [];
+    for (let r = 2; r <= rowCount; r++) {
+      const row = ws.getRow(r);
+      const idValue = this.cellText(row.getCell(13));
+      if (idValue) allIds.push({ row: r, id: idValue });
+    }
+    const existingIdSet = new Set<string>();
+    if (allIds.length > 0) {
+      const CHUNK = 1000;
+      for (let i = 0; i < allIds.length; i += CHUNK) {
+        const chunk = allIds.slice(i, i + CHUNK);
+        const found = await this.prisma.oplataKv.findMany({
+          where: { id: { in: chunk.map((x) => x.id) } },
+          select: { id: true },
+        });
+        for (const f of found) existingIdSet.add(f.id);
+      }
+    }
+    this.log.log(`ОплатыКв import: ${allIds.length} ID dan ${existingIdSet.size} ta mavjud`);
+
     for (let r = 2; r <= rowCount; r++) {
       const row = ws.getRow(r);
       // Bo'sh qatorni o'tkazib yuborish
@@ -274,10 +302,11 @@ export class OplataKvService {
       if (!hasAny) continue;
 
       result.total++;
+      const contractNo = this.cellText(row.getCell(1));
+      const idValue   = this.cellText(row.getCell(13));
+
       try {
-        const contractNo = this.cellText(row.getCell(1));
         const dateRaw   = row.getCell(2).value;
-        const idValue   = this.cellText(row.getCell(13));
 
         if (!contractNo) throw new Error('Дог № bo\'sh');
         if (!idValue)    throw new Error('ID ustuni bo\'sh — majburiy');
@@ -285,10 +314,15 @@ export class OplataKvService {
         const date = this.parseDate(dateRaw);
         if (!date) throw new Error('Дата formati noto\'g\'ri (kerakli: dd.mm.yyyy)');
 
-        // Dublikat tekshirish — ID bo'yicha
-        const existing = await this.prisma.oplataKv.findUnique({ where: { id: idValue } });
-        if (existing) {
+        // Dublikat tekshirish — set'dan
+        if (existingIdSet.has(idValue)) {
           result.skipped++;
+          if (result.skippedRows.length < 100) {
+            result.skippedRows.push({
+              row: r, id: idValue, contractNo,
+              reason: 'ID DB\'da allaqachon bor',
+            });
+          }
           continue;
         }
 
@@ -332,12 +366,22 @@ export class OplataKvService {
           },
         });
 
+        // Insert qilingan ID'ni set'ga qoshamiz — fayl ichidagi dublikatlar uchun
+        existingIdSet.add(idValue);
         result.added++;
       } catch (e: any) {
         result.errors++;
-        result.errorRows.push({ row: r, reason: e?.message || 'Noma\'lum xato' });
+        if (result.errorRows.length < 200) {
+          result.errorRows.push({
+            row: r,
+            reason: e?.message || 'Noma\'lum xato',
+            id: idValue || undefined,
+            contractNo: contractNo || undefined,
+          });
+        }
       }
     }
+    result.duration = Math.round((Date.now() - startTs) / 1000);
 
     // Batch ma'lumotlarini yangilab qoyamiz
     await this.prisma.importBatch.update({
