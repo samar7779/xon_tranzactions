@@ -270,34 +270,18 @@ export class OplataKvService {
       duration: 0,
     };
 
-    // Birinchi qator — sarlavha, o'tkazib yuboramiz
     const rowCount = ws.actualRowCount || ws.rowCount;
 
-    // Performance optimizatsiya: barcha ID'larni avval to'plab, bitta zaprosda
-    // mavjudligini tekshiramiz (har bir qator uchun alohida findUnique chaqirilmaydi).
-    const allIds: Array<{ row: number; id: string }> = [];
-    for (let r = 2; r <= rowCount; r++) {
-      const row = ws.getRow(r);
-      const idValue = this.cellText(row.getCell(13));
-      if (idValue) allIds.push({ row: r, id: idValue });
-    }
-    const existingIdSet = new Set<string>();
-    if (allIds.length > 0) {
-      const CHUNK = 1000;
-      for (let i = 0; i < allIds.length; i += CHUNK) {
-        const chunk = allIds.slice(i, i + CHUNK);
-        const found = await this.prisma.oplataKv.findMany({
-          where: { id: { in: chunk.map((x) => x.id) } },
-          select: { id: true },
-        });
-        for (const f of found) existingIdSet.add(f.id);
-      }
-    }
-    this.log.log(`ОплатыКв import: ${allIds.length} ID dan ${existingIdSet.size} ta mavjud`);
+    // ─── 1-bosqich: barcha qatorlarni Excel'dan o'qib, valid yozuvlarni to'plash ───
+    type ValidRow = {
+      row: number;
+      data: any;
+    };
+    const validRows: ValidRow[] = [];
+    const allCandidateIds: string[] = [];
 
     for (let r = 2; r <= rowCount; r++) {
       const row = ws.getRow(r);
-      // Bo'sh qatorni o'tkazib yuborish
       const hasAny = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].some((c) => this.cellText(row.getCell(c)) !== '');
       if (!hasAny) continue;
 
@@ -307,68 +291,38 @@ export class OplataKvService {
 
       try {
         const dateRaw   = row.getCell(2).value;
-
         if (!contractNo) throw new Error('Дог № bo\'sh');
         if (!idValue)    throw new Error('ID ustuni bo\'sh — majburiy');
 
         const date = this.parseDate(dateRaw);
         if (!date) throw new Error('Дата formati noto\'g\'ri (kerakli: dd.mm.yyyy)');
 
-        // Dublikat tekshirish — set'dan
-        if (existingIdSet.has(idValue)) {
-          result.skipped++;
-          if (result.skippedRows.length < 100) {
-            result.skippedRows.push({
-              row: r, id: idValue, contractNo,
-              reason: 'ID DB\'da allaqachon bor',
-            });
-          }
-          continue;
-        }
-
         const paymentAmount    = this.parseAmountOrNull(row.getCell(3).value);
         const firstInstallment = this.parseAmountOrNull(row.getCell(4).value);
         const monthlyAmount    = this.parseAmountOrNull(row.getCell(5).value);
 
-        const purpose       = this.cellText(row.getCell(6)) || null;
-        const txType        = this.cellText(row.getCell(7)).slice(0, 60) || null;
-        const note          = this.cellText(row.getCell(8)) || null;
-        const paymentCategory = this.parseCategory(this.cellText(row.getCell(9)));
-        const object        = this.cellText(row.getCell(10)).slice(0, 255) || null;
-        const client        = this.cellText(row.getCell(11)).slice(0, 255) || null;
-        const paymentMethod = this.cellText(row.getCell(12)).slice(0, 120) || null;
-
-        const createData: any = {
-          id: idValue, // Excel'dan kelgan uniq ID
-          contractNo: contractNo.slice(0, 50),
-          date,
-          paymentAmount:    paymentAmount    !== null ? new Prisma.Decimal(paymentAmount)    : null,
-          firstInstallment: firstInstallment !== null ? new Prisma.Decimal(firstInstallment) : null,
-          monthlyAmount:    monthlyAmount    !== null ? new Prisma.Decimal(monthlyAmount)    : null,
-          purpose, txType, note, paymentCategory, object, client, paymentMethod,
-          createdById:   actor.id   ?? null,
-          createdByName: actor.name ?? null,
-          importBatchId: batch.id,
-        };
-        await this.prisma.oplataKv.create({ data: createData });
-
-        // History yozuvi
-        await this.prisma.oplataKvHistory.create({
+        validRows.push({
+          row: r,
           data: {
-            oplataKvId: idValue,
-            action: 'imported',
-            actorType: actor.id ? 'user' : 'system',
-            actorId: actor.id ?? null,
-            actorName: actor.name ?? null,
-            fieldsChanged: ['*'],
-            changes: { batchId: batch.id, fileName } as any,
-            note: `Excel'dan import qilindi (batch ${batch.id.slice(0, 8)})`,
+            id: idValue,
+            contractNo: contractNo.slice(0, 50),
+            date,
+            paymentAmount:    paymentAmount    !== null ? new Prisma.Decimal(paymentAmount)    : null,
+            firstInstallment: firstInstallment !== null ? new Prisma.Decimal(firstInstallment) : null,
+            monthlyAmount:    monthlyAmount    !== null ? new Prisma.Decimal(monthlyAmount)    : null,
+            purpose:        this.cellText(row.getCell(6)) || null,
+            txType:         this.cellText(row.getCell(7)).slice(0, 60) || null,
+            note:           this.cellText(row.getCell(8)) || null,
+            paymentCategory: this.parseCategory(this.cellText(row.getCell(9))),
+            object:         this.cellText(row.getCell(10)).slice(0, 255) || null,
+            client:         this.cellText(row.getCell(11)).slice(0, 255) || null,
+            paymentMethod:  this.cellText(row.getCell(12)).slice(0, 120) || null,
+            createdById:    actor.id   ?? null,
+            createdByName:  actor.name ?? null,
+            importBatchId:  batch.id,
           },
         });
-
-        // Insert qilingan ID'ni set'ga qoshamiz — fayl ichidagi dublikatlar uchun
-        existingIdSet.add(idValue);
-        result.added++;
+        allCandidateIds.push(idValue);
       } catch (e: any) {
         result.errors++;
         if (result.errorRows.length < 200) {
@@ -381,6 +335,88 @@ export class OplataKvService {
         }
       }
     }
+    this.log.log(`ОплатыКв import: ${result.total} qator, ${validRows.length} valid, ${result.errors} xato`);
+
+    // ─── 2-bosqich: barcha ID'larni bitta zaprosda tekshirish ───
+    const existingIdSet = new Set<string>();
+    if (allCandidateIds.length > 0) {
+      const CHUNK = 5000;
+      for (let i = 0; i < allCandidateIds.length; i += CHUNK) {
+        const chunk = allCandidateIds.slice(i, i + CHUNK);
+        const found = await this.prisma.oplataKv.findMany({
+          where: { id: { in: chunk } },
+          select: { id: true },
+        });
+        for (const f of found) existingIdSet.add(f.id);
+      }
+    }
+    this.log.log(`ОплатыКв import: ${existingIdSet.size} ta dublikat ID topildi`);
+
+    // Dublikatlarni va fayl ichidagi takrorlarni ajratish
+    const seenInFile = new Set<string>();
+    const toInsert: any[] = [];
+    for (const v of validRows) {
+      const id: string = v.data.id;
+      if (existingIdSet.has(id) || seenInFile.has(id)) {
+        result.skipped++;
+        if (result.skippedRows.length < 100) {
+          result.skippedRows.push({
+            row: v.row,
+            id,
+            contractNo: v.data.contractNo,
+            reason: existingIdSet.has(id) ? 'ID DB\'da allaqachon bor' : 'Fayl ichida takror ID',
+          });
+        }
+        continue;
+      }
+      seenInFile.add(id);
+      toInsert.push(v.data);
+    }
+
+    // ─── 3-bosqich: BULK INSERT (chunk'larda) ───
+    const INSERT_CHUNK = 1000;
+    for (let i = 0; i < toInsert.length; i += INSERT_CHUNK) {
+      const chunk = toInsert.slice(i, i + INSERT_CHUNK);
+      try {
+        const r = await this.prisma.oplataKv.createMany({
+          data: chunk,
+          skipDuplicates: true,
+        });
+        result.added += r.count;
+      } catch (e: any) {
+        this.log.error(`Bulk insert xato (chunk ${i}): ${e?.message}`);
+        // Chunk xato bersa, qatorlarni alohida xato qilamiz
+        for (const item of chunk) {
+          result.errors++;
+          if (result.errorRows.length < 200) {
+            result.errorRows.push({
+              row: -1, reason: `Bulk insert xato: ${e?.message || 'noma\'lum'}`,
+              id: item.id, contractNo: item.contractNo,
+            });
+          }
+        }
+      }
+      if (i % (INSERT_CHUNK * 5) === 0) {
+        this.log.log(`ОплатыКв import: ${i + chunk.length} / ${toInsert.length} qoshildi`);
+      }
+    }
+
+    // ─── 4-bosqich: BULK HISTORY (bitta yozuv har 1000 qator uchun emas, batch summary uchun) ───
+    // Har bir qator uchun alohida history yozuvi yaratish o'rniga, bitta batch summary yozamiz.
+    // Bu 70k qator uchun 70k → 1 yozuv (juda tez).
+    await this.prisma.oplataKvHistory.create({
+      data: {
+        oplataKvId: `BATCH-${batch.id}`, // batch-level marker
+        action: 'imported',
+        actorType: actor.id ? 'user' : 'system',
+        actorId: actor.id ?? null,
+        actorName: actor.name ?? null,
+        fieldsChanged: ['*'],
+        changes: { batchId: batch.id, fileName, count: result.added } as any,
+        note: `Excel'dan ${result.added} ta qator import qilindi (batch ${batch.id.slice(0, 8)})`,
+      },
+    });
+
     result.duration = Math.round((Date.now() - startTs) / 1000);
 
     // Batch ma'lumotlarini yangilab qoyamiz
