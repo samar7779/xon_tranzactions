@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, BookUser, CreditCard, X,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -24,9 +24,8 @@ interface NavItem {
 const NAV: NavItem[] = [
   { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
-  { href: '/crm',          key: 'crm',          icon: BookUser,        group: 'main',  permission: PERMS.CRM_VIEW },
-  // Biling — XonPay reconciliation (Kapitalbank vs CRM)
-  { href: '/biling',       key: 'biling',       icon: CreditCard,       group: 'main',  permission: PERMS.CRM_VIEW },
+  // ОплатыКв — CRM + Billing bitta bo'lim, tab bar bilan
+  { href: '/oplatykv',     key: 'oplatykv',     icon: Home,             group: 'main',  permission: PERMS.CRM_VIEW },
 
   { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
 
