@@ -17,10 +17,24 @@ import {
 type AuthUser = { id?: string; email?: string; fullName?: string };
 
 function actorFrom(u?: AuthUser) {
+  // To'liq ism + email — audit log uchun aniq ma'lumot
+  const parts: string[] = [];
+  if (u?.fullName) parts.push(u.fullName);
+  if (u?.email) parts.push(u.email);
   return {
     id: u?.id ?? null,
-    name: u?.fullName || u?.email || null,
+    name: parts.length > 0 ? parts.join(' · ') : null,
   };
+}
+
+/** Multer originalname'ni Latin-1 → UTF-8 ga to'g'ri o'tkazadi (kirill harflar uchun). */
+function fixFileName(name?: string): string | undefined {
+  if (!name) return name;
+  try {
+    return Buffer.from(name, 'latin1').toString('utf8');
+  } catch {
+    return name;
+  }
 }
 
 @ApiTags('oplata-kv')
@@ -86,7 +100,7 @@ export class OplataKvController {
     @CurrentUser() user?: AuthUser,
   ) {
     if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
-    return this.svc.importExcel(file.buffer, actorFrom(user), file?.originalname);
+    return this.svc.importExcel(file.buffer, actorFrom(user), fixFileName(file?.originalname));
   }
 
   @Delete('import-batch/:id')
