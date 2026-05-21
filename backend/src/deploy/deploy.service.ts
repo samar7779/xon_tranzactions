@@ -148,4 +148,99 @@ export class DeployService {
       return `log fayli yo'q: ${this.logFile}\n(${e?.message})`;
     }
   }
+
+  /**
+   * Log'ning oxirgi yozuvlaridan deploy holatini aniqlaydi.
+   * Telegram bilan ulanish bo'lmasa ham, UI shu yerdan status ola oladi.
+   */
+  async status() {
+    try {
+      const buf = await fs.readFile(this.logFile, 'utf8');
+      const lines = buf.split('\n').filter((l) => l.trim());
+      const last500 = lines.slice(-500);
+
+      // Oxirgi DEPLOY START, OK yoki FAIL'ni topamiz
+      let lastStart: { time: string; raw: string } | null = null;
+      let lastEnd: { time: string; status: 'success' | 'failed'; message: string; raw: string } | null = null;
+      let lastError: string | null = null;
+
+      for (let i = last500.length - 1; i >= 0; i--) {
+        const line = last500[i];
+        if (!lastEnd) {
+          const okMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*DEPLOY OK\s*·?\s*(\d+s)?/);
+          if (okMatch) {
+            lastEnd = { time: okMatch[1], status: 'success', message: `Tugadi ${okMatch[2] || ''}`.trim(), raw: line };
+            continue;
+          }
+          const failMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*✗ FAIL:\s*(.+)/);
+          if (failMatch) {
+            lastEnd = { time: failMatch[1], status: 'failed', message: failMatch[2], raw: line };
+            continue;
+          }
+        }
+        if (!lastStart) {
+          const startMatch = line.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}).*DEPLOY START/);
+          if (startMatch) {
+            lastStart = { time: startMatch[1], raw: line };
+            // Topdik — oxirgi start
+          }
+        }
+        if (lastEnd && lastStart) break;
+      }
+
+      // Xato qatorni ham olamiz (TS xato bo'lsa foydali)
+      if (lastEnd?.status === 'failed') {
+        for (let i = last500.length - 1; i >= 0; i--) {
+          const line = last500[i];
+          if (/error TS\d+|Cannot find|Module not found/i.test(line)) {
+            lastError = line;
+            break;
+          }
+        }
+      }
+
+      // Joriy holat
+      let state: 'idle' | 'running' | 'success' | 'failed' = 'idle';
+      const startTs = lastStart ? new Date(lastStart.time).getTime() : 0;
+      const endTs = lastEnd ? new Date(lastEnd.time).getTime() : 0;
+
+      if (lastStart && startTs > endTs) {
+        // Start oxirgi event — hali davom etyapti (yoki crashed)
+        const age = (Date.now() - startTs) / 1000;
+        if (age < 600) state = 'running';
+        else state = lastEnd?.status || 'idle';
+      } else if (lastEnd) {
+        state = lastEnd.status;
+      }
+
+      // Joriy git HEAD
+      let currentCommit = '';
+      try {
+        const headPath = path.join(this.repoDir, '.git/HEAD');
+        const headRef = (await fs.readFile(headPath, 'utf8')).trim();
+        if (headRef.startsWith('ref: ')) {
+          const refPath = path.join(this.repoDir, '.git', headRef.slice(5));
+          currentCommit = (await fs.readFile(refPath, 'utf8')).trim().slice(0, 8);
+        } else {
+          currentCommit = headRef.slice(0, 8);
+        }
+      } catch { /* ignore */ }
+
+      return {
+        ok: true,
+        state,
+        currentCommit,
+        startedAt: lastStart?.time || null,
+        finishedAt: lastEnd?.time || null,
+        message: lastEnd?.message || null,
+        error: lastError,
+      };
+    } catch (e: any) {
+      return {
+        ok: false,
+        state: 'idle' as const,
+        error: e?.message || 'log fayli o\'qilmadi',
+      };
+    }
+  }
 }
