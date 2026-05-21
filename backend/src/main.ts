@@ -14,7 +14,11 @@ async function bootstrap() {
   });
 
   // Body parser limit oshiriladi (katta Excel import uchun)
-  app.use(json({ limit: '100mb' }));
+  // verify: GitHub webhook HMAC uchun xom body'ni req.rawBody'da saqlash
+  app.use(json({
+    limit: '100mb',
+    verify: (req: any, _res, buf) => { req.rawBody = buf; },
+  }));
   app.use(urlencoded({ limit: '100mb', extended: true }));
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT', 3001);
