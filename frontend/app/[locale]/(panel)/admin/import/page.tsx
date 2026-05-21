@@ -729,7 +729,7 @@ function OplataKvImportPanel() {
     mutationFn: async (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      return api.postForm<ImportResult>('/oplata-kv/import', fd, { timeout: 300_000 });
+      return api.postForm<ImportResult>('/oplata-kv/import', fd, { timeout: 1_800_000 }); // 30 daqiqa
     },
     onSuccess: (r) => {
       setResult(r);
