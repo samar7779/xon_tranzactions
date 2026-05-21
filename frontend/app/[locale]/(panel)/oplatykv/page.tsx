@@ -1,8 +1,9 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { BookUser, CreditCard, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 
 export default function OplatyKvOverview() {
   const { locale } = useParams<{ locale: string }>();
@@ -23,8 +24,8 @@ export default function OplatyKvOverview() {
             className="group relative overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-soft hover:shadow-lg hover:ring-indigo-300 transition-all p-6"
           >
             <div className="flex items-start gap-4">
-              <span className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 grid place-items-center text-white shadow-md shadow-indigo-500/30 shrink-0">
-                <BookUser className="h-6 w-6" />
+              <span className="relative w-14 h-14 rounded-xl overflow-hidden bg-white ring-1 ring-slate-200 shadow-sm shrink-0">
+                <Image src="/xon-saroy-logo.png" alt="XonSaroy" fill sizes="56px" className="object-contain p-1.5" />
               </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -44,8 +45,8 @@ export default function OplatyKvOverview() {
             className="group relative overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-soft hover:shadow-lg hover:ring-violet-300 transition-all p-6"
           >
             <div className="flex items-start gap-4">
-              <span className="w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white shadow-md shadow-violet-500/30 shrink-0">
-                <CreditCard className="h-6 w-6" />
+              <span className="relative w-14 h-14 rounded-xl overflow-hidden bg-white ring-1 ring-slate-200 shadow-sm shrink-0">
+                <Image src="/xonpay.jpg" alt="XonPay" fill sizes="56px" className="object-cover" />
               </span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">

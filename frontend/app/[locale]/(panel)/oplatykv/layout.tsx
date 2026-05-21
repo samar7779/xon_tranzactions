@@ -1,15 +1,15 @@
 'use client';
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { BookUser, CreditCard, Home } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', icon: Home,       exact: true  },
-  { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      icon: BookUser,   exact: false },
-  { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  icon: CreditCard, exact: false },
+  { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', img: '/sheets.png',         exact: true  },
+  { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      img: '/xon-saroy-logo.png', exact: false },
+  { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  img: '/xonpay.jpg',         exact: false },
 ];
 
 export default function OplatyKvLayout({ children }: { children: React.ReactNode }) {
@@ -32,7 +32,6 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
           {TABS.map((t) => {
             const href = `/${locale}${t.href}`;
             const active = activeKey === t.key;
-            const Icon = t.icon;
             return (
               <Link
                 key={t.key}
@@ -46,7 +45,12 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
                     : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
                 )}
               >
-                <Icon className={cn('h-4 w-4 transition-colors', active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600')} />
+                <span className={cn(
+                  'relative w-5 h-5 rounded-md overflow-hidden ring-1 transition-all shrink-0',
+                  active ? 'ring-indigo-200 shadow-sm' : 'ring-slate-200 group-hover:ring-slate-300',
+                )}>
+                  <Image src={t.img} alt={t.label} fill sizes="20px" className="object-contain" />
+                </span>
                 <span>{t.label}</span>
               </Link>
             );
