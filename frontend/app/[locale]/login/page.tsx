@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
+import { cn } from '@/lib/utils';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { ShowcaseStage } from '@/components/showcase-stage';
 
@@ -86,8 +87,8 @@ export default function LoginPage() {
            style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
       {/* Top-right: clock + language */}
-      <div className="absolute top-5 right-5 z-30 flex items-center gap-4">
-        <div className="text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
+      <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2 sm:gap-4">
+        <div className="hidden sm:block text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
           <div className="tabular-nums text-cyan-200">{clock}</div>
           <div className="text-cyan-400/40">{t('tashkent')}</div>
         </div>
@@ -97,24 +98,24 @@ export default function LoginPage() {
       </div>
 
       {/* Top-left: system online */}
-      <div className="absolute top-5 left-5 z-30 text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
-        <div className="flex items-center gap-2">
+      <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 text-[9px] sm:text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
           </span>
           <span>{t('systemOnline')}</span>
         </div>
-        <div className="mt-1 text-cyan-400/40">{tApp('title').toUpperCase()}</div>
+        <div className="mt-1 text-cyan-400/40 hidden sm:block">{tApp('title').toUpperCase()}</div>
       </div>
 
       {/* Kirish CTA — markazda pastda, faqat panel yopiq bo'lganda ko'rinadi */}
-      <div className={`absolute bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
+      <div className={`absolute bottom-8 sm:bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
         open ? 'opacity-0 translate-y-8 pointer-events-none' : 'opacity-100 translate-y-0'
       }`}>
         <button
           onClick={() => setOpen(true)}
-          className="group relative px-8 h-14 rounded-full overflow-hidden
+          className="group relative px-6 sm:px-8 h-12 sm:h-14 rounded-full overflow-hidden
                      bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
                      ring-2 ring-amber-200/60
                      shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
@@ -136,20 +137,20 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Right-side slide-in login panel */}
-      <div className={`fixed top-0 right-0 h-full w-[460px] max-w-[92vw] z-50
+      {/* Right-side slide-in login panel — telefonda to'liq ekran */}
+      <div className={`fixed top-0 right-0 h-full w-full sm:w-[460px] sm:max-w-[92vw] z-50
                        transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                        ${open ? 'translate-x-0' : 'translate-x-full'}`}>
 
-        {/* Soft fade edge to the left of panel */}
-        <div className="absolute inset-y-0 -left-16 w-16 bg-gradient-to-r from-transparent to-[rgba(6,14,29,0.6)] pointer-events-none" />
+        {/* Soft fade edge to the left of panel — faqat sm+ */}
+        <div className="hidden sm:block absolute inset-y-0 -left-16 w-16 bg-gradient-to-r from-transparent to-[rgba(6,14,29,0.6)] pointer-events-none" />
 
-        <div className="relative h-full overflow-hidden
+        <div className="relative h-full overflow-y-auto overflow-x-hidden
                         bg-[linear-gradient(180deg,rgba(8,18,38,0.95)_0%,rgba(6,14,29,0.97)_100%)]
                         backdrop-blur-xl
                         border-l border-cyan-400/30
                         shadow-[-30px_0_80px_-10px_rgba(0,0,0,0.7),inset_4px_0_30px_-15px_rgba(34,211,238,0.25)]
-                        p-9 sm:p-11 flex flex-col">
+                        p-5 sm:p-9 md:p-11 flex flex-col">
 
           {/* HUD background — subtle scan grid */}
           <div className="absolute inset-0 opacity-[0.06] pointer-events-none"
@@ -189,13 +190,13 @@ export default function LoginPage() {
           </button>
 
           {/* Sarlavha */}
-          <div className="relative mt-6 mb-8" style={{ animation: open ? 'login-stagger 0.6s 0.15s both' : 'none' }}>
+          <div className="relative mt-4 sm:mt-6 mb-6 sm:mb-8" style={{ animation: open ? 'login-stagger 0.6s 0.15s both' : 'none' }}>
             <div className="flex items-center gap-2 text-[10px] tracking-[0.3em] uppercase text-cyan-400/80 font-mono mb-2">
               <span className="w-4 h-px bg-cyan-400/60" />
               <span>· ID · 0001 ·</span>
               <span className="flex-1 h-px bg-gradient-to-r from-cyan-400/30 to-transparent" />
             </div>
-            <h1 className="text-[26px] font-bold tracking-[0.06em] uppercase text-cyan-50
+            <h1 className="text-[20px] sm:text-[26px] font-bold tracking-[0.06em] uppercase text-cyan-50
                            drop-shadow-[0_0_18px_rgba(34,211,238,0.5)]">
               {t('loginTitle')}
             </h1>
@@ -334,9 +335,12 @@ export default function LoginPage() {
         }
       `}</style>
 
-      {/* Pastki readout */}
-      <div className="absolute bottom-5 left-5 right-5 z-30
-                      flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none">
+      {/* Pastki readout — panel ochilganda telefonda yashiriladi (joy yetmaydi) */}
+      <div className={cn(
+        "absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 z-30",
+        "flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none",
+        open && "hidden sm:flex",
+      )}>
         <span>· {t('authRequired')} ·</span>
         <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
       </div>
