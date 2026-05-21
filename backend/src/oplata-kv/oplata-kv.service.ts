@@ -8,7 +8,7 @@ import {
 
 type Actor = { id?: string | null; name?: string | null };
 
-interface ImportResult {
+export interface ImportResult {
   total: number;
   added: number;
   skipped: number;
