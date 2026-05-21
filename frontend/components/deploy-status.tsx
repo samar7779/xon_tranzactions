@@ -1,4 +1,5 @@
 'use client';
+// rebuild trigger — deploy status badge ko'rinishi uchun
 
 import { useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';

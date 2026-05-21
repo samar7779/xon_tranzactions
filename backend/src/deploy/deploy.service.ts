@@ -9,7 +9,7 @@ import * as path from 'path';
  * Deploy webhook xizmati — xonapp/backend/deploy.py pattern'ini takrorlaydi.
  *
  * GitHub push → POST /api/_deploy → HMAC tekshir → git pull → build → restart
- * → Telegram xabar.
+ * → Telegram xabar (yoki UI badge orqali GET /api/_deploy/status).
  *
  * Build sekin (Next.js + Nest) shu sababli ish fonda bajariladi, webhook
  * darrov 200 qaytaradi. Natija Telegram'ga keladi.
