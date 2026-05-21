@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
-  CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto, OplataKvCategoryEnum,
+  CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
 
 type Actor = { id?: string | null; name?: string | null };

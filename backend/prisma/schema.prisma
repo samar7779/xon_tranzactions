@@ -829,7 +829,8 @@ model OplataKv {
   createdById       String?  @map("created_by_id") @db.VarChar(50)       // AdminUser.id
   createdByName     String?  @map("created_by_name") @db.VarChar(190)    // muzlatib qo'yilgan ism
 
-  history           OplataKvHistory[]
+  // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
+  // keyin ham audit log saqlanib qoladi.
 
   @@index([contractNo])
   @@index([date(sort: Desc)])
@@ -847,8 +848,7 @@ enum OplataKvCategory {
 
 model OplataKvHistory {
   id              String   @id @default(cuid())
-  oplataKvId      String   @map("oplata_kv_id")
-  oplataKv        OplataKv @relation(fields: [oplataKvId], references: [id], onDelete: Cascade)
+  oplataKvId      String   @map("oplata_kv_id") @db.VarChar(50)        // OplataKv.id — FK emas (o'chirilgandan keyin ham qoladi)
 
   action          String   @db.VarChar(20)                            // created | edited | deleted | imported
   actorType       String   @map("actor_type") @db.VarChar(10)         // user | system
