@@ -1,4 +1,5 @@
 'use client';
+// rebuild trigger — oplata-kv import kartasi ko'rinishini ta'minlash uchun
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
