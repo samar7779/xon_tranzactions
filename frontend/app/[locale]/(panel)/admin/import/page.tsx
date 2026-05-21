@@ -308,15 +308,18 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState(false); // hidden by default — ustga bosilganda ochiladi
+  const [expanded, setExpanded] = useState(true); // default'da ochiq — diagnostika uchun
 
+  // Diagnostika rejimi: barcha batch'larni olamiz, keyin client tomonda filterlaymiz
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['import-batches', refreshKey, kind || 'all'],
-    queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>(
-      kind ? `/import/batches?kind=${encodeURIComponent(kind)}` : '/import/batches',
-    ),
-    enabled: expanded, // faqat bo'lim ochilganda fetch qiladi
+    queryKey: ['import-batches', refreshKey, 'all'],
+    queryFn: () => api.get<{ ok: boolean; items: ImportBatch[] }>('/import/batches'),
+    enabled: expanded,
   });
+
+  const allBatches = data?.items || [];
+  const filteredBatches = kind ? allBatches.filter((b) => b.kind === kind) : allBatches;
+  const otherKindsCount = kind ? allBatches.length - filteredBatches.length : 0;
 
   const itemLabel = kind === 'oplata-kv' ? 'qator' : 'tranzaksiya';
   const delMut = useMutation({
@@ -358,7 +361,7 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
     return `${(b / 1024 / 1024).toFixed(1)} MB`;
   }
 
-  const batches = data?.items || [];
+  const batches = filteredBatches;
 
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
@@ -371,7 +374,10 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
         <History className="h-4 w-4 text-indigo-600 shrink-0" />
         <div className="text-sm font-semibold text-slate-800">Import tarixi</div>
         {expanded && (
-          <span className="text-[11px] text-slate-400">{batches.length} ta yozuv</span>
+          <span className="text-[11px] text-slate-400">
+            {batches.length} ta yozuv
+            {otherKindsCount > 0 && <span className="ml-1 text-amber-600">(+{otherKindsCount} ta boshqa turdagi yashirilgan)</span>}
+          </span>
         )}
         <span className="ml-auto text-slate-400">
           {expanded
@@ -403,6 +409,12 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                       <span className="text-[12px] font-semibold text-slate-800 truncate" title={b.fileName || ''}>
                         {b.fileName || '(nomsiz)'}
                       </span>
+                      <span className={cn(
+                        'text-[9px] font-bold px-1.5 py-0.5 rounded-full ring-1',
+                        b.kind === 'oplata-kv'
+                          ? 'bg-violet-50 text-violet-700 ring-violet-200'
+                          : 'bg-sky-50 text-sky-700 ring-sky-200',
+                      )}>{b.kind}</span>
                       {b.notes && (
                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">LEGACY</span>
                       )}
