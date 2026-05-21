@@ -28,6 +28,7 @@ const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06
 export default function DashboardPage() {
   const { locale } = useParams<{ locale: string }>();
   const t = useTranslations('dashboard');
+  const tc = useTranslations('common');
 
   const { data: accounts, isLoading: accLoading } = useQuery({
     queryKey: ['accounts'],
@@ -225,7 +226,9 @@ export default function DashboardPage() {
   }, [clientDaily, cliSubCode]);
 
   // ─── XONPAY DEBITOR — XonPay'da ro'yxatda lekin bankka kelmagan to'lovlar ───
-  const [xonpayRange, setXonpayRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
+  // XonPay default — kechagi sana (today-1). XonPay'da bugungi to'lov hali to'liq
+  // sinxron bo'lmagan, shu sababli 'kecha' eng so'nggi to'liq ma'lumotni beradi.
+  const [xonpayRange, setXonpayRange] = useState<'yesterday' | '7d' | '30d' | 'custom'>('yesterday');
   const [xonpayCustomFrom, setXonpayCustomFrom] = useState('');
   const [xonpayCustomTo, setXonpayCustomTo] = useState('');
 
@@ -233,7 +236,11 @@ export default function DashboardPage() {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const today = new Date();
     if (xonpayRange === 'custom') return { from: xonpayCustomFrom, to: xonpayCustomTo };
-    if (xonpayRange === 'today') return { from: fmt(today), to: fmt(today) };
+    if (xonpayRange === 'yesterday') {
+      const yest = new Date(today);
+      yest.setDate(yest.getDate() - 1);
+      return { from: fmt(yest), to: fmt(yest) };
+    }
     const back = xonpayRange === '7d' ? 6 : 29;
     const f = new Date(today);
     f.setDate(f.getDate() - back);
@@ -760,7 +767,7 @@ export default function DashboardPage() {
                 }}
               />
               <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
-                <RangeBtn active={xonpayRange === 'today'} onClick={() => setXonpayRange('today')}>{t('rangeToday')}</RangeBtn>
+                <RangeBtn active={xonpayRange === 'yesterday'} onClick={() => setXonpayRange('yesterday')}>{tc('yesterday')}</RangeBtn>
                 <RangeBtn active={xonpayRange === '7d'} onClick={() => setXonpayRange('7d')}>{t('range7d')}</RangeBtn>
                 <RangeBtn active={xonpayRange === '30d'} onClick={() => setXonpayRange('30d')}>{t('range30d')}</RangeBtn>
                 <RangeBtn active={xonpayRange === 'custom'} onClick={() => setXonpayRange('custom')}>{t('rangeCustom')}</RangeBtn>
