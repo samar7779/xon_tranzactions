@@ -3,6 +3,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -11,6 +12,10 @@ async function bootstrap() {
     rawBody: true, // GitHub webhook HMAC tekshiruvi uchun
     bodyParser: true,
   });
+
+  // Body parser limit oshiriladi (katta Excel import uchun)
+  app.use(json({ limit: '100mb' }));
+  app.use(urlencoded({ limit: '100mb', extended: true }));
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT', 3001);
   const swaggerPath = config.get<string>('SWAGGER_PATH', 'docs');
