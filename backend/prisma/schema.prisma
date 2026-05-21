@@ -804,3 +804,64 @@ model CounterpartyHistory {
   @@index([action])
   @@map("counterparty_history")
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ОплатыКв — Kvartira to'lovlari (alohida muhim jadval)
+// ═══════════════════════════════════════════════════════════════
+model OplataKv {
+  id                String   @id @default(cuid())
+
+  contractNo        String   @map("contract_no") @db.VarChar(50)        // Дог №
+  date              DateTime @db.Date                                    // Дата
+  paymentAmount     Decimal? @map("payment_amount") @db.Decimal(15, 2)   // Сумма оплаты (+/-)
+  firstInstallment  Decimal? @map("first_installment") @db.Decimal(15, 2) // 1 взнос (+/-)
+  monthlyAmount     Decimal? @map("monthly_amount") @db.Decimal(15, 2)   // ежемесячный (+/-)
+  purpose           String?  @db.Text                                    // Назначение платежа
+  txType            String?  @map("tx_type") @db.VarChar(60)             // Тип
+  note              String?  @db.Text                                    // Примечание
+  paymentCategory   OplataKvCategory? @map("payment_category")           // Оплата
+  object            String?  @db.VarChar(255)                            // Объект
+  client            String?  @db.VarChar(255)                            // Клиент
+  paymentMethod     String?  @map("payment_method") @db.VarChar(120)     // Способ оплаты
+
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  createdById       String?  @map("created_by_id") @db.VarChar(50)       // AdminUser.id
+  createdByName     String?  @map("created_by_name") @db.VarChar(190)    // muzlatib qo'yilgan ism
+
+  history           OplataKvHistory[]
+
+  @@index([contractNo])
+  @@index([date(sort: Desc)])
+  @@index([client])
+  @@index([object])
+  @@index([paymentCategory])
+  @@map("oplata_kv")
+}
+
+enum OplataKvCategory {
+  MONTHLY   // ежемесячный
+  FIRST     // 1 взнос
+  GENERAL   // Общий
+}
+
+model OplataKvHistory {
+  id              String   @id @default(cuid())
+  oplataKvId      String   @map("oplata_kv_id")
+  oplataKv        OplataKv @relation(fields: [oplataKvId], references: [id], onDelete: Cascade)
+
+  action          String   @db.VarChar(20)                            // created | edited | deleted | imported
+  actorType       String   @map("actor_type") @db.VarChar(10)         // user | system
+  actorId         String?  @map("actor_id") @db.VarChar(50)
+  actorName       String?  @map("actor_name") @db.VarChar(190)        // full name — muzlatilgan
+  fieldsChanged   String[] @map("fields_changed") @default([])
+  changes         Json?                                                // {field: {old, new}}
+  note            String?  @db.Text
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@index([oplataKvId, createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
+  @@map("oplata_kv_history")
+}

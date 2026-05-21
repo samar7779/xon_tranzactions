@@ -56,6 +56,10 @@ export const PERMISSIONS = {
   // ─── Kategoriyalar ───
   CATEGORIES_VIEW: 'categories:view',
   CATEGORIES_MANAGE: 'categories:manage',
+
+  // ─── ОплатыКв (kvartira to'lovlari) ───
+  OPLATAKV_VIEW: 'oplatakv:view',
+  OPLATAKV_MANAGE: 'oplatakv:manage',
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -159,6 +163,13 @@ export const PERMISSION_GROUPS: { group: string; items: { value: Permission; lab
     ],
   },
   {
+    group: 'ОплатыКв',
+    items: [
+      { value: PERMISSIONS.OPLATAKV_VIEW, label: 'ОплатыКв jadvalini ko\'rish' },
+      { value: PERMISSIONS.OPLATAKV_MANAGE, label: 'ОплатыКв qator qo\'shish/tahrirlash/o\'chirish va import qilish' },
+    ],
+  },
+  {
     group: 'Tizim',
     items: [{ value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' }],
   },
@@ -191,6 +202,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
       PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.CATEGORIES_MANAGE,
+      PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_MANAGE,
     ],
   },
   {
@@ -208,6 +220,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW, PERMISSIONS.COUNTERPARTIES_MANAGE,
       PERMISSIONS.CATEGORIES_VIEW, PERMISSIONS.CATEGORIES_MANAGE,
+      PERMISSIONS.OPLATAKV_VIEW, PERMISSIONS.OPLATAKV_MANAGE,
     ],
   },
   {
@@ -227,6 +240,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.CRM_VIEW,
       PERMISSIONS.COUNTERPARTIES_VIEW,
       PERMISSIONS.CATEGORIES_VIEW,
+      PERMISSIONS.OPLATAKV_VIEW,
     ],
   },
 ];

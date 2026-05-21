@@ -25,6 +25,7 @@ import { CategorizationModule } from './categorization/categorization.module';
 import { ImportModule } from './import/import.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { XonpayModule } from './xonpay/xonpay.module';
+import { OplataKvModule } from './oplata-kv/oplata-kv.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { XonpayModule } from './xonpay/xonpay.module';
     ImportModule,
     AttachmentsModule,
     XonpayModule,
+    OplataKvModule,
   ],
 })
 export class AppModule {}

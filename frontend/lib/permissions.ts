@@ -29,6 +29,8 @@ export const PERMS = {
   COUNTERPARTIES_MANAGE: 'counterparties:manage',
   CATEGORIES_VIEW: 'categories:view',
   CATEGORIES_MANAGE: 'categories:manage',
+  OPLATAKV_VIEW: 'oplatakv:view',
+  OPLATAKV_MANAGE: 'oplatakv:manage',
 } as const;
 
 export type Permission = (typeof PERMS)[keyof typeof PERMS];
