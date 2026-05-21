@@ -97,7 +97,7 @@ export class OplataKvService {
 
   // ───────────────── CREATE ─────────────────
   async create(dto: CreateOplataKvDto, actor: Actor) {
-    const data: Prisma.OplataKvCreateInput = {
+    const data: any = {
       contractNo: dto.contractNo,
       date: new Date(dto.date),
       paymentAmount:    dto.paymentAmount    != null ? new Prisma.Decimal(dto.paymentAmount)    : null,
@@ -106,7 +106,7 @@ export class OplataKvService {
       purpose:        dto.purpose         ?? null,
       txType:         dto.txType          ?? null,
       note:           dto.note            ?? null,
-      paymentCategory: (dto.paymentCategory ?? null) as OplataKvCategory | null,
+      paymentCategory: dto.paymentCategory ?? null,
       object:         dto.object          ?? null,
       client:         dto.client          ?? null,
       paymentMethod:  dto.paymentMethod   ?? null,
@@ -137,16 +137,16 @@ export class OplataKvService {
     const before = await this.prisma.oplataKv.findUnique({ where: { id } });
     if (!before) throw new NotFoundException('ОплатыКв qator topilmadi');
 
-    const data: Prisma.OplataKvUpdateInput = {};
-    if (dto.contractNo       !== undefined) data.contractNo       = dto.contractNo!;
-    if (dto.date             !== undefined) data.date             = new Date(dto.date!);
-    if (dto.paymentAmount    !== undefined) data.paymentAmount    = dto.paymentAmount    === null ? null : new Prisma.Decimal(dto.paymentAmount!);
-    if (dto.firstInstallment !== undefined) data.firstInstallment = dto.firstInstallment === null ? null : new Prisma.Decimal(dto.firstInstallment!);
-    if (dto.monthlyAmount    !== undefined) data.monthlyAmount    = dto.monthlyAmount    === null ? null : new Prisma.Decimal(dto.monthlyAmount!);
+    const data: any = {};
+    if (dto.contractNo       !== undefined) data.contractNo       = dto.contractNo;
+    if (dto.date             !== undefined) data.date             = new Date(dto.date as string);
+    if (dto.paymentAmount    !== undefined) data.paymentAmount    = dto.paymentAmount    === null ? null : new Prisma.Decimal(dto.paymentAmount as number);
+    if (dto.firstInstallment !== undefined) data.firstInstallment = dto.firstInstallment === null ? null : new Prisma.Decimal(dto.firstInstallment as number);
+    if (dto.monthlyAmount    !== undefined) data.monthlyAmount    = dto.monthlyAmount    === null ? null : new Prisma.Decimal(dto.monthlyAmount as number);
     if (dto.purpose          !== undefined) data.purpose          = dto.purpose;
     if (dto.txType           !== undefined) data.txType           = dto.txType;
     if (dto.note             !== undefined) data.note             = dto.note;
-    if (dto.paymentCategory  !== undefined) data.paymentCategory  = (dto.paymentCategory ?? null) as OplataKvCategory | null;
+    if (dto.paymentCategory  !== undefined) data.paymentCategory  = dto.paymentCategory ?? null;
     if (dto.object           !== undefined) data.object           = dto.object;
     if (dto.client           !== undefined) data.client           = dto.client;
     if (dto.paymentMethod    !== undefined) data.paymentMethod    = dto.paymentMethod;
@@ -304,20 +304,19 @@ export class OplataKvService {
         const client        = this.cellText(row.getCell(11)).slice(0, 255) || null;
         const paymentMethod = this.cellText(row.getCell(12)).slice(0, 120) || null;
 
-        await this.prisma.oplataKv.create({
-          data: {
-            id: idValue, // Excel'dan kelgan uniq ID
-            contractNo: contractNo.slice(0, 50),
-            date,
-            paymentAmount:    paymentAmount    !== null ? new Prisma.Decimal(paymentAmount)    : null,
-            firstInstallment: firstInstallment !== null ? new Prisma.Decimal(firstInstallment) : null,
-            monthlyAmount:    monthlyAmount    !== null ? new Prisma.Decimal(monthlyAmount)    : null,
-            purpose, txType, note, paymentCategory, object, client, paymentMethod,
-            createdById:   actor.id   ?? null,
-            createdByName: actor.name ?? null,
-            importBatchId: batch.id,
-          },
-        });
+        const createData: any = {
+          id: idValue, // Excel'dan kelgan uniq ID
+          contractNo: contractNo.slice(0, 50),
+          date,
+          paymentAmount:    paymentAmount    !== null ? new Prisma.Decimal(paymentAmount)    : null,
+          firstInstallment: firstInstallment !== null ? new Prisma.Decimal(firstInstallment) : null,
+          monthlyAmount:    monthlyAmount    !== null ? new Prisma.Decimal(monthlyAmount)    : null,
+          purpose, txType, note, paymentCategory, object, client, paymentMethod,
+          createdById:   actor.id   ?? null,
+          createdByName: actor.name ?? null,
+          importBatchId: batch.id,
+        };
+        await this.prisma.oplataKv.create({ data: createData });
 
         // History yozuvi
         await this.prisma.oplataKvHistory.create({
@@ -378,14 +377,14 @@ export class OplataKvService {
       const ids = rows.map((r) => r.id);
 
       // Audit yozuvi — har bir qatorni o'chirilganini history'ga yozamiz
-      const historyData = ids.map((id) => ({
+      const historyData: any[] = ids.map((id) => ({
         oplataKvId: id,
         action: 'deleted',
-        actorType: 'system' as const,
+        actorType: 'system',
         actorId: null,
         actorName: `import-batch-delete (${batchId.slice(0, 8)})`,
         fieldsChanged: ['*'],
-        changes: { reason: 'Import batch o\'chirildi' } as any,
+        changes: { reason: 'Import batch o\'chirildi' },
         note: `Import batch ${batchId.slice(0, 8)} bilan birga o'chirildi`,
       }));
       await this.prisma.oplataKvHistory.createMany({ data: historyData });

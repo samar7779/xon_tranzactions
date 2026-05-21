@@ -380,14 +380,14 @@ export class ImportService {
         const ids = rows.map((r) => r.id);
 
         // Audit history yozish
-        const historyData = ids.map((id) => ({
+        const historyData: any[] = ids.map((id) => ({
           oplataKvId: id,
           action: 'deleted',
-          actorType: 'system' as const,
+          actorType: 'system',
           actorId: null,
           actorName: `import-batch-delete (${batchId.slice(0, 8)})`,
           fieldsChanged: ['*'],
-          changes: { reason: 'Import batch o\'chirildi' } as any,
+          changes: { reason: 'Import batch o\'chirildi' },
           note: `Import batch ${batchId.slice(0, 8)} bilan birga o'chirildi`,
         }));
         await this.prisma.oplataKvHistory.createMany({ data: historyData });
