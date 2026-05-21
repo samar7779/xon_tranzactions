@@ -249,7 +249,7 @@ fi
 if [ "$need_be" = "1" ]; then
   if [ -d "$REPO/backend" ]; then
     pushd "$REPO/backend" > /dev/null
-    if ! run "backend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
+    if ! run "backend npm ci" npm install --silent --no-audit --no-fund --include=dev --prefer-offline; then
       tg_fail "❌ <b>xon.transactions</b> · backend npm install muvaffaqiyatsiz"
       exit 1
     fi
@@ -282,12 +282,17 @@ fi
 if [ "$need_fe" = "1" ]; then
   if [ -d "$REPO/frontend" ]; then
     pushd "$REPO/frontend" > /dev/null
-    if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev; then
+    if ! run "frontend npm ci" npm install --silent --no-audit --no-fund --include=dev --prefer-offline; then
       tg_fail "❌ <b>xon.transactions</b> · frontend npm install muvaffaqiyatsiz"
       exit 1
     fi
     # Eski temp build qoldiqlarini tozalash
     rm -rf .next-build .next-old
+    # Optimizatsiya: oldingi .next/cache'ni yangi build'ga ko'chiramiz — incremental build (2-3 marta tezroq)
+    if [ -d ".next/cache" ]; then
+      mkdir -p .next-build
+      cp -r .next/cache .next-build/cache 2>/dev/null && log "✓ .next/cache ko'chirildi (incremental build)"
+    fi
     # Temp papkaga build — eski .next tegilmaydi
     if ! run "frontend build (→ .next-build)" env NEXT_DIST_DIR=.next-build npm run build; then
       tg_fail "❌ <b>xon.transactions</b> · frontend build muvaffaqiyatsiz"
