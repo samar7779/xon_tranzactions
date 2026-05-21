@@ -85,7 +85,9 @@ tg() {
     "${DEPLOY_NOTIFY_CHAT}" \
     "$(printf '%s' "$text" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null || printf '"%s"' "$(printf '%s' "$text" | sed 's/"/\\"/g')")" \
     > "$tmp"
-  curl -sS -m 10 -X POST -H "Content-Type: application/json" -d @"$tmp" \
+  # IPv4 (-4) ni majburiy qilish + retry (skript kontekstida IPv6 timeout muammosi bor)
+  curl -sS -4 -m 15 --connect-timeout 8 --retry 2 --retry-delay 1 \
+    -X POST -H "Content-Type: application/json" -d @"$tmp" \
     "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" >> "$LOG" 2>&1 || true
   rm -f "$tmp"
 }
@@ -114,7 +116,7 @@ tg_fail() {
 
   # Zaxira: oxirgi 300 qator log fayl sifatida
   tail -300 "$LOG" 2>/dev/null > /tmp/xon-deploy-fail.log
-  curl -sS -m 15 \
+  curl -sS -4 -m 20 --connect-timeout 8 --retry 2 --retry-delay 1 \
     -F chat_id="${DEPLOY_NOTIFY_CHAT}" \
     -F document=@/tmp/xon-deploy-fail.log \
     "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendDocument" >> "$LOG" 2>&1 || true
