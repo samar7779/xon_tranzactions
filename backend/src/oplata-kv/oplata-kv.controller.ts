@@ -90,11 +90,52 @@ export class OplataKvController {
     return this.svc.remove(id, actorFrom(user));
   }
 
-  // ─── Import ───────────────────────────────────────────────
+  // ─── Import (2-bosqichli: preview + commit) ───────────────────────────────────────────────
+
+  @Post('import/preview')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({
+    summary: "Excel'ni tekshirish (preview) — bazaga qo'shilmaydi",
+    description: "Faylni o'qiydi, qatorlarni tekshiradi, dublikat ID'larni topadi. Natijani cache'da saqlaydi va previewId qaytaradi (30 daqiqa amal qiladi). Bazaga qo'shish uchun /import/commit chaqirilishi kerak.",
+  })
+  async importPreview(
+    @UploadedFile() file: any,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
+    return this.svc.previewImport(file.buffer, actorFrom(user), fixFileName(file?.originalname));
+  }
+
+  @Post('import/commit')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({
+    summary: "Preview tasdiqlash — cache'dagi qatorlarni bazaga qo'shadi",
+    description: "previewImport qaytargan previewId bilan chaqiriladi. Cache'dan o'qib bulk insert qiladi.",
+  })
+  async importCommit(
+    @Body() body: { previewId: string },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    if (!body?.previewId) throw new BadRequestException('previewId yuborilmadi');
+    return this.svc.commitImport(body.previewId, actorFrom(user));
+  }
+
+  @Post('import/cancel')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Preview'ni bekor qilish (cache'dan o'chirish)" })
+  async importCancel(@Body() body: { previewId: string }) {
+    if (!body?.previewId) throw new BadRequestException('previewId yuborilmadi');
+    return this.svc.cancelPreview(body.previewId);
+  }
+
   @Post('import')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: "Excel'dan ОплатыКв qatorlarini import qilish (dublikat ID skip)" })
+  @ApiOperation({
+    summary: "Excel'dan ОплатыКв qatorlarini import qilish (1-bosqichli, eski usul)",
+    description: "Eski usul — preview ko'rsatmasdan to'g'ridan-to'g'ri import. Yangi UI /import/preview + /import/commit ishlatadi.",
+  })
   async importExcel(
     @UploadedFile() file: any,
     @CurrentUser() user?: AuthUser,

@@ -5,7 +5,7 @@ import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Upload, Loader2, AlertTriangle, FileSpreadsheet, X,
+  Upload, Loader2, AlertTriangle, FileSpreadsheet, X, Check,
   ChevronDown, ChevronRight, Info, Wallet, Briefcase, Users,
   FileSignature, Lock, Download, Trash2, History, Home,
 } from 'lucide-react';
@@ -729,41 +729,95 @@ const OPLATA_KV_COLUMNS: Array<{ letter: string; header: string; description: st
   { letter: 'M', header: 'ID',                 description: 'Unikal ID (dublikat skip)', required: true },
 ];
 
+interface ImportPreview {
+  previewId: string;
+  fileName: string | null;
+  total: number;
+  willInsert: number;
+  duplicatesInDb: number;
+  duplicatesInFile: number;
+  errors: number;
+  errorRows: Array<{ row: number; reason: string; id?: string; contractNo?: string }>;
+  skippedRows: Array<{ row: number; id: string; contractNo: string; reason: string }>;
+  duration: number;
+  expiresAt: string;
+}
+
 function OplataKvImportPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorsOpen, setErrorsOpen] = useState(false);
+  const [skippedOpen, setSkippedOpen] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
 
-  const mut = useMutation({
+  // ─── 1-bosqich: PREVIEW (tekshirish, bazaga qo'shilmaydi) ───
+  const previewMut = useMutation({
     mutationFn: async (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      return api.postForm<ImportResult>('/oplata-kv/import', fd, { timeout: 1_800_000 }); // 30 daqiqa
+      return api.postForm<ImportPreview>('/oplata-kv/import/preview', fd, { timeout: 1_800_000 });
     },
-    onSuccess: (r) => {
-      setResult(r);
-      if (r.errors === 0) {
-        toast.success(`${r.added} ta ОплатыКв qatori qo'shildi`);
-      } else {
-        toast(`Tugadi: ${r.added} qo'shildi, ${r.errors} xato`, {
+    onSuccess: (p) => {
+      setPreview(p);
+      setResult(null);
+      if (p.willInsert === 0 && p.errors === 0) {
+        toast(`Hech qaysi yangi qator yo'q — barchasi DB'da bor (${p.duplicatesInDb})`, {
+          icon: 'ℹ️',
+          style: { background: '#eff6ff', color: '#1e40af', border: '1px solid #bfdbfe' },
+        });
+      } else if (p.errors > 0) {
+        toast(`Tekshirildi: ${p.willInsert} yangi, ${p.errors} xato — tasdiqlash kerak`, {
           icon: '⚠️',
           style: { background: '#fffbeb', color: '#92400e', border: '1px solid #fde68a' },
         });
+      } else {
+        toast.success(`Tekshirildi: ${p.willInsert} ta yangi qator tasdiqlash kerak`);
       }
     },
-    onError: (e: any) => toast.error(e?.message || 'Import xato'),
+    onError: (e: any) => toast.error(e?.message || 'Tekshirish xato'),
+  });
+
+  // ─── 2-bosqich: COMMIT (preview tasdiqlash, bazaga qo'shish) ───
+  const commitMut = useMutation({
+    mutationFn: async (previewId: string) => {
+      return api.post<ImportResult>('/oplata-kv/import/commit', { previewId }, { timeout: 1_800_000 });
+    },
+    onSuccess: (r) => {
+      setResult(r);
+      setPreview(null);
+      toast.success(`${r.added} ta ОплатыКв qatori qo'shildi`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Commit xato'),
+  });
+
+  // ─── Preview'ni bekor qilish ───
+  const cancelMut = useMutation({
+    mutationFn: async (previewId: string) => {
+      return api.post('/oplata-kv/import/cancel', { previewId });
+    },
+    onSuccess: () => {
+      setPreview(null);
+      setFileName(null);
+      toast('Bekor qilindi — hech narsa qo\'shilmadi', {
+        icon: '↩️',
+        style: { background: '#f1f5f9', color: '#0f172a', border: '1px solid #cbd5e1' },
+      });
+    },
   });
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setPreview(null);
     setResult(null);
-    mut.mutate(file);
+    previewMut.mutate(file);
     if (fileRef.current) fileRef.current.value = '';
   }
+
+  const busy = previewMut.isPending || commitMut.isPending;
 
   return (
     <div className="space-y-5">
@@ -774,7 +828,7 @@ function OplataKvImportPanel() {
             <div className="text-sm font-semibold text-slate-800">ОплатыКв qatorlarini Excel'dan import qilish</div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <input
               ref={fileRef}
               type="file"
@@ -784,50 +838,66 @@ function OplataKvImportPanel() {
             />
             <Button
               onClick={() => fileRef.current?.click()}
-              disabled={mut.isPending}
+              disabled={busy}
               className="h-12 px-5 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white text-[13px] font-semibold"
             >
-              {mut.isPending ? (
-                <><Loader2 className="h-5 w-5 animate-spin" /> Yuklanmoqda...</>
+              {previewMut.isPending ? (
+                <><Loader2 className="h-5 w-5 animate-spin" /> Tekshirilmoqda...</>
+              ) : commitMut.isPending ? (
+                <><Loader2 className="h-5 w-5 animate-spin" /> Qo'shilmoqda...</>
               ) : (
                 <><Upload className="h-5 w-5" /> Excel yuklash (.xlsx)</>
               )}
             </Button>
-            {fileName && !mut.isPending && (
+            {fileName && !busy && (
               <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
                 <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
               </div>
             )}
           </div>
 
-          {result && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <Stat label="Jami qator"      value={result.total}   color="slate" />
-                <Stat label="Qo'shildi"       value={result.added}   color="emerald" />
-                <Stat label="Dublikat skip"   value={result.skipped} color="amber" />
-                <Stat label="Xato"            value={result.errors}  color="rose" />
-              </div>
-              {typeof result.duration === 'number' && (
-                <div className="text-[11px] text-slate-500">
-                  ⏱ Tugadi: {result.duration} sekund · ~{result.total > 0 ? Math.round(result.total / Math.max(1, result.duration)) : 0} qator/sek
+          {/* 1-bosqich: PREVIEW natijasi ko'rsatiladi (tasdiqlanmaganlar) */}
+          {preview && !result && (
+            <div className="space-y-3 rounded-2xl ring-1 ring-indigo-200 bg-indigo-50/40 p-4">
+              <div className="flex items-center gap-2 pb-1">
+                <Info className="h-4 w-4 text-indigo-600" />
+                <div className="text-[13px] font-semibold text-indigo-900">
+                  Tekshirish natijasi (bazaga hali qo'shilmadi)
                 </div>
-              )}
-              {result.errors > 0 && (
-                <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+                <span className="ml-auto text-[10px] text-indigo-700/70 tabular-nums">
+                  ⏱ {preview.duration}s
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                <Stat label="Jami qator"        value={preview.total}            color="slate" />
+                <Stat label="Yangi (qo'shilishi)" value={preview.willInsert}     color="emerald" />
+                <Stat label="DB'da bor"         value={preview.duplicatesInDb}   color="amber" />
+                <Stat label="Faylda takror"     value={preview.duplicatesInFile} color="amber" />
+                <Stat label="Xato"              value={preview.errors}           color="rose" />
+              </div>
+
+              {/* Xatolar ro'yxati — to'liq ko'rsatamiz, foydalanuvchi qarorga kelishi uchun */}
+              {preview.errors > 0 && (
+                <div className="rounded-xl ring-1 ring-rose-200 bg-white overflow-hidden">
                   <button
                     onClick={() => setErrorsOpen((o) => !o)}
                     className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
-                      {result.errors} ta xato qator (birinchi 200 tasi ko'rsatilgan)
+                      {preview.errors} ta xato qator
+                      {preview.errors > preview.errorRows.length && (
+                        <span className="text-[10px] font-normal text-rose-700">
+                          (birinchi {preview.errorRows.length} tasi ko'rsatilgan)
+                        </span>
+                      )}
                     </span>
                     {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {errorsOpen && (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
-                      {result.errorRows.map((e, i) => (
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 border-t border-rose-200">
+                      {preview.errorRows.map((e, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
                           <span className="font-mono text-rose-700 shrink-0">Qator {e.row}</span>
                           <div className="space-y-0.5">
@@ -846,25 +916,86 @@ function OplataKvImportPanel() {
                   )}
                 </div>
               )}
-              {result.skippedRows && result.skippedRows.length > 0 && (
-                <details className="rounded-xl ring-1 ring-amber-200 bg-amber-50/40 overflow-hidden">
-                  <summary className="cursor-pointer px-4 py-2.5 text-[12px] font-semibold text-amber-900 hover:bg-amber-50 flex items-center gap-2">
-                    <Info className="h-4 w-4" />
-                    {result.skipped} ta dublikat skip ({Math.min(result.skipped, 100)} ta ko'rsatilgan)
-                  </summary>
-                  <div className="max-h-72 overflow-y-auto divide-y divide-amber-100">
-                    {result.skippedRows.map((s, i) => (
-                      <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
-                        <span className="font-mono text-amber-700 shrink-0">Qator {s.row}</span>
-                        <div className="font-mono text-[10px] text-slate-600">
-                          Дог №: <b className="text-slate-800">{s.contractNo}</b>
-                          <span className="mx-2">·</span>
-                          ID: <b className="text-slate-800">{s.id}</b>
+
+              {/* Dublikatlar ro'yxati */}
+              {preview.skippedRows && preview.skippedRows.length > 0 && (
+                <div className="rounded-xl ring-1 ring-amber-200 bg-white overflow-hidden">
+                  <button
+                    onClick={() => setSkippedOpen((o) => !o)}
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-amber-900 hover:bg-amber-50"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      {preview.duplicatesInDb + preview.duplicatesInFile} ta dublikat
+                      (birinchi {preview.skippedRows.length} tasi ko'rsatilgan)
+                    </span>
+                    {skippedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  </button>
+                  {skippedOpen && (
+                    <div className="max-h-72 overflow-y-auto divide-y divide-amber-100 border-t border-amber-200">
+                      {preview.skippedRows.map((s, i) => (
+                        <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
+                          <span className="font-mono text-amber-700 shrink-0">Qator {s.row}</span>
+                          <div className="font-mono text-[10px] text-slate-600">
+                            Дог №: <b className="text-slate-800">{s.contractNo}</b>
+                            <span className="mx-2">·</span>
+                            ID: <b className="text-slate-800">{s.id}</b>
+                            <span className="mx-2 text-amber-600">·</span>
+                            <span className="text-amber-800">{s.reason}</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                </details>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tasdiqlash / bekor */}
+              <div className="flex items-center gap-2 pt-2 border-t border-indigo-200">
+                <Button
+                  variant="outline"
+                  onClick={() => cancelMut.mutate(preview.previewId)}
+                  disabled={busy}
+                  className="gap-1.5"
+                >
+                  <X className="h-4 w-4" />
+                  Bekor qilish
+                </Button>
+                <Button
+                  onClick={() => commitMut.mutate(preview.previewId)}
+                  disabled={busy || preview.willInsert === 0}
+                  className="ml-auto gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                >
+                  {commitMut.isPending ? (
+                    <><Loader2 className="h-4 w-4 animate-spin" /> Qo'shilmoqda...</>
+                  ) : (
+                    <><Check className="h-4 w-4" /> Tasdiqlash — {preview.willInsert.toLocaleString('uz-UZ')} qator qo'shilsin</>
+                  )}
+                </Button>
+              </div>
+              <div className="text-[10px] text-indigo-700/70">
+                💡 Tasdiqlamasangiz hech narsa o'zgarmaydi. Preview 30 daqiqa amal qiladi.
+              </div>
+            </div>
+          )}
+
+          {/* 2-bosqich natijasi: commit'dan keyin */}
+          {result && (
+            <div className="space-y-3 rounded-2xl ring-1 ring-emerald-200 bg-emerald-50/40 p-4">
+              <div className="flex items-center gap-2 pb-1">
+                <Check className="h-4 w-4 text-emerald-600" />
+                <div className="text-[13px] font-semibold text-emerald-900">Import tugadi</div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Stat label="Jami qator"      value={result.total}   color="slate" />
+                <Stat label="Qo'shildi"       value={result.added}   color="emerald" />
+                <Stat label="Dublikat skip"   value={result.skipped} color="amber" />
+                <Stat label="Xato"            value={result.errors}  color="rose" />
+              </div>
+              {typeof result.duration === 'number' && (
+                <div className="text-[11px] text-slate-500">
+                  ⏱ Tugadi: {result.duration} sekund · ~{result.total > 0 ? Math.round(result.total / Math.max(1, result.duration)) : 0} qator/sek
+                </div>
               )}
             </div>
           )}
@@ -921,8 +1052,8 @@ function OplataKvImportPanel() {
         )}
       </Card>
 
-      {/* Import tarixi — faqat oplata-kv kind'i */}
-      <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} kind="oplata-kv" />
+      {/* Import tarixi — faqat oplata-kv kind'i (commit muvaffaqiyatli bo'lganda yangilanadi) */}
+      <BatchHistorySection refreshKey={commitMut.isSuccess ? Date.now() : 0} kind="oplata-kv" />
     </div>
   );
 }
