@@ -95,9 +95,13 @@
     "failedTitle": "Deploy failed",
     "failedDesc": "New version was not deployed. The old version continues to work. Contact administrator.",
     "closeBtn": "Close",
+    "completedTitle": "Completed steps",
+    "waiting": "Waiting...",
+    "live": "LIVE",
     "phases": {
       "git fetch": "Fetching code",
       "git reset": "Setting up code",
+      "git reset --hard origin/main": "Setting up code",
       "backend npm ci": "Backend libraries",
       "backend prisma generate": "Database model",
       "backend prisma db push": "Database sync",
@@ -106,6 +110,8 @@
       "backend build": "Backend build",
       "frontend npm ci": "Frontend libraries",
       "frontend build": "Frontend build (longest phase)",
+      ".next/cache ko'chirildi": "Cache copied",
+      "frontend .next almashtirildi": "New build installed",
       "restart xon-tranzactions-frontend": "Restarting frontend",
       "restart xon-tranzactions-backend": "Restarting backend"
     }

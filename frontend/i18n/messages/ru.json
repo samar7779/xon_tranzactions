@@ -95,9 +95,13 @@
     "failedTitle": "Деплой не удался",
     "failedDesc": "Новая версия не установлена. Старая версия продолжает работать. Обратитесь к администратору.",
     "closeBtn": "Закрыть",
+    "completedTitle": "Выполненные шаги",
+    "waiting": "Ожидание...",
+    "live": "ЖИВО",
     "phases": {
       "git fetch": "Обновление кода",
       "git reset": "Установка кода",
+      "git reset --hard origin/main": "Установка кода",
       "backend npm ci": "Backend библиотеки",
       "backend prisma generate": "Модель базы",
       "backend prisma db push": "Синхронизация базы",
@@ -106,6 +110,8 @@
       "backend build": "Сборка backend",
       "frontend npm ci": "Frontend библиотеки",
       "frontend build": "Сборка frontend (самый длинный этап)",
+      ".next/cache ko'chirildi": "Кэш скопирован",
+      "frontend .next almashtirildi": "Новая сборка установлена",
       "restart xon-tranzactions-frontend": "Перезапуск frontend",
       "restart xon-tranzactions-backend": "Перезапуск backend"
     }

@@ -95,9 +95,13 @@
     "failedTitle": "Deploy muvaffaqiyatsiz",
     "failedDesc": "Yangi versiya tushmadi. Eski versiya ishlashda davom etmoqda. Administratorga murojaat qiling.",
     "closeBtn": "Yopish",
+    "completedTitle": "Bajarilgan bosqichlar",
+    "waiting": "Kutilmoqda...",
+    "live": "JONLI",
     "phases": {
       "git fetch": "Kodni yangilash",
       "git reset": "Kodni o'rnatish",
+      "git reset --hard origin/main": "Kodni o'rnatish",
       "backend npm ci": "Backend kutubxonalari",
       "backend prisma generate": "Baza modeli",
       "backend prisma db push": "Bazani sinxronlash",
@@ -106,6 +110,8 @@
       "backend build": "Backend tuzilishi",
       "frontend npm ci": "Frontend kutubxonalari",
       "frontend build": "Frontend tuzilishi (eng uzun bosqich)",
+      ".next/cache ko'chirildi": "Cache nusxalandi",
+      "frontend .next almashtirildi": "Yangi build o'rnatildi",
       "restart xon-tranzactions-frontend": "Frontend qayta yuklash",
       "restart xon-tranzactions-backend": "Backend qayta yuklash"
     }
