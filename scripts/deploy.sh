@@ -52,20 +52,27 @@ mkdir -p "$(dirname "$LOCK")" 2>/dev/null || true
 ts() { date '+%Y-%m-%d %H:%M:%S'; }
 log() { printf '%s [deploy] %s\n' "$(ts)" "$*" >> "$LOG"; }
 
+# Stale lock cleanup — agar lock fayli bor lekin uni hech qaysi jarayon ushlab turmagan bo'lsa, olib tashlaymiz.
+# Avval flock -n bilan tezda olishga harakat qilamiz. Olmasak, lockfile'ni
+# ushlab turgan jarayon haqiqatdan tirikmi tekshiramiz. Tirik bo'lmasa — olib tashlaymiz.
+if [ -f "$LOCK" ]; then
+  # Lock fayli boshqa fd'da ochilganmi tekshirish uchun fuser ishlatamiz
+  if ! fuser "$LOCK" >/dev/null 2>&1; then
+    log "⚠ stale lock topildi (jarayon yo'q) — tozalaymiz: $LOCK"
+    rm -f "$LOCK"
+  fi
+fi
+
 # Concurrency lock — qisqa kutish (60s). Eski stuck deploy bolib qolsa, tashlab ketamiz.
 exec 9>"$LOCK"
 if ! flock -w 60 9; then
   log "⚠ deploy lock 60s da ololmadi — eski stuck deploy bo'lishi mumkin. Tashlab ketildi."
-  # Telegram'ga xabar (tg() funksiyasi pastda, lekin TG_BOT_TOKEN/CHAT yuqorida set qilingan)
-  TG_FILE=$(mktemp)
-  printf '{"chat_id":"%s","text":"⚠️ xon.transactions deploy lock band — eski jarayon ovqatga ket, yangi push tushdi: %s"}\n' \
-    "$DEPLOY_NOTIFY_CHAT" "${DEPLOY_COMMIT:-?}" > "$TG_FILE"
-  curl -sS -X POST -H "Content-Type: application/json" -d @"$TG_FILE" \
-    "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" > /dev/null 2>&1 || true
-  rm -f "$TG_FILE"
   exit 1
 fi
 log "🔒 deploy lock olindi"
+# Lock fayli skript tugaganda yoki uzilganda avtomatik ozod bo'ladi (flock fd 9'da)
+# Qo'shimcha: SIGINT/SIGTERM signallarida lock faylni o'chiramiz
+trap 'rm -f "$LOCK" 2>/dev/null; exit 130' INT TERM
 
 # Telegram xabari yuborish — STDIN orqali (UTF-8 muammosini hal qiladi)
 tg() {
