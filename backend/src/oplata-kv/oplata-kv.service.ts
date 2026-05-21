@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
@@ -7,8 +8,18 @@ import {
 
 type Actor = { id?: string | null; name?: string | null };
 
+interface ImportResult {
+  total: number;
+  added: number;
+  skipped: number;
+  errors: number;
+  errorRows: Array<{ row: number; reason: string }>;
+  batchId?: string;
+}
+
 @Injectable()
 export class OplataKvService {
+  private readonly log = new Logger(OplataKvService.name);
   constructor(private readonly prisma: PrismaService) {}
 
   // ───────────────── LIST ─────────────────
@@ -210,5 +221,228 @@ export class OplataKvService {
       out[k] = this.normalizeForDiff(v);
     }
     return out;
+  }
+
+  // ───────────────── IMPORT (Excel) ─────────────────
+  /**
+   * Excel ustunlari (rus sarlavhalar):
+   *   A: Дог №                — Shartnoma raqami (majburiy)
+   *   B: Дата                 — dd.MM.yyyy (majburiy)
+   *   C: Сумма оплаты         — +/- (bo'sh bo'lishi mumkin)
+   *   D: 1 взнос              — +/-
+   *   E: ежемесячный          — +/-
+   *   F: Назначение платежа   — purpose
+   *   G: Тип                  — type
+   *   H: Примечание           — note
+   *   I: Оплата               — ежемесячный | 1 взнос | Общий (mapped)
+   *   J: Объект               — object
+   *   K: Клиент               — client
+   *   L: Способ оплаты        — paymentMethod
+   *   M: ID                   — uniq id (majburiy, dublikat skip)
+   */
+  async importExcel(
+    buffer: Buffer,
+    actor: Actor,
+    fileName?: string,
+  ): Promise<ImportResult> {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new BadRequestException("Excel bo'sh");
+
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        kind: 'oplata-kv',
+        fileName: fileName?.slice(0, 255) || null,
+        fileSize: buffer.length,
+        importedBy: actor.name?.slice(0, 190) || null,
+      },
+    });
+
+    const result: ImportResult = {
+      total: 0, added: 0, skipped: 0, errors: 0,
+      errorRows: [],
+      batchId: batch.id,
+    };
+
+    // Birinchi qator — sarlavha, o'tkazib yuboramiz
+    const rowCount = ws.actualRowCount || ws.rowCount;
+    for (let r = 2; r <= rowCount; r++) {
+      const row = ws.getRow(r);
+      // Bo'sh qatorni o'tkazib yuborish
+      const hasAny = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].some((c) => this.cellText(row.getCell(c)) !== '');
+      if (!hasAny) continue;
+
+      result.total++;
+      try {
+        const contractNo = this.cellText(row.getCell(1));
+        const dateRaw   = row.getCell(2).value;
+        const idValue   = this.cellText(row.getCell(13));
+
+        if (!contractNo) throw new Error('Дог № bo\'sh');
+        if (!idValue)    throw new Error('ID ustuni bo\'sh — majburiy');
+
+        const date = this.parseDate(dateRaw);
+        if (!date) throw new Error('Дата formati noto\'g\'ri (kerakli: dd.mm.yyyy)');
+
+        // Dublikat tekshirish — ID bo'yicha
+        const existing = await this.prisma.oplataKv.findUnique({ where: { id: idValue } });
+        if (existing) {
+          result.skipped++;
+          continue;
+        }
+
+        const paymentAmount    = this.parseAmountOrNull(row.getCell(3).value);
+        const firstInstallment = this.parseAmountOrNull(row.getCell(4).value);
+        const monthlyAmount    = this.parseAmountOrNull(row.getCell(5).value);
+
+        const purpose       = this.cellText(row.getCell(6)) || null;
+        const txType        = this.cellText(row.getCell(7)).slice(0, 60) || null;
+        const note          = this.cellText(row.getCell(8)) || null;
+        const paymentCategory = this.parseCategory(this.cellText(row.getCell(9)));
+        const object        = this.cellText(row.getCell(10)).slice(0, 255) || null;
+        const client        = this.cellText(row.getCell(11)).slice(0, 255) || null;
+        const paymentMethod = this.cellText(row.getCell(12)).slice(0, 120) || null;
+
+        await this.prisma.oplataKv.create({
+          data: {
+            id: idValue, // Excel'dan kelgan uniq ID
+            contractNo: contractNo.slice(0, 50),
+            date,
+            paymentAmount:    paymentAmount    !== null ? new Prisma.Decimal(paymentAmount)    : null,
+            firstInstallment: firstInstallment !== null ? new Prisma.Decimal(firstInstallment) : null,
+            monthlyAmount:    monthlyAmount    !== null ? new Prisma.Decimal(monthlyAmount)    : null,
+            purpose, txType, note, paymentCategory, object, client, paymentMethod,
+            createdById:   actor.id   ?? null,
+            createdByName: actor.name ?? null,
+            importBatchId: batch.id,
+          },
+        });
+
+        // History yozuvi
+        await this.prisma.oplataKvHistory.create({
+          data: {
+            oplataKvId: idValue,
+            action: 'imported',
+            actorType: actor.id ? 'user' : 'system',
+            actorId: actor.id ?? null,
+            actorName: actor.name ?? null,
+            fieldsChanged: ['*'],
+            changes: { batchId: batch.id, fileName } as any,
+            note: `Excel'dan import qilindi (batch ${batch.id.slice(0, 8)})`,
+          },
+        });
+
+        result.added++;
+      } catch (e: any) {
+        result.errors++;
+        result.errorRows.push({ row: r, reason: e?.message || 'Noma\'lum xato' });
+      }
+    }
+
+    // Batch ma'lumotlarini yangilab qoyamiz
+    await this.prisma.importBatch.update({
+      where: { id: batch.id },
+      data: {
+        rowsTotal:   result.total,
+        rowsAdded:   result.added,
+        rowsSkipped: result.skipped,
+        rowsErrors:  result.errors,
+      },
+    });
+
+    this.log.log(`ОплатыКв import: ${result.added} qoshildi, ${result.skipped} skip, ${result.errors} xato`);
+    return result;
+  }
+
+  /**
+   * Importni o'chirish — batch'dagi barcha oplata_kv qatorlarini va batch'ning o'zini o'chiradi.
+   * History (oplata_kv_history) qoladi — audit log uchun.
+   */
+  async deleteImportBatch(batchId: string) {
+    const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
+    if (!batch) throw new BadRequestException('Import batch topilmadi');
+    if (batch.kind !== 'oplata-kv') {
+      throw new BadRequestException('Bu batch oplata-kv emas');
+    }
+
+    const CHUNK = 500;
+    let totalDeleted = 0;
+    while (true) {
+      const rows = await this.prisma.oplataKv.findMany({
+        where: { importBatchId: batchId },
+        select: { id: true },
+        take: CHUNK,
+      });
+      if (rows.length === 0) break;
+      const ids = rows.map((r) => r.id);
+
+      // Audit yozuvi — har bir qatorni o'chirilganini history'ga yozamiz
+      const historyData = ids.map((id) => ({
+        oplataKvId: id,
+        action: 'deleted',
+        actorType: 'system' as const,
+        actorId: null,
+        actorName: `import-batch-delete (${batchId.slice(0, 8)})`,
+        fieldsChanged: ['*'],
+        changes: { reason: 'Import batch o\'chirildi' } as any,
+        note: `Import batch ${batchId.slice(0, 8)} bilan birga o'chirildi`,
+      }));
+      await this.prisma.oplataKvHistory.createMany({ data: historyData });
+
+      const r = await this.prisma.oplataKv.deleteMany({ where: { id: { in: ids } } });
+      totalDeleted += r.count;
+    }
+
+    await this.prisma.importBatch.delete({ where: { id: batchId } });
+    return { ok: true, deleted: totalDeleted };
+  }
+
+  // ─── Excel parsing helpers ───────────────────────────
+  private cellText(cell: ExcelJS.Cell): string {
+    const v = cell.value;
+    if (v == null) return '';
+    if (typeof v === 'object' && 'text' in (v as any)) return String((v as any).text).trim();
+    if (typeof v === 'object' && 'result' in (v as any)) return String((v as any).result).trim();
+    return String(v).trim();
+  }
+
+  /** "100 000,50" | "100000.5" | number → number | null */
+  private parseAmountOrNull(raw: any): number | null {
+    if (raw == null || raw === '') return null;
+    if (typeof raw === 'number') return raw;
+    const s = String(raw).trim().replace(/\s/g, '').replace(/,/g, '.');
+    if (!s) return null;
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+
+  /** dd.MM.yyyy | yyyy-MM-dd | Date | Excel date number → Date | null */
+  private parseDate(raw: any): Date | null {
+    if (!raw) return null;
+    if (raw instanceof Date) return raw;
+    if (typeof raw === 'number') {
+      // Excel date serial
+      const d = new Date(Math.round((raw - 25569) * 86400 * 1000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const s = String(raw).trim();
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+    if (m) {
+      const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  /** Excel'dagi "ежемесячный" | "1 взнос" | "Общий" → enum yoki null */
+  private parseCategory(s: string): OplataKvCategory | null {
+    const t = (s || '').trim().toLowerCase();
+    if (!t) return null;
+    if (t.includes('ежемесяч')) return 'MONTHLY';
+    if (t.includes('1 взнос') || t.includes('первый') || t.includes('1-взнос')) return 'FIRST';
+    if (t.includes('общий') || t.includes('общая') || t === 'общ') return 'GENERAL';
+    return null;
   }
 }
