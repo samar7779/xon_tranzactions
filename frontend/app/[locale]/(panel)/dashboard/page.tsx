@@ -787,31 +787,68 @@ export default function DashboardPage() {
 
           {xonpayOpen && (
             <div className="p-4">
-              {/* Jami: Total / Tushgan / Kutilayotgan */}
-              <div className="flex items-center gap-5 mb-3 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">JAMI</span>
-                  <span className="text-[13px] font-bold tabular-nums text-slate-800">
+              {/* KPI kartalari — JAMI / TUSHGAN / DEBITOR (tanlangan sana oralig'i bo'yicha) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                {/* JAMI */}
+                <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">JAMI</span>
+                    <div className="w-7 h-7 rounded-lg bg-slate-100 grid place-items-center">
+                      <BarChart3 className="h-3.5 w-3.5 text-slate-600" />
+                    </div>
+                  </div>
+                  <div className="text-[18px] sm:text-[19px] font-bold tabular-nums text-slate-900 leading-tight">
                     {formatMoney(xonpayTotals.total).replace(' UZS', '')}
-                  </span>
-                  <span className="text-[10px] text-slate-400 tabular-nums">({xonpayTotals.totalCount} ta)</span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    <span className="font-semibold tabular-nums">{xonpayTotals.totalCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya
+                  </div>
+                  {/* Decorative orb */}
+                  <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-slate-200/30 blur-2xl pointer-events-none" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">TUSHGAN</span>
-                  <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+
+                {/* TUSHGAN */}
+                <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-3.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">TUSHGAN</span>
+                    <div className="w-7 h-7 rounded-lg bg-emerald-100 grid place-items-center">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    </div>
+                  </div>
+                  <div className="text-[18px] sm:text-[19px] font-bold tabular-nums text-emerald-700 leading-tight">
                     {formatMoney(xonpayTotals.matched).replace(' UZS', '')}
-                  </span>
-                  <span className="text-[10px] text-emerald-600/70 tabular-nums">({xonpayTotals.matchedCount} ta)</span>
+                  </div>
+                  <div className="text-[10px] text-emerald-700/70 mt-1 flex items-center justify-between gap-2">
+                    <span><span className="font-semibold tabular-nums">{xonpayTotals.matchedCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya</span>
+                    {xonpayTotals.total > 0 && (
+                      <span className="font-semibold tabular-nums bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[10px]">
+                        {Math.round((xonpayTotals.matched / xonpayTotals.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-emerald-300/30 blur-2xl pointer-events-none" />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">DEBITOR</span>
-                  <span className="text-[13px] font-bold tabular-nums text-rose-700">
+
+                {/* DEBITOR */}
+                <div className="relative overflow-hidden rounded-xl border border-rose-200 bg-gradient-to-br from-rose-50 to-white p-3.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">DEBITOR</span>
+                    <div className="w-7 h-7 rounded-lg bg-rose-100 grid place-items-center">
+                      <AlertCircle className="h-3.5 w-3.5 text-rose-600 animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-[18px] sm:text-[19px] font-bold tabular-nums text-rose-700 leading-tight">
                     {formatMoney(xonpayTotals.missing).replace(' UZS', '')}
-                  </span>
-                  <span className="text-[10px] text-rose-600/70 tabular-nums">({xonpayTotals.missingCount} ta)</span>
+                  </div>
+                  <div className="text-[10px] text-rose-700/70 mt-1 flex items-center justify-between gap-2">
+                    <span><span className="font-semibold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya</span>
+                    {xonpayTotals.total > 0 && (
+                      <span className="font-semibold tabular-nums bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded text-[10px]">
+                        {Math.round((xonpayTotals.missing / xonpayTotals.total) * 100)}%
+                      </span>
+                    )}
+                  </div>
+                  <div className="absolute -top-6 -right-6 w-20 h-20 rounded-full bg-rose-300/30 blur-2xl pointer-events-none" />
                 </div>
               </div>
 
