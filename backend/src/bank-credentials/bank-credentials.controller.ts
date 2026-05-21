@@ -19,6 +19,11 @@ export class BankCredentialsController {
   @ApiOperation({ summary: 'Bank credentiallar ro\'yxati' })
   list(@Query('bankId') bankId?: string) { return this.svc.list(bankId); }
 
+  @Get('auth-issues')
+  @RequirePermissions(PERMISSIONS.CREDENTIALS_VIEW)
+  @ApiOperation({ summary: 'Hozir login/parol xatoligi bergan bank credentiallari (oxirgi FAILED sync log auth pattern bilan)' })
+  authIssues() { return this.svc.listAuthIssues(); }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.CREDENTIALS_VIEW)
   @ApiOperation({ summary: 'Bitta credential' })

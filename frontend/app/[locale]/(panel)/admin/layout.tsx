@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload } from 'lucide-react';
+import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { key: 'users',          tKey: 'users',          icon: Users },
   { key: 'roles',          tKey: 'roles',          icon: ShieldCheck },
+  { key: 'login',          tKey: 'login',          icon: KeyRound },
   { key: 'counterparties', tKey: 'counterparties', icon: Briefcase },
   { key: 'sync-logs',      tKey: 'syncLogs',       icon: History },
   { key: 'api-explorer',   tKey: 'apiExplorer',    icon: Zap },

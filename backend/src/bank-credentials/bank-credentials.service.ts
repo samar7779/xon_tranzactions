@@ -150,6 +150,109 @@ export class BankCredentialsService {
     }
   }
 
+  /**
+   * Hozir parol xatoligi (auth failure) bergan bank credentiallarning ro'yxati.
+   * Logika: har bir aktiv hisob uchun OXIRGI SyncLog tekshiriladi.
+   * Agar uning status=FAILED bo'lsa va errorMessage'da login/parol xatosini
+   * ko'rsatuvchi pattern bo'lsa — shu credential muammoli deb belgilanadi.
+   * Bir credentialga tegishli birorta xato bergan hisob bo'lsa — credential ko'rsatiladi.
+   */
+  async listAuthIssues() {
+    // Auth muammosini ko'rsatuvchi pattern'lar (errorMessage'da bo'lishi mumkin)
+    const AUTH_PATTERN = /login\s*fail|invalid\s*credential|wrong\s*password|\b401\b|unauthorized|auth(entication)?\s*fail|noto'g'ri\s*(parol|login)|ulanib\s*bo['']?lmadi/i;
+
+    // Hamma aktiv hisoblar — credential bilan birga
+    const accounts = await this.prisma.bankAccount.findMany({
+      where: { syncEnabled: true },
+      select: {
+        id: true,
+        branch: true,
+        accountNo: true,
+        ownerName: true,
+        credentialId: true,
+        credential: {
+          select: {
+            id: true,
+            label: true,
+            loginPrefix: true,
+            loginName: true,
+            authMode: true,
+            useProxy: true,
+            lastError: true,
+            lastVerifiedAt: true,
+            bank: { select: { id: true, code: true, name: true, apiKind: true } },
+          },
+        },
+      },
+    });
+
+    if (accounts.length === 0) return { ok: true, items: [] };
+
+    const accountIds = accounts.map((a) => a.id);
+
+    // Har bir hisob uchun OXIRGI sync log — DISTINCT ON (PostgreSQL)
+    const latestLogs: Array<{ account_id: string; status: string; error_message: string | null; started_at: Date }> =
+      await this.prisma.$queryRawUnsafe(
+        `SELECT DISTINCT ON (account_id) account_id, status, error_message, started_at
+         FROM sync_logs
+         WHERE account_id = ANY($1::text[])
+         ORDER BY account_id, started_at DESC`,
+        accountIds,
+      );
+
+    const logByAccount = new Map(latestLogs.map((l) => [l.account_id, l]));
+
+    // Credential bo'yicha guruhlash
+    const credIssues = new Map<string, any>();
+    for (const acc of accounts) {
+      const log = logByAccount.get(acc.id);
+      if (!log) continue;
+      if (log.status !== 'FAILED') continue;
+      const msg = log.error_message || '';
+      if (!AUTH_PATTERN.test(msg)) continue;
+
+      const credId = acc.credentialId;
+      if (!credIssues.has(credId)) {
+        credIssues.set(credId, {
+          credentialId: credId,
+          bankId: acc.credential.bank.id,
+          bankCode: acc.credential.bank.code,
+          bankName: acc.credential.bank.name,
+          label: acc.credential.label,
+          loginPrefix: acc.credential.loginPrefix,
+          loginName: acc.credential.loginName,
+          authMode: acc.credential.authMode,
+          useProxy: acc.credential.useProxy,
+          credLastError: acc.credential.lastError,
+          credLastVerifiedAt: acc.credential.lastVerifiedAt,
+          accounts: [],
+          latestErrorAt: log.started_at,
+          totalFailingAccounts: 0,
+        });
+      }
+      const issue = credIssues.get(credId);
+      issue.accounts.push({
+        accountId: acc.id,
+        accountNo: acc.accountNo,
+        branch: acc.branch,
+        ownerName: acc.ownerName,
+        errorMessage: msg.slice(0, 500),
+        lastFailedAt: log.started_at,
+      });
+      issue.totalFailingAccounts += 1;
+      if (log.started_at > issue.latestErrorAt) {
+        issue.latestErrorAt = log.started_at;
+      }
+    }
+
+    // Eng yangi xatolik tepada
+    const items = Array.from(credIssues.values()).sort(
+      (a, b) => new Date(b.latestErrorAt).getTime() - new Date(a.latestErrorAt).getTime(),
+    );
+
+    return { ok: true, items };
+  }
+
   /** Faqat ichki ishlatish uchun — sync service'ga parolni dekriptlangan holda berish. */
   async loadDecrypted(id: string) {
     const c = await this.prisma.bankCredential.findUnique({
