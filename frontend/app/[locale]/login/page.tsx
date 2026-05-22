@@ -75,34 +75,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden font-sans text-white">
-      {/* Background: faqat md+ ekranlarda showcase animatsiyasi.
-          Telefonda sodda gradient fon — chiroyli, lekin chalg'itmaydi */}
+    <div className="relative w-full md:w-screen md:h-screen md:overflow-hidden font-sans text-white">
+      {/* ============ DESKTOP (md+) ============ */}
+      {/* Background: showcase animatsiyasi */}
       <div className={`hidden md:block absolute inset-0 transition-all duration-700 ease-out
                        ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
         <ShowcaseStage />
-      </div>
-      {/* Mobil fon — sodda gradient + ozgina HUD effekti */}
-      <div className="md:hidden absolute inset-0 bg-gradient-to-br from-[#031020] via-[#06182d] to-[#020912]">
-        {/* Yengil to'r */}
-        <div className="absolute inset-0 opacity-[0.08]"
-             style={{
-               backgroundImage:
-                 'linear-gradient(rgba(34,211,238,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.5) 1px, transparent 1px)',
-               backgroundSize: '32px 32px',
-             }} />
-        {/* Markaziy yorug'lik */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl" />
-        <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full bg-amber-500/15 blur-3xl" />
       </div>
       {/* Vignette overlay — panel ochilganda chap tomon biroz qoraytadi (faqat desktop) */}
       <div className={`hidden md:block absolute inset-0 pointer-events-none transition-opacity duration-700
                        ${open ? 'opacity-100' : 'opacity-0'}`}
            style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
-      {/* Top-right: clock + language */}
-      <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2 sm:gap-4">
-        <div className="hidden sm:block text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
+      {/* Desktop: top-right clock + language */}
+      <div className="hidden md:flex absolute top-5 right-5 z-30 items-center gap-4">
+        <div className="text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
           <div className="tabular-nums text-cyan-200">{clock}</div>
           <div className="text-cyan-400/40">{t('tashkent')}</div>
         </div>
@@ -111,64 +98,111 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Top-left: system online */}
-      <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 text-[9px] sm:text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
-        <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Desktop: top-left system online */}
+      <div className="hidden md:block absolute top-5 left-5 z-30 text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
+        <div className="flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5">
             <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
           </span>
           <span>{t('systemOnline')}</span>
         </div>
-        <div className="mt-1 text-cyan-400/40 hidden sm:block">{tApp('title').toUpperCase()}</div>
+        <div className="mt-1 text-cyan-400/40">{tApp('title').toUpperCase()}</div>
       </div>
 
-      {/* Mobil markaziy brand — faqat md dan kichik ekranlarda, showcase yo'q joyiga */}
-      <div className={`md:hidden absolute left-1/2 top-[28%] -translate-x-1/2 z-30 transition-all duration-500 text-center px-6 ${
-        open ? 'opacity-0 -translate-y-4 pointer-events-none' : 'opacity-100'
-      }`}>
-        <div className="text-[36px] font-black tracking-[0.06em] uppercase
-                        bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700
-                        bg-clip-text text-transparent leading-none
-                        drop-shadow-[0_0_30px_rgba(245,158,11,0.4)]">
-          XON SAROY
-        </div>
-        <div className="mt-3 text-[11px] tracking-[0.3em] uppercase text-cyan-300/80 font-mono">
-          {tApp('tagline')}
-        </div>
-        <div className="mt-6 flex items-center justify-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60 font-mono">
-          <span className="w-6 h-px bg-cyan-400/40" />
-          <span>· REAL-TIME ·</span>
-          <span className="w-6 h-px bg-cyan-400/40" />
-        </div>
+      {/* Desktop: pastki readout */}
+      <div className={cn(
+        "hidden md:flex absolute bottom-5 left-5 right-5 z-30",
+        "items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none",
+      )}>
+        <span>· {t('authRequired')} ·</span>
+        <span>REV 1.0 · {new Date().getFullYear()}</span>
       </div>
 
-      {/* Kirish CTA — markazda pastda, faqat panel yopiq bo'lganda ko'rinadi */}
-      <div className={`absolute bottom-10 sm:bottom-12 left-1/2 -translate-x-1/2 z-40 transition-all duration-500 ${
-        open ? 'opacity-0 translate-y-8 pointer-events-none' : 'opacity-100 translate-y-0'
-      }`}>
-        <button
-          onClick={() => setOpen(true)}
-          className="group relative px-10 sm:px-8 h-14 sm:h-14 rounded-full overflow-hidden
-                     bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
-                     ring-2 ring-amber-200/60
-                     shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
-                     hover:shadow-[0_20px_70px_-10px_rgba(245,158,11,0.9)]
-                     hover:scale-105 active:scale-95
-                     transition-all duration-300"
-        >
-          {/* Sweep glow */}
-          <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                           bg-gradient-to-r from-transparent via-white/40 to-transparent
-                           transition-transform duration-1000 ease-out" />
-          {/* Sonar pulse */}
-          <span className="absolute inset-0 rounded-full ring-2 ring-amber-300/60 animate-ping" style={{ animationDuration: '2s' }} />
-          <span className="relative flex items-center gap-3 text-slate-900 font-bold tracking-[0.18em] uppercase text-[13px]">
-            <LogIn className="h-4 w-4" />
-            {t('submit')}
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </span>
-        </button>
+      {/* ============ MOBIL (faqat md dan kichik) ============ */}
+      <div className="md:hidden relative flex flex-col min-h-[100dvh] overflow-hidden">
+        {/* Mobil fon */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#031020] via-[#06182d] to-[#020912]" />
+        {/* Yengil to'r */}
+        <div className="absolute inset-0 opacity-[0.08] pointer-events-none"
+             style={{
+               backgroundImage:
+                 'linear-gradient(rgba(34,211,238,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.5) 1px, transparent 1px)',
+               backgroundSize: '32px 32px',
+             }} />
+        {/* Markaziy yorug'lik */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-72 h-72 rounded-full bg-cyan-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full bg-amber-500/15 blur-3xl pointer-events-none" />
+
+        {/* Mobil top bar — online + language */}
+        <div className="relative z-20 flex items-center justify-between px-4 pt-4">
+          <div className="text-[9px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
+              </span>
+              <span>{t('systemOnline')}</span>
+            </div>
+          </div>
+          <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
+            <LanguageSwitcher />
+          </div>
+        </div>
+
+        {/* Markaziy brand + CTA — flex bilan vertikal markazda */}
+        <div className="relative z-20 flex-1 flex flex-col items-center justify-center px-6 py-8 gap-8">
+          {/* Brand */}
+          <div className="text-center">
+            <div className="text-[40px] font-black tracking-[0.06em] uppercase
+                            bg-gradient-to-br from-amber-300 via-amber-500 to-amber-700
+                            bg-clip-text text-transparent leading-none
+                            drop-shadow-[0_0_30px_rgba(245,158,11,0.4)]">
+              XON SAROY
+            </div>
+            <div className="mt-3 text-[11px] tracking-[0.3em] uppercase text-cyan-300/80 font-mono px-4">
+              {tApp('tagline')}
+            </div>
+            <div className="mt-5 flex items-center justify-center gap-2 text-[10px] tracking-[0.25em] uppercase text-cyan-400/60 font-mono">
+              <span className="w-6 h-px bg-cyan-400/40" />
+              <span>· REAL-TIME ·</span>
+              <span className="w-6 h-px bg-cyan-400/40" />
+            </div>
+          </div>
+
+          {/* Soat */}
+          <div className="text-center font-mono">
+            <div className="text-[28px] tabular-nums text-cyan-200 tracking-[0.1em]">{clock}</div>
+            <div className="text-[9px] tracking-[0.3em] uppercase text-cyan-400/50 mt-1">{t('tashkent')}</div>
+          </div>
+
+          {/* CTA Kirish tugmasi */}
+          <button
+            onClick={() => setOpen(true)}
+            className="group relative w-full max-w-[320px] h-16 rounded-2xl overflow-hidden
+                       bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
+                       ring-2 ring-amber-200/60
+                       shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
+                       active:scale-95
+                       transition-all duration-300"
+          >
+            <span className="absolute inset-0 -translate-x-full group-active:translate-x-full
+                             bg-gradient-to-r from-transparent via-white/40 to-transparent
+                             transition-transform duration-1000 ease-out" />
+            <span className="absolute inset-0 rounded-2xl ring-2 ring-amber-300/60 animate-ping" style={{ animationDuration: '2s' }} />
+            <span className="relative flex items-center justify-center gap-3 text-slate-900 font-bold tracking-[0.18em] uppercase text-[14px]">
+              <LogIn className="h-5 w-5" />
+              {t('submit')}
+              <ArrowRight className="h-5 w-5" />
+            </span>
+          </button>
+        </div>
+
+        {/* Mobil pastki readout */}
+        <div className="relative z-20 flex items-center justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]
+                        text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono">
+          · {t('authRequired')} ·
+        </div>
       </div>
 
       {/* Right-side slide-in login panel — telefonda to'liq ekran */}
@@ -369,15 +403,6 @@ export default function LoginPage() {
         }
       `}</style>
 
-      {/* Pastki readout — panel ochilganda telefonda yashiriladi (joy yetmaydi) */}
-      <div className={cn(
-        "absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 z-30",
-        "flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none",
-        open && "hidden sm:flex",
-      )}>
-        <span>· {t('authRequired')} ·</span>
-        <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
-      </div>
     </div>
   );
 }
