@@ -126,6 +126,146 @@ export class OplataKvService {
     return { ok: true, item: row };
   }
 
+  // ───────────────── EXPORT (Excel / JSON) ─────────────────
+  /** Filtr bo'yicha BARCHA qatorlarni qaytaradi (export uchun). */
+  private async fetchAllForExport(q: ListOplataKvDto) {
+    const where: Prisma.OplataKvWhereInput = {};
+    if (q.q) {
+      where.OR = [
+        { contractNo: { contains: q.q, mode: 'insensitive' } },
+        { client:     { contains: q.q, mode: 'insensitive' } },
+        { object:     { contains: q.q, mode: 'insensitive' } },
+        { purpose:    { contains: q.q, mode: 'insensitive' } },
+        { note:       { contains: q.q, mode: 'insensitive' } },
+      ];
+    }
+    if (q.dateFrom || q.dateTo) {
+      where.date = {};
+      if (q.dateFrom) (where.date as any).gte = new Date(q.dateFrom);
+      if (q.dateTo)   (where.date as any).lte = new Date(q.dateTo + 'T23:59:59');
+    }
+    if (q.paymentCategory) where.paymentCategory = q.paymentCategory as OplataKvCategory;
+    if (q.contractNo) where.contractNo = { contains: q.contractNo, mode: 'insensitive' };
+    if (q.client) where.client = { contains: q.client, mode: 'insensitive' };
+    if (q.object) where.object = { contains: q.object, mode: 'insensitive' };
+
+    const sortBy = q.sortBy || 'date';
+    const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
+    return this.prisma.oplataKv.findMany({
+      where,
+      orderBy: { [sortBy]: sortDir } as any,
+    });
+  }
+
+  async exportXlsx(q: ListOplataKvDto): Promise<{ buffer: Buffer; filename: string }> {
+    const items = await this.fetchAllForExport(q);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('ОплатыКв');
+
+    ws.columns = [
+      { header: 'Дог №',          key: 'contractNo',       width: 16 },
+      { header: 'Дата',           key: 'date',             width: 12 },
+      { header: 'Сумма оплаты',   key: 'paymentAmount',    width: 18 },
+      { header: '1 взнос',        key: 'firstInstallment', width: 18 },
+      { header: 'Ежемесячный',    key: 'monthlyAmount',    width: 18 },
+      { header: 'Оплата',         key: 'paymentCategory',  width: 14 },
+      { header: 'Клиент',         key: 'client',           width: 28 },
+      { header: 'Объект',         key: 'object',           width: 22 },
+      { header: 'Способ оплаты',  key: 'paymentMethod',    width: 22 },
+      { header: 'Назначение',     key: 'purpose',          width: 42 },
+      { header: 'Тип',            key: 'txType',           width: 14 },
+      { header: 'Примечание',     key: 'note',             width: 28 },
+      { header: 'ID',             key: 'id',               width: 38 },
+    ];
+
+    const head = ws.getRow(1);
+    head.font = { bold: true, size: 10 };
+    head.height = 22;
+    head.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8EAF6' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+
+    const categoryLabel: Record<string, string> = {
+      MONTHLY: 'ежемесячный',
+      FIRST:   '1 взнос',
+      GENERAL: 'Общий',
+    };
+
+    for (const it of items) {
+      let date = '';
+      if (it.date) {
+        const d = new Date(it.date);
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        date = `${dd}.${mm}.${d.getUTCFullYear()}`;
+      }
+      const row = ws.addRow({
+        contractNo: it.contractNo || '',
+        date,
+        paymentAmount:    it.paymentAmount    ? Number(it.paymentAmount)    : null,
+        firstInstallment: it.firstInstallment ? Number(it.firstInstallment) : null,
+        monthlyAmount:    it.monthlyAmount    ? Number(it.monthlyAmount)    : null,
+        paymentCategory:  it.paymentCategory ? (categoryLabel[it.paymentCategory] || it.paymentCategory) : '',
+        client: it.client || '',
+        object: it.object || '',
+        paymentMethod: it.paymentMethod || '',
+        purpose: it.purpose || '',
+        txType: it.txType || '',
+        note: it.note || '',
+        id: it.id,
+      });
+      row.font = { size: 9 };
+      row.getCell('paymentAmount').numFmt    = '#,##0.00';
+      row.getCell('firstInstallment').numFmt = '#,##0.00';
+      row.getCell('monthlyAmount').numFmt    = '#,##0.00';
+      row.getCell('date').numFmt = '@';
+      row.getCell('date').alignment = { horizontal: 'center' };
+    }
+
+    // Yakuniy yig'indi qatori
+    if (items.length > 0) {
+      const totalRow = ws.addRow({
+        contractNo: 'ИТОГО:',
+        paymentAmount:    items.reduce((s, x) => s + Number(x.paymentAmount || 0), 0),
+        firstInstallment: items.reduce((s, x) => s + Number(x.firstInstallment || 0), 0),
+        monthlyAmount:    items.reduce((s, x) => s + Number(x.monthlyAmount || 0), 0),
+      });
+      totalRow.font = { bold: true, size: 10 };
+      totalRow.getCell('paymentAmount').numFmt    = '#,##0.00';
+      totalRow.getCell('firstInstallment').numFmt = '#,##0.00';
+      totalRow.getCell('monthlyAmount').numFmt    = '#,##0.00';
+      totalRow.eachCell((c) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+      });
+    }
+
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const ts = new Date().toISOString().slice(0, 10);
+    return { buffer, filename: `oplaty-kv-${ts}.xlsx` };
+  }
+
+  async exportJson(q: ListOplataKvDto): Promise<{ buffer: Buffer; filename: string }> {
+    const items = await this.fetchAllForExport(q);
+    const json = JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      total: items.length,
+      filter: { q: q.q || null, dateFrom: q.dateFrom || null, dateTo: q.dateTo || null, paymentCategory: q.paymentCategory || null },
+      items,
+    }, null, 2);
+    const buffer = Buffer.from(json, 'utf8');
+    const ts = new Date().toISOString().slice(0, 10);
+    return { buffer, filename: `oplaty-kv-${ts}.json` };
+  }
+
   // ───────────────── HISTORY ─────────────────
   async getHistory(id: string, limit = 100) {
     const items = await this.prisma.oplataKvHistory.findMany({

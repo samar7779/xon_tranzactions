@@ -7,10 +7,10 @@ import {
   Search, Plus, Edit3, Trash2, History, X, ChevronLeft, ChevronRight,
   Calendar, Loader2, Hash, ArrowUpRight, Filter as FilterIcon,
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
-  Copy, Check,
+  Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
 } from 'lucide-react';
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/skeleton';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatMoney } from '@/lib/utils';
@@ -124,6 +124,54 @@ export default function OplataKvPage() {
     } catch {
       toast.error('Nusxalashda xato');
     }
+  };
+
+  // ─── Export — filter-aware ───
+  // qsForExport: page/perPage'siz, qolgan filtrlar
+  const qsForExport = useMemo(() => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set('q', q.trim());
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo)   p.set('dateTo', dateTo);
+    if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
+    return p.toString();
+  }, [q, dateFrom, dateTo, categoryFilter]);
+
+  const [exporting, setExporting] = useState<null | 'xlsx' | 'json' | 'pdf'>(null);
+
+  const downloadExcel = async () => {
+    setExporting('xlsx');
+    try {
+      const ts = new Date().toISOString().slice(0, 10);
+      await apiDownload(`/oplata-kv/export?${qsForExport}`, `oplaty-kv-${ts}.xlsx`);
+      toast.success('Excel yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'Excel yuklab olishda xato');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const downloadJson = async () => {
+    setExporting('json');
+    try {
+      const ts = new Date().toISOString().slice(0, 10);
+      await apiDownload(`/oplata-kv/export-json?${qsForExport}`, `oplaty-kv-${ts}.json`);
+      toast.success('JSON yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'JSON yuklab olishda xato');
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const printPdf = () => {
+    // Brauzer print dialogi (foydalanuvchi "Saqlash PDF" tanlashi mumkin)
+    setExporting('pdf');
+    setTimeout(() => {
+      window.print();
+      setExporting(null);
+    }, 100);
   };
 
   // URL params for list query
@@ -261,6 +309,44 @@ export default function OplataKvPage() {
                   <SelectItem value="GENERAL">Общий</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Download dropdown — filter-aware */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className="h-10 px-3 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-colors"
+                    title="Yuklab olish"
+                  >
+                    {exporting
+                      ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                      : <Download className="h-4 w-4" />}
+                    <span className="hidden sm:inline">Yuklab olish</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[220px]">
+                  <DropdownMenuItem onClick={downloadExcel} className="gap-2 cursor-pointer">
+                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                    <div className="flex-1">
+                      <div className="text-[13px] font-semibold">Excel (.xlsx)</div>
+                      <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={downloadJson} className="gap-2 cursor-pointer">
+                    <FileJson className="h-4 w-4 text-amber-600" />
+                    <div className="flex-1">
+                      <div className="text-[13px] font-semibold">JSON (.json)</div>
+                      <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={printPdf} className="gap-2 cursor-pointer">
+                    <Printer className="h-4 w-4 text-indigo-600" />
+                    <div className="flex-1">
+                      <div className="text-[13px] font-semibold">Chop etish / PDF</div>
+                      <div className="text-[10.5px] text-slate-500">Brauzer print dialogi</div>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               {canManage && (
                 <Button
