@@ -34,6 +34,24 @@ interface DiagnoseItem {
   existingTxId?: string;
 }
 
+interface AmountMismatchItem {
+  txId: string;
+  b2Id?: string | null;
+  generalId?: string | null;
+  docNumber?: string | null;
+  ddate?: string | null;
+  time?: string | null;
+  direction?: 'IN' | 'OUT' | null;
+  bankAmount: number;
+  dbAmount: number;
+  diff: number;          // bankAmount - dbAmount
+  fromAccount?: string | null;
+  fromName?: string | null;
+  toAccount?: string | null;
+  toName?: string | null;
+  purpose?: string | null;
+}
+
 interface BulkResult {
   ok: true;
   summary: { total: number; ok: number; error: number };
@@ -129,6 +147,9 @@ export function AccountDrilldown({
     matchedCount: number;
     bankOnly: DiagnoseItem[];
     dbOnly: DiagnoseItem[];
+    amountMismatch?: AmountMismatchItem[];
+    amountMismatchCount?: number;
+    amountMismatchDiffSum?: number;
     fallbackUsed?: boolean;
     fallbackSource?: 'GetDocuments' | null;
     fallbackError?: string | null;
@@ -366,6 +387,9 @@ function DiagnoseResult({
     matchedCount: number;
     bankOnly: DiagnoseItem[];
     dbOnly: DiagnoseItem[];
+    amountMismatch?: AmountMismatchItem[];
+    amountMismatchCount?: number;
+    amountMismatchDiffSum?: number;
     fallbackUsed?: boolean;
     fallbackSource?: 'GetDocuments' | null;
     fallbackError?: string | null;
@@ -374,12 +398,16 @@ function DiagnoseResult({
   date: string;
   onFixed: () => void;
 }) {
+  const mismatch = data.amountMismatch || [];
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-4 text-[12px] text-slate-600 flex-wrap">
         <span>Bankda: <b className="text-slate-900">{data.bankCount}</b></span>
         <span>AllTranzactions: <b className="text-slate-900">{data.dbCount}</b></span>
         <span>Mos: <b className="text-emerald-700">{data.matchedCount}</b></span>
+        {mismatch.length > 0 && (
+          <span>Summa farqli: <b className="text-orange-700">{mismatch.length}</b></span>
+        )}
         {data.fallbackUsed && (
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-indigo-700 bg-indigo-50 ring-1 ring-indigo-200 px-2 py-0.5 rounded-full">
             <CheckCircle2 className="h-3 w-3" />
@@ -411,12 +439,12 @@ function DiagnoseResult({
               </div>
             </div>
           </div>
-        ) : (
+        ) : mismatch.length === 0 ? (
           <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             Yozuvlar to'liq mos — farq, ehtimol, yaxlitlash xatosi yoki kalit indekslar muammosi
           </div>
-        )
+        ) : null
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DiagPanel
@@ -439,6 +467,101 @@ function DiagnoseResult({
           />
         </div>
       )}
+
+      {mismatch.length > 0 && (
+        <AmountMismatchPanel
+          items={mismatch}
+          diffSum={data.amountMismatchDiffSum || 0}
+        />
+      )}
+    </div>
+  );
+}
+
+function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; diffSum: number }) {
+  return (
+    <div className="rounded-lg border border-orange-200 bg-orange-50/40 overflow-hidden">
+      <div className="px-3 py-2 bg-orange-50 border-b border-orange-200 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-orange-900">
+          <AlertTriangle className="h-4 w-4" />
+          Summa farqli yozuvlar — ID mos, lekin bank vs AllTranzactions summasi farqli
+        </div>
+        <div className="flex items-center gap-3 text-[11px]">
+          <span className="text-orange-700">
+            {items.length} ta yozuv
+          </span>
+          <span className="text-orange-900 font-bold tabular-nums">
+            Jami farq: {formatMoney(diffSum)} so'm
+          </span>
+        </div>
+      </div>
+      <div className="max-h-[420px] overflow-auto">
+        <table className="w-full text-[11px]">
+          <thead className="bg-orange-50/60 text-orange-700 sticky top-0">
+            <tr>
+              <th className="text-left px-2 py-1.5 font-medium">№ / b2_id</th>
+              <th className="text-left px-2 py-1.5 font-medium">Yo'nalish</th>
+              <th className="text-right px-2 py-1.5 font-medium">Bank summasi</th>
+              <th className="text-right px-2 py-1.5 font-medium">DB summasi</th>
+              <th className="text-right px-2 py-1.5 font-medium">Farq</th>
+              <th className="text-left px-2 py-1.5 font-medium">Tomonlar</th>
+              <th className="text-left px-2 py-1.5 font-medium">Maqsad</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-orange-100">
+            {items.map((it) => (
+              <tr key={it.txId} className="hover:bg-orange-50/60">
+                <td className="px-2 py-1.5 align-top">
+                  <div className="font-semibold text-slate-800">{it.docNumber || '—'}</div>
+                  {it.b2Id && (
+                    <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]" title={it.b2Id}>
+                      {it.b2Id}
+                    </div>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 align-top">
+                  {it.direction === 'IN' ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                      <ArrowDownLeft className="h-3 w-3" /> Kirim
+                    </span>
+                  ) : it.direction === 'OUT' ? (
+                    <span className="inline-flex items-center gap-1 text-rose-700">
+                      <ArrowUpRight className="h-3 w-3" /> Chiqim
+                    </span>
+                  ) : (
+                    <span className="text-slate-400">—</span>
+                  )}
+                </td>
+                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900">
+                  {formatMoney(it.bankAmount)}
+                </td>
+                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900">
+                  {formatMoney(it.dbAmount)}
+                </td>
+                <td className={cn(
+                  'px-2 py-1.5 align-top text-right tabular-nums font-bold',
+                  it.diff > 0 ? 'text-orange-700' : 'text-purple-700',
+                )}>
+                  {it.diff > 0 ? '+' : ''}{formatMoney(it.diff)}
+                </td>
+                <td className="px-2 py-1.5 align-top text-slate-600">
+                  <div className="truncate max-w-[180px]" title={it.fromName || ''}>
+                    {it.fromName || it.fromAccount || '—'}
+                  </div>
+                  <div className="text-[9px] text-slate-400 truncate max-w-[180px]" title={it.toName || ''}>
+                    → {it.toName || it.toAccount || '—'}
+                  </div>
+                </td>
+                <td className="px-2 py-1.5 align-top text-slate-600">
+                  <div className="truncate max-w-[220px]" title={it.purpose || ''}>
+                    {it.purpose || '—'}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
