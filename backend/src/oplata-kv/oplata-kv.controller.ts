@@ -118,6 +118,16 @@ export class OplataKvController {
     return this.svc.syncFromTransactions({ minDate, actor: actorFrom(user) });
   }
 
+  @Delete('cleanup-tx-source')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish (optional date filter)" })
+  async cleanupTxSource(
+    @Query('date') date?: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.cleanupTxSource({ date: date || null, actor: actorFrom(user) });
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Bitta qatorni olish' })

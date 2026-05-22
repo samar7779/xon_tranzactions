@@ -338,6 +338,29 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
 
+  // Tranzaksiya-manba qatorlarni tozalash
+  const cleanupTxMut = useMutation({
+    mutationFn: (date: string | null) => {
+      const url = date
+        ? `/oplata-kv/cleanup-tx-source?date=${encodeURIComponent(date)}`
+        : '/oplata-kv/cleanup-tx-source';
+      return api.delete<{ ok: boolean; deleted: number; matched: number; date: string | null }>(url);
+    },
+    onSuccess: (r: any) => {
+      toast.success(`O'chirildi: ${r.deleted} ta qator${r.date ? ` (sana: ${r.date})` : ''}`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Tozalashda xato'),
+  });
+
+  function handleCleanup() {
+    const date = oplatykvTxMinDate || null;
+    const msg = date
+      ? `${date} sanasidagi tranzaksiya-manba bilan qo'shilgan barcha OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!`
+      : "BARCHA tranzaksiya-manba bilan qo'shilgan OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!";
+    if (!confirm(msg)) return;
+    cleanupTxMut.mutate(date);
+  }
+
   return (
     <div className="space-y-4">
       {/* SYNC MINIMAL SANA */}
@@ -461,10 +484,23 @@ function SyncSettingsPanel() {
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Hozir sync
                 </Button>
+                <Button
+                  onClick={handleCleanup}
+                  disabled={cleanupTxMut.isPending}
+                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
+                  title={oplatykvTxMinDate
+                    ? `Tanlangan sanadagi (${oplatykvTxMinDate}) tranzaksiya-manba qatorlarini o'chirish`
+                    : "Barcha tranzaksiya-manba qatorlarini o'chirish (sana yo'q)"}
+                >
+                  {cleanupTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                  Tranzaksiya manbasini tozalash
+                </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
                 Saqlangach, "Hozir sync" tugmasini bosing yoki keyingi sync paytida ishlaydi.
+                <br />
+                <b>"Tranzaksiya manbasini tozalash"</b> — sanada yozilgan bo'lsa o'sha sanasi bo'yicha, bo'lmasa barcha tranzaksiyadan kelgan qatorlarni o'chiradi (tarix saqlanadi).
               </div>
             </div>
           )}
