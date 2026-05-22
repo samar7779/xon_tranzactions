@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CrmService } from '../crm/crm.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -47,7 +48,10 @@ interface PreviewState {
 @Injectable()
 export class OplataKvService {
   private readonly log = new Logger(OplataKvService.name);
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly crmService: CrmService,
+  ) {}
 
   // ─── Preview cache (in-memory) ───────────────────────────
   // Foydalanuvchi katta Excel yuklasa → avval tekshiramiz va cache'da turamiz.
@@ -173,73 +177,96 @@ export class OplataKvService {
     return { ok: true, item: row };
   }
 
-  // ───────────────── CRM SVERKA (OplatyKv vs Transactions taqqoslash) ─────────────────
+  // ───────────────── CRM SVERKA (OplatyKv vs XonSaroy CRM taqqoslash) ─────────────────
   /**
    * Bitta shartnoma uchun:
-   * - OplatyKv qatorlari + jami
-   * - Transactions (CRM) qatorlari + jami (faqat IN direction = kirim)
-   * - Taqqoslash natijasi
+   * - OplatyKv qatorlari + jami (bizning DB)
+   * - XonSaroy CRM payment_histories (tashqi API)
+   * - Taqqoslash: jami summa, boshlangich, oylik
    */
   async crmSverka(contractNo: string) {
     if (!contractNo || !contractNo.trim()) {
       return { ok: false, error: "contractNo bo'sh" };
     }
     const cn = contractNo.trim();
-    const [oplataItems, txItems] = await Promise.all([
+
+    const [oplataItems, crmResp] = await Promise.all([
       this.prisma.oplataKv.findMany({
         where: { contractNo: cn },
         orderBy: { date: 'asc' },
       }),
-      this.prisma.transaction.findMany({
-        where: { contractNumber: cn },
-        select: {
-          id: true,
-          txnDate: true,
-          amount: true,
-          direction: true,
-          description: true,
-          fromName: true,
-          toName: true,
-          externalId: true,
-        },
-        orderBy: { txnDate: 'asc' },
-      }),
+      this.crmService.show({ contract: cn }).catch((e) => ({ ok: false, error: e?.message || 'CRM xato' })),
     ]);
 
-    const oplataSums = {
-      paymentAmount:    oplataItems.reduce((s, i) => s + Number(i.paymentAmount    || 0), 0),
-      firstInstallment: oplataItems.reduce((s, i) => s + Number(i.firstInstallment || 0), 0),
-      monthlyAmount:    oplataItems.reduce((s, i) => s + Number(i.monthlyAmount    || 0), 0),
-    };
+    // OplatyKv summalari (kategoriya bo'yicha)
+    const oplataInitial = oplataItems.reduce((s, i) => s + Number(i.firstInstallment || 0), 0);
+    const oplataMonthly = oplataItems.reduce((s, i) => s + Number(i.monthlyAmount    || 0), 0);
+    const oplataTotalPayment = oplataItems.reduce((s, i) => s + Number(i.paymentAmount || 0), 0);
 
-    const txTotalIn  = txItems.filter((t) => t.direction === 'IN' ).reduce((s, t) => s + Number(t.amount), 0);
-    const txTotalOut = txItems.filter((t) => t.direction === 'OUT').reduce((s, t) => s + Number(t.amount), 0);
-    const txNet = txTotalIn - txTotalOut;
+    // CRM payment_histories'ni boshlangich/oylik bo'yicha guruhlash
+    const detail: any = (crmResp as any)?.detail || null;
+    const histories: any[] = Array.isArray(detail?.payment_histories) ? detail.payment_histories : [];
 
-    const diff = oplataSums.paymentAmount - txNet;
-    const matched = Math.abs(diff) < 0.01;
+    const crmHistInitial: any[] = [];
+    const crmHistMonthly: any[] = [];
+    for (const h of histories) {
+      const k = String(h?.type?.key || '').toLowerCase();
+      if (k.includes('init') || k.includes('boshlang') || k.includes('перво')) crmHistInitial.push(h);
+      else crmHistMonthly.push(h);
+    }
+
+    const crmInitialSum = crmHistInitial.reduce((s, h) => s + Number(h?.amount || 0), 0);
+    const crmMonthlySum = crmHistMonthly.reduce((s, h) => s + Number(h?.amount || 0), 0);
+    const crmTotalPaid  = crmInitialSum + crmMonthlySum;
+
+    // Taqqoslash — har kategoriya
+    const diffTotal   = oplataTotalPayment - crmTotalPaid;
+    const diffInitial = oplataInitial - crmInitialSum;
+    const diffMonthly = oplataMonthly - crmMonthlySum;
+    const matched     = Math.abs(diffTotal) < 0.01;
 
     return {
       ok: true,
       contractNo: cn,
+      crmConnected: (crmResp as any)?.ok !== false,
       oplata: {
         items: oplataItems,
         count: oplataItems.length,
-        sums: oplataSums,
+        totalPayment: oplataTotalPayment,
+        initial: oplataInitial,
+        monthly: oplataMonthly,
       },
-      transactions: {
-        items: txItems,
-        count: txItems.length,
-        totalIn: txTotalIn,
-        totalOut: txTotalOut,
-        net: txNet,
+      crm: {
+        connected: (crmResp as any)?.ok !== false,
+        error: (crmResp as any)?.ok === false ? (crmResp as any).error : null,
+        contractInfo: detail ? {
+          price:        Number(detail?.price || 0),
+          contractDate: detail?.contract_date || null,
+          status:       detail?.status?.key || null,
+          initialPlan:  Number(detail?.initial?.total?.amount || 0),
+          initialPaid:  Number(detail?.initial?.total?.paid   || 0),
+          monthlyPlan:  Number(detail?.monthly?.total?.amount || 0),
+          monthlyPaid:  Number(detail?.monthly?.total?.paid   || 0),
+        } : null,
+        histories: histories.map((h) => ({
+          amount:    Number(h?.amount || 0),
+          datePaid:  h?.date_paid || null,
+          typeKey:   String(h?.type?.key || ''),
+          typeLabel: h?.type?.value?.name?.uz || h?.type?.value?.name?.ru || '',
+        })),
+        count: histories.length,
+        initialSum: crmInitialSum,
+        monthlySum: crmMonthlySum,
+        totalPaid:  crmTotalPaid,
       },
       comparison: {
-        oplataTotal: oplataSums.paymentAmount,
-        crmTotal: txNet,
-        diff,
+        oplataTotal: oplataTotalPayment,
+        crmTotal:    crmTotalPaid,
+        diff:        diffTotal,
+        diffInitial,
+        diffMonthly,
         matched,
-        status: matched ? 'ok' : (diff > 0 ? 'oplata-more' : 'crm-more'),
+        status: matched ? 'ok' : (diffTotal > 0 ? 'oplata-more' : 'crm-more'),
       },
     };
   }

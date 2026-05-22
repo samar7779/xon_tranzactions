@@ -981,15 +981,25 @@ function AktSverkaDialog({
     enabled: !!selectedContract,
   });
 
-  // CRM sverka — OplatyKv vs Transactions
+  // CRM sverka — OplatyKv vs XonSaroy CRM
   const crmQuery = useQuery({
     queryKey: ['oplata-kv-crm-sverka', selectedContract],
     queryFn: () => api.get<{
       ok: boolean;
       contractNo: string;
-      oplata: { items: OplataKvItem[]; count: number; sums: { paymentAmount: number; firstInstallment: number; monthlyAmount: number } };
-      transactions: { items: Array<{ id: string; txnDate: string; amount: string; direction: 'IN' | 'OUT'; description: string | null; fromName: string | null; toName: string | null; externalId: string | null }>; count: number; totalIn: number; totalOut: number; net: number };
-      comparison: { oplataTotal: number; crmTotal: number; diff: number; matched: boolean; status: 'ok' | 'oplata-more' | 'crm-more' };
+      crmConnected: boolean;
+      oplata: { items: OplataKvItem[]; count: number; totalPayment: number; initial: number; monthly: number };
+      crm: {
+        connected: boolean;
+        error: string | null;
+        contractInfo: { price: number; contractDate: string | null; status: string | null; initialPlan: number; initialPaid: number; monthlyPlan: number; monthlyPaid: number } | null;
+        histories: Array<{ amount: number; datePaid: string | null; typeKey: string; typeLabel: string }>;
+        count: number;
+        initialSum: number;
+        monthlySum: number;
+        totalPaid: number;
+      };
+      comparison: { oplataTotal: number; crmTotal: number; diff: number; diffInitial: number; diffMonthly: number; matched: boolean; status: 'ok' | 'oplata-more' | 'crm-more' };
     }>(`/oplata-kv/crm-sverka?contractNo=${encodeURIComponent(selectedContract || '')}`),
     enabled: !!selectedContract && crmMode,
   });
@@ -1326,12 +1336,20 @@ function CrmSverkaView({
       </div>
     );
   }
-  const { oplata, transactions, comparison } = data;
+  const { oplata, crm, comparison } = data;
   const matched = comparison.matched;
   const oplataMore = comparison.status === 'oplata-more';
 
   return (
     <div className="px-7 py-5 space-y-5">
+      {/* CRM ulanmaganmi? */}
+      {!crm.connected && (
+        <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 p-3 text-[12px] text-rose-700 flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <div>CRM bilan aloqa o'rnatib bo'lmadi{crm.error ? `: ${crm.error}` : ''}</div>
+        </div>
+      )}
+
       {/* Comparison summary — 3 ta katta kartochka */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white p-4 shadow-lg shadow-indigo-500/20">
@@ -1340,9 +1358,9 @@ function CrmSverkaView({
           <div className="text-[11px] text-white/85 mt-1">{oplata.count} ta to'lov</div>
         </div>
         <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white p-4 shadow-lg shadow-sky-500/20">
-          <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">CRM (Transactions)</div>
+          <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">XonSaroy CRM</div>
           <div className="text-2xl font-black tabular-nums">{formatMoney(comparison.crmTotal, '')}</div>
-          <div className="text-[11px] text-white/85 mt-1">{transactions.count} ta tranzaksiya · NET (kirim − chiqim)</div>
+          <div className="text-[11px] text-white/85 mt-1">{crm.count} ta payment_history</div>
         </div>
         <div className={cn(
           'rounded-2xl p-4 shadow-lg ring-1',
@@ -1371,7 +1389,23 @@ function CrmSverkaView({
         </div>
       </div>
 
-      {/* Side-by-side jadval — OplatyKv (chap) vs Transactions (o'ng) */}
+      {/* Kategoriya bo'yicha taqqoslash */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <CategoryCompareCard
+          title="Boshlang'ich"
+          oplata={oplata.initial}
+          crm={crm.initialSum}
+          diff={comparison.diffInitial}
+        />
+        <CategoryCompareCard
+          title="Oylik"
+          oplata={oplata.monthly}
+          crm={crm.monthlySum}
+          diff={comparison.diffMonthly}
+        />
+      </div>
+
+      {/* Side-by-side jadval — OplatyKv (chap) vs CRM histories (o'ng) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* OplatyKv */}
         <div className="rounded-2xl ring-1 ring-indigo-200 overflow-hidden">
@@ -1419,11 +1453,11 @@ function CrmSverkaView({
           </div>
         </div>
 
-        {/* Transactions (CRM) */}
+        {/* CRM payment_histories */}
         <div className="rounded-2xl ring-1 ring-sky-200 overflow-hidden">
           <div className="bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2.5 border-b border-sky-200 flex items-center justify-between">
             <div className="text-[11px] uppercase tracking-wider font-bold text-sky-700">
-              Transactions ({transactions.count})
+              XonSaroy CRM ({crm.count})
             </div>
             <div className="text-[11px] tabular-nums font-bold text-sky-900">
               {formatMoney(comparison.crmTotal, '')}
@@ -1434,42 +1468,73 @@ function CrmSverkaView({
               <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase sticky top-0">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Sana</th>
-                  <th className="px-3 py-2 text-center font-semibold">Yo'n.</th>
+                  <th className="px-3 py-2 text-left font-semibold">Tip</th>
                   <th className="px-3 py-2 text-right font-semibold">Summa</th>
-                  <th className="px-3 py-2 text-left font-semibold">Yuboruvchi</th>
                 </tr>
               </thead>
               <tbody>
-                {transactions.items.length === 0 ? (
-                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-[12px]">CRM da tranzaksiya topilmadi</td></tr>
-                ) : transactions.items.map((t: any) => (
-                  <tr key={t.id} className="border-t border-slate-100 hover:bg-sky-50/40 transition-colors">
-                    <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">
-                      {t.txnDate ? fmtDateRu(t.txnDate) : '—'}
-                    </td>
-                    <td className="px-3 py-1.5 text-center">
-                      <span className={cn(
-                        'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ring-1',
-                        t.direction === 'IN'
-                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                          : 'bg-rose-50 text-rose-700 ring-rose-200',
-                      )}>
-                        {t.direction === 'IN' ? 'KIR' : 'CHQ'}
-                      </span>
-                    </td>
-                    <td className={cn(
-                      'px-3 py-1.5 text-right tabular-nums font-semibold',
-                      t.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
-                    )}>
-                      {formatMoney(Number(t.amount), '')}
-                    </td>
-                    <td className="px-3 py-1.5 max-w-[180px] truncate" title={t.direction === 'IN' ? (t.fromName || '') : (t.toName || '')}>
-                      {t.direction === 'IN' ? (t.fromName || '—') : (t.toName || '—')}
-                    </td>
-                  </tr>
-                ))}
+                {crm.histories.length === 0 ? (
+                  <tr><td colSpan={3} className="py-6 text-center text-slate-400 text-[12px]">
+                    {crm.connected ? "CRM'da to'lov tarixi yo'q" : "CRM ulanmadi"}
+                  </td></tr>
+                ) : crm.histories.map((h: any, i: number) => {
+                  const isInitial = h.typeKey.toLowerCase().includes('init') || h.typeKey.toLowerCase().includes('boshlang');
+                  return (
+                    <tr key={i} className="border-t border-slate-100 hover:bg-sky-50/40 transition-colors">
+                      <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">
+                        {h.datePaid ? fmtDateRu(h.datePaid) : '—'}
+                      </td>
+                      <td className="px-3 py-1.5">
+                        <span className={cn(
+                          'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ring-1',
+                          isInitial
+                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
+                            : 'bg-sky-50 text-sky-700 ring-sky-200',
+                        )}>
+                          {isInitial ? 'BSH' : 'OYL'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">
+                        {formatMoney(h.amount, '')}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; oplata: number; crm: number; diff: number }) {
+  const matched = Math.abs(diff) < 0.01;
+  return (
+    <div className={cn(
+      'rounded-xl ring-1 p-3',
+      matched ? 'bg-emerald-50/50 ring-emerald-200' : 'bg-rose-50/50 ring-rose-200',
+    )}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">{title}</div>
+        {matched
+          ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          : <AlertTriangle className="h-4 w-4 text-rose-600" />}
+      </div>
+      <div className="grid grid-cols-3 gap-2 text-[11px]">
+        <div>
+          <div className="text-[9px] text-indigo-600 uppercase font-semibold">OplatyKv</div>
+          <div className="font-bold text-slate-800 tabular-nums">{formatMoney(oplata, '')}</div>
+        </div>
+        <div>
+          <div className="text-[9px] text-sky-600 uppercase font-semibold">CRM</div>
+          <div className="font-bold text-slate-800 tabular-nums">{formatMoney(crm, '')}</div>
+        </div>
+        <div>
+          <div className="text-[9px] uppercase font-semibold text-slate-500">Farq</div>
+          <div className={cn('font-bold tabular-nums', matched ? 'text-emerald-700' : 'text-rose-700')}>
+            {matched ? '✓' : (diff > 0 ? '+' : '') + formatMoney(diff, '')}
           </div>
         </div>
       </div>
