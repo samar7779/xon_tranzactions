@@ -130,6 +130,25 @@ export class OplataKvService {
     const txTypes = this.parseList(q.txTypes);
     if (txTypes) where.txType = { in: txTypes };
 
+    // ─── Manba filter: manual | excel | transaction ───
+    const sources = this.parseList(q.sources);
+    if (sources) {
+      const ors: Prisma.OplataKvWhereInput[] = [];
+      if (sources.includes('transaction')) ors.push({ sourceTxId: { not: null } });
+      if (sources.includes('excel'))       ors.push({ sourceTxId: null, importBatchId: { not: null } });
+      if (sources.includes('manual'))      ors.push({ sourceTxId: null, importBatchId: null });
+      if (ors.length === 1) Object.assign(where, ors[0]);
+      else if (ors.length > 1) {
+        // Hozirgi OR'ni saqlab, qo'shimcha OR sifatida AND qilamiz
+        if (where.OR) {
+          where.AND = [{ OR: where.OR }, { OR: ors }];
+          delete where.OR;
+        } else {
+          where.OR = ors;
+        }
+      }
+    }
+
     return where;
   }
 
@@ -175,6 +194,132 @@ export class OplataKvService {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('ОплатыКв qator topilmadi');
     return { ok: true, item: row };
+  }
+
+  // ───────────────── SYNC FROM TRANSACTIONS (avto-import) ─────────────────
+  /**
+   * Tranzaksiyalardan OplatyKv'ga avto-import.
+   * Shartlar:
+   *  - direction = 'IN' (kirim)
+   *  - category.code = 'CLIENT' (Клиент / Физ.Л / Юр.Л)
+   *  - contractNumber not null (shartnoma raqami bor)
+   *  - txnDate > minDate (foydalanuvchi sozlamasi)
+   *
+   * Dedup: sourceTxId (unique) orqali — mavjud bo'lsa update, bo'lmasa create.
+   */
+  async syncFromTransactions(opts: { minDate?: Date | null; actor?: Actor } = {}) {
+    const startedAt = Date.now();
+    const minDate = opts.minDate ?? null;
+
+    const where: Prisma.TransactionWhereInput = {
+      direction: 'IN',
+      category: { code: 'CLIENT' },
+      contractNumber: { not: null },
+    };
+    if (minDate) {
+      where.txnDate = { gt: minDate };
+    }
+
+    const txList = await this.prisma.transaction.findMany({
+      where,
+      select: {
+        id: true,
+        txnDate: true,
+        amount: true,
+        contractNumber: true,
+        description: true,
+        fromName: true,
+      },
+      orderBy: { txnDate: 'asc' },
+    });
+
+    if (txList.length === 0) {
+      return {
+        ok: true,
+        total: 0, added: 0, updated: 0, skipped: 0,
+        duration: Math.round((Date.now() - startedAt) / 1000),
+        minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
+      };
+    }
+
+    // CRM contract cache'dan object va client'larni olamiz (bir martalik query)
+    const contractNos = Array.from(new Set(txList.map((t) => t.contractNumber).filter((c): c is string => !!c)));
+    const crmContracts = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: contractNos } },
+      select: { contractNumber: true, customerName: true, objectName: true },
+    });
+    const crmByContract = new Map(crmContracts.map((c) => [c.contractNumber, c]));
+
+    let added = 0;
+    let updated = 0;
+    let skipped = 0;
+    const actorName = opts.actor?.name || 'auto · tranzaksiyadan';
+
+    for (const tx of txList) {
+      if (!tx.contractNumber || !tx.txnDate) { skipped++; continue; }
+      const crm = crmByContract.get(tx.contractNumber);
+      const amount = new Prisma.Decimal(tx.amount);
+
+      const data: Prisma.OplataKvUncheckedCreateInput = {
+        id: randomUUID(),
+        contractNo: tx.contractNumber,
+        date: tx.txnDate,
+        paymentAmount: amount,
+        purpose: tx.description || null,
+        txType: 'Взносы за квартиры',
+        client: crm?.customerName || tx.fromName || null,
+        object: crm?.objectName || null,
+        sourceTxId: tx.id,
+        createdByName: actorName,
+      };
+
+      try {
+        const existing = await this.prisma.oplataKv.findUnique({
+          where: { sourceTxId: tx.id },
+          select: { id: true, paymentAmount: true, contractNo: true, date: true },
+        });
+        if (existing) {
+          // Yangilanish kerakmi?
+          const amountChanged   = Number(existing.paymentAmount || 0) !== Number(amount);
+          const contractChanged = existing.contractNo !== tx.contractNumber;
+          const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate).getTime();
+          if (amountChanged || contractChanged || dateChanged) {
+            await this.prisma.oplataKv.update({
+              where: { id: existing.id },
+              data: {
+                contractNo: tx.contractNumber,
+                date: tx.txnDate,
+                paymentAmount: amount,
+                purpose: tx.description || null,
+                client: crm?.customerName || tx.fromName || null,
+                object: crm?.objectName || null,
+              },
+            });
+            updated++;
+          } else {
+            skipped++;
+          }
+        } else {
+          await this.prisma.oplataKv.create({ data });
+          added++;
+        }
+      } catch (e: any) {
+        this.log.warn(`syncFromTransactions: tx ${tx.id} → xato: ${e?.message}`);
+        skipped++;
+      }
+    }
+
+    const duration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.log(`syncFromTransactions: total=${txList.length} added=${added} updated=${updated} skipped=${skipped} duration=${duration}s`);
+    return {
+      ok: true,
+      total: txList.length,
+      added,
+      updated,
+      skipped,
+      duration,
+      minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
+    };
   }
 
   // ───────────────── CRM SVERKA (OplatyKv vs XonSaroy CRM taqqoslash) ─────────────────
@@ -349,6 +494,19 @@ export class OplataKvService {
       paymentMethod:   'paymentMethod',
       txType:          'txType',
     };
+
+    // Source ustun — fixed options (DB'dan emas)
+    if (column === 'source') {
+      const fixed = [
+        { id: 'manual',      name: "Qo'lda" },
+        { id: 'excel',       name: 'Excel' },
+        { id: 'transaction', name: 'Tranzaksiya' },
+      ];
+      const filtered = search
+        ? fixed.filter((v) => v.name.toLowerCase().includes(search.toLowerCase()))
+        : fixed;
+      return { ok: true, values: filtered };
+    }
 
     const field = COLUMN_TO_FIELD[column];
     if (!field) return { ok: true, values: [] };

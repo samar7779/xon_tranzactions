@@ -25,26 +25,33 @@ export class SyncController {
   @ApiOperation({ summary: 'Sync sozlamalari — syncMinDate va boshqalar' })
   async getSettings() {
     const syncMinDate = await this.settings.getSyncMinDate();
+    const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
     return {
       ok: true,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
+      oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
     };
   }
 
   @Patch('settings')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @ApiOperation({ summary: 'Sync sozlamalarini saqlash (syncMinDate)' })
+  @ApiOperation({ summary: 'Sync sozlamalarini saqlash (syncMinDate, oplatykvTxMinDate)' })
   async setSettings(
-    @Body() body: { syncMinDate?: string | null },
+    @Body() body: { syncMinDate?: string | null; oplatykvTxMinDate?: string | null },
     @CurrentUser('email') email?: string,
   ) {
     if (body.syncMinDate !== undefined) {
       await this.settings.setSyncMinDate(body.syncMinDate || null, email);
     }
+    if (body.oplatykvTxMinDate !== undefined) {
+      await this.settings.setOplatyKvTxMinDate(body.oplatykvTxMinDate || null, email);
+    }
     const syncMinDate = await this.settings.getSyncMinDate();
+    const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
     return {
       ok: true,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
+      oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
     };
   }
 
