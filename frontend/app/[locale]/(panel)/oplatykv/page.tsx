@@ -5,9 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search, Plus, Edit3, Trash2, History, X, ChevronLeft, ChevronRight,
-  Calendar, Loader2, Hash, ArrowDownLeft, ArrowUpRight, Filter as FilterIcon,
+  Calendar, Loader2, Hash, ArrowUpRight, Filter as FilterIcon,
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
+  Copy, Check,
 } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
+} from '@/components/ui/dropdown-menu';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -104,10 +108,23 @@ export default function OplataKvPage() {
   const [perPage, setPerPage] = useState(50);
 
   // Dialog state
+  const [detailRow, setDetailRow] = useState<OplataKvItem | null>(null);
   const [editRow, setEditRow] = useState<OplataKvItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteRow, setDeleteRow] = useState<OplataKvItem | null>(null);
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyId = async (id: string) => {
+    try {
+      await navigator.clipboard.writeText(id);
+      setCopiedId(id);
+      toast.success(`ID nusxalandi: ${id.slice(0, 12)}…`);
+      setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 1500);
+    } catch {
+      toast.error('Nusxalashda xato');
+    }
+  };
 
   // URL params for list query
   const qs = useMemo(() => {
@@ -173,22 +190,64 @@ export default function OplataKvPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-slate-400" />
-                <Input
-                  type="date"
-                  className="h-10 rounded-xl w-[140px]"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                />
-                <span className="text-slate-400">—</span>
-                <Input
-                  type="date"
-                  className="h-10 rounded-xl w-[140px]"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                />
-              </div>
+              {/* Sana filtri — icon ichida (collapsed) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    className={cn(
+                      'h-10 px-3 rounded-xl ring-1 inline-flex items-center gap-2 text-[13px] transition-colors',
+                      (dateFrom || dateTo)
+                        ? 'bg-indigo-50 ring-indigo-200 text-indigo-700 hover:bg-indigo-100'
+                        : 'bg-slate-50/60 ring-slate-200 text-slate-600 hover:bg-slate-100',
+                    )}
+                    title="Sana oralig'i"
+                  >
+                    <Calendar className="h-4 w-4" />
+                    <span className="font-medium">
+                      {(dateFrom || dateTo)
+                        ? `${dateFrom ? fmtDateRu(dateFrom) : '…'} — ${dateTo ? fmtDateRu(dateTo) : '…'}`
+                        : "Sana oralig'i"}
+                    </span>
+                    {(dateFrom || dateTo) && (
+                      <span
+                        className="ml-1 w-4 h-4 rounded-full grid place-items-center hover:bg-rose-500 hover:text-white"
+                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDateFrom(''); setDateTo(''); }}
+                      >
+                        <X className="h-3 w-3" />
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="p-3 w-[280px] space-y-2">
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Sana oralig'i</div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-600">Boshlanish</label>
+                    <Input
+                      type="date"
+                      className="h-9 rounded-lg"
+                      value={dateFrom}
+                      onChange={(e) => setDateFrom(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-semibold text-slate-600">Tugash</label>
+                    <Input
+                      type="date"
+                      className="h-9 rounded-lg"
+                      value={dateTo}
+                      onChange={(e) => setDateTo(e.target.value)}
+                    />
+                  </div>
+                  {(dateFrom || dateTo) && (
+                    <button
+                      className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                      onClick={() => { setDateFrom(''); setDateTo(''); }}
+                    >
+                      Tozalash
+                    </button>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
 
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                 <SelectTrigger className="h-10 rounded-xl w-[170px]">
@@ -227,31 +286,30 @@ export default function OplataKvPage() {
                   <Th align="right">1 взнос</Th>
                   <Th align="right">ежемесячный</Th>
                   <Th>Оплата</Th>
-                  <Th>Клиент</Th>
                   <Th>Объект</Th>
-                  <Th>Способ оплаты</Th>
-                  <Th>Назначение</Th>
                   <Th>Тип</Th>
-                  <Th>Примечание</Th>
-                  <Th>ID</Th>
-                  <Th align="center">Amallar</Th>
+                  <Th align="center">ID</Th>
                 </tr>
               </thead>
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100">
-                    {Array.from({ length: 14 }).map((__, j) => (
+                    {Array.from({ length: 9 }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={14} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
                     Hech qanday qator topilmadi
                   </td></tr>
                 )}
                 {items.map((it) => (
-                  <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                  <tr
+                    key={it.id}
+                    className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                    onClick={() => setDetailRow(it)}
+                  >
                     <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">{it.contractNo}</td>
                     <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
                     <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
@@ -264,29 +322,23 @@ export default function OplataKvPage() {
                         </span>
                       ) : <span className="text-slate-400">—</span>}
                     </td>
-                    <td className="px-3 py-2.5 max-w-[180px] truncate" title={it.client || ''}>{it.client || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 max-w-[160px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 max-w-[140px] truncate" title={it.paymentMethod || ''}>{it.paymentMethod || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 max-w-[220px] truncate" title={it.purpose || ''}>{it.purpose || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400">—</span>}</td>
                     <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 max-w-[180px] truncate" title={it.note || ''}>{it.note || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5 font-mono text-[10.5px] text-slate-400" title={it.id}>{it.id.slice(0, 8)}…</td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center justify-center gap-1">
-                        <IconBtn title="Tarix" onClick={() => setHistoryRow(it)} color="slate">
-                          <History className="h-3.5 w-3.5" />
-                        </IconBtn>
-                        {canManage && (
-                          <>
-                            <IconBtn title="Tahrirlash" onClick={() => setEditRow(it)} color="indigo">
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </IconBtn>
-                            <IconBtn title="O'chirish" onClick={() => setDeleteRow(it)} color="rose">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </IconBtn>
-                          </>
+                    <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        title={`ID: ${it.id}`}
+                        onClick={() => copyId(it.id)}
+                        className={cn(
+                          'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors',
+                          copiedId === it.id
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600',
                         )}
-                      </div>
+                      >
+                        {copiedId === it.id
+                          ? <Check className="h-3.5 w-3.5" />
+                          : <Copy className="h-3.5 w-3.5" />}
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -319,6 +371,18 @@ export default function OplataKvPage() {
           </div>
         </Card>
       </div>
+
+      {/* Detail modal — qator bosilganda chiroyli ko'rinish + edit/delete */}
+      <OplataKvDetailDialog
+        row={detailRow}
+        canManage={canManage}
+        onClose={() => setDetailRow(null)}
+        onEdit={(it) => { setDetailRow(null); setEditRow(it); }}
+        onDelete={(it) => { setDetailRow(null); setDeleteRow(it); }}
+        onHistory={(it) => { setDetailRow(null); setHistoryRow(it); }}
+        onCopyId={copyId}
+        copiedId={copiedId}
+      />
 
       {/* Create / Edit dialog */}
       <OplataKvFormDialog
@@ -361,23 +425,179 @@ function Th({ children, align = 'left' }: { children: React.ReactNode; align?: '
   );
 }
 
-function IconBtn({ children, title, onClick, color }: {
-  children: React.ReactNode; title: string; onClick: () => void;
-  color: 'indigo' | 'rose' | 'slate';
+// ─────────────────────────────────────────────────────────
+// Detail dialog — qator bosilganda barcha ma'lumotni chiroyli ko'rinishda
+// ─────────────────────────────────────────────────────────
+function OplataKvDetailDialog({
+  row, canManage, onClose, onEdit, onDelete, onHistory, onCopyId, copiedId,
+}: {
+  row: OplataKvItem | null;
+  canManage: boolean;
+  onClose: () => void;
+  onEdit: (r: OplataKvItem) => void;
+  onDelete: (r: OplataKvItem) => void;
+  onHistory: (r: OplataKvItem) => void;
+  onCopyId: (id: string) => void;
+  copiedId: string | null;
 }) {
-  const colorCls = {
-    indigo: 'hover:bg-indigo-50 hover:text-indigo-700 text-slate-500',
-    rose:   'hover:bg-rose-50 hover:text-rose-700 text-slate-500',
-    slate:  'hover:bg-slate-100 text-slate-500',
+  if (!row) return null;
+  const catCls = row.paymentCategory ? CATEGORY_CLS[row.paymentCategory] : '';
+  const catLabel = row.paymentCategory ? CATEGORY_LABEL[row.paymentCategory] : '—';
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0">
+        {/* Hero header */}
+        <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
+          <div
+            className="absolute inset-0 opacity-[0.12] pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+            }}
+          />
+          <div className="relative">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
+                  Договор
+                </div>
+                <div className="font-mono text-2xl font-black tracking-tight truncate">
+                  {row.contractNo || '—'}
+                </div>
+                <div className="text-[12px] text-white/80 mt-1">
+                  {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
+                </div>
+              </div>
+              {row.paymentCategory && (
+                <span className={cn('px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-white/15 ring-white/30 text-white')}>
+                  {catLabel}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 space-y-5 max-h-[60vh] overflow-y-auto">
+          {/* Sums grid */}
+          <div className="grid grid-cols-3 gap-2.5">
+            <DetailSum label="Сумма оплаты" value={row.paymentAmount}    color="indigo" />
+            <DetailSum label="1 взнос"       value={row.firstInstallment} color="amber" />
+            <DetailSum label="ежемесячный"   value={row.monthlyAmount}    color="sky" />
+          </div>
+
+          {/* Info rows */}
+          <div className="space-y-2">
+            <DetailRow icon={<User2 className="h-4 w-4" />}      label="Клиент"        value={row.client} />
+            <DetailRow icon={<Home className="h-4 w-4" />}       label="Объект"        value={row.object} />
+            <DetailRow icon={<CreditCard className="h-4 w-4" />} label="Способ оплаты" value={row.paymentMethod} />
+            <DetailRow icon={<FileText className="h-4 w-4" />}   label="Назначение"    value={row.purpose} multiline />
+            <DetailRow icon={<TagIcon className="h-4 w-4" />}    label="Тип"           value={row.txType} />
+            <DetailRow icon={<FileText className="h-4 w-4" />}   label="Примечание"    value={row.note} multiline />
+          </div>
+
+          {/* Meta */}
+          <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-3 text-[11px] text-slate-500">
+            <div>
+              <div className="uppercase tracking-wider font-semibold mb-0.5">Yaratildi</div>
+              <div className="text-slate-700">{fmtDateTime(row.createdAt)}</div>
+              {row.createdByName && <div className="text-slate-500">{row.createdByName}</div>}
+            </div>
+            <div>
+              <div className="uppercase tracking-wider font-semibold mb-0.5">O'zgartirildi</div>
+              <div className="text-slate-700">{fmtDateTime(row.updatedAt)}</div>
+            </div>
+          </div>
+
+          {/* Full ID with copy */}
+          <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5 flex items-center gap-2">
+            <Hash className="h-4 w-4 text-slate-400 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">ID</div>
+              <code className="text-[11.5px] text-slate-700 font-mono break-all">{row.id}</code>
+            </div>
+            <button
+              onClick={() => onCopyId(row.id)}
+              className={cn(
+                'shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-colors',
+                copiedId === row.id
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : 'bg-white hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 ring-1 ring-slate-200',
+              )}
+              title="Nusxalash"
+            >
+              {copiedId === row.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2">
+          <button
+            onClick={() => onHistory(row)}
+            className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors inline-flex items-center gap-1.5"
+          >
+            <History className="h-4 w-4" /> Tarix
+          </button>
+          <div className="flex items-center gap-2">
+            {canManage && (
+              <>
+                <button
+                  onClick={() => onDelete(row)}
+                  className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 ring-1 ring-rose-200 transition-colors inline-flex items-center gap-1.5"
+                >
+                  <Trash2 className="h-4 w-4" /> O'chirish
+                </button>
+                <button
+                  onClick={() => onEdit(row)}
+                  className="h-10 px-4 rounded-xl text-[13px] font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-md inline-flex items-center gap-1.5"
+                >
+                  <Edit3 className="h-4 w-4" /> Tahrirlash
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DetailRow({ icon, label, value, multiline }: { icon: React.ReactNode; label: string; value: string | null; multiline?: boolean }) {
+  return (
+    <div className="flex items-start gap-3 py-1.5">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 grid place-items-center text-slate-500 shrink-0">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{label}</div>
+        <div className={cn('text-[13px] text-slate-800 font-medium', multiline ? 'whitespace-pre-wrap break-words' : 'truncate')}>
+          {value || <span className="text-slate-400 font-normal italic">—</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSum({ label, value, color }: { label: string; value: string | number | null; color: 'indigo' | 'amber' | 'sky' }) {
+  const cls = {
+    indigo: 'bg-gradient-to-br from-indigo-50 to-violet-50 ring-indigo-200 text-indigo-900',
+    amber:  'bg-gradient-to-br from-amber-50 to-orange-50 ring-amber-200 text-amber-900',
+    sky:    'bg-gradient-to-br from-sky-50 to-cyan-50 ring-sky-200 text-sky-900',
+  }[color];
+  const labelCls = {
+    indigo: 'text-indigo-600',
+    amber:  'text-amber-600',
+    sky:    'text-sky-600',
   }[color];
   return (
-    <button
-      title={title}
-      onClick={onClick}
-      className={cn('w-7 h-7 grid place-items-center rounded-md transition-colors', colorCls)}
-    >
-      {children}
-    </button>
+    <div className={cn('rounded-xl ring-1 p-3', cls)}>
+      <div className={cn('text-[10px] uppercase tracking-wider font-bold', labelCls)}>{label}</div>
+      <div className="text-base font-black tabular-nums mt-0.5">
+        {fmtNum(value)}
+      </div>
+    </div>
   );
 }
 
