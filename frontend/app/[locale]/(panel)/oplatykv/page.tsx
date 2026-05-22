@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react';
 import * as React from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -663,13 +664,34 @@ function ColumnTh({
 }) {
   const activeCount = columnFilters[column]?.size || 0;
   const isOpen = openFilterColumn === column;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  const openPopover = () => {
+    if (btnRef.current) setAnchorRect(btnRef.current.getBoundingClientRect());
+    setOpenFilterColumn(column);
+  };
+
+  // Scroll/resize bo'lsa — popoverni yopamiz (drift muammosini oldini olamiz)
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = () => setOpenFilterColumn(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [isOpen, setOpenFilterColumn]);
+
   return (
-    <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-left relative">
+    <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-left">
       <div className="flex items-center gap-1">
         <span>{label}</span>
         {filterMode && (
           <button
-            onClick={() => setOpenFilterColumn(isOpen ? null : column)}
+            ref={btnRef}
+            onClick={() => isOpen ? setOpenFilterColumn(null) : openPopover()}
             className={cn(
               'relative inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
               activeCount > 0
@@ -687,10 +709,11 @@ function ColumnTh({
           </button>
         )}
       </div>
-      {isOpen && (
+      {isOpen && anchorRect && (
         <ColumnFilterPopover
           column={column}
           label={label}
+          anchorRect={anchorRect}
           selected={columnFilters[column] || new Set()}
           activeFilterParams={activeFilterParams}
           onChange={(next) => setColumnFilters((prev) => {
@@ -710,10 +733,11 @@ function ColumnTh({
 // ColumnFilterPopover — checkbox ro'yxat (debounced search, distinct values)
 // ─────────────────────────────────────────────────────────
 function ColumnFilterPopover({
-  column, label, selected, activeFilterParams, onChange, onClose,
+  column, label, anchorRect, selected, activeFilterParams, onChange, onClose,
 }: {
   column: string;
   label: string;
+  anchorRect: DOMRect;
   selected: Set<string>;
   activeFilterParams: string;
   onChange: (next: Set<string>) => void;
@@ -736,7 +760,6 @@ function ColumnFilterPopover({
       if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener('keydown', onKey);
-    // setTimeout so we don't catch the same click that opened us
     const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
     return () => {
       document.removeEventListener('keydown', onKey);
@@ -764,10 +787,23 @@ function ColumnFilterPopover({
     onChange(next);
   };
 
-  return (
+  // Position calculation — viewport ichida sig'sin
+  const popoverWidth = 300;
+  const popoverMaxHeight = 420; // approximate
+  let left = anchorRect.left;
+  let top = anchorRect.bottom + 6;
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  const viewportH = typeof window !== 'undefined' ? window.innerHeight : 768;
+  // Agar o'ngga sig'masa — chap tomonga surimiz
+  if (left + popoverWidth > viewportW - 8) left = Math.max(8, viewportW - popoverWidth - 8);
+  // Agar pastga sig'masa — yuqoriga ko'taramiz
+  if (top + popoverMaxHeight > viewportH - 8) top = Math.max(8, anchorRect.top - popoverMaxHeight - 6);
+
+  return createPortal(
     <div
       ref={popoverRef}
-      className="absolute z-50 top-full left-0 mt-1 w-[280px] bg-white ring-1 ring-slate-200 rounded-xl shadow-2xl p-2.5 text-slate-700 normal-case tracking-normal"
+      className="z-[9999] bg-white ring-1 ring-slate-200 rounded-xl shadow-2xl p-2.5 text-slate-700 normal-case tracking-normal"
+      style={{ position: 'fixed', top, left, width: popoverWidth }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
@@ -833,7 +869,8 @@ function ColumnFilterPopover({
           Tayyor
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
