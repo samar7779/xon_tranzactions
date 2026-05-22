@@ -228,6 +228,7 @@ export class OplataKvService {
       where,
       select: {
         id: true,
+        externalId: true,
         txnDate: true,
         amount: true,
         contractNumber: true,
@@ -263,9 +264,14 @@ export class OplataKvService {
       if (!tx.contractNumber || !tx.txnDate) { skipped++; continue; }
       const crm = crmByContract.get(tx.contractNumber);
       const amount = new Prisma.Decimal(tx.amount);
+      // Tranzaksiya externalId — bank kompozit ID (masalan: 5606448707_439_22.05.2026_...)
+      // Agar externalId bo'lsa — uni OplatyKv.id va sourceTxId qilib ishlatamiz (dedup va kuzatish uchun)
+      // Bo'lmasa — fallback: random UUID + tx.id (cuid)
+      const oplataId = tx.externalId || randomUUID();
+      const dedupKey = tx.externalId || tx.id;
 
       const data: Prisma.OplataKvUncheckedCreateInput = {
-        id: randomUUID(),
+        id: oplataId,
         contractNo: tx.contractNumber,
         date: tx.txnDate,
         paymentAmount: amount,
@@ -273,13 +279,13 @@ export class OplataKvService {
         txType: 'Взносы за квартиры',
         client: crm?.customerName || tx.fromName || null,
         object: crm?.objectName || null,
-        sourceTxId: tx.id,
+        sourceTxId: dedupKey,
         createdByName: actorName,
       };
 
       try {
         const existing = await this.prisma.oplataKv.findUnique({
-          where: { sourceTxId: tx.id },
+          where: { sourceTxId: dedupKey },
           select: { id: true, paymentAmount: true, contractNo: true, date: true },
         });
         if (existing) {
@@ -288,15 +294,34 @@ export class OplataKvService {
           const contractChanged = existing.contractNo !== tx.contractNumber;
           const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate).getTime();
           if (amountChanged || contractChanged || dateChanged) {
+            const updateData = {
+              contractNo: tx.contractNumber,
+              date: tx.txnDate,
+              paymentAmount: amount,
+              purpose: tx.description || null,
+              client: crm?.customerName || tx.fromName || null,
+              object: crm?.objectName || null,
+            };
             await this.prisma.oplataKv.update({
               where: { id: existing.id },
+              data: updateData,
+            });
+            // History — edited
+            await this.prisma.oplataKvHistory.create({
               data: {
-                contractNo: tx.contractNumber,
-                date: tx.txnDate,
-                paymentAmount: amount,
-                purpose: tx.description || null,
-                client: crm?.customerName || tx.fromName || null,
-                object: crm?.objectName || null,
+                oplataKvId: existing.id,
+                action: 'edited',
+                actorType: 'system',
+                actorId: null,
+                actorName: actorName,
+                fieldsChanged: ['paymentAmount', 'contractNo', 'date'].filter((f) => {
+                  if (f === 'paymentAmount') return amountChanged;
+                  if (f === 'contractNo')    return contractChanged;
+                  if (f === 'date')          return dateChanged;
+                  return false;
+                }),
+                changes: this.serializeForHistory(updateData) as any,
+                note: `Tranzaksiyadan yangilandi (txId: ${tx.id})`,
               },
             });
             updated++;
@@ -304,7 +329,20 @@ export class OplataKvService {
             skipped++;
           }
         } else {
-          await this.prisma.oplataKv.create({ data });
+          const created = await this.prisma.oplataKv.create({ data });
+          // History — created
+          await this.prisma.oplataKvHistory.create({
+            data: {
+              oplataKvId: created.id,
+              action: 'created',
+              actorType: 'system',
+              actorId: null,
+              actorName: actorName,
+              fieldsChanged: Object.keys(data).filter((k) => k !== 'id'),
+              changes: this.serializeForHistory(data) as any,
+              note: `Tranzaksiyadan avto-import (txId: ${tx.id}, externalId: ${tx.externalId || '—'})`,
+            },
+          });
           added++;
         }
       } catch (e: any) {
@@ -323,6 +361,56 @@ export class OplataKvService {
       skipped,
       duration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
+    };
+  }
+
+  /**
+   * Tranzaksiya-manba (sourceTxId not null) OplatyKv qatorlarini o'chirish.
+   * Optional: belgilangan sana bo'yicha filter.
+   * Foydalanish: noto'g'ri sana bilan sync qilinganni tozalab, qaytadan sync qilish.
+   */
+  async cleanupTxSource(opts: { date?: string | null; actor?: Actor } = {}) {
+    const where: Prisma.OplataKvWhereInput = {
+      sourceTxId: { not: null },
+    };
+    if (opts.date) {
+      const d = new Date(opts.date);
+      if (isNaN(d.getTime())) throw new BadRequestException("Noto'g'ri sana");
+      where.date = d;
+    }
+    // O'chiriladigan qatorlarni avval olamiz — history uchun
+    const toDelete = await this.prisma.oplataKv.findMany({
+      where,
+      select: { id: true, contractNo: true, paymentAmount: true, date: true, sourceTxId: true },
+    });
+    const actorName = opts.actor?.name || 'system · cleanup';
+    // History (deleted) — har biri uchun
+    if (toDelete.length > 0) {
+      await this.prisma.oplataKvHistory.createMany({
+        data: toDelete.map((r) => ({
+          oplataKvId: r.id,
+          action: 'deleted',
+          actorType: opts.actor?.id ? 'user' : 'system',
+          actorId: opts.actor?.id ?? null,
+          actorName,
+          fieldsChanged: [],
+          changes: {
+            contractNo: { old: r.contractNo, new: null },
+            paymentAmount: { old: r.paymentAmount?.toString(), new: null },
+            date: { old: r.date?.toISOString(), new: null },
+            sourceTxId: { old: r.sourceTxId, new: null },
+          } as any,
+          note: `Tranzaksiya-manba tozalash${opts.date ? ` (sana: ${opts.date})` : ''}`,
+        })),
+      });
+    }
+    const result = await this.prisma.oplataKv.deleteMany({ where });
+    this.log.warn(`cleanupTxSource: deleted=${result.count} date=${opts.date || 'ALL'}`);
+    return {
+      ok: true,
+      deleted: result.count,
+      matched: toDelete.length,
+      date: opts.date || null,
     };
   }
 
