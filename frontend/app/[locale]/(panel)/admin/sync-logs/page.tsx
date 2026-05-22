@@ -365,7 +365,6 @@ function SyncSettingsPanel() {
   // Accordion holati — kartochkalar default yashirin
   const [openSync, setOpenSync] = useState(false);
   const [openOplata, setOpenOplata] = useState(false);
-  const [openMapping, setOpenMapping] = useState(false);
 
   // Object mapping — CRUD
   const mappingsQuery = useQuery({
@@ -637,137 +636,116 @@ function SyncSettingsPanel() {
                   Tarix saqlanadi (deleted log).
                 </div>
               </div>
+
+              {/* ── OBJECT MAPPING — sub-bo'lim ichida (OplatyKv kartochkasi ichida) ── */}
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-fuchsia-600 flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Obyekt nomi mapping (CRM → OplatyKv)
+                </Label>
+                <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+                  CRM <b>"XON SAROY AFSONASI"</b> bersa, OplatyKv'ga <b>"АФСОНА"</b> deb yozish uchun.
+                  Mapping bo'lmasa — CRM nomi qanday bo'lsa shunday yoziladi.
+                </div>
+
+                {/* Yangi mapping qo'shish */}
+                <div className="rounded-xl bg-fuchsia-50/40 ring-1 ring-fuchsia-200 p-3 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-fuchsia-700 flex items-center gap-1.5">
+                    <Plus className="h-3 w-3" /> Yangi mapping
+                  </div>
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <div className="flex-1 min-w-[160px]">
+                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                        CRM nomi
+                      </Label>
+                      <Input
+                        type="text"
+                        value={newCrmName}
+                        onChange={(e) => setNewCrmName(e.target.value)}
+                        placeholder="XON SAROY AFSONASI"
+                        className="h-9 text-[12.5px]"
+                      />
+                    </div>
+                    <ArrowRight className="h-4 w-4 text-slate-400 pb-2.5 shrink-0" />
+                    <div className="flex-1 min-w-[160px]">
+                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                        OplatyKv nomi
+                      </Label>
+                      <Input
+                        type="text"
+                        value={newOplataName}
+                        onChange={(e) => setNewOplataName(e.target.value)}
+                        placeholder="АФСОНА"
+                        className="h-9 text-[12.5px]"
+                      />
+                    </div>
+                    <Button
+                      onClick={() => addMappingMut.mutate()}
+                      disabled={!newCrmName.trim() || !newOplataName.trim() || addMappingMut.isPending}
+                      className="h-9 px-3 gap-1.5 bg-gradient-to-br from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white text-[12px]"
+                    >
+                      {addMappingMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                      Qo'shish
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Mavjud mappinglar */}
+                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden mt-3">
+                  <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-slate-600">
+                    Mavjud mappinglar
+                    {(mappingsQuery.data?.items?.length || 0) > 0 && (
+                      <span className="text-slate-400 font-medium ml-1 normal-case">
+                        · {mappingsQuery.data!.items.length}
+                      </span>
+                    )}
+                  </div>
+                  {mappingsQuery.isLoading ? (
+                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto mb-1" />
+                      Yuklanmoqda...
+                    </div>
+                  ) : (mappingsQuery.data?.items?.length || 0) === 0 ? (
+                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 italic">
+                      Mapping mavjud emas
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                      {mappingsQuery.data!.items.map((m) => (
+                        <div key={m.id} className="px-3 py-2 flex items-center gap-2 hover:bg-slate-50/60">
+                          <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[12px] font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded truncate">
+                              {m.crmName}
+                            </span>
+                            <ArrowRight className="h-3 w-3 text-slate-400 shrink-0" />
+                            <span className="font-mono text-[12px] font-bold text-fuchsia-700 bg-fuchsia-50 px-1.5 py-0.5 rounded truncate">
+                              {m.oplataName}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              if (confirm(`'${m.crmName}' mapping'ini o'chirishni xohlaysizmi?`)) {
+                                deleteMappingMut.mutate(m.id);
+                              }
+                            }}
+                            disabled={deleteMappingMut.isPending}
+                            className="w-7 h-7 rounded grid place-items-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                            title="O'chirish"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-[10px] text-slate-400 mt-2">
+                  Eslatma: mapping faqat <b>keyingi sync'larga</b> ta'sir qiladi.
+                </div>
+              </div>
             </div>
           )}
-        </CardContent>
-        )}
-      </Card>
-
-      {/* OBJECT MAPPING — CRM nomi → OplatyKv nomi */}
-      <Card className="border-0 shadow-soft overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setOpenMapping((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
-        >
-          <div className="w-9 h-9 rounded-xl bg-fuchsia-50 grid place-items-center shrink-0">
-            <Building2 className="h-5 w-5 text-fuchsia-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-slate-800">Obyekt nomi mapping (CRM → OplatyKv)</div>
-            <div className="text-[11.5px] text-slate-500 mt-0.5 truncate">
-              {mappingsQuery.data?.items?.length
-                ? `${mappingsQuery.data.items.length} ta mapping faol`
-                : "Mapping yo'q — CRM nomi qanday bo'lsa shunday yoziladi"}
-            </div>
-          </div>
-          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openMapping && 'rotate-180')} />
-        </button>
-        {openMapping && (
-        <CardContent className="px-6 pb-6 pt-2 space-y-4 border-t border-slate-100">
-          <div className="text-[12px] text-slate-500 max-w-2xl">
-            CRM dan keladigan obyekt nomini OplatyKv'ga qisqartirib yoki o'zgartirib yozish uchun.
-            Misol: CRM <b>"XON SAROY AFSONASI"</b> bersa, OplatyKv'ga <b>"АФСОНА"</b> deb yoziladi.
-            Mapping bo'lmasa — CRM nomi qanday bo'lsa shunday yoziladi.
-          </div>
-
-          {/* Yangi mapping qo'shish formasi */}
-          <div className="rounded-xl bg-fuchsia-50/40 ring-1 ring-fuchsia-200 p-3.5 space-y-2">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-fuchsia-700 flex items-center gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              Yangi mapping
-            </Label>
-            <div className="flex items-end gap-2 flex-wrap">
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                  CRM nomi (asli)
-                </Label>
-                <Input
-                  type="text"
-                  value={newCrmName}
-                  onChange={(e) => setNewCrmName(e.target.value)}
-                  placeholder="XON SAROY AFSONASI"
-                  className="h-10"
-                />
-              </div>
-              <ArrowRight className="h-5 w-5 text-slate-400 pb-2.5" />
-              <div className="flex-1 min-w-[180px]">
-                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                  OplatyKv nomi (yoziladigan)
-                </Label>
-                <Input
-                  type="text"
-                  value={newOplataName}
-                  onChange={(e) => setNewOplataName(e.target.value)}
-                  placeholder="АФСОНА"
-                  className="h-10"
-                />
-              </div>
-              <Button
-                onClick={() => addMappingMut.mutate()}
-                disabled={!newCrmName.trim() || !newOplataName.trim() || addMappingMut.isPending}
-                className="h-10 px-4 gap-2 bg-gradient-to-br from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white"
-              >
-                {addMappingMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                Qo'shish
-              </Button>
-            </div>
-          </div>
-
-          {/* Mapping ro'yxati */}
-          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-            <div className="bg-slate-50 px-4 py-2 border-b border-slate-200 text-[11px] uppercase tracking-wider font-bold text-slate-600">
-              Mavjud mappinglar
-              {(mappingsQuery.data?.items?.length || 0) > 0 && (
-                <span className="text-slate-400 font-medium ml-1 normal-case">
-                  · {mappingsQuery.data!.items.length}
-                </span>
-              )}
-            </div>
-            {mappingsQuery.isLoading ? (
-              <div className="px-4 py-6 text-center text-[12px] text-slate-400">
-                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
-                Yuklanmoqda...
-              </div>
-            ) : (mappingsQuery.data?.items?.length || 0) === 0 ? (
-              <div className="px-4 py-6 text-center text-[12px] text-slate-400 italic">
-                Mapping mavjud emas
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-100">
-                {mappingsQuery.data!.items.map((m) => (
-                  <div key={m.id} className="px-4 py-2.5 flex items-center gap-3 hover:bg-slate-50/60">
-                    <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-[13px] font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded truncate">
-                        {m.crmName}
-                      </span>
-                      <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span className="font-mono text-[13px] font-bold text-fuchsia-700 bg-fuchsia-50 px-2 py-0.5 rounded truncate">
-                        {m.oplataName}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (confirm(`'${m.crmName}' mapping'ini o'chirishni xohlaysizmi?`)) {
-                          deleteMappingMut.mutate(m.id);
-                        }
-                      }}
-                      disabled={deleteMappingMut.isPending}
-                      className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
-                      title="O'chirish"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="text-[10.5px] text-slate-400">
-            Eslatma: mapping faqat <b>keyingi sync'larga</b> ta'sir qiladi.
-            Allaqachon yozilgan qatorlar avtomatik yangilanmaydi — agar kerak bo'lsa cleanup + qayta sync qiling.
-          </div>
         </CardContent>
         )}
       </Card>
