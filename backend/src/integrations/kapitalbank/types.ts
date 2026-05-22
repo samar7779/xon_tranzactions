@@ -86,3 +86,33 @@ export interface KbDoc1CResult {
   fin?: number;
   oper_day?: string;
 }
+
+/** GetDocuments natijasidagi bitta yozuv (result[]) — PDF §4.2 */
+export interface KbDocumentsItem {
+  client_id?: number;
+  num?: string;
+  branch?: string;
+  general_id?: string;
+  b2_id?: string;
+  uniq?: string;
+  ddate?: string;          // dd.MM.yyyy
+  vdate?: string;
+  stime?: string;
+  mfo_dt?: string;
+  acc_dt?: string;
+  name_dt?: string;
+  inn_dt?: string;
+  mfo_ct?: string;
+  acc_ct?: string;
+  name_ct?: string;
+  inn_ct?: string;
+  purpose?: string;
+  purp_code?: string;
+  amount?: number;
+  dtype?: string;
+  state?: number;
+  dir?: number;
+  err?: string;
+  err_msg?: string;
+  anor?: number;
+}

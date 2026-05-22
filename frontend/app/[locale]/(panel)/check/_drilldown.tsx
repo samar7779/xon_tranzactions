@@ -129,6 +129,9 @@ export function AccountDrilldown({
     matchedCount: number;
     bankOnly: DiagnoseItem[];
     dbOnly: DiagnoseItem[];
+    fallbackUsed?: boolean;
+    fallbackSource?: 'GetDocuments' | null;
+    fallbackError?: string | null;
   }>({
     queryKey: ['diagnose', item.accountId, dateFrom],
     queryFn: () => api.post('/transactions/reconcile/diagnose', {
@@ -357,18 +360,43 @@ function ReconcileTable({ data }: { data: ReconcileData }) {
 function DiagnoseResult({
   data, accountId, date, onFixed,
 }: {
-  data: { bankCount: number; dbCount: number; matchedCount: number; bankOnly: DiagnoseItem[]; dbOnly: DiagnoseItem[] };
+  data: {
+    bankCount: number;
+    dbCount: number;
+    matchedCount: number;
+    bankOnly: DiagnoseItem[];
+    dbOnly: DiagnoseItem[];
+    fallbackUsed?: boolean;
+    fallbackSource?: 'GetDocuments' | null;
+    fallbackError?: string | null;
+  };
   accountId: string;
   date: string;
   onFixed: () => void;
 }) {
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-4 text-[12px] text-slate-600">
+      <div className="flex items-center gap-4 text-[12px] text-slate-600 flex-wrap">
         <span>Bankda: <b className="text-slate-900">{data.bankCount}</b></span>
         <span>AllTranzactions: <b className="text-slate-900">{data.dbCount}</b></span>
         <span>Mos: <b className="text-emerald-700">{data.matchedCount}</b></span>
+        {data.fallbackUsed && (
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-indigo-700 bg-indigo-50 ring-1 ring-indigo-200 px-2 py-0.5 rounded-full">
+            <CheckCircle2 className="h-3 w-3" />
+            GetDocuments fallback
+          </span>
+        )}
       </div>
+
+      {data.fallbackError && (
+        <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-[11px] text-rose-800 flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <div>
+            <div className="font-semibold">GetDocuments fallback urinib ko'rildi, lekin xato:</div>
+            <div className="mt-0.5 font-mono">{data.fallbackError}</div>
+          </div>
+        </div>
+      )}
 
       {data.bankOnly.length === 0 && data.dbOnly.length === 0 ? (
         data.bankCount === 0 && data.dbCount === 0 ? (
@@ -377,7 +405,7 @@ function DiagnoseResult({
             <div>
               <div className="font-semibold">Bank tranzaksiyalar ro'yxati bo'sh</div>
               <div className="mt-0.5 text-amber-800">
-                Bank shu kun uchun faqat oborot va saldo qaytardi, individual tranzaksiyalar (content[]) yo'q.
+                Bank shu kun uchun na GetDoc1C, na GetDocuments orqali individual yozuv qaytarmadi.
                 Bu odatda dam olish/non-operatsion kunda bo'ladi. AllTranzactions'da ham hech narsa yo'q.
                 Farq qaerdandir oldingi kunlardan keladi — boshqa kunlarni tekshirib ko'ring.
               </div>

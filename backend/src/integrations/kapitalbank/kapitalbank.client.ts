@@ -6,6 +6,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent';
 import {
   KapitalbankResponse,
   KbDoc1CResult,
+  KbDocumentsItem,
   KbLoginResult,
   KbAccount,
 } from './types';
@@ -46,6 +47,12 @@ interface GetDocDetailsParams extends BaseAuthParams {
   bank_day: string;        // dd.MM.yyyy
   doc_id: string;          // general_id (BankId/PaymentId/...)
   doc_type: number;        // 0/1/2 — kelgan / yuborilgan / ichki
+}
+
+interface GetDocumentsParams extends BaseAuthParams {
+  client_id: number | string;
+  date?: string;           // dd.MM.yyyy
+  sid?: string;
 }
 
 /**
@@ -244,6 +251,28 @@ export class KapitalbankClient {
     const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
     const resp = await this.post<KbAccount[]>(url, body, authHeader, undefined, params.useProxy);
     return this.ensureNoError(resp, this.bankNameFromUrl(url));
+  }
+
+  /**
+   * GetDocuments — PDF §4.2.
+   * Tashkilot (client_id) bo'yicha shu kunga to'lov hujjatlari ro'yxati.
+   * GetDoc1C dan farqi: account+branch emas, client_id orqali so'raydi — ba'zan
+   * GetDoc1C content[] bo'sh qaytarsa ham GetDocuments yozuvlarni qaytaradi.
+   * Natija — TASHKILOTNING hamma hisoblari uchun, shuning uchun chaqirgan tomon
+   * acc_dt/acc_ct ga ko'ra filter qilishi kerak.
+   */
+  async getDocuments(params: GetDocumentsParams): Promise<KbDocumentsItem[]> {
+    const url = `${params.baseUrl}/GetDocuments`;
+    const body: any = {
+      client_id: params.client_id,
+    };
+    if (params.date) body.date = params.date;
+    if (params.sid) body.sid = params.sid;
+    const authHeader = params.sid ? undefined : this.basicHeader(params.login, params.password);
+    const resp = await this.post<KbDocumentsItem[]>(url, body, authHeader, undefined, params.useProxy);
+    // PDF javobida result — array. ensureNoError oddiy null tekshiruvni qiladi.
+    const result = this.ensureNoError(resp, this.bankNameFromUrl(url));
+    return Array.isArray(result) ? result : [];
   }
 
   /**
