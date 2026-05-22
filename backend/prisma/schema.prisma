@@ -829,7 +829,7 @@ model OplataKv {
   createdById       String?  @map("created_by_id") @db.VarChar(50)       // AdminUser.id
   createdByName     String?  @map("created_by_name") @db.VarChar(190)    // muzlatib qo'yilgan ism
   importBatchId     String?  @map("import_batch_id") @db.VarChar(50)     // ImportBatch.id (agar import bilan kelgan bo'lsa)
-  sourceTxId        String?  @unique @map("source_tx_id") @db.VarChar(50) // Transaction.id — agar tranzaksiyadan auto-kelgan bo'lsa (unique = dedup)
+  sourceTxId        String?  @unique @map("source_tx_id") @db.VarChar(255) // Transaction externalId (bank kompozit) yoki cuid (dedup uchun unique)
 
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
