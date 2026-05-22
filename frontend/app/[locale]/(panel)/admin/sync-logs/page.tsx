@@ -352,8 +352,11 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Tozalashda xato'),
   });
 
+  // Cleanup uchun alohida sana — saqlangan min sanaga bog'liq emas
+  const [cleanupDate, setCleanupDate] = useState<string>('');
+
   function handleCleanup() {
-    const date = oplatykvTxMinDate || null;
+    const date = cleanupDate || null;
     const msg = date
       ? `${date} sanasidagi tranzaksiya-manba bilan qo'shilgan barcha OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!`
       : "BARCHA tranzaksiya-manba bilan qo'shilgan OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!";
@@ -484,23 +487,55 @@ function SyncSettingsPanel() {
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Hozir sync
                 </Button>
-                <Button
-                  onClick={handleCleanup}
-                  disabled={cleanupTxMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
-                  title={oplatykvTxMinDate
-                    ? `Tanlangan sanadagi (${oplatykvTxMinDate}) tranzaksiya-manba qatorlarini o'chirish`
-                    : "Barcha tranzaksiya-manba qatorlarini o'chirish (sana yo'q)"}
-                >
-                  {cleanupTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                  Tranzaksiya manbasini tozalash
-                </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
                 Saqlangach, "Hozir sync" tugmasini bosing yoki keyingi sync paytida ishlaydi.
-                <br />
-                <b>"Tranzaksiya manbasini tozalash"</b> — sanada yozilgan bo'lsa o'sha sanasi bo'yicha, bo'lmasa barcha tranzaksiyadan kelgan qatorlarni o'chiradi (tarix saqlanadi).
+              </div>
+
+              {/* CLEANUP SECTION — alohida sana */}
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 flex items-center gap-1.5">
+                  <X className="h-3.5 w-3.5" />
+                  Tranzaksiya manbasini tozalash
+                </Label>
+                <div className="flex items-center gap-2 flex-wrap mt-2">
+                  <div className="relative">
+                    <Input
+                      type="date"
+                      value={cleanupDate}
+                      onChange={(e) => setCleanupDate(e.target.value)}
+                      placeholder="Sana (bo'sh = hammasi)"
+                      className="h-10 w-56 pr-9"
+                    />
+                    {cleanupDate && (
+                      <button
+                        type="button"
+                        onClick={() => setCleanupDate('')}
+                        title="Tozalash"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    onClick={handleCleanup}
+                    disabled={cleanupTxMut.isPending}
+                    className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
+                    title={cleanupDate
+                      ? `${cleanupDate} sanasidagi tranzaksiya-manba qatorlarini o'chirish`
+                      : "Barcha tranzaksiya-manba qatorlarini o'chirish (sana yo'q)"}
+                  >
+                    {cleanupTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                    Tozalash
+                  </Button>
+                </div>
+                <div className="text-[10.5px] text-slate-400 mt-1.5">
+                  Sana qo'yilsa — faqat shu sanadagi tranzaksiyadan kelgan qatorlar o'chiriladi.
+                  Bo'sh qoldirilsa — BARCHA tranzaksiyadan kelgan qatorlar o'chiriladi.
+                  Tarix saqlanadi (deleted log).
+                </div>
               </div>
             </div>
           )}
