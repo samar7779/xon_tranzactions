@@ -173,6 +173,43 @@ export class OplataKvService {
     return { ok: true, item: row };
   }
 
+  // ───────────────── BY CONTRACT (Akt Sverka) ─────────────────
+  /**
+   * Bitta shartnoma bo'yicha barcha to'lovlar tarixi + jami summalar.
+   * Akt sverka modal'i uchun.
+   */
+  async findByContract(contractNo: string) {
+    if (!contractNo || !contractNo.trim()) {
+      return { ok: false, error: "contractNo bo'sh", items: [], sums: null, meta: null };
+    }
+    const items = await this.prisma.oplataKv.findMany({
+      where: { contractNo: contractNo.trim() },
+      orderBy: { date: 'asc' },
+    });
+    const sums = {
+      paymentAmount:    items.reduce((s, i) => s + Number(i.paymentAmount    || 0), 0),
+      firstInstallment: items.reduce((s, i) => s + Number(i.firstInstallment || 0), 0),
+      monthlyAmount:    items.reduce((s, i) => s + Number(i.monthlyAmount    || 0), 0),
+    };
+    // Eng so'nggi mijoz/obyekt ma'lumotini olamiz (eng yangi qatordan)
+    const latest = items[items.length - 1];
+    const meta = latest ? {
+      client:        latest.client,
+      object:        latest.object,
+      paymentMethod: latest.paymentMethod,
+      firstDate:     items[0]?.date || null,
+      lastDate:      latest.date,
+    } : null;
+    return {
+      ok: true,
+      contractNo: contractNo.trim(),
+      count: items.length,
+      items,
+      sums,
+      meta,
+    };
+  }
+
   // ───────────────── EXPORT (Excel / JSON) ─────────────────
   /** Filtr bo'yicha BARCHA qatorlarni qaytaradi (export uchun). */
   private async fetchAllForExport(q: ListOplataKvDto) {

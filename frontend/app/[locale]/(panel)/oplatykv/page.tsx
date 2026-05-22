@@ -10,6 +10,7 @@ import {
   Calendar, Loader2, Hash, ArrowUpRight, Filter as FilterIcon,
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
+  FileCheck2, ChevronDown,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -115,6 +116,7 @@ export default function OplataKvPage() {
   const [deleteRow, setDeleteRow] = useState<OplataKvItem | null>(null);
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [aktSverkaOpen, setAktSverkaOpen] = useState(false);
 
   // Per-column filter (Google Sheets style)
   const [columnFilterMode, setColumnFilterMode] = useState(false);
@@ -379,6 +381,15 @@ export default function OplataKvPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Akt Sverka — shartnoma bo'yicha tarix */}
+              <button
+                onClick={() => setAktSverkaOpen(true)}
+                className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md shadow-amber-500/30 grid place-items-center transition-all hover:scale-105"
+                title="Akt Sverka — shartnoma bo'yicha to'lov tarixi"
+              >
+                <FileCheck2 className="h-4 w-4" />
+              </button>
+
               {/* Ustun filter rejimi toggle — faqat ikon */}
               <button
                 onClick={() => {
@@ -603,6 +614,14 @@ export default function OplataKvPage() {
 
       {/* History viewer */}
       <HistoryDialog row={historyRow} onClose={() => setHistoryRow(null)} />
+
+      {/* Akt Sverka dialog */}
+      <AktSverkaDialog
+        open={aktSverkaOpen}
+        onClose={() => setAktSverkaOpen(false)}
+        onCopyId={copyId}
+        copiedId={copiedId}
+      />
     </div>
   );
 }
@@ -897,6 +916,318 @@ function ColumnFilterPopover({
       </div>
     </div>,
     document.body,
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// AktSverkaDialog — shartnoma bo'yicha to'lov tarixi (Akt Sverka)
+// ─────────────────────────────────────────────────────────
+function AktSverkaDialog({
+  open, onClose, onCopyId, copiedId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onCopyId: (id: string) => void;
+  copiedId: string | null;
+}) {
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [selectedContract, setSelectedContract] = useState<string | null>(null);
+  const [suggestOpen, setSuggestOpen] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Modal yopilganda holatni reset qilamiz
+  useEffect(() => {
+    if (!open) {
+      setSearch('');
+      setDebounced('');
+      setSelectedContract(null);
+      setSuggestOpen(false);
+    }
+  }, [open]);
+
+  // Autocomplete — distinct contractNo lar
+  const suggestQuery = useQuery({
+    queryKey: ['oplata-kv-akt-sverka-suggest', debounced],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set('column', 'contractNo');
+      if (debounced) p.set('search', debounced);
+      return api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(`/oplata-kv/distinct?${p.toString()}`);
+    },
+    enabled: open && suggestOpen,
+  });
+
+  // Tanlangan shartnoma bo'yicha to'lovlar
+  const contractQuery = useQuery({
+    queryKey: ['oplata-kv-by-contract', selectedContract],
+    queryFn: () => api.get<{
+      ok: boolean;
+      contractNo: string;
+      count: number;
+      items: OplataKvItem[];
+      sums: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
+      meta: { client: string | null; object: string | null; paymentMethod: string | null; firstDate: string | null; lastDate: string | null } | null;
+    }>(`/oplata-kv/by-contract?contractNo=${encodeURIComponent(selectedContract || '')}`),
+    enabled: !!selectedContract,
+  });
+
+  const downloadExcel = async () => {
+    if (!selectedContract) return;
+    try {
+      const p = new URLSearchParams();
+      p.set('contractNos', selectedContract);
+      await apiDownload(`/oplata-kv/export?${p.toString()}`, `akt-sverka-${selectedContract}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success('Excel yuklab olindi');
+    } catch (e: any) {
+      toast.error(e?.message || 'Excel xato');
+    }
+  };
+
+  const data = contractQuery.data;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent
+        className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col"
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
+        {/* HERO */}
+        <div className="relative bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 px-7 pt-6 pb-5 text-white shrink-0">
+          <div
+            className="absolute inset-0 opacity-[0.12] pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+            }}
+          />
+          <div className="absolute -top-16 -right-16 w-56 h-56 rounded-full bg-white/10 blur-3xl animate-pulse" />
+          <div className="relative pr-12 flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md grid place-items-center ring-1 ring-white/30 shadow-xl shrink-0">
+              <FileCheck2 className="h-7 w-7 text-white" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">
+                Akt Sverka
+              </div>
+              <h2 className="text-2xl font-black tracking-tight">Shartnoma bo'yicha to'lov tarixi</h2>
+              <p className="text-[12px] text-white/85 mt-0.5">Shartnoma raqamini tanlang — barcha to'lovlar ko'rsatiladi</p>
+            </div>
+          </div>
+        </div>
+
+        {/* SEARCH (autocomplete) */}
+        <div className="px-7 py-5 border-b border-slate-100 bg-slate-50/60 shrink-0">
+          <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-2">
+            Shartnoma raqami
+          </label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+            <Input
+              autoFocus
+              className="pl-10 h-12 rounded-xl text-[14px] font-mono font-semibold"
+              placeholder="Дог № yozish..."
+              value={selectedContract || search}
+              onFocus={() => setSuggestOpen(true)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setSelectedContract(null);
+                setSuggestOpen(true);
+              }}
+            />
+            {(selectedContract || search) && (
+              <button
+                onClick={() => { setSearch(''); setSelectedContract(null); setSuggestOpen(false); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-rose-500 hover:text-white transition-colors z-10"
+                title="Tozalash"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+
+            {/* Suggestions dropdown */}
+            {suggestOpen && !selectedContract && (
+              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white ring-1 ring-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
+                {suggestQuery.isLoading ? (
+                  <div className="py-6 text-center text-[12px] text-slate-400">
+                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                    Yuklanmoqda...
+                  </div>
+                ) : (suggestQuery.data?.values?.length || 0) === 0 ? (
+                  <div className="py-6 text-center text-[12px] text-slate-400">
+                    Shartnoma topilmadi
+                  </div>
+                ) : (
+                  suggestQuery.data!.values.slice(0, 50).map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => {
+                        setSelectedContract(v.id);
+                        setSearch('');
+                        setSuggestOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0 font-mono text-[13px] font-semibold text-slate-800"
+                    >
+                      {v.name}
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* BODY — scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {!selectedContract ? (
+            <div className="px-7 py-16 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 grid place-items-center mx-auto mb-3">
+                <FileCheck2 className="h-8 w-8 text-amber-600" />
+              </div>
+              <div className="text-[15px] font-bold text-slate-700">Shartnoma tanlang</div>
+              <p className="text-[12.5px] text-slate-500 mt-1 max-w-sm mx-auto">
+                Yuqoridagi maydonga shartnoma raqamini yozing yoki ro'yxatdan tanlang
+              </p>
+            </div>
+          ) : contractQuery.isLoading ? (
+            <div className="px-7 py-16 text-center text-slate-400">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              Yuklanmoqda...
+            </div>
+          ) : data && data.items.length === 0 ? (
+            <div className="px-7 py-12 text-center text-slate-400">
+              Bu shartnoma bo'yicha to'lovlar topilmadi
+            </div>
+          ) : data ? (
+            <div className="px-7 py-5 space-y-5">
+              {/* Meta */}
+              {data.meta && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Mijoz</div>
+                    <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.client || '—'}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Obyekt</div>
+                    <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.object || '—'}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sums */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-200 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-indigo-600 mb-1">Сумма оплаты</div>
+                  <div className="text-[15px] font-black text-indigo-900 tabular-nums">{formatMoney(data.sums.paymentAmount, '')}</div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-amber-600 mb-1">1 взнос</div>
+                  <div className="text-[15px] font-black text-amber-900 tabular-nums">{formatMoney(data.sums.firstInstallment, '')}</div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-sky-50 to-cyan-50 ring-1 ring-sky-200 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-sky-600 mb-1">Ежемесячный</div>
+                  <div className="text-[15px] font-black text-sky-900 tabular-nums">{formatMoney(data.sums.monthlyAmount, '')}</div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 mb-1">Жами</div>
+                  <div className="text-[15px] font-black text-emerald-900 tabular-nums">{data.count} <span className="text-xs text-emerald-500">ta</span></div>
+                </div>
+              </div>
+
+              {/* Items list */}
+              <div className="rounded-2xl ring-1 ring-slate-200 overflow-hidden">
+                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
+                  <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">
+                    To'lovlar tarixi · <span className="text-slate-400 normal-case">{data.count} ta</span>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[12.5px]">
+                    <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase tracking-wider">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                        <th className="px-3 py-2 text-right font-semibold">Сумма</th>
+                        <th className="px-3 py-2 text-right font-semibold">1 взнос</th>
+                        <th className="px-3 py-2 text-right font-semibold">Ежемес.</th>
+                        <th className="px-3 py-2 text-left font-semibold">Tip</th>
+                        <th className="px-3 py-2 text-left font-semibold">Izoh</th>
+                        <th className="px-3 py-2 text-center font-semibold">ID</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.items.map((it) => (
+                        <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                          <td className="px-3 py-2 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.firstInstallment))}>{fmtNum(it.firstInstallment)}</td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.monthlyAmount))}>{fmtNum(it.monthlyAmount)}</td>
+                          <td className="px-3 py-2">{it.txType || <span className="text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2 max-w-[200px] truncate" title={it.purpose || ''}>{it.purpose || <span className="text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              onClick={() => onCopyId(it.id)}
+                              className={cn(
+                                'inline-flex items-center justify-center w-6 h-6 rounded transition-colors',
+                                copiedId === it.id ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600',
+                              )}
+                              title={it.id}
+                            >
+                              {copiedId === it.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {/* Yakuniy yig'indi */}
+                    <tfoot>
+                      <tr className="bg-amber-50 border-t-2 border-amber-300 font-bold">
+                        <td className="px-3 py-2.5 text-[11px] uppercase tracking-wider text-amber-700">ИТОГО</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.paymentAmount, '')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.firstInstallment, '')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.monthlyAmount, '')}</td>
+                        <td colSpan={3}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* FOOTER */}
+        <div className="px-7 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
+          <div className="text-[11.5px] text-slate-500">
+            {selectedContract ? (
+              <>Shartnoma: <span className="font-mono font-bold text-slate-800">{selectedContract}</span></>
+            ) : (
+              <>Shartnoma tanlanmadi</>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => window.print()}
+              disabled={!selectedContract || !data || data.items.length === 0}
+              className="h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Printer className="h-3.5 w-3.5" /> Chop etish
+            </button>
+            <button
+              onClick={downloadExcel}
+              disabled={!selectedContract || !data || data.items.length === 0}
+              className="h-9 px-3 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-[12px] shadow-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" /> Excel
+            </button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

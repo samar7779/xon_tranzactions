@@ -89,6 +89,13 @@ export class OplataKvController {
     return this.svc.distinctValues(column, q, search);
   }
 
+  @Get('by-contract')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Shartnoma bo'yicha to'lov tarixi (Akt Sverka)" })
+  byContract(@Query('contractNo') contractNo: string) {
+    return this.svc.findByContract(contractNo);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Bitta qatorni olish' })
