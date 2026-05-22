@@ -32,6 +32,7 @@ interface DiagnoseItem {
   id?: string;
   existsOnDate?: string;  // Boshqa sana ostida saqlangan (qo'shish tugmasini hide qilamiz)
   existingTxId?: string;
+  foundOnBankDate?: string | null;  // dbOnly: bank ±1 kunda topildi — sana siljish signali
 }
 
 interface AmountMismatchItem {
@@ -828,6 +829,20 @@ function DiagItem({
           {it.b2Id && <IdChip label="b2" value={it.b2Id} />}
           {it.externalId && <IdChip label="ext" value={it.externalId} />}
           {it.id && <IdChip label="db" value={it.id} />}
+        </div>
+      )}
+      {/* Bank ±1 kunda topildi — sana siljish (date shift) */}
+      {it.foundOnBankDate && date && it.foundOnBankDate !== date && (
+        <div className="mt-2 rounded-md bg-indigo-50 ring-1 ring-indigo-200 px-2.5 py-1.5 text-[10px] text-indigo-900 flex items-start gap-1.5">
+          <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0 text-indigo-600" />
+          <div className="flex-1">
+            <div className="font-semibold">
+              Bankda mavjud, lekin boshqa sanada
+            </div>
+            <div className="text-indigo-700 mt-0.5">
+              Bank sanasi: <span className="font-mono">{it.foundOnBankDate}</span> · joriy sverka: <span className="font-mono">{date}</span>
+            </div>
+          </div>
         </div>
       )}
       {/* Agar tx boshqa sana ostida saqlangan bo'lsa — duplikat bo'lmaslik uchun
