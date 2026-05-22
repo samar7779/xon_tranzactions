@@ -558,8 +558,11 @@ export class ReconcileService {
       // Legacy: ba'zi eski yozuvlarda b2_id/general_id externalId sifatida saqlangan
     }
     const matchedDbIds = new Set<string>();
+    // Tolerance — yaxlitlash xatosi (1 tiyin = 0.01 so'm)
+    const AMOUNT_EPSILON = 0.01;
 
     const bankOnly: any[] = [];
+    const amountMismatch: any[] = [];
     for (const item of bankItems) {
       // Composite externalId — eski tx'larda bankB2Id null bo'lishi mumkin,
       // shuning uchun composite key bilan ham qidirib ko'ramiz
@@ -595,6 +598,30 @@ export class ReconcileService {
       }
       if (found) {
         matchedDbIds.add(found.id);
+        // Summa farqi tekshiruvi — ID mos, lekin summa boshqacha bo'lsa
+        // ID asosida bog'lanadi (dublikat hisoblamaymiz), lekin alohida ro'yxatga ham qo'shamiz.
+        const bankAmt = (item.amount ?? 0) / 100;
+        const dbAmt = Number(found.amount);
+        const diff = bankAmt - dbAmt;
+        if (Math.abs(diff) > AMOUNT_EPSILON) {
+          amountMismatch.push({
+            txId: found.id,
+            b2Id: item.b2_id,
+            generalId: item.general_id,
+            docNumber: item.num,
+            ddate: item.ddate,
+            time: item.time,
+            direction: item.dir === 1 ? 'OUT' : item.dir === 2 ? 'IN' : null,
+            bankAmount: bankAmt,
+            dbAmount: dbAmt,
+            diff,
+            fromAccount: item.acc_dt,
+            fromName: item.name_dt,
+            toAccount: item.acc_ct,
+            toName: item.name_ct,
+            purpose: item.purpose,
+          });
+        }
       } else {
         bankOnly.push({
           b2Id: item.b2_id,
@@ -634,6 +661,9 @@ export class ReconcileService {
         description: tx.description,
       }));
 
+    // Summa farqi totallari
+    const amountMismatchDiffSum = amountMismatch.reduce((s, x) => s + (x.diff || 0), 0);
+
     return {
       ok: true,
       date,
@@ -644,6 +674,10 @@ export class ReconcileService {
       matchedCount: matchedDbIds.size,
       bankOnly,
       dbOnly,
+      // Yangi: summa nomos kelgan yozuvlar (ID mos, summa farqli)
+      amountMismatch,
+      amountMismatchCount: amountMismatch.length,
+      amountMismatchDiffSum,
       // Fallback metadata — frontend banner uchun
       fallbackUsed,
       fallbackSource: fallbackUsed ? ('GetDocuments' as const) : null,
