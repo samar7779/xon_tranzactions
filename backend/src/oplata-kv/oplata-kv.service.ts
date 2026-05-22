@@ -266,106 +266,142 @@ export class OplataKvService {
 
     let added = 0;
     let updated = 0;
-    // Skip sabablari alohida — debugging uchun
-    let skippedNoData = 0;     // contractNumber yoki txnDate yo'q
-    let skippedExists = 0;     // mavjud va o'zgarmagan
-    let skippedError = 0;      // create/update da xato
+    let skippedNoData = 0;
+    let skippedExists = 0;
+    let skippedError = 0;
     const errorSamples: Array<{ txId: string; reason: string }> = [];
     const actorName = opts.actor?.name || 'auto · tranzaksiyadan';
 
-    for (const tx of txList) {
-      if (!tx.contractNumber || !tx.txnDate) { skippedNoData++; continue; }
-      const crm = crmByContract.get(tx.contractNumber);
+    // ─── BATCH: avval barcha mavjudlarni 1 ta query bilan olamiz ───
+    const validTxs = txList.filter((t) => t.contractNumber && t.txnDate);
+    skippedNoData = txList.length - validTxs.length;
+
+    const allDedupKeys = validTxs.map((t) => t.externalId || t.id);
+    const existingRows = await this.prisma.oplataKv.findMany({
+      where: { sourceTxId: { in: allDedupKeys } },
+      select: { id: true, sourceTxId: true, paymentAmount: true, contractNo: true, date: true },
+    });
+    const existingMap = new Map(existingRows.map((r) => [r.sourceTxId!, r]));
+
+    // Yangi qatorlar — bulk createMany uchun
+    const toCreate: Prisma.OplataKvCreateManyInput[] = [];
+    const toCreateHistory: Prisma.OplataKvHistoryCreateManyInput[] = [];
+    // Yangilanadigan qatorlar — har biri alohida update (history ham)
+    const toUpdate: Array<{
+      id: string;
+      data: any;
+      changedFields: string[];
+      historyNote: string;
+    }> = [];
+
+    for (const tx of validTxs) {
+      const crm = crmByContract.get(tx.contractNumber!);
       const amount = new Prisma.Decimal(tx.amount);
-      // Tranzaksiya externalId — bank kompozit ID (masalan: 5606448707_439_22.05.2026_...)
-      // Agar externalId bo'lsa — uni OplatyKv.id va sourceTxId qilib ishlatamiz (dedup va kuzatish uchun)
-      // Bo'lmasa — fallback: random UUID + tx.id (cuid)
       const oplataId = tx.externalId || randomUUID();
       const dedupKey = tx.externalId || tx.id;
+      const existing = existingMap.get(dedupKey);
 
-      const data: Prisma.OplataKvUncheckedCreateInput = {
-        id: oplataId,
-        contractNo: tx.contractNumber,
-        date: tx.txnDate,
+      const baseData = {
+        contractNo: tx.contractNumber!,
+        date: tx.txnDate!,
         paymentAmount: amount,
         purpose: tx.description || null,
         txType: 'Взносы за квартиры',
         client: crm?.customerName || tx.fromName || null,
         object: mapObject(crm?.objectName),
-        sourceTxId: dedupKey,
-        createdByName: actorName,
       };
 
-      try {
-        const existing = await this.prisma.oplataKv.findUnique({
-          where: { sourceTxId: dedupKey },
-          select: { id: true, paymentAmount: true, contractNo: true, date: true },
-        });
-        if (existing) {
-          // Yangilanish kerakmi?
-          const amountChanged   = Number(existing.paymentAmount || 0) !== Number(amount);
-          const contractChanged = existing.contractNo !== tx.contractNumber;
-          const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate).getTime();
-          if (amountChanged || contractChanged || dateChanged) {
-            const updateData = {
-              contractNo: tx.contractNumber,
-              date: tx.txnDate,
-              paymentAmount: amount,
-              purpose: tx.description || null,
-              client: crm?.customerName || tx.fromName || null,
-              object: mapObject(crm?.objectName),
-            };
-            await this.prisma.oplataKv.update({
-              where: { id: existing.id },
-              data: updateData,
-            });
-            // History — edited
-            await this.prisma.oplataKvHistory.create({
-              data: {
-                oplataKvId: existing.id,
-                action: 'edited',
-                actorType: 'system',
-                actorId: null,
-                actorName: actorName,
-                fieldsChanged: ['paymentAmount', 'contractNo', 'date'].filter((f) => {
-                  if (f === 'paymentAmount') return amountChanged;
-                  if (f === 'contractNo')    return contractChanged;
-                  if (f === 'date')          return dateChanged;
-                  return false;
-                }),
-                changes: this.serializeForHistory(updateData) as any,
-                note: `Tranzaksiyadan yangilandi (txId: ${tx.id})`,
-              },
-            });
-            updated++;
-          } else {
-            skippedExists++;
-          }
+      if (existing) {
+        const amountChanged   = Number(existing.paymentAmount || 0) !== Number(amount);
+        const contractChanged = existing.contractNo !== tx.contractNumber;
+        const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate!).getTime();
+        if (amountChanged || contractChanged || dateChanged) {
+          const changedFields = [
+            amountChanged && 'paymentAmount',
+            contractChanged && 'contractNo',
+            dateChanged && 'date',
+          ].filter(Boolean) as string[];
+          toUpdate.push({
+            id: existing.id,
+            data: baseData,
+            changedFields,
+            historyNote: `Tranzaksiyadan yangilandi (txId: ${tx.id})`,
+          });
         } else {
-          const created = await this.prisma.oplataKv.create({ data });
-          // History — created
+          skippedExists++;
+        }
+      } else {
+        toCreate.push({
+          id: oplataId,
+          ...baseData,
+          sourceTxId: dedupKey,
+          createdByName: actorName,
+        });
+        toCreateHistory.push({
+          oplataKvId: oplataId,
+          action: 'created',
+          actorType: 'system',
+          actorId: null,
+          actorName,
+          fieldsChanged: ['contractNo', 'date', 'paymentAmount', 'client', 'object', 'sourceTxId'],
+          changes: this.serializeForHistory({ ...baseData, sourceTxId: dedupKey }) as any,
+          note: `Tranzaksiyadan avto-import (txId: ${tx.id}, ext: ${tx.externalId || '—'})`,
+        });
+      }
+    }
+
+    // BULK createMany — chunks 500
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < toCreate.length; i += CHUNK_SIZE) {
+      const chunk = toCreate.slice(i, i + CHUNK_SIZE);
+      try {
+        const res = await this.prisma.oplataKv.createMany({ data: chunk, skipDuplicates: true });
+        added += res.count;
+      } catch (e: any) {
+        skippedError += chunk.length;
+        if (errorSamples.length < 5) {
+          errorSamples.push({ txId: 'batch', reason: e?.message || 'createMany xato' });
+        }
+        this.log.warn(`createMany chunk[${i}] xato: ${e?.message}`);
+      }
+    }
+
+    // BULK history createMany
+    if (toCreateHistory.length > 0) {
+      try {
+        await this.prisma.oplataKvHistory.createMany({ data: toCreateHistory });
+      } catch (e: any) {
+        this.log.warn(`historyCreateMany xato: ${e?.message}`);
+      }
+    }
+
+    // Updates — alohida (bir nechta bo'lsa concurrency limit bilan)
+    const CONCURRENCY = 10;
+    for (let i = 0; i < toUpdate.length; i += CONCURRENCY) {
+      const batch = toUpdate.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (u) => {
+        try {
+          await this.prisma.oplataKv.update({ where: { id: u.id }, data: u.data });
           await this.prisma.oplataKvHistory.create({
             data: {
-              oplataKvId: created.id,
-              action: 'created',
+              oplataKvId: u.id,
+              action: 'edited',
               actorType: 'system',
               actorId: null,
-              actorName: actorName,
-              fieldsChanged: Object.keys(data).filter((k) => k !== 'id'),
-              changes: this.serializeForHistory(data) as any,
-              note: `Tranzaksiyadan avto-import (txId: ${tx.id}, externalId: ${tx.externalId || '—'})`,
+              actorName,
+              fieldsChanged: u.changedFields,
+              changes: this.serializeForHistory(u.data) as any,
+              note: u.historyNote,
             },
           });
-          added++;
+          updated++;
+        } catch (e: any) {
+          skippedError++;
+          if (errorSamples.length < 5) {
+            errorSamples.push({ txId: u.id, reason: e?.message || 'update xato' });
+          }
         }
-      } catch (e: any) {
-        const reason = e?.message || 'unknown';
-        this.log.warn(`syncFromTransactions: tx ${tx.id} (ext=${tx.externalId}) → xato: ${reason}`);
-        skippedError++;
-        if (errorSamples.length < 5) {
-          errorSamples.push({ txId: tx.externalId || tx.id, reason });
-        }
-      }
+      }));
     }
 
     const duration = Math.round((Date.now() - startedAt) / 1000);
