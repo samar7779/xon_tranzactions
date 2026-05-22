@@ -826,7 +826,7 @@ function DiagItem({
       {(it.b2Id || it.externalId || it.id) && (
         <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
           {it.b2Id && <IdChip label="b2" value={it.b2Id} />}
-          {!it.b2Id && it.externalId && <IdChip label="ext" value={it.externalId} />}
+          {it.externalId && <IdChip label="ext" value={it.externalId} />}
           {it.id && <IdChip label="db" value={it.id} />}
         </div>
       )}
