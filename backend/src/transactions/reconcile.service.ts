@@ -440,7 +440,55 @@ export class ReconcileService {
       date: dateDmy,
       useProxy: cred.useProxy === true,
     });
-    const bankItems = bankRes?.content || [];
+    let bankItems = bankRes?.content || [];
+
+    // ── Fallback: agar Kapitalbank GetDoc1C content[] bo'sh qaytarsa, ──
+    // GetDocuments (PDF §4.2) orqali tashkilot hujjatlarini olib, bu hisobga oid
+    // yozuvlarni filtr qilamiz. Ba'zan GetDoc1C bo'sh bo'lsa ham GetDocuments
+    // yozuvlarni qaytaradi (bank ichki indekslash farqi).
+    let fallbackUsed = false;
+    let fallbackError: string | null = null;
+    if (bank.apiKind === 'KAPITALBANK_V3' && bankItems.length === 0) {
+      try {
+        const loginRes = await this.kb.apiLogin({
+          baseUrl: bank.apiBaseUrl,
+          login,
+          password,
+          useProxy: cred.useProxy === true,
+        });
+        // Birinchi mos branch, topilmasa birinchi client
+        const client = loginRes.clients?.find((c) => c.branch === account.branch)
+          ?? loginRes.clients?.[0];
+        if (!client?.id) throw new Error('Login javobida client_id topilmadi');
+
+        const docs = await this.kb.getDocuments({
+          baseUrl: bank.apiBaseUrl,
+          login,
+          password,
+          client_id: client.id,
+          date: dateDmy,
+          sid: loginRes.sid,
+          useProxy: cred.useProxy === true,
+        });
+
+        // Faqat shu hisobga oid yozuvlar (debitor yoki kreditor tomonida)
+        const filtered = docs.filter(
+          (d) => d.acc_dt === account.accountNo || d.acc_ct === account.accountNo,
+        );
+        if (filtered.length > 0) {
+          // KbDocumentsItem maydonlari KbDoc1CItem bilan deyarli bir xil — keyingi
+          // kod (composite ID, b2_id, dir, amount va h.k.) bilan mos keladi.
+          bankItems = filtered as any;
+          fallbackUsed = true;
+          this.log.log(
+            `diagnoseDay ${account.accountNo} ${date}: GetDocuments fallback → ${filtered.length} yozuv topildi`,
+          );
+        }
+      } catch (e: any) {
+        fallbackError = e?.message || String(e);
+        this.log.warn(`diagnoseDay GetDocuments fallback xato: ${fallbackError}`);
+      }
+    }
 
     // DB dan o'sha kun uchun tranzaksiyalarni olamiz
     const dayStart = new Date(`${date}T00:00:00+05:00`);
@@ -596,6 +644,10 @@ export class ReconcileService {
       matchedCount: matchedDbIds.size,
       bankOnly,
       dbOnly,
+      // Fallback metadata — frontend banner uchun
+      fallbackUsed,
+      fallbackSource: fallbackUsed ? ('GetDocuments' as const) : null,
+      fallbackError,
     };
   }
 
