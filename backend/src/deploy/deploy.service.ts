@@ -150,21 +150,24 @@ export class DeployService {
   }
 
   /**
-   * Har faza uchun taxminiy davomiylik (sekund). Jami ~75 sek.
-   * Bu raqamlar real deploy'lardan o'rta hisobida olingan.
+   * Har faza uchun taxminiy davomiylik (sekund) — real deploylar o'rta hisobi.
+   * Eslatma: frontend build eng o'zgaruvchan — cache holatiga qarab 60-300s bo'lishi mumkin.
    */
   private readonly PHASE_DURATIONS: Record<string, number> = {
-    'git fetch': 2,
+    'git fetch': 3,
     'git reset': 1,
-    'backend npm ci': 5,
-    'backend prisma generate': 2,
-    'backend prisma db push': 2,
-    'backend prisma migrate deploy': 3,
-    'backend prisma seed': 3,
-    'backend build': 5,
-    'frontend npm ci': 10,
-    'frontend build': 40,
-    'restart xon-tranzactions-frontend': 2,
+    'git reset --hard origin/main': 1,
+    'backend npm ci': 30,
+    'backend prisma generate': 3,
+    'backend prisma db push': 3,
+    'backend prisma migrate deploy': 5,
+    'backend prisma seed': 5,
+    'backend build': 15,
+    'frontend npm ci': 60,
+    'frontend build': 180,
+    'frontend build (→ .next-build)': 180,
+    "frontend .next almashtirildi": 1,
+    'restart xon-tranzactions-frontend': 3,
     'restart xon-tranzactions-backend': 1,
   };
 
@@ -255,12 +258,43 @@ export class DeployService {
           }
         }
 
-        // Estimated total = tugagan + joriy + qolgan
-        const completedTime = completedPhases.reduce((s, ph) => s + (this.PHASE_DURATIONS[ph] || 0), 0);
+        // ─ Estimation (yangi mantiq) ─
+        // Qolgan fazalar = barcha fazalardan completed va current'ni chiqarib tashlash
+        const completedSet = new Set(completedPhases);
+        const allPhases = Object.keys(this.PHASE_DURATIONS);
+        const remainingPhases = allPhases.filter(
+          (p) => !completedSet.has(p) && p !== currentPhase,
+        );
+        const remainingPhasesDuration = remainingPhases.reduce(
+          (s, p) => s + (this.PHASE_DURATIONS[p] || 5),
+          0,
+        );
+        // Joriy faza uchun qolgan vaqt (tugamagani uchun half'iga oid)
+        const currentPhaseRemaining = currentPhase
+          ? Math.max(2, Math.round((this.PHASE_DURATIONS[currentPhase] || 10) / 2))
+          : 0;
+
         const allPhasesTotal = Object.values(this.PHASE_DURATIONS).reduce((s, v) => s + v, 0);
-        const estimatedTotal = Math.max(allPhasesTotal, elapsedSeconds + 10);
-        estimatedRemainingSeconds = Math.max(0, estimatedTotal - elapsedSeconds);
-        progressPercent = Math.min(99, Math.max(1, Math.round((completedTime / allPhasesTotal) * 100)));
+
+        // Agar elapsed barcha taxminni jiddiy oshib ketgan bo'lsa — estimate uncertain
+        if (elapsedSeconds > allPhasesTotal * 1.3 && remainingPhases.length === 0 && !currentPhase) {
+          // Hech qanday qolgan faza yo'q, vaqt esa ko'p o'tdi — yakunlanmoqda
+          estimatedRemainingSeconds = null;
+        } else if (remainingPhases.length === 0 && !currentPhase) {
+          // Hammasi tugagan — kichik buffer
+          estimatedRemainingSeconds = 3;
+        } else {
+          estimatedRemainingSeconds = remainingPhasesDuration + currentPhaseRemaining;
+        }
+
+        // Progress: tugagan fazalar soni / jami fazalar soni — yana real ko'rinishda
+        // (bu raqamlar emas, faqat percent)
+        const completedTime = completedPhases.reduce(
+          (s, ph) => s + (this.PHASE_DURATIONS[ph] || 5),
+          0,
+        );
+        const elapsedRatio = completedTime / Math.max(1, allPhasesTotal);
+        progressPercent = Math.min(95, Math.max(2, Math.round(elapsedRatio * 100)));
       }
 
       // Joriy git HEAD
