@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import * as React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -115,6 +116,53 @@ export default function OplataKvPage() {
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  // Per-column filter (Google Sheets style)
+  const [columnFilterMode, setColumnFilterMode] = useState(false);
+  const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
+  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+
+  // localStorage'dan tiklash
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('oplatykv-column-filters-v1');
+      if (raw) {
+        const obj = JSON.parse(raw);
+        const restored: Record<string, Set<string>> = {};
+        for (const [k, v] of Object.entries(obj)) {
+          if (Array.isArray(v) && v.length > 0) restored[k] = new Set(v as string[]);
+        }
+        if (Object.keys(restored).length > 0) {
+          setColumnFilters(restored);
+          setColumnFilterMode(true);
+        }
+      }
+      const rawMode = localStorage.getItem('oplatykv-filter-mode-v1');
+      if (rawMode === '1') setColumnFilterMode(true);
+    } catch { /* ignore */ }
+  }, []);
+
+  // localStorage'ga saqlash
+  useEffect(() => {
+    try {
+      const obj: Record<string, string[]> = {};
+      for (const k of Object.keys(columnFilters)) {
+        if (columnFilters[k]?.size > 0) obj[k] = Array.from(columnFilters[k]);
+      }
+      if (Object.keys(obj).length > 0) {
+        localStorage.setItem('oplatykv-column-filters-v1', JSON.stringify(obj));
+      } else {
+        localStorage.removeItem('oplatykv-column-filters-v1');
+      }
+    } catch { /* ignore */ }
+  }, [columnFilters]);
+
+  useEffect(() => {
+    try {
+      if (columnFilterMode) localStorage.setItem('oplatykv-filter-mode-v1', '1');
+      else localStorage.removeItem('oplatykv-filter-mode-v1');
+    } catch { /* ignore */ }
+  }, [columnFilterMode]);
+
   const copyId = async (id: string) => {
     try {
       await navigator.clipboard.writeText(id);
@@ -174,6 +222,23 @@ export default function OplataKvPage() {
     }, 100);
   };
 
+  // Column → DTO param nomi
+  const COLUMN_TO_PARAM: Record<string, string> = {
+    contractNo:      'contractNos',
+    paymentCategory: 'paymentCategories',
+    client:          'clients',
+    object:          'objects',
+    paymentMethod:   'paymentMethods',
+    txType:          'txTypes',
+  };
+
+  // columnFilters Set object — JSON serialization uchun
+  const columnFiltersKey = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(columnFilters).map(([k, v]) => [k, Array.from(v).sort()]),
+    ),
+  );
+
   // URL params for list query
   const qs = useMemo(() => {
     const p = new URLSearchParams();
@@ -183,8 +248,32 @@ export default function OplataKvPage() {
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
     if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
+    // Per-column filterlar (vergul bilan)
+    for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+      const set = columnFilters[col];
+      if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+    }
     return p.toString();
-  }, [page, perPage, q, dateFrom, dateTo, categoryFilter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, perPage, q, dateFrom, dateTo, categoryFilter, columnFiltersKey]);
+
+  // Filter popoverga uzatish uchun — barcha AKTIV column filterlar (page'siz)
+  const activeFilterParams = useMemo(() => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set('q', q.trim());
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo)   p.set('dateTo', dateTo);
+    if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
+    for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+      const set = columnFilters[col];
+      if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+    }
+    return p.toString();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, dateFrom, dateTo, categoryFilter, columnFiltersKey]);
+
+  // Aktiv column filterlar soni — badge uchun
+  const activeColumnFiltersCount = Object.values(columnFilters).filter((s) => s && s.size > 0).length;
 
   const listQuery = useQuery({
     queryKey: ['oplata-kv', qs],
@@ -198,7 +287,8 @@ export default function OplataKvPage() {
   });
 
   // Filtr o'zgarganda sahifani 1-ga qaytarish
-  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, categoryFilter, perPage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, categoryFilter, perPage, columnFiltersKey]);
 
   const items = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
@@ -310,6 +400,33 @@ export default function OplataKvPage() {
                 </SelectContent>
               </Select>
 
+              {/* Ustun filter rejimi toggle */}
+              <button
+                onClick={() => {
+                  setColumnFilterMode((v) => !v);
+                  if (columnFilterMode) {
+                    // Yopayotganda — barcha column filterlarni tozalash
+                    setColumnFilters({});
+                    setOpenFilterColumn(null);
+                  }
+                }}
+                className={cn(
+                  'relative h-10 px-3 rounded-xl ring-1 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-colors',
+                  columnFilterMode
+                    ? 'bg-indigo-600 text-white ring-indigo-700 hover:bg-indigo-700 shadow-md shadow-indigo-500/30'
+                    : 'bg-slate-50/60 text-slate-700 ring-slate-200 hover:bg-slate-100',
+                )}
+                title={columnFilterMode ? "Ustun filter rejimini o'chirish" : "Ustun filter rejimini yoqish"}
+              >
+                <FilterIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Ustun filter</span>
+                {activeColumnFiltersCount > 0 && (
+                  <span className="ml-0.5 min-w-[18px] h-[18px] rounded-full bg-white text-indigo-700 text-[10px] font-bold grid place-items-center px-1">
+                    {activeColumnFiltersCount}
+                  </span>
+                )}
+              </button>
+
               {/* Download dropdown — filter-aware */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -366,14 +483,30 @@ export default function OplataKvPage() {
             <table className="w-full text-[13px]">
               <thead className="bg-slate-50 text-slate-500 uppercase text-[10.5px] tracking-wider">
                 <tr>
-                  <Th>Дог №</Th>
+                  <ColumnTh label="Дог №" column="contractNo"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
                   <Th>Дата</Th>
                   <Th align="right">Сумма оплаты</Th>
                   <Th align="right">1 взнос</Th>
                   <Th align="right">ежемесячный</Th>
-                  <Th>Оплата</Th>
-                  <Th>Объект</Th>
-                  <Th>Тип</Th>
+                  <ColumnTh label="Оплата" column="paymentCategory"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
+                  <ColumnTh label="Объект" column="object"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
+                  <ColumnTh label="Тип" column="txType"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
                   <Th align="center">ID</Th>
                 </tr>
               </thead>
@@ -509,6 +642,198 @@ function Th({ children, align = 'left' }: { children: React.ReactNode; align?: '
       align === 'center' && 'text-center',
       align === 'left' && 'text-left',
     )}>{children}</th>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// ColumnTh — filter ikoni va popover bilan jadval header
+// ─────────────────────────────────────────────────────────
+function ColumnTh({
+  label, column, filterMode, columnFilters, setColumnFilters,
+  openFilterColumn, setOpenFilterColumn, activeFilterParams,
+}: {
+  label: string;
+  column: string;
+  filterMode: boolean;
+  columnFilters: Record<string, Set<string>>;
+  setColumnFilters: React.Dispatch<React.SetStateAction<Record<string, Set<string>>>>;
+  openFilterColumn: string | null;
+  setOpenFilterColumn: (c: string | null) => void;
+  activeFilterParams: string;
+}) {
+  const activeCount = columnFilters[column]?.size || 0;
+  const isOpen = openFilterColumn === column;
+  return (
+    <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-left relative">
+      <div className="flex items-center gap-1">
+        <span>{label}</span>
+        {filterMode && (
+          <button
+            onClick={() => setOpenFilterColumn(isOpen ? null : column)}
+            className={cn(
+              'relative inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+              activeCount > 0
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'text-slate-400 hover:bg-indigo-100 hover:text-indigo-700',
+            )}
+            title={activeCount > 0 ? `${activeCount} tanlangan` : 'Filter'}
+          >
+            <FilterIcon className="h-3 w-3" />
+            {activeCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-0.5">
+                {activeCount > 9 ? '9+' : activeCount}
+              </span>
+            )}
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <ColumnFilterPopover
+          column={column}
+          label={label}
+          selected={columnFilters[column] || new Set()}
+          activeFilterParams={activeFilterParams}
+          onChange={(next) => setColumnFilters((prev) => {
+            const cp = { ...prev };
+            if (next.size === 0) delete cp[column];
+            else cp[column] = next;
+            return cp;
+          })}
+          onClose={() => setOpenFilterColumn(null)}
+        />
+      )}
+    </th>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// ColumnFilterPopover — checkbox ro'yxat (debounced search, distinct values)
+// ─────────────────────────────────────────────────────────
+function ColumnFilterPopover({
+  column, label, selected, activeFilterParams, onChange, onClose,
+}: {
+  column: string;
+  label: string;
+  selected: Set<string>;
+  activeFilterParams: string;
+  onChange: (next: Set<string>) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Debounce
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Esc / outside click — yopish
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    // setTimeout so we don't catch the same click that opened us
+    const t = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+      clearTimeout(t);
+    };
+  }, [onClose]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['oplata-kv-distinct', column, debounced, activeFilterParams],
+    queryFn: () => {
+      const p = new URLSearchParams(activeFilterParams);
+      p.set('column', column);
+      if (debounced) p.set('search', debounced);
+      return api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>(`/oplata-kv/distinct?${p.toString()}`);
+    },
+  });
+  const values = data?.values || [];
+  const tanlangan = values.filter((v) => selected.has(v.id));
+  const qolgan = values.filter((v) => !selected.has(v.id));
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onChange(next);
+  };
+
+  return (
+    <div
+      ref={popoverRef}
+      className="absolute z-50 top-full left-0 mt-1 w-[280px] bg-white ring-1 ring-slate-200 rounded-xl shadow-2xl p-2.5 text-slate-700 normal-case tracking-normal"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
+        Filter: <span className="text-slate-800">{label}</span>
+      </div>
+      <div className="relative">
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+        <Input
+          autoFocus
+          className="pl-7 h-8 text-[12px] rounded-lg"
+          placeholder="Qidirish..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+      <div className="mt-2 max-h-64 overflow-y-auto -mx-1 px-1">
+        {isLoading ? (
+          <div className="py-6 text-center text-[12px] text-slate-400">
+            <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+            Yuklanmoqda...
+          </div>
+        ) : values.length === 0 ? (
+          <div className="py-6 text-center text-[12px] text-slate-400">
+            Qiymat topilmadi
+          </div>
+        ) : (
+          [...tanlangan, ...qolgan].map((v) => (
+            <label
+              key={v.id}
+              className={cn(
+                'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors',
+                selected.has(v.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'hover:bg-slate-50',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={selected.has(v.id)}
+                onChange={() => toggle(v.id)}
+                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+              />
+              <span className={cn('text-[12.5px] truncate flex-1', selected.has(v.id) ? 'font-semibold text-indigo-700' : 'text-slate-700')}>
+                {v.name}
+              </span>
+            </label>
+          ))
+        )}
+      </div>
+      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 gap-2">
+        {selected.size > 0 ? (
+          <button
+            onClick={() => onChange(new Set())}
+            className="text-rose-600 text-[11.5px] font-semibold hover:bg-rose-50 px-2 py-1 rounded-md transition-colors"
+          >
+            Tozalash ({selected.size})
+          </button>
+        ) : (
+          <span className="text-[11px] text-slate-400">{values.length} ta variant</span>
+        )}
+        <button
+          onClick={onClose}
+          className="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-[11.5px] font-semibold transition-colors"
+        >
+          Tayyor
+        </button>
+      </div>
+    </div>
   );
 }
 

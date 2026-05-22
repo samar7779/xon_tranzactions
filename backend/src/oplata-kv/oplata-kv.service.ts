@@ -63,11 +63,16 @@ export class OplataKvService {
     }
   }
 
-  // ───────────────── LIST ─────────────────
-  async list(q: ListOplataKvDto) {
-    const page = Math.max(1, Number(q.page) || 1);
-    const perPage = Math.min(200, Math.max(1, Number(q.perPage) || 50));
+  // ───────────────── WHERE BUILDER (sharedmaroq) ─────────────────
+  /** Vergul bilan ajratilgan string'ni massivga aylantiradi. */
+  private parseList(s?: string | null): string[] | null {
+    if (!s) return null;
+    const arr = s.split(',').map((x) => x.trim()).filter(Boolean);
+    return arr.length > 0 ? arr : null;
+  }
 
+  /** Barcha filterlardan WHERE yasaydi — list/export/distinct shu metodni ishlatadi. */
+  private buildWhere(q: ListOplataKvDto): Prisma.OplataKvWhereInput {
     const where: Prisma.OplataKvWhereInput = {};
 
     if (q.q && q.q.trim()) {
@@ -88,6 +93,37 @@ export class OplataKvService {
     if (q.paymentCategory) where.paymentCategory = q.paymentCategory as OplataKvCategory;
     if (q.client) where.client = { contains: q.client, mode: 'insensitive' };
     if (q.object) where.object = { contains: q.object, mode: 'insensitive' };
+
+    // ─── Per-ustun multi-select (vergul bilan) ───
+    const contractNos = this.parseList(q.contractNos);
+    if (contractNos) where.contractNo = { in: contractNos };
+
+    const paymentCategories = this.parseList(q.paymentCategories);
+    if (paymentCategories) {
+      where.paymentCategory = { in: paymentCategories as OplataKvCategory[] };
+    }
+
+    const clients = this.parseList(q.clients);
+    if (clients) where.client = { in: clients };
+
+    const objects = this.parseList(q.objects);
+    if (objects) where.object = { in: objects };
+
+    const paymentMethods = this.parseList(q.paymentMethods);
+    if (paymentMethods) where.paymentMethod = { in: paymentMethods };
+
+    const txTypes = this.parseList(q.txTypes);
+    if (txTypes) where.txType = { in: txTypes };
+
+    return where;
+  }
+
+  // ───────────────── LIST ─────────────────
+  async list(q: ListOplataKvDto) {
+    const page = Math.max(1, Number(q.page) || 1);
+    const perPage = Math.min(200, Math.max(1, Number(q.perPage) || 50));
+
+    const where = this.buildWhere(q);
 
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
@@ -129,32 +165,99 @@ export class OplataKvService {
   // ───────────────── EXPORT (Excel / JSON) ─────────────────
   /** Filtr bo'yicha BARCHA qatorlarni qaytaradi (export uchun). */
   private async fetchAllForExport(q: ListOplataKvDto) {
-    const where: Prisma.OplataKvWhereInput = {};
-    if (q.q) {
-      where.OR = [
-        { contractNo: { contains: q.q, mode: 'insensitive' } },
-        { client:     { contains: q.q, mode: 'insensitive' } },
-        { object:     { contains: q.q, mode: 'insensitive' } },
-        { purpose:    { contains: q.q, mode: 'insensitive' } },
-        { note:       { contains: q.q, mode: 'insensitive' } },
-      ];
-    }
-    if (q.dateFrom || q.dateTo) {
-      where.date = {};
-      if (q.dateFrom) (where.date as any).gte = new Date(q.dateFrom);
-      if (q.dateTo)   (where.date as any).lte = new Date(q.dateTo + 'T23:59:59');
-    }
-    if (q.paymentCategory) where.paymentCategory = q.paymentCategory as OplataKvCategory;
-    if (q.contractNo) where.contractNo = { contains: q.contractNo, mode: 'insensitive' };
-    if (q.client) where.client = { contains: q.client, mode: 'insensitive' };
-    if (q.object) where.object = { contains: q.object, mode: 'insensitive' };
-
+    const where = this.buildWhere(q);
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
     return this.prisma.oplataKv.findMany({
       where,
       orderBy: { [sortBy]: sortDir } as any,
     });
+  }
+
+  // ───────────────── DISTINCT (column filter popover) ─────────────────
+  /**
+   * Berilgan ustun uchun distinct qiymatlar.
+   * SELF-EXCLUSION: shu ustunning o'z filtri istisno qilinadi (foydalanuvchi qaytadan tanlay olsin).
+   */
+  async distinctValues(
+    column: string,
+    q: ListOplataKvDto,
+    search?: string,
+  ): Promise<{ ok: true; values: Array<{ id: string; name: string }> }> {
+    // Column → DTO field nomi va self-exclusion uchun
+    const COLUMN_TO_PARAM: Record<string, keyof ListOplataKvDto> = {
+      contractNo:      'contractNos',
+      paymentCategory: 'paymentCategories',
+      client:          'clients',
+      object:          'objects',
+      paymentMethod:   'paymentMethods',
+      txType:          'txTypes',
+    };
+
+    // Column DB field
+    const COLUMN_TO_FIELD: Record<string, keyof Prisma.OplataKvScalarFieldEnum | string> = {
+      contractNo:      'contractNo',
+      paymentCategory: 'paymentCategory',
+      client:          'client',
+      object:          'object',
+      paymentMethod:   'paymentMethod',
+      txType:          'txType',
+    };
+
+    const field = COLUMN_TO_FIELD[column];
+    if (!field) return { ok: true, values: [] };
+
+    // Self-exclusion: shu ustunning filtri olib tashlanadi
+    const queryCopy: any = { ...q };
+    const selfParam = COLUMN_TO_PARAM[column];
+    if (selfParam) delete queryCopy[selfParam];
+    // q (erkin qidiruv) ham eslataylik — o'sha ham excludable bo'lishi mumkin, lekin saqlab qolaylik
+    // bu yerda buildWhere'ni boshqa filtrlar bilan ishlatamiz
+    const where = this.buildWhere(queryCopy);
+
+    // Faqat NULL bo'lmagan qiymatlarni olamiz
+    (where as any)[field] = { not: null, ...(search ? { contains: search, mode: 'insensitive' } : {}) };
+
+    // PaymentCategory enum — alohida ko'rib chiqamiz
+    if (column === 'paymentCategory') {
+      const rows = await this.prisma.oplataKv.findMany({
+        where: this.buildWhere(queryCopy), // self-exclusion qilingan
+        select: { paymentCategory: true },
+        distinct: ['paymentCategory'],
+        take: 50,
+      });
+      const labels: Record<string, string> = {
+        MONTHLY: 'ежемесячный',
+        FIRST:   '1 взнос',
+        GENERAL: 'Общий',
+      };
+      let values = rows
+        .map((r) => r.paymentCategory)
+        .filter((v): v is OplataKvCategory => !!v)
+        .map((v) => ({ id: v, name: labels[v] || v }));
+      if (search) {
+        const s = search.toLowerCase();
+        values = values.filter((v) => v.name.toLowerCase().includes(s));
+      }
+      return { ok: true, values };
+    }
+
+    // Boshqa columnlar — distinct text qiymat
+    const rows = await this.prisma.oplataKv.findMany({
+      where,
+      select: { [field]: true } as any,
+      distinct: [field as any],
+      take: 300,
+    });
+    let values = rows
+      .map((r: any) => r[field])
+      .filter((v: any) => v !== null && v !== undefined && String(v).trim() !== '')
+      .map((v: any) => ({ id: String(v), name: String(v) }));
+
+    // Alifbo tartibida
+    values.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    return { ok: true, values };
   }
 
   async exportXlsx(q: ListOplataKvDto): Promise<{ buffer: Buffer; filename: string }> {

@@ -147,6 +147,31 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   object?: string;
 
+  // ─── Per-ustun multi-select filterlari (vergul bilan) — Google Sheets style ───
+  @ApiPropertyOptional({ description: 'Shartnoma raqamlari (vergul bilan ajratilgan)' })
+  @IsOptional() @IsString()
+  contractNos?: string;
+
+  @ApiPropertyOptional({ description: 'Kategoriyalar (vergul bilan): MONTHLY,FIRST,GENERAL' })
+  @IsOptional() @IsString()
+  paymentCategories?: string;
+
+  @ApiPropertyOptional({ description: "Mijozlar ro'yxati (vergul bilan)" })
+  @IsOptional() @IsString()
+  clients?: string;
+
+  @ApiPropertyOptional({ description: "Obyektlar ro'yxati (vergul bilan)" })
+  @IsOptional() @IsString()
+  objects?: string;
+
+  @ApiPropertyOptional({ description: "To'lov usullari (vergul bilan)" })
+  @IsOptional() @IsString()
+  paymentMethods?: string;
+
+  @ApiPropertyOptional({ description: 'Tiplar (vergul bilan)' })
+  @IsOptional() @IsString()
+  txTypes?: string;
+
   @ApiPropertyOptional({ description: 'Tartiblash maydoni' })
   @IsOptional() @IsIn(['date', 'createdAt', 'updatedAt', 'paymentAmount', 'firstInstallment', 'monthlyAmount', 'contractNo'])
   sortBy?: 'date' | 'createdAt' | 'updatedAt' | 'paymentAmount' | 'firstInstallment' | 'monthlyAmount' | 'contractNo';

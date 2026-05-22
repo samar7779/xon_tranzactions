@@ -78,6 +78,17 @@ export class OplataKvController {
     res.end(buffer);
   }
 
+  @Get('distinct')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Ustun uchun distinct qiymatlar (filter popover)' })
+  distinct(
+    @Query('column') column: string,
+    @Query('search') search: string,
+    @Query() q: ListOplataKvDto,
+  ) {
+    return this.svc.distinctValues(column, q, search);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Bitta qatorni olish' })
