@@ -103,6 +103,21 @@ export class OplataKvController {
     return this.svc.crmSverka(contractNo);
   }
 
+  @Post('sync-from-transactions')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Tranzaksiyalardan auto-import — CLIENT/IN/contractNo > minDate" })
+  async syncFromTx(
+    @Body() body: { minDate?: string },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    let minDate: Date | null = null;
+    if (body?.minDate) {
+      minDate = new Date(body.minDate);
+      if (isNaN(minDate.getTime())) throw new BadRequestException("Noto'g'ri sana");
+    }
+    return this.svc.syncFromTransactions({ minDate, actor: actorFrom(user) });
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Bitta qatorni olish' })

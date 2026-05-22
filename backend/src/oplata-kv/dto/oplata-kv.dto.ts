@@ -172,6 +172,10 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   txTypes?: string;
 
+  @ApiPropertyOptional({ description: "Manba filter: manual | excel | transaction (vergul bilan ko'p)" })
+  @IsOptional() @IsString()
+  sources?: string;
+
   // ─── Distinct endpoint uchun (ListOplataKvDto qayta ishlatilgani uchun) ───
   @ApiPropertyOptional({ description: 'Distinct uchun ustun nomi (faqat /distinct endpoint)' })
   @IsOptional() @IsString()

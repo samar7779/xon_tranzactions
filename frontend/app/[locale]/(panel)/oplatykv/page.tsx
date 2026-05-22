@@ -50,7 +50,27 @@ interface OplataKvItem {
   createdAt: string;
   updatedAt: string;
   createdByName: string | null;
+  importBatchId?: string | null;
+  sourceTxId?: string | null;
 }
+
+// Manba (qaysi yo'l bilan qo'shilgan) — manual / excel / transaction
+function getSource(it: OplataKvItem): 'manual' | 'excel' | 'transaction' {
+  if (it.sourceTxId) return 'transaction';
+  if (it.importBatchId) return 'excel';
+  return 'manual';
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  manual:      "Qo'lda",
+  excel:       'Excel',
+  transaction: 'Tranzaksiya',
+};
+const SOURCE_CLS: Record<string, string> = {
+  manual:      'bg-slate-100 text-slate-700 ring-slate-200',
+  excel:       'bg-violet-50 text-violet-700 ring-violet-200',
+  transaction: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+};
 
 const CATEGORY_LABEL: Record<Category, string> = {
   MONTHLY: 'ежемесячный',
@@ -232,6 +252,7 @@ export default function OplataKvPage() {
     object:          'objects',
     paymentMethod:   'paymentMethods',
     txType:          'txTypes',
+    source:          'sources',
   };
 
   // columnFilters Set object — JSON serialization uchun
@@ -496,23 +517,30 @@ export default function OplataKvPage() {
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
+                  <ColumnTh label="Manba" column="source"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
                   <Th align="center">ID</Th>
                 </tr>
               </thead>
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100">
-                    {Array.from({ length: 9 }).map((__, j) => (
+                    {Array.from({ length: 10 }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={9} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
                     Hech qanday qator topilmadi
                   </td></tr>
                 )}
-                {items.map((it) => (
+                {items.map((it) => {
+                  const src = getSource(it);
+                  return (
                   <tr
                     key={it.id}
                     className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
@@ -532,6 +560,11 @@ export default function OplataKvPage() {
                     </td>
                     <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400">—</span>}</td>
                     <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-3 py-2.5">
+                      <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
+                        {SOURCE_LABEL[src]}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
                         title={`ID: ${it.id}`}
@@ -549,7 +582,8 @@ export default function OplataKvPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

@@ -43,4 +43,24 @@ export class SettingsService {
     }
     await this.set('sync.minDate', value, updatedBy);
   }
+
+  /**
+   * OplatyKv tranzaksiyadan auto-import minimal sanasi.
+   * Bu sanadan keyingi (kiritilgan sanadan yangi) tranzaksiyalar OplatyKv'ga
+   * avtomatik qo'shiladi (CLIENT kategoriya, IN direction).
+   */
+  async getOplatyKvTxMinDate(): Promise<Date | null> {
+    const s = await this.get('oplatykv.txMinDate');
+    if (!s) return null;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  async setOplatyKvTxMinDate(value: string | null, updatedBy?: string): Promise<void> {
+    if (value) {
+      const d = new Date(value);
+      if (isNaN(d.getTime())) throw new Error(`Noto'g'ri sana: ${value}`);
+    }
+    await this.set('oplatykv.txMinDate', value, updatedBy);
+  }
 }
