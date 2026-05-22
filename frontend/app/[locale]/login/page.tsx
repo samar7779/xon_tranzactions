@@ -130,6 +130,31 @@ export default function LoginPage() {
         <span>REV 1.0 · {new Date().getFullYear()}</span>
       </div>
 
+      {/* Desktop: KIRISH tugmasi — pastki-markazda floating */}
+      {!open && (
+        <div className="hidden md:flex absolute bottom-20 left-1/2 -translate-x-1/2 z-30">
+          <button
+            onClick={() => setOpen(true)}
+            className="group relative h-16 px-10 rounded-2xl overflow-hidden
+                       bg-gradient-to-r from-amber-500/90 via-amber-400 to-amber-500/90
+                       ring-2 ring-amber-200/60
+                       shadow-[0_15px_50px_-10px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.4)]
+                       hover:scale-[1.03] active:scale-95
+                       transition-all duration-300"
+          >
+            <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
+                             bg-gradient-to-r from-transparent via-white/40 to-transparent
+                             transition-transform duration-1000 ease-out" />
+            <span className="absolute inset-0 rounded-2xl ring-2 ring-amber-300/60 animate-ping" style={{ animationDuration: '2.5s' }} />
+            <span className="relative flex items-center justify-center gap-3 text-slate-900 font-bold tracking-[0.18em] uppercase text-[14px]">
+              <LogIn className="h-5 w-5" />
+              {t('submit')}
+              <ArrowRight className="h-5 w-5" />
+            </span>
+          </button>
+        </div>
+      )}
+
       {/* ============ MOBIL (faqat md dan kichik) ============ */}
       <div className="md:hidden relative flex flex-col min-h-[100dvh] overflow-hidden">
         {/* Mobil fon */}
