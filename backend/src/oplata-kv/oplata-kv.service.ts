@@ -77,15 +77,26 @@ export class OplataKvService {
 
     if (q.q && q.q.trim()) {
       const s = q.q.trim();
-      where.OR = [
-        { contractNo: { contains: s, mode: 'insensitive' } },
-        { client:     { contains: s, mode: 'insensitive' } },
-        { object:     { contains: s, mode: 'insensitive' } },
-        { purpose:    { contains: s, mode: 'insensitive' } },
-        { note:       { contains: s, mode: 'insensitive' } },
+      const ors: Prisma.OplataKvWhereInput[] = [
+        { contractNo:    { contains: s, mode: 'insensitive' } },
+        { client:        { contains: s, mode: 'insensitive' } },
+        { object:        { contains: s, mode: 'insensitive' } },
+        { purpose:       { contains: s, mode: 'insensitive' } },
+        { note:          { contains: s, mode: 'insensitive' } },
         { paymentMethod: { contains: s, mode: 'insensitive' } },
-        { txType:     { contains: s, mode: 'insensitive' } },
+        { txType:        { contains: s, mode: 'insensitive' } },
+        { id:            { contains: s, mode: 'insensitive' } },
       ];
+      // Raqam bo'lsa — summalar bo'yicha ham qidiramiz (aniq tenglik)
+      const n = Number(s.replace(/[\s,]/g, ''));
+      if (Number.isFinite(n) && n > 0) {
+        ors.push(
+          { paymentAmount:    n as any },
+          { firstInstallment: n as any },
+          { monthlyAmount:    n as any },
+        );
+      }
+      where.OR = ors;
     }
     if (q.dateFrom) where.date = { ...(where.date as object), gte: new Date(q.dateFrom) };
     if (q.dateTo)   where.date = { ...(where.date as object), lte: new Date(q.dateTo) };
