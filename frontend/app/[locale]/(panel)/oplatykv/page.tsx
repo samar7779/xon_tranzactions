@@ -1615,10 +1615,24 @@ function OplataKvDetailDialog({
             <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
               Договор
             </div>
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               <div className="font-mono text-2xl font-black tracking-tight">
                 {row.contractNo || '—'}
               </div>
+              {row.contractNo && (
+                <button
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(row.contractNo);
+                      toast.success(`Shartnoma nusxalandi: ${row.contractNo}`);
+                    } catch { toast.error('Nusxalashda xato'); }
+                  }}
+                  className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center text-white/80 hover:text-white transition-all hover:scale-110"
+                  title="Shartnoma raqamini nusxalash"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                </button>
+              )}
               {row.paymentCategory && (
                 <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-white/15 ring-white/30 text-white whitespace-nowrap">
                   {catLabel}
