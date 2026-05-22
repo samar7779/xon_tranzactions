@@ -259,17 +259,11 @@ export class OplataKvService {
     const queryCopy: any = { ...q };
     const selfParam = COLUMN_TO_PARAM[column];
     if (selfParam) delete queryCopy[selfParam];
-    // q (erkin qidiruv) ham eslataylik — o'sha ham excludable bo'lishi mumkin, lekin saqlab qolaylik
-    // bu yerda buildWhere'ni boshqa filtrlar bilan ishlatamiz
-    const where = this.buildWhere(queryCopy);
 
-    // Faqat NULL bo'lmagan qiymatlarni olamiz
-    (where as any)[field] = { not: null, ...(search ? { contains: search, mode: 'insensitive' } : {}) };
-
-    // PaymentCategory enum — alohida ko'rib chiqamiz
+    // PaymentCategory enum — alohida ko'rib chiqamiz (contains qabul qilmaydi)
     if (column === 'paymentCategory') {
       const rows = await this.prisma.oplataKv.findMany({
-        where: this.buildWhere(queryCopy), // self-exclusion qilingan
+        where: this.buildWhere(queryCopy),
         select: { paymentCategory: true },
         distinct: ['paymentCategory'],
         take: 50,
@@ -290,7 +284,23 @@ export class OplataKvService {
       return { ok: true, values };
     }
 
-    // Boshqa columnlar — distinct text qiymat
+    // Boshqa text columnlar
+    // Qaysi maydon nullable — schema bo'yicha (contractNo required, qolganlar nullable)
+    const NULLABLE_FIELDS = new Set(['client', 'object', 'paymentMethod', 'purpose', 'note', 'txType']);
+
+    const where = this.buildWhere(queryCopy);
+
+    // Search filterini qo'shamiz (lekin not:null faqat nullable maydonlar uchun)
+    const fieldFilter: any = {};
+    if (NULLABLE_FIELDS.has(String(field))) fieldFilter.not = null;
+    if (search) {
+      fieldFilter.contains = search;
+      fieldFilter.mode = 'insensitive';
+    }
+    if (Object.keys(fieldFilter).length > 0) {
+      (where as any)[field] = fieldFilter;
+    }
+
     const rows = await this.prisma.oplataKv.findMany({
       where,
       select: { [field]: true } as any,
