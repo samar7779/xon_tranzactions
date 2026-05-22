@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -338,51 +338,75 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
 
-  // Tranzaksiya-manba qatorlarni tozalash
+  // Tranzaksiya-manba qatorlarni tozalash (date range)
   const cleanupTxMut = useMutation({
-    mutationFn: (date: string | null) => {
-      const url = date
-        ? `/oplata-kv/cleanup-tx-source?date=${encodeURIComponent(date)}`
-        : '/oplata-kv/cleanup-tx-source';
-      return api.delete<{ ok: boolean; deleted: number; matched: number; date: string | null }>(url);
+    mutationFn: (range: { dateFrom: string | null; dateTo: string | null }) => {
+      const params = new URLSearchParams();
+      if (range.dateFrom) params.set('dateFrom', range.dateFrom);
+      if (range.dateTo) params.set('dateTo', range.dateTo);
+      const qs = params.toString();
+      const url = qs ? `/oplata-kv/cleanup-tx-source?${qs}` : '/oplata-kv/cleanup-tx-source';
+      return api.delete<{ ok: boolean; deleted: number; matched: number; dateFrom: string | null; dateTo: string | null }>(url);
     },
     onSuccess: (r: any) => {
-      toast.success(`O'chirildi: ${r.deleted} ta qator${r.date ? ` (sana: ${r.date})` : ''}`);
+      const rangeText = r.dateFrom || r.dateTo
+        ? ` (${r.dateFrom || '∞'} → ${r.dateTo || '∞'})`
+        : '';
+      toast.success(`O'chirildi: ${r.deleted} ta qator${rangeText}`);
     },
     onError: (e: any) => toast.error(e?.message || 'Tozalashda xato'),
   });
 
-  // Cleanup uchun alohida sana — saqlangan min sanaga bog'liq emas
-  const [cleanupDate, setCleanupDate] = useState<string>('');
+  // Cleanup uchun sana oralig'i
+  const [cleanupDateFrom, setCleanupDateFrom] = useState<string>('');
+  const [cleanupDateTo, setCleanupDateTo] = useState<string>('');
+
+  // Accordion holati — kartochkalar default yashirin
+  const [openSync, setOpenSync] = useState(false);
+  const [openOplata, setOpenOplata] = useState(false);
 
   function handleCleanup() {
-    const date = cleanupDate || null;
-    const msg = date
-      ? `${date} sanasidagi tranzaksiya-manba bilan qo'shilgan barcha OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!`
-      : "BARCHA tranzaksiya-manba bilan qo'shilgan OplatyKv qatorlarini o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!";
+    const range = { dateFrom: cleanupDateFrom || null, dateTo: cleanupDateTo || null };
+    let msg: string;
+    if (range.dateFrom && range.dateTo) {
+      msg = `${range.dateFrom} dan ${range.dateTo} gacha bo'lgan tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!`;
+    } else if (range.dateFrom) {
+      msg = `${range.dateFrom} dan keyingi (shu kun bilan birga) tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?`;
+    } else if (range.dateTo) {
+      msg = `${range.dateTo} gacha (shu kun bilan birga) tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?`;
+    } else {
+      msg = "BARCHA tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!";
+    }
     if (!confirm(msg)) return;
-    cleanupTxMut.mutate(date);
+    cleanupTxMut.mutate(range);
   }
 
   return (
     <div className="space-y-4">
-      {/* SYNC MINIMAL SANA */}
-      <Card className="border-0 shadow-soft">
-        <CardContent className="p-6 space-y-5">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 grid place-items-center shrink-0">
-              <ShieldAlert className="h-5 w-5 text-indigo-600" />
-            </div>
-            <div>
-              <div className="text-base font-bold text-slate-800">Sync chegarasi (minimal sana)</div>
-              <div className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
-                Sync bu sanadan oldingi tranzaksiyalarni <b>HECH QACHON olmaydi</b>.
-                Qo'lda import qilingan tarixiy ma'lumotlarni himoya qilish uchun
-                ishlatiladi.
-              </div>
+      {/* SYNC MINIMAL SANA — collapsible */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setOpenSync((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        >
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 grid place-items-center shrink-0">
+            <ShieldAlert className="h-5 w-5 text-indigo-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-800">Sync chegarasi (minimal sana)</div>
+            <div className="text-[11.5px] text-slate-500 mt-0.5 truncate">
+              {data?.syncMinDate ? `Aktiv: ${data.syncMinDate}` : "Chegara yo'q — barcha tarix sync bo'ladi"}
             </div>
           </div>
-
+          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openSync && 'rotate-180')} />
+        </button>
+        {openSync && (
+        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100">
+          <div className="text-[12px] text-slate-500 max-w-2xl">
+            Sync bu sanadan oldingi tranzaksiyalarni <b>HECH QACHON olmaydi</b>.
+            Qo'lda import qilingan tarixiy ma'lumotlarni himoya qilish uchun ishlatiladi.
+          </div>
           {isLoading ? (
             <Skeleton className="h-10 w-64" />
           ) : (
@@ -424,24 +448,34 @@ function SyncSettingsPanel() {
             </div>
           )}
         </CardContent>
+        )}
       </Card>
 
-      {/* OPLATYKV — TRANZAKSIYADAN AUTO-IMPORT */}
-      <Card className="border-0 shadow-soft">
-        <CardContent className="p-6 space-y-5">
-          <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-50 grid place-items-center shrink-0">
-              <ShieldAlert className="h-5 w-5 text-amber-600" />
+      {/* OPLATYKV — TRANZAKSIYADAN AUTO-IMPORT — collapsible */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setOpenOplata((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        >
+          <div className="w-9 h-9 rounded-xl bg-amber-50 grid place-items-center shrink-0">
+            <ShieldAlert className="h-5 w-5 text-amber-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-800">ОплатыКв — Tranzaksiyalardan auto-import</div>
+            <div className="text-[11.5px] text-slate-500 mt-0.5 truncate">
+              {data?.oplatykvTxMinDate ? `Aktiv: ${data.oplatykvTxMinDate}` : "Sozlanmagan — auto-import o'chirilgan"}
             </div>
-            <div>
-              <div className="text-base font-bold text-slate-800">ОплатыКв — Tranzaksiyalardan auto-import</div>
-              <div className="text-[12px] text-slate-500 mt-0.5 max-w-2xl">
-                Tranzaksiyalardan ОплатыКв jadvaliga avto-import minimal sanasi.
-                Faqat <b>CLIENT</b> (Клиент / Физ.Л / Юр.Л) kategoriyasidagi <b>KIRIM</b>
-                tranzaksiyalar, shartnoma raqami bor va sanasi <b>shu sanadan keyin</b>
-                bo'lganlar qo'shiladi. Dedup — Transaction ID orqali.
-              </div>
-            </div>
+          </div>
+          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openOplata && 'rotate-180')} />
+        </button>
+        {openOplata && (
+        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100">
+          <div className="text-[12px] text-slate-500 max-w-2xl">
+            Tranzaksiyalardan ОплатыКв jadvaliga avto-import minimal sanasi.
+            Faqat <b>CLIENT</b> (Клиент / Физ.Л / Юр.Л) kategoriyasidagi <b>KIRIM</b>
+            tranzaksiyalar, shartnoma raqami bor va sanasi <b>shu sanadan keyin</b>
+            bo'lganlar qo'shiladi. Dedup — Transaction ID orqali.
           </div>
 
           {isLoading ? (
@@ -493,53 +527,90 @@ function SyncSettingsPanel() {
                 Saqlangach, "Hozir sync" tugmasini bosing yoki keyingi sync paytida ishlaydi.
               </div>
 
-              {/* CLEANUP SECTION — alohida sana */}
+              {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}
               <div className="mt-5 pt-5 border-t border-slate-100">
                 <Label className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 flex items-center gap-1.5">
                   <X className="h-3.5 w-3.5" />
                   Tranzaksiya manbasini tozalash
                 </Label>
-                <div className="flex items-center gap-2 flex-wrap mt-2">
-                  <div className="relative">
-                    <Input
-                      type="date"
-                      value={cleanupDate}
-                      onChange={(e) => setCleanupDate(e.target.value)}
-                      placeholder="Sana (bo'sh = hammasi)"
-                      className="h-10 w-56 pr-9"
-                    />
-                    {cleanupDate && (
-                      <button
-                        type="button"
-                        onClick={() => setCleanupDate('')}
-                        title="Tozalash"
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
+                <div className="flex items-end gap-2 flex-wrap mt-2">
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                      Boshlanish
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type="date"
+                        value={cleanupDateFrom}
+                        onChange={(e) => setCleanupDateFrom(e.target.value)}
+                        className="h-10 w-44 pr-9"
+                      />
+                      {cleanupDateFrom && (
+                        <button
+                          type="button"
+                          onClick={() => setCleanupDateFrom('')}
+                          title="Tozalash"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-slate-400 text-lg pb-2">—</div>
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                      Tugash
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        type="date"
+                        value={cleanupDateTo}
+                        onChange={(e) => setCleanupDateTo(e.target.value)}
+                        className="h-10 w-44 pr-9"
+                      />
+                      {cleanupDateTo && (
+                        <button
+                          type="button"
+                          onClick={() => setCleanupDateTo('')}
+                          title="Tozalash"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <Button
                     onClick={handleCleanup}
                     disabled={cleanupTxMut.isPending}
                     className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
-                    title={cleanupDate
-                      ? `${cleanupDate} sanasidagi tranzaksiya-manba qatorlarini o'chirish`
-                      : "Barcha tranzaksiya-manba qatorlarini o'chirish (sana yo'q)"}
+                    title={cleanupDateFrom || cleanupDateTo
+                      ? `${cleanupDateFrom || '∞'} dan ${cleanupDateTo || '∞'} gacha tozalash`
+                      : "BARCHA tranzaksiya-manba qatorlarini o'chirish"}
                   >
                     {cleanupTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                     Tozalash
                   </Button>
                 </div>
-                <div className="text-[10.5px] text-slate-400 mt-1.5">
-                  Sana qo'yilsa — faqat shu sanadagi tranzaksiyadan kelgan qatorlar o'chiriladi.
-                  Bo'sh qoldirilsa — BARCHA tranzaksiyadan kelgan qatorlar o'chiriladi.
+                <div className="text-[10.5px] text-slate-400 mt-2">
+                  <b>Sana oralig'i</b> — qatorlarning <code>date</code> maydoni bo'yicha filtr:
+                  <br />
+                  • Faqat <b>boshlanish</b> → shu sanadan keyingi (shu kun bilan)
+                  <br />
+                  • Faqat <b>tugash</b> → shu sanagacha (shu kun bilan)
+                  <br />
+                  • <b>Ikkalasi</b> → oraliq ichida
+                  <br />
+                  • <b>Bo'sh</b> → BARCHA tranzaksiya-manba qatorlar (ehtiyot)
+                  <br />
                   Tarix saqlanadi (deleted log).
                 </div>
               </div>
             </div>
           )}
         </CardContent>
+        )}
       </Card>
     </div>
   );

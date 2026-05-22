@@ -843,6 +843,21 @@ model OplataKv {
   @@map("oplata_kv")
 }
 
+// ─────────────────────────────────────────────────────────────────
+// OPLATA KV — OBJECT NAME MAPPING (CRM → OplatyKv)
+// CRM dan "XON SAROY AFSONASI" kelsa, OplatyKv'ga "АФСОНА" deb yoziladi
+// ─────────────────────────────────────────────────────────────────
+model OplataKvObjectMapping {
+  id            String   @id @default(cuid())
+  crmName       String   @unique @map("crm_name") @db.VarChar(255)   // CRM dan keladigan obyekt nomi
+  oplataName    String   @map("oplata_name") @db.VarChar(255)        // OplatyKv'ga yoziladigan nom
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdByName String?  @map("created_by_name") @db.VarChar(190)
+
+  @@index([crmName])
+  @@map("oplata_kv_object_mappings")
+}
+
 enum OplataKvCategory {
   MONTHLY   // ежемесячный
   FIRST     // 1 взнос

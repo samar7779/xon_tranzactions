@@ -120,12 +120,17 @@ export class OplataKvController {
 
   @Delete('cleanup-tx-source')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
-  @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish (optional date filter)" })
+  @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish — optional date range" })
   async cleanupTxSource(
-    @Query('date') date?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
     @CurrentUser() user?: AuthUser,
   ) {
-    return this.svc.cleanupTxSource({ date: date || null, actor: actorFrom(user) });
+    return this.svc.cleanupTxSource({
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+      actor: actorFrom(user),
+    });
   }
 
   @Get(':id')

@@ -255,6 +255,15 @@ export class OplataKvService {
     });
     const crmByContract = new Map(crmContracts.map((c) => [c.contractNumber, c]));
 
+    // Object mapping (CRM nomi -> OplatyKv nomi)
+    const mappings = await this.prisma.oplataKvObjectMapping.findMany();
+    const objMap = new Map(mappings.map((m) => [m.crmName.trim().toLowerCase(), m.oplataName]));
+    const mapObject = (crmName: string | null | undefined): string | null => {
+      if (!crmName) return null;
+      const mapped = objMap.get(crmName.trim().toLowerCase());
+      return mapped || crmName;
+    };
+
     let added = 0;
     let updated = 0;
     let skipped = 0;
@@ -369,14 +378,25 @@ export class OplataKvService {
    * Optional: belgilangan sana bo'yicha filter.
    * Foydalanish: noto'g'ri sana bilan sync qilinganni tozalab, qaytadan sync qilish.
    */
-  async cleanupTxSource(opts: { date?: string | null; actor?: Actor } = {}) {
+  async cleanupTxSource(opts: { dateFrom?: string | null; dateTo?: string | null; actor?: Actor } = {}) {
     const where: Prisma.OplataKvWhereInput = {
       sourceTxId: { not: null },
     };
-    if (opts.date) {
-      const d = new Date(opts.date);
-      if (isNaN(d.getTime())) throw new BadRequestException("Noto'g'ri sana");
-      where.date = d;
+    if (opts.dateFrom || opts.dateTo) {
+      const dateFilter: any = {};
+      if (opts.dateFrom) {
+        const d = new Date(opts.dateFrom);
+        if (isNaN(d.getTime())) throw new BadRequestException("Noto'g'ri dateFrom");
+        d.setUTCHours(0, 0, 0, 0);
+        dateFilter.gte = d;
+      }
+      if (opts.dateTo) {
+        const d = new Date(opts.dateTo);
+        if (isNaN(d.getTime())) throw new BadRequestException("Noto'g'ri dateTo");
+        d.setUTCHours(23, 59, 59, 999);
+        dateFilter.lte = d;
+      }
+      where.date = dateFilter;
     }
     // O'chiriladigan qatorlarni avval olamiz — history uchun
     const toDelete = await this.prisma.oplataKv.findMany({
@@ -400,17 +420,25 @@ export class OplataKvService {
             date: { old: r.date?.toISOString(), new: null },
             sourceTxId: { old: r.sourceTxId, new: null },
           } as any,
-          note: `Tranzaksiya-manba tozalash${opts.date ? ` (sana: ${opts.date})` : ''}`,
+          note: `Tranzaksiya-manba tozalash${
+            opts.dateFrom || opts.dateTo
+              ? ` (${opts.dateFrom || '∞'}…${opts.dateTo || '∞'})`
+              : ''
+          }`,
         })),
       });
     }
     const result = await this.prisma.oplataKv.deleteMany({ where });
-    this.log.warn(`cleanupTxSource: deleted=${result.count} date=${opts.date || 'ALL'}`);
+    const range = opts.dateFrom || opts.dateTo
+      ? `${opts.dateFrom || '∞'}…${opts.dateTo || '∞'}`
+      : 'ALL';
+    this.log.warn(`cleanupTxSource: deleted=${result.count} range=${range}`);
     return {
       ok: true,
       deleted: result.count,
       matched: toDelete.length,
-      date: opts.date || null,
+      dateFrom: opts.dateFrom || null,
+      dateTo: opts.dateTo || null,
     };
   }
 
