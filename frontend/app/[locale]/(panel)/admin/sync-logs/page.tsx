@@ -329,12 +329,24 @@ function SyncSettingsPanel() {
   // Tranzaksiyalardan auto-sync trigger
   const syncTxMut = useMutation({
     mutationFn: (minDate: string | null) =>
-      api.post<{ ok: boolean; total: number; added: number; updated: number; skipped: number; duration: number }>(
-        '/oplata-kv/sync-from-transactions',
-        { minDate },
-      ),
+      api.post<{
+        ok: boolean; total: number; added: number; updated: number; skipped: number;
+        skippedBreakdown?: { noData: number; exists: number; error: number };
+        errorSamples?: Array<{ txId: string; reason: string }>;
+        duration: number;
+      }>('/oplata-kv/sync-from-transactions', { minDate }),
     onSuccess: (r: any) => {
-      toast.success(`Sync tugadi · qo'shildi ${r.added}, yangilandi ${r.updated}, o'tkazildi ${r.skipped}`);
+      const bd = r.skippedBreakdown || {};
+      const skipDetail = [
+        bd.noData ? `${bd.noData} data yo'q` : null,
+        bd.exists ? `${bd.exists} mavjud` : null,
+        bd.error ? `${bd.error} xato` : null,
+      ].filter(Boolean).join(', ');
+      const msg = `Sync tugadi · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}`;
+      toast.success(msg, { duration: 7000 });
+      if (r.errorSamples && r.errorSamples.length > 0) {
+        toast.error(`Xato namunalari: ${r.errorSamples.slice(0, 2).map((s: any) => s.reason).join('; ')}`, { duration: 10000 });
+      }
     },
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
