@@ -266,11 +266,15 @@ export class OplataKvService {
 
     let added = 0;
     let updated = 0;
-    let skipped = 0;
+    // Skip sabablari alohida — debugging uchun
+    let skippedNoData = 0;     // contractNumber yoki txnDate yo'q
+    let skippedExists = 0;     // mavjud va o'zgarmagan
+    let skippedError = 0;      // create/update da xato
+    const errorSamples: Array<{ txId: string; reason: string }> = [];
     const actorName = opts.actor?.name || 'auto · tranzaksiyadan';
 
     for (const tx of txList) {
-      if (!tx.contractNumber || !tx.txnDate) { skipped++; continue; }
+      if (!tx.contractNumber || !tx.txnDate) { skippedNoData++; continue; }
       const crm = crmByContract.get(tx.contractNumber);
       const amount = new Prisma.Decimal(tx.amount);
       // Tranzaksiya externalId — bank kompozit ID (masalan: 5606448707_439_22.05.2026_...)
@@ -335,7 +339,7 @@ export class OplataKvService {
             });
             updated++;
           } else {
-            skipped++;
+            skippedExists++;
           }
         } else {
           const created = await this.prisma.oplataKv.create({ data });
@@ -355,19 +359,34 @@ export class OplataKvService {
           added++;
         }
       } catch (e: any) {
-        this.log.warn(`syncFromTransactions: tx ${tx.id} → xato: ${e?.message}`);
-        skipped++;
+        const reason = e?.message || 'unknown';
+        this.log.warn(`syncFromTransactions: tx ${tx.id} (ext=${tx.externalId}) → xato: ${reason}`);
+        skippedError++;
+        if (errorSamples.length < 5) {
+          errorSamples.push({ txId: tx.externalId || tx.id, reason });
+        }
       }
     }
 
     const duration = Math.round((Date.now() - startedAt) / 1000);
-    this.log.log(`syncFromTransactions: total=${txList.length} added=${added} updated=${updated} skipped=${skipped} duration=${duration}s`);
+    const skippedTotal = skippedNoData + skippedExists + skippedError;
+    this.log.log(
+      `syncFromTransactions: total=${txList.length} added=${added} updated=${updated} ` +
+      `skipped=${skippedTotal} (noData=${skippedNoData} exists=${skippedExists} error=${skippedError}) ` +
+      `duration=${duration}s`,
+    );
     return {
       ok: true,
       total: txList.length,
       added,
       updated,
-      skipped,
+      skipped: skippedTotal,
+      skippedBreakdown: {
+        noData: skippedNoData,     // contractNumber yoki txnDate yo'q
+        exists: skippedExists,     // mavjud va o'zgarmagan
+        error:  skippedError,      // create/update da xato
+      },
+      errorSamples,
       duration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
     };
