@@ -458,14 +458,15 @@ export default function OplataKvPage() {
         </Card>
       </div>
 
-      {/* Detail modal — qator bosilganda chiroyli ko'rinish + edit/delete */}
+      {/* Detail modal — qator bosilganda chiroyli ko'rinish + edit/delete
+          Detail yopilmaydi — Edit/Delete/Tarix ustida ochiladi, yopilganda detail ko'rinadi */}
       <OplataKvDetailDialog
         row={detailRow}
         canManage={canManage}
         onClose={() => setDetailRow(null)}
-        onEdit={(it) => { setDetailRow(null); setEditRow(it); }}
-        onDelete={(it) => { setDetailRow(null); setDeleteRow(it); }}
-        onHistory={(it) => { setDetailRow(null); setHistoryRow(it); }}
+        onEdit={(it) => setEditRow(it)}
+        onDelete={(it) => setDeleteRow(it)}
+        onHistory={(it) => setHistoryRow(it)}
         onCopyId={copyId}
         copiedId={copiedId}
       />
@@ -532,7 +533,11 @@ function OplataKvDetailDialog({
 
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-2xl p-0 overflow-hidden gap-0">
+      <DialogContent
+        className="sm:max-w-3xl p-0 overflow-hidden gap-0"
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         {/* Hero header */}
         <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
           <div
@@ -542,24 +547,22 @@ function OplataKvDetailDialog({
               backgroundSize: '20px 20px',
             }}
           />
-          <div className="relative">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
-                  Договор
-                </div>
-                <div className="font-mono text-2xl font-black tracking-tight truncate">
-                  {row.contractNo || '—'}
-                </div>
-                <div className="text-[12px] text-white/80 mt-1">
-                  {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
-                </div>
+          <div className="relative pr-12">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
+              Договор
+            </div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="font-mono text-2xl font-black tracking-tight">
+                {row.contractNo || '—'}
               </div>
               {row.paymentCategory && (
-                <span className={cn('px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-white/15 ring-white/30 text-white')}>
+                <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-white/15 ring-white/30 text-white whitespace-nowrap">
                   {catLabel}
                 </span>
               )}
+            </div>
+            <div className="text-[12px] text-white/80 mt-1.5">
+              {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
             </div>
           </div>
         </div>
