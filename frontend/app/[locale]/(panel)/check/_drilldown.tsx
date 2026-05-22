@@ -823,9 +823,11 @@ function DiagItem({
           </div>
         )}
       </div>
-      {(it.b2Id || it.externalId) && (
-        <div className="text-[10px] text-slate-400 font-mono truncate">
-          {it.b2Id ? `b2:${it.b2Id}` : it.externalId}
+      {(it.b2Id || it.externalId || it.id) && (
+        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
+          {it.b2Id && <IdChip label="b2" value={it.b2Id} />}
+          {!it.b2Id && it.externalId && <IdChip label="ext" value={it.externalId} />}
+          {it.id && <IdChip label="db" value={it.id} />}
         </div>
       )}
       {/* Agar tx boshqa sana ostida saqlangan bo'lsa — duplikat bo'lmaslik uchun
@@ -888,6 +890,40 @@ function DiagItem({
         <BulkResultModal result={bulkResult} onClose={handleCloseModal} />
       )}
     </div>
+  );
+}
+
+/** ID chip + copy tugmasi — sverka tekshirish uchun yozuv ID'larini tez nusxa olish */
+function IdChip({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.stopPropagation();
+        try {
+          await navigator.clipboard.writeText(value);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          // clipboard mavjud emas — sodda fallback
+          toast.error('Nusxa olib bo\'lmadi');
+        }
+      }}
+      className={cn(
+        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded',
+        'bg-slate-100 hover:bg-slate-200 active:bg-slate-300',
+        'text-slate-600 hover:text-slate-900',
+        'transition-colors max-w-[180px]',
+      )}
+      title={`Nusxa olish: ${value}`}
+    >
+      <span className="text-[9px] text-slate-400 uppercase">{label}</span>
+      <span className="truncate">{value}</span>
+      {copied
+        ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+        : <Copy className="h-3 w-3 shrink-0" />}
+    </button>
   );
 }
 
