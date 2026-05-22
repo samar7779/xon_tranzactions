@@ -1,7 +1,8 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query,
+  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -49,6 +50,32 @@ export class OplataKvController {
   @ApiOperation({ summary: 'ОплатыКв ro\'yxati (pagination + filter + sums)' })
   list(@Query() q: ListOplataKvDto) {
     return this.svc.list(q);
+  }
+
+  @Get('export')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Filtr bo\'yicha barcha qatorlarni Excel sifatida yuklab olish' })
+  async exportXlsx(@Query() q: ListOplataKvDto, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.exportXlsx(q);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
+  @Get('export-json')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Filtr bo\'yicha JSON eksport' })
+  async exportJson(@Query() q: ListOplataKvDto, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.exportJson(q);
+    res.set({
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 
   @Get(':id')
