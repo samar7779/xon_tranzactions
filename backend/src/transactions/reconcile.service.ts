@@ -502,6 +502,49 @@ export class ReconcileService {
       }
     }
 
+    // ── Qo'shnish kunlar (±1) bank yozuvlari ─────────────────────────
+    // Bank ddate va bizning valueDate har doim ham mos kelmaydi: ba'zan tranzaksiya
+    // 13.05'ga qo'yiladi (vdate), bank esa uni 14.05 content[]'ida ko'rsatadi (ddate).
+    // Shuning uchun dbOnly'ga qo'shishdan oldin ±1 kun bank yozuvlarida tekshiramiz.
+    const neighborBankByKey = new Map<string, { onDate: string; item: any }>();
+    if (bank.apiKind === 'KAPITALBANK_V3') {
+      const baseDate = new Date(`${date}T00:00:00+05:00`);
+      const neighbors = [-1, 1].map((offset) => {
+        const d = new Date(baseDate.getTime() + offset * 86_400_000);
+        return { isoDate: d.toISOString().slice(0, 10), dmy: this.fmtDate(d) };
+      });
+      const results = await Promise.all(
+        neighbors.map(async (n) => {
+          try {
+            const r = await this.kb.getDoc1C({
+              baseUrl: bank.apiBaseUrl!,
+              login,
+              password,
+              branch: account.branch,
+              account: account.accountNo,
+              date: n.dmy,
+              useProxy: cred.useProxy === true,
+            });
+            return { isoDate: n.isoDate, items: r?.content || [] };
+          } catch (e: any) {
+            this.log.warn(`diagnoseDay neighbor ${n.isoDate} xato: ${e?.message}`);
+            return { isoDate: n.isoDate, items: [] };
+          }
+        }),
+      );
+      for (const day of results) {
+        for (const it of day.items) {
+          // Faqat shu hisobga oid yozuvlar
+          if (it.acc_dt !== account.accountNo && it.acc_ct !== account.accountNo) continue;
+          const ref = { onDate: day.isoDate, item: it };
+          if (it.b2_id) neighborBankByKey.set(`b2:${it.b2_id}`, ref);
+          if (it.general_id) neighborBankByKey.set(`gen:${it.general_id}`, ref);
+          const composite = this.sync.makeCompositeId(it, account.accountNo, account.bank.code);
+          if (composite) neighborBankByKey.set(`ext:${composite}`, ref);
+        }
+      }
+    }
+
     // DB dan o'sha kun uchun tranzaksiyalarni olamiz
     // SVERKA UCHUN valueDate (vdate) ishlatamiz — bank ham shu sana bo'yicha
     // kunlik oborotni hisoblaydi. Eski yozuvlar uchun valueDate NULL bo'lsa
@@ -681,20 +724,36 @@ export class ReconcileService {
 
     const dbOnly = dbItems
       .filter((tx) => !matchedDbIds.has(tx.id))
-      .map((tx) => ({
-        id: tx.id,
-        externalId: tx.externalId,
-        b2Id: tx.bankB2Id,
-        generalId: tx.bankGeneralId,
-        docNumber: tx.docNumber,
-        direction: tx.direction,
-        amount: Number(tx.amount),
-        fromAccount: tx.fromAccount,
-        fromName: tx.fromName,
-        toAccount: tx.toAccount,
-        toName: tx.toName,
-        description: tx.description,
-      }));
+      .map((tx) => {
+        // Qo'shni kunlar bank yozuvlari ichida tekshiramiz — sana siljish (date shift)
+        // holatini aniqlash uchun. Agar topilsa, foundOnBankDate to'ldiriladi.
+        const neighborKeys = [
+          tx.bankB2Id ? `b2:${tx.bankB2Id}` : null,
+          tx.bankGeneralId ? `gen:${tx.bankGeneralId}` : null,
+          tx.externalId ? `ext:${tx.externalId}` : null,
+        ].filter(Boolean) as string[];
+        let foundOnBankDate: string | null = null;
+        for (const k of neighborKeys) {
+          const m = neighborBankByKey.get(k);
+          if (m) { foundOnBankDate = m.onDate; break; }
+        }
+        return {
+          id: tx.id,
+          externalId: tx.externalId,
+          b2Id: tx.bankB2Id,
+          generalId: tx.bankGeneralId,
+          docNumber: tx.docNumber,
+          direction: tx.direction,
+          amount: Number(tx.amount),
+          fromAccount: tx.fromAccount,
+          fromName: tx.fromName,
+          toAccount: tx.toAccount,
+          toName: tx.toName,
+          description: tx.description,
+          // Bank ±1 kunda topilgan bo'lsa — sana siljish indikatori
+          foundOnBankDate,
+        };
+      });
 
     // Summa farqi totallari
     const amountMismatchDiffSum = amountMismatch.reduce((s, x) => s + (x.diff || 0), 0);
