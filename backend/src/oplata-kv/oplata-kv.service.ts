@@ -489,45 +489,64 @@ export class OplataKvService {
       }
       where.date = dateFilter;
     }
-    // O'chiriladigan qatorlarni avval olamiz — history uchun
-    const toDelete = await this.prisma.oplataKv.findMany({
-      where,
-      select: { id: true, contractNo: true, paymentAmount: true, date: true, sourceTxId: true },
-    });
+    // BATCH approach — katta tozalashda timeout va memory'dan saqlanish
     const actorName = opts.actor?.name || 'system · cleanup';
-    // History (deleted) — har biri uchun
-    if (toDelete.length > 0) {
-      await this.prisma.oplataKvHistory.createMany({
-        data: toDelete.map((r) => ({
-          oplataKvId: r.id,
-          action: 'deleted',
-          actorType: opts.actor?.id ? 'user' : 'system',
-          actorId: opts.actor?.id ?? null,
-          actorName,
-          fieldsChanged: [],
-          changes: {
-            contractNo: { old: r.contractNo, new: null },
-            paymentAmount: { old: r.paymentAmount?.toString(), new: null },
-            date: { old: r.date?.toISOString(), new: null },
-            sourceTxId: { old: r.sourceTxId, new: null },
-          } as any,
-          note: `Tranzaksiya-manba tozalash${
-            opts.dateFrom || opts.dateTo
-              ? ` (${opts.dateFrom || '∞'}…${opts.dateTo || '∞'})`
-              : ''
-          }`,
-        })),
+    const noteText = `Tranzaksiya-manba tozalash${
+      opts.dateFrom || opts.dateTo
+        ? ` (${opts.dateFrom || '∞'}…${opts.dateTo || '∞'})`
+        : ''
+    }`;
+    const totalCount = await this.prisma.oplataKv.count({ where });
+    let totalDeleted = 0;
+    let totalHistory = 0;
+    const CHUNK = 500;
+
+    while (true) {
+      const batch = await this.prisma.oplataKv.findMany({
+        where,
+        select: { id: true, contractNo: true, paymentAmount: true, date: true, sourceTxId: true },
+        take: CHUNK,
       });
+      if (batch.length === 0) break;
+
+      // History (chunk uchun)
+      try {
+        await this.prisma.oplataKvHistory.createMany({
+          data: batch.map((r) => ({
+            oplataKvId: r.id,
+            action: 'deleted',
+            actorType: opts.actor?.id ? 'user' : 'system',
+            actorId: opts.actor?.id ?? null,
+            actorName,
+            fieldsChanged: [],
+            changes: {
+              contractNo: { old: r.contractNo, new: null },
+              paymentAmount: { old: r.paymentAmount?.toString() ?? null, new: null },
+              date: { old: r.date?.toISOString() ?? null, new: null },
+              sourceTxId: { old: r.sourceTxId, new: null },
+            } as any,
+            note: noteText,
+          })),
+        });
+        totalHistory += batch.length;
+      } catch (e: any) {
+        this.log.warn(`cleanup history chunk xato (jiddiy emas): ${e?.message}`);
+      }
+
+      // Delete chunk
+      const ids = batch.map((r) => r.id);
+      const res = await this.prisma.oplataKv.deleteMany({ where: { id: { in: ids } } });
+      totalDeleted += res.count;
     }
-    const result = await this.prisma.oplataKv.deleteMany({ where });
+
     const range = opts.dateFrom || opts.dateTo
       ? `${opts.dateFrom || '∞'}…${opts.dateTo || '∞'}`
       : 'ALL';
-    this.log.warn(`cleanupTxSource: deleted=${result.count} range=${range}`);
+    this.log.warn(`cleanupTxSource: matched=${totalCount} deleted=${totalDeleted} history=${totalHistory} range=${range}`);
     return {
       ok: true,
-      deleted: result.count,
-      matched: toDelete.length,
+      deleted: totalDeleted,
+      matched: totalCount,
       dateFrom: opts.dateFrom || null,
       dateTo: opts.dateTo || null,
     };
