@@ -96,6 +96,13 @@ export class OplataKvController {
     return this.svc.findByContract(contractNo);
   }
 
+  @Get('crm-sverka')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'OplatyKv vs CRM (Transactions) sverka — bitta shartnoma uchun' })
+  crmSverka(@Query('contractNo') contractNo: string) {
+    return this.svc.crmSverka(contractNo);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Bitta qatorni olish' })

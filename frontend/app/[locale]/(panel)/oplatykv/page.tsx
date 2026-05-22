@@ -10,7 +10,8 @@ import {
   Calendar, Loader2, Hash, ArrowUpRight, Filter as FilterIcon,
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
-  FileCheck2, ChevronDown,
+  FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
+  CheckCircle2, AlertTriangle,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -936,6 +937,7 @@ function AktSverkaDialog({
   const [debounced, setDebounced] = useState('');
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [crmMode, setCrmMode] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -949,6 +951,7 @@ function AktSverkaDialog({
       setDebounced('');
       setSelectedContract(null);
       setSuggestOpen(false);
+      setCrmMode(false);
     }
   }, [open]);
 
@@ -976,6 +979,19 @@ function AktSverkaDialog({
       meta: { client: string | null; object: string | null; paymentMethod: string | null; firstDate: string | null; lastDate: string | null } | null;
     }>(`/oplata-kv/by-contract?contractNo=${encodeURIComponent(selectedContract || '')}`),
     enabled: !!selectedContract,
+  });
+
+  // CRM sverka — OplatyKv vs Transactions
+  const crmQuery = useQuery({
+    queryKey: ['oplata-kv-crm-sverka', selectedContract],
+    queryFn: () => api.get<{
+      ok: boolean;
+      contractNo: string;
+      oplata: { items: OplataKvItem[]; count: number; sums: { paymentAmount: number; firstInstallment: number; monthlyAmount: number } };
+      transactions: { items: Array<{ id: string; txnDate: string; amount: string; direction: 'IN' | 'OUT'; description: string | null; fromName: string | null; toName: string | null; externalId: string | null }>; count: number; totalIn: number; totalOut: number; net: number };
+      comparison: { oplataTotal: number; crmTotal: number; diff: number; matched: boolean; status: 'ok' | 'oplata-more' | 'crm-more' };
+    }>(`/oplata-kv/crm-sverka?contractNo=${encodeURIComponent(selectedContract || '')}`),
+    enabled: !!selectedContract && crmMode,
   });
 
   const downloadExcel = async () => {
@@ -1054,65 +1070,90 @@ function AktSverkaDialog({
           <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-2">
             Shartnoma raqami
           </label>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
-            <Input
-              autoFocus
-              className="pl-10 h-12 rounded-xl text-[14px] font-mono font-semibold"
-              placeholder="Дог № yozish..."
-              value={selectedContract || search}
-              onFocus={() => setSuggestOpen(true)}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setSelectedContract(null);
-                setSuggestOpen(true);
-              }}
-            />
-            {(selectedContract || search) && (
-              <button
-                onClick={() => { setSearch(''); setSelectedContract(null); setSuggestOpen(false); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-rose-500 hover:text-white transition-colors z-10"
-                title="Tozalash"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+              <Input
+                autoFocus
+                className="pl-10 h-12 rounded-xl text-[14px] font-mono font-semibold"
+                placeholder="Дог № yozish..."
+                value={selectedContract || search}
+                onFocus={() => setSuggestOpen(true)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSelectedContract(null);
+                  setSuggestOpen(true);
+                }}
+              />
+              {(selectedContract || search) && (
+                <button
+                  onClick={() => { setSearch(''); setSelectedContract(null); setSuggestOpen(false); setCrmMode(false); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-rose-500 hover:text-white transition-colors z-10"
+                  title="Tozalash"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
 
-            {/* Suggestions dropdown */}
-            {suggestOpen && !selectedContract && (
-              <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white ring-1 ring-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
-                {suggestQuery.isLoading ? (
-                  <div className="py-6 text-center text-[12px] text-slate-400">
-                    <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
-                    Yuklanmoqda...
-                  </div>
-                ) : (suggestQuery.data?.values?.length || 0) === 0 ? (
-                  <div className="py-6 text-center text-[12px] text-slate-400">
-                    Shartnoma topilmadi
-                  </div>
-                ) : (
-                  suggestQuery.data!.values.slice(0, 50).map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => {
-                        setSelectedContract(v.id);
-                        setSearch('');
-                        setSuggestOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0 font-mono text-[13px] font-semibold text-slate-800"
-                    >
-                      {v.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            )}
+              {/* Suggestions dropdown */}
+              {suggestOpen && !selectedContract && (
+                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white ring-1 ring-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
+                  {suggestQuery.isLoading ? (
+                    <div className="py-6 text-center text-[12px] text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
+                      Yuklanmoqda...
+                    </div>
+                  ) : (suggestQuery.data?.values?.length || 0) === 0 ? (
+                    <div className="py-6 text-center text-[12px] text-slate-400">
+                      Shartnoma topilmadi
+                    </div>
+                  ) : (
+                    suggestQuery.data!.values.slice(0, 50).map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => {
+                          setSelectedContract(v.id);
+                          setSearch('');
+                          setSuggestOpen(false);
+                        }}
+                        className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0 font-mono text-[13px] font-semibold text-slate-800"
+                      >
+                        {v.name}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            {/* CRM Sverka toggle — shartnoma tanlanganda aktiv */}
+            <button
+              onClick={() => setCrmMode((v) => !v)}
+              disabled={!selectedContract}
+              className={cn(
+                'h-12 w-12 rounded-xl ring-1 grid place-items-center transition-all shrink-0',
+                !selectedContract
+                  ? 'bg-slate-50 ring-slate-200 text-slate-300 cursor-not-allowed'
+                  : crmMode
+                    ? 'bg-gradient-to-br from-fuchsia-600 to-pink-600 ring-fuchsia-700 text-white shadow-md shadow-fuchsia-500/30 hover:scale-105'
+                    : 'bg-white ring-slate-200 text-fuchsia-600 hover:bg-fuchsia-50 hover:scale-105',
+              )}
+              title="CRM Sverka — Transactions bilan taqqoslash"
+            >
+              <GitCompareArrows className="h-5 w-5" />
+            </button>
           </div>
         </div>
 
         {/* BODY — scrollable (print da expand bo'ladi) */}
         <div className="flex-1 overflow-y-auto print:overflow-visible print:max-h-none">
-          {!selectedContract ? (
+          {/* CRM SVERKA view (crmMode true bo'lsa, contract tanlangan) */}
+          {selectedContract && crmMode ? (
+            <CrmSverkaView
+              data={crmQuery.data}
+              isLoading={crmQuery.isLoading}
+              onRowClick={onRowClick}
+            />
+          ) : !selectedContract ? (
             <div className="px-7 py-16 text-center">
               <div className="w-16 h-16 rounded-2xl bg-amber-100 grid place-items-center mx-auto mb-3">
                 <FileCheck2 className="h-8 w-8 text-amber-600" />
@@ -1133,16 +1174,8 @@ function AktSverkaDialog({
             </div>
           ) : data ? (
             <div className="px-7 py-5 space-y-5">
-              {/* Meta — faqat Obyekt */}
-              {data.meta && data.meta.object && (
-                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Obyekt</div>
-                  <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.object}</div>
-                </div>
-              )}
-
-              {/* Sums */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {/* Sums + Obyekt — 5 ta kartochka */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
                 <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-200 p-3.5">
                   <div className="text-[9.5px] uppercase tracking-wider font-bold text-indigo-600 mb-1">Сумма оплаты</div>
                   <div className="text-[15px] font-black text-indigo-900 tabular-nums">{formatMoney(data.sums.paymentAmount, '')}</div>
@@ -1158,6 +1191,12 @@ function AktSverkaDialog({
                 <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 p-3.5">
                   <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 mb-1">Жами</div>
                   <div className="text-[15px] font-black text-emerald-900 tabular-nums">{data.count} <span className="text-xs text-emerald-500">ta</span></div>
+                </div>
+                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-slate-200 p-3.5 col-span-2 sm:col-span-1">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-600 mb-1">Obyekt</div>
+                  <div className="text-[13px] font-bold text-slate-800 truncate" title={data.meta?.object || '—'}>
+                    {data.meta?.object || '—'}
+                  </div>
                 </div>
               </div>
 
@@ -1259,6 +1298,182 @@ function AktSverkaDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// CrmSverkaView — OplatyKv vs Transactions taqqoslash
+// ─────────────────────────────────────────────────────────
+function CrmSverkaView({
+  data, isLoading, onRowClick,
+}: {
+  data: any;
+  isLoading: boolean;
+  onRowClick: (it: OplataKvItem) => void;
+}) {
+  if (isLoading) {
+    return (
+      <div className="px-7 py-16 text-center text-slate-400">
+        <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+        CRM sverka yuklanmoqda...
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div className="px-7 py-12 text-center text-slate-400">
+        Ma'lumot yo'q
+      </div>
+    );
+  }
+  const { oplata, transactions, comparison } = data;
+  const matched = comparison.matched;
+  const oplataMore = comparison.status === 'oplata-more';
+
+  return (
+    <div className="px-7 py-5 space-y-5">
+      {/* Comparison summary — 3 ta katta kartochka */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white p-4 shadow-lg shadow-indigo-500/20">
+          <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">OplatyKv</div>
+          <div className="text-2xl font-black tabular-nums">{formatMoney(comparison.oplataTotal, '')}</div>
+          <div className="text-[11px] text-white/85 mt-1">{oplata.count} ta to'lov</div>
+        </div>
+        <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white p-4 shadow-lg shadow-sky-500/20">
+          <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">CRM (Transactions)</div>
+          <div className="text-2xl font-black tabular-nums">{formatMoney(comparison.crmTotal, '')}</div>
+          <div className="text-[11px] text-white/85 mt-1">{transactions.count} ta tranzaksiya · NET (kirim − chiqim)</div>
+        </div>
+        <div className={cn(
+          'rounded-2xl p-4 shadow-lg ring-1',
+          matched
+            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-emerald-500/30 ring-emerald-700'
+            : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-rose-500/30 ring-rose-700',
+        )}>
+          <div className="flex items-center gap-2 mb-1">
+            {matched
+              ? <CheckCircle2 className="h-4 w-4" />
+              : <AlertTriangle className="h-4 w-4" />}
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/90">
+              {matched ? 'Natija — Mos' : 'Natija — Xato'}
+            </div>
+          </div>
+          <div className="text-2xl font-black tabular-nums">
+            {matched ? '✓' : (comparison.diff > 0 ? '+' : '') + formatMoney(comparison.diff, '')}
+          </div>
+          <div className="text-[11px] text-white/85 mt-1">
+            {matched
+              ? "Summalar bir xil — sverka muvaffaqiyatli"
+              : oplataMore
+                ? `OplatyKv'da ${formatMoney(Math.abs(comparison.diff), '')} ortiqcha`
+                : `CRM'da ${formatMoney(Math.abs(comparison.diff), '')} ortiqcha`}
+          </div>
+        </div>
+      </div>
+
+      {/* Side-by-side jadval — OplatyKv (chap) vs Transactions (o'ng) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* OplatyKv */}
+        <div className="rounded-2xl ring-1 ring-indigo-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-50 to-violet-50 px-4 py-2.5 border-b border-indigo-200 flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-indigo-700">
+              OplatyKv ({oplata.count})
+            </div>
+            <div className="text-[11px] tabular-nums font-bold text-indigo-900">
+              {formatMoney(comparison.oplataTotal, '')}
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto print:max-h-none">
+            <table className="w-full text-[12px]">
+              <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                  <th className="px-3 py-2 text-right font-semibold">Сумма</th>
+                  <th className="px-3 py-2 text-right font-semibold">1 взнос</th>
+                  <th className="px-3 py-2 text-right font-semibold">Ежемес.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {oplata.items.length === 0 ? (
+                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-[12px]">To'lov yo'q</td></tr>
+                ) : oplata.items.map((it: OplataKvItem) => (
+                  <tr
+                    key={it.id}
+                    className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                    onClick={() => onRowClick(it)}
+                  >
+                    <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
+                    <td className={cn('px-3 py-1.5 text-right tabular-nums', amountCls(it.paymentAmount))}>
+                      {it.paymentAmount ? formatMoney(Number(it.paymentAmount), '') : '—'}
+                    </td>
+                    <td className={cn('px-3 py-1.5 text-right tabular-nums', amountCls(it.firstInstallment))}>
+                      {it.firstInstallment ? formatMoney(Number(it.firstInstallment), '') : '—'}
+                    </td>
+                    <td className={cn('px-3 py-1.5 text-right tabular-nums', amountCls(it.monthlyAmount))}>
+                      {it.monthlyAmount ? formatMoney(Number(it.monthlyAmount), '') : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Transactions (CRM) */}
+        <div className="rounded-2xl ring-1 ring-sky-200 overflow-hidden">
+          <div className="bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2.5 border-b border-sky-200 flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-sky-700">
+              Transactions ({transactions.count})
+            </div>
+            <div className="text-[11px] tabular-nums font-bold text-sky-900">
+              {formatMoney(comparison.crmTotal, '')}
+            </div>
+          </div>
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto print:max-h-none">
+            <table className="w-full text-[12px]">
+              <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase sticky top-0">
+                <tr>
+                  <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                  <th className="px-3 py-2 text-center font-semibold">Yo'n.</th>
+                  <th className="px-3 py-2 text-right font-semibold">Summa</th>
+                  <th className="px-3 py-2 text-left font-semibold">Yuboruvchi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.items.length === 0 ? (
+                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-[12px]">CRM da tranzaksiya topilmadi</td></tr>
+                ) : transactions.items.map((t: any) => (
+                  <tr key={t.id} className="border-t border-slate-100 hover:bg-sky-50/40 transition-colors">
+                    <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">
+                      {t.txnDate ? fmtDateRu(t.txnDate) : '—'}
+                    </td>
+                    <td className="px-3 py-1.5 text-center">
+                      <span className={cn(
+                        'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ring-1',
+                        t.direction === 'IN'
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                          : 'bg-rose-50 text-rose-700 ring-rose-200',
+                      )}>
+                        {t.direction === 'IN' ? 'KIR' : 'CHQ'}
+                      </span>
+                    </td>
+                    <td className={cn(
+                      'px-3 py-1.5 text-right tabular-nums font-semibold',
+                      t.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
+                    )}>
+                      {formatMoney(Number(t.amount), '')}
+                    </td>
+                    <td className="px-3 py-1.5 max-w-[180px] truncate" title={t.direction === 'IN' ? (t.fromName || '') : (t.toName || '')}>
+                      {t.direction === 'IN' ? (t.fromName || '—') : (t.toName || '—')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

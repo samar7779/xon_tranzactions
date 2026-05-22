@@ -173,6 +173,77 @@ export class OplataKvService {
     return { ok: true, item: row };
   }
 
+  // ───────────────── CRM SVERKA (OplatyKv vs Transactions taqqoslash) ─────────────────
+  /**
+   * Bitta shartnoma uchun:
+   * - OplatyKv qatorlari + jami
+   * - Transactions (CRM) qatorlari + jami (faqat IN direction = kirim)
+   * - Taqqoslash natijasi
+   */
+  async crmSverka(contractNo: string) {
+    if (!contractNo || !contractNo.trim()) {
+      return { ok: false, error: "contractNo bo'sh" };
+    }
+    const cn = contractNo.trim();
+    const [oplataItems, txItems] = await Promise.all([
+      this.prisma.oplataKv.findMany({
+        where: { contractNo: cn },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.transaction.findMany({
+        where: { contractNumber: cn },
+        select: {
+          id: true,
+          txnDate: true,
+          amount: true,
+          direction: true,
+          description: true,
+          fromName: true,
+          toName: true,
+          externalId: true,
+        },
+        orderBy: { txnDate: 'asc' },
+      }),
+    ]);
+
+    const oplataSums = {
+      paymentAmount:    oplataItems.reduce((s, i) => s + Number(i.paymentAmount    || 0), 0),
+      firstInstallment: oplataItems.reduce((s, i) => s + Number(i.firstInstallment || 0), 0),
+      monthlyAmount:    oplataItems.reduce((s, i) => s + Number(i.monthlyAmount    || 0), 0),
+    };
+
+    const txTotalIn  = txItems.filter((t) => t.direction === 'IN' ).reduce((s, t) => s + Number(t.amount), 0);
+    const txTotalOut = txItems.filter((t) => t.direction === 'OUT').reduce((s, t) => s + Number(t.amount), 0);
+    const txNet = txTotalIn - txTotalOut;
+
+    const diff = oplataSums.paymentAmount - txNet;
+    const matched = Math.abs(diff) < 0.01;
+
+    return {
+      ok: true,
+      contractNo: cn,
+      oplata: {
+        items: oplataItems,
+        count: oplataItems.length,
+        sums: oplataSums,
+      },
+      transactions: {
+        items: txItems,
+        count: txItems.length,
+        totalIn: txTotalIn,
+        totalOut: txTotalOut,
+        net: txNet,
+      },
+      comparison: {
+        oplataTotal: oplataSums.paymentAmount,
+        crmTotal: txNet,
+        diff,
+        matched,
+        status: matched ? 'ok' : (diff > 0 ? 'oplata-more' : 'crm-more'),
+      },
+    };
+  }
+
   // ───────────────── BY CONTRACT (Akt Sverka) ─────────────────
   /**
    * Bitta shartnoma bo'yicha barcha to'lovlar tarixi + jami summalar.
