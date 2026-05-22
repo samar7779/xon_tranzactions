@@ -4,6 +4,7 @@ import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
+import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -51,6 +52,7 @@ export class OplataKvService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crmService: CrmService,
+    private readonly crmCache: CrmContractCacheService,
   ) {}
 
   // ─── Preview cache (in-memory) ───────────────────────────
@@ -425,6 +427,85 @@ export class OplataKvService {
       errorSamples,
       duration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
+    };
+  }
+
+  /**
+   * Tranzaksiya-manba qatorlardan obyekt nomi yo'q bo'lganlarni CRM dan to'ldirish.
+   * Concurrency-limited bilan: bir vaqtda 5 ta CRM lookup.
+   * Cache populate qiladi (keyingi sync'larda foydaliroq).
+   */
+  async fillMissingObjects(opts: { limit?: number; actor?: Actor } = {}) {
+    const startedAt = Date.now();
+    const limit = Math.min(opts.limit || 500, 2000);
+
+    // Source=tx va object=null qatorlar
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { sourceTxId: { not: null }, object: null },
+      select: { id: true, contractNo: true },
+      take: limit,
+    });
+    if (rows.length === 0) {
+      return { ok: true, total: 0, uniqueContracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    }
+
+    // ContractNo bo'yicha guruhlash
+    const byContract = new Map<string, string[]>();
+    for (const r of rows) {
+      const arr = byContract.get(r.contractNo) || [];
+      arr.push(r.id);
+      byContract.set(r.contractNo, arr);
+    }
+    const uniqueContracts = Array.from(byContract.keys());
+
+    // Object mapping
+    const mappings = await this.prisma.oplataKvObjectMapping.findMany();
+    const objMap = new Map(mappings.map((m) => [m.crmName.trim().toLowerCase(), m.oplataName]));
+
+    let filled = 0;
+    let notFound = 0;
+    let errors = 0;
+
+    const CONCURRENCY = 5;
+    for (let i = 0; i < uniqueContracts.length; i += CONCURRENCY) {
+      const batch = uniqueContracts.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (cn) => {
+        try {
+          const result = await this.crmCache.lookup(cn);
+          if (!result || !result.objectName) {
+            notFound++;
+            return;
+          }
+          let objName = result.objectName;
+          const mapped = objMap.get(objName.trim().toLowerCase());
+          if (mapped) objName = mapped;
+
+          const ids = byContract.get(cn)!;
+          await this.prisma.oplataKv.updateMany({
+            where: { id: { in: ids } },
+            data: { object: objName },
+          });
+          filled += ids.length;
+        } catch (e: any) {
+          this.log.warn(`fillMissingObjects ${cn} xato: ${e?.message}`);
+          errors++;
+        }
+      }));
+    }
+
+    const duration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.log(
+      `fillMissingObjects: total=${rows.length} unique=${uniqueContracts.length} ` +
+      `filled=${filled} notFound=${notFound} errors=${errors} duration=${duration}s`,
+    );
+    return {
+      ok: true,
+      total: rows.length,
+      uniqueContracts: uniqueContracts.length,
+      filled,
+      notFound,
+      errors,
+      duration,
     };
   }
 

@@ -351,6 +351,18 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
 
+  // Obyektlarni CRM dan to'ldirish
+  const fillObjectsMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; total: number; uniqueContracts: number; filled: number; notFound: number; errors: number; duration: number }>('/oplata-kv/fill-objects', { limit: 1000 }),
+    onSuccess: (r: any) => {
+      toast.success(
+        `Obyekt to'ldirish · jami ${r.total} qator (${r.uniqueContracts} shartnoma) · to'ldirildi: ${r.filled}, topilmadi: ${r.notFound}, xato: ${r.errors}${r.duration ? ` · ${r.duration}s` : ''}`,
+        { duration: 8000 },
+      );
+    },
+    onError: (e: any) => toast.error(e?.message || "Obyekt to'ldirishda xato"),
+  });
+
   // Tranzaksiya-manba qatorlarni tozalash (date range)
   const cleanupTxMut = useMutation({
     mutationFn: (range: { dateFrom: string | null; dateTo: string | null }) => {
@@ -562,10 +574,21 @@ function SyncSettingsPanel() {
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Hozir sync
                 </Button>
+                <Button
+                  onClick={() => fillObjectsMut.mutate()}
+                  disabled={fillObjectsMut.isPending}
+                  className="h-10 px-4 gap-2 bg-gradient-to-br from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-sky-700 text-white"
+                  title="Tranzaksiya-manba qatorlarda yo'q obyektlarni CRM dan to'ldirish (1 marta max 1000 ta)"
+                >
+                  {fillObjectsMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
+                  Obyektlarni CRM dan
+                </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
-                Saqlangach, "Hozir sync" tugmasini bosing yoki keyingi sync paytida ishlaydi.
+                <br />
+                <b>"Obyektlarni CRM dan"</b> — tranzaksiyadan qo'shilgan qatorlarda obyekt nomi yo'q bo'lsa CRM dan oladi (bir marta max 1000 ta, sekin).
+                Mapping qo'llaniladi.
               </div>
 
               {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}

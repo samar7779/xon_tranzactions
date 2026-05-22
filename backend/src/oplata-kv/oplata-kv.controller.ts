@@ -142,6 +142,16 @@ export class OplataKvController {
     return this.svc.deleteObjectMapping(id);
   }
 
+  @Post('fill-objects')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Tranzaksiya-manba qatorlarda yo'q obyektlarni CRM dan to'ldirish" })
+  async fillObjects(
+    @Body() body: { limit?: number },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.fillMissingObjects({ limit: body?.limit, actor: actorFrom(user) });
+  }
+
   @Delete('cleanup-tx-source')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish — optional date range" })
