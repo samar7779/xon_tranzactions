@@ -217,7 +217,11 @@ export class OplataKvService {
       contractNumber: { not: null },
     };
     if (minDate) {
-      where.txnDate = { gt: minDate };
+      // Foydalanuvchi kiritgan sananing OXIRGI sekundidan (23:59:59.999) keyingi tranzaksiyalar
+      // Misol: 30.04.2026 qo'ysangiz, 01.05.2026 00:00 dan boshlab olinadi (shu sana o'zi olinmaydi)
+      const dayEnd = new Date(minDate);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+      where.txnDate = { gt: dayEnd };
     }
 
     const txList = await this.prisma.transaction.findMany({
