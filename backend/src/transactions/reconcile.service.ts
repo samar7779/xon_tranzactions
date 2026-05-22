@@ -502,14 +502,15 @@ export class ReconcileService {
       }
     }
 
-    // ── Qo'shnish kunlar (±1) bank yozuvlari ─────────────────────────
+    // ── Qo'shnish kunlar (±2) bank yozuvlari ─────────────────────────
     // Bank ddate va bizning valueDate har doim ham mos kelmaydi: ba'zan tranzaksiya
     // 13.05'ga qo'yiladi (vdate), bank esa uni 14.05 content[]'ida ko'rsatadi (ddate).
-    // Shuning uchun dbOnly'ga qo'shishdan oldin ±1 kun bank yozuvlarida tekshiramiz.
+    // Inspector tool kabi ±2 kun atrofini tekshiramiz — yozuv 12-15.05 oraliqda
+    // istalgan joyda bo'lishi mumkin. dbOnly'ga qo'shishdan oldin neighbor'larda topish.
     const neighborBankByKey = new Map<string, { onDate: string; item: any }>();
     if (bank.apiKind === 'KAPITALBANK_V3') {
       const baseDate = new Date(`${date}T00:00:00+05:00`);
-      const neighbors = [-1, 1].map((offset) => {
+      const neighbors = [-2, -1, 1, 2].map((offset) => {
         const d = new Date(baseDate.getTime() + offset * 86_400_000);
         return { isoDate: d.toISOString().slice(0, 10), dmy: this.fmtDate(d) };
       });
