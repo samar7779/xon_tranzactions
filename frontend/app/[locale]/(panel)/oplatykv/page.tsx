@@ -621,6 +621,7 @@ export default function OplataKvPage() {
         onClose={() => setAktSverkaOpen(false)}
         onCopyId={copyId}
         copiedId={copiedId}
+        onRowClick={(it) => setDetailRow(it)}
       />
     </div>
   );
@@ -923,12 +924,13 @@ function ColumnFilterPopover({
 // AktSverkaDialog — shartnoma bo'yicha to'lov tarixi (Akt Sverka)
 // ─────────────────────────────────────────────────────────
 function AktSverkaDialog({
-  open, onClose, onCopyId, copiedId,
+  open, onClose, onCopyId, copiedId, onRowClick,
 }: {
   open: boolean;
   onClose: () => void;
   onCopyId: (id: string) => void;
   copiedId: string | null;
+  onRowClick: (it: OplataKvItem) => void;
 }) {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -992,8 +994,34 @@ function AktSverkaDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      {/* Print CSS — modaldan tashqari hammasini yashirish, modal'ni ekspand qilish */}
+      {open && (
+        <style jsx global>{`
+          @media print {
+            body * { visibility: hidden !important; }
+            [data-print-area="akt-sverka"],
+            [data-print-area="akt-sverka"] * { visibility: visible !important; }
+            [data-print-area="akt-sverka"] {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              max-height: none !important;
+              transform: none !important;
+              overflow: visible !important;
+              box-shadow: none !important;
+              border: none !important;
+              border-radius: 0 !important;
+            }
+            /* Dialog overlay/portal default backgroundlarni yashirish */
+            [data-state="open"][role="dialog"] { background: white !important; }
+          }
+        `}</style>
+      )}
       <DialogContent
-        className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col"
+        data-print-area="akt-sverka"
+        className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col print:max-h-none print:overflow-visible print:max-w-full print:rounded-none print:shadow-none print:ring-0 print:border-0"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
@@ -1021,8 +1049,8 @@ function AktSverkaDialog({
           </div>
         </div>
 
-        {/* SEARCH (autocomplete) */}
-        <div className="px-7 py-5 border-b border-slate-100 bg-slate-50/60 shrink-0">
+        {/* SEARCH (autocomplete) — print'da yashirin */}
+        <div className="px-7 py-5 border-b border-slate-100 bg-slate-50/60 shrink-0 print:hidden">
           <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-2">
             Shartnoma raqami
           </label>
@@ -1082,8 +1110,8 @@ function AktSverkaDialog({
           </div>
         </div>
 
-        {/* BODY — scrollable */}
-        <div className="flex-1 overflow-y-auto">
+        {/* BODY — scrollable (print da expand bo'ladi) */}
+        <div className="flex-1 overflow-y-auto print:overflow-visible print:max-h-none">
           {!selectedContract ? (
             <div className="px-7 py-16 text-center">
               <div className="w-16 h-16 rounded-2xl bg-amber-100 grid place-items-center mx-auto mb-3">
@@ -1105,17 +1133,11 @@ function AktSverkaDialog({
             </div>
           ) : data ? (
             <div className="px-7 py-5 space-y-5">
-              {/* Meta */}
-              {data.meta && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Mijoz</div>
-                    <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.client || '—'}</div>
-                  </div>
-                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Obyekt</div>
-                    <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.object || '—'}</div>
-                  </div>
+              {/* Meta — faqat Obyekt */}
+              {data.meta && data.meta.object && (
+                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3">
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Obyekt</div>
+                  <div className="text-[13.5px] font-semibold text-slate-800 truncate">{data.meta.object}</div>
                 </div>
               )}
 
@@ -1155,20 +1177,29 @@ function AktSverkaDialog({
                         <th className="px-3 py-2 text-right font-semibold">1 взнос</th>
                         <th className="px-3 py-2 text-right font-semibold">Ежемес.</th>
                         <th className="px-3 py-2 text-left font-semibold">Tip</th>
-                        <th className="px-3 py-2 text-left font-semibold">Izoh</th>
-                        <th className="px-3 py-2 text-center font-semibold">ID</th>
+                        <th className="px-3 py-2 text-center font-semibold print:hidden">ID</th>
                       </tr>
                     </thead>
                     <tbody>
                       {data.items.map((it) => (
-                        <tr key={it.id} className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors">
+                        <tr
+                          key={it.id}
+                          className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                          onClick={() => onRowClick(it)}
+                          title="To'liq ma'lumotni ko'rish"
+                        >
                           <td className="px-3 py-2 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
-                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
-                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.firstInstallment))}>{fmtNum(it.firstInstallment)}</td>
-                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.monthlyAmount))}>{fmtNum(it.monthlyAmount)}</td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.paymentAmount))}>
+                            {it.paymentAmount ? formatMoney(Number(it.paymentAmount), '') : '—'}
+                          </td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.firstInstallment))}>
+                            {it.firstInstallment ? formatMoney(Number(it.firstInstallment), '') : '—'}
+                          </td>
+                          <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.monthlyAmount))}>
+                            {it.monthlyAmount ? formatMoney(Number(it.monthlyAmount), '') : '—'}
+                          </td>
                           <td className="px-3 py-2">{it.txType || <span className="text-slate-400">—</span>}</td>
-                          <td className="px-3 py-2 max-w-[200px] truncate" title={it.purpose || ''}>{it.purpose || <span className="text-slate-400">—</span>}</td>
-                          <td className="px-3 py-2 text-center">
+                          <td className="px-3 py-2 text-center print:hidden" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => onCopyId(it.id)}
                               className={cn(
@@ -1190,7 +1221,7 @@ function AktSverkaDialog({
                         <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.paymentAmount, '')}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.firstInstallment, '')}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.monthlyAmount, '')}</td>
-                        <td colSpan={3}></td>
+                        <td colSpan={2}></td>
                       </tr>
                     </tfoot>
                   </table>
@@ -1200,8 +1231,8 @@ function AktSverkaDialog({
           ) : null}
         </div>
 
-        {/* FOOTER */}
-        <div className="px-7 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0">
+        {/* FOOTER (print da yashirin) */}
+        <div className="px-7 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0 print:hidden">
           <div className="text-[11.5px] text-slate-500">
             {selectedContract ? (
               <>Shartnoma: <span className="font-mono font-bold text-slate-800">{selectedContract}</span></>
