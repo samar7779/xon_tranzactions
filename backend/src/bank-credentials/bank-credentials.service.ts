@@ -159,7 +159,8 @@ export class BankCredentialsService {
    */
   async listAuthIssues() {
     // Auth muammosini ko'rsatuvchi pattern'lar (errorMessage'da bo'lishi mumkin)
-    const AUTH_PATTERN = /login\s*fail|invalid\s*credential|wrong\s*password|\b401\b|unauthorized|auth(entication)?\s*fail|noto'g'ri\s*(parol|login)|ulanib\s*bo['']?lmadi/i;
+    // EN + UZ-Latin + RU (banklar ko'pincha rus tilida xato qaytaradi)
+    const AUTH_PATTERN = /login\s*fail|invalid\s*credential|wrong\s*password|\b40[13]\b|unauthorized|forbidden|auth(entication)?\s*fail|noto'g'ri\s*(parol|login)|ulanib\s*bo['']?lmadi|(логин|пароль).{0,30}(неверн|не\s*верн|не\s*правил|указан)|неверн\w*\s*(логин|пароль)|доступ\s*(запрещ|отказ)|авториз\w*\s*(не\s*пройд|неудач|отказ)/i;
 
     // Hamma aktiv hisoblar — credential bilan birga
     const accounts = await this.prisma.bankAccount.findMany({
