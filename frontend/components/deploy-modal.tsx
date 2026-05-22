@@ -38,6 +38,13 @@ export function DeployModal() {
 
   useEffect(() => { setMounted(true); }, []);
 
+  // Tashqaridan modal'ni ochish uchun event listener (topbar bell ichidan chaqiriladi)
+  useEffect(() => {
+    const handler = () => setExpanded(true);
+    window.addEventListener('open-deploy-modal', handler);
+    return () => window.removeEventListener('open-deploy-modal', handler);
+  }, []);
+
   const { data } = useQuery<DeployStatus>({
     queryKey: ['deploy-status'],
     queryFn: () => api.get<DeployStatus>('/_deploy/status'),
@@ -115,72 +122,9 @@ export function DeployModal() {
 
   return createPortal(
     <>
-      {/* ═══════════════ XABARNOMA (kichik, pastki-o'ngda) ═══════════════ */}
-      {!expanded && (
-        <div className="fixed bottom-4 right-4 z-[9998] animate-slide-up-in">
-          <button
-            onClick={() => setExpanded(true)}
-            className={cn(
-              'group relative pl-3 pr-9 py-2.5 rounded-2xl shadow-2xl ring-1 transition-all hover:scale-[1.02] active:scale-[0.98] min-w-[240px] text-left',
-              activeKind === 'running'  && 'bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 ring-white/20 hover:shadow-indigo-500/40',
-              activeKind === 'newVersion' && 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500 ring-white/20 hover:shadow-emerald-500/40',
-              activeKind === 'failed'   && 'bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 ring-white/20 hover:shadow-rose-500/40',
-            )}
-          >
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur grid place-items-center ring-1 ring-white/30 shrink-0">
-                {activeKind === 'running' && <Loader2 className="h-4 w-4 text-white animate-spin" />}
-                {activeKind === 'newVersion' && <Sparkles className="h-4 w-4 text-white" />}
-                {activeKind === 'failed' && <AlertCircle className="h-4 w-4 text-white" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-white/80 animate-pulse" />
-                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/85 leading-none">
-                    {activeKind === 'running'   && t('live')}
-                    {activeKind === 'newVersion' && t('newVersionTitle')}
-                    {activeKind === 'failed'    && t('failedTitle')}
-                  </div>
-                </div>
-                <div className="text-[13px] font-bold text-white leading-tight mt-0.5 truncate">
-                  {activeKind === 'running' && (
-                    <>
-                      {t('deploying')}
-                      {typeof data.progressPercent === 'number' && (
-                        <span className="ml-1.5 tabular-nums text-white/90">{data.progressPercent}%</span>
-                      )}
-                    </>
-                  )}
-                  {activeKind === 'newVersion' && t('newVersionBtn')}
-                  {activeKind === 'failed' && (data.message || t('failedDesc'))}
-                </div>
-              </div>
-              <ChevronUp className="h-4 w-4 text-white/70 group-hover:text-white transition-colors shrink-0" />
-            </div>
-
-            {/* Mini progress bar (faqat running uchun) */}
-            {activeKind === 'running' && (
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/15 rounded-b-2xl overflow-hidden">
-                <div
-                  className="h-full bg-white/70 transition-all duration-1000 ease-out"
-                  style={{ width: `${data.progressPercent ?? 1}%` }}
-                />
-              </div>
-            )}
-          </button>
-
-          {/* Tashqi X — yopish */}
-          <button
-            onClick={(e) => { e.stopPropagation(); dismissNotification(); }}
-            className="absolute top-2 right-2 w-5 h-5 rounded-full bg-white/15 hover:bg-white/30 grid place-items-center text-white/80 hover:text-white transition-all"
-            aria-label="Yopish"
-          >
-            <X className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {/* ═══════════════ TO'LIQ MODAL (faqat foydalanuvchi xohlasa) ═══════════════ */}
+      {/* ═══════════════ TO'LIQ MODAL ═══════════════ */}
+      {/* Floating chip OLIB TASHLANDI — bell ichida ko'rinadi.
+          Modal faqat foydalanuvchi xohlasa ochiladi (window event orqali) */}
       {expanded && (
         <div
           className="fixed inset-0 z-[9999] grid place-items-center p-4 animate-fade-in"
