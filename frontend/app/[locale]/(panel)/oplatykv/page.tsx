@@ -105,7 +105,6 @@ export default function OplataKvPage() {
   const [q, setQ] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
 
@@ -182,9 +181,8 @@ export default function OplataKvPage() {
     if (q.trim()) p.set('q', q.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
-    if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
     return p.toString();
-  }, [q, dateFrom, dateTo, categoryFilter]);
+  }, [q, dateFrom, dateTo]);
 
   const [exporting, setExporting] = useState<null | 'xlsx' | 'json' | 'pdf'>(null);
 
@@ -248,7 +246,6 @@ export default function OplataKvPage() {
     if (q.trim()) p.set('q', q.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
-    if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
     // Per-column filterlar (vergul bilan)
     for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
       const set = columnFilters[col];
@@ -256,7 +253,7 @@ export default function OplataKvPage() {
     }
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, q, dateFrom, dateTo, categoryFilter, columnFiltersKey]);
+  }, [page, perPage, q, dateFrom, dateTo, columnFiltersKey]);
 
   // Filter popoverga uzatish uchun — barcha AKTIV column filterlar (page'siz)
   const activeFilterParams = useMemo(() => {
@@ -264,14 +261,13 @@ export default function OplataKvPage() {
     if (q.trim()) p.set('q', q.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
-    if (categoryFilter !== 'all') p.set('paymentCategory', categoryFilter);
     for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
       const set = columnFilters[col];
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateFrom, dateTo, categoryFilter, columnFiltersKey]);
+  }, [q, dateFrom, dateTo, columnFiltersKey]);
 
   // Aktiv column filterlar soni — badge uchun
   const activeColumnFiltersCount = Object.values(columnFilters).filter((s) => s && s.size > 0).length;
@@ -289,7 +285,7 @@ export default function OplataKvPage() {
 
   // Filtr o'zgarganda sahifani 1-ga qaytarish
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, categoryFilter, perPage, columnFiltersKey]);
+  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, perPage, columnFiltersKey]);
 
   const items = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
@@ -312,16 +308,19 @@ export default function OplataKvPage() {
           <CardContent className="p-4">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
                 <Input
                   className="pl-9 h-10 rounded-xl bg-slate-50/60"
-                  placeholder="Qidiruv — Дог №, Клиент, Объект, Назначение..."
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
+                <TypewriterPlaceholder
+                  visible={!q}
+                  phrases={["Дог № qidirish...", "Mijoz nomi...", "Obyekt...", "ID...", "Summa..."]}
+                />
                 {q && (
                   <button
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:text-white hover:bg-rose-500"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:text-white hover:bg-rose-500 z-10"
                     onClick={() => setQ('')}
                   >
                     <X className="h-3 w-3" />
@@ -334,26 +333,18 @@ export default function OplataKvPage() {
                 <DropdownMenuTrigger asChild>
                   <button
                     className={cn(
-                      'h-10 px-3 rounded-xl ring-1 inline-flex items-center gap-2 text-[13px] transition-colors',
+                      'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors',
                       (dateFrom || dateTo)
                         ? 'bg-indigo-50 ring-indigo-200 text-indigo-700 hover:bg-indigo-100'
                         : 'bg-slate-50/60 ring-slate-200 text-slate-600 hover:bg-slate-100',
                     )}
-                    title="Sana oralig'i"
+                    title={(dateFrom || dateTo)
+                      ? `${dateFrom ? fmtDateRu(dateFrom) : '…'} — ${dateTo ? fmtDateRu(dateTo) : '…'}`
+                      : "Sana oralig'i"}
                   >
                     <Calendar className="h-4 w-4" />
-                    <span className="font-medium">
-                      {(dateFrom || dateTo)
-                        ? `${dateFrom ? fmtDateRu(dateFrom) : '…'} — ${dateTo ? fmtDateRu(dateTo) : '…'}`
-                        : "Sana oralig'i"}
-                    </span>
                     {(dateFrom || dateTo) && (
-                      <span
-                        className="ml-1 w-4 h-4 rounded-full grid place-items-center hover:bg-rose-500 hover:text-white"
-                        onClick={(e) => { e.stopPropagation(); e.preventDefault(); setDateFrom(''); setDateTo(''); }}
-                      >
-                        <X className="h-3 w-3" />
-                      </span>
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-2 ring-white" />
                     )}
                   </button>
                 </DropdownMenuTrigger>
@@ -388,31 +379,17 @@ export default function OplataKvPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="h-10 rounded-xl w-[170px]">
-                  <FilterIcon className="h-4 w-4 mr-1 text-slate-400" />
-                  <SelectValue placeholder="Оплата" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Barchasi (Оплата)</SelectItem>
-                  <SelectItem value="MONTHLY">ежемесячный</SelectItem>
-                  <SelectItem value="FIRST">1 взнос</SelectItem>
-                  <SelectItem value="GENERAL">Общий</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {/* Ustun filter rejimi toggle */}
+              {/* Ustun filter rejimi toggle — faqat ikon */}
               <button
                 onClick={() => {
                   setColumnFilterMode((v) => !v);
                   if (columnFilterMode) {
-                    // Yopayotganda — barcha column filterlarni tozalash
                     setColumnFilters({});
                     setOpenFilterColumn(null);
                   }
                 }}
                 className={cn(
-                  'relative h-10 px-3 rounded-xl ring-1 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-colors',
+                  'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors',
                   columnFilterMode
                     ? 'bg-indigo-600 text-white ring-indigo-700 hover:bg-indigo-700 shadow-md shadow-indigo-500/30'
                     : 'bg-slate-50/60 text-slate-700 ring-slate-200 hover:bg-slate-100',
@@ -420,25 +397,23 @@ export default function OplataKvPage() {
                 title={columnFilterMode ? "Ustun filter rejimini o'chirish" : "Ustun filter rejimini yoqish"}
               >
                 <FilterIcon className="h-4 w-4" />
-                <span className="hidden sm:inline">Ustun filter</span>
                 {activeColumnFiltersCount > 0 && (
-                  <span className="ml-0.5 min-w-[18px] h-[18px] rounded-full bg-white text-indigo-700 text-[10px] font-bold grid place-items-center px-1">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-1 ring-2 ring-white">
                     {activeColumnFiltersCount}
                   </span>
                 )}
               </button>
 
-              {/* Download dropdown — filter-aware */}
+              {/* Download dropdown — faqat ikon */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="h-10 px-3 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1.5 text-[13px] font-semibold transition-colors"
+                    className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 grid place-items-center transition-colors"
                     title="Yuklab olish"
                   >
                     {exporting
                       ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
                       : <Download className="h-4 w-4" />}
-                    <span className="hidden sm:inline">Yuklab olish</span>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-[220px]">
@@ -467,12 +442,13 @@ export default function OplataKvPage() {
               </DropdownMenu>
 
               {canManage && (
-                <Button
+                <button
                   onClick={() => setCreateOpen(true)}
-                  className="h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md"
+                  className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md grid place-items-center transition-colors"
+                  title="Yangi qator"
                 >
-                  <Plus className="h-4 w-4 mr-1" /> Yangi qator
-                </Button>
+                  <Plus className="h-4 w-4" />
+                </button>
               )}
             </div>
           </CardContent>
@@ -635,6 +611,54 @@ export default function OplataKvPage() {
 // Helpers
 // ─────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────
+// TypewriterPlaceholder — yozadi → o'chiradi → keyingisi
+// ─────────────────────────────────────────────────────────
+function TypewriterPlaceholder({ visible, phrases }: { visible: boolean; phrases: string[] }) {
+  const [text, setText] = useState('');
+  const [phraseIdx, setPhraseIdx] = useState(0);
+  const [phase, setPhase] = useState<'typing' | 'pause' | 'erasing'>('typing');
+
+  useEffect(() => {
+    if (!visible) return;
+    const current = phrases[phraseIdx % phrases.length];
+    let timeout: any;
+
+    if (phase === 'typing') {
+      if (text.length < current.length) {
+        timeout = setTimeout(() => setText(current.slice(0, text.length + 1)), 70);
+      } else {
+        timeout = setTimeout(() => setPhase('pause'), 1400);
+      }
+    } else if (phase === 'pause') {
+      timeout = setTimeout(() => setPhase('erasing'), 100);
+    } else if (phase === 'erasing') {
+      if (text.length > 0) {
+        timeout = setTimeout(() => setText(text.slice(0, -1)), 35);
+      } else {
+        setPhraseIdx((i) => i + 1);
+        setPhase('typing');
+      }
+    }
+    return () => clearTimeout(timeout);
+  }, [text, phase, phraseIdx, phrases, visible]);
+
+  if (!visible) return null;
+  return (
+    <div className="absolute left-9 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-slate-400 select-none">
+      {text}
+      <span className="inline-block w-[2px] h-[14px] bg-indigo-500 ml-0.5 align-middle animate-tw-cursor" />
+      <style jsx>{`
+        @keyframes tw-cursor-blink {
+          0%, 49% { opacity: 1; }
+          50%, 100% { opacity: 0; }
+        }
+        .animate-tw-cursor { animation: tw-cursor-blink 0.8s steps(1) infinite; }
+      `}</style>
+    </div>
+  );
+}
+
 function Th({ children, align = 'left' }: { children: React.ReactNode; align?: 'left' | 'right' | 'center' }) {
   return (
     <th className={cn(
@@ -672,17 +696,19 @@ function ColumnTh({
     setOpenFilterColumn(column);
   };
 
-  // Scroll/resize bo'lsa — popoverni yopamiz (drift muammosini oldini olamiz)
+  // Scroll/resize bo'lganda popoverni qayta pozitsiyalaymiz (yopilmaydi)
   useEffect(() => {
     if (!isOpen) return;
-    const close = () => setOpenFilterColumn(null);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
+    const reposition = () => {
+      if (btnRef.current) setAnchorRect(btnRef.current.getBoundingClientRect());
     };
-  }, [isOpen, setOpenFilterColumn]);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [isOpen]);
 
   return (
     <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-left">
