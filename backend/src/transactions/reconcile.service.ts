@@ -268,6 +268,21 @@ export class ReconcileService {
     return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
   }
 
+  /**
+   * Composite externalId formati: [IP_]general_id_num_ddate_acc_ct_acc_dt_amount_sign
+   * 3-element ddate (dd.MM.yyyy). Date qaytaradi yoki null.
+   */
+  private parseDdateFromExternalId(ext: string | null | undefined): Date | null {
+    if (!ext) return null;
+    const body = ext.startsWith('IP_') ? ext.slice(3) : ext;
+    const parts = body.split('_');
+    const ddate = parts[2];
+    if (!ddate || !/^\d{2}\.\d{2}\.\d{4}$/.test(ddate)) return null;
+    const [d, m, y] = ddate.split('.').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    return isNaN(dt.getTime()) ? null : dt;
+  }
+
   /** Tashkent bugungi sanasini YYYY-MM-DD shaklida qaytaradi */
   private todayTashkent(): string {
     const now = new Date(Date.now() + 5 * 60 * 60 * 1000);
@@ -723,38 +738,109 @@ export class ReconcileService {
       }
     }
 
-    const dbOnly = dbItems
-      .filter((tx) => !matchedDbIds.has(tx.id))
-      .map((tx) => {
-        // Qo'shni kunlar bank yozuvlari ichida tekshiramiz — sana siljish (date shift)
-        // holatini aniqlash uchun. Agar topilsa, foundOnBankDate to'ldiriladi.
-        const neighborKeys = [
+    const unmatchedDb = dbItems.filter((tx) => !matchedDbIds.has(tx.id));
+
+    // ── Smart fallback: unmatched dbOnly yozuvlarning externalId'idan ddate ─
+    // parse qilib, bank ichida shu ddate atrofini ham tekshiramiz. Ba'zan
+    // bank ddate=14.05 yozuvini 14.05 GetDoc1C'da emas, balki 15.05 yoki 16.05
+    // content[]'ida ko'rsatadi. Shuning uchun sverka sanasiga emas, balki
+    // yozuv ddate'siga asoslangan qo'shimcha qidiruv kerak.
+    if (bank.apiKind === 'KAPITALBANK_V3' && unmatchedDb.length > 0) {
+      const alreadyFetched = new Set<string>([date]);
+      // Inisial fetched dates (sverka ±2)
+      const baseDate = new Date(`${date}T00:00:00+05:00`);
+      for (const offset of [-2, -1, 1, 2]) {
+        const d = new Date(baseDate.getTime() + offset * 86_400_000);
+        alreadyFetched.add(d.toISOString().slice(0, 10));
+      }
+
+      // Unmatched dbOnly'lar uchun extra dates yig'amiz
+      const extraDates = new Set<string>();
+      for (const tx of unmatchedDb) {
+        // Allaqachon neighbor'da topilgan bo'lsa — qo'shimcha kerak emas
+        const keys = [
           tx.bankB2Id ? `b2:${tx.bankB2Id}` : null,
           tx.bankGeneralId ? `gen:${tx.bankGeneralId}` : null,
           tx.externalId ? `ext:${tx.externalId}` : null,
         ].filter(Boolean) as string[];
-        let foundOnBankDate: string | null = null;
-        for (const k of neighborKeys) {
-          const m = neighborBankByKey.get(k);
-          if (m) { foundOnBankDate = m.onDate; break; }
+        if (keys.some((k) => neighborBankByKey.has(k))) continue;
+
+        const ddate = this.parseDdateFromExternalId(tx.externalId);
+        if (!ddate) continue;
+        // ddate ±2 atrofi
+        for (const offset of [-2, -1, 0, 1, 2]) {
+          const d = new Date(ddate.getTime() + offset * 86_400_000);
+          const iso = d.toISOString().slice(0, 10);
+          if (!alreadyFetched.has(iso)) extraDates.add(iso);
         }
-        return {
-          id: tx.id,
-          externalId: tx.externalId,
-          b2Id: tx.bankB2Id,
-          generalId: tx.bankGeneralId,
-          docNumber: tx.docNumber,
-          direction: tx.direction,
-          amount: Number(tx.amount),
-          fromAccount: tx.fromAccount,
-          fromName: tx.fromName,
-          toAccount: tx.toAccount,
-          toName: tx.toName,
-          description: tx.description,
-          // Bank ±1 kunda topilgan bo'lsa — sana siljish indikatori
-          foundOnBankDate,
-        };
-      });
+      }
+
+      if (extraDates.size > 0) {
+        this.log.log(`diagnoseDay ${account.accountNo}: ${extraDates.size} ta qo'shimcha kun bank'dan olinadi`);
+        const extraResults = await Promise.all(
+          Array.from(extraDates).map(async (isoDate) => {
+            const d = new Date(`${isoDate}T00:00:00+05:00`);
+            const dmy = this.fmtDate(d);
+            try {
+              const r = await this.kb.getDoc1C({
+                baseUrl: bank.apiBaseUrl!,
+                login,
+                password,
+                branch: account.branch,
+                account: account.accountNo,
+                date: dmy,
+                useProxy: cred.useProxy === true,
+              });
+              return { isoDate, items: r?.content || [] };
+            } catch (e: any) {
+              this.log.warn(`diagnoseDay extra ${isoDate} xato: ${e?.message}`);
+              return { isoDate, items: [] };
+            }
+          }),
+        );
+        for (const day of extraResults) {
+          for (const it of day.items) {
+            if (it.acc_dt !== account.accountNo && it.acc_ct !== account.accountNo) continue;
+            const ref = { onDate: day.isoDate, item: it };
+            if (it.b2_id) neighborBankByKey.set(`b2:${it.b2_id}`, ref);
+            if (it.general_id) neighborBankByKey.set(`gen:${it.general_id}`, ref);
+            const composite = this.sync.makeCompositeId(it, account.accountNo, account.bank.code);
+            if (composite) neighborBankByKey.set(`ext:${composite}`, ref);
+          }
+        }
+      }
+    }
+
+    const dbOnly = unmatchedDb.map((tx) => {
+      // Qo'shni kunlar bank yozuvlari ichida tekshiramiz — sana siljish (date shift)
+      // holatini aniqlash uchun. Agar topilsa, foundOnBankDate to'ldiriladi.
+      const neighborKeys = [
+        tx.bankB2Id ? `b2:${tx.bankB2Id}` : null,
+        tx.bankGeneralId ? `gen:${tx.bankGeneralId}` : null,
+        tx.externalId ? `ext:${tx.externalId}` : null,
+      ].filter(Boolean) as string[];
+      let foundOnBankDate: string | null = null;
+      for (const k of neighborKeys) {
+        const m = neighborBankByKey.get(k);
+        if (m) { foundOnBankDate = m.onDate; break; }
+      }
+      return {
+        id: tx.id,
+        externalId: tx.externalId,
+        b2Id: tx.bankB2Id,
+        generalId: tx.bankGeneralId,
+        docNumber: tx.docNumber,
+        direction: tx.direction,
+        amount: Number(tx.amount),
+        fromAccount: tx.fromAccount,
+        fromName: tx.fromName,
+        toAccount: tx.toAccount,
+        toName: tx.toName,
+        description: tx.description,
+        // Bank atrofdagi kunlarda topilgan bo'lsa — sana siljish indikatori
+        foundOnBankDate,
+      };
+    });
 
     // Summa farqi totallari
     const amountMismatchDiffSum = amountMismatch.reduce((s, x) => s + (x.diff || 0), 0);
