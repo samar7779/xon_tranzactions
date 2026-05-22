@@ -287,7 +287,7 @@ export class OplataKvService {
         purpose: tx.description || null,
         txType: 'Взносы за квартиры',
         client: crm?.customerName || tx.fromName || null,
-        object: crm?.objectName || null,
+        object: mapObject(crm?.objectName),
         sourceTxId: dedupKey,
         createdByName: actorName,
       };
@@ -309,7 +309,7 @@ export class OplataKvService {
               paymentAmount: amount,
               purpose: tx.description || null,
               client: crm?.customerName || tx.fromName || null,
-              object: crm?.objectName || null,
+              object: mapObject(crm?.objectName),
             };
             await this.prisma.oplataKv.update({
               where: { id: existing.id },
@@ -371,6 +371,42 @@ export class OplataKvService {
       duration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
     };
+  }
+
+  // ───────────────── OBJECT MAPPING (CRM nomi → OplatyKv nomi) ─────────────────
+  async listObjectMappings() {
+    const items = await this.prisma.oplataKvObjectMapping.findMany({
+      orderBy: { crmName: 'asc' },
+    });
+    return { ok: true, items };
+  }
+
+  async createObjectMapping(crmName: string, oplataName: string, actor: Actor) {
+    const cn = crmName?.trim();
+    const on = oplataName?.trim();
+    if (!cn || !on) throw new BadRequestException("CRM va OplatyKv nomi bo'sh bo'lmasligi kerak");
+    try {
+      const item = await this.prisma.oplataKvObjectMapping.create({
+        data: {
+          crmName: cn,
+          oplataName: on,
+          createdByName: actor.name ?? null,
+        },
+      });
+      return { ok: true, item };
+    } catch (e: any) {
+      if (e?.code === 'P2002') throw new BadRequestException(`'${cn}' uchun mapping allaqachon mavjud`);
+      throw e;
+    }
+  }
+
+  async deleteObjectMapping(id: string) {
+    try {
+      await this.prisma.oplataKvObjectMapping.delete({ where: { id } });
+      return { ok: true };
+    } catch {
+      throw new NotFoundException('Mapping topilmadi');
+    }
   }
 
   /**

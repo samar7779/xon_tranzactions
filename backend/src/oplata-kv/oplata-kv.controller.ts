@@ -118,6 +118,30 @@ export class OplataKvController {
     return this.svc.syncFromTransactions({ minDate, actor: actorFrom(user) });
   }
 
+  @Get('object-mappings')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Obyekt nomi mapping ro'yxati (CRM -> OplatyKv)" })
+  listObjectMappings() {
+    return this.svc.listObjectMappings();
+  }
+
+  @Post('object-mappings')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Yangi obyekt mapping qo'shish" })
+  createObjectMapping(
+    @Body() body: { crmName: string; oplataName: string },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.createObjectMapping(body.crmName, body.oplataName, actorFrom(user));
+  }
+
+  @Delete('object-mappings/:id')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Mapping o'chirish" })
+  deleteObjectMapping(@Param('id') id: string) {
+    return this.svc.deleteObjectMapping(id);
+  }
+
   @Delete('cleanup-tx-source')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish — optional date range" })
