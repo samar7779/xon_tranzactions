@@ -172,6 +172,15 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   txTypes?: string;
 
+  // ─── Distinct endpoint uchun (ListOplataKvDto qayta ishlatilgani uchun) ───
+  @ApiPropertyOptional({ description: 'Distinct uchun ustun nomi (faqat /distinct endpoint)' })
+  @IsOptional() @IsString()
+  column?: string;
+
+  @ApiPropertyOptional({ description: "Distinct popoveridagi qidiruv (faqat /distinct)" })
+  @IsOptional() @IsString()
+  search?: string;
+
   @ApiPropertyOptional({ description: 'Tartiblash maydoni' })
   @IsOptional() @IsIn(['date', 'createdAt', 'updatedAt', 'paymentAmount', 'firstInstallment', 'monthlyAmount', 'contractNo'])
   sortBy?: 'date' | 'createdAt' | 'updatedAt' | 'paymentAmount' | 'firstInstallment' | 'monthlyAmount' | 'contractNo';
