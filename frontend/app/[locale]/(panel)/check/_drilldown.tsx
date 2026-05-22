@@ -154,6 +154,13 @@ export function AccountDrilldown({
     fallbackUsed?: boolean;
     fallbackSource?: 'GetDocuments' | null;
     fallbackError?: string | null;
+    _debug?: {
+      searchedDates: string[];
+      itemsPerDate: Record<string, number>;
+      neighborIndexSize: number;
+      foundByNeighborCount: number;
+      unmatchedDbCount: number;
+    };
   }>({
     queryKey: ['diagnose', item.accountId, dateFrom],
     queryFn: () => api.post('/transactions/reconcile/diagnose', {
@@ -394,6 +401,13 @@ function DiagnoseResult({
     fallbackUsed?: boolean;
     fallbackSource?: 'GetDocuments' | null;
     fallbackError?: string | null;
+    _debug?: {
+      searchedDates: string[];
+      itemsPerDate: Record<string, number>;
+      neighborIndexSize: number;
+      foundByNeighborCount: number;
+      unmatchedDbCount: number;
+    };
   };
   accountId: string;
   date: string;
@@ -402,6 +416,15 @@ function DiagnoseResult({
   const mismatch = data.amountMismatch || [];
   return (
     <div className="space-y-3">
+      {data._debug && (
+        <div className="rounded-lg bg-slate-100 ring-1 ring-slate-300 p-2.5 text-[10px] font-mono text-slate-700 space-y-0.5">
+          <div className="font-bold text-slate-900">DEBUG (vaqtinchalik)</div>
+          <div>Qidirilgan kunlar: {data._debug.searchedDates.join(', ') || '(yo\'q)'}</div>
+          <div>Har kunda content[] hajmi: {Object.entries(data._debug.itemsPerDate).map(([d, n]) => `${d}=${n}`).join(' · ')}</div>
+          <div>Neighbor indeks o'lchami (b2/gen/ext kalitlar): <b>{data._debug.neighborIndexSize}</b></div>
+          <div>Unmatched DB: <b>{data._debug.unmatchedDbCount}</b> · Ulardan neighbor'da topilgan: <b className="text-emerald-700">{data._debug.foundByNeighborCount}</b></div>
+        </div>
+      )}
       <div className="flex items-center gap-4 text-[12px] text-slate-600 flex-wrap">
         <span>Bankda: <b className="text-slate-900">{data.bankCount}</b></span>
         <span>AllTranzactions: <b className="text-slate-900">{data.dbCount}</b></span>

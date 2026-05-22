@@ -523,6 +523,8 @@ export class ReconcileService {
     // Inspector tool kabi ±2 kun atrofini tekshiramiz — yozuv 12-15.05 oraliqda
     // istalgan joyda bo'lishi mumkin. dbOnly'ga qo'shishdan oldin neighbor'larda topish.
     const neighborBankByKey = new Map<string, { onDate: string; item: any }>();
+    const debugSearchedDates: string[] = [];
+    const debugItemCounts: Record<string, number> = {};
     if (bank.apiKind === 'KAPITALBANK_V3') {
       const baseDate = new Date(`${date}T00:00:00+05:00`);
       const neighbors = [-2, -1, 1, 2].map((offset) => {
@@ -549,6 +551,8 @@ export class ReconcileService {
         }),
       );
       for (const day of results) {
+        debugSearchedDates.push(day.isoDate);
+        debugItemCounts[day.isoDate] = day.items.length;
         for (const it of day.items) {
           // Faqat shu hisobga oid yozuvlar
           if (it.acc_dt !== account.accountNo && it.acc_ct !== account.accountNo) continue;
@@ -799,6 +803,8 @@ export class ReconcileService {
           }),
         );
         for (const day of extraResults) {
+          debugSearchedDates.push(day.isoDate);
+          debugItemCounts[day.isoDate] = day.items.length;
           for (const it of day.items) {
             if (it.acc_dt !== account.accountNo && it.acc_ct !== account.accountNo) continue;
             const ref = { onDate: day.isoDate, item: it };
@@ -845,6 +851,9 @@ export class ReconcileService {
     // Summa farqi totallari
     const amountMismatchDiffSum = amountMismatch.reduce((s, x) => s + (x.diff || 0), 0);
 
+    // Debug ma'lumoti — qaysi sanalarni qidirdik, nima topdik
+    const foundByNeighborCount = dbOnly.filter((x) => x.foundOnBankDate).length;
+
     return {
       ok: true,
       date,
@@ -855,6 +864,14 @@ export class ReconcileService {
       matchedCount: matchedDbIds.size,
       bankOnly,
       dbOnly,
+      // DEBUG: neighbor qidiruv natijasi
+      _debug: {
+        searchedDates: debugSearchedDates.sort(),
+        itemsPerDate: debugItemCounts,
+        neighborIndexSize: neighborBankByKey.size,
+        foundByNeighborCount,
+        unmatchedDbCount: unmatchedDb.length,
+      },
       // Yangi: summa nomos kelgan yozuvlar (ID mos, summa farqli)
       amountMismatch,
       amountMismatchCount: amountMismatch.length,
