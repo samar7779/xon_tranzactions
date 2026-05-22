@@ -513,7 +513,7 @@ export class OplataKvService {
     const [oplataItems, crmResp] = await Promise.all([
       this.prisma.oplataKv.findMany({
         where: { contractNo: cn },
-        orderBy: { date: 'asc' },
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       }),
       this.crmService.show({ contract: cn }).catch((e) => ({ ok: false, error: e?.message || 'CRM xato' })),
     ]);
@@ -602,7 +602,7 @@ export class OplataKvService {
     }
     const items = await this.prisma.oplataKv.findMany({
       where: { contractNo: contractNo.trim() },
-      orderBy: { date: 'asc' },
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
     const sums = {
       paymentAmount:    items.reduce((s, i) => s + Number(i.paymentAmount    || 0), 0),
