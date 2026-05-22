@@ -30,6 +30,15 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clock, setClock] = useState('00:00:00');
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Mobile aniqlash — ShowcaseStage'ni DOM'dan butunlay olib tashlaymiz
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   useEffect(() => {
     if (hasHydrated && token) router.replace(`/${locale}/dashboard`);
@@ -75,13 +84,15 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative w-full md:w-screen md:h-screen md:overflow-hidden font-sans text-white">
+    <div className="relative w-full overflow-x-hidden md:w-screen md:h-screen md:overflow-hidden font-sans text-white">
       {/* ============ DESKTOP (md+) ============ */}
-      {/* Background: showcase animatsiyasi */}
-      <div className={`hidden md:block absolute inset-0 transition-all duration-700 ease-out
-                       ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
-        <ShowcaseStage />
-      </div>
+      {/* Background: showcase animatsiyasi — mobile'da DOM'da umuman bo'lmaydi */}
+      {!isMobile && (
+        <div className={`hidden md:block absolute inset-0 transition-all duration-700 ease-out
+                         ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
+          <ShowcaseStage />
+        </div>
+      )}
       {/* Vignette overlay — panel ochilganda chap tomon biroz qoraytadi (faqat desktop) */}
       <div className={`hidden md:block absolute inset-0 pointer-events-none transition-opacity duration-700
                        ${open ? 'opacity-100' : 'opacity-0'}`}
