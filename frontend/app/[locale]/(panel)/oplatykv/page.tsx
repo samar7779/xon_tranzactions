@@ -52,6 +52,7 @@ interface OplataKvItem {
   createdByName: string | null;
   importBatchId?: string | null;
   sourceTxId?: string | null;
+  crmXato?: boolean;
 }
 
 // Manba (qaysi yo'l bilan qo'shilgan) — manual / excel / transaction
@@ -569,7 +570,19 @@ export default function OplataKvPage() {
                     className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
                     onClick={() => setDetailRow(it)}
                   >
-                    <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">{it.contractNo}</td>
+                    <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">
+                      <span className="inline-flex items-center gap-1.5">
+                        {it.contractNo}
+                        {it.crmXato && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                            title="CRM da topilmadi — Tranzaksiyada to'g'rilang (Qo'lda yoki Ariza)"
+                          >
+                            XATO
+                          </span>
+                        )}
+                      </span>
+                    </td>
                     <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
                     <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
                     <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.firstInstallment))}>
@@ -1665,9 +1678,22 @@ function OplataKvDetailDialog({
                   {catLabel}
                 </span>
               )}
+              {row.crmXato && (
+                <span
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-rose-500/30 ring-rose-300/50 text-rose-50 whitespace-nowrap"
+                  title="CRM da TOPILMADI — Tranzaksiyada to'g'rilang"
+                >
+                  ⚠ XATO
+                </span>
+              )}
             </div>
             <div className="text-[12px] text-white/80 mt-1.5">
               {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
+              {row.crmXato && (
+                <span className="ml-2 text-rose-200 text-[11px]">
+                  · CRM da topilmadi
+                </span>
+              )}
             </div>
           </div>
         </div>

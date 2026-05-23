@@ -297,38 +297,55 @@ function SyncSettingsPanel() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['sync-settings'],
-    queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null; oplatykvTxMinDate: string | null; oplatykvAutoSyncMinutes: number }>('/sync/settings'),
+    queryFn: () => api.get<{
+      ok: boolean;
+      syncMinDate: string | null;
+      oplatykvTxMinDate: string | null;
+      oplatykvAutoSyncMinutes: number;
+      oplatykvDayStart: string;
+      oplatykvDayEnd: string;
+      oplatykvNightStart: string;
+      oplatykvNightEnd: string;
+      oplatykvAutoXatoCleanup: boolean;
+    }>('/sync/settings'),
   });
   const [syncMinDate, setSyncMinDate] = useState<string>('');
   const [oplatykvTxMinDate, setOplatykvTxMinDate] = useState<string>('');
   const [oplatykvAutoSyncMinutes, setOplatykvAutoSyncMinutes] = useState<string>('0');
+  const [dayStart, setDayStart] = useState<string>('08:00');
+  const [dayEnd, setDayEnd] = useState<string>('22:00');
+  const [nightStart, setNightStart] = useState<string>('01:00');
+  const [nightEnd, setNightEnd] = useState<string>('07:50');
+  const [autoXato, setAutoXato] = useState<boolean>(false);
   const [dirty1, setDirty1] = useState(false);
   const [dirty2, setDirty2] = useState(false);
   const [dirty3, setDirty3] = useState(false);
+  const [dirty4, setDirty4] = useState(false);  // time windows
+  const [dirty5, setDirty5] = useState(false);  // auto xato
 
   useEffect(() => {
-    if (data?.syncMinDate !== undefined) {
-      setSyncMinDate(data.syncMinDate || '');
-      setDirty1(false);
-    }
-    if (data?.oplatykvTxMinDate !== undefined) {
-      setOplatykvTxMinDate(data.oplatykvTxMinDate || '');
-      setDirty2(false);
-    }
-    if (data?.oplatykvAutoSyncMinutes !== undefined) {
-      setOplatykvAutoSyncMinutes(String(data.oplatykvAutoSyncMinutes || 0));
-      setDirty3(false);
-    }
-  }, [data?.syncMinDate, data?.oplatykvTxMinDate, data?.oplatykvAutoSyncMinutes]);
+    if (data?.syncMinDate !== undefined) { setSyncMinDate(data.syncMinDate || ''); setDirty1(false); }
+    if (data?.oplatykvTxMinDate !== undefined) { setOplatykvTxMinDate(data.oplatykvTxMinDate || ''); setDirty2(false); }
+    if (data?.oplatykvAutoSyncMinutes !== undefined) { setOplatykvAutoSyncMinutes(String(data.oplatykvAutoSyncMinutes || 0)); setDirty3(false); }
+    if (data?.oplatykvDayStart) { setDayStart(data.oplatykvDayStart); setDirty4(false); }
+    if (data?.oplatykvDayEnd) { setDayEnd(data.oplatykvDayEnd); }
+    if (data?.oplatykvNightStart) { setNightStart(data.oplatykvNightStart); }
+    if (data?.oplatykvNightEnd) { setNightEnd(data.oplatykvNightEnd); }
+    if (data?.oplatykvAutoXatoCleanup !== undefined) { setAutoXato(data.oplatykvAutoXatoCleanup); setDirty5(false); }
+  }, [data?.syncMinDate, data?.oplatykvTxMinDate, data?.oplatykvAutoSyncMinutes, data?.oplatykvDayStart, data?.oplatykvDayEnd, data?.oplatykvNightStart, data?.oplatykvNightEnd, data?.oplatykvAutoXatoCleanup]);
 
   const mut = useMutation({
-    mutationFn: (vals: { syncMinDate?: string | null; oplatykvTxMinDate?: string | null; oplatykvAutoSyncMinutes?: number | null }) =>
-      api.patch<any>('/sync/settings', vals),
+    mutationFn: (vals: any) => api.patch<any>('/sync/settings', vals),
     onSuccess: (r: any) => {
       toast.success("Sozlama saqlandi");
       if (r.syncMinDate !== undefined) { setSyncMinDate(r.syncMinDate || ''); setDirty1(false); }
       if (r.oplatykvTxMinDate !== undefined) { setOplatykvTxMinDate(r.oplatykvTxMinDate || ''); setDirty2(false); }
       if (r.oplatykvAutoSyncMinutes !== undefined) { setOplatykvAutoSyncMinutes(String(r.oplatykvAutoSyncMinutes || 0)); setDirty3(false); }
+      if (r.oplatykvDayStart) { setDayStart(r.oplatykvDayStart); setDirty4(false); }
+      if (r.oplatykvDayEnd) setDayEnd(r.oplatykvDayEnd);
+      if (r.oplatykvNightStart) setNightStart(r.oplatykvNightStart);
+      if (r.oplatykvNightEnd) setNightEnd(r.oplatykvNightEnd);
+      if (r.oplatykvAutoXatoCleanup !== undefined) { setAutoXato(r.oplatykvAutoXatoCleanup); setDirty5(false); }
       qc.invalidateQueries({ queryKey: ['sync-settings'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
@@ -604,18 +621,6 @@ function SyncSettingsPanel() {
                   {splitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Split now
                 </Button>
-                <Button
-                  onClick={() => {
-                    if (!confirm("Tx-manba qatorlardan CRM da TOPILMAGAN shartnomalarni o'chirishni xohlaysizmi?\n\nFaqat sourceTxId bor va shartnoma CRM'da yo'q bo'lganlar.")) return;
-                    cleanupXatoMut.mutate();
-                  }}
-                  disabled={cleanupXatoMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
-                  title="CRM da topilmagan tx-manba qatorlarni o'chirish (XATO cleanup)"
-                >
-                  {cleanupXatoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                  XATO cleanup
-                </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
@@ -662,10 +667,44 @@ function SyncSettingsPanel() {
                   </div>
                 </div>
                 <div className="text-[10.5px] text-slate-400 mt-2">
-                  Misol: <b>30</b> qo'ysangiz — backend har 30 daqiqada avtomatik tx-dan sync qiladi (object + client + installment split bilan).
-                  <br />
-                  Tavsiya: <b>30-60</b> daqiqa (CRM API zo'r turlmasligi uchun). 0 yoki bo'sh — faqat qo'lda "Hozir sync".
+                  Misol: <b>15</b> qo'ysangiz — backend har 15 daqiqada avtomatik tx-dan sync qiladi.
                 </div>
+
+                {/* DAY/NIGHT TIME WINDOWS */}
+                <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-600 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5" /> Vaqt oraliqlari (Tashkent)
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* DAY mode */}
+                    <div className="rounded-xl bg-amber-50/50 ring-1 ring-amber-200 p-3 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">☀ KUNDUZ ({oplatykvAutoSyncMinutes}min, limit 1000)</div>
+                      <div className="flex items-center gap-2">
+                        <Input type="time" value={dayStart} onChange={(e) => { setDayStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
+                        <span className="text-slate-400">—</span>
+                        <Input type="time" value={dayEnd} onChange={(e) => { setDayEnd(e.target.value); setDirty4(true); }} className="h-9 w-28" />
+                      </div>
+                    </div>
+                    {/* NIGHT batch */}
+                    <div className="rounded-xl bg-indigo-50/50 ring-1 ring-indigo-200 p-3 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">🌙 TUN (kuniga 1, FULL batch)</div>
+                      <div className="flex items-center gap-2">
+                        <Input type="time" value={nightStart} onChange={(e) => { setNightStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
+                        <span className="text-slate-400">—</span>
+                        <Input type="time" value={nightEnd} onChange={(e) => { setNightEnd(e.target.value); setDirty4(true); }} className="h-9 w-28" />
+                      </div>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => mut.mutate({ oplatykvDayStart: dayStart, oplatykvDayEnd: dayEnd, oplatykvNightStart: nightStart, oplatykvNightEnd: nightEnd })}
+                    disabled={!dirty4 || mut.isPending}
+                    className="h-9 px-4 gap-2 bg-slate-600 hover:bg-slate-700 text-white text-[12px]"
+                  >
+                    {mut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                    Vaqtlarni saqlash
+                  </Button>
+                </div>
+
               </div>
 
               {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}
