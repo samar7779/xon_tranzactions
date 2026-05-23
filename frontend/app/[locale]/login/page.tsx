@@ -104,24 +104,29 @@ export default function LoginPage() {
             <LanguageSwitcher />
           </div>
 
-          {/* KIRISH tugmasi — top-right corner */}
+          {/* KIRISH tugmasi — futuristic stil, burchak braket'lar bilan */}
           <button
             onClick={() => setOpen(true)}
-            className="group relative h-11 sm:h-12 px-5 sm:px-7 rounded-2xl overflow-hidden
-                       bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500
-                       ring-2 ring-amber-200/60
-                       shadow-[0_15px_40px_-10px_rgba(245,158,11,0.8),inset_0_1px_0_rgba(255,255,255,0.4)]
+            className="group relative h-11 sm:h-12 px-6 sm:px-8 overflow-hidden
+                       bg-gradient-to-br from-amber-600 via-amber-400 to-amber-600
+                       text-slate-900
+                       ring-1 ring-amber-200/90
+                       shadow-[0_0_25px_-3px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-2px_0_rgba(120,53,15,0.3)]
+                       hover:shadow-[0_0_45px_-3px_rgba(245,158,11,1)]
                        hover:scale-[1.05] active:scale-95
                        transition-all duration-300"
+            style={{ clipPath: 'polygon(8% 0%, 100% 0%, 92% 100%, 0% 100%)' }}
           >
+            {/* Inner gradient sheen */}
+            <span className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
+            {/* Sweep highlight */}
             <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                             bg-gradient-to-r from-transparent via-white/40 to-transparent
-                             transition-transform duration-1000 ease-out" />
-            <span className="absolute inset-0 rounded-2xl ring-2 ring-amber-300/60 animate-ping" style={{ animationDuration: '2.5s' }} />
-            <span className="relative flex items-center justify-center gap-2 text-slate-900 font-bold tracking-[0.18em] uppercase text-[12px] sm:text-[13px]">
-              <LogIn className="h-4 w-4 sm:h-4 sm:w-4" />
+                             bg-gradient-to-r from-transparent via-white/60 to-transparent
+                             transition-transform duration-700 ease-out" />
+            <span className="relative flex items-center justify-center gap-2.5 font-black tracking-[0.22em] uppercase text-[12px] sm:text-[14px]">
+              <LogIn className="h-4 w-4" />
               {t('submit')}
-              <ArrowRight className="h-4 w-4 hidden sm:inline-block" />
+              <ArrowRight className="h-4 w-4 hidden sm:inline-block transition-transform group-hover:translate-x-1" />
             </span>
           </button>
         </div>
