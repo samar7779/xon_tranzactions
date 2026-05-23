@@ -154,12 +154,29 @@ export class OplataKvController {
 
   @Post('split-installments')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
-  @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM payment_histories asosida)" })
+  @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM asosida)" })
   async splitInstallments(
     @Body() body: { limit?: number },
     @CurrentUser() user?: AuthUser,
   ) {
     return this.svc.splitInstallments({ limit: body?.limit, actor: actorFrom(user) });
+  }
+
+  @Post(':id/split')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Bitta qator uchun split — shu shartnoma bo'yicha qayta hisoblaydi (force)" })
+  async splitOne(
+    @Param('id') id: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    const row = await this.svc.findOne(id);
+    const contractNo = (row as any)?.item?.contractNo;
+    if (!contractNo) throw new BadRequestException('Shartnoma raqami topilmadi');
+    return this.svc.splitInstallments({
+      contractNo,
+      force: true,
+      actor: actorFrom(user),
+    });
   }
 
   @Delete('cleanup-tx-source')

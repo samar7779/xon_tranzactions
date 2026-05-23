@@ -705,18 +705,32 @@ export class OplataKvService {
    *   - refund <= running_monthly -> hammasi monthly
    *   - refund > running_monthly -> monthly=running_monthly, qolgan -> initial
    */
-  async splitInstallments(opts: { limit?: number; actor?: Actor } = {}) {
+  async splitInstallments(opts: { limit?: number; contractNo?: string; force?: boolean; actor?: Actor } = {}) {
     const startedAt = Date.now();
     const limit = Math.min(opts.limit || 5000, 20000);
 
-    // Faqat tranzaksiya-manba + paymentAmount bor + ajratish qilinmagan
+    // Filter: agar contractNo berilsa — faqat shu shartnoma uchun
+    // force=true bo'lsa firstInstallment/monthlyAmount bor bo'lsa ham qayta hisoblaydi
+    const where: Prisma.OplataKvWhereInput = {
+      sourceTxId: { not: null },
+      paymentAmount: { not: null },
+    };
+    if (opts.contractNo) where.contractNo = opts.contractNo;
+    if (!opts.force) {
+      where.firstInstallment = null;
+      where.monthlyAmount = null;
+    }
+
+    // Agar contractNo bo'yicha force re-split bo'lsa, hozirgi qiymatlarni reset qilamiz
+    if (opts.contractNo && opts.force) {
+      await this.prisma.oplataKv.updateMany({
+        where: { contractNo: opts.contractNo, sourceTxId: { not: null } },
+        data: { firstInstallment: null, monthlyAmount: null, paymentCategory: null },
+      });
+    }
+
     const rows = await this.prisma.oplataKv.findMany({
-      where: {
-        sourceTxId: { not: null },
-        paymentAmount: { not: null },
-        firstInstallment: null,
-        monthlyAmount: null,
-      },
+      where,
       select: { id: true, contractNo: true, date: true, paymentAmount: true },
       orderBy: { date: 'asc' },
       take: limit,
@@ -752,21 +766,24 @@ export class OplataKvService {
       const batch = contractsArr.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async ([contractNo, items]) => {
         try {
-          // CRM'dan detail
+          // CRM'dan detail (initial plan summasi va payment_histories)
           const resp: any = await this.crmService.show({ contract: contractNo });
-          if (!resp?.ok || !resp.detail?.payment_histories) {
+          if (!resp?.ok || !resp.detail) {
             notFound += items.length;
             return;
           }
-          const histories = resp.detail.payment_histories as any[];
+          const detail = resp.detail;
+          // CRM dagi initial total reja (1-vznos jami summasi shartnoma bo'yicha)
+          const initialPlan = Number(detail?.initial?.total?.amount || 0);
 
-          // Eski running_monthly — shu contractda BU BATCH'gacha bo'lgan jami
+          // Eski running totals — shu contractda BU BATCH'gacha bo'lgan jami
           const firstDate = items[0].date;
-          const existing = await this.prisma.oplataKv.aggregate({
-            where: { contractNo, date: { lt: firstDate }, monthlyAmount: { not: null } },
-            _sum: { monthlyAmount: true },
+          const existingSums = await this.prisma.oplataKv.aggregate({
+            where: { contractNo, date: { lt: firstDate } },
+            _sum: { firstInstallment: true, monthlyAmount: true },
           });
-          let runningMonthly = Number(existing._sum.monthlyAmount || 0);
+          let runningInitial = Number(existingSums._sum.firstInstallment || 0);
+          let runningMonthly = Number(existingSums._sum.monthlyAmount || 0);
 
           // Date asc tartibida — running balance to'g'ri ishlashi uchun
           items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -778,45 +795,53 @@ export class OplataKvService {
             let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
 
             if (amount > 0) {
-              // Match CRM history by date + amount
-              const match = histories.find((h: any) =>
-                sameDate(h.date_paid, item.date) &&
-                Math.abs(Number(h.amount || 0) - amount) < 0.01,
-              );
-              if (match) {
-                const typeKey = String(match.type?.key || '').toLowerCase();
-                if (typeKey.includes('init') || typeKey.includes('boshlang') || typeKey.includes('перво')) {
-                  firstInstallment = amount;
-                  category = 'FIRST';
-                } else {
-                  monthlyAmount = amount;
-                  category = 'MONTHLY';
-                  runningMonthly += amount;
-                }
-              } else {
-                // Mos kelmasa default monthly
+              // POZITIV — initialPlan chegarasiga qarab ajratamiz
+              // runningInitial = shu contractda hozirgacha jami 1-vznos
+              // remaining = initialPlan - runningInitial (qancha qoldi)
+              const remainingInitial = initialPlan > 0
+                ? Math.max(0, initialPlan - runningInitial)
+                : 0;
+
+              if (initialPlan <= 0 || remainingInitial <= 0) {
+                // Initial yo'q yoki to'liq to'langan -> hammasi monthly
                 monthlyAmount = amount;
-                category = 'MONTHLY';
                 runningMonthly += amount;
+              } else if (remainingInitial >= amount) {
+                // Hammasi initialga sig'adi
+                firstInstallment = amount;
+                runningInitial += amount;
+              } else {
+                // SPLIT — bir qismi initial, qolgani monthly
+                firstInstallment = remainingInitial;
+                monthlyAmount = amount - remainingInitial;
+                runningInitial += remainingInitial;
+                runningMonthly += monthlyAmount;
               }
             } else if (amount < 0) {
-              // Refund — avval monthly, yetmasa initial'ga
-              const refund = -amount; // pozitiv
+              // NEGATIV (refund) — avval monthly'dan, yetmasa initial'dan
+              const refund = -amount;
               if (refund <= runningMonthly) {
-                monthlyAmount = amount; // hammasi monthly (negative)
+                monthlyAmount = amount;
                 runningMonthly -= refund;
-                category = 'MONTHLY';
-              } else {
+              } else if (runningMonthly > 0) {
                 // Split: monthly o'zining qancha bo'lsa shuncha oladi, qolgani initial'dan
                 monthlyAmount = -runningMonthly;
                 firstInstallment = -(refund - runningMonthly);
+                runningInitial -= refund - runningMonthly;
                 runningMonthly = 0;
-                category = 'GENERAL';
+              } else {
+                // Monthly umuman yo'q — hammasi initial'dan
+                firstInstallment = amount;
+                runningInitial -= refund;
               }
             } else {
-              // amount = 0 — hech narsa
-              continue;
+              continue; // 0 - hech narsa
             }
+
+            // Category aniqlash
+            if (firstInstallment !== 0 && monthlyAmount !== 0) category = 'GENERAL';
+            else if (firstInstallment !== 0) category = 'FIRST';
+            else category = 'MONTHLY';
 
             await this.prisma.oplataKv.update({
               where: { id: item.id },
