@@ -866,7 +866,7 @@ enum OplataKvCategory {
 
 model OplataKvHistory {
   id              String   @id @default(cuid())
-  oplataKvId      String   @map("oplata_kv_id") @db.VarChar(50)        // OplataKv.id — FK emas (o'chirilgandan keyin ham qoladi)
+  oplataKvId      String   @map("oplata_kv_id") @db.VarChar(255)       // OplataKv.id (externalId — bank kompozit 75+) — FK emas
 
   action          String   @db.VarChar(20)                            // created | edited | deleted | imported
   actorType       String   @map("actor_type") @db.VarChar(10)         // user | system
