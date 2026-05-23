@@ -451,22 +451,27 @@ export class OplataKvService {
     // Foydalanuvchi sahifani yangilab ko'rishi mumkin — qatorlar asta to'ldiriladi.
     if (!OplataKvService.fillingInProgress) {
       OplataKvService.fillingInProgress = true;
-      setImmediate(() => {
-        this.fillMissingObjects({ limit: 20000, actor: opts.actor })
-          .then((r) => {
-            this.log.log(
-              `background fillMissingObjects DONE: scanned=${r.total} filled=${r.filled} notFound=${r.notFound} errors=${r.errors} duration=${r.duration}s`,
-            );
-          })
-          .catch((e) => {
-            this.log.warn(`background fillMissingObjects xato: ${e?.message}`);
-          })
-          .finally(() => {
-            OplataKvService.fillingInProgress = false;
-          });
+      setImmediate(async () => {
+        try {
+          // 1. Object + Client
+          const objR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+          this.log.log(
+            `bg fillMissingObjects DONE: scanned=${objR.total} filled=${objR.filled} notFound=${objR.notFound} errors=${objR.errors} duration=${objR.duration}s`,
+          );
+          // 2. Installment split (CRM payment_histories asosida)
+          const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+          this.log.log(
+            `bg splitInstallments DONE: scanned=${splitR.total} contracts=${splitR.contracts} ` +
+            `filled=${splitR.filled} notFound=${splitR.notFound} errors=${splitR.errors} duration=${splitR.duration}s`,
+          );
+        } catch (e: any) {
+          this.log.warn(`bg job xato: ${e?.message}`);
+        } finally {
+          OplataKvService.fillingInProgress = false;
+        }
       });
     } else {
-      this.log.log('background fillMissingObjects: avval boshlanganini kutmoqda, yangi sync uchun ishga tushirilmadi');
+      this.log.log('bg job: avval boshlanganini kutmoqda, yangi sync uchun ishga tushirilmadi');
     }
 
     const totalDuration = Math.round((Date.now() - startedAt) / 1000);
@@ -644,6 +649,165 @@ export class OplataKvService {
       ok: true,
       total: rows.length,
       uniqueContracts: uniqueContracts.length,
+      filled,
+      notFound,
+      errors,
+      duration,
+    };
+  }
+
+  /**
+   * Tranzaksiyadan kelgan qatorlarda paymentAmount BOR lekin firstInstallment va
+   * monthlyAmount yo'q bo'lganlarni CRM payment_histories asosida ajratish.
+   *
+   * Mantiq:
+   * - amount > 0: CRM payment_histories'dan date+amount bilan mos kelgan history topiladi
+   *   - type=initial -> firstInstallment, paymentCategory=FIRST
+   *   - type=monthly -> monthlyAmount, paymentCategory=MONTHLY
+   *   - Mos kelmasa -> default monthly
+   * - amount < 0 (refund): avval monthly'ga, yetmasa qolgani initial'ga
+   *   - running_monthly (shu contractda shu sanagacha jami monthlyAmount)
+   *   - refund <= running_monthly -> hammasi monthly
+   *   - refund > running_monthly -> monthly=running_monthly, qolgan -> initial
+   */
+  async splitInstallments(opts: { limit?: number; actor?: Actor } = {}) {
+    const startedAt = Date.now();
+    const limit = Math.min(opts.limit || 5000, 20000);
+
+    // Faqat tranzaksiya-manba + paymentAmount bor + ajratish qilinmagan
+    const rows = await this.prisma.oplataKv.findMany({
+      where: {
+        sourceTxId: { not: null },
+        paymentAmount: { not: null },
+        firstInstallment: null,
+        monthlyAmount: null,
+      },
+      select: { id: true, contractNo: true, date: true, paymentAmount: true },
+      orderBy: { date: 'asc' },
+      take: limit,
+    });
+    if (rows.length === 0) {
+      return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    }
+
+    // Contract bo'yicha guruhlash
+    const byContract = new Map<string, typeof rows>();
+    for (const r of rows) {
+      const arr = byContract.get(r.contractNo) || [];
+      arr.push(r);
+      byContract.set(r.contractNo, arr);
+    }
+
+    let filled = 0;
+    let notFound = 0;
+    let errors = 0;
+
+    const sameDate = (a: any, b: any): boolean => {
+      if (!a || !b) return false;
+      try {
+        const da = new Date(a).toISOString().slice(0, 10);
+        const db = new Date(b).toISOString().slice(0, 10);
+        return da === db;
+      } catch { return false; }
+    };
+
+    const CONCURRENCY = 10;
+    const contractsArr = Array.from(byContract.entries());
+    for (let i = 0; i < contractsArr.length; i += CONCURRENCY) {
+      const batch = contractsArr.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async ([contractNo, items]) => {
+        try {
+          // CRM'dan detail
+          const resp: any = await this.crmService.show({ contract: contractNo });
+          if (!resp?.ok || !resp.detail?.payment_histories) {
+            notFound += items.length;
+            return;
+          }
+          const histories = resp.detail.payment_histories as any[];
+
+          // Eski running_monthly — shu contractda BU BATCH'gacha bo'lgan jami
+          const firstDate = items[0].date;
+          const existing = await this.prisma.oplataKv.aggregate({
+            where: { contractNo, date: { lt: firstDate }, monthlyAmount: { not: null } },
+            _sum: { monthlyAmount: true },
+          });
+          let runningMonthly = Number(existing._sum.monthlyAmount || 0);
+
+          // Date asc tartibida — running balance to'g'ri ishlashi uchun
+          items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+          for (const item of items) {
+            const amount = Number(item.paymentAmount);
+            let firstInstallment = 0;
+            let monthlyAmount = 0;
+            let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
+
+            if (amount > 0) {
+              // Match CRM history by date + amount
+              const match = histories.find((h: any) =>
+                sameDate(h.date_paid, item.date) &&
+                Math.abs(Number(h.amount || 0) - amount) < 0.01,
+              );
+              if (match) {
+                const typeKey = String(match.type?.key || '').toLowerCase();
+                if (typeKey.includes('init') || typeKey.includes('boshlang') || typeKey.includes('перво')) {
+                  firstInstallment = amount;
+                  category = 'FIRST';
+                } else {
+                  monthlyAmount = amount;
+                  category = 'MONTHLY';
+                  runningMonthly += amount;
+                }
+              } else {
+                // Mos kelmasa default monthly
+                monthlyAmount = amount;
+                category = 'MONTHLY';
+                runningMonthly += amount;
+              }
+            } else if (amount < 0) {
+              // Refund — avval monthly, yetmasa initial'ga
+              const refund = -amount; // pozitiv
+              if (refund <= runningMonthly) {
+                monthlyAmount = amount; // hammasi monthly (negative)
+                runningMonthly -= refund;
+                category = 'MONTHLY';
+              } else {
+                // Split: monthly o'zining qancha bo'lsa shuncha oladi, qolgani initial'dan
+                monthlyAmount = -runningMonthly;
+                firstInstallment = -(refund - runningMonthly);
+                runningMonthly = 0;
+                category = 'GENERAL';
+              }
+            } else {
+              // amount = 0 — hech narsa
+              continue;
+            }
+
+            await this.prisma.oplataKv.update({
+              where: { id: item.id },
+              data: {
+                firstInstallment: firstInstallment !== 0 ? new Prisma.Decimal(firstInstallment) : null,
+                monthlyAmount:    monthlyAmount    !== 0 ? new Prisma.Decimal(monthlyAmount)    : null,
+                paymentCategory:  category as OplataKvCategory,
+              },
+            });
+            filled++;
+          }
+        } catch (e: any) {
+          this.log.warn(`splitInstallments ${contractNo} xato: ${e?.message}`);
+          errors += items.length;
+        }
+      }));
+    }
+
+    const duration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.log(
+      `splitInstallments: scanned=${rows.length} contracts=${contractsArr.length} ` +
+      `filled=${filled} notFound=${notFound} errors=${errors} duration=${duration}s`,
+    );
+    return {
+      total: rows.length,
+      contracts: contractsArr.length,
       filled,
       notFound,
       errors,
