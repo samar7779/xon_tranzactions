@@ -90,22 +90,17 @@ export default function LoginPage() {
       <div className={cn(
         "hidden md:block absolute inset-0 transition-all duration-700 ease-out",
         open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100',
-        scanning && 'scale-[1.02] brightness-110',
       )}>
-        <ShowcaseStage variant="minimal" />
+        <ShowcaseStage variant="minimal" scanning={scanning} />
       </div>
 
       {/* ============ MOBIL SHOWCASE (alohida vertikal dizayn) ============ */}
       <div className={cn(
         "md:hidden absolute inset-0 transition-all duration-500",
         open ? 'opacity-30 scale-[0.95]' : 'opacity-100 scale-100',
-        scanning && 'scale-[1.02] brightness-110',
       )}>
-        <MobileLoginShowcase />
+        <MobileLoginShowcase scanning={scanning} />
       </div>
-
-      {/* ============ SECURITY SCAN OVERLAY — KIRISH bosilganda ============ */}
-      {scanning && <SecurityScanOverlay />}
 
       {/* Vignette overlay — panel ochilganda chap tomon qoraytadi */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-700
@@ -356,12 +351,8 @@ export default function LoginPage() {
  * Mobile uchun alohida login showcase — vertikal stack, sodda va chiroyli.
  * Desktop'dagi 3D dashboard'dan farqli — bu telefon ekraniga moslashtirilgan.
  */
-/**
- * Security scan overlay — KIRISH bosilganda 1.8s davom etadigan animatsiya.
- * Horizontal scan chiziq pastdan yuqoriga, decryption matni, lock icon pulse.
- */
-function SecurityScanOverlay() {
-  const t = useTranslations('auth');
+/** Mobile uchun scan animatsiya — showcase ichida overlay (butun ekran emas) */
+function MobileScanOverlay() {
   const lines = [
     '> INITIATING SECURE CHANNEL...',
     '> VERIFYING ENDPOINT...',
@@ -372,85 +363,61 @@ function SecurityScanOverlay() {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     lines.forEach((_, i) => {
-      timers.push(setTimeout(() => setVisible((v) => [...v, i]), i * 380));
+      timers.push(setTimeout(() => setVisible((v) => [...v, i]), 500 + i * 200));
     });
     return () => timers.forEach(clearTimeout);
   }, []);
 
   return (
-    <div className="fixed inset-0 z-40 pointer-events-none">
-      {/* Markaziy mato'rli vignette */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_60%_at_50%_50%,rgba(2,6,18,0.3),rgba(2,6,18,0.75))] animate-in fade-in duration-300" />
-
-      {/* Vertical scan chiziq (pastdan yuqoriga) */}
+    <div className="absolute inset-0 z-30 pointer-events-none">
+      {/* Vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(2,6,18,0.3),rgba(2,6,18,0.85))]" />
+      {/* Vertical scan chiziq */}
       <div className="absolute inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent
                       shadow-[0_0_30px_rgba(34,211,238,0.95)]"
-           style={{ animation: 'scan-sweep 1.8s linear forwards' }} />
-
-      {/* Horizontal grid pattern flash */}
-      <div className="absolute inset-0 opacity-0"
-           style={{
-             animation: 'grid-flash 1.8s ease-out forwards',
-             backgroundImage:
-               'linear-gradient(rgba(34,211,238,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.15) 1px, transparent 1px)',
-             backgroundSize: '40px 40px',
-           }} />
-
-      {/* Markaziy lock icon va decryption matn */}
-      <div className="absolute inset-0 grid place-items-center">
+           style={{ animation: 'mob-scan-sweep 1.6s linear forwards' }} />
+      {/* Markaz */}
+      <div className="absolute inset-0 grid place-items-center px-6">
         <div className="text-center space-y-4">
-          {/* Lock + pulse rings */}
-          <div className="relative w-20 h-20 mx-auto">
+          <div className="relative w-16 h-16 mx-auto">
             <span className="absolute inset-0 rounded-full ring-2 ring-cyan-400/60 animate-ping" style={{ animationDuration: '1.2s' }} />
-            <span className="absolute inset-2 rounded-full ring-2 ring-amber-400/40 animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
             <div className="absolute inset-0 rounded-full bg-cyan-500/10 ring-2 ring-cyan-400/80 grid place-items-center
-                            shadow-[0_0_40px_rgba(34,211,238,0.6),inset_0_0_30px_rgba(34,211,238,0.3)]">
-              <ShieldCheck className="h-9 w-9 text-cyan-200" />
+                            shadow-[0_0_40px_rgba(34,211,238,0.7)]">
+              <ShieldCheck className="h-7 w-7 text-cyan-200" />
             </div>
           </div>
-
-          {/* Decryption matnlari — birin-ketin chiqadi */}
-          <div className="font-mono text-[11px] tracking-[0.18em] uppercase space-y-1 text-left min-w-[280px]">
+          <div className="font-mono text-[10px] tracking-[0.18em] uppercase space-y-1 text-left min-w-[240px]">
             {lines.map((line, i) => (
               <div
                 key={i}
                 className={cn(
                   'transition-all duration-300',
-                  visible.includes(i)
-                    ? 'opacity-100 translate-x-0'
-                    : 'opacity-0 -translate-x-3',
+                  visible.includes(i) ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-3',
                   i === lines.length - 1 ? 'text-amber-300' : 'text-cyan-300',
                 )}
               >
                 {line}
                 {visible.includes(i) && (
-                  <span className="inline-block w-2 h-3 bg-current animate-pulse ml-1 align-middle" />
+                  <span className="inline-block w-1.5 h-3 bg-current animate-pulse ml-1 align-middle" />
                 )}
               </div>
             ))}
           </div>
         </div>
       </div>
-
       <style jsx>{`
-        @keyframes scan-sweep {
+        @keyframes mob-scan-sweep {
           0%   { top: 100%; opacity: 0; }
           10%  { opacity: 1; }
           90%  { opacity: 1; }
           100% { top: 0%; opacity: 0; }
-        }
-        @keyframes grid-flash {
-          0%   { opacity: 0; }
-          30%  { opacity: 1; }
-          70%  { opacity: 1; }
-          100% { opacity: 0; }
         }
       `}</style>
     </div>
   );
 }
 
-function MobileLoginShowcase() {
+function MobileLoginShowcase({ scanning = false }: { scanning?: boolean } = {}) {
   const [bal, setBal] = useState(0);
 
   useEffect(() => {
@@ -483,8 +450,14 @@ function MobileLoginShowcase() {
       <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-amber-400/15 rounded-full blur-3xl animate-pulse pointer-events-none"
            style={{ animationDuration: '4s', animationDelay: '2s' }} />
 
+      {/* Scanning overlay — mobile uchun in-place (showcase ichida) */}
+      {scanning && <MobileScanOverlay />}
+
       {/* Markaziy kontent — vertikal stack */}
-      <div className="relative z-10 h-full overflow-y-auto pt-20 pb-20 px-5 flex flex-col gap-4 items-center">
+      <div className={cn(
+        "relative z-10 h-full overflow-y-auto pt-20 pb-20 px-5 flex flex-col gap-4 items-center transition-all duration-500",
+        scanning && "opacity-20 scale-95 blur-sm",
+      )}>
         {/* Title */}
         <div className="text-center pointer-events-none">
           <h1 className="text-[26px] font-bold tracking-[0.04em] leading-[1]

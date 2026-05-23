@@ -8,10 +8,17 @@ import { cn } from '@/lib/utils';
  * ShowcaseStage — qayta ishlatiluvchi hero composition.
  * Showcase sahifasida, login sahifa fonida va SplashLoader'da ishlatiladi.
  */
-export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minimal' } = {}) {
+export function ShowcaseStage({
+  variant = 'full',
+  scanning = false,
+}: {
+  variant?: 'full' | 'minimal';
+  scanning?: boolean;
+} = {}) {
   const isMinimal = variant === 'minimal';
   const [bal, setBal] = useState(0);
-  const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
+  // Static tilt — mouse parallax o'chirilgan (foydalanuvchi so'roviga muvofiq)
+  const tilt = { rx: 6, ry: -8 };
 
   // Balance counter — initial 0→target, keyin har 2s da yangi tranzaksiya kelgandek katta o'zgarish
   useEffect(() => {
@@ -32,21 +39,12 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
     };
   }, []);
 
-  // Mouse parallax — kursor harakatlansa karta egiladi
-  function onMove(e: React.MouseEvent<HTMLDivElement>) {
-    const w = window.innerWidth, h = window.innerHeight;
-    const x = (e.clientX - w / 2) / (w / 2);
-    const y = (e.clientY - h / 2) / (h / 2);
-    setTilt({ rx: 8 - y * 4, ry: -10 - x * 5 });
-  }
-  function onLeave() { setTilt({ rx: 8, ry: -10 }); }
+  // Mouse parallax o'chirilgan — static tilt ishlatamiz
 
   return (
     <div
       className="relative w-screen h-screen overflow-hidden text-white
                  bg-[radial-gradient(ellipse_at_center,#2d4a8a_0%,#162a55_45%,#0a162e_100%)]"
-      onMouseMove={onMove}
-      onMouseLeave={onLeave}
     >
       <BackgroundNetwork />
       {!isMinimal && <ConstellationBottom />}
@@ -118,16 +116,18 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
             </>
           )}
 
-          {/* 3D dashboard — minimal'da kattaroq + ko'proq efekt */}
+          {/* 3D dashboard — minimal'da kattaroq + flip animatsiya (scanning'da orqaga aylanadi) */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
             <div
-              className={isMinimal ? "relative w-full max-w-[1180px]" : "relative w-full max-w-[820px]"}
+              className={isMinimal ? "relative w-full max-w-[1320px]" : "relative w-full max-w-[820px]"}
               style={{
-                transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
+                transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry + (scanning ? 180 : 0)}deg)`,
                 transformStyle: 'preserve-3d',
-                transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+                transition: 'transform 0.9s cubic-bezier(0.65, 0, 0.35, 1)',
               }}
             >
+              {/* FRONT side — dashboard (backface-hidden, scanning'da yashirinadi) */}
+              <div className="relative" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
               {/* Asosiy glow halo — minimal'da kattaroq va kuchliroq */}
               <div className={cn(
                 "absolute rounded-[40px] blur-3xl -z-10",
@@ -356,6 +356,20 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                   <span className="text-[9px] uppercase tracking-[0.25em] text-white/35 font-semibold">Integrated</span>
                   <BankPill src="/banks/kapital.webp" name="Kapitalbank" />
                   <BankPill src="/banks/ipak.svg" name="Ipak Yo'li" />
+                </div>
+              )}
+              </div>
+              {/* /FRONT side */}
+
+              {/* BACK side — scanning'da ko'rinadi (rotateY(180deg)) */}
+              {isMinimal && (
+                <div className="absolute inset-0"
+                     style={{
+                       backfaceVisibility: 'hidden',
+                       WebkitBackfaceVisibility: 'hidden',
+                       transform: 'rotateY(180deg)',
+                     }}>
+                  <DashboardScanBack active={scanning} />
                 </div>
               )}
             </div>
@@ -618,6 +632,112 @@ function AnimatedBalanceDisplay({ value, size = 'md' }: { value: number; size?: 
         : "drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)] scale-100",
     )}>
       {formatMoney(display)}
+    </div>
+  );
+}
+
+/** Dashboard'ning ORQA tomoni — KIRISH bosilganda flip orqali ko'rinadi.
+ *  Security scan animatsiyasi: vertikal scan chiziq, grid pattern,
+ *  decryption matnlari, shield icon — dashboard ichida, butun ekran emas. */
+function DashboardScanBack({ active }: { active: boolean }) {
+  const lines = [
+    '> INITIATING SECURE CHANNEL...',
+    '> VERIFYING ENDPOINT...',
+    '> DECRYPTING ACCESS LAYER...',
+    '> AUTHENTICATION REQUIRED',
+  ];
+  const [visible, setVisible] = useState<number[]>([]);
+  useEffect(() => {
+    if (!active) { setVisible([]); return; }
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    lines.forEach((_, i) => {
+      timers.push(setTimeout(() => setVisible((v) => [...v, i]), 700 + i * 220));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, [active]);
+
+  return (
+    <div className="relative w-full h-full rounded-[24px] overflow-hidden border border-cyan-400/30
+                    bg-[linear-gradient(160deg,rgba(8,18,38,0.95)_0%,rgba(6,14,29,0.97)_100%)]
+                    shadow-[0_50px_120px_-20px_rgba(0,0,0,0.85)]">
+      {/* Grid pattern */}
+      <div className="absolute inset-0 opacity-30 pointer-events-none"
+           style={{
+             backgroundImage:
+               'linear-gradient(rgba(34,211,238,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.15) 1px, transparent 1px)',
+             backgroundSize: '40px 40px',
+             maskImage: 'radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%)',
+             WebkitMaskImage: 'radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%)',
+           }} />
+
+      {/* Vertical scan chiziq — pastdan yuqoriga */}
+      {active && (
+        <div className="absolute inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent
+                        shadow-[0_0_40px_rgba(34,211,238,0.95)]"
+             style={{ animation: 'dashboard-scan-sweep 1.4s linear forwards' }} />
+      )}
+
+      {/* Burchak braket'lar */}
+      <span className="absolute top-4 left-4 w-5 h-5 border-l-2 border-t-2 border-cyan-400/60" />
+      <span className="absolute top-4 right-4 w-5 h-5 border-r-2 border-t-2 border-cyan-400/60" />
+      <span className="absolute bottom-4 left-4 w-5 h-5 border-l-2 border-b-2 border-cyan-400/60" />
+      <span className="absolute bottom-4 right-4 w-5 h-5 border-r-2 border-b-2 border-cyan-400/60" />
+
+      {/* Burchak yorug'liklari */}
+      <div className="absolute -top-20 -left-20 w-72 h-72 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-amber-400/15 rounded-full blur-3xl pointer-events-none" />
+
+      {/* Markaziy kontent */}
+      <div className="absolute inset-0 grid place-items-center px-8">
+        <div className="text-center space-y-6">
+          {/* Shield icon + halqalar */}
+          <div className="relative w-24 h-24 mx-auto">
+            {active && (
+              <>
+                <span className="absolute inset-0 rounded-full ring-2 ring-cyan-400/60 animate-ping" style={{ animationDuration: '1.2s' }} />
+                <span className="absolute inset-2 rounded-full ring-2 ring-amber-400/40 animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
+              </>
+            )}
+            <div className="absolute inset-0 rounded-full bg-cyan-500/10 ring-2 ring-cyan-400/80 grid place-items-center
+                            shadow-[0_0_50px_rgba(34,211,238,0.7),inset_0_0_40px_rgba(34,211,238,0.4)]">
+              <svg className="h-12 w-12 text-cyan-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <path d="m9 12 2 2 4-4" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Decryption matnlari */}
+          <div className="font-mono text-[13px] tracking-[0.18em] uppercase space-y-1.5 text-left min-w-[320px]">
+            {lines.map((line, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'transition-all duration-300',
+                  visible.includes(i)
+                    ? 'opacity-100 translate-x-0'
+                    : 'opacity-0 -translate-x-3',
+                  i === lines.length - 1 ? 'text-amber-300' : 'text-cyan-300',
+                )}
+              >
+                {line}
+                {visible.includes(i) && (
+                  <span className="inline-block w-2 h-3.5 bg-current animate-pulse ml-1 align-middle" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes dashboard-scan-sweep {
+          0%   { top: 100%; opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { top: 0%; opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
