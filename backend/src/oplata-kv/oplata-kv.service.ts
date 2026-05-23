@@ -423,8 +423,13 @@ export class OplataKvService {
     });
 
     const totalDuration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.log(
+      `syncFromTransactions DONE: syncDuration=${syncDuration}s totalDuration=${totalDuration}s ` +
+      `objects: scanned=${objectsResult.total} filled=${objectsResult.filled} notFound=${objectsResult.notFound} errors=${objectsResult.errors}`,
+    );
     return {
       ok: true,
+      version: 'v2-auto-object',  // Marker: yangi kod deploy bo'lganini bildiradi
       total: txList.length,
       added,
       updated,
@@ -443,6 +448,7 @@ export class OplataKvService {
         errors: objectsResult.errors,
       },
       duration: totalDuration,
+      syncDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
     };
   }
