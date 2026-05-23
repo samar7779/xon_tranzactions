@@ -97,20 +97,10 @@ export default function LoginPage() {
                        ${open ? 'opacity-100' : 'opacity-0'}`}
            style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
-      {/* Top-right: KIRISH tugmasi + clock + til (asosiy CTA) */}
+      {/* Top-right: KIRISH tugmasi + til (faqat asosiy elementlar) */}
       {!open && (
         <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2 sm:gap-3">
-          {/* Clock + til — kichik ekranda yashirinadi yoki kichraytiriladi */}
-          <div className="hidden sm:flex items-center gap-3">
-            <div className="text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase text-right font-mono">
-              <div className="tabular-nums text-cyan-200">{clock}</div>
-              <div className="text-cyan-400/40">{t('tashkent')}</div>
-            </div>
-            <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
-              <LanguageSwitcher />
-            </div>
-          </div>
-          <div className="sm:hidden border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
+          <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
             <LanguageSwitcher />
           </div>
 
@@ -137,19 +127,7 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Top-left: system online */}
-      <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-30 text-[9px] sm:text-[10px] tracking-[0.2em] text-cyan-300/70 uppercase font-mono">
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="animate-ping absolute inset-0 rounded-full bg-cyan-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-cyan-400" />
-          </span>
-          <span>{t('systemOnline')}</span>
-        </div>
-        <div className="mt-1 text-cyan-400/40 hidden sm:block">{tApp('title').toUpperCase()}</div>
-      </div>
-
-      {/* Pastki readout — auth required */}
+      {/* Pastki readout — auth required (faqat sodda matn) */}
       <div className={cn(
         "absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 z-30",
         "flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none",
@@ -157,7 +135,6 @@ export default function LoginPage() {
       )}>
         <span>· {t('authRequired')} ·</span>
         <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
-        <span className="sm:hidden font-mono text-cyan-300/60 tabular-nums">{clock}</span>
       </div>
 
       {/* Right-side slide-in login panel — telefonda to'liq ekran */}
