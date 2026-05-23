@@ -152,6 +152,16 @@ export class OplataKvController {
     return this.svc.fillMissingObjects({ limit: body?.limit, actor: actorFrom(user) });
   }
 
+  @Post('split-installments')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM payment_histories asosida)" })
+  async splitInstallments(
+    @Body() body: { limit?: number },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.splitInstallments({ limit: body?.limit, actor: actorFrom(user) });
+  }
+
   @Delete('cleanup-tx-source')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Tranzaksiya-manba (sourceTxId) qatorlarni o'chirish — optional date range" })
