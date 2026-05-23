@@ -406,13 +406,23 @@ export class OplataKvService {
       }));
     }
 
-    const duration = Math.round((Date.now() - startedAt) / 1000);
+    const syncDuration = Math.round((Date.now() - startedAt) / 1000);
     const skippedTotal = skippedNoData + skippedExists + skippedError;
     this.log.log(
       `syncFromTransactions: total=${txList.length} added=${added} updated=${updated} ` +
       `skipped=${skippedTotal} (noData=${skippedNoData} exists=${skippedExists} error=${skippedError}) ` +
-      `duration=${duration}s`,
+      `syncDuration=${syncDuration}s`,
     );
+
+    // ── Sync tugagach AUTO: yo'q obyektlarni CRM dan to'ldirish ──
+    // Yangi qo'shilgan + mavjud bo'lganlardan object null bo'lsa CRM dan oladi
+    // Max 1000 ta bir sync'da (timeoutdan saqlanish)
+    const objectsResult = await this.fillMissingObjects({ limit: 1000, actor: opts.actor }).catch((e) => {
+      this.log.warn(`auto-fillMissingObjects xato (jiddiy emas): ${e?.message}`);
+      return { total: 0, uniqueContracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    });
+
+    const totalDuration = Math.round((Date.now() - startedAt) / 1000);
     return {
       ok: true,
       total: txList.length,
@@ -420,12 +430,19 @@ export class OplataKvService {
       updated,
       skipped: skippedTotal,
       skippedBreakdown: {
-        noData: skippedNoData,     // contractNumber yoki txnDate yo'q
-        exists: skippedExists,     // mavjud va o'zgarmagan
-        error:  skippedError,      // create/update da xato
+        noData: skippedNoData,
+        exists: skippedExists,
+        error:  skippedError,
       },
       errorSamples,
-      duration,
+      objects: {
+        scanned: objectsResult.total,
+        contracts: objectsResult.uniqueContracts,
+        filled: objectsResult.filled,
+        notFound: objectsResult.notFound,
+        errors: objectsResult.errors,
+      },
+      duration: totalDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
     };
   }
