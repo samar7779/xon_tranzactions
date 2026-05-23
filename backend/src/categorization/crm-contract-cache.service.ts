@@ -110,7 +110,28 @@ export class CrmContractCacheService {
           };
           const customerName = buildName(detail.client) || detail.fio || null; // Text — limit yo'q
           const status = trunc(String(detail.status || detail.contract_status || '').toLowerCase() || null, 128);
-          const objectName = trunc(detail.object_name || detail.client?.object_name || null, 255);
+          // Obyekt nomi — CRM bir necha joyda saqlashi mumkin
+          const extractObject = (d: any): string | null => {
+            const candidates = [
+              d?.object_name,
+              d?.object,
+              d?.info?.object,
+              d?.info?.object_name,
+              d?.client?.object_name,
+              d?.client?.object,
+            ];
+            for (const c of candidates) {
+              if (!c) continue;
+              if (typeof c === 'string' && c.trim()) return c.trim();
+              if (typeof c === 'object') {
+                // {name: 'X', uz: 'X', ru: 'X', lotin: 'X', kirill: 'X'}
+                const nm = c.name || c.value || c.uz || c.ru || c.lotin || c.kirill || c.title;
+                if (nm && typeof nm === 'string' && nm.trim()) return nm.trim();
+              }
+            }
+            return null;
+          };
+          const objectName = trunc(extractObject(detail), 255);
           const apartmentNumber = trunc(detail.apartment_number || detail.client?.apartment_number || null, 64);
           const phone = trunc(detail.client?.phone_primary || detail.client?.phone || null, 64);
           const contractKey = trunc(v.toUpperCase(), 128) as string;

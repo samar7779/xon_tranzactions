@@ -489,17 +489,51 @@ export class OplataKvService {
     let notFound = 0;
     let errors = 0;
 
+    // Helper: detail objektidan obyekt nomini topish (cache extractObject bilan bir xil)
+    const extractObjectFromDetail = (d: any): string | null => {
+      if (!d) return null;
+      const candidates = [
+        d.object_name, d.object,
+        d.info?.object, d.info?.object_name,
+        d.client?.object_name, d.client?.object,
+      ];
+      for (const c of candidates) {
+        if (!c) continue;
+        if (typeof c === 'string' && c.trim()) return c.trim();
+        if (typeof c === 'object') {
+          const nm = c.name || c.value || c.uz || c.ru || c.lotin || c.kirill || c.title;
+          if (nm && typeof nm === 'string' && nm.trim()) return nm.trim();
+        }
+      }
+      return null;
+    };
+
     const CONCURRENCY = 5;
     for (let i = 0; i < uniqueContracts.length; i += CONCURRENCY) {
       const batch = uniqueContracts.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async (cn) => {
         try {
-          const result = await this.crmCache.lookup(cn);
-          if (!result || !result.objectName) {
+          // 1. Cache lookup
+          let objName: string | null = null;
+          const cached = await this.crmCache.lookup(cn);
+          if (cached?.objectName) {
+            objName = cached.objectName;
+          } else {
+            // 2. Cache'da yo'q yoki null — CRM'ga to'g'ridan-to'g'ri so'rov
+            try {
+              const resp: any = await this.crmService.show({ contract: cn });
+              if (resp?.ok && resp.detail) {
+                objName = extractObjectFromDetail(resp.detail);
+              }
+            } catch { /* CRM xato — notFound */ }
+          }
+
+          if (!objName) {
             notFound++;
             return;
           }
-          let objName = result.objectName;
+
+          // Mapping qo'llaymiz
           const mapped = objMap.get(objName.trim().toLowerCase());
           if (mapped) objName = mapped;
 
