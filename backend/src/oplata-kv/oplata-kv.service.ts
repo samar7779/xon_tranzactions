@@ -446,22 +446,36 @@ export class OplataKvService {
       `syncDuration=${syncDuration}s`,
     );
 
-    // ── Sync tugagach AUTO: yo'q obyektlarni CRM dan to'ldirish ──
-    // Yangi qo'shilgan + mavjud bo'lganlardan object null bo'lsa CRM dan oladi
-    // Max 1000 ta bir sync'da (timeoutdan saqlanish)
-    const objectsResult = await this.fillMissingObjects({ limit: 10000, actor: opts.actor }).catch((e) => {
-      this.log.warn(`auto-fillMissingObjects xato (jiddiy emas): ${e?.message}`);
-      return { total: 0, uniqueContracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
-    });
+    // ── FONDA: obyekt/client to'ldirish (502 timeoutdan saqlanish) ──
+    // Response darrov qaytadi, fillMissingObjects orqada davom etadi.
+    // Foydalanuvchi sahifani yangilab ko'rishi mumkin — qatorlar asta to'ldiriladi.
+    if (!OplataKvService.fillingInProgress) {
+      OplataKvService.fillingInProgress = true;
+      setImmediate(() => {
+        this.fillMissingObjects({ limit: 20000, actor: opts.actor })
+          .then((r) => {
+            this.log.log(
+              `background fillMissingObjects DONE: scanned=${r.total} filled=${r.filled} notFound=${r.notFound} errors=${r.errors} duration=${r.duration}s`,
+            );
+          })
+          .catch((e) => {
+            this.log.warn(`background fillMissingObjects xato: ${e?.message}`);
+          })
+          .finally(() => {
+            OplataKvService.fillingInProgress = false;
+          });
+      });
+    } else {
+      this.log.log('background fillMissingObjects: avval boshlanganini kutmoqda, yangi sync uchun ishga tushirilmadi');
+    }
 
     const totalDuration = Math.round((Date.now() - startedAt) / 1000);
     this.log.log(
-      `syncFromTransactions DONE: syncDuration=${syncDuration}s totalDuration=${totalDuration}s ` +
-      `objects: scanned=${objectsResult.total} filled=${objectsResult.filled} notFound=${objectsResult.notFound} errors=${objectsResult.errors}`,
+      `syncFromTransactions DONE: syncDuration=${syncDuration}s totalDuration=${totalDuration}s`,
     );
     return {
       ok: true,
-      version: 'v2-auto-object',  // Marker: yangi kod deploy bo'lganini bildiradi
+      version: 'v3-bg-fill',  // Marker — yangi background fill versiyasi
       total: txList.length,
       added,
       updated,
@@ -472,18 +486,15 @@ export class OplataKvService {
         error:  skippedError,
       },
       errorSamples,
-      objects: {
-        scanned: objectsResult.total,
-        contracts: objectsResult.uniqueContracts,
-        filled: objectsResult.filled,
-        notFound: objectsResult.notFound,
-        errors: objectsResult.errors,
-      },
+      objectsBackground: true,  // Frontend: orqada davom etmoqda
       duration: totalDuration,
       syncDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
     };
   }
+
+  // Static flag — bir vaqtda faqat 1 ta background fill ishlaydi (DB raqobatidan saqlanish)
+  private static fillingInProgress = false;
 
   /**
    * Tranzaksiya-manba qatorlardan obyekt nomi yo'q bo'lganlarni CRM dan to'ldirish.

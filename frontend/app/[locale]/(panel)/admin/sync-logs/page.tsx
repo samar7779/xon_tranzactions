@@ -343,11 +343,11 @@ function SyncSettingsPanel() {
         bd.exists ? `${bd.exists} mavjud` : null,
         bd.error ? `${bd.error} xato` : null,
       ].filter(Boolean).join(', ');
-      const objLine = r.objects && r.objects.scanned > 0
-        ? `Obyekt: ${r.objects.filled}/${r.objects.scanned} to'ldirildi (${r.objects.contracts} shartnoma)`
-        : '';
-      const msg = `Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}${r.duration ? ` · ${r.duration}s` : ''}${objLine ? `\n${objLine}` : ''}`;
-      toast.success(msg, { duration: 10000 });
+      const msg = `Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}${r.duration ? ` · ${r.duration}s` : ''}`;
+      toast.success(msg, { duration: 6000 });
+      if (r.objectsBackground) {
+        toast.info("Obyekt va Mijoz nomlari CRM dan ORQADA to'ldirilyapti — sahifani 1-2 daqiqadan keyin yangilang", { duration: 8000 });
+      }
       if (r.errorSamples && r.errorSamples.length > 0) {
         toast.error(`Xato namunalari: ${r.errorSamples.slice(0, 2).map((s: any) => s.reason).join('; ')}`, { duration: 10000 });
       }
