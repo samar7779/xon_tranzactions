@@ -46,6 +46,39 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
       <BackgroundNetwork />
       {!isMinimal && <ConstellationBottom />}
 
+      {/* MINIMAL VARIANT: katta orbital halqalar + particle'lar (faqat desktop hero) */}
+      {isMinimal && (
+        <>
+          {/* Sekin aylanuvchi orbital halqalar — fonda dashboard atrofida */}
+          <div className="absolute inset-0 grid place-items-center pointer-events-none z-0">
+            <div className="relative">
+              {/* Sariq halqa */}
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
+                              w-[1400px] h-[1400px] rounded-full
+                              border border-amber-400/8
+                              showcase-orbit-slow" />
+              {/* Cyan halqa */}
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
+                              w-[1700px] h-[1700px] rounded-full
+                              border border-cyan-400/6
+                              showcase-orbit-reverse" />
+              {/* Eng katta halqa — dashed */}
+              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
+                              w-[2000px] h-[2000px] rounded-full
+                              border border-dashed border-cyan-300/5
+                              showcase-orbit-slow" style={{ animationDuration: '60s' }} />
+            </div>
+          </div>
+
+          {/* Yuqori va pastki yorug'lik streak'lari — chizilgan glow */}
+          <div className="absolute top-1/4 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent showcase-streak pointer-events-none" />
+          <div className="absolute bottom-1/4 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-300/25 to-transparent showcase-streak pointer-events-none" style={{ animationDelay: '2s', animationDirection: 'reverse' }} />
+
+          {/* Floating particle'lar — fonda asta-sekin pastdan yuqoriga */}
+          <FloatingParticles />
+        </>
+      )}
+
       <div className="relative z-10 h-full flex flex-col items-center px-4 pt-2 pb-2">
 
         {/* 3D dashboard + atrofdagi elementlar */}
@@ -608,6 +641,42 @@ function ConnectionLines() {
         );
       })}
     </svg>
+  );
+}
+
+/* ─── Floating particles (minimal hero) ─── */
+function FloatingParticles() {
+  // Deterministic positions — re-render'da o'zgarmasin
+  const particles = [
+    { x: 8,  y: 18, delay: 0,   dur: 14, size: 'w-1 h-1',   col: 'bg-cyan-300/60' },
+    { x: 17, y: 70, delay: 2.3, dur: 16, size: 'w-0.5 h-0.5', col: 'bg-amber-300/50' },
+    { x: 23, y: 35, delay: 4.1, dur: 13, size: 'w-1 h-1',   col: 'bg-cyan-200/55' },
+    { x: 31, y: 88, delay: 1.0, dur: 17, size: 'w-1.5 h-1.5', col: 'bg-amber-300/40' },
+    { x: 42, y: 12, delay: 6.5, dur: 19, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/55' },
+    { x: 48, y: 55, delay: 3.7, dur: 15, size: 'w-1 h-1',   col: 'bg-amber-200/50' },
+    { x: 56, y: 80, delay: 8.2, dur: 14, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/50' },
+    { x: 64, y: 22, delay: 5.4, dur: 18, size: 'w-1 h-1',   col: 'bg-amber-300/55' },
+    { x: 73, y: 60, delay: 2.8, dur: 16, size: 'w-1.5 h-1.5', col: 'bg-cyan-200/45' },
+    { x: 81, y: 38, delay: 7.1, dur: 13, size: 'w-1 h-1',   col: 'bg-amber-200/50' },
+    { x: 89, y: 75, delay: 4.5, dur: 17, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/55' },
+    { x: 93, y: 15, delay: 1.9, dur: 15, size: 'w-1 h-1',   col: 'bg-amber-300/50' },
+  ];
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
+      {particles.map((p, i) => (
+        <span
+          key={i}
+          className={cn('absolute rounded-full showcase-particle-float', p.size, p.col)}
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.dur}s`,
+            boxShadow: '0 0 8px currentColor',
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
