@@ -767,13 +767,11 @@ export class OplataKvService {
       await Promise.all(batch.map(async ([contractNo, items]) => {
         try {
           // CRM'dan detail (initial plan summasi va payment_histories)
-          const resp: any = await this.crmService.show({ contract: contractNo });
-          if (!resp?.ok || !resp.detail) {
-            notFound += items.length;
-            return;
-          }
-          const detail = resp.detail;
+          // Agar CRM topilmasa -> fallback (initialPlan=0 -> hammasi monthly)
+          const resp: any = await this.crmService.show({ contract: contractNo }).catch(() => null);
+          const detail = resp?.ok ? resp.detail : null;
           // CRM dagi initial total reja (1-vznos jami summasi shartnoma bo'yicha)
+          // CRM topilmasa initialPlan = 0 -> hammasi monthly'ga ketadi (fallback, baribir filled bo'ladi)
           const initialPlan = Number(detail?.initial?.total?.amount || 0);
 
           // Eski running totals — shu contractda BU BATCH'gacha bo'lgan jami
