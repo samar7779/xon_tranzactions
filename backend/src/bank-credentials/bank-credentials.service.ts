@@ -160,7 +160,7 @@ export class BankCredentialsService {
   async listAuthIssues() {
     // Auth muammosini ko'rsatuvchi pattern'lar (errorMessage'da bo'lishi mumkin)
     // EN + UZ-Latin + RU (banklar ko'pincha rus tilida xato qaytaradi)
-    const AUTH_PATTERN = /login\s*fail|invalid\s*credential|wrong\s*password|\b40[13]\b|unauthorized|forbidden|auth(entication)?\s*fail|noto'g'ri\s*(parol|login)|ulanib\s*bo['']?lmadi|(логин|пароль).{0,30}(неверн|не\s*верн|не\s*правил|указан)|неверн\w*\s*(логин|пароль)|доступ\s*(запрещ|отказ)|авториз\w*\s*(не\s*пройд|неудач|отказ)/i;
+    const AUTH_PATTERN = /login\s*fail|invalid\s*credential|wrong\s*password|password\s*(expired|expir)|\b40[13]\b|unauthorized|forbidden|auth(entication)?\s*fail|noto'g'ri\s*(parol|login)|parol\s*(muddati|tugagan|eskirgan)|ulanib\s*bo['']?lmadi|(логин|пароль).{0,30}(неверн|не\s*верн|не\s*правил|указан|истёк|истек|просрочен|устарел)|пароль\s*(истёк|истек|просрочен|устарел|необходимо|нужно)|установите\s*нов|смените\s*пароль|обновите\s*пароль|неверн\w*\s*(логин|пароль)|доступ\s*(запрещ|отказ)|авториз\w*\s*(не\s*пройд|неудач|отказ)/i;
 
     // Hamma aktiv hisoblar — credential bilan birga
     const accounts = await this.prisma.bankAccount.findMany({
