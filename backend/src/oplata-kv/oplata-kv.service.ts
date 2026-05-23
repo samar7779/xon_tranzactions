@@ -60,31 +60,67 @@ export class OplataKvService {
 
   // Auto-sync uchun oxirgi ishga tushgan vaqt
   private lastAutoSyncAt: Date | null = null;
+  private lastNightBatchDay: number | null = null;  // Tunda 1 marta — qaysi sana
 
   /**
-   * Har daqiqada tekshiradi — agar settings'da interval o'rnatilgan va shu vaqt o'tgan bo'lsa,
-   * avtomatik sync ishga tushiradi.
+   * Tashkent vaqti bo'yicha hour qaytaradi (UTC+5)
+   */
+  private getTashkentHourMinute(): { hour: number; minute: number } {
+    const now = new Date();
+    // UTC + 5
+    const tashkent = new Date(now.getTime() + 5 * 60 * 60 * 1000);
+    return { hour: tashkent.getUTCHours(), minute: tashkent.getUTCMinutes() };
+  }
+
+  /**
+   * Har daqiqada tekshiradi.
+   * DAY mode (08:00-22:00 Tashkent): har user belgilangan interval'da (default 15), max 1000 ta
+   * NIGHT mode (01:00-07:50 Tashkent): kuniga 1 marta — limit'siz batch (barcha tx-status)
    */
   @Cron(CronExpression.EVERY_MINUTE)
   async autoSyncTick() {
     try {
+      const { hour, minute } = this.getTashkentHourMinute();
       const intervalMin = await this.settings.getOplatyKvAutoSyncMinutes();
-      if (!intervalMin || intervalMin < 1) return; // disabled
+      const minDate = await this.settings.getOplatyKvTxMinDate();
 
-      const now = new Date();
-      if (this.lastAutoSyncAt) {
-        const elapsedMin = (now.getTime() - this.lastAutoSyncAt.getTime()) / 60000;
-        if (elapsedMin < intervalMin) return; // hali vaqt yetmadi
+      // ─── DAY MODE (08:00 — 22:00 Tashkent), every intervalMin daqiqada ───
+      if (hour >= 8 && hour < 22) {
+        if (!intervalMin || intervalMin < 1) return;
+        const now = new Date();
+        if (this.lastAutoSyncAt) {
+          const elapsedMin = (now.getTime() - this.lastAutoSyncAt.getTime()) / 60000;
+          if (elapsedMin < intervalMin) return;
+        }
+        this.lastAutoSyncAt = now;
+        this.log.log(`Auto-sync DAY (interval ${intervalMin}min): boshlandi`);
+        const result = await this.syncFromTransactions({
+          minDate,
+          limit: 1000,
+          actor: { id: null, name: 'cron · day-15min' },
+        });
+        this.log.log(`Auto-sync DAY DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+        return;
       }
 
-      this.lastAutoSyncAt = now;
-      const minDate = await this.settings.getOplatyKvTxMinDate();
-      this.log.log(`Auto-sync ishga tushdi (interval: ${intervalMin}min, minDate: ${minDate?.toISOString().slice(0, 10) || '—'})`);
-      const result = await this.syncFromTransactions({
-        minDate,
-        actor: { id: null, name: 'cron · auto-sync' },
-      });
-      this.log.log(`Auto-sync DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+      // ─── NIGHT MODE (01:00 — 07:50 Tashkent), kuniga 1 marta — FULL BATCH ───
+      const isNightWindow =
+        (hour === 1 && minute >= 0) ||
+        (hour >= 2 && hour <= 6) ||
+        (hour === 7 && minute < 50);
+      if (isNightWindow) {
+        const today = new Date();
+        const tashkentDay = new Date(today.getTime() + 5 * 60 * 60 * 1000).getUTCDate();
+        if (this.lastNightBatchDay === tashkentDay) return; // bugun allaqachon ishladi
+        this.lastNightBatchDay = tashkentDay;
+        this.log.log(`Auto-sync NIGHT BATCH: boshlandi`);
+        const result = await this.syncFromTransactions({
+          minDate,
+          // limit: undefined -> hamma tx olinadi (full batch)
+          actor: { id: null, name: 'cron · night-batch' },
+        });
+        this.log.log(`Auto-sync NIGHT BATCH DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+      }
     } catch (e: any) {
       this.log.warn(`Auto-sync xato: ${e?.message}`);
     }
@@ -276,9 +312,10 @@ export class OplataKvService {
    *
    * Dedup: sourceTxId (unique) orqali — mavjud bo'lsa update, bo'lmasa create.
    */
-  async syncFromTransactions(opts: { minDate?: Date | null; actor?: Actor } = {}) {
+  async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor } = {}) {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;
+    const limit = opts.limit && opts.limit > 0 ? opts.limit : undefined;
 
     // CLIENT kategoriya — IKKALA direction (IN = to'lov, OUT = refund/qaytarish)
     const where: Prisma.TransactionWhereInput = {
@@ -305,7 +342,8 @@ export class OplataKvService {
         fromName: true,
         toName: true,
       },
-      orderBy: { txnDate: 'asc' },
+      orderBy: { txnDate: 'desc' },  // Yangilar avval (limit bilan eng yangilarini olamiz)
+      take: limit,
     });
 
     if (txList.length === 0) {
@@ -717,6 +755,7 @@ export class OplataKvService {
 
     // Filter: agar contractNo berilsa — faqat shu shartnoma uchun
     // force=true bo'lsa firstInstallment/monthlyAmount bor bo'lsa ham qayta hisoblaydi
+    // !force: faqat hech narsa qo'yilmaganlarni (foydalanuvchining qo'lda qo'yganlariga tegmaymiz)
     const where: Prisma.OplataKvWhereInput = {
       sourceTxId: { not: null },
       paymentAmount: { not: null },
@@ -725,6 +764,7 @@ export class OplataKvService {
     if (!opts.force) {
       where.firstInstallment = null;
       where.monthlyAmount = null;
+      where.paymentCategory = null;  // Qo'lda qo'yilgan paymentCategory'ga tegmaymiz
     }
 
     // Agar contractNo bo'yicha force re-split bo'lsa, hozirgi qiymatlarni reset qilamiz
@@ -876,6 +916,26 @@ export class OplataKvService {
       notFound,
       errors,
       duration,
+    };
+  }
+
+  /**
+   * UI uchun — oxirgi sync vaqti.
+   */
+  async getLastSyncInfo() {
+    const lastTx = await this.prisma.oplataKv.findFirst({
+      where: { sourceTxId: { not: null } },
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true, createdAt: true },
+    });
+    const txCount = await this.prisma.oplataKv.count({
+      where: { sourceTxId: { not: null } },
+    });
+    return {
+      ok: true,
+      lastUpdate: lastTx?.updatedAt || null,
+      lastCreated: lastTx?.createdAt || null,
+      txSourceCount: txCount,
     };
   }
 
