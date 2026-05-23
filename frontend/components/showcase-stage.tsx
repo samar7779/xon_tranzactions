@@ -117,7 +117,7 @@ export function ShowcaseStage({
           )}
 
           {/* 3D dashboard — minimal'da kattaroq + flip animatsiya (scanning'da orqaga aylanadi) */}
-          <div className="absolute inset-0 grid place-items-center showcase-card-in">
+          <div className="absolute inset-0 grid place-items-center showcase-card-in" style={{ perspective: '1600px' }}>
             <div
               className={isMinimal ? "relative w-full max-w-[1320px]" : "relative w-full max-w-[820px]"}
               style={{
@@ -126,8 +126,14 @@ export function ShowcaseStage({
                 transition: 'transform 0.9s cubic-bezier(0.65, 0, 0.35, 1)',
               }}
             >
-              {/* FRONT side — dashboard (backface-hidden, scanning'da yashirinadi) */}
-              <div className="relative" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
+              {/* FRONT side — dashboard (opacity orqali yashirinadi, rotation yarmida) */}
+              <div className="relative transition-opacity duration-300"
+                   style={{
+                     opacity: scanning ? 0 : 1,
+                     transitionDelay: scanning ? '0.2s' : '0.6s',
+                     backfaceVisibility: 'hidden',
+                     WebkitBackfaceVisibility: 'hidden',
+                   }}>
               {/* Asosiy glow halo — minimal'da kattaroq va kuchliroq */}
               <div className={cn(
                 "absolute rounded-[40px] blur-3xl -z-10",
@@ -361,10 +367,12 @@ export function ShowcaseStage({
               </div>
               {/* /FRONT side */}
 
-              {/* BACK side — scanning'da ko'rinadi (rotateY(180deg)) */}
+              {/* BACK side — scanning'da ko'rinadi (rotateY(180deg) + opacity) */}
               {isMinimal && (
-                <div className="absolute inset-0"
+                <div className="absolute inset-0 transition-opacity duration-300"
                      style={{
+                       opacity: scanning ? 1 : 0,
+                       transitionDelay: scanning ? '0.6s' : '0s',
                        backfaceVisibility: 'hidden',
                        WebkitBackfaceVisibility: 'hidden',
                        transform: 'rotateY(180deg)',
