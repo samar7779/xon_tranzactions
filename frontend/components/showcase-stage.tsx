@@ -197,21 +197,21 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                   {/* Chap: balance + 2 chart */}
                   <div className="col-span-7 space-y-3" style={{ transformStyle: 'preserve-3d' }}>
                     {/* TOTAL BALANCE — hero element */}
-                    <div className="rounded-2xl bg-gradient-to-br from-slate-900/85 to-slate-800/55 ring-1 ring-white/10 p-4 relative overflow-hidden
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-amber-400/80 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.55)]
-                                    hover:[transform:translateZ(80px)_scale(1.06)]
-                                    active:[transform:translateZ(50px)_scale(1.03)] active:duration-100">
+                    <div className={cn(
+                      "rounded-2xl bg-gradient-to-br from-slate-900/85 to-slate-800/55 ring-1 ring-white/10 relative overflow-hidden",
+                      "transition-all duration-300 ease-out cursor-pointer",
+                      "hover:ring-amber-400/80 hover:shadow-[0_40px_80px_-10px_rgba(245,158,11,0.55)]",
+                      "hover:[transform:translateZ(80px)_scale(1.06)]",
+                      "active:[transform:translateZ(50px)_scale(1.03)] active:duration-100",
+                      isMinimal ? "p-5" : "p-4",
+                    )}>
                       <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-amber-400/15 blur-3xl" />
                       <div className="absolute -left-10 -bottom-10 w-32 h-32 rounded-full bg-cyan-400/12 blur-3xl" />
                       <div className="relative flex items-start justify-between gap-3">
                         <div>
                           <div className="text-[9px] uppercase tracking-[0.22em] text-white/45 font-semibold">Total Balance · UZS</div>
-                          <div className="mt-1 text-[28px] font-bold tabular-nums tracking-tight
-                                          bg-gradient-to-r from-amber-100 via-amber-300 to-amber-500 bg-clip-text text-transparent
-                                          drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)]">
-                            {formatMoney(bal)}
-                          </div>
+                          <AnimatedBalanceDisplay value={bal} size={isMinimal ? 'lg' : 'md'} />
+
                           <div className="mt-1 flex items-center gap-2 text-[11px]">
                             <span className="text-emerald-400 font-semibold flex items-center gap-1">
                               <TrendUp /> 12.5%
@@ -226,19 +226,36 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                       </div>
                     </div>
 
-                    {/* Payment analytics */}
-                    <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
-                                    transition-all duration-300 ease-out cursor-pointer
-                                    hover:ring-cyan-400/80 hover:shadow-[0_40px_80px_-10px_rgba(34,211,238,0.55)]
-                                    hover:bg-white/[0.06]
-                                    hover:[transform:translateZ(80px)_scale(1.06)]
-                                    active:[transform:translateZ(50px)_scale(1.03)] active:duration-100">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-[11px] font-semibold">Payment analytics</span>
+                    {/* Payment analytics — kattaroq, jonli effekt */}
+                    <div className={cn(
+                      "rounded-2xl bg-white/[0.025] ring-1 ring-white/8 relative overflow-hidden",
+                      "transition-all duration-300 ease-out cursor-pointer",
+                      "hover:ring-cyan-400/80 hover:shadow-[0_40px_80px_-10px_rgba(34,211,238,0.55)]",
+                      "hover:bg-white/[0.06]",
+                      "hover:[transform:translateZ(80px)_scale(1.06)]",
+                      "active:[transform:translateZ(50px)_scale(1.03)] active:duration-100",
+                      isMinimal ? "p-5" : "p-3.5",
+                    )}>
+                      {/* Yengil glow accent — top-left va bottom-right */}
+                      <div className="absolute -top-12 -left-12 w-32 h-32 rounded-full bg-amber-400/8 blur-3xl pointer-events-none" />
+                      <div className="absolute -bottom-12 -right-12 w-32 h-32 rounded-full bg-cyan-400/8 blur-3xl pointer-events-none" />
+
+                      <div className="relative flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("font-semibold", isMinimal ? "text-[13px]" : "text-[11px]")}>Payment analytics</span>
+                          {/* LIVE indikator */}
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-400/15 ring-1 ring-emerald-400/30">
+                            <span className="relative flex h-1.5 w-1.5">
+                              <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+                              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+                            </span>
+                            <span className="text-[8px] uppercase tracking-[0.18em] font-bold text-emerald-300">Live</span>
+                          </span>
+                        </div>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Auraeoce ▾</span>
                       </div>
-                      <PaymentLineChart />
-                      <div className="flex justify-between mt-1 text-[9px] text-white/40 px-1">
+                      <PaymentLineChart tall={isMinimal} />
+                      <div className="relative flex justify-between mt-2 text-[9px] text-white/40 px-1">
                         {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m) => <span key={m}>{m}</span>)}
                       </div>
                     </div>
@@ -558,7 +575,54 @@ function BankPill({ src, name }: { src: string; name: string }) {
   );
 }
 
-function PaymentLineChart() {
+/** Balance — value o'zgarganda flash + scale efekt, smooth count animatsiya */
+function AnimatedBalanceDisplay({ value, size = 'md' }: { value: number; size?: 'md' | 'lg' }) {
+  const [display, setDisplay] = useState(value);
+  const [flash, setFlash] = useState(false);
+  const prev = useRef(value);
+
+  useEffect(() => {
+    if (Math.abs(value - prev.current) < 1) return;
+    setFlash(true);
+    const from = prev.current;
+    const to = value;
+    const start = performance.now();
+    const dur = 700;
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setDisplay(from + (to - from) * eased);
+      if (p < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        prev.current = to;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    const flashOff = setTimeout(() => setFlash(false), 500);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(flashOff);
+    };
+  }, [value]);
+
+  return (
+    <div className={cn(
+      "mt-1 font-bold tabular-nums tracking-tight",
+      "bg-gradient-to-r from-amber-100 via-amber-300 to-amber-500 bg-clip-text text-transparent",
+      "transition-all duration-300 ease-out",
+      size === 'lg' ? "text-[36px]" : "text-[28px]",
+      flash
+        ? "drop-shadow-[0_2px_28px_rgba(245,158,11,1)] scale-[1.06] brightness-125"
+        : "drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)] scale-100",
+    )}>
+      {formatMoney(display)}
+    </div>
+  );
+}
+
+function PaymentLineChart({ tall = false }: { tall?: boolean } = {}) {
   // 12 oy uchun Y qiymatlari — har 2.5s da yangilanadi (real-time chart effekt)
   const [ys, setYs] = useState<number[]>([75, 55, 40, 60, 18, 35, 28, 45, 32, 50, 22, 38]);
   useEffect(() => {
@@ -594,28 +658,47 @@ function PaymentLineChart() {
   const peakY = ys[peakIdx];
 
   return (
-    <svg viewBox="0 0 380 100" className="w-full h-[130px]">
+    <svg viewBox="0 0 380 100" className={cn("w-full", tall ? "h-[180px]" : "h-[130px]")} preserveAspectRatio="none">
       <defs>
         <linearGradient id="pl-fill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.45" />
+          <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.55" />
           <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
         </linearGradient>
         <linearGradient id="pl-stroke" x1="0" y1="0" x2="1" y2="0">
           <stop offset="0%" stopColor="#fde68a" />
           <stop offset="100%" stopColor="#f59e0b" />
         </linearGradient>
+        {/* Glow filter — line uchun */}
+        <filter id="pl-glow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <style>{`.pl-path-anim { transition: d 2200ms cubic-bezier(0.4, 0, 0.2, 1); }`}</style>
       </defs>
-      <path d={buildPath(true)} fill="url(#pl-fill)" className="pl-path-anim" />
-      <path d={buildPath(false)}
-            fill="none" stroke="url(#pl-stroke)" strokeWidth="2.5" strokeLinecap="round" className="pl-path-anim" />
-      {/* Peak dot — eng past nuqtada (eng katta qiymat) */}
-      <circle cx={peakX} cy={peakY} r="4.5" fill="#fde68a" style={{ transition: 'cx 2.2s, cy 2.2s' }} />
-      <circle cx={peakX} cy={peakY} r="9" fill="#fbbf24" opacity="0.35" style={{ transition: 'cx 2.2s, cy 2.2s' }}>
-        <animate attributeName="r" values="6;14;6" dur="2.5s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.45;0;0.45" dur="2.5s" repeatCount="indefinite" />
-      </circle>
+      {/* Grid lines */}
       {[25, 50, 75].map((y) => <line key={y} x1="0" y1={y} x2="380" y2={y} stroke="#ffffff10" />)}
+
+      {/* Fill area */}
+      <path d={buildPath(true)} fill="url(#pl-fill)" className="pl-path-anim" />
+      {/* Line stroke + glow */}
+      <path d={buildPath(false)}
+            fill="none" stroke="url(#pl-stroke)" strokeWidth="3" strokeLinecap="round"
+            className="pl-path-anim" filter="url(#pl-glow)" />
+
+      {/* Travelling pulse dot — chap-o'ngga harakatlanadi */}
+      <circle r="3.5" fill="#fde68a" filter="url(#pl-glow)">
+        <animateMotion dur="4.5s" repeatCount="indefinite" rotate="auto" path={buildPath(false)} />
+      </circle>
+
+      {/* Peak dot — eng yuqori qiymat */}
+      <circle cx={peakX} cy={peakY} r="5" fill="#fde68a" filter="url(#pl-glow)" style={{ transition: 'cx 2.2s, cy 2.2s' }} />
+      <circle cx={peakX} cy={peakY} r="10" fill="#fbbf24" opacity="0.4" style={{ transition: 'cx 2.2s, cy 2.2s' }}>
+        <animate attributeName="r" values="6;16;6" dur="2.5s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.5;0;0.5" dur="2.5s" repeatCount="indefinite" />
+      </circle>
     </svg>
   );
 }
