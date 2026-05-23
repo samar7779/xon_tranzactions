@@ -111,26 +111,58 @@ export class OplataKvService {
     if (q.client) where.client = { contains: q.client, mode: 'insensitive' };
     if (q.object) where.object = { contains: q.object, mode: 'insensitive' };
 
-    // ─── Per-ustun multi-select (vergul bilan) ───
+    // ─── Per-ustun multi-select (vergul bilan), '__null__' = bo'sh qiymatlar ───
+    // Helper: list -> Prisma where clause (null bo'lsa OR with null)
+    const buildListFilter = (list: string[] | null) => {
+      if (!list) return null;
+      const hasNull = list.includes('__null__');
+      const realValues = list.filter((v) => v !== '__null__');
+      if (hasNull && realValues.length > 0) {
+        return { OR: [{ in: realValues }, null] }; // special — we expand below
+      }
+      if (hasNull) return null; // marker — will be set as null filter
+      return { in: realValues };
+    };
+    const applyFieldFilter = (field: string, list: string[] | null) => {
+      if (!list) return;
+      const hasNull = list.includes('__null__');
+      const realValues = list.filter((v) => v !== '__null__');
+      if (hasNull && realValues.length > 0) {
+        // Both null AND specific values — needs OR
+        const ors: any[] = [{ [field]: { in: realValues } }, { [field]: null }];
+        if (where.OR) where.AND = [{ OR: where.OR }, { OR: ors }];
+        else where.OR = ors;
+      } else if (hasNull) {
+        (where as any)[field] = null;
+      } else if (realValues.length > 0) {
+        (where as any)[field] = { in: realValues };
+      }
+    };
+
     const contractNos = this.parseList(q.contractNos);
-    if (contractNos) where.contractNo = { in: contractNos };
+    if (contractNos) applyFieldFilter('contractNo', contractNos);
 
     const paymentCategories = this.parseList(q.paymentCategories);
     if (paymentCategories) {
-      where.paymentCategory = { in: paymentCategories as OplataKvCategory[] };
+      const hasNull = paymentCategories.includes('__null__');
+      const realValues = paymentCategories.filter((v) => v !== '__null__') as OplataKvCategory[];
+      if (hasNull && realValues.length > 0) {
+        const ors: any[] = [{ paymentCategory: { in: realValues } }, { paymentCategory: null }];
+        if (where.OR) where.AND = [{ OR: where.OR }, { OR: ors }];
+        else where.OR = ors;
+      } else if (hasNull) {
+        where.paymentCategory = null;
+      } else if (realValues.length > 0) {
+        where.paymentCategory = { in: realValues };
+      }
     }
 
-    const clients = this.parseList(q.clients);
-    if (clients) where.client = { in: clients };
-
-    const objects = this.parseList(q.objects);
-    if (objects) where.object = { in: objects };
-
-    const paymentMethods = this.parseList(q.paymentMethods);
-    if (paymentMethods) where.paymentMethod = { in: paymentMethods };
-
-    const txTypes = this.parseList(q.txTypes);
-    if (txTypes) where.txType = { in: txTypes };
+    applyFieldFilter('client', this.parseList(q.clients));
+    applyFieldFilter('object', this.parseList(q.objects));
+    applyFieldFilter('paymentMethod', this.parseList(q.paymentMethods));
+    applyFieldFilter('txType', this.parseList(q.txTypes));
+    // buildListFilter unused — placeholder
+    void buildListFilter;
 
     // ─── Manba filter: manual | excel | transaction ───
     const sources = this.parseList(q.sources);
@@ -417,7 +449,7 @@ export class OplataKvService {
     // ── Sync tugagach AUTO: yo'q obyektlarni CRM dan to'ldirish ──
     // Yangi qo'shilgan + mavjud bo'lganlardan object null bo'lsa CRM dan oladi
     // Max 1000 ta bir sync'da (timeoutdan saqlanish)
-    const objectsResult = await this.fillMissingObjects({ limit: 1000, actor: opts.actor }).catch((e) => {
+    const objectsResult = await this.fillMissingObjects({ limit: 10000, actor: opts.actor }).catch((e) => {
       this.log.warn(`auto-fillMissingObjects xato (jiddiy emas): ${e?.message}`);
       return { total: 0, uniqueContracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
     });
@@ -460,23 +492,26 @@ export class OplataKvService {
    */
   async fillMissingObjects(opts: { limit?: number; actor?: Actor } = {}) {
     const startedAt = Date.now();
-    const limit = Math.min(opts.limit || 500, 2000);
+    const limit = Math.min(opts.limit || 5000, 20000);
 
-    // Source=tx va object=null qatorlar
+    // Source=tx va (object null YOKI client null) — ikkalasini ham to'ldiramiz
     const rows = await this.prisma.oplataKv.findMany({
-      where: { sourceTxId: { not: null }, object: null },
-      select: { id: true, contractNo: true },
+      where: {
+        sourceTxId: { not: null },
+        OR: [{ object: null }, { client: null }],
+      },
+      select: { id: true, contractNo: true, object: true, client: true },
       take: limit,
     });
     if (rows.length === 0) {
       return { ok: true, total: 0, uniqueContracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
     }
 
-    // ContractNo bo'yicha guruhlash
-    const byContract = new Map<string, string[]>();
+    // ContractNo bo'yicha guruhlash + qaysi maydonlarni yangilash kerakligi
+    const byContract = new Map<string, Array<{ id: string; needsObject: boolean; needsClient: boolean }>>();
     for (const r of rows) {
       const arr = byContract.get(r.contractNo) || [];
-      arr.push(r.id);
+      arr.push({ id: r.id, needsObject: !r.object, needsClient: !r.client });
       byContract.set(r.contractNo, arr);
     }
     const uniqueContracts = Array.from(byContract.keys());
@@ -489,7 +524,7 @@ export class OplataKvService {
     let notFound = 0;
     let errors = 0;
 
-    // Helper: detail objektidan obyekt nomini topish (cache extractObject bilan bir xil)
+    // Helper: detail objektidan obyekt nomini topish
     const extractObjectFromDetail = (d: any): string | null => {
       if (!d) return null;
       const candidates = [
@@ -508,6 +543,21 @@ export class OplataKvService {
       return null;
     };
 
+    // Helper: detail dan client (mijoz) FULL NAME ni qurish
+    const extractClientFromDetail = (d: any): string | null => {
+      if (!d) return null;
+      const c = d.client || {};
+      const f = (v: any): string => {
+        if (!v) return '';
+        if (typeof v === 'string') return v;
+        if (typeof v === 'object') return v.kirill || v.lotin || v.uz || v.ru || v.name || v.value || '';
+        return '';
+      };
+      const parts = [f(c.last_name), f(c.first_name), f(c.middle_name)].filter(Boolean);
+      if (parts.length > 0) return parts.join(' ').trim();
+      return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || d.fio || null;
+    };
+
     const CONCURRENCY = 5;
     for (let i = 0; i < uniqueContracts.length; i += CONCURRENCY) {
       const batch = uniqueContracts.slice(i, i + CONCURRENCY);
@@ -515,34 +565,51 @@ export class OplataKvService {
         try {
           // 1. Cache lookup
           let objName: string | null = null;
+          let clientName: string | null = null;
           const cached = await this.crmCache.lookup(cn);
-          if (cached?.objectName) {
-            objName = cached.objectName;
-          } else {
-            // 2. Cache'da yo'q yoki null — CRM'ga to'g'ridan-to'g'ri so'rov
+          if (cached?.objectName) objName = cached.objectName;
+          if (cached?.customerName) clientName = cached.customerName;
+
+          // 2. Agar cache to'liq emas — CRM'ga to'g'ridan-to'g'ri so'rov
+          if (!objName || !clientName) {
             try {
               const resp: any = await this.crmService.show({ contract: cn });
               if (resp?.ok && resp.detail) {
-                objName = extractObjectFromDetail(resp.detail);
+                if (!objName)    objName = extractObjectFromDetail(resp.detail);
+                if (!clientName) clientName = extractClientFromDetail(resp.detail);
               }
-            } catch { /* CRM xato — notFound */ }
+            } catch { /* CRM xato */ }
           }
 
-          if (!objName) {
+          // Mapping qo'llaymiz (faqat obyekt uchun)
+          if (objName) {
+            const mapped = objMap.get(objName.trim().toLowerCase());
+            if (mapped) objName = mapped;
+          }
+
+          if (!objName && !clientName) {
             notFound++;
             return;
           }
 
-          // Mapping qo'llaymiz
-          const mapped = objMap.get(objName.trim().toLowerCase());
-          if (mapped) objName = mapped;
+          const items = byContract.get(cn)!;
+          // Har qator uchun update — agar mavjud bo'lsa
+          const idsNeedObject = items.filter((it) => it.needsObject).map((it) => it.id);
+          const idsNeedClient = items.filter((it) => it.needsClient).map((it) => it.id);
 
-          const ids = byContract.get(cn)!;
-          await this.prisma.oplataKv.updateMany({
-            where: { id: { in: ids } },
-            data: { object: objName },
-          });
-          filled += ids.length;
+          if (objName && idsNeedObject.length > 0) {
+            await this.prisma.oplataKv.updateMany({
+              where: { id: { in: idsNeedObject } },
+              data: { object: objName },
+            });
+          }
+          if (clientName && idsNeedClient.length > 0) {
+            await this.prisma.oplataKv.updateMany({
+              where: { id: { in: idsNeedClient } },
+              data: { client: clientName },
+            });
+          }
+          filled += items.length;
         } catch (e: any) {
           this.log.warn(`fillMissingObjects ${cn} xato: ${e?.message}`);
           errors++;
@@ -938,6 +1005,17 @@ export class OplataKvService {
 
     // Alifbo tartibida
     values.sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+    // Null/bo'sh qiymatlar bormi? Bor bo'lsa "(bo'sh)" optionni yuqoriga qo'shamiz
+    if (NULLABLE_FIELDS.has(String(field))) {
+      const whereForNull = this.buildWhere(queryCopy);
+      const nullCount = await this.prisma.oplataKv.count({
+        where: { ...whereForNull, [field]: null },
+      });
+      if (nullCount > 0) {
+        values.unshift({ id: '__null__', name: `(bo'sh)` });
+      }
+    }
 
     return { ok: true, values };
   }
