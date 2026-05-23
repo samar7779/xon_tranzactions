@@ -558,19 +558,26 @@ export class OplataKvService {
       return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || d.fio || null;
     };
 
-    const CONCURRENCY = 5;
+    // ─── TEZLIK OPTIMIZATSIYA ───
+    // 1. Avval BARCHA cached contractlarni BITTA query bilan olamiz (DB lookup'lar kamayadi)
+    const cachedAll = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: uniqueContracts.map((c) => c.toUpperCase().trim()) } },
+      select: { contractNumber: true, customerName: true, objectName: true, found: true },
+    });
+    const cachedMap = new Map(cachedAll.map((c) => [c.contractNumber.toUpperCase(), c]));
+
+    // 2. Concurrency 5 -> 25 (5x tezroq, CRM API ham yetadi)
+    const CONCURRENCY = 25;
     for (let i = 0; i < uniqueContracts.length; i += CONCURRENCY) {
       const batch = uniqueContracts.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async (cn) => {
         try {
-          // 1. Cache lookup
-          let objName: string | null = null;
-          let clientName: string | null = null;
-          const cached = await this.crmCache.lookup(cn);
-          if (cached?.objectName) objName = cached.objectName;
-          if (cached?.customerName) clientName = cached.customerName;
+          // 1. Cache'dan boshlaymiz — DB query'siz, oldindan yuklangan
+          const cached = cachedMap.get(cn.toUpperCase().trim());
+          let objName: string | null = cached?.objectName || null;
+          let clientName: string | null = cached?.customerName || null;
 
-          // 2. Agar cache to'liq emas — CRM'ga to'g'ridan-to'g'ri so'rov
+          // 2. Agar cache to'liq emas (yoki yo'q) — CRM live so'rov
           if (!objName || !clientName) {
             try {
               const resp: any = await this.crmService.show({ contract: cn });
