@@ -13,12 +13,13 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
   const [bal, setBal] = useState(0);
   const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
 
-  // Balance counter — 0 dan target gacha, keyin tirik ko'rinish uchun cycling
+  // Balance counter — 0 dan target gacha, keyin yangi tranzaksiyalar kelgandek o'sib boradi
   useEffect(() => {
     const baseTarget = 12_504_500;
     const start = performance.now();
     let raf = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let current = baseTarget;
 
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / 2400);
@@ -26,11 +27,13 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
       if (p < 1) {
         raf = requestAnimationFrame(tick);
       } else {
-        // Initial animation tugadi — endi har 1.8s da kichik fluctuation
+        // Initial animation tugadi — endi har 1.2s da +/- katta o'zgarish (ko'rinarli)
         intervalId = setInterval(() => {
-          const delta = Math.floor((Math.random() - 0.5) * 20_000);
-          setBal(baseTarget + delta);
-        }, 1800);
+          // Asosan +/- 300K gacha tasodifiy, simulating real transactions
+          const delta = Math.floor((Math.random() - 0.45) * 600_000);
+          current = Math.max(11_500_000, Math.min(13_500_000, current + delta));
+          setBal(current);
+        }, 1200);
       }
     };
     raf = requestAnimationFrame(tick);
@@ -315,16 +318,22 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                         <LogoDisc size={28} rounded="rounded-full" />
                         <div className="text-[11px] font-semibold text-slate-600">Credit</div>
                       </div>
-                      <div className="relative mt-3 font-mono text-[13px] tracking-wider text-slate-800">
-                        <AnimatedCardNumber />
+                      {/* Yashiringan karta raqami — faqat oxirgi 4 ta raqam ko'rinadi */}
+                      <div className="relative mt-3 font-mono text-[13px] tracking-wider text-slate-700">
+                        <MaskedCardNumber />
                       </div>
-                      <div className="relative mt-2 flex items-center justify-between">
-                        <div className="text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
+                      {/* Animatsiyali balans summasi */}
+                      <div className="relative mt-2 flex items-end justify-between">
+                        <div>
+                          <div className="text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">Available</div>
+                          <CardBalance />
+                        </div>
                         <div className="flex gap-0.5">
                           <span className="w-5 h-5 rounded-full bg-rose-500/80" />
                           <span className="w-5 h-5 rounded-full bg-amber-400/80 -ml-2" />
                         </div>
                       </div>
+                      <div className="relative mt-1.5 text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
                     </div>
                   </div>
                 </div>
@@ -615,35 +624,36 @@ function TransactionBars() {
   );
 }
 
-/** Credit kartasi raqami — har 2.5s da kichik scramble effekti, keyin real raqamga qaytadi */
-function AnimatedCardNumber() {
-  const REAL = '1234 5034 5678 3058';
-  const [display, setDisplay] = useState(REAL);
+/** Credit kartasi raqami — yashiringan (•••• •••• •••• 3058), real bank kartalari kabi */
+function MaskedCardNumber() {
+  // Bullet character animatsiyali — har 2s da subtle pulse
+  return (
+    <span className="inline-flex items-center gap-3 text-[14px] tracking-wider">
+      <span className="text-slate-400 animate-pulse" style={{ animationDuration: '2s' }}>••••</span>
+      <span className="text-slate-400 animate-pulse" style={{ animationDuration: '2s', animationDelay: '0.5s' }}>••••</span>
+      <span className="text-slate-400 animate-pulse" style={{ animationDuration: '2s', animationDelay: '1s' }}>••••</span>
+      <span className="text-slate-800 font-bold">3058</span>
+    </span>
+  );
+}
+
+/** Karta available balansi — yangi tranzaksiyalar kelgandek jonli o'zgaradi */
+function CardBalance() {
+  const [amt, setAmt] = useState(2_847_500);
   useEffect(() => {
-    let scrambleTimer: ReturnType<typeof setTimeout> | null = null;
     const interval = setInterval(() => {
-      // Scramble fazasi — 0.6s davomida tasodifiy raqamlar
-      const scrambleStart = Date.now();
-      const scrambleId = setInterval(() => {
-        const elapsed = Date.now() - scrambleStart;
-        if (elapsed > 600) {
-          clearInterval(scrambleId);
-          setDisplay(REAL);
-          return;
-        }
-        // 4 ta blokdan tasodifiy birini scramble qilamiz
-        const blocks = REAL.split(' ');
-        const idx = Math.floor(Math.random() * 4);
-        blocks[idx] = String(Math.floor(1000 + Math.random() * 9000));
-        setDisplay(blocks.join(' '));
-      }, 70);
-    }, 3000);
-    return () => {
-      clearInterval(interval);
-      if (scrambleTimer) clearTimeout(scrambleTimer);
-    };
+      setAmt((prev) => {
+        const delta = Math.floor((Math.random() - 0.4) * 250_000);
+        return Math.max(1_500_000, Math.min(3_800_000, prev + delta));
+      });
+    }, 1500);
+    return () => clearInterval(interval);
   }, []);
-  return <span>{display}</span>;
+  return (
+    <div className="mt-0.5 font-mono text-[13px] font-bold text-slate-900 tabular-nums">
+      {formatMoney(amt).replace(' UZS', '')} <span className="text-[9px] text-slate-500 font-sans">UZS</span>
+    </div>
+  );
 }
 
 function ConnectionLines() {
