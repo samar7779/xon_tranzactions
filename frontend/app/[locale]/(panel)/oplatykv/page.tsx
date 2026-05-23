@@ -324,7 +324,7 @@ export default function OplataKvPage() {
           <SumCard label="Сумма оплаты" value={sums.paymentAmount}    color="indigo" />
           <SumCard label="1 взнос"       value={sums.firstInstallment} color="amber" />
           <SumCard label="ежемесячный"   value={sums.monthlyAmount}    color="sky" />
-          <CountCard label="Жами yozuv"  count={total} />
+          <CountCard label="Всего записей"  count={total} />
         </div>
 
         {/* ═══ Filter bar ═══ */}
@@ -549,8 +549,12 @@ export default function OplataKvPage() {
                     <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">{it.contractNo}</td>
                     <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
                     <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
-                    <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.firstInstallment))}>{fmtNum(it.firstInstallment)}</td>
-                    <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.monthlyAmount))}>{fmtNum(it.monthlyAmount)}</td>
+                    <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.firstInstallment))}>
+                      {it.firstInstallment ? fmtNum(it.firstInstallment) : ''}
+                    </td>
+                    <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.monthlyAmount))}>
+                      {it.monthlyAmount ? fmtNum(it.monthlyAmount) : ''}
+                    </td>
                     <td className="px-3 py-2.5">
                       {it.paymentCategory ? (
                         <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1', CATEGORY_CLS[it.paymentCategory])}>
@@ -1701,12 +1705,32 @@ function OplataKvDetailDialog({
 
         {/* Footer actions */}
         <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2">
-          <button
-            onClick={() => onHistory(row)}
-            className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors inline-flex items-center gap-1.5"
-          >
-            <History className="h-4 w-4" /> Tarix
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onHistory(row)}
+              className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors inline-flex items-center gap-1.5"
+            >
+              <History className="h-4 w-4" /> Tarix
+            </button>
+            {row.sourceTxId && canManage && (
+              <button
+                onClick={async () => {
+                  if (!confirm(`Shu shartnoma (${row.contractNo}) bo'yicha to'lovlarni qayta hisoblash (split)?`)) return;
+                  try {
+                    const r: any = await api.post(`/oplata-kv/${row.id}/split`, {});
+                    toast.success(`Split: ${r.filled} qator yangilandi (${r.contracts || 1} shartnoma)`);
+                    setTimeout(() => window.location.reload(), 1200);
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Split xato');
+                  }
+                }}
+                className="h-10 px-3 rounded-xl text-[13px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 ring-1 ring-fuchsia-200 transition-colors inline-flex items-center gap-1.5"
+                title="Bu shartnoma bo'yicha 1-vznos/oylik qayta hisoblash"
+              >
+                <Receipt className="h-4 w-4" /> Re-split
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             {canManage && (
               <>
@@ -1806,7 +1830,7 @@ function CountCard({ label, count }: { label: string; count: number }) {
         <div className="min-w-0 flex-1">
           <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
           <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-900">
-            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400">ta</span>
+            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400">шт.</span>
           </div>
         </div>
       </CardContent>
