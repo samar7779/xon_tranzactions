@@ -363,6 +363,18 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
 
+  // Split installments — qo'lda triggerlash
+  const splitMut = useMutation({
+    mutationFn: () => api.post<{ total: number; contracts: number; filled: number; notFound: number; errors: number; duration: number }>('/oplata-kv/split-installments', { limit: 5000 }, { timeout: 600_000 }),
+    onSuccess: (r: any) => {
+      toast.success(
+        `Installment split · jami ${r.total} qator (${r.contracts} shartnoma) · to'ldirildi: ${r.filled}, topilmadi: ${r.notFound}, xato: ${r.errors}${r.duration ? ` · ${r.duration}s` : ''}`,
+        { duration: 10000 },
+      );
+    },
+    onError: (e: any) => toast.error(e?.message || 'Split xato'),
+  });
+
   // Tranzaksiya-manba qatorlarni tozalash (date range)
   const cleanupTxMut = useMutation({
     mutationFn: (range: { dateFrom: string | null; dateTo: string | null }) => {
@@ -573,6 +585,15 @@ function SyncSettingsPanel() {
                 >
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Hozir sync
+                </Button>
+                <Button
+                  onClick={() => splitMut.mutate()}
+                  disabled={splitMut.isPending}
+                  className="h-10 px-4 gap-2 bg-gradient-to-br from-violet-500 to-fuchsia-600 hover:from-violet-600 hover:to-fuchsia-700 text-white"
+                  title="paymentAmount'ni 1-vznos va oylik'ga ajratish (CRM payment_histories asosida)"
+                >
+                  {splitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Split now
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
