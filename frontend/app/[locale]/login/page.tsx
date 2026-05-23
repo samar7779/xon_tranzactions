@@ -32,13 +32,20 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clock, setClock] = useState('00:00:00');
 
-  // KIRISH bosilganda — avval scan animatsiyasi, keyin login paneli ochiladi
+  // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
+  // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
   const handleKirish = () => {
     setScanning(true);
     setTimeout(() => {
       setOpen(true);
-      setScanning(false);
-    }, 1800); // 1.8 soniya scan davom etadi
+      // scanning=true holatda qoldiriladi, login yopilgach handleClose'da false bo'ladi
+    }, 2500);
+  };
+
+  // Login yopilganda — dashboard scan'dan dashboard'ga qaytadi (flip back)
+  const handleCloseLogin = () => {
+    setOpen(false);
+    setScanning(false);
   };
 
   useEffect(() => {
@@ -58,10 +65,13 @@ export default function LoginPage() {
     return () => clearInterval(id);
   }, []);
 
-  // ESC orqali yopish
+  // ESC orqali yopish — dashboard ham scan'dan qaytadi
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
+      if (e.key === 'Escape') {
+        setOpen(false);
+        setScanning(false);
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -188,7 +198,7 @@ export default function LoginPage() {
 
           {/* Close button */}
           <button
-            onClick={() => setOpen(false)}
+            onClick={handleCloseLogin}
             className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full grid place-items-center
                        bg-white/5 ring-1 ring-white/10 text-cyan-200/70
                        hover:bg-rose-500/20 hover:ring-rose-400/40 hover:text-rose-200
