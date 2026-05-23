@@ -9,6 +9,7 @@ import {
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
   Plus, Trash2, ArrowRight, Building2,
 } from 'lucide-react';
+// Clock allaqachon import qilingan
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -296,12 +297,14 @@ function SyncSettingsPanel() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['sync-settings'],
-    queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null; oplatykvTxMinDate: string | null }>('/sync/settings'),
+    queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null; oplatykvTxMinDate: string | null; oplatykvAutoSyncMinutes: number }>('/sync/settings'),
   });
   const [syncMinDate, setSyncMinDate] = useState<string>('');
   const [oplatykvTxMinDate, setOplatykvTxMinDate] = useState<string>('');
+  const [oplatykvAutoSyncMinutes, setOplatykvAutoSyncMinutes] = useState<string>('0');
   const [dirty1, setDirty1] = useState(false);
   const [dirty2, setDirty2] = useState(false);
+  const [dirty3, setDirty3] = useState(false);
 
   useEffect(() => {
     if (data?.syncMinDate !== undefined) {
@@ -312,15 +315,20 @@ function SyncSettingsPanel() {
       setOplatykvTxMinDate(data.oplatykvTxMinDate || '');
       setDirty2(false);
     }
-  }, [data?.syncMinDate, data?.oplatykvTxMinDate]);
+    if (data?.oplatykvAutoSyncMinutes !== undefined) {
+      setOplatykvAutoSyncMinutes(String(data.oplatykvAutoSyncMinutes || 0));
+      setDirty3(false);
+    }
+  }, [data?.syncMinDate, data?.oplatykvTxMinDate, data?.oplatykvAutoSyncMinutes]);
 
   const mut = useMutation({
-    mutationFn: (vals: { syncMinDate?: string | null; oplatykvTxMinDate?: string | null }) =>
+    mutationFn: (vals: { syncMinDate?: string | null; oplatykvTxMinDate?: string | null; oplatykvAutoSyncMinutes?: number | null }) =>
       api.patch<any>('/sync/settings', vals),
     onSuccess: (r: any) => {
       toast.success("Sozlama saqlandi");
       if (r.syncMinDate !== undefined) { setSyncMinDate(r.syncMinDate || ''); setDirty1(false); }
       if (r.oplatykvTxMinDate !== undefined) { setOplatykvTxMinDate(r.oplatykvTxMinDate || ''); setDirty2(false); }
+      if (r.oplatykvAutoSyncMinutes !== undefined) { setOplatykvAutoSyncMinutes(String(r.oplatykvAutoSyncMinutes || 0)); setDirty3(false); }
       qc.invalidateQueries({ queryKey: ['sync-settings'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
@@ -570,8 +578,52 @@ function SyncSettingsPanel() {
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
                 <br />
-                <b>Sync ichida AVTOMATIK:</b> obyekt nomi yo'q bo'lganlar CRM'dan to'ldiriladi (max 1000 ta bir martaga, mapping qo'llaniladi).
-                Agar 1000 dan ko'p bo'lsa qaytadan sync bossangiz qolganlari to'ldiriladi.
+                <b>Sync ichida AVTOMATIK:</b> obyekt + client + 1 взнос/oylik ajratish CRM'dan orqada to'ldiriladi.
+              </div>
+
+              {/* AUTO-SYNC INTERVAL */}
+              <div className="mt-5 pt-5 border-t border-slate-100">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600 flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  Avtomatik sync (cron)
+                </Label>
+                <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+                  Backend har belgilangan daqiqada avtomatik sync'ni ishga tushiradi. <b>0</b> qo'ysangiz — o'chirilgan.
+                </div>
+                <div className="flex items-end gap-2 flex-wrap">
+                  <div>
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                      Har necha daqiqada
+                    </Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={1440}
+                      value={oplatykvAutoSyncMinutes}
+                      onChange={(e) => { setOplatykvAutoSyncMinutes(e.target.value); setDirty3(true); }}
+                      placeholder="0 = o'chirilgan"
+                      className="h-10 w-32"
+                    />
+                  </div>
+                  <Button
+                    onClick={() => mut.mutate({ oplatykvAutoSyncMinutes: Number(oplatykvAutoSyncMinutes) || 0 })}
+                    disabled={!dirty3 || mut.isPending}
+                    className="h-10 px-4 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  >
+                    {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Saqlash
+                  </Button>
+                  <div className="text-[11px] text-slate-500 self-center">
+                    {Number(oplatykvAutoSyncMinutes) > 0
+                      ? <>✓ Faol: har <b>{oplatykvAutoSyncMinutes} daqiqada</b> bir marta</>
+                      : <>○ O'chirilgan</>}
+                  </div>
+                </div>
+                <div className="text-[10.5px] text-slate-400 mt-2">
+                  Misol: <b>30</b> qo'ysangiz — backend har 30 daqiqada avtomatik tx-dan sync qiladi (object + client + installment split bilan).
+                  <br />
+                  Tavsiya: <b>30-60</b> daqiqa (CRM API zo'r turlmasligi uchun). 0 yoki bo'sh — faqat qo'lda "Hozir sync".
+                </div>
               </div>
 
               {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}
