@@ -280,14 +280,12 @@ export class OplataKvService {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;
 
+    // CLIENT kategoriya — IKKALA direction (IN = to'lov, OUT = refund/qaytarish)
     const where: Prisma.TransactionWhereInput = {
-      direction: 'IN',
       category: { code: 'CLIENT' },
       contractNumber: { not: null },
     };
     if (minDate) {
-      // Foydalanuvchi kiritgan sananing OXIRGI sekundidan (23:59:59.999) keyingi tranzaksiyalar
-      // Misol: 30.04.2026 qo'ysangiz, 01.05.2026 00:00 dan boshlab olinadi (shu sana o'zi olinmaydi)
       const dayEnd = new Date(minDate);
       dayEnd.setUTCHours(23, 59, 59, 999);
       where.txnDate = { gt: dayEnd };
@@ -300,9 +298,11 @@ export class OplataKvService {
         externalId: true,
         txnDate: true,
         amount: true,
+        direction: true,         // IN/OUT — sign uchun
         contractNumber: true,
         description: true,
         fromName: true,
+        toName: true,
       },
       orderBy: { txnDate: 'asc' },
     });
@@ -365,10 +365,15 @@ export class OplataKvService {
 
     for (const tx of validTxs) {
       const crm = crmByContract.get(tx.contractNumber!);
-      const amount = new Prisma.Decimal(tx.amount);
+      // IN = positive (to'lov), OUT = negative (refund)
+      const rawAmount = Math.abs(Number(tx.amount));
+      const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount;
+      const amount = new Prisma.Decimal(signedAmount);
       const oplataId = tx.externalId || randomUUID();
       const dedupKey = tx.externalId || tx.id;
       const existing = existingMap.get(dedupKey);
+      // Client nomi — IN bo'lsa yuboruvchi, OUT bo'lsa qabul qiluvchi
+      const txParty = tx.direction === 'IN' ? tx.fromName : (tx as any).toName;
 
       const baseData = {
         contractNo: tx.contractNumber!,
@@ -376,7 +381,7 @@ export class OplataKvService {
         paymentAmount: amount,
         purpose: tx.description || null,
         txType: 'Взносы за квартиры',
-        client: crm?.customerName || tx.fromName || null,
+        client: crm?.customerName || txParty || null,
         object: mapObject(crm?.objectName),
       };
 
