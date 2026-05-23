@@ -118,6 +118,13 @@ export class OplataKvController {
     return this.svc.syncFromTransactions({ minDate, actor: actorFrom(user) });
   }
 
+  @Get('last-sync-info')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Oxirgi tx-manba sync vaqti — UI'da ko'rsatish uchun" })
+  async lastSyncInfo() {
+    return this.svc.getLastSyncInfo();
+  }
+
   @Get('object-mappings')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Obyekt nomi mapping ro'yxati (CRM -> OplatyKv)" })
@@ -177,6 +184,13 @@ export class OplataKvController {
       force: true,
       actor: actorFrom(user),
     });
+  }
+
+  @Delete('cleanup-xato-contracts')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Tx-manba qatorlardan CRM da topilmaganlarni o'chirish (XATO cleanup)" })
+  async cleanupXato(@CurrentUser() user?: AuthUser) {
+    return this.svc.cleanupXatoContracts({ actor: actorFrom(user) });
   }
 
   @Delete('cleanup-tx-source')

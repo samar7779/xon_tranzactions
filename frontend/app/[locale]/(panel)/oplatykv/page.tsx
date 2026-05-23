@@ -307,6 +307,13 @@ export default function OplataKvPage() {
     placeholderData: (prev) => prev,
   });
 
+  // Oxirgi sync vaqti (UI'da ko'rsatish)
+  const lastSyncQuery = useQuery({
+    queryKey: ['oplata-kv-last-sync'],
+    queryFn: () => api.get<{ ok: boolean; lastUpdate: string | null; lastCreated: string | null; txSourceCount: number }>('/oplata-kv/last-sync-info'),
+    refetchInterval: 60_000, // har daqiqada yangilanadi
+  });
+
   // Filtr o'zgarganda sahifani 1-ga qaytarish
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, perPage, columnFiltersKey]);
@@ -331,6 +338,22 @@ export default function OplataKvPage() {
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4">
             <div className="flex items-center gap-3 flex-wrap">
+              {/* Last sync timestamp chip */}
+              {lastSyncQuery.data?.lastUpdate && (
+                <div
+                  className="h-10 px-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 shrink-0"
+                  title={`So'nggi yangilanish: ${new Date(lastSyncQuery.data.lastUpdate).toLocaleString('ru-RU')}\n${lastSyncQuery.data.txSourceCount} ta tx-manba qator`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="font-semibold">Sync:</span>
+                  <span className="tabular-nums">
+                    {new Date(lastSyncQuery.data.lastUpdate).toLocaleString('ru-RU', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              )}
               <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
                 <Input
