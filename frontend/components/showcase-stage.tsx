@@ -13,18 +13,31 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
   const [bal, setBal] = useState(0);
   const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
 
-  // Balance counter — 0 dan target gacha
+  // Balance counter — 0 dan target gacha, keyin tirik ko'rinish uchun cycling
   useEffect(() => {
-    const target = 12_504_500;
+    const baseTarget = 12_504_500;
     const start = performance.now();
     let raf = 0;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / 2400);
-      setBal(target * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) raf = requestAnimationFrame(tick);
+      setBal(baseTarget * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) {
+        raf = requestAnimationFrame(tick);
+      } else {
+        // Initial animation tugadi — endi har 1.8s da kichik fluctuation
+        intervalId = setInterval(() => {
+          const delta = Math.floor((Math.random() - 0.5) * 20_000);
+          setBal(baseTarget + delta);
+        }, 1800);
+      }
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   // Mouse parallax — kursor harakatlansa karta egiladi
@@ -185,7 +198,10 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                   <LogoDisc size={32} rounded="rounded-full" />
                 </div>
 
-                <div className="grid grid-cols-12 gap-3 p-4" style={{ transformStyle: 'preserve-3d' }}>
+                <div className={cn(
+                  "grid grid-cols-12 gap-4",
+                  isMinimal ? "p-6" : "p-4",
+                )} style={{ transformStyle: 'preserve-3d' }}>
                   {/* Chap: balance + 2 chart */}
                   <div className="col-span-7 space-y-3" style={{ transformStyle: 'preserve-3d' }}>
                     {/* TOTAL BALANCE — hero element */}
@@ -300,7 +316,7 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                         <div className="text-[11px] font-semibold text-slate-600">Credit</div>
                       </div>
                       <div className="relative mt-3 font-mono text-[13px] tracking-wider text-slate-800">
-                        1234 5034 5678 3058
+                        <AnimatedCardNumber />
                       </div>
                       <div className="relative mt-2 flex items-center justify-between">
                         <div className="text-[8px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
@@ -541,7 +557,7 @@ function BankPill({ src, name }: { src: string; name: string }) {
 
 function PaymentLineChart() {
   return (
-    <svg viewBox="0 0 380 100" className="w-full h-[100px]">
+    <svg viewBox="0 0 380 100" className="w-full h-[130px]">
       <defs>
         <linearGradient id="pl-fill" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.45" />
@@ -573,18 +589,61 @@ function PaymentLineChart() {
 }
 
 function TransactionBars() {
-  const values = [55, 75, 90, 60, 85, 65, 80];
+  const [values, setValues] = useState<number[]>([55, 75, 90, 60, 85, 65, 80]);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setValues((prev) =>
+        prev.map((v) => {
+          const delta = (Math.random() - 0.5) * 35;
+          return Math.max(30, Math.min(95, v + delta));
+        }),
+      );
+    }, 1400);
+    return () => clearInterval(interval);
+  }, []);
   return (
-    <div className="flex items-end gap-2 h-[90px]">
+    <div className="flex items-end gap-2 h-[120px]">
       {values.map((v, i) => (
         <div key={i} className="flex-1 flex flex-col items-center">
-          <div className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-amber-700 via-amber-500 to-amber-200 showcase-bar
-                          shadow-[0_0_8px_rgba(251,191,36,0.4)]"
-               style={{ height: `${v}%`, animationDelay: `${0.4 + i * 0.07}s` }} />
+          <div className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-amber-700 via-amber-500 to-amber-200
+                          shadow-[0_0_8px_rgba(251,191,36,0.4)]
+                          transition-all duration-[1200ms] ease-in-out"
+               style={{ height: `${v}%` }} />
         </div>
       ))}
     </div>
   );
+}
+
+/** Credit kartasi raqami — har 2.5s da kichik scramble effekti, keyin real raqamga qaytadi */
+function AnimatedCardNumber() {
+  const REAL = '1234 5034 5678 3058';
+  const [display, setDisplay] = useState(REAL);
+  useEffect(() => {
+    let scrambleTimer: ReturnType<typeof setTimeout> | null = null;
+    const interval = setInterval(() => {
+      // Scramble fazasi — 0.6s davomida tasodifiy raqamlar
+      const scrambleStart = Date.now();
+      const scrambleId = setInterval(() => {
+        const elapsed = Date.now() - scrambleStart;
+        if (elapsed > 600) {
+          clearInterval(scrambleId);
+          setDisplay(REAL);
+          return;
+        }
+        // 4 ta blokdan tasodifiy birini scramble qilamiz
+        const blocks = REAL.split(' ');
+        const idx = Math.floor(Math.random() * 4);
+        blocks[idx] = String(Math.floor(1000 + Math.random() * 9000));
+        setDisplay(blocks.join(' '));
+      }, 70);
+    }, 3000);
+    return () => {
+      clearInterval(interval);
+      if (scrambleTimer) clearTimeout(scrambleTimer);
+    };
+  }, []);
+  return <span>{display}</span>;
 }
 
 function ConnectionLines() {
