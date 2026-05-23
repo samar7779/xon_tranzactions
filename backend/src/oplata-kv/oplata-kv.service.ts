@@ -1,10 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomUUID } from 'crypto';
 import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
+import { SettingsService } from '../sync/settings.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -53,7 +55,40 @@ export class OplataKvService {
     private readonly prisma: PrismaService,
     private readonly crmService: CrmService,
     private readonly crmCache: CrmContractCacheService,
+    private readonly settings: SettingsService,
   ) {}
+
+  // Auto-sync uchun oxirgi ishga tushgan vaqt
+  private lastAutoSyncAt: Date | null = null;
+
+  /**
+   * Har daqiqada tekshiradi — agar settings'da interval o'rnatilgan va shu vaqt o'tgan bo'lsa,
+   * avtomatik sync ishga tushiradi.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async autoSyncTick() {
+    try {
+      const intervalMin = await this.settings.getOplatyKvAutoSyncMinutes();
+      if (!intervalMin || intervalMin < 1) return; // disabled
+
+      const now = new Date();
+      if (this.lastAutoSyncAt) {
+        const elapsedMin = (now.getTime() - this.lastAutoSyncAt.getTime()) / 60000;
+        if (elapsedMin < intervalMin) return; // hali vaqt yetmadi
+      }
+
+      this.lastAutoSyncAt = now;
+      const minDate = await this.settings.getOplatyKvTxMinDate();
+      this.log.log(`Auto-sync ishga tushdi (interval: ${intervalMin}min, minDate: ${minDate?.toISOString().slice(0, 10) || '—'})`);
+      const result = await this.syncFromTransactions({
+        minDate,
+        actor: { id: null, name: 'cron · auto-sync' },
+      });
+      this.log.log(`Auto-sync DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+    } catch (e: any) {
+      this.log.warn(`Auto-sync xato: ${e?.message}`);
+    }
+  }
 
   // ─── Preview cache (in-memory) ───────────────────────────
   // Foydalanuvchi katta Excel yuklasa → avval tekshiramiz va cache'da turamiz.

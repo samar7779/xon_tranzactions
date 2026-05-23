@@ -26,18 +26,24 @@ export class SyncController {
   async getSettings() {
     const syncMinDate = await this.settings.getSyncMinDate();
     const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
+    const oplatykvAutoSyncMinutes = await this.settings.getOplatyKvAutoSyncMinutes();
     return {
       ok: true,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
       oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
+      oplatykvAutoSyncMinutes,
     };
   }
 
   @Patch('settings')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @ApiOperation({ summary: 'Sync sozlamalarini saqlash (syncMinDate, oplatykvTxMinDate)' })
+  @ApiOperation({ summary: 'Sync sozlamalarini saqlash' })
   async setSettings(
-    @Body() body: { syncMinDate?: string | null; oplatykvTxMinDate?: string | null },
+    @Body() body: {
+      syncMinDate?: string | null;
+      oplatykvTxMinDate?: string | null;
+      oplatykvAutoSyncMinutes?: number | null;
+    },
     @CurrentUser('email') email?: string,
   ) {
     if (body.syncMinDate !== undefined) {
@@ -46,12 +52,17 @@ export class SyncController {
     if (body.oplatykvTxMinDate !== undefined) {
       await this.settings.setOplatyKvTxMinDate(body.oplatykvTxMinDate || null, email);
     }
+    if (body.oplatykvAutoSyncMinutes !== undefined) {
+      await this.settings.setOplatyKvAutoSyncMinutes(body.oplatykvAutoSyncMinutes || null, email);
+    }
     const syncMinDate = await this.settings.getSyncMinDate();
     const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
+    const oplatykvAutoSyncMinutes = await this.settings.getOplatyKvAutoSyncMinutes();
     return {
       ok: true,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
       oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
+      oplatykvAutoSyncMinutes,
     };
   }
 

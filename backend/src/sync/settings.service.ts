@@ -63,4 +63,20 @@ export class SettingsService {
     }
     await this.set('oplatykv.txMinDate', value, updatedBy);
   }
+
+  /**
+   * OplatyKv auto-sync interval daqiqada.
+   * 0 yoki null -> auto-sync o'chirilgan.
+   * Misol: 30 -> har 30 daqiqada bir marta avtomatik sync.
+   */
+  async getOplatyKvAutoSyncMinutes(): Promise<number> {
+    const s = await this.get('oplatykv.txAutoSyncMinutes');
+    const n = Number(s);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  async setOplatyKvAutoSyncMinutes(value: number | null, updatedBy?: string): Promise<void> {
+    const v = value && value > 0 ? String(Math.floor(value)) : null;
+    await this.set('oplatykv.txAutoSyncMinutes', v, updatedBy);
+  }
 }
