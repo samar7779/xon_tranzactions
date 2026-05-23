@@ -13,32 +13,21 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
   const [bal, setBal] = useState(0);
   const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
 
-  // Balance counter — 0 dan target gacha, keyin yangi tranzaksiyalar kelgandek o'sib boradi
+  // Balance counter — initial 0→target, keyin har 2s da yangi tranzaksiya kelgandek katta o'zgarish
   useEffect(() => {
     const baseTarget = 12_504_500;
-    const start = performance.now();
-    let raf = 0;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     let current = baseTarget;
+    setBal(baseTarget);
 
-    const tick = (t: number) => {
-      const p = Math.min(1, (t - start) / 2400);
-      setBal(baseTarget * (1 - Math.pow(1 - p, 3)));
-      if (p < 1) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        // Initial animation tugadi — endi har 1.2s da +/- katta o'zgarish (ko'rinarli)
-        intervalId = setInterval(() => {
-          // Asosan +/- 300K gacha tasodifiy, simulating real transactions
-          const delta = Math.floor((Math.random() - 0.45) * 600_000);
-          current = Math.max(11_500_000, Math.min(13_500_000, current + delta));
-          setBal(current);
-        }, 1200);
-      }
-    };
-    raf = requestAnimationFrame(tick);
+    // Har 2 soniyada yangi target — ±1.5M oraliqda (KATTA ko'rinarli o'zgarish)
+    intervalId = setInterval(() => {
+      const delta = Math.floor((Math.random() - 0.45) * 3_000_000);
+      current = Math.max(10_500_000, Math.min(14_500_000, current + delta));
+      setBal(current);
+    }, 2000);
+
     return () => {
-      cancelAnimationFrame(raf);
       if (intervalId) clearInterval(intervalId);
     };
   }, []);
@@ -194,10 +183,10 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                   <div className="flex-1" />
                   <div className="flex items-center gap-1.5 h-7 px-3 rounded-full bg-white/[0.04] ring-1 ring-white/8
                                   text-[11px] text-white/40 min-w-[220px]">
-                    <SearchIcon /> Search transactions...
+                    <SearchIcon /> <TypingSearch />
                   </div>
-                  <NotifPill count={3} color="amber" />
-                  <NotifPill count={2} color="cyan" />
+                  <NotifPill count={3} color="amber" pulse />
+                  <NotifPill count={2} color="cyan" pulse />
                   <LogoDisc size={32} rounded="rounded-full" />
                 </div>
 
@@ -257,17 +246,22 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
 
                   {/* O'ng: bars + secure + card */}
                   <div className="col-span-5 space-y-3 relative" style={{ transformStyle: 'preserve-3d' }}>
-                    <ConnectionLines />
+                    {/* ConnectionLines (kok dashes) — faqat full variant'da */}
+                    {!isMinimal && <ConnectionLines />}
 
-                    {/* "▲ $50.00" badge — connection chizig'i yonida */}
-                    <div className="absolute -left-14 top-7 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
-                         style={{ animationDelay: '1.4s' }}>
-                      <span className="text-emerald-400">▲</span> $50.00
-                    </div>
-                    <div className="absolute -left-14 bottom-20 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
-                         style={{ animationDelay: '1.6s' }}>
-                      <span className="text-emerald-400">▲</span> $75.00
-                    </div>
+                    {/* "▲ $50.00" badge — faqat full variant */}
+                    {!isMinimal && (
+                      <>
+                        <div className="absolute -left-14 top-7 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
+                             style={{ animationDelay: '1.4s' }}>
+                          <span className="text-emerald-400">▲</span> $50.00
+                        </div>
+                        <div className="absolute -left-14 bottom-20 z-10 text-[10px] text-emerald-300 font-bold flex items-center gap-1 showcase-fade-up"
+                             style={{ animationDelay: '1.6s' }}>
+                          <span className="text-emerald-400">▲</span> $75.00
+                        </div>
+                      </>
+                    )}
 
                     {/* Transaction finance bars */}
                     <div className="rounded-2xl bg-white/[0.025] ring-1 ring-white/8 p-3.5
@@ -627,6 +621,7 @@ function PaymentLineChart() {
 }
 
 function TransactionBars() {
+  const BAR_AREA_PX = 120;
   const [values, setValues] = useState<number[]>([55, 75, 90, 60, 85, 65, 80]);
   useEffect(() => {
     const interval = setInterval(() => {
@@ -640,13 +635,13 @@ function TransactionBars() {
     return () => clearInterval(interval);
   }, []);
   return (
-    <div className="flex items-end gap-2 h-[120px]">
+    <div className="flex items-end gap-2" style={{ height: BAR_AREA_PX }}>
       {values.map((v, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center">
+        <div key={i} className="flex-1 flex justify-center items-end h-full">
           <div className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-amber-700 via-amber-500 to-amber-200
-                          shadow-[0_0_8px_rgba(251,191,36,0.4)]
+                          shadow-[0_0_12px_rgba(251,191,36,0.55)]
                           transition-all duration-[1200ms] ease-in-out"
-               style={{ height: `${v}%` }} />
+               style={{ height: `${(v / 100) * BAR_AREA_PX}px` }} />
         </div>
       ))}
     </div>
@@ -842,8 +837,29 @@ function TrendUp() {
   );
 }
 
-function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' }) {
+function NotifPill({ count, color, pulse }: { count: number; color: 'amber' | 'cyan'; pulse?: boolean }) {
   const [ringing, setRinging] = useState(false);
+
+  // Avto-shake — pulse=true bo'lsa har 3-5s da silkinadi
+  useEffect(() => {
+    if (!pulse) return;
+    const trigger = () => {
+      setRinging(true);
+      setTimeout(() => setRinging(false), 700);
+    };
+    // Tasodifiy intervallar bilan tabiiy ko'rinish
+    let timeout: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      const delay = 3000 + Math.random() * 2500;
+      timeout = setTimeout(() => {
+        trigger();
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => clearTimeout(timeout);
+  }, [pulse]);
+
   const cls = color === 'amber'
     ? 'bg-amber-400/15 text-amber-300 ring-amber-400/25 hover:bg-amber-400/30 hover:ring-amber-400/60 hover:shadow-[0_0_20px_rgba(245,158,11,0.6)]'
     : 'bg-cyan-400/15 text-cyan-300 ring-cyan-400/25 hover:bg-cyan-400/30 hover:ring-cyan-400/60 hover:shadow-[0_0_20px_rgba(34,211,238,0.6)]';
@@ -865,5 +881,48 @@ function NotifPill({ count, color }: { count: number; color: 'amber' | 'cyan' })
         <path d="M13.73 21a2 2 0 0 1-3.46 0" strokeLinecap="round" />
       </svg>
     </button>
+  );
+}
+
+/** Search input typing efekt — yozadi, kutadi, o'chiradi, qaytadan */
+function TypingSearch() {
+  const QUERIES = [
+    'Kapitalbank tranzaksiyalari',
+    'oxirgi to\'lovlar',
+    'sverka 2026-05',
+    'kirim oboroti',
+    'CRM mijozlar',
+  ];
+  const [text, setText] = useState('');
+  const [phase, setPhase] = useState<'typing' | 'pause' | 'deleting'>('typing');
+  const [qIdx, setQIdx] = useState(0);
+
+  useEffect(() => {
+    const current = QUERIES[qIdx];
+    let timeout: ReturnType<typeof setTimeout>;
+    if (phase === 'typing') {
+      if (text.length < current.length) {
+        timeout = setTimeout(() => setText(current.slice(0, text.length + 1)), 65);
+      } else {
+        timeout = setTimeout(() => setPhase('pause'), 1400);
+      }
+    } else if (phase === 'pause') {
+      timeout = setTimeout(() => setPhase('deleting'), 300);
+    } else {
+      if (text.length > 0) {
+        timeout = setTimeout(() => setText(text.slice(0, -1)), 35);
+      } else {
+        setQIdx((idx) => (idx + 1) % QUERIES.length);
+        setPhase('typing');
+      }
+    }
+    return () => clearTimeout(timeout);
+  }, [text, phase, qIdx]);
+
+  return (
+    <span className="flex-1 truncate">
+      {text || <span className="text-white/30">Search transactions...</span>}
+      <span className="inline-block w-[1.5px] h-[10px] bg-white/60 ml-[1px] animate-pulse align-middle" />
+    </span>
   );
 }
