@@ -76,13 +76,20 @@ export default function LoginPage() {
 
   return (
     <div className="relative w-screen h-[100dvh] overflow-hidden font-sans text-white">
-      {/* ============ SHOWCASE (minimal — faqat dashboard) ============ */}
-      <div className={`absolute inset-0 transition-all duration-700 ease-out
-                       ${open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100'}`}>
-        {/* Mobile'da scale qilamiz, dashboard kichikroq, lekin ko'rinadi */}
-        <div className="origin-center scale-[0.55] sm:scale-75 md:scale-100 h-full">
-          <ShowcaseStage variant="minimal" />
-        </div>
+      {/* ============ DESKTOP SHOWCASE (md+) ============ */}
+      <div className={cn(
+        "hidden md:block absolute inset-0 transition-all duration-700 ease-out",
+        open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100',
+      )}>
+        <ShowcaseStage variant="minimal" />
+      </div>
+
+      {/* ============ MOBIL SHOWCASE (alohida vertikal dizayn) ============ */}
+      <div className={cn(
+        "md:hidden absolute inset-0 transition-all duration-500",
+        open ? 'opacity-30 scale-[0.95]' : 'opacity-100 scale-100',
+      )}>
+        <MobileLoginShowcase />
       </div>
 
       {/* Vignette overlay — panel ochilganda chap tomon qoraytadi */}
@@ -351,6 +358,145 @@ export default function LoginPage() {
         }
       `}</style>
 
+    </div>
+  );
+}
+
+/**
+ * Mobile uchun alohida login showcase — vertikal stack, sodda va chiroyli.
+ * Desktop'dagi 3D dashboard'dan farqli — bu telefon ekraniga moslashtirilgan.
+ */
+function MobileLoginShowcase() {
+  const [bal, setBal] = useState(0);
+
+  useEffect(() => {
+    const target = 12_504_500;
+    const start = performance.now();
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / 2400);
+      setBal(target * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  return (
+    <div className="relative w-full h-full overflow-hidden
+                    bg-[radial-gradient(ellipse_at_top,#2d4a8a_0%,#162a55_45%,#0a162e_100%)]">
+      {/* Fon: yengil to'r */}
+      <div className="absolute inset-0 opacity-[0.08] pointer-events-none"
+           style={{
+             backgroundImage:
+               'linear-gradient(rgba(34,211,238,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.5) 1px, transparent 1px)',
+             backgroundSize: '32px 32px',
+           }} />
+
+      {/* Burchak yorug'liklari */}
+      <div className="absolute -top-20 -left-20 w-72 h-72 bg-cyan-400/15 rounded-full blur-3xl animate-pulse pointer-events-none"
+           style={{ animationDuration: '4s' }} />
+      <div className="absolute -bottom-20 -right-20 w-72 h-72 bg-amber-400/15 rounded-full blur-3xl animate-pulse pointer-events-none"
+           style={{ animationDuration: '4s', animationDelay: '2s' }} />
+
+      {/* Markaziy kontent — vertikal stack */}
+      <div className="relative z-10 h-full overflow-y-auto pt-20 pb-20 px-5 flex flex-col gap-4 items-center">
+        {/* Title */}
+        <div className="text-center pointer-events-none">
+          <h1 className="text-[26px] font-bold tracking-[0.04em] leading-[1]
+                         bg-gradient-to-r from-amber-200 via-amber-100 to-amber-300 bg-clip-text text-transparent
+                         drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]">
+            XON SAROY
+          </h1>
+          <div className="mt-1 mx-auto h-px w-24 bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
+          <div className="text-[9px] uppercase tracking-[0.35em] text-amber-200/60 font-semibold mt-1">
+            real-time banking
+          </div>
+        </div>
+
+        {/* TOTAL BALANCE card — hero */}
+        <div className="w-full max-w-sm rounded-2xl bg-gradient-to-br from-slate-900/90 to-slate-800/60 ring-1 ring-white/10 p-4 relative overflow-hidden
+                        shadow-[0_20px_50px_-15px_rgba(0,0,0,0.6)]">
+          <div className="absolute -right-10 -top-10 w-32 h-32 rounded-full bg-amber-400/15 blur-3xl" />
+          <div className="absolute -left-10 -bottom-10 w-24 h-24 rounded-full bg-cyan-400/12 blur-3xl" />
+          <div className="relative">
+            <div className="text-[9px] uppercase tracking-[0.22em] text-white/45 font-semibold">Total Balance · UZS</div>
+            <div className="mt-1 text-[28px] font-bold tabular-nums tracking-tight
+                            bg-gradient-to-r from-amber-100 via-amber-300 to-amber-500 bg-clip-text text-transparent
+                            drop-shadow-[0_2px_8px_rgba(245,158,11,0.3)]">
+              {new Intl.NumberFormat('en-US').format(Math.floor(bal))}
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-[11px]">
+              <span className="text-emerald-400 font-semibold">↑ 12.5%</span>
+              <span className="text-white/45">vs last month</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mini chart — Payment analytics */}
+        <div className="w-full max-w-sm rounded-2xl bg-white/[0.025] ring-1 ring-white/10 p-3.5 backdrop-blur-sm">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[11px] font-semibold text-white">Payment analytics</span>
+            <span className="text-[9px] px-2 py-0.5 rounded-full bg-amber-400/15 text-amber-300 ring-1 ring-amber-400/20 font-medium">Aqvdcoin ▾</span>
+          </div>
+          <svg viewBox="0 0 280 80" className="w-full h-16" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="m-line" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="#fbbf24" />
+                <stop offset="100%" stopColor="#f59e0b" />
+              </linearGradient>
+              <linearGradient id="m-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d="M0,50 C30,40 50,30 70,35 C90,40 110,55 130,30 C150,5 170,15 190,45 C210,75 230,40 250,25 C270,15 280,20 280,20 L280,80 L0,80 Z" fill="url(#m-area)" />
+            <path d="M0,50 C30,40 50,30 70,35 C90,40 110,55 130,30 C150,5 170,15 190,45 C210,75 230,40 250,25 C270,15 280,20 280,20"
+                  fill="none" stroke="url(#m-line)" strokeWidth="2.5" strokeLinecap="round" />
+            <circle cx="130" cy="30" r="3.5" fill="#fbbf24" />
+          </svg>
+          <div className="flex justify-between mt-1 text-[8px] text-white/40 px-1">
+            {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m) => <span key={m}>{m}</span>)}
+          </div>
+        </div>
+
+        {/* Secure Banking */}
+        <div className="w-full max-w-sm rounded-2xl bg-white/[0.025] ring-1 ring-white/10 p-3 flex items-center gap-3 backdrop-blur-sm">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 grid place-items-center shrink-0
+                          shadow-[inset_0_1px_0_rgba(255,255,255,0.3),0_4px_12px_-2px_rgba(245,158,11,0.5)]">
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12px] font-semibold text-white">Secure Banking</div>
+            <div className="text-[10px] text-white/50">All transactions encrypted</div>
+            <div className="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden">
+              <div className="h-full w-[82%] bg-gradient-to-r from-amber-400 to-amber-300" />
+            </div>
+          </div>
+        </div>
+
+        {/* Credit card — holographic */}
+        <div className="w-full max-w-sm relative rounded-2xl p-4 bg-gradient-to-br from-slate-100 via-slate-200 to-slate-100 text-slate-900
+                        ring-1 ring-white/20 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.6)] overflow-hidden">
+          <div className="absolute inset-y-0 -left-1/3 w-1/3 bg-gradient-to-r from-transparent via-white/70 to-transparent showcase-hologram pointer-events-none" />
+          <div className="relative flex items-center justify-between">
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 ring-1 ring-white/40" />
+            <div className="text-[12px] font-semibold text-slate-600">Credit</div>
+          </div>
+          <div className="relative mt-4 font-mono text-[14px] tracking-wider text-slate-800">
+            1234 5034 5678 3058
+          </div>
+          <div className="relative mt-2 flex items-center justify-between">
+            <div className="text-[9px] text-slate-500 uppercase tracking-[0.18em] font-semibold">XON SAROY</div>
+            <div className="flex gap-0.5">
+              <span className="w-5 h-5 rounded-full bg-rose-500/80" />
+              <span className="w-5 h-5 rounded-full bg-amber-400/80 -ml-2" />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
+import { cn } from '@/lib/utils';
 
 /**
  * ShowcaseStage — qayta ishlatiluvchi hero composition.
@@ -98,30 +99,56 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
             </>
           )}
 
-          {/* 3D dashboard — minimal'da kattaroq */}
+          {/* 3D dashboard — minimal'da kattaroq + ko'proq efekt */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
             <div
-              className={isMinimal ? "relative w-full max-w-[960px]" : "relative w-full max-w-[820px]"}
+              className={isMinimal ? "relative w-full max-w-[1180px]" : "relative w-full max-w-[820px]"}
               style={{
                 transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
                 transformStyle: 'preserve-3d',
                 transition: 'transform 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
               }}
             >
-              <div className="absolute -inset-3 rounded-3xl bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/20 blur-3xl -z-10" />
+              {/* Asosiy glow halo — minimal'da kattaroq va kuchliroq */}
+              <div className={cn(
+                "absolute rounded-[40px] blur-3xl -z-10",
+                isMinimal
+                  ? "-inset-12 bg-gradient-to-br from-cyan-400/40 via-blue-500/25 to-amber-400/35"
+                  : "-inset-3 bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/20",
+              )} />
+
+              {/* Minimal'da qo'shimcha pulse rings — dashboard atrofida */}
+              {isMinimal && (
+                <>
+                  <div className="absolute -inset-8 rounded-[36px] ring-1 ring-amber-300/20 showcase-breathe pointer-events-none" />
+                  <div className="absolute -inset-16 rounded-[44px] ring-1 ring-cyan-400/15 showcase-breathe pointer-events-none"
+                       style={{ animationDelay: '1.2s' }} />
+                  {/* Burchak yorug'liklari */}
+                  <div className="absolute -top-20 -left-20 w-80 h-80 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
+                  <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-amber-400/15 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '4s', animationDelay: '2s' }} />
+                </>
+              )}
 
               {/* Title — dashboard yuqorisida, panel bilan birga 3D'da egiladi */}
               <div className="relative text-center mb-2 showcase-fade-up pointer-events-none"
                    style={{ animationDelay: '0.1s' }}>
-                <h1 className="text-[22px] sm:text-[28px] lg:text-[32px] font-bold tracking-[0.05em] leading-[0.95]
-                               bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent
-                               drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]
-                               showcase-text-shimmer"
+                <h1 className={cn(
+                  "font-bold tracking-[0.05em] leading-[0.95]",
+                  "bg-gradient-to-r from-amber-200 via-amber-100 to-amber-200 bg-clip-text text-transparent",
+                  "drop-shadow-[0_2px_14px_rgba(245,158,11,0.45)]",
+                  "showcase-text-shimmer",
+                  isMinimal
+                    ? "text-[28px] sm:text-[36px] lg:text-[44px]"
+                    : "text-[22px] sm:text-[28px] lg:text-[32px]",
+                )}
                     style={{ backgroundSize: '200% 100%' }}>
                   XON SAROY TRANSACTIONS
                 </h1>
                 <div className="mx-auto mt-1 h-px w-[38%] bg-gradient-to-r from-transparent via-amber-300/70 to-transparent" />
-                <div className="text-[8px] uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-0.5">
+                <div className={cn(
+                  "uppercase tracking-[0.4em] text-amber-200/55 font-semibold mt-0.5",
+                  isMinimal ? "text-[10px] sm:text-[11px]" : "text-[8px]",
+                )}>
                   real-time banking platform
                 </div>
               </div>
