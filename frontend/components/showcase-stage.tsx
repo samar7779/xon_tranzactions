@@ -565,6 +565,40 @@ function BankPill({ src, name }: { src: string; name: string }) {
 }
 
 function PaymentLineChart() {
+  // 12 oy uchun Y qiymatlari — har 2.5s da yangilanadi (real-time chart effekt)
+  const [ys, setYs] = useState<number[]>([75, 55, 40, 60, 18, 35, 28, 45, 32, 50, 22, 38]);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setYs((prev) =>
+        prev.map((y) => {
+          const delta = (Math.random() - 0.5) * 30;
+          return Math.max(12, Math.min(85, y + delta));
+        }),
+      );
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // X koordinatalar — 12 nuqta, 380px ichida
+  const xs = ys.map((_, i) => (380 / 11) * i);
+  // Smooth path — cubic Bezier
+  const buildPath = (close: boolean) => {
+    let path = `M ${xs[0]} ${ys[0]}`;
+    for (let i = 0; i < ys.length - 1; i++) {
+      const x1 = xs[i] + (xs[i + 1] - xs[i]) / 2;
+      const x2 = xs[i] + (xs[i + 1] - xs[i]) / 2;
+      path += ` C ${x1} ${ys[i]}, ${x2} ${ys[i + 1]}, ${xs[i + 1]} ${ys[i + 1]}`;
+    }
+    if (close) path += ` L ${xs[xs.length - 1]} 100 L 0 100 Z`;
+    return path;
+  };
+
+  // Eng past nuqta (peak) — tooltip va aylanaga
+  let peakIdx = 0;
+  for (let i = 1; i < ys.length; i++) if (ys[i] < ys[peakIdx]) peakIdx = i;
+  const peakX = xs[peakIdx];
+  const peakY = ys[peakIdx];
+
   return (
     <svg viewBox="0 0 380 100" className="w-full h-[130px]">
       <defs>
@@ -576,22 +610,17 @@ function PaymentLineChart() {
           <stop offset="0%" stopColor="#fde68a" />
           <stop offset="100%" stopColor="#f59e0b" />
         </linearGradient>
+        <style>{`.pl-path-anim { transition: d 2200ms cubic-bezier(0.4, 0, 0.2, 1); }`}</style>
       </defs>
-      <path d="M 0 75 Q 30 60 60 55 T 120 40 T 180 60 T 240 18 T 300 35 T 380 28 L 380 100 L 0 100 Z"
-            fill="url(#pl-fill)" />
-      <path d="M 0 75 Q 30 60 60 55 T 120 40 T 180 60 T 240 18 T 300 35 T 380 28"
-            fill="none" stroke="url(#pl-stroke)" strokeWidth="2.5" strokeLinecap="round" className="showcase-draw" />
-      <circle cx="240" cy="18" r="4.5" fill="#fde68a" />
-      <circle cx="240" cy="18" r="9" fill="#fbbf24" opacity="0.35">
+      <path d={buildPath(true)} fill="url(#pl-fill)" className="pl-path-anim" />
+      <path d={buildPath(false)}
+            fill="none" stroke="url(#pl-stroke)" strokeWidth="2.5" strokeLinecap="round" className="pl-path-anim" />
+      {/* Peak dot — eng past nuqtada (eng katta qiymat) */}
+      <circle cx={peakX} cy={peakY} r="4.5" fill="#fde68a" style={{ transition: 'cx 2.2s, cy 2.2s' }} />
+      <circle cx={peakX} cy={peakY} r="9" fill="#fbbf24" opacity="0.35" style={{ transition: 'cx 2.2s, cy 2.2s' }}>
         <animate attributeName="r" values="6;14;6" dur="2.5s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.45;0;0.45" dur="2.5s" repeatCount="indefinite" />
       </circle>
-      <g transform="translate(240, 18)">
-        <rect x="-34" y="-32" width="74" height="20" rx="4" fill="#0f172a" stroke="#fbbf24" strokeWidth="1" />
-        <text x="3" y="-18" fontSize="9" fill="#fde68a" textAnchor="middle" fontWeight="700" fontFamily="monospace">
-          ▲ 1 000.00
-        </text>
-      </g>
       {[25, 50, 75].map((y) => <line key={y} x1="0" y1={y} x2="380" y2={y} stroke="#ffffff10" />)}
     </svg>
   );
