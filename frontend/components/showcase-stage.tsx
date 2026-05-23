@@ -46,35 +46,16 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
       <BackgroundNetwork />
       {!isMinimal && <ConstellationBottom />}
 
-      {/* MINIMAL VARIANT: katta orbital halqalar + particle'lar (faqat desktop hero) */}
+      {/* MINIMAL VARIANT: subtle hero efektlar */}
       {isMinimal && (
         <>
-          {/* Sekin aylanuvchi orbital halqalar — fonda dashboard atrofida */}
-          <div className="absolute inset-0 grid place-items-center pointer-events-none z-0">
-            <div className="relative">
-              {/* Sariq halqa */}
-              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
-                              w-[1400px] h-[1400px] rounded-full
-                              border border-amber-400/8
-                              showcase-orbit-slow" />
-              {/* Cyan halqa */}
-              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
-                              w-[1700px] h-[1700px] rounded-full
-                              border border-cyan-400/6
-                              showcase-orbit-reverse" />
-              {/* Eng katta halqa — dashed */}
-              <div className="absolute -translate-x-1/2 -translate-y-1/2 left-0 top-0
-                              w-[2000px] h-[2000px] rounded-full
-                              border border-dashed border-cyan-300/5
-                              showcase-orbit-slow" style={{ animationDuration: '60s' }} />
-            </div>
-          </div>
+          {/* Spotlight — markazda dashboard'ga e'tiborni jamlash */}
+          <div className="absolute inset-0 pointer-events-none z-0"
+               style={{
+                 background: 'radial-gradient(ellipse 60% 55% at 50% 50%, rgba(96,165,250,0.18) 0%, rgba(245,158,11,0.06) 40%, transparent 75%)',
+               }} />
 
-          {/* Yuqori va pastki yorug'lik streak'lari — chizilgan glow */}
-          <div className="absolute top-1/4 inset-x-0 h-px bg-gradient-to-r from-transparent via-cyan-400/30 to-transparent showcase-streak pointer-events-none" />
-          <div className="absolute bottom-1/4 inset-x-0 h-px bg-gradient-to-r from-transparent via-amber-300/25 to-transparent showcase-streak pointer-events-none" style={{ animationDelay: '2s', animationDirection: 'reverse' }} />
-
-          {/* Floating particle'lar — fonda asta-sekin pastdan yuqoriga */}
+          {/* Floating particle'lar — fonda asta-sekin uchadi (kichik va kam) */}
           <FloatingParticles />
         </>
       )}
@@ -150,15 +131,11 @@ export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minima
                   : "-inset-3 bg-gradient-to-br from-cyan-400/25 via-blue-500/15 to-amber-400/20",
               )} />
 
-              {/* Minimal'da qo'shimcha pulse rings — dashboard atrofida */}
+              {/* Minimal'da qo'shimcha — faqat burchak yorug'liklari (rings'siz, toza ko'rinish) */}
               {isMinimal && (
                 <>
-                  <div className="absolute -inset-8 rounded-[36px] ring-1 ring-amber-300/20 showcase-breathe pointer-events-none" />
-                  <div className="absolute -inset-16 rounded-[44px] ring-1 ring-cyan-400/15 showcase-breathe pointer-events-none"
-                       style={{ animationDelay: '1.2s' }} />
-                  {/* Burchak yorug'liklari */}
-                  <div className="absolute -top-20 -left-20 w-80 h-80 bg-cyan-400/15 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '4s' }} />
-                  <div className="absolute -bottom-20 -right-20 w-80 h-80 bg-amber-400/15 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '4s', animationDelay: '2s' }} />
+                  <div className="absolute -top-32 -left-32 w-96 h-96 bg-cyan-400/12 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '5s' }} />
+                  <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-amber-400/12 rounded-full blur-3xl pointer-events-none animate-pulse" style={{ animationDuration: '5s', animationDelay: '2.5s' }} />
                 </>
               )}
 
@@ -644,35 +621,31 @@ function ConnectionLines() {
   );
 }
 
-/* ─── Floating particles (minimal hero) ─── */
+/* ─── Floating particles (minimal hero) — kichik, kam, sekin ─── */
 function FloatingParticles() {
-  // Deterministic positions — re-render'da o'zgarmasin
+  // Faqat 8 ta kichik particle — chetlarda, dashboard'ni xira qilmaslik uchun
   const particles = [
-    { x: 8,  y: 18, delay: 0,   dur: 14, size: 'w-1 h-1',   col: 'bg-cyan-300/60' },
-    { x: 17, y: 70, delay: 2.3, dur: 16, size: 'w-0.5 h-0.5', col: 'bg-amber-300/50' },
-    { x: 23, y: 35, delay: 4.1, dur: 13, size: 'w-1 h-1',   col: 'bg-cyan-200/55' },
-    { x: 31, y: 88, delay: 1.0, dur: 17, size: 'w-1.5 h-1.5', col: 'bg-amber-300/40' },
-    { x: 42, y: 12, delay: 6.5, dur: 19, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/55' },
-    { x: 48, y: 55, delay: 3.7, dur: 15, size: 'w-1 h-1',   col: 'bg-amber-200/50' },
-    { x: 56, y: 80, delay: 8.2, dur: 14, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/50' },
-    { x: 64, y: 22, delay: 5.4, dur: 18, size: 'w-1 h-1',   col: 'bg-amber-300/55' },
-    { x: 73, y: 60, delay: 2.8, dur: 16, size: 'w-1.5 h-1.5', col: 'bg-cyan-200/45' },
-    { x: 81, y: 38, delay: 7.1, dur: 13, size: 'w-1 h-1',   col: 'bg-amber-200/50' },
-    { x: 89, y: 75, delay: 4.5, dur: 17, size: 'w-0.5 h-0.5', col: 'bg-cyan-300/55' },
-    { x: 93, y: 15, delay: 1.9, dur: 15, size: 'w-1 h-1',   col: 'bg-amber-300/50' },
+    { x: 6,  y: 28, delay: 0,   dur: 18, col: 'bg-cyan-300/40' },
+    { x: 11, y: 75, delay: 4.2, dur: 22, col: 'bg-amber-300/30' },
+    { x: 18, y: 45, delay: 8.0, dur: 19, col: 'bg-cyan-200/35' },
+    { x: 25, y: 88, delay: 2.5, dur: 24, col: 'bg-amber-300/25' },
+    { x: 75, y: 15, delay: 6.1, dur: 20, col: 'bg-cyan-300/35' },
+    { x: 82, y: 60, delay: 1.3, dur: 23, col: 'bg-amber-200/30' },
+    { x: 89, y: 32, delay: 9.5, dur: 18, col: 'bg-cyan-300/30' },
+    { x: 94, y: 78, delay: 3.7, dur: 21, col: 'bg-amber-300/35' },
   ];
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
       {particles.map((p, i) => (
         <span
           key={i}
-          className={cn('absolute rounded-full showcase-particle-float', p.size, p.col)}
+          className={cn('absolute w-0.5 h-0.5 rounded-full showcase-particle-float', p.col)}
           style={{
             left: `${p.x}%`,
             top: `${p.y}%`,
             animationDelay: `${p.delay}s`,
             animationDuration: `${p.dur}s`,
-            boxShadow: '0 0 8px currentColor',
+            boxShadow: '0 0 6px currentColor',
           }}
         />
       ))}
