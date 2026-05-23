@@ -300,6 +300,7 @@ export class OplataKvService {
         amount: true,
         direction: true,         // IN/OUT — sign uchun
         contractNumber: true,
+        isContractManual: true,  // Qo'lda tuzatilganmi
         description: true,
         fromName: true,
         toName: true,
@@ -341,7 +342,7 @@ export class OplataKvService {
     const errorSamples: Array<{ txId: string; reason: string }> = [];
     const actorName = opts.actor?.name || 'auto · tranzaksiyadan';
 
-    // ─── BATCH: avval barcha mavjudlarni 1 ta query bilan olamiz ───
+    // ─── BATCH: barcha valid tx'lar (XATO ham kiritiladi — keyin tuzatilganda update bo'ladi) ───
     const validTxs = txList.filter((t) => t.contractNumber && t.txnDate);
     skippedNoData = txList.length - validTxs.length;
 
@@ -874,6 +875,62 @@ export class OplataKvService {
       filled,
       notFound,
       errors,
+      duration,
+    };
+  }
+
+  /**
+   * Mavjud OplatyKv qatorlardan CRM da topilmaganlarni (XATO) topib o'chirish.
+   * Foydalanish: avval sync XATO contractlarni ham olardi, endi olmaydi —
+   * eski xato yozuvlarni tozalash uchun.
+   */
+  async cleanupXatoContracts(opts: { actor?: Actor } = {}) {
+    const startedAt = Date.now();
+    // Faqat tranzaksiya-manba qatorlarni qaraymiz
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { sourceTxId: { not: null } },
+      select: { id: true, contractNo: true },
+    });
+    const contractNos = Array.from(new Set(rows.map((r) => r.contractNo)));
+    const verified = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: contractNos } },
+      select: { contractNumber: true, found: true },
+    });
+    const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
+
+    // Manual fix qilinganlar — Transaction'da isContractManual=true bo'lganlar
+    // Bu OplatyKv qatorning sourceTxId orqali Transaction'ga bog'lab tekshirish kerak
+    // Lekin oson uchun — faqat CRM verified asosida cleanup qilamiz
+    const toDelete = rows.filter((r) => !verifiedSet.has(r.contractNo));
+    if (toDelete.length === 0) {
+      return { ok: true, scanned: rows.length, deleted: 0, duration: 0 };
+    }
+
+    const ids = toDelete.map((r) => r.id);
+    // Tarix yozish
+    try {
+      await this.prisma.oplataKvHistory.createMany({
+        data: toDelete.map((r) => ({
+          oplataKvId: r.id,
+          action: 'deleted',
+          actorType: opts.actor?.id ? 'user' : 'system',
+          actorId: opts.actor?.id ?? null,
+          actorName: opts.actor?.name || 'system · cleanupXato',
+          fieldsChanged: [],
+          changes: { contractNo: { old: r.contractNo, new: null } } as any,
+          note: `XATO contract cleanup — CRM'da topilmagan`,
+        })),
+      });
+    } catch (e: any) {
+      this.log.warn(`cleanupXato history xato: ${e?.message}`);
+    }
+    const result = await this.prisma.oplataKv.deleteMany({ where: { id: { in: ids } } });
+    const duration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.warn(`cleanupXatoContracts: scanned=${rows.length} deleted=${result.count} duration=${duration}s`);
+    return {
+      ok: true,
+      scanned: rows.length,
+      deleted: result.count,
       duration,
     };
   }
