@@ -12,6 +12,8 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { ShowcaseStage } from '@/components/showcase-stage';
+import { LoginTicker } from '@/components/login-ticker';
+import { playClick, playScan, playSuccess } from '@/lib/login-sounds';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -34,11 +36,14 @@ export default function LoginPage() {
 
   // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
   // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
+  // Sound'lar: click → 0.3s scan → 2.0s success (ACCESS GRANTED bilan birga)
   const handleKirish = () => {
+    playClick();
+    setTimeout(() => playScan(), 300);
+    setTimeout(() => playSuccess(), 2000);
     setScanning(true);
     setTimeout(() => {
       setOpen(true);
-      // scanning=true holatda qoldiriladi, login yopilgach handleClose'da false bo'ladi
     }, 2500);
   };
 
@@ -145,14 +150,12 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Pastki readout — auth required (faqat sodda matn) */}
+      {/* Pastki real-time tranzaksiya ticker */}
       <div className={cn(
-        "absolute bottom-3 sm:bottom-5 left-3 sm:left-5 right-3 sm:right-5 z-30",
-        "flex items-center justify-between text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 font-mono pointer-events-none",
-        open && "opacity-0",
+        "absolute bottom-0 left-0 right-0 z-30 transition-opacity duration-500",
+        (open || scanning) && "opacity-0 pointer-events-none",
       )}>
-        <span>· {t('authRequired')} ·</span>
-        <span className="hidden sm:inline">REV 1.0 · {new Date().getFullYear()}</span>
+        <LoginTicker />
       </div>
 
       {/* Right-side slide-in login panel — telefonda to'liq ekran */}
