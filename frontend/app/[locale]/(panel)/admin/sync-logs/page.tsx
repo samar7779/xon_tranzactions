@@ -326,15 +326,16 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
   });
 
-  // Tranzaksiyalardan auto-sync trigger
+  // Tranzaksiyalardan auto-sync trigger (object lookup ham avtomatik)
   const syncTxMut = useMutation({
     mutationFn: (minDate: string | null) =>
       api.post<{
         ok: boolean; total: number; added: number; updated: number; skipped: number;
         skippedBreakdown?: { noData: number; exists: number; error: number };
         errorSamples?: Array<{ txId: string; reason: string }>;
+        objects?: { scanned: number; contracts: number; filled: number; notFound: number; errors: number };
         duration: number;
-      }>('/oplata-kv/sync-from-transactions', { minDate }),
+      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 600_000 }),
     onSuccess: (r: any) => {
       const bd = r.skippedBreakdown || {};
       const skipDetail = [
@@ -342,25 +343,16 @@ function SyncSettingsPanel() {
         bd.exists ? `${bd.exists} mavjud` : null,
         bd.error ? `${bd.error} xato` : null,
       ].filter(Boolean).join(', ');
-      const msg = `Sync tugadi · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}`;
-      toast.success(msg, { duration: 7000 });
+      const objLine = r.objects && r.objects.scanned > 0
+        ? `Obyekt: ${r.objects.filled}/${r.objects.scanned} to'ldirildi (${r.objects.contracts} shartnoma)`
+        : '';
+      const msg = `Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}${r.duration ? ` · ${r.duration}s` : ''}${objLine ? `\n${objLine}` : ''}`;
+      toast.success(msg, { duration: 10000 });
       if (r.errorSamples && r.errorSamples.length > 0) {
         toast.error(`Xato namunalari: ${r.errorSamples.slice(0, 2).map((s: any) => s.reason).join('; ')}`, { duration: 10000 });
       }
     },
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
-  });
-
-  // Obyektlarni CRM dan to'ldirish
-  const fillObjectsMut = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; total: number; uniqueContracts: number; filled: number; notFound: number; errors: number; duration: number }>('/oplata-kv/fill-objects', { limit: 1000 }),
-    onSuccess: (r: any) => {
-      toast.success(
-        `Obyekt to'ldirish · jami ${r.total} qator (${r.uniqueContracts} shartnoma) · to'ldirildi: ${r.filled}, topilmadi: ${r.notFound}, xato: ${r.errors}${r.duration ? ` · ${r.duration}s` : ''}`,
-        { duration: 8000 },
-      );
-    },
-    onError: (e: any) => toast.error(e?.message || "Obyekt to'ldirishda xato"),
   });
 
   // Tranzaksiya-manba qatorlarni tozalash (date range)
@@ -569,26 +561,17 @@ function SyncSettingsPanel() {
                   onClick={() => syncTxMut.mutate(oplatykvTxMinDate || null)}
                   disabled={syncTxMut.isPending}
                   className="h-10 px-4 gap-2 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
-                  title="Hozir tranzaksiyalardan import qilish"
+                  title="Hozir tranzaksiyalardan import qilish + Obyektlarni CRM dan to'ldirish"
                 >
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Hozir sync
-                </Button>
-                <Button
-                  onClick={() => fillObjectsMut.mutate()}
-                  disabled={fillObjectsMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-cyan-500 to-sky-600 hover:from-cyan-600 hover:to-sky-700 text-white"
-                  title="Tranzaksiya-manba qatorlarda yo'q obyektlarni CRM dan to'ldirish (1 marta max 1000 ta)"
-                >
-                  {fillObjectsMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Building2 className="h-4 w-4" />}
-                  Obyektlarni CRM dan
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
                 <br />
-                <b>"Obyektlarni CRM dan"</b> — tranzaksiyadan qo'shilgan qatorlarda obyekt nomi yo'q bo'lsa CRM dan oladi (bir marta max 1000 ta, sekin).
-                Mapping qo'llaniladi.
+                <b>Sync ichida AVTOMATIK:</b> obyekt nomi yo'q bo'lganlar CRM'dan to'ldiriladi (max 1000 ta bir martaga, mapping qo'llaniladi).
+                Agar 1000 dan ko'p bo'lsa qaytadan sync bossangiz qolganlari to'ldiriladi.
               </div>
 
               {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}
