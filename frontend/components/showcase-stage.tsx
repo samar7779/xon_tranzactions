@@ -653,13 +653,16 @@ function DashboardScanBack({ active }: { active: boolean }) {
     '> VERIFYING ENDPOINT...',
     '> DECRYPTING ACCESS LAYER...',
     '> AUTHENTICATION REQUIRED',
+    '> ACCESS GRANTED ✓',
   ];
   const [visible, setVisible] = useState<number[]>([]);
   useEffect(() => {
     if (!active) { setVisible([]); return; }
     const timers: ReturnType<typeof setTimeout>[] = [];
+    // 5 ta matn, 2.5s davomida tarqatib chiqaramiz
+    const delays = [700, 1000, 1300, 1600, 2000];
     lines.forEach((_, i) => {
-      timers.push(setTimeout(() => setVisible((v) => [...v, i]), 700 + i * 220));
+      timers.push(setTimeout(() => setVisible((v) => [...v, i]), delays[i]));
     });
     return () => timers.forEach(clearTimeout);
   }, [active]);
@@ -678,11 +681,11 @@ function DashboardScanBack({ active }: { active: boolean }) {
              WebkitMaskImage: 'radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%)',
            }} />
 
-      {/* Vertical scan chiziq — pastdan yuqoriga */}
+      {/* Vertical scan chiziq — pastdan yuqoriga (2 marta o'tadi) */}
       {active && (
         <div className="absolute inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent
                         shadow-[0_0_40px_rgba(34,211,238,0.95)]"
-             style={{ animation: 'dashboard-scan-sweep 1.4s linear forwards' }} />
+             style={{ animation: 'dashboard-scan-sweep 1.2s linear 2' }} />
       )}
 
       {/* Burchak braket'lar */}
@@ -725,7 +728,10 @@ function DashboardScanBack({ active }: { active: boolean }) {
                   visible.includes(i)
                     ? 'opacity-100 translate-x-0'
                     : 'opacity-0 -translate-x-3',
-                  i === lines.length - 1 ? 'text-amber-300' : 'text-cyan-300',
+                  // Oxirgi (ACCESS GRANTED) — emerald, 4-chi (AUTHENTICATION) — amber, qolganlar cyan
+                  i === lines.length - 1 ? 'text-emerald-400 font-bold drop-shadow-[0_0_10px_rgba(52,211,153,0.6)]'
+                    : i === lines.length - 2 ? 'text-amber-300'
+                    : 'text-cyan-300',
                 )}
               >
                 {line}
