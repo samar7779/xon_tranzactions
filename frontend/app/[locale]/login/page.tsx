@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
-  Loader2, ArrowRight, Eye, EyeOff, AlertCircle, X, LogIn,
+  Loader2, ArrowRight, Eye, EyeOff, AlertCircle, X, LogIn, ShieldCheck,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
@@ -23,6 +23,7 @@ export default function LoginPage() {
   const hasHydrated = useAuth((s) => s.hasHydrated);
 
   const [open, setOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
@@ -30,6 +31,15 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clock, setClock] = useState('00:00:00');
+
+  // KIRISH bosilganda — avval scan animatsiyasi, keyin login paneli ochiladi
+  const handleKirish = () => {
+    setScanning(true);
+    setTimeout(() => {
+      setOpen(true);
+      setScanning(false);
+    }, 1800); // 1.8 soniya scan davom etadi
+  };
 
   useEffect(() => {
     if (hasHydrated && token) router.replace(`/${locale}/dashboard`);
@@ -80,6 +90,7 @@ export default function LoginPage() {
       <div className={cn(
         "hidden md:block absolute inset-0 transition-all duration-700 ease-out",
         open ? 'scale-[0.98] brightness-[0.78]' : 'scale-100 brightness-100',
+        scanning && 'scale-[1.02] brightness-110',
       )}>
         <ShowcaseStage variant="minimal" />
       </div>
@@ -88,9 +99,13 @@ export default function LoginPage() {
       <div className={cn(
         "md:hidden absolute inset-0 transition-all duration-500",
         open ? 'opacity-30 scale-[0.95]' : 'opacity-100 scale-100',
+        scanning && 'scale-[1.02] brightness-110',
       )}>
         <MobileLoginShowcase />
       </div>
+
+      {/* ============ SECURITY SCAN OVERLAY — KIRISH bosilganda ============ */}
+      {scanning && <SecurityScanOverlay />}
 
       {/* Vignette overlay — panel ochilganda chap tomon qoraytadi */}
       <div className={`absolute inset-0 pointer-events-none transition-opacity duration-700
@@ -98,36 +113,29 @@ export default function LoginPage() {
            style={{ background: 'radial-gradient(ellipse 80% 80% at 30% 50%, transparent 0%, rgba(2,6,18,0.55) 80%)' }} />
 
       {/* Top-right: KIRISH tugmasi + til (faqat asosiy elementlar) */}
-      {!open && (
+      {!open && !scanning && (
         <div className="absolute top-3 right-3 sm:top-5 sm:right-5 z-30 flex items-center gap-2 sm:gap-3">
           <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
             <LanguageSwitcher />
           </div>
 
-          {/* KIRISH tugmasi — futuristic stil, burchak braket'lar bilan */}
+          {/* KIRISH tugmasi — icon-only, til chip stilida (sariq fonda LogIn icon) */}
           <button
-            onClick={() => setOpen(true)}
-            className="group relative h-11 sm:h-12 px-6 sm:px-8 overflow-hidden
-                       bg-gradient-to-br from-amber-600 via-amber-400 to-amber-600
+            onClick={handleKirish}
+            title={t('submit')}
+            aria-label={t('submit')}
+            className="group relative h-10 w-10 rounded-full overflow-hidden
+                       bg-gradient-to-br from-amber-500 via-amber-400 to-amber-500
                        text-slate-900
-                       ring-1 ring-amber-200/90
-                       shadow-[0_0_25px_-3px_rgba(245,158,11,0.7),inset_0_1px_0_rgba(255,255,255,0.6),inset_0_-2px_0_rgba(120,53,15,0.3)]
-                       hover:shadow-[0_0_45px_-3px_rgba(245,158,11,1)]
-                       hover:scale-[1.05] active:scale-95
-                       transition-all duration-300"
-            style={{ clipPath: 'polygon(8% 0%, 100% 0%, 92% 100%, 0% 100%)' }}
+                       ring-1 ring-amber-200/80
+                       shadow-[0_0_25px_-5px_rgba(245,158,11,0.85),inset_0_1px_0_rgba(255,255,255,0.55)]
+                       hover:shadow-[0_0_40px_-3px_rgba(245,158,11,1)]
+                       hover:scale-[1.08] active:scale-95
+                       transition-all duration-300
+                       flex items-center justify-center"
           >
-            {/* Inner gradient sheen */}
-            <span className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent pointer-events-none" />
-            {/* Sweep highlight */}
-            <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                             bg-gradient-to-r from-transparent via-white/60 to-transparent
-                             transition-transform duration-700 ease-out" />
-            <span className="relative flex items-center justify-center gap-2.5 font-black tracking-[0.22em] uppercase text-[12px] sm:text-[14px]">
-              <LogIn className="h-4 w-4" />
-              {t('submit')}
-              <ArrowRight className="h-4 w-4 hidden sm:inline-block transition-transform group-hover:translate-x-1" />
-            </span>
+            <span className="absolute inset-0 rounded-full ring-2 ring-amber-300/70 animate-ping pointer-events-none" style={{ animationDuration: '2.5s' }} />
+            <LogIn className="relative h-4 w-4" />
           </button>
         </div>
       )}
@@ -348,6 +356,100 @@ export default function LoginPage() {
  * Mobile uchun alohida login showcase — vertikal stack, sodda va chiroyli.
  * Desktop'dagi 3D dashboard'dan farqli — bu telefon ekraniga moslashtirilgan.
  */
+/**
+ * Security scan overlay — KIRISH bosilganda 1.8s davom etadigan animatsiya.
+ * Horizontal scan chiziq pastdan yuqoriga, decryption matni, lock icon pulse.
+ */
+function SecurityScanOverlay() {
+  const t = useTranslations('auth');
+  const lines = [
+    '> INITIATING SECURE CHANNEL...',
+    '> VERIFYING ENDPOINT...',
+    '> DECRYPTING ACCESS LAYER...',
+    '> AUTHENTICATION REQUIRED',
+  ];
+  const [visible, setVisible] = useState<number[]>([]);
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    lines.forEach((_, i) => {
+      timers.push(setTimeout(() => setVisible((v) => [...v, i]), i * 380));
+    });
+    return () => timers.forEach(clearTimeout);
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-40 pointer-events-none">
+      {/* Markaziy mato'rli vignette */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_50%_60%_at_50%_50%,rgba(2,6,18,0.3),rgba(2,6,18,0.75))] animate-in fade-in duration-300" />
+
+      {/* Vertical scan chiziq (pastdan yuqoriga) */}
+      <div className="absolute inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent
+                      shadow-[0_0_30px_rgba(34,211,238,0.95)]"
+           style={{ animation: 'scan-sweep 1.8s linear forwards' }} />
+
+      {/* Horizontal grid pattern flash */}
+      <div className="absolute inset-0 opacity-0"
+           style={{
+             animation: 'grid-flash 1.8s ease-out forwards',
+             backgroundImage:
+               'linear-gradient(rgba(34,211,238,0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,0.15) 1px, transparent 1px)',
+             backgroundSize: '40px 40px',
+           }} />
+
+      {/* Markaziy lock icon va decryption matn */}
+      <div className="absolute inset-0 grid place-items-center">
+        <div className="text-center space-y-4">
+          {/* Lock + pulse rings */}
+          <div className="relative w-20 h-20 mx-auto">
+            <span className="absolute inset-0 rounded-full ring-2 ring-cyan-400/60 animate-ping" style={{ animationDuration: '1.2s' }} />
+            <span className="absolute inset-2 rounded-full ring-2 ring-amber-400/40 animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.2s' }} />
+            <div className="absolute inset-0 rounded-full bg-cyan-500/10 ring-2 ring-cyan-400/80 grid place-items-center
+                            shadow-[0_0_40px_rgba(34,211,238,0.6),inset_0_0_30px_rgba(34,211,238,0.3)]">
+              <ShieldCheck className="h-9 w-9 text-cyan-200" />
+            </div>
+          </div>
+
+          {/* Decryption matnlari — birin-ketin chiqadi */}
+          <div className="font-mono text-[11px] tracking-[0.18em] uppercase space-y-1 text-left min-w-[280px]">
+            {lines.map((line, i) => (
+              <div
+                key={i}
+                className={cn(
+                  'transition-all duration-300',
+                  visible.includes(i)
+                    ? 'opacity-100 translate-x-0'
+                    : 'opacity-0 -translate-x-3',
+                  i === lines.length - 1 ? 'text-amber-300' : 'text-cyan-300',
+                )}
+              >
+                {line}
+                {visible.includes(i) && (
+                  <span className="inline-block w-2 h-3 bg-current animate-pulse ml-1 align-middle" />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <style jsx>{`
+        @keyframes scan-sweep {
+          0%   { top: 100%; opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { top: 0%; opacity: 0; }
+        }
+        @keyframes grid-flash {
+          0%   { opacity: 0; }
+          30%  { opacity: 1; }
+          70%  { opacity: 1; }
+          100% { opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
 function MobileLoginShowcase() {
   const [bal, setBal] = useState(0);
 
