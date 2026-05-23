@@ -363,6 +363,15 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Sync xato'),
   });
 
+  // XATO contractlarni tozalash (CRM da topilmaganlar)
+  const cleanupXatoMut = useMutation({
+    mutationFn: () => api.delete<{ scanned: number; deleted: number; duration: number }>('/oplata-kv/cleanup-xato-contracts'),
+    onSuccess: (r: any) => {
+      toast.success(`XATO cleanup: ${r.deleted}/${r.scanned} qator o'chirildi · ${r.duration}s`, { duration: 8000 });
+    },
+    onError: (e: any) => toast.error(e?.message || 'XATO cleanup xato'),
+  });
+
   // Split installments — qo'lda triggerlash
   const splitMut = useMutation({
     mutationFn: () => api.post<{ total: number; contracts: number; filled: number; notFound: number; errors: number; duration: number }>('/oplata-kv/split-installments', { limit: 5000 }, { timeout: 600_000 }),
@@ -594,6 +603,18 @@ function SyncSettingsPanel() {
                 >
                   {splitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Split now
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (!confirm("Tx-manba qatorlardan CRM da TOPILMAGAN shartnomalarni o'chirishni xohlaysizmi?\n\nFaqat sourceTxId bor va shartnoma CRM'da yo'q bo'lganlar.")) return;
+                    cleanupXatoMut.mutate();
+                  }}
+                  disabled={cleanupXatoMut.isPending}
+                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
+                  title="CRM da topilmagan tx-manba qatorlarni o'chirish (XATO cleanup)"
+                >
+                  {cleanupXatoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
+                  XATO cleanup
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
