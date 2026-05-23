@@ -5,12 +5,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
 import {
   KeyRound, AlertCircle, RefreshCw, CheckCircle2, Eye, EyeOff, Loader2, Lock,
-  Building2, Hash, Shield,
+  Hash, Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { api } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
+import { BankLogo } from '@/components/bank-logo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -150,10 +151,9 @@ function IssueCard({ issue, onUpdate }: { issue: AuthIssue; onUpdate: () => void
 
       <div className="p-4 sm:p-5">
         <div className="flex items-start gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
-          {/* Bank icon */}
-          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-rose-500 to-orange-600 grid place-items-center text-white shrink-0 shadow-sm">
-            <Building2 className="h-5 w-5" />
-          </div>
+          {/* Bank logosi */}
+          <BankLogo code={issue.bankCode} name={issue.bankName} size={44} />
+
 
           {/* Main info */}
           <div className="flex-1 min-w-0">
