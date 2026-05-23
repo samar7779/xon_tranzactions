@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
  * ShowcaseStage — qayta ishlatiluvchi hero composition.
  * Showcase sahifasida, login sahifa fonida va SplashLoader'da ishlatiladi.
  */
-export function ShowcaseStage() {
+export function ShowcaseStage({ variant = 'full' }: { variant?: 'full' | 'minimal' } = {}) {
+  const isMinimal = variant === 'minimal';
   const [bal, setBal] = useState(0);
   const [tilt, setTilt] = useState({ rx: 8, ry: -10 });
 
@@ -42,7 +43,7 @@ export function ShowcaseStage() {
       onMouseLeave={onLeave}
     >
       <BackgroundNetwork />
-      <ConstellationBottom />
+      {!isMinimal && <ConstellationBottom />}
 
       <div className="relative z-10 h-full flex flex-col items-center px-4 pt-2 pb-2">
 
@@ -50,53 +51,57 @@ export function ShowcaseStage() {
         <div className="relative flex-1 w-full max-w-[1200px] mx-auto"
              style={{ perspective: '1900px' }}>
 
-          {/* Storyset SVG scenes — dashboard yonida kichik dekoratsiya */}
-          <SvgScene src="/showcase-tx.svg"        pos="top-[2%]    left-[22%]"  size={100} glow="cyan"  delay="0.8s" />
-          <SvgScene src="/showcase-analytics.svg" pos="bottom-[2%] right-[22%]" size={100} glow="amber" delay="1.4s" />
+          {!isMinimal && (
+            <>
+              {/* Storyset SVG scenes — dashboard yonida kichik dekoratsiya */}
+              <SvgScene src="/showcase-tx.svg"        pos="top-[2%]    left-[22%]"  size={100} glow="cyan"  delay="0.8s" />
+              <SvgScene src="/showcase-analytics.svg" pos="bottom-[2%] right-[22%]" size={100} glow="amber" delay="1.4s" />
 
-          {/* Floating coins — qarish $ € */}
-          <Coin sym="$" pos="top-[12%]  right-[42%]"  size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
-          <Coin sym="€" pos="bottom-[12%] left-[42%]" size="sm" bg="from-blue-500 to-blue-800"   delay="3.0s" />
+              {/* Floating coins — qarish $ € */}
+              <Coin sym="$" pos="top-[12%]  right-[42%]"  size="md" bg="from-slate-100 to-slate-300" delay="0.6s" gold />
+              <Coin sym="€" pos="bottom-[12%] left-[42%]" size="sm" bg="from-blue-500 to-blue-800"   delay="3.0s" />
 
-          {/* Logoli tokenlar — sichqonchadan qochadi (bank kartalar bilan ust-ma-ust kelmaydigan joylar) */}
-          <LogoCoin pos="top-[4%]    left-[42%]"   size="sm" delay="2.4s" />
-          <LogoCoin pos="bottom-[14%] right-[40%]" size="md" delay="1.8s" />
-          <LogoCoin pos="bottom-[2%]  left-[28%]"  size="sm" delay="0.7s" />
+              {/* Logoli tokenlar — sichqonchadan qochadi */}
+              <LogoCoin pos="top-[4%]    left-[42%]"   size="sm" delay="2.4s" />
+              <LogoCoin pos="bottom-[14%] right-[40%]" size="md" delay="1.8s" />
+              <LogoCoin pos="bottom-[2%]  left-[28%]"  size="sm" delay="0.7s" />
 
-          {/* Bank live cards — CHAP TOMON (real-time transaction stream) */}
-          <BankLiveCard
-            pos="top-[6%] left-[1%]"  bank="kapital" name="Kapitalbank"
-            who="ABU SAHIY MCHJ" amount="+18.5M" dir="in"  delay="0.5s"
-          />
-          <BankLiveCard
-            pos="top-[28%] left-[1%]" bank="ipak"    name="Ipak Yo'li"
-            who="LEVEL UP-STROY"    amount="+5.5M"  dir="in"  delay="1.0s"
-          />
-          <BankLiveCard
-            pos="bottom-[22%] left-[2%]" bank="kapital" name="Kapitalbank"
-            who="Soliq to'lovi"      amount="−4.8M" dir="out" delay="1.5s"
-          />
+              {/* Bank live cards — CHAP TOMON (real-time transaction stream) */}
+              <BankLiveCard
+                pos="top-[6%] left-[1%]"  bank="kapital" name="Kapitalbank"
+                who="ABU SAHIY MCHJ" amount="+18.5M" dir="in"  delay="0.5s"
+              />
+              <BankLiveCard
+                pos="top-[28%] left-[1%]" bank="ipak"    name="Ipak Yo'li"
+                who="LEVEL UP-STROY"    amount="+5.5M"  dir="in"  delay="1.0s"
+              />
+              <BankLiveCard
+                pos="bottom-[22%] left-[2%]" bank="kapital" name="Kapitalbank"
+                who="Soliq to'lovi"      amount="−4.8M" dir="out" delay="1.5s"
+              />
 
-          {/* Bank status cards — O'NG TOMON (bank ulanish holati) */}
-          <BankStatusCard
-            pos="top-[4%] right-[1%]"  bank="kapital" name="Kapitalbank"
-            count="134 hsb"  active delay="0.7s"
-          />
-          <BankStatusCard
-            pos="top-[42%] right-[1%]" bank="ipak"    name="Ipak Yo'li"
-            count="5 hsb"    active delay="1.2s"
-          />
+              {/* Bank status cards — O'NG TOMON (bank ulanish holati) */}
+              <BankStatusCard
+                pos="top-[4%] right-[1%]"  bank="kapital" name="Kapitalbank"
+                count="134 hsb"  active delay="0.7s"
+              />
+              <BankStatusCard
+                pos="top-[42%] right-[1%]" bank="ipak"    name="Ipak Yo'li"
+                count="5 hsb"    active delay="1.2s"
+              />
 
-          {/* Floating stat chips */}
-          <StatChip label="Data" value="−13.8%"  dir="up"   pos="bottom-[36%] right-[3%]" delay="1.0s" />
-          <StatChip label="Inol" value="3.58%"   dir="up"   pos="bottom-[30%] right-[1%]" delay="1.3s" />
-          <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[28%] left-[1%]"  delay="1.3s" />
-          <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[22%] left-[3%]"  delay="1.6s" />
+              {/* Floating stat chips */}
+              <StatChip label="Data" value="−13.8%"  dir="up"   pos="bottom-[36%] right-[3%]" delay="1.0s" />
+              <StatChip label="Inol" value="3.58%"   dir="up"   pos="bottom-[30%] right-[1%]" delay="1.3s" />
+              <StatChip label="Data" value="−12.89%" dir="down" pos="bottom-[28%] left-[1%]"  delay="1.3s" />
+              <StatChip label="USD"  value="−4.7%"   dir="down" pos="bottom-[22%] left-[3%]"  delay="1.6s" />
+            </>
+          )}
 
-          {/* 3D dashboard */}
+          {/* 3D dashboard — minimal'da kattaroq */}
           <div className="absolute inset-0 grid place-items-center showcase-card-in">
             <div
-              className="relative w-full max-w-[820px]"
+              className={isMinimal ? "relative w-full max-w-[960px]" : "relative w-full max-w-[820px]"}
               style={{
                 transform: `rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg)`,
                 transformStyle: 'preserve-3d',
@@ -272,12 +277,14 @@ export function ShowcaseStage() {
                 </div>
               </div>
 
-              {/* Bank logos — pastda */}
-              <div className="mt-3 flex items-center justify-center gap-3 showcase-fade-up" style={{ animationDelay: '1.5s' }}>
-                <span className="text-[9px] uppercase tracking-[0.25em] text-white/35 font-semibold">Integrated</span>
-                <BankPill src="/banks/kapital.webp" name="Kapitalbank" />
-                <BankPill src="/banks/ipak.svg" name="Ipak Yo'li" />
-              </div>
+              {/* Bank logos — pastda (faqat full variant) */}
+              {!isMinimal && (
+                <div className="mt-3 flex items-center justify-center gap-3 showcase-fade-up" style={{ animationDelay: '1.5s' }}>
+                  <span className="text-[9px] uppercase tracking-[0.25em] text-white/35 font-semibold">Integrated</span>
+                  <BankPill src="/banks/kapital.webp" name="Kapitalbank" />
+                  <BankPill src="/banks/ipak.svg" name="Ipak Yo'li" />
+                </div>
+              )}
             </div>
           </div>
         </div>
