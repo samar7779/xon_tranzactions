@@ -127,10 +127,12 @@ export function ShowcaseStage({
               }}
             >
               {/* FRONT side — dashboard (opacity orqali yashirinadi, rotation yarmida) */}
+              {/* preserve-3d KERAK — ichki kartochkalar hover translateZ ishlashi uchun */}
               <div className="relative transition-opacity duration-300"
                    style={{
                      opacity: scanning ? 0 : 1,
                      transitionDelay: scanning ? '0.2s' : '0.6s',
+                     transformStyle: 'preserve-3d',
                      backfaceVisibility: 'hidden',
                      WebkitBackfaceVisibility: 'hidden',
                    }}>
