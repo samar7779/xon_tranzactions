@@ -77,15 +77,38 @@ export class OplataKvService {
    * DAY mode (08:00-22:00 Tashkent): har user belgilangan interval'da (default 15), max 1000 ta
    * NIGHT mode (01:00-07:50 Tashkent): kuniga 1 marta — limit'siz batch (barcha tx-status)
    */
+  /**
+   * HH:MM string -> {hour, minute}
+   */
+  private parseTime(s: string): { hour: number; minute: number } {
+    const [h, m] = s.split(':').map(Number);
+    return { hour: h || 0, minute: m || 0 };
+  }
+  /** Joriy vaqt (minute) berilgan range ichidami? */
+  private isInRange(nowH: number, nowM: number, startStr: string, endStr: string): boolean {
+    const start = this.parseTime(startStr);
+    const end = this.parseTime(endStr);
+    const nowMin = nowH * 60 + nowM;
+    const startMin = start.hour * 60 + start.minute;
+    const endMin = end.hour * 60 + end.minute;
+    return nowMin >= startMin && nowMin < endMin;
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async autoSyncTick() {
     try {
       const { hour, minute } = this.getTashkentHourMinute();
       const intervalMin = await this.settings.getOplatyKvAutoSyncMinutes();
       const minDate = await this.settings.getOplatyKvTxMinDate();
+      // Settings'dan vaqt oraliqlari
+      const dayStart   = await this.settings.getOplatyKvDayStart();   // '08:00'
+      const dayEnd     = await this.settings.getOplatyKvDayEnd();     // '22:00'
+      const nightStart = await this.settings.getOplatyKvNightStart(); // '01:00'
+      const nightEnd   = await this.settings.getOplatyKvNightEnd();   // '07:50'
+      // autoXato olib tashlandi — user: 'tolovlarni ochirish keremas'
 
-      // ─── DAY MODE (08:00 — 22:00 Tashkent), every intervalMin daqiqada ───
-      if (hour >= 8 && hour < 22) {
+      // ─── DAY MODE — every intervalMin daqiqada, limit 1000 ───
+      if (this.isInRange(hour, minute, dayStart, dayEnd)) {
         if (!intervalMin || intervalMin < 1) return;
         const now = new Date();
         if (this.lastAutoSyncAt) {
@@ -93,33 +116,28 @@ export class OplataKvService {
           if (elapsedMin < intervalMin) return;
         }
         this.lastAutoSyncAt = now;
-        this.log.log(`Auto-sync DAY (interval ${intervalMin}min): boshlandi`);
+        this.log.log(`Auto-sync DAY (${dayStart}-${dayEnd}, interval ${intervalMin}min): boshlandi`);
         const result = await this.syncFromTransactions({
-          minDate,
-          limit: 1000,
-          actor: { id: null, name: 'cron · day-15min' },
+          minDate, limit: 1000,
+          actor: { id: null, name: 'cron · day' },
         });
         this.log.log(`Auto-sync DAY DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+        // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
         return;
       }
 
-      // ─── NIGHT MODE (01:00 — 07:50 Tashkent), kuniga 1 marta — FULL BATCH ───
-      const isNightWindow =
-        (hour === 1 && minute >= 0) ||
-        (hour >= 2 && hour <= 6) ||
-        (hour === 7 && minute < 50);
-      if (isNightWindow) {
-        const today = new Date();
-        const tashkentDay = new Date(today.getTime() + 5 * 60 * 60 * 1000).getUTCDate();
-        if (this.lastNightBatchDay === tashkentDay) return; // bugun allaqachon ishladi
+      // ─── NIGHT BATCH — kuniga 1 marta, FULL ───
+      if (this.isInRange(hour, minute, nightStart, nightEnd)) {
+        const tashkentDay = new Date(Date.now() + 5 * 60 * 60 * 1000).getUTCDate();
+        if (this.lastNightBatchDay === tashkentDay) return;
         this.lastNightBatchDay = tashkentDay;
-        this.log.log(`Auto-sync NIGHT BATCH: boshlandi`);
+        this.log.log(`Auto-sync NIGHT BATCH (${nightStart}-${nightEnd}): boshlandi`);
         const result = await this.syncFromTransactions({
           minDate,
-          // limit: undefined -> hamma tx olinadi (full batch)
           actor: { id: null, name: 'cron · night-batch' },
         });
         this.log.log(`Auto-sync NIGHT BATCH DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
+        // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
       }
     } catch (e: any) {
       this.log.warn(`Auto-sync xato: ${e?.message}`);
@@ -281,11 +299,30 @@ export class OplataKvService {
       }),
     ]);
 
+    // CRM XATO status — har qator uchun (faqat tx-manba qatorlarda tekshiriladi)
+    const txContractNos = Array.from(new Set(
+      items.filter((i) => i.sourceTxId).map((i) => i.contractNo),
+    ));
+    let xatoSet = new Set<string>();
+    if (txContractNos.length > 0) {
+      const verified = await this.prisma.crmContract.findMany({
+        where: { contractNumber: { in: txContractNos } },
+        select: { contractNumber: true, found: true },
+      });
+      const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
+      // XATO = tx-manba lekin CRM da verified emas
+      xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
+    }
+    const itemsWithStatus = items.map((i) => ({
+      ...i,
+      crmXato: i.sourceTxId && xatoSet.has(i.contractNo) ? true : false,
+    }));
+
     return {
       ok: true,
       page, perPage, total,
       pageCount: Math.max(1, Math.ceil(total / perPage)),
-      items,
+      items: itemsWithStatus,
       sums: {
         paymentAmount:    Number(sums._sum.paymentAmount    ?? 0),
         firstInstallment: Number(sums._sum.firstInstallment ?? 0),
