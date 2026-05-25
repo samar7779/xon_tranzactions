@@ -1,48 +1,42 @@
 'use client';
 
 /**
- * Pomodoro Focus Timer — 4 ta vizual stil bilan:
- *  - hourglass (qumli soat) — animatsiyali qum to'kilishi
- *  - ring (doira) — circular progress
- *  - digital (raqamli) — LED style countdown
- *  - bar (chiziq) — linear progress
+ * Pomodoro Focus Timer — ZAMONAVIY 4 ta dizayn:
+ *  - orb (premium pulsing sphere) — default
+ *  - liquid (modern water filling glass)
+ *  - ring (minimalist clean ring with bold typography)
+ *  - display (frosted glass + neon digital)
  *
- * Foydalanuvchi har sessiya tugaganda hisoblash bo'ladi (localStorage).
- * Bugungi sessiyalar va jami fokus vaqti ko'rsatiladi.
+ * Sound to'g'rilandi: AudioContext ref'ga saqlanadi va birinchi Start
+ * bosilganda yaratiladi (autoplay policy uchun).
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import {
-  Play, Pause, RotateCcw, Hourglass, CircleDot, Hash, BarChart3,
+  Play, Pause, RotateCcw, Sparkles, Droplets, Circle, Hash,
   Coffee, Brain, Flame, Settings as SettingsIcon, Volume2, VolumeX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type TimerStyle = 'hourglass' | 'ring' | 'digital' | 'bar';
+type TimerStyle = 'orb' | 'liquid' | 'ring' | 'display';
 type Mode = 'focus' | 'break';
 
 interface SessionStats {
-  date: string;       // YYYY-MM-DD
+  date: string;
   sessions: number;
   totalSeconds: number;
 }
 
 const STYLE_OPTIONS: { value: TimerStyle; label: string; icon: any }[] = [
-  { value: 'hourglass', label: 'Qumli soat', icon: Hourglass },
-  { value: 'ring',      label: 'Doira',      icon: CircleDot  },
-  { value: 'digital',   label: 'Raqamli',    icon: Hash       },
-  { value: 'bar',       label: 'Chiziq',     icon: BarChart3  },
+  { value: 'orb',     label: 'Orb',         icon: Sparkles },
+  { value: 'liquid',  label: 'Suyuq',       icon: Droplets },
+  { value: 'ring',    label: 'Doira',       icon: Circle   },
+  { value: 'display', label: 'Display',     icon: Hash     },
 ];
 
-const FOCUS_DURATION = 25 * 60; // 25 min
-const BREAK_DURATION = 5 * 60;  // 5 min
+function todayKey() { return new Date().toISOString().slice(0, 10); }
 
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-/** localStorage'dan bugungi stats o'qish */
 function loadStats(): SessionStats {
   if (typeof window === 'undefined') return { date: todayKey(), sessions: 0, totalSeconds: 0 };
   try {
@@ -59,39 +53,20 @@ function saveStats(s: SessionStats) {
   localStorage.setItem('pomodoro-stats', JSON.stringify(s));
 }
 
-/** Yengil beep ovozi — Web Audio bilan */
-function playDone() {
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const notes = [523.25, 659.25, 783.99]; // C5, E5, G5
-    notes.forEach((freq, i) => {
-      setTimeout(() => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.6);
-      }, i * 100);
-    });
-  } catch {}
-}
-
 export function PomodoroTimer() {
-  const [style, setStyle] = useState<TimerStyle>('hourglass');
+  const [style, setStyle] = useState<TimerStyle>('orb');
   const [mode, setMode] = useState<Mode>('focus');
   const [running, setRunning] = useState(false);
-  const [secondsLeft, setSecondsLeft] = useState(FOCUS_DURATION);
+  const [secondsLeft, setSecondsLeft] = useState(25 * 60);
   const [stats, setStats] = useState<SessionStats>({ date: todayKey(), sessions: 0, totalSeconds: 0 });
   const [muted, setMuted] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [focusMin, setFocusMin] = useState(25);
   const [breakMin, setBreakMin] = useState(5);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Boot: localStorage'dan o'qish
+  // Boot — localStorage'dan
   useEffect(() => {
     if (typeof window === 'undefined') return;
     setStats(loadStats());
@@ -112,7 +87,6 @@ export function PomodoroTimer() {
     intervalRef.current = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
-          // Tugadi!
           clearInterval(intervalRef.current!);
           handleComplete();
           return 0;
@@ -120,17 +94,67 @@ export function PomodoroTimer() {
         return s - 1;
       });
     }, 1000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [running]);
+
+  /** AudioContext ni user-interaction'da yaratamiz (autoplay policy) */
+  function ensureAudio() {
+    if (typeof window === 'undefined') return null;
+    if (!audioCtxRef.current) {
+      try {
+        const AC = (window.AudioContext || (window as any).webkitAudioContext);
+        if (AC) audioCtxRef.current = new AC();
+      } catch {}
+    }
+    if (audioCtxRef.current?.state === 'suspended') {
+      audioCtxRef.current.resume().catch(() => {});
+    }
+    return audioCtxRef.current;
+  }
+
+  function playDone() {
+    if (muted) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    try {
+      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      notes.forEach((freq, i) => {
+        setTimeout(() => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.2, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.7);
+        }, i * 110);
+      });
+    } catch {}
+  }
+
+  function playClick() {
+    if (muted) return;
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.frequency.value = 800;
+      gain.gain.setValueAtTime(0.08, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.08);
+    } catch {}
+  }
 
   function handleComplete() {
     setRunning(false);
-    if (!muted) playDone();
+    playDone();
 
     if (mode === 'focus') {
-      // Fokus tugadi — stats yangilash + break'ga o'tish
       const newStats: SessionStats = {
         date: todayKey(),
         sessions: stats.sessions + 1,
@@ -148,13 +172,15 @@ export function PomodoroTimer() {
     }
   }
 
-  function start() { setRunning(true); }
-  function pause() { setRunning(false); }
+  function start() { ensureAudio(); playClick(); setRunning(true); }
+  function pause() { playClick(); setRunning(false); }
   function reset() {
+    playClick();
     setRunning(false);
     setSecondsLeft(mode === 'focus' ? focusMin * 60 : breakMin * 60);
   }
   function switchMode(m: Mode) {
+    playClick();
     setMode(m);
     setRunning(false);
     setSecondsLeft(m === 'focus' ? focusMin * 60 : breakMin * 60);
@@ -170,15 +196,12 @@ export function PomodoroTimer() {
   }
 
   const totalDuration = mode === 'focus' ? focusMin * 60 : breakMin * 60;
-  const progress = totalDuration > 0 ? 1 - secondsLeft / totalDuration : 0; // 0 to 1
+  const progress = totalDuration > 0 ? 1 - secondsLeft / totalDuration : 0;
   const mins = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
   const timeStr = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 
-  const accentColor = mode === 'focus' ? 'amber' : 'cyan';
   const accentGrad = mode === 'focus' ? 'from-amber-500 to-orange-600' : 'from-cyan-500 to-blue-600';
-
-  // Bugungi jami fokus vaqti
   const totalMin = Math.floor(stats.totalSeconds / 60);
   const totalH = Math.floor(totalMin / 60);
   const totalM = totalMin % 60;
@@ -205,8 +228,6 @@ export function PomodoroTimer() {
             Pomodoro · {mode === 'focus' ? `${focusMin} daqiqa ish` : `${breakMin} daqiqa dam`}
           </div>
         </div>
-
-        {/* Style chooser */}
         <div className="flex items-center gap-1">
           <button
             onClick={toggleMute}
@@ -214,7 +235,7 @@ export function PomodoroTimer() {
               "w-8 h-8 rounded-lg grid place-items-center transition-colors",
               muted ? "bg-slate-100 text-slate-400" : "bg-emerald-50 text-emerald-700",
             )}
-            title={muted ? 'Ovoz o\'chirilgan' : 'Ovoz yoqilgan'}
+            title={muted ? "Ovoz o'chirilgan" : "Ovoz yoqilgan"}
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -224,7 +245,6 @@ export function PomodoroTimer() {
               "w-8 h-8 rounded-lg grid place-items-center transition-colors",
               showSettings ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500 hover:text-slate-700",
             )}
-            title="Sozlamalar"
           >
             <SettingsIcon className="h-4 w-4" />
           </button>
@@ -247,8 +267,7 @@ export function PomodoroTimer() {
                   if (mode === 'focus' && !running) setSecondsLeft(v * 60);
                 }}
                 className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 text-sm bg-white"
-                min={1}
-                max={120}
+                min={1} max={120}
               />
             </div>
             <div>
@@ -263,14 +282,12 @@ export function PomodoroTimer() {
                   if (mode === 'break' && !running) setSecondsLeft(v * 60);
                 }}
                 className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 text-sm bg-white"
-                min={1}
-                max={60}
+                min={1} max={60}
               />
             </div>
           </div>
-          {/* Style chooser */}
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Dizayn</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Zamonaviy dizayn</label>
             <div className="grid grid-cols-4 gap-1.5">
               {STYLE_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
@@ -319,11 +336,11 @@ export function PomodoroTimer() {
       </div>
 
       {/* Visualization */}
-      <div className="px-6 py-8 grid place-items-center min-h-[280px]">
-        {style === 'hourglass' && <Hourglass3D progress={progress} mode={mode} timeStr={timeStr} running={running} />}
-        {style === 'ring' && <RingTimer progress={progress} mode={mode} timeStr={timeStr} />}
-        {style === 'digital' && <DigitalTimer timeStr={timeStr} mode={mode} progress={progress} />}
-        {style === 'bar' && <BarTimer progress={progress} mode={mode} timeStr={timeStr} />}
+      <div className="px-6 py-8 grid place-items-center min-h-[320px]">
+        {style === 'orb' && <OrbTimer progress={progress} mode={mode} timeStr={timeStr} running={running} />}
+        {style === 'liquid' && <LiquidTimer progress={progress} mode={mode} timeStr={timeStr} running={running} />}
+        {style === 'ring' && <MinimalRing progress={progress} mode={mode} timeStr={timeStr} />}
+        {style === 'display' && <ModernDisplay timeStr={timeStr} mode={mode} progress={progress} />}
       </div>
 
       {/* Controls */}
@@ -332,25 +349,30 @@ export function PomodoroTimer() {
           <button
             onClick={start}
             className={cn(
-              "px-6 h-12 rounded-xl text-white font-bold shadow-lg transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-2",
+              "px-8 h-12 rounded-2xl text-white font-bold shadow-lg transition-all hover:scale-105 active:scale-95 inline-flex items-center gap-2",
               `bg-gradient-to-br ${accentGrad}`,
             )}
+            style={{
+              boxShadow: mode === 'focus'
+                ? '0 10px 30px -10px rgba(245,158,11,0.6)'
+                : '0 10px 30px -10px rgba(6,182,212,0.6)',
+            }}
           >
-            <Play className="h-4 w-4" />
+            <Play className="h-4 w-4 fill-current" />
             Boshlash
           </button>
         ) : (
           <button
             onClick={pause}
-            className="px-6 h-12 rounded-xl bg-slate-200 text-slate-700 font-bold hover:bg-slate-300 transition-all inline-flex items-center gap-2"
+            className="px-8 h-12 rounded-2xl bg-slate-800 text-white font-bold hover:bg-slate-900 transition-all inline-flex items-center gap-2 shadow-lg"
           >
-            <Pause className="h-4 w-4" />
+            <Pause className="h-4 w-4 fill-current" />
             To'xtatish
           </button>
         )}
         <button
           onClick={reset}
-          className="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors grid place-items-center"
+          className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors grid place-items-center shadow-sm"
           title="Qaytarish"
         >
           <RotateCcw className="h-4 w-4" />
@@ -382,107 +404,173 @@ export function PomodoroTimer() {
   );
 }
 
-/* ═══════════════════ HOURGLASS — qumli soat ═══════════════════ */
+/* ═════════════════════ ORB — premium pulsing sphere ═════════════════════ */
 
-function Hourglass3D({ progress, mode, timeStr, running }: { progress: number; mode: Mode; timeStr: string; running: boolean }) {
-  // Qumli soat: top sand decreases, bottom increases
-  // progress: 0 = top to'la, 1 = bottom to'la
-  const sandColor = mode === 'focus' ? '#f59e0b' : '#06b6d4';
-  const sandColorLight = mode === 'focus' ? '#fcd34d' : '#67e8f9';
+function OrbTimer({ progress, mode, timeStr, running }: { progress: number; mode: Mode; timeStr: string; running: boolean }) {
+  const grad1 = mode === 'focus' ? '#fbbf24' : '#22d3ee';
+  const grad2 = mode === 'focus' ? '#f97316' : '#3b82f6';
+  const glow  = mode === 'focus' ? 'rgba(251,191,36,0.6)' : 'rgba(34,211,238,0.6)';
 
-  // Top sand: starts at y=12 (top), goes to y=48 (middle) as progress increases
-  // We represent top sand height: (1-progress) * maxHeight
-  const topSandHeight = (1 - progress) * 36; // max 36 units
-  const bottomSandHeight = progress * 36;
+  return (
+    <div className="relative">
+      {/* Ambient pulse halos */}
+      <div className="absolute inset-0 rounded-full animate-ping" style={{ background: `radial-gradient(circle, ${glow}, transparent 60%)`, animationDuration: '3s' }} />
+      <div className="absolute inset-4 rounded-full animate-ping" style={{ background: `radial-gradient(circle, ${glow}, transparent 60%)`, animationDuration: '4s', animationDelay: '1s' }} />
+
+      {/* Main orb */}
+      <div className="relative w-64 h-64">
+        {/* Outer glow */}
+        <div className="absolute inset-0 rounded-full blur-3xl" style={{ background: `radial-gradient(circle, ${glow}, transparent 70%)` }} />
+
+        {/* Sphere */}
+        <div
+          className={cn("relative w-full h-full rounded-full overflow-hidden", running && "animate-[pulse_3s_ease-in-out_infinite]")}
+          style={{
+            background: `radial-gradient(circle at 30% 30%, ${grad1}, ${grad2} 70%, ${grad2} 100%)`,
+            boxShadow: `inset 0 -20px 40px rgba(0,0,0,0.3), inset 20px 20px 60px rgba(255,255,255,0.4), 0 30px 60px ${glow}`,
+          }}
+        >
+          {/* Inner highlight */}
+          <div className="absolute top-6 left-8 w-24 h-24 rounded-full blur-2xl bg-white/40" />
+
+          {/* Progress arc — outer rim */}
+          <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="4" />
+            <circle
+              cx="50" cy="50" r="46"
+              fill="none"
+              stroke="white"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray={2 * Math.PI * 46}
+              strokeDashoffset={(1 - progress) * 2 * Math.PI * 46}
+              className="transition-all duration-1000 ease-linear"
+              style={{ filter: 'drop-shadow(0 0 6px rgba(255,255,255,0.8))' }}
+            />
+          </svg>
+
+          {/* Time display */}
+          <div className="absolute inset-0 grid place-items-center">
+            <div className="text-center">
+              <div className="text-5xl font-black text-white tabular-nums tracking-tight drop-shadow-lg">{timeStr}</div>
+              <div className="text-[10px] uppercase tracking-[0.3em] text-white/80 font-bold mt-1">
+                {Math.round(progress * 100)}%
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Orbital satellites — sekin aylanadi */}
+        {running && (
+          <div className="absolute inset-0 animate-[spin_8s_linear_infinite]">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 w-3 h-3 rounded-full" style={{ background: 'white', boxShadow: `0 0 12px ${glow}` }} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════ LIQUID — water filling glass ═════════════════════ */
+
+function LiquidTimer({ progress, mode, timeStr, running }: { progress: number; mode: Mode; timeStr: string; running: boolean }) {
+  const grad1 = mode === 'focus' ? '#fbbf24' : '#22d3ee';
+  const grad2 = mode === 'focus' ? '#f97316' : '#0ea5e9';
+  // Water level — progress oshganda suv pasayadi (qum kabi) yoki ko'tariladi?
+  // Pomodoro logika: vaqt o'tgan sari liquid TUGAYDI (yoki to'ladi — visualizatsiya tanlovi)
+  // Bizda: tugashga yaqinlashganda suv PASAYADI
+  const waterLevel = 1 - progress; // 1 = to'la, 0 = bo'sh
 
   return (
     <div className="relative">
       {/* Outer glow */}
-      <div className={cn(
-        "absolute -inset-4 rounded-full blur-2xl opacity-40",
-        mode === 'focus' ? 'bg-amber-400' : 'bg-cyan-400',
-      )} />
+      <div className="absolute -inset-6 rounded-full blur-3xl opacity-40" style={{ background: `radial-gradient(circle, ${grad1}, transparent)` }} />
 
-      <svg viewBox="0 0 100 140" width="180" height="252" className="relative">
-        <defs>
-          {/* Sand gradient */}
-          <linearGradient id="sand-grad" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" stopColor={sandColorLight} />
-            <stop offset="100%" stopColor={sandColor} />
-          </linearGradient>
-          {/* Glass gradient */}
-          <linearGradient id="glass-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(148,163,184,0.1)" />
-            <stop offset="50%" stopColor="rgba(148,163,184,0.25)" />
-            <stop offset="100%" stopColor="rgba(148,163,184,0.1)" />
-          </linearGradient>
-          {/* ClipPath — top triangle */}
-          <clipPath id="top-clip">
-            <path d="M 15 12 L 85 12 L 50 65 Z" />
-          </clipPath>
-          {/* ClipPath — bottom triangle */}
-          <clipPath id="bottom-clip">
-            <path d="M 50 75 L 85 128 L 15 128 Z" />
-          </clipPath>
-        </defs>
+      {/* Glass container */}
+      <div className="relative w-52 h-72">
+        <svg viewBox="0 0 100 140" className="w-full h-full">
+          <defs>
+            <linearGradient id="liquid-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor={grad1} stopOpacity="0.9" />
+              <stop offset="100%" stopColor={grad2} stopOpacity="1" />
+            </linearGradient>
+            <linearGradient id="glass-grad-modern" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.4)" />
+              <stop offset="50%" stopColor="rgba(255,255,255,0.1)" />
+              <stop offset="100%" stopColor="rgba(255,255,255,0.4)" />
+            </linearGradient>
+            <clipPath id="glass-clip">
+              <path d="M 25 10 L 75 10 L 78 130 Q 50 138 22 130 Z" />
+            </clipPath>
+          </defs>
 
-        {/* Frame top */}
-        <rect x="10" y="8" width="80" height="4" rx="2" fill="#94a3b8" />
-        {/* Frame bottom */}
-        <rect x="10" y="128" width="80" height="4" rx="2" fill="#94a3b8" />
+          {/* Glass body */}
+          <path d="M 25 10 L 75 10 L 78 130 Q 50 138 22 130 Z" fill="url(#glass-grad-modern)" stroke="rgba(148,163,184,0.5)" strokeWidth="1.5" />
 
-        {/* Glass body */}
-        <path d="M 15 12 L 85 12 L 50 65 L 85 128 L 15 128 L 50 75 Z" fill="url(#glass-grad)" stroke="#cbd5e1" strokeWidth="1.5" />
+          {/* WATER (clipped) */}
+          <g clipPath="url(#glass-clip)">
+            {/* Water body */}
+            <rect x="0" y={10 + (1 - waterLevel) * 120} width="100" height="130" fill="url(#liquid-grad)" />
 
-        {/* TOP SAND — clipped triangle, height decreases */}
-        <g clipPath="url(#top-clip)">
-          <rect x="10" y={12 + (36 - topSandHeight)} width="80" height={topSandHeight} fill="url(#sand-grad)" />
-        </g>
+            {/* Wave animations */}
+            {running && waterLevel > 0.05 && (
+              <>
+                <path
+                  d={`M 0 ${10 + (1 - waterLevel) * 120} Q 25 ${10 + (1 - waterLevel) * 120 - 3} 50 ${10 + (1 - waterLevel) * 120} T 100 ${10 + (1 - waterLevel) * 120} L 100 130 L 0 130 Z`}
+                  fill="url(#liquid-grad)"
+                  opacity="0.85"
+                >
+                  <animate
+                    attributeName="d"
+                    dur="3s"
+                    repeatCount="indefinite"
+                    values={`M 0 ${10 + (1 - waterLevel) * 120} Q 25 ${10 + (1 - waterLevel) * 120 - 3} 50 ${10 + (1 - waterLevel) * 120} T 100 ${10 + (1 - waterLevel) * 120} L 100 130 L 0 130 Z;
+                             M 0 ${10 + (1 - waterLevel) * 120} Q 25 ${10 + (1 - waterLevel) * 120 + 3} 50 ${10 + (1 - waterLevel) * 120} T 100 ${10 + (1 - waterLevel) * 120} L 100 130 L 0 130 Z;
+                             M 0 ${10 + (1 - waterLevel) * 120} Q 25 ${10 + (1 - waterLevel) * 120 - 3} 50 ${10 + (1 - waterLevel) * 120} T 100 ${10 + (1 - waterLevel) * 120} L 100 130 L 0 130 Z`}
+                  />
+                </path>
 
-        {/* BOTTOM SAND — clipped triangle, height increases from bottom */}
-        <g clipPath="url(#bottom-clip)">
-          <rect x="10" y={128 - bottomSandHeight} width="80" height={bottomSandHeight} fill="url(#sand-grad)" />
-        </g>
+                {/* Bubbles */}
+                <circle cx="35" cy="100" r="1.5" fill="white" opacity="0.7">
+                  <animate attributeName="cy" values="125;30" dur="4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0;0.7;0" dur="4s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="60" cy="80" r="1" fill="white" opacity="0.7">
+                  <animate attributeName="cy" values="125;30" dur="5s" begin="1s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0;0.7;0" dur="5s" begin="1s" repeatCount="indefinite" />
+                </circle>
+                <circle cx="45" cy="60" r="1.2" fill="white" opacity="0.7">
+                  <animate attributeName="cy" values="125;30" dur="6s" begin="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0;0.7;0" dur="6s" begin="2s" repeatCount="indefinite" />
+                </circle>
+              </>
+            )}
+          </g>
 
-        {/* Sand falling stream (faqat running bo'lganda) */}
-        {running && progress > 0 && progress < 1 && (
-          <>
-            <rect x="49" y="65" width="2" height="10" fill={sandColor} opacity="0.9">
-              <animate attributeName="opacity" values="0.4;1;0.4" dur="0.4s" repeatCount="indefinite" />
-            </rect>
-            {/* Particles */}
-            <circle cx="50" cy="68" r="1" fill={sandColorLight}>
-              <animate attributeName="cy" values="65;75" dur="0.5s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="1;0" dur="0.5s" repeatCount="indefinite" />
-            </circle>
-            <circle cx="50" cy="70" r="0.8" fill={sandColor}>
-              <animate attributeName="cy" values="65;75" dur="0.5s" begin="0.25s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="1;0" dur="0.5s" begin="0.25s" repeatCount="indefinite" />
-            </circle>
-          </>
-        )}
+          {/* Glass shine */}
+          <path d="M 30 15 L 35 15 L 38 125 L 33 128 Z" fill="white" opacity="0.3" />
+          {/* Rim highlight */}
+          <ellipse cx="50" cy="10" rx="25" ry="3" fill="rgba(255,255,255,0.4)" />
+        </svg>
+      </div>
 
-        {/* Center pinch (decorative) */}
-        <circle cx="50" cy="70" r="2" fill="#94a3b8" />
-      </svg>
-
-      {/* Time display — ostida */}
-      <div className="text-center mt-3">
+      {/* Time display — overlay */}
+      <div className="absolute inset-0 grid place-items-center pointer-events-none">
         <div className={cn(
-          "text-4xl font-black tabular-nums tracking-tight",
-          mode === 'focus' ? 'text-amber-600' : 'text-cyan-600',
+          "px-4 py-2 rounded-2xl backdrop-blur-md bg-white/40 ring-1 ring-white/60 shadow-xl",
+          mode === 'focus' ? 'text-amber-700' : 'text-cyan-700',
         )}>
-          {timeStr}
+          <div className="text-4xl font-black tabular-nums tracking-tight drop-shadow">{timeStr}</div>
         </div>
       </div>
     </div>
   );
 }
 
-/* ═══════════════════ RING — doira ═══════════════════ */
+/* ═════════════════════ MINIMAL RING — clean modern ═════════════════════ */
 
-function RingTimer({ progress, mode, timeStr }: { progress: number; mode: Mode; timeStr: string }) {
-  const RADIUS = 90;
+function MinimalRing({ progress, mode, timeStr }: { progress: number; mode: Mode; timeStr: string }) {
+  const RADIUS = 100;
   const CIRC = 2 * Math.PI * RADIUS;
   const dashOffset = CIRC - progress * CIRC;
   const color = mode === 'focus' ? '#f59e0b' : '#06b6d4';
@@ -490,36 +578,59 @@ function RingTimer({ progress, mode, timeStr }: { progress: number; mode: Mode; 
 
   return (
     <div className="relative">
-      <svg width="220" height="220" viewBox="0 0 220 220" className="-rotate-90">
+      <svg width="240" height="240" viewBox="0 0 240 240" className="-rotate-90">
         <defs>
-          <linearGradient id="ring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <linearGradient id="minring-grad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor={colorLight} />
             <stop offset="100%" stopColor={color} />
           </linearGradient>
+          <filter id="minring-glow">
+            <feGaussianBlur stdDeviation="3" />
+          </filter>
         </defs>
-        <circle cx="110" cy="110" r={RADIUS} fill="none" stroke="rgb(226,232,240)" strokeWidth="14" />
+        {/* Subtle track */}
+        <circle cx="120" cy="120" r={RADIUS} fill="none" stroke="rgb(241,245,249)" strokeWidth="8" />
+        {/* Glow layer */}
         <circle
-          cx="110" cy="110" r={RADIUS}
+          cx="120" cy="120" r={RADIUS}
           fill="none"
-          stroke="url(#ring-grad)"
-          strokeWidth="14"
+          stroke="url(#minring-grad)"
+          strokeWidth="8"
           strokeLinecap="round"
           strokeDasharray={CIRC}
           strokeDashoffset={dashOffset}
           className="transition-all duration-1000 ease-linear"
-          style={{ filter: `drop-shadow(0 0 8px ${color})` }}
+          filter="url(#minring-glow)"
+          opacity="0.6"
+        />
+        {/* Main stroke */}
+        <circle
+          cx="120" cy="120" r={RADIUS}
+          fill="none"
+          stroke="url(#minring-grad)"
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={CIRC}
+          strokeDashoffset={dashOffset}
+          className="transition-all duration-1000 ease-linear"
+        />
+        {/* End dot */}
+        <circle
+          cx="120" cy="120" r={RADIUS}
+          fill="none"
+          stroke="transparent"
         />
       </svg>
       <div className="absolute inset-0 grid place-items-center">
         <div className="text-center">
           <div className={cn(
-            "text-5xl font-black tabular-nums tracking-tight",
-            mode === 'focus' ? 'text-amber-600' : 'text-cyan-600',
+            "text-6xl font-black tabular-nums tracking-tight",
+            mode === 'focus' ? 'text-slate-900' : 'text-slate-900',
           )}>
             {timeStr}
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-slate-400 mt-1 font-bold">
-            {Math.round(progress * 100)}% bajarildi
+          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 mt-2 font-bold">
+            {mode === 'focus' ? 'Fokus' : 'Dam olish'}
           </div>
         </div>
       </div>
@@ -527,83 +638,79 @@ function RingTimer({ progress, mode, timeStr }: { progress: number; mode: Mode; 
   );
 }
 
-/* ═══════════════════ DIGITAL — raqamli LED ═══════════════════ */
+/* ═════════════════════ MODERN DISPLAY — frosted glass + neon ═════════════════════ */
 
-function DigitalTimer({ timeStr, mode, progress }: { timeStr: string; mode: Mode; progress: number }) {
-  return (
-    <div className="text-center">
-      {/* LED display */}
-      <div className={cn(
-        "px-8 py-6 rounded-2xl bg-slate-900 ring-4 ring-slate-800 shadow-2xl",
-        mode === 'focus' ? 'shadow-amber-500/30' : 'shadow-cyan-500/30',
-      )}>
-        <div className={cn(
-          "text-7xl font-black tabular-nums tracking-tight font-mono",
-          mode === 'focus' ? 'text-amber-400' : 'text-cyan-400',
-        )} style={{
-          textShadow: mode === 'focus'
-            ? '0 0 20px rgba(251,191,36,0.8), 0 0 40px rgba(251,191,36,0.4)'
-            : '0 0 20px rgba(34,211,238,0.8), 0 0 40px rgba(34,211,238,0.4)',
-        }}>
-          {timeStr}
-        </div>
-      </div>
-      {/* Mini progress */}
-      <div className="mt-4 px-4">
-        <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
-          <div
-            className={cn(
-              "h-full rounded-full transition-all duration-1000 ease-linear",
-              mode === 'focus' ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-cyan-400 to-blue-500',
-            )}
-            style={{ width: `${progress * 100}%` }}
-          />
-        </div>
-        <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mt-2">
-          {Math.round(progress * 100)}% bajarildi
-        </div>
-      </div>
-    </div>
-  );
-}
+function ModernDisplay({ timeStr, mode, progress }: { timeStr: string; mode: Mode; progress: number }) {
+  const color = mode === 'focus' ? 'rgb(251 191 36)' : 'rgb(34 211 238)';
 
-/* ═══════════════════ BAR — chiziq ═══════════════════ */
-
-function BarTimer({ progress, mode, timeStr }: { progress: number; mode: Mode; timeStr: string }) {
   return (
     <div className="w-full max-w-md">
-      <div className="text-center mb-6">
-        <div className={cn(
-          "text-6xl font-black tabular-nums tracking-tight",
-          mode === 'focus' ? 'text-amber-600' : 'text-cyan-600',
-        )}>
-          {timeStr}
-        </div>
-      </div>
-
-      {/* Big bar */}
-      <div className="relative h-12 rounded-2xl bg-slate-100 overflow-hidden ring-1 ring-slate-200">
+      {/* Glass card */}
+      <div
+        className="relative rounded-3xl p-8 overflow-hidden"
+        style={{
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.85))',
+          backdropFilter: 'blur(20px)',
+          boxShadow: `0 25px 50px -12px rgba(0,0,0,0.15), 0 0 40px ${mode === 'focus' ? 'rgba(251,191,36,0.2)' : 'rgba(34,211,238,0.2)'}`,
+          border: '1px solid rgba(255,255,255,0.5)',
+        }}
+      >
+        {/* Background glow */}
         <div
-          className={cn(
-            "absolute inset-y-0 left-0 rounded-2xl transition-all duration-1000 ease-linear bg-gradient-to-r",
-            mode === 'focus' ? 'from-amber-400 to-orange-500' : 'from-cyan-400 to-blue-500',
-          )}
-          style={{ width: `${progress * 100}%`, boxShadow: `0 0 20px ${mode === 'focus' ? 'rgba(251,191,36,0.5)' : 'rgba(34,211,238,0.5)'}` }}
+          className="absolute -top-12 -right-12 w-40 h-40 rounded-full blur-3xl"
+          style={{ background: color, opacity: 0.3 }}
         />
-        <div className="absolute inset-0 grid place-items-center">
-          <span className="text-sm font-bold text-slate-800 mix-blend-difference">
-            {Math.round(progress * 100)}%
+        <div
+          className="absolute -bottom-12 -left-12 w-40 h-40 rounded-full blur-3xl"
+          style={{ background: color, opacity: 0.2 }}
+        />
+
+        {/* Mode label */}
+        <div className="relative text-center mb-4">
+          <span className={cn(
+            "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] uppercase tracking-[0.3em] font-bold",
+            mode === 'focus' ? 'bg-amber-100 text-amber-700' : 'bg-cyan-100 text-cyan-700',
+          )}>
+            {mode === 'focus' ? <Brain className="h-3 w-3" /> : <Coffee className="h-3 w-3" />}
+            {mode === 'focus' ? 'Fokus' : 'Dam olish'}
           </span>
         </div>
-      </div>
 
-      {/* Tick marks */}
-      <div className="mt-2 flex justify-between text-[9px] text-slate-400 font-mono">
-        {[0, 25, 50, 75, 100].map((p) => (
-          <span key={p} className={cn(progress * 100 >= p && (mode === 'focus' ? 'text-amber-600 font-bold' : 'text-cyan-600 font-bold'))}>
-            {p}%
-          </span>
-        ))}
+        {/* Time — large, modern */}
+        <div className="relative text-center">
+          <div
+            className="text-8xl font-black tabular-nums tracking-tight bg-clip-text text-transparent"
+            style={{
+              backgroundImage: mode === 'focus'
+                ? 'linear-gradient(135deg, #f59e0b, #f97316)'
+                : 'linear-gradient(135deg, #06b6d4, #3b82f6)',
+              filter: `drop-shadow(0 4px 12px ${mode === 'focus' ? 'rgba(245,158,11,0.3)' : 'rgba(6,182,212,0.3)'})`,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {timeStr}
+          </div>
+        </div>
+
+        {/* Modern progress bar */}
+        <div className="relative mt-6">
+          <div className="h-2 rounded-full bg-slate-200/60 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000 ease-linear"
+              style={{
+                width: `${progress * 100}%`,
+                background: mode === 'focus'
+                  ? 'linear-gradient(90deg, #fbbf24, #f97316)'
+                  : 'linear-gradient(90deg, #22d3ee, #3b82f6)',
+                boxShadow: `0 0 12px ${color}`,
+              }}
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[10px] font-bold text-slate-500">
+            <span>{Math.round(progress * 100)}%</span>
+            <span>100%</span>
+          </div>
+        </div>
       </div>
     </div>
   );
