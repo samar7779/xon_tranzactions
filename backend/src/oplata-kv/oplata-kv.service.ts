@@ -596,6 +596,19 @@ export class OplataKvService {
       `syncDuration=${syncDuration}s`,
     );
 
+    // ── SINXRON: XATO shartnomalardan split tozalash (tez updateMany) ──
+    // User talabi: sync qilingach XATO qatorlarda 1-vznos/oylik darhol bo'sh bo'lishi kerak.
+    // Bu tezkor (~100ms) — bg jobni kutishga hojat yo'q.
+    let xatoCleanedCount = 0;
+    try {
+      xatoCleanedCount = await this.cleanupSplitsForXatoContracts();
+      if (xatoCleanedCount > 0) {
+        this.log.log(`sync: XATO split cleanup — ${xatoCleanedCount} qator tozalandi (sinxron)`);
+      }
+    } catch (e: any) {
+      this.log.warn(`sync XATO cleanup xato: ${e?.message}`);
+    }
+
     // ── FONDA: obyekt/client to'ldirish (502 timeoutdan saqlanish) ──
     // Response darrov qaytadi, fillMissingObjects orqada davom etadi.
     // Foydalanuvchi sahifani yangilab ko'rishi mumkin — qatorlar asta to'ldiriladi.
@@ -630,7 +643,7 @@ export class OplataKvService {
     );
     return {
       ok: true,
-      version: 'v3-bg-fill',  // Marker — yangi background fill versiyasi
+      version: 'v4-xato-cleanup-sync',  // Marker — XATO cleanup sinxron qilingan versiya
       total: txList.length,
       added,
       updated,
@@ -642,6 +655,7 @@ export class OplataKvService {
       },
       errorSamples,
       objectsBackground: true,  // Frontend: orqada davom etmoqda
+      xatoCleanedRows: xatoCleanedCount,
       duration: totalDuration,
       syncDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
