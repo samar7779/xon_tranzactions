@@ -103,6 +103,13 @@ export class OplataKvController {
     return this.svc.crmSverka(contractNo);
   }
 
+  @Get('crm-lookup')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Form auto-fill — shartnoma raqami bo\'yicha mijoz va obyekt nomi' })
+  crmLookup(@Query('contractNo') contractNo: string) {
+    return this.svc.crmLookupForForm(contractNo);
+  }
+
   @Post('sync-from-transactions')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Tranzaksiyalardan auto-import — CLIENT/IN/contractNo > minDate" })
