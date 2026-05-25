@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from './crm-contract-cache.service';
 import { extractContractNumber } from './contract-parser';
@@ -520,7 +521,7 @@ export class CategorizationService {
   async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; verified: boolean; customerName: string | null }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { contractNumber: true, categoryId: true, subcategoryId: true },
+      select: { contractNumber: true, categoryId: true, subcategoryId: true, externalId: true },
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
@@ -571,6 +572,16 @@ export class CategorizationService {
       } catch (e: any) {
         this.log.warn(`setContract history yozishda xato (${txId}): ${e?.message}`);
       }
+
+      // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
+      await this.syncContractChangeToOplataKv({
+        txId,
+        externalId: old.externalId,
+        oldContract: old.contractNumber,
+        newContract,
+        actorEmail: u?.email || null,
+        reason: 'setContract',
+      });
     }
 
     return { ok: true, verified, customerName };
@@ -643,7 +654,7 @@ export class CategorizationService {
   async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; contractNumber: string | null }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { contractNumber: true, isContractManual: true },
+      select: { contractNumber: true, isContractManual: true, externalId: true },
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
@@ -682,9 +693,133 @@ export class CategorizationService {
       } catch (e: any) {
         this.log.warn(`setContractManual history yozishda xato (${txId}): ${e?.message}`);
       }
+
+      // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
+      await this.syncContractChangeToOplataKv({
+        txId,
+        externalId: old.externalId,
+        oldContract: old.contractNumber,
+        newContract,
+        actorEmail: u?.email || null,
+        reason: 'setContractManual',
+      });
     }
 
     return { ok: true, contractNumber: newContract };
+  }
+
+  /**
+   * Tranzaksiyaning contractNumber'i o'zgarganda, OplatyKv'dagi shu source tx
+   * uchun yaratilgan qatorni TO'LIQ yangilaydi.
+   *
+   * User talabi: "qachonki bu xato tolovlar tranzaksiyada togrlnsa oplata kvda
+   * xam togrlanish kere ... update bolganda barcha malumoti update olish kere"
+   * — barcha maydonlar tranzaksiyadan qayta o'qib yangilanadi (faqat contractNo
+   * emas).
+   *
+   * Yangilanadi: contractNo, date, paymentAmount, purpose, txType, client,
+   * object. firstInstallment/monthlyAmount — tozalanadi, keyingi background
+   * splitInstallments yangi shartnoma asosida qayta hisoblaydi (CRM
+   * payment_histories API kerak).
+   */
+  private async syncContractChangeToOplataKv(p: {
+    txId: string;
+    externalId: string | null;
+    oldContract: string | null;
+    newContract: string | null;
+    actorEmail: string | null;
+    reason: string;
+  }): Promise<void> {
+    if (!p.newContract) return; // null bo'lsa hech narsa qilmaymiz (kelajakda DELETE qilish mumkin)
+
+    try {
+      const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
+      if (dedupKeys.length === 0) return;
+
+      // 1) OplatyKv qatorini topish (sourceTxId bo'yicha)
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { sourceTxId: { in: dedupKeys } },
+        select: { id: true, contractNo: true },
+      });
+      if (!row) return; // OplatyKv'da hali sync qilinmagan — sync vaqtida to'g'ri qo'yiladi
+
+      // 2) Tranzaksiyaning to'liq holatini o'qish — barcha qaytariladigan maydonlar
+      const tx = await this.prisma.transaction.findUnique({
+        where: { id: p.txId },
+        select: {
+          txnDate: true,
+          amount: true,
+          direction: true,
+          description: true,
+          fromName: true,
+          toName: true,
+          subcategory: { select: { name: true } },
+        },
+      });
+      if (!tx || !tx.txnDate) return;
+
+      // 3) CRM cache'dan yangi shartnoma uchun obyekt/mijoz olish (bor bo'lsa)
+      const crm = await this.prisma.crmContract.findFirst({
+        where: { contractNumber: p.newContract },
+        select: { customerName: true, objectName: true },
+      });
+
+      // 4) Object mapping (CRM nomi -> OplatyKv nomi)
+      let mappedObject: string | null = null;
+      if (crm?.objectName) {
+        const mapping = await this.prisma.oplataKvObjectMapping.findFirst({
+          where: { crmName: crm.objectName },
+          select: { oplataName: true },
+        });
+        mappedObject = mapping?.oplataName || crm.objectName;
+      }
+
+      // 5) Yangi qiymatlarni hisoblash (syncFromTransactions bilan bir xil mantiq)
+      const rawAmount = Math.abs(Number(tx.amount));
+      const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount;
+      const txParty = tx.direction === 'IN' ? tx.fromName : tx.toName;
+      const txTypeName = (tx as any).subcategory?.name
+        || (tx.direction === 'IN' ? 'Взносы за квартиры' : 'Возврат взносов за кв.');
+
+      // 6) Atomic update — barcha derivat maydonlar
+      await this.prisma.oplataKv.update({
+        where: { id: row.id },
+        data: {
+          contractNo: p.newContract,
+          date: tx.txnDate,
+          paymentAmount: new Prisma.Decimal(signedAmount),
+          purpose: tx.description || null,
+          txType: txTypeName,
+          client: crm?.customerName || txParty || null,
+          object: mappedObject,
+          // Splitni reset qilamiz — background splitInstallments CRM payment_histories
+          // bilan qayta hisoblaydi (yangi shartnoma uchun)
+          firstInstallment: null,
+          monthlyAmount: null,
+        },
+      });
+
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id,
+          action: 'edited',
+          actorType: 'system',
+          actorId: null,
+          actorName: p.actorEmail ? `tranzaksiyadan (${p.actorEmail})` : 'tranzaksiyadan',
+          fieldsChanged: [
+            'contractNo', 'date', 'paymentAmount', 'purpose', 'txType',
+            'client', 'object', 'firstInstallment', 'monthlyAmount',
+          ],
+          changes: {
+            contractNo: { old: row.contractNo, new: p.newContract },
+          } as any,
+          note: `Tranzaksiya contractNumber o'zgartirildi (${p.reason}, txId: ${p.txId}) — barcha maydonlar tranzaksiyadan qayta o'qildi`,
+        },
+      });
+    } catch (e: any) {
+      // Bu bog'liq operatsiya — asosiy setContract muvaffaqiyatli qaytishi kerak
+      this.log.warn(`syncContractChangeToOplataKv xato (txId=${p.txId}): ${e?.message}`);
+    }
   }
 
   /** Tranzaksiya kategoriya tarixi (eng yangidan oldingiga) */

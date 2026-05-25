@@ -578,17 +578,16 @@ export default function OplataKvPage() {
                     onClick={() => setDetailRow(it)}
                   >
                     <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">
-                      <span className="inline-flex items-center gap-1.5">
-                        {it.contractNo}
-                        {it.crmXato && (
-                          <span
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200"
-                            title="CRM da topilmadi — Tranzaksiyada to'g'rilang (Qo'lda yoki Ariza)"
-                          >
-                            XATO
-                          </span>
-                        )}
-                      </span>
+                      {it.crmXato ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                          title="CRM da topilmadi — Tranzaksiyada to'g'rilang (Qo'lda yoki Ariza)"
+                        >
+                          XATO
+                        </span>
+                      ) : (
+                        it.contractNo
+                      )}
                     </td>
                     <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
                     <td className={cn('px-3 py-2.5 text-right tabular-nums', amountCls(it.paymentAmount))}>{fmtNum(it.paymentAmount)}</td>
@@ -1663,34 +1662,37 @@ function OplataKvDetailDialog({
               Договор
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="font-mono text-2xl font-black tracking-tight">
-                {row.contractNo || '—'}
-              </div>
-              {row.contractNo && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await navigator.clipboard.writeText(row.contractNo);
-                      toast.success(`Shartnoma nusxalandi: ${row.contractNo}`);
-                    } catch { toast.error('Nusxalashda xato'); }
-                  }}
-                  className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center text-white/80 hover:text-white transition-all hover:scale-110"
-                  title="Shartnoma raqamini nusxalash"
+              {row.crmXato ? (
+                <div
+                  className="font-mono text-2xl font-black tracking-tight text-rose-100"
+                  title="CRM da TOPILMADI — Tranzaksiyada to'g'rilang"
                 >
-                  <Copy className="h-3.5 w-3.5" />
-                </button>
+                  XATO
+                </div>
+              ) : (
+                <>
+                  <div className="font-mono text-2xl font-black tracking-tight">
+                    {row.contractNo || '—'}
+                  </div>
+                  {row.contractNo && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(row.contractNo);
+                          toast.success(`Shartnoma nusxalandi: ${row.contractNo}`);
+                        } catch { toast.error('Nusxalashda xato'); }
+                      }}
+                      className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center text-white/80 hover:text-white transition-all hover:scale-110"
+                      title="Shartnoma raqamini nusxalash"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </>
               )}
               {row.paymentCategory && (
                 <span className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-white/15 ring-white/30 text-white whitespace-nowrap">
                   {catLabel}
-                </span>
-              )}
-              {row.crmXato && (
-                <span
-                  className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-rose-500/30 ring-rose-300/50 text-rose-50 whitespace-nowrap"
-                  title="CRM da TOPILMADI — Tranzaksiyada to'g'rilang"
-                >
-                  ⚠ XATO
                 </span>
               )}
             </div>
@@ -1698,7 +1700,7 @@ function OplataKvDetailDialog({
               {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
               {row.crmXato && (
                 <span className="ml-2 text-rose-200 text-[11px]">
-                  · CRM da topilmadi
+                  · CRM da topilmadi — Tranzaksiyada to'g'rilang
                 </span>
               )}
             </div>
