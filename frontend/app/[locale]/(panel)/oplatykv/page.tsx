@@ -2034,8 +2034,10 @@ function OplataKvFormDialog({
   onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!row;
-  // Tranzaksiyadan kelgan qator — asosiy maydonlarni lock qilamiz
-  const isFromTx = !!row?.sourceTxId;
+  // Tashqi manbadan kelgan qator (bank tx YOKI Excel import) — asosiy
+  // maydonlarni lock qilamiz. Faqat qo'lda yaratilgan qatorlarda
+  // foydalanuvchi 5 ta asosiy maydonni tahrirlashi mumkin.
+  const isFromTx = !!row?.sourceTxId || !!row?.importBatchId;
 
   const [contractNo, setContractNo] = useState('');
   const [date, setDate] = useState('');
@@ -2148,12 +2150,12 @@ function OplataKvFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {/* Bankdan kelgan qator info banner */}
+        {/* Tashqi manbadan kelgan qator info banner */}
         {isFromTx && (
           <div className="mt-1 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 flex items-start gap-2">
             <Lock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
             <div className="text-[12px] text-amber-900 leading-relaxed">
-              <b>Bankdan kelgan qator</b> — Дог №, Дата, Сумма оплаты, Клиент, Назначение
+              <b>{row?.sourceTxId ? 'Bankdan kelgan qator' : "Excel'dan import qilingan qator"}</b> — Дог №, Дата, Сумма оплаты, Клиент, Назначение
               maydonlari tahrirlab bo'lmaydi. Qolgan maydonlarni o'zgartirishingiz mumkin.
             </div>
           </div>
