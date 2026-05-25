@@ -177,6 +177,13 @@ export class OplataKvController {
     return { ok: true, cleaned };
   }
 
+  @Get('debug-xato-splits')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "DIAGNOSTIC: XATO split rowlarining BEFORE/AFTER holati + sample" })
+  async debugXatoSplits() {
+    return this.svc.debugXatoSplits();
+  }
+
   @Post(':id/split')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Bitta qator uchun split — faqat shu qator qayta hisoblanadi (boshqalarga tegmaydi)" })
