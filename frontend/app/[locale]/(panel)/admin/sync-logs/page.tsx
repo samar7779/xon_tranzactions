@@ -1113,11 +1113,10 @@ function SyncProgressDialog({
       const now = Date.now();
       const elapsedSec = Math.round((now - (startedAt || now)) / 1000);
       setElapsed(elapsedSec);
-      // Bosqich heuristikasi
-      if (elapsedSec < 3) setActiveStep(0);
-      else if (elapsedSec < 5) setActiveStep(1);
-      else if (elapsedSec < Math.max(60, elapsedSec - 30)) setActiveStep(2);
-      else setActiveStep(3);
+      // Bosqich heuristikasi (3 bosqich: sync, fill, split)
+      if (elapsedSec < 5) setActiveStep(0);
+      else if (elapsedSec < 60) setActiveStep(1);
+      else setActiveStep(2);
     }, 250);
     return () => clearInterval(tid);
   }, [open, isPending, startedAt]);
@@ -1148,17 +1147,6 @@ function SyncProgressDialog({
       color: 'emerald',
     },
     {
-      icon: Trash,
-      title: 'XATO splitlar tozalandi',
-      desc: 'CRM da yo\'q shartnomalardagi 1 взнос/oylik null qilinadi',
-      result: result && (
-        <>
-          Tozalandi: <b>{result.xatoCleanedRows || 0}</b> qator
-        </>
-      ),
-      color: 'rose',
-    },
-    {
       icon: Layers,
       title: 'Obyekt va Mijoz to\'ldirish',
       desc: 'CRM dan obyekt/mijoz nomi olib qatorlarga yoziladi',
@@ -1172,10 +1160,16 @@ function SyncProgressDialog({
     {
       icon: Split,
       title: '1 взнос va Oylik ajratish',
-      desc: 'CRM payment_histories asosida split hisoblanadi',
+      desc: 'CRM payment_histories asosida split + XATO splitlarni tozalash',
       result: result?.splitResult && (
         <>
           {result.splitResult.contracts} shartnoma · To'ldirildi: <b>{result.splitResult.filled}</b>/{result.splitResult.total} · CRM topmadi: <b>{result.splitResult.notFound}</b>
+          {result.splitResult.xatoCleaned > 0 && (
+            <>
+              <br />
+              🧹 XATO splitlar tozalandi: <b>{result.splitResult.xatoCleaned}</b> qator
+            </>
+          )}
         </>
       ),
       color: 'violet',
