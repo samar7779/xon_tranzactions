@@ -79,4 +79,39 @@ export class SettingsService {
     const v = value && value > 0 ? String(Math.floor(value)) : null;
     await this.set('oplatykv.txAutoSyncMinutes', v, updatedBy);
   }
+
+  /**
+   * OplatyKv auto-sync vaqt sozlamalari (HH:MM formatda)
+   */
+  private async getTimeStr(key: string, def: string): Promise<string> {
+    const v = await this.get(key);
+    if (v && /^\d{1,2}:\d{2}$/.test(v)) return v;
+    return def;
+  }
+  async getOplatyKvDayStart(): Promise<string>   { return this.getTimeStr('oplatykv.dayStart',   '08:00'); }
+  async getOplatyKvDayEnd():   Promise<string>   { return this.getTimeStr('oplatykv.dayEnd',     '22:00'); }
+  async getOplatyKvNightStart(): Promise<string> { return this.getTimeStr('oplatykv.nightStart', '01:00'); }
+  async getOplatyKvNightEnd():   Promise<string> { return this.getTimeStr('oplatykv.nightEnd',   '07:50'); }
+  async setOplatyKvTimeWindows(vals: { dayStart?: string; dayEnd?: string; nightStart?: string; nightEnd?: string }, updatedBy?: string) {
+    const validate = (s?: string) => {
+      if (!s) return null;
+      if (!/^\d{1,2}:\d{2}$/.test(s)) throw new Error(`Noto'g'ri vaqt format (HH:MM): ${s}`);
+      return s;
+    };
+    if (vals.dayStart   !== undefined) await this.set('oplatykv.dayStart',   validate(vals.dayStart),   updatedBy);
+    if (vals.dayEnd     !== undefined) await this.set('oplatykv.dayEnd',     validate(vals.dayEnd),     updatedBy);
+    if (vals.nightStart !== undefined) await this.set('oplatykv.nightStart', validate(vals.nightStart), updatedBy);
+    if (vals.nightEnd   !== undefined) await this.set('oplatykv.nightEnd',   validate(vals.nightEnd),   updatedBy);
+  }
+
+  /**
+   * Auto XATO cleanup — sync ichida CRM da topilmaganlarni avtomatik o'chirish
+   */
+  async getOplatyKvAutoXatoCleanup(): Promise<boolean> {
+    const v = await this.get('oplatykv.autoXatoCleanup');
+    return v === '1' || v === 'true';
+  }
+  async setOplatyKvAutoXatoCleanup(value: boolean, updatedBy?: string): Promise<void> {
+    await this.set('oplatykv.autoXatoCleanup', value ? '1' : null, updatedBy);
+  }
 }

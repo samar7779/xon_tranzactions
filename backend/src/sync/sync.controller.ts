@@ -22,16 +22,20 @@ export class SyncController {
 
   @Get('settings')
   @RequirePermissions(PERMISSIONS.SYNC_VIEW)
-  @ApiOperation({ summary: 'Sync sozlamalari — syncMinDate va boshqalar' })
+  @ApiOperation({ summary: 'Sync sozlamalari' })
   async getSettings() {
     const syncMinDate = await this.settings.getSyncMinDate();
     const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
-    const oplatykvAutoSyncMinutes = await this.settings.getOplatyKvAutoSyncMinutes();
     return {
       ok: true,
       syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
       oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
-      oplatykvAutoSyncMinutes,
+      oplatykvAutoSyncMinutes: await this.settings.getOplatyKvAutoSyncMinutes(),
+      oplatykvDayStart:        await this.settings.getOplatyKvDayStart(),
+      oplatykvDayEnd:          await this.settings.getOplatyKvDayEnd(),
+      oplatykvNightStart:      await this.settings.getOplatyKvNightStart(),
+      oplatykvNightEnd:        await this.settings.getOplatyKvNightEnd(),
+      oplatykvAutoXatoCleanup: await this.settings.getOplatyKvAutoXatoCleanup(),
     };
   }
 
@@ -43,27 +47,30 @@ export class SyncController {
       syncMinDate?: string | null;
       oplatykvTxMinDate?: string | null;
       oplatykvAutoSyncMinutes?: number | null;
+      oplatykvDayStart?: string;
+      oplatykvDayEnd?: string;
+      oplatykvNightStart?: string;
+      oplatykvNightEnd?: string;
+      oplatykvAutoXatoCleanup?: boolean;
     },
     @CurrentUser('email') email?: string,
   ) {
-    if (body.syncMinDate !== undefined) {
-      await this.settings.setSyncMinDate(body.syncMinDate || null, email);
+    if (body.syncMinDate !== undefined) await this.settings.setSyncMinDate(body.syncMinDate || null, email);
+    if (body.oplatykvTxMinDate !== undefined) await this.settings.setOplatyKvTxMinDate(body.oplatykvTxMinDate || null, email);
+    if (body.oplatykvAutoSyncMinutes !== undefined) await this.settings.setOplatyKvAutoSyncMinutes(body.oplatykvAutoSyncMinutes || null, email);
+    if (body.oplatykvDayStart !== undefined || body.oplatykvDayEnd !== undefined ||
+        body.oplatykvNightStart !== undefined || body.oplatykvNightEnd !== undefined) {
+      await this.settings.setOplatyKvTimeWindows({
+        dayStart: body.oplatykvDayStart,
+        dayEnd: body.oplatykvDayEnd,
+        nightStart: body.oplatykvNightStart,
+        nightEnd: body.oplatykvNightEnd,
+      }, email);
     }
-    if (body.oplatykvTxMinDate !== undefined) {
-      await this.settings.setOplatyKvTxMinDate(body.oplatykvTxMinDate || null, email);
+    if (body.oplatykvAutoXatoCleanup !== undefined) {
+      await this.settings.setOplatyKvAutoXatoCleanup(body.oplatykvAutoXatoCleanup, email);
     }
-    if (body.oplatykvAutoSyncMinutes !== undefined) {
-      await this.settings.setOplatyKvAutoSyncMinutes(body.oplatykvAutoSyncMinutes || null, email);
-    }
-    const syncMinDate = await this.settings.getSyncMinDate();
-    const oplatykvTxMinDate = await this.settings.getOplatyKvTxMinDate();
-    const oplatykvAutoSyncMinutes = await this.settings.getOplatyKvAutoSyncMinutes();
-    return {
-      ok: true,
-      syncMinDate: syncMinDate ? syncMinDate.toISOString().slice(0, 10) : null,
-      oplatykvTxMinDate: oplatykvTxMinDate ? oplatykvTxMinDate.toISOString().slice(0, 10) : null,
-      oplatykvAutoSyncMinutes,
-    };
+    return this.getSettings();
   }
 
   @Post('account/:id')
