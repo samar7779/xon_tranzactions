@@ -120,6 +120,7 @@ export class OplataKvService {
         const result = await this.syncFromTransactions({
           minDate, limit: 1000,
           actor: { id: null, name: 'cron · day' },
+          runInline: false,  // Cron — bg ishlatadi (lock bilan, response kutilmaydi)
         });
         this.log.log(`Auto-sync DAY DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
         // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
@@ -135,6 +136,7 @@ export class OplataKvService {
         const result = await this.syncFromTransactions({
           minDate,
           actor: { id: null, name: 'cron · night-batch' },
+          runInline: false,  // Cron — bg ishlatadi
         });
         this.log.log(`Auto-sync NIGHT BATCH DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
         // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
@@ -387,7 +389,7 @@ export class OplataKvService {
    *
    * Dedup: sourceTxId (unique) orqali — mavjud bo'lsa update, bo'lmasa create.
    */
-  async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor } = {}) {
+  async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor; runInline?: boolean } = {}) {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;
     const limit = opts.limit && opts.limit > 0 ? opts.limit : undefined;
@@ -423,9 +425,7 @@ export class OplataKvService {
     });
 
     if (txList.length === 0) {
-      // ── MUHIM: cleanup + bg fill/split HAR DOIM bajariladi, hatto yangi tx yo'q bo'lsa ham ──
-      // User talabi: 1) XATO splitlar avtomatik tozalanishi
-      //              2) sync qilgan paytda split ham ishlash kerak (yarim qolgan rowlar uchun)
+      // ── MUHIM: cleanup + fill/split HAR DOIM bajariladi, hatto yangi tx yo'q bo'lsa ham ──
       let xatoCleanedCount = 0;
       try {
         xatoCleanedCount = await this.cleanupSplitsForXatoContracts();
@@ -436,30 +436,44 @@ export class OplataKvService {
         this.log.warn(`sync XATO cleanup xato (early return): ${e?.message}`);
       }
 
-      // Bg fill/split — yangi tx yo'q bo'lsa ham, oldingi sync'lardan qolgan
-      // yarim-bajarilgan qatorlarni tugatadi (object/client + verified split)
-      if (!OplataKvService.fillingInProgress) {
-        OplataKvService.fillingInProgress = true;
-        setImmediate(async () => {
-          try {
-            const objR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-            this.log.log(`bg fillMissingObjects (early-return) DONE: filled=${objR.filled}/${objR.total}`);
-            const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
-            this.log.log(`bg splitInstallments (early-return) DONE: filled=${splitR.filled}/${splitR.total}`);
-          } catch (e: any) {
-            this.log.warn(`bg job xato (early-return): ${e?.message}`);
-          } finally {
-            OplataKvService.fillingInProgress = false;
-          }
-        });
+      // Fill + Split — yangi tx yo'q bo'lsa ham, oldingi sync'lardan yarim qolgan rowlar
+      let fillR: any = { total: 0, filled: 0, notFound: 0 };
+      let splitR: any = { total: 0, filled: 0, notFound: 0, contracts: 0 };
+
+      if (opts.runInline !== false) {
+        try {
+          fillR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+          this.log.log(`sync inline (early-return) fill: filled=${fillR.filled}/${fillR.total}`);
+          splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+          this.log.log(`sync inline (early-return) split: filled=${splitR.filled}/${splitR.total}`);
+        } catch (e: any) {
+          this.log.warn(`sync inline (early-return) xato: ${e?.message}`);
+        }
+      } else {
+        // Cron — bg
+        if (!OplataKvService.fillingInProgress) {
+          OplataKvService.fillingInProgress = true;
+          setImmediate(async () => {
+            try {
+              await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+              await this.splitInstallments({ limit: 20000, actor: opts.actor });
+            } catch (e: any) {
+              this.log.warn(`bg job xato (cron early-return): ${e?.message}`);
+            } finally {
+              OplataKvService.fillingInProgress = false;
+            }
+          });
+        }
       }
 
       return {
         ok: true,
-        version: 'v5-cleanup-always',
+        version: 'v6-all-inline',
         total: 0, added: 0, updated: 0, skipped: 0,
         xatoCleanedRows: xatoCleanedCount,
-        objectsBackground: true,
+        fillResult: { filled: fillR.filled, notFound: fillR.notFound, total: fillR.total },
+        splitResult: { filled: splitR.filled, notFound: splitR.notFound, total: splitR.total, contracts: splitR.contracts },
+        objectsBackground: opts.runInline === false,
         duration: Math.round((Date.now() - startedAt) / 1000),
         minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
       };
@@ -643,8 +657,6 @@ export class OplataKvService {
     );
 
     // ── SINXRON: XATO shartnomalardan split tozalash (tez updateMany) ──
-    // User talabi: sync qilingach XATO qatorlarda 1-vznos/oylik darhol bo'sh bo'lishi kerak.
-    // Bu tezkor (~100ms) — bg jobni kutishga hojat yo'q.
     let xatoCleanedCount = 0;
     try {
       xatoCleanedCount = await this.cleanupSplitsForXatoContracts();
@@ -655,32 +667,39 @@ export class OplataKvService {
       this.log.warn(`sync XATO cleanup xato: ${e?.message}`);
     }
 
-    // ── FONDA: obyekt/client to'ldirish (502 timeoutdan saqlanish) ──
-    // Response darrov qaytadi, fillMissingObjects orqada davom etadi.
-    // Foydalanuvchi sahifani yangilab ko'rishi mumkin — qatorlar asta to'ldiriladi.
-    if (!OplataKvService.fillingInProgress) {
-      OplataKvService.fillingInProgress = true;
-      setImmediate(async () => {
-        try {
-          // 1. Object + Client
-          const objR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-          this.log.log(
-            `bg fillMissingObjects DONE: scanned=${objR.total} filled=${objR.filled} notFound=${objR.notFound} errors=${objR.errors} duration=${objR.duration}s`,
-          );
-          // 2. Installment split (CRM payment_histories asosida)
-          const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
-          this.log.log(
-            `bg splitInstallments DONE: scanned=${splitR.total} contracts=${splitR.contracts} ` +
-            `filled=${splitR.filled} notFound=${splitR.notFound} errors=${splitR.errors} duration=${splitR.duration}s`,
-          );
-        } catch (e: any) {
-          this.log.warn(`bg job xato: ${e?.message}`);
-        } finally {
-          OplataKvService.fillingInProgress = false;
-        }
-      });
+    // ── SINXRON: obyekt/client to'ldirish + split (bg emas — JAVOBDA HAMMASI tugagan) ──
+    // User talabi: "bta bosganda togrlansa" — bitta tugma hammasini bajarsin.
+    // Cron yo'lida bg ishlatadi (lock bilan), lekin user qo'lda sync bossa kutadi.
+    let fillResult: any = { total: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    let splitResult: any = { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    if (opts.runInline !== false) {
+      try {
+        fillResult = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+        this.log.log(
+          `sync inline fillMissingObjects: scanned=${fillResult.total} filled=${fillResult.filled} notFound=${fillResult.notFound} errors=${fillResult.errors} duration=${fillResult.duration}s`,
+        );
+        splitResult = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+        this.log.log(
+          `sync inline splitInstallments: scanned=${splitResult.total} contracts=${splitResult.contracts} filled=${splitResult.filled} notFound=${splitResult.notFound} errors=${splitResult.errors} duration=${splitResult.duration}s`,
+        );
+      } catch (e: any) {
+        this.log.warn(`sync inline fill/split xato: ${e?.message}`);
+      }
     } else {
-      this.log.log('bg job: avval boshlanganini kutmoqda, yangi sync uchun ishga tushirilmadi');
+      // Cron — bg ishlatadi (lock bilan)
+      if (!OplataKvService.fillingInProgress) {
+        OplataKvService.fillingInProgress = true;
+        setImmediate(async () => {
+          try {
+            await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+            await this.splitInstallments({ limit: 20000, actor: opts.actor });
+          } catch (e: any) {
+            this.log.warn(`bg job xato (cron): ${e?.message}`);
+          } finally {
+            OplataKvService.fillingInProgress = false;
+          }
+        });
+      }
     }
 
     const totalDuration = Math.round((Date.now() - startedAt) / 1000);
@@ -689,7 +708,7 @@ export class OplataKvService {
     );
     return {
       ok: true,
-      version: 'v4-xato-cleanup-sync',  // Marker — XATO cleanup sinxron qilingan versiya
+      version: 'v6-all-inline',  // Marker — fill+split sinxron (bg emas)
       total: txList.length,
       added,
       updated,
@@ -700,8 +719,19 @@ export class OplataKvService {
         error:  skippedError,
       },
       errorSamples,
-      objectsBackground: true,  // Frontend: orqada davom etmoqda
+      objectsBackground: opts.runInline === false,
       xatoCleanedRows: xatoCleanedCount,
+      fillResult: {
+        filled: fillResult.filled,
+        notFound: fillResult.notFound,
+        total: fillResult.total,
+      },
+      splitResult: {
+        filled: splitResult.filled,
+        notFound: splitResult.notFound,
+        total: splitResult.total,
+        contracts: splitResult.contracts,
+      },
       duration: totalDuration,
       syncDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
