@@ -7,13 +7,14 @@ import {
   CheckCircle2, XCircle, Loader2, AlertTriangle, Activity, Clock,
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
-  Plus, Trash2, ArrowRight, Building2,
+  Plus, Trash2, ArrowRight, Building2, Sparkles, Trash, Layers, Split,
 } from 'lucide-react';
 // Clock allaqachon import qilingan
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { Sparkline } from '@/components/sparkline';
@@ -366,7 +367,12 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
   });
 
-  // Tranzaksiyalardan auto-sync trigger (object lookup ham avtomatik)
+  // Sync progress modal state
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Tranzaksiyalardan sync (HAMMASI) — modal bilan progress ko'rsatadi
   const syncTxMut = useMutation({
     mutationFn: (minDate: string | null) =>
       api.post<{
@@ -377,49 +383,21 @@ function SyncSettingsPanel() {
         fillResult?: { filled: number; notFound: number; total: number };
         splitResult?: { filled: number; notFound: number; total: number; contracts: number };
         duration: number;
-      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 900_000 }),  // 15 min — hammasi sinxron
+      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 900_000 }),
+    onMutate: () => {
+      setSyncResult(null);
+      setSyncError(null);
+      setSyncModalOpen(true);
+    },
     onSuccess: (r: any) => {
-      // Sync natijasi
-      const bd = r.skippedBreakdown || {};
-      const skipDetail = [
-        bd.noData ? `${bd.noData} data yo'q` : null,
-        bd.exists ? `${bd.exists} mavjud` : null,
-        bd.error ? `${bd.error} xato` : null,
-      ].filter(Boolean).join(', ');
-      toast.success(
-        `1) Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}`,
-        { duration: 7000 },
-      );
-
-      // XATO cleanup
-      if (r.xatoCleanedRows && r.xatoCleanedRows > 0) {
-        toast.success(`2) 🧹 XATO splitlar tozalandi · ${r.xatoCleanedRows} qator`, { duration: 7000 });
-      }
-
-      // Object/Client fill
-      if (r.fillResult) {
-        toast.success(
-          `3) Obyekt/Mijoz · to'ldirildi: ${r.fillResult.filled}/${r.fillResult.total} (CRM topmadi: ${r.fillResult.notFound})`,
-          { duration: 7000 },
-        );
-      }
-
-      // Split installments
-      if (r.splitResult) {
-        toast.success(
-          `4) Split · ${r.splitResult.contracts} shartnoma · to'ldirildi: ${r.splitResult.filled}/${r.splitResult.total} (CRM topmadi: ${r.splitResult.notFound})`,
-          { duration: 7000 },
-        );
-      }
-
-      // Umumiy vaqt
-      toast.success(`✓ HAMMASI TUGADI · ${r.duration}s`, { duration: 5000 });
-
+      setSyncResult(r);
       if (r.errorSamples && r.errorSamples.length > 0) {
         toast.error(`Xato namunalari: ${r.errorSamples.slice(0, 2).map((s: any) => s.reason).join('; ')}`, { duration: 10000 });
       }
     },
-    onError: (e: any) => toast.error(e?.message || 'Sync xato'),
+    onError: (e: any) => {
+      setSyncError(e?.message || 'Sync xato');
+    },
   });
 
   // XATO contractlarni tozalash (CRM da topilmaganlar)
@@ -530,6 +508,15 @@ function SyncSettingsPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Sync progress modal */}
+      <SyncProgressDialog
+        open={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        isPending={syncTxMut.isPending}
+        result={syncResult}
+        error={syncError}
+      />
+
       {/* SYNC MINIMAL SANA — collapsible */}
       <Card className="border-0 shadow-soft overflow-hidden">
         <button
@@ -1036,5 +1023,263 @@ function PaginationBar({ page, totalPages, onChange }: { page: number; totalPage
         {safePage} / {totalPages}
       </span>
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SYNC PROGRESS DIALOG — chiroyli animatsiyali progress modal
+// ═══════════════════════════════════════════════════════════════════
+function SyncProgressDialog({
+  open,
+  onClose,
+  isPending,
+  result,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  isPending: boolean;
+  result: any | null;
+  error: string | null;
+}) {
+  // Elapsed timer (faqat pending paytda yangilanadi)
+  const [elapsed, setElapsed] = useState(0);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  // Hozir qaysi bosqich (heuristik — backend real-time signal yubormaydi)
+  // Bosqichlarni vaqt asosida o'tkazamiz:
+  //   0-3s   → Step 1 (sync)
+  //   3-5s   → Step 2 (XATO cleanup)
+  //   5s-?   → Step 3 (Fill objects) — uzoq davom etadi
+  //   so'ngra → Step 4 (Split)
+  // Bu faqat vizual taxmin — haqiqiy natija result kelganda ko'rsatiladi
+  const [activeStep, setActiveStep] = useState(0);
+
+  useEffect(() => {
+    if (!open) return;
+    if (isPending && !startedAt) {
+      setStartedAt(Date.now());
+      setElapsed(0);
+      setActiveStep(0);
+    }
+    if (!isPending) {
+      setStartedAt(null);
+      return;
+    }
+    const tid = setInterval(() => {
+      const now = Date.now();
+      const elapsedSec = Math.round((now - (startedAt || now)) / 1000);
+      setElapsed(elapsedSec);
+      // Bosqich heuristikasi
+      if (elapsedSec < 3) setActiveStep(0);
+      else if (elapsedSec < 5) setActiveStep(1);
+      else if (elapsedSec < Math.max(60, elapsedSec - 30)) setActiveStep(2);
+      else setActiveStep(3);
+    }, 250);
+    return () => clearInterval(tid);
+  }, [open, isPending, startedAt]);
+
+  // Modal yopilganda holatni reset qilamiz
+  useEffect(() => {
+    if (!open) {
+      setStartedAt(null);
+      setElapsed(0);
+      setActiveStep(0);
+    }
+  }, [open]);
+
+  const done = !!result && !isPending;
+  const errored = !!error && !isPending;
+
+  // Bosqichlar tavsifi
+  const steps = [
+    {
+      icon: RefreshCcw,
+      title: 'Tranzaksiyalardan sync',
+      desc: 'Yangi tranzaksiyalarni OplatyKv ga qo\'shish/yangilash',
+      result: result && (
+        <>
+          Qo'shildi: <b>{result.added}</b>, yangilandi: <b>{result.updated}</b>, o'tkazildi: <b>{result.skipped}</b>
+        </>
+      ),
+      color: 'emerald',
+    },
+    {
+      icon: Trash,
+      title: 'XATO splitlar tozalandi',
+      desc: 'CRM da yo\'q shartnomalardagi 1 взнос/oylik null qilinadi',
+      result: result && (
+        <>
+          Tozalandi: <b>{result.xatoCleanedRows || 0}</b> qator
+        </>
+      ),
+      color: 'rose',
+    },
+    {
+      icon: Layers,
+      title: 'Obyekt va Mijoz to\'ldirish',
+      desc: 'CRM dan obyekt/mijoz nomi olib qatorlarga yoziladi',
+      result: result?.fillResult && (
+        <>
+          To'ldirildi: <b>{result.fillResult.filled}</b>/{result.fillResult.total} · CRM topmadi: <b>{result.fillResult.notFound}</b>
+        </>
+      ),
+      color: 'indigo',
+    },
+    {
+      icon: Split,
+      title: '1 взнос va Oylik ajratish',
+      desc: 'CRM payment_histories asosida split hisoblanadi',
+      result: result?.splitResult && (
+        <>
+          {result.splitResult.contracts} shartnoma · To'ldirildi: <b>{result.splitResult.filled}</b>/{result.splitResult.total} · CRM topmadi: <b>{result.splitResult.notFound}</b>
+        </>
+      ),
+      color: 'violet',
+    },
+  ];
+
+  const colorMap: Record<string, { ring: string; bg: string; text: string; iconBg: string }> = {
+    emerald: { ring: 'ring-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600' },
+    rose:    { ring: 'ring-rose-200',    bg: 'bg-rose-50',    text: 'text-rose-700',    iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600' },
+    indigo:  { ring: 'ring-indigo-200',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600' },
+    violet:  { ring: 'ring-violet-200',  bg: 'bg-violet-50',  text: 'text-violet-700',  iconBg: 'bg-gradient-to-br from-violet-500 to-fuchsia-600' },
+  };
+
+  const totalSec = result?.duration || elapsed;
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && !isPending && onClose()}>
+      <DialogContent
+        className="sm:max-w-2xl p-0 overflow-hidden gap-0"
+        onInteractOutside={(e) => isPending && e.preventDefault()}
+        onPointerDownOutside={(e) => isPending && e.preventDefault()}
+      >
+        {/* Hero header */}
+        <div className={cn(
+          'relative px-7 pt-6 pb-5 text-white',
+          done && !errored ? 'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500'
+          : errored ? 'bg-gradient-to-br from-rose-500 via-red-500 to-pink-600'
+          : 'bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600',
+        )}>
+          <div
+            className="absolute inset-0 opacity-[0.12] pointer-events-none"
+            style={{
+              backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
+              backgroundSize: '20px 20px',
+            }}
+          />
+          <div className="relative">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1.5">
+              OplatyKv Sync
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-2xl font-black tracking-tight">
+                {done && !errored ? '✓ HAMMASI TUGADI'
+                  : errored ? '✗ XATO'
+                  : 'Bajarilmoqda...'}
+              </div>
+              {isPending && <Loader2 className="h-6 w-6 animate-spin" />}
+              {done && !errored && <Sparkles className="h-6 w-6" />}
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-[12px] text-white/85">
+              <Clock className="h-3.5 w-3.5" />
+              <span className="font-mono tabular-nums">{mm}:{ss}</span>
+              {isPending && <span className="text-white/60">· kuting, sahifani yopmang</span>}
+            </div>
+          </div>
+        </div>
+
+        {/* Body — steps */}
+        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto bg-slate-50/40">
+          {steps.map((step, idx) => {
+            const isActive = isPending && idx === activeStep;
+            const isDone = done || idx < activeStep;
+            const cmap = colorMap[step.color];
+            const Icon = step.icon;
+
+            return (
+              <div
+                key={idx}
+                className={cn(
+                  'rounded-2xl p-4 ring-1 transition-all',
+                  isDone ? cn(cmap.bg, cmap.ring)
+                  : isActive ? 'bg-white ring-indigo-300 shadow-md shadow-indigo-500/20'
+                  : 'bg-white ring-slate-200',
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={cn(
+                    'w-10 h-10 rounded-xl grid place-items-center shrink-0 text-white shadow-md transition-all',
+                    isDone ? cmap.iconBg
+                    : isActive ? 'bg-gradient-to-br from-indigo-500 to-violet-600 animate-pulse'
+                    : 'bg-slate-200 shadow-none',
+                  )}>
+                    {isDone ? (
+                      <CheckCircle2 className="h-5 w-5" />
+                    ) : isActive ? (
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                      <Icon className={cn('h-5 w-5', isActive || isDone ? 'text-white' : 'text-slate-400')} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={cn(
+                      'text-[13px] font-bold leading-snug',
+                      isDone ? cmap.text : isActive ? 'text-indigo-700' : 'text-slate-500',
+                    )}>
+                      {idx + 1}. {step.title}
+                    </div>
+                    <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                      {step.desc}
+                    </div>
+                    {isDone && step.result && (
+                      <div className={cn('text-[12px] mt-2 tabular-nums', cmap.text)}>
+                        {step.result}
+                      </div>
+                    )}
+                    {isActive && (
+                      <div className="mt-2 text-[11px] text-indigo-600 font-semibold flex items-center gap-1.5">
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
+                        Bajarilmoqda...
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {errored && (
+            <div className="rounded-2xl p-4 bg-rose-50 ring-1 ring-rose-200">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-rose-700 font-semibold">{error}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between gap-3">
+          <div className="text-[11px] text-slate-500">
+            {isPending ? 'Jarayon davom etmoqda — 5-10 daqiqa olishi mumkin'
+              : done ? 'Tayyor — OplatyKv sahifasini yangilang'
+              : ''}
+          </div>
+          <Button
+            onClick={onClose}
+            disabled={isPending}
+            className={cn(
+              'h-10 px-5',
+              done ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : '',
+            )}
+          >
+            {isPending ? 'Iltimos kuting...' : 'Yopish'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
