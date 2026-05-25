@@ -299,9 +299,12 @@ export class OplataKvService {
       }),
     ]);
 
-    // CRM XATO status — har qator uchun (faqat tx-manba qatorlarda tekshiriladi)
-    // MUHIM: Transaction'da isContractManual=true (qo'lda kiritilgan) bo'lsa — XATO emas.
-    // Bu Transaction UI bilan mos: "QO'LDA · CRM TEKSHIRILMAGAN" (amber) — XATO (rose) emas.
+    // CRM XATO status + Manba (manual/ariza) — har qator uchun
+    // Manba = Transaction'da contract qanday belgilanganini ko'rsatadi:
+    //   'ariza'  — isContractManual=true + attachment bor (qog'oz hujjat bilan)
+    //   'manual' — isContractManual=true + attachment yo'q (sof qo'lda kiritilgan)
+    //   null     — avto-extract yoki CRM verified
+    // XATO logikasi: faqat manual va ariza emas bo'lgan unverified contractlar XATO bo'ladi.
     const txSourceItems = items.filter((i) => i.sourceTxId);
     const txContractNos = Array.from(new Set(txSourceItems.map((i) => i.contractNo)));
     const sourceTxIds = Array.from(new Set(
@@ -309,10 +312,10 @@ export class OplataKvService {
     ));
 
     let xatoSet = new Set<string>();
-    let manualTxIds = new Set<string>();
+    const sourceByTxId = new Map<string, 'manual' | 'ariza'>();
 
     if (sourceTxIds.length > 0) {
-      // Tranzaksiyalardan isContractManual=true bo'lganlarni olamiz (externalId yoki id bo'yicha)
+      // Tranzaksiyalardan isContractManual=true bo'lganlarni va attachment soni bilan olamiz
       const tx = await this.prisma.transaction.findMany({
         where: {
           OR: [
@@ -321,11 +324,16 @@ export class OplataKvService {
           ],
           isContractManual: true,
         },
-        select: { id: true, externalId: true },
+        select: {
+          id: true,
+          externalId: true,
+          _count: { select: { attachments: true } },
+        },
       });
       tx.forEach((t) => {
-        if (t.externalId) manualTxIds.add(t.externalId);
-        manualTxIds.add(t.id);
+        const src: 'manual' | 'ariza' = t._count.attachments > 0 ? 'ariza' : 'manual';
+        if (t.externalId) sourceByTxId.set(t.externalId, src);
+        sourceByTxId.set(t.id, src);
       });
     }
 
@@ -339,9 +347,13 @@ export class OplataKvService {
     }
 
     const itemsWithStatus = items.map((i) => {
-      const isManual = i.sourceTxId ? manualTxIds.has(i.sourceTxId) : false;
-      const xato = i.sourceTxId && xatoSet.has(i.contractNo) && !isManual;
-      return { ...i, crmXato: !!xato };
+      const contractSource = i.sourceTxId ? (sourceByTxId.get(i.sourceTxId) || null) : null;
+      const xato = i.sourceTxId && xatoSet.has(i.contractNo) && !contractSource;
+      return {
+        ...i,
+        crmXato: !!xato,
+        contractSource,  // 'manual' | 'ariza' | null
+      };
     });
 
     return {
