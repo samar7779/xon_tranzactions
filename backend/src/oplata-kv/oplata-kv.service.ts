@@ -300,23 +300,49 @@ export class OplataKvService {
     ]);
 
     // CRM XATO status — har qator uchun (faqat tx-manba qatorlarda tekshiriladi)
-    const txContractNos = Array.from(new Set(
-      items.filter((i) => i.sourceTxId).map((i) => i.contractNo),
+    // MUHIM: Transaction'da isContractManual=true (qo'lda kiritilgan) bo'lsa — XATO emas.
+    // Bu Transaction UI bilan mos: "QO'LDA · CRM TEKSHIRILMAGAN" (amber) — XATO (rose) emas.
+    const txSourceItems = items.filter((i) => i.sourceTxId);
+    const txContractNos = Array.from(new Set(txSourceItems.map((i) => i.contractNo)));
+    const sourceTxIds = Array.from(new Set(
+      txSourceItems.map((i) => i.sourceTxId).filter((x): x is string => !!x),
     ));
+
     let xatoSet = new Set<string>();
+    let manualTxIds = new Set<string>();
+
+    if (sourceTxIds.length > 0) {
+      // Tranzaksiyalardan isContractManual=true bo'lganlarni olamiz (externalId yoki id bo'yicha)
+      const tx = await this.prisma.transaction.findMany({
+        where: {
+          OR: [
+            { externalId: { in: sourceTxIds } },
+            { id: { in: sourceTxIds } },
+          ],
+          isContractManual: true,
+        },
+        select: { id: true, externalId: true },
+      });
+      tx.forEach((t) => {
+        if (t.externalId) manualTxIds.add(t.externalId);
+        manualTxIds.add(t.id);
+      });
+    }
+
     if (txContractNos.length > 0) {
       const verified = await this.prisma.crmContract.findMany({
         where: { contractNumber: { in: txContractNos } },
         select: { contractNumber: true, found: true },
       });
       const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
-      // XATO = tx-manba lekin CRM da verified emas
       xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
     }
-    const itemsWithStatus = items.map((i) => ({
-      ...i,
-      crmXato: i.sourceTxId && xatoSet.has(i.contractNo) ? true : false,
-    }));
+
+    const itemsWithStatus = items.map((i) => {
+      const isManual = i.sourceTxId ? manualTxIds.has(i.sourceTxId) : false;
+      const xato = i.sourceTxId && xatoSet.has(i.contractNo) && !isManual;
+      return { ...i, crmXato: !!xato };
+    });
 
     return {
       ok: true,
