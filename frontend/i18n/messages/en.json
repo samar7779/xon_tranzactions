@@ -477,6 +477,10 @@
     "contractNumberLabel": "Contract number",
     "contractNumberPlaceholder": "e.g. 12345VTN26MP"
   },
+  "setup": {
+    "title": "Banks",
+    "subtitle": "Banks, connections and accounts"
+  },
   "accounts": {
     "title": "Bank accounts",
     "subtitle": "Tracked accounts",
