@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, Pencil, Trash2, UserCog, MoreVertical, Search, X,
   Shield, Users, CheckCircle2, XCircle, KeyRound,
+  LayoutGrid, List, Mail, Clock, Sparkles, Crown, Lock, Activity,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -78,6 +79,7 @@ export default function AdminUsersPage() {
   const [editing, setEditing] = useState<AdminItem | null>(null);
   const [q, setQ] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
 
   const removeMut = useMutation({
     mutationFn: (id: string) => api.delete(`/admin-users/${id}`),
@@ -122,149 +124,113 @@ export default function AdminUsersPage() {
   return (
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-lg font-bold tracking-tight">Adminlar</div>
-            <div className="text-xs text-slate-500">Foydalanuvchilarni boshqaring va rollar tayinlang</div>
-          </div>
-          {canManage && (
-            <Button size="sm" onClick={openCreate} className="rounded-full font-semibold">
-              <Plus className="h-3.5 w-3.5 mr-1.5" />Yangi admin
-            </Button>
-          )}
-        </div>
-
-        {/* ═══ KPI ═══ */}
+        {/* ═══ KPI ═══ (header olib tashlandi) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiTile label="Jami" value={String(stats.total)} icon={Users} color="indigo" />
           <KpiTile label="Faol" value={String(stats.active)} icon={CheckCircle2} color="emerald" />
-          <KpiTile label="Adminlar" value={String(stats.admins)} icon={Shield} color="rose" />
-          <KpiTile label="Oxirgi 7 kun kirgan" value={String(stats.recent)} icon={UserCog} color="cyan" />
+          <KpiTile label="Bloklangan" value={String(stats.total - stats.active)} icon={XCircle} color="rose" />
+          <KpiTile label="Oxirgi 7 kun" value={String(stats.recent)} icon={Activity} color="cyan" />
         </div>
 
-        {/* ═══ Filter ═══ */}
-        <Card className="border-0 shadow-soft">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
-                  placeholder="Email yoki ism..."
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-                {q && (
-                  <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className={cn(
-                  "h-10 rounded-xl text-sm font-medium w-auto min-w-[160px] border-0",
-                  roleFilter !== 'all'
-                    ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                    : "bg-slate-50 ring-1 ring-slate-200 text-slate-700",
-                )}>
-                  <SelectValue placeholder="Hamma rollar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Hamma rollar</SelectItem>
-                  {(roles?.items || []).map((r) => (
-                    <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        {/* ═══ Action bar: Yangi admin (chap) + Search + Filter + View Toggle (o'ng) ═══ */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {canManage && (
+            <Button onClick={openCreate} className="rounded-xl font-semibold h-10 shadow-md
+                                                    bg-gradient-to-br from-indigo-600 to-violet-600
+                                                    hover:from-indigo-700 hover:to-violet-700">
+              <Plus className="h-4 w-4 mr-1.5" /> Yangi admin
+            </Button>
+          )}
 
-        {/* ═══ User Grid ═══ */}
+          <div className="relative flex-1 min-w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              className="pl-9 h-10 rounded-xl bg-white border-slate-200 focus-visible:bg-white"
+              placeholder="Email yoki ism..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            {q && (
+              <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className={cn(
+              "h-10 rounded-xl text-sm font-medium w-auto min-w-[160px] border-0",
+              roleFilter !== 'all'
+                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
+                : "bg-white ring-1 ring-slate-200 text-slate-700",
+            )}>
+              <SelectValue placeholder="Hamma rollar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Hamma rollar</SelectItem>
+              {(roles?.items || []).map((r) => (
+                <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* View toggle — Card / Table */}
+          <div className="inline-flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl h-10">
+            <button
+              onClick={() => setViewMode('card')}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+                viewMode === 'card' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              )}
+              title="Kartochka ko'rinish"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" />
+              Karta
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+                viewMode === 'table' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              )}
+              title="Jadval ko'rinish"
+            >
+              <List className="h-3.5 w-3.5" />
+              Jadval
+            </button>
+          </div>
+        </div>
+
+        {/* ═══ Content ═══ */}
         {isLoading ? (
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-44" />)}
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-52" />)}
           </div>
         ) : filtered.length === 0 ? (
           <Card><CardContent className="p-0">
             <EmptyState icon={UserCog} title="Foydalanuvchilar yo'q" description="Birinchi adminni qo'shish uchun yuqoridagi tugmani bosing" />
           </CardContent></Card>
-        ) : (
-          <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((u) => {
-              const role = u.roleRef?.label || '— rol biriktirilmagan';
-              const roleKey = u.roleRef?.name || '';
-              const c = getRoleColor(roleKey);
-              return (
-                <Card key={u.id} className="group border-0 shadow-soft card-hover overflow-hidden relative">
-                  <div className={cn("h-1.5 bg-gradient-to-r", c.grad)} />
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn(
-                          "w-12 h-12 rounded-full grid place-items-center shrink-0 shadow-sm text-white text-sm font-bold bg-gradient-to-br",
-                          c.grad,
-                        )}>
-                          {getInitials(u.fullName, u.email)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-[14px] font-bold truncate tracking-tight">{u.fullName || '—'}</div>
-                          <div className="text-[11px] text-slate-500 truncate">{u.email}</div>
-                        </div>
-                      </div>
-                      {canManage && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(u)}>
-                              <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => toggleActiveMut.mutate({ id: u.id, isActive: !u.isActive })}>
-                              {u.isActive
-                                ? <><XCircle className="h-4 w-4 mr-2" /> Bloklash</>
-                                : <><CheckCircle2 className="h-4 w-4 mr-2" /> Faollashtirish</>}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(u.id)}>
-                              <Trash2 className="h-4 w-4 mr-2" /> O'chirish
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2 flex-wrap mb-3">
-                      <span className={cn("inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset", c.bg, c.text)} style={{ borderColor: 'transparent' }}>
-                        <Shield className="h-3 w-3" /> {role}
-                      </span>
-                      <span className={cn(
-                        "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset",
-                        u.isActive ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-50 text-slate-500 ring-slate-200",
-                      )}>
-                        <span className={cn("w-1.5 h-1.5 rounded-full", u.isActive ? "bg-emerald-500" : "bg-slate-300")} />
-                        {u.isActive ? 'Faol' : 'Bloklangan'}
-                      </span>
-                    </div>
-
-                    <div className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2 space-y-1.5 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Oxirgi kirish</span>
-                        <span className="text-slate-700">{u.lastLoginAt ? formatDateTime(u.lastLoginAt) : 'Hech qachon'}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">Yaratilgan</span>
-                        <span className="text-slate-700">{formatDateTime(u.createdAt)}</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
+        ) : viewMode === 'card' ? (
+          <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((u) => (
+              <ProAdminCard
+                key={u.id}
+                user={u}
+                canManage={canManage}
+                onEdit={() => openEdit(u)}
+                onToggle={() => toggleActiveMut.mutate({ id: u.id, isActive: !u.isActive })}
+                onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(u.id)}
+              />
+            ))}
           </div>
+        ) : (
+          <AdminTable
+            items={filtered}
+            canManage={canManage}
+            onEdit={openEdit}
+            onToggle={(u) => toggleActiveMut.mutate({ id: u.id, isActive: !u.isActive })}
+            onDelete={(u) => confirm(tc('confirmDelete')) && removeMut.mutate(u.id)}
+          />
         )}
       </div>
 
@@ -304,6 +270,317 @@ function KpiTile({
         </div>
         <div className="text-3xl font-bold tracking-tight tabular-nums">{value}</div>
       </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Pro admin kartochkasi — glass, hover glow, status efekt (active/blocked).
+ */
+function ProAdminCard({
+  user: u, canManage, onEdit, onToggle, onDelete,
+}: {
+  user: AdminItem;
+  canManage: boolean;
+  onEdit: () => void;
+  onToggle: () => void;
+  onDelete: () => void;
+}) {
+  const tc = useTranslations('common');
+  const role = u.roleRef?.label || '— rol biriktirilmagan';
+  const roleKey = u.roleRef?.name || '';
+  const c = getRoleColor(roleKey);
+  const isSuper = roleKey === 'SUPERADMIN';
+  const isActive = u.isActive;
+
+  // Oxirgi kirish — yaqindami yoki uzoq?
+  const lastLoginAgo = u.lastLoginAt ? Math.floor((Date.now() - new Date(u.lastLoginAt).getTime()) / 86400000) : null;
+  const isOnline = lastLoginAgo !== null && lastLoginAgo === 0;
+  const isRecent = lastLoginAgo !== null && lastLoginAgo <= 7;
+
+  return (
+    <div className="group relative">
+      {/* Glow halo */}
+      <div className={cn(
+        "absolute -inset-0.5 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-40 blur-xl transition-opacity duration-500 -z-10",
+        isActive ? c.grad : 'from-slate-400 to-slate-600',
+      )} />
+
+      <div className={cn(
+        "relative bg-white rounded-2xl ring-1 overflow-hidden transition-all duration-300",
+        "shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.18)]",
+        "hover:-translate-y-1",
+        isActive
+          ? "ring-slate-200/80 hover:ring-slate-300"
+          : "ring-rose-200 grayscale-[60%] opacity-80 hover:opacity-100 hover:grayscale-0",
+      )}>
+        {/* Top accent bar */}
+        <div className={cn("h-1 bg-gradient-to-r", c.grad)} />
+
+        {/* Bloklangan watermark */}
+        {!isActive && (
+          <div className="absolute top-3 right-12 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                          bg-rose-100 ring-1 ring-rose-300 text-rose-700 text-[10px] font-bold uppercase tracking-wider
+                          animate-pulse">
+            <Lock className="h-2.5 w-2.5" /> Bloklangan
+          </div>
+        )}
+
+        {/* Online pulse */}
+        {isActive && isOnline && (
+          <div className="absolute top-3 right-12 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                          bg-emerald-50 ring-1 ring-emerald-300 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
+            </span>
+            Online
+          </div>
+        )}
+
+        <div className="p-5">
+          {/* Header */}
+          <div className="flex items-start gap-4 mb-4">
+            <div className="relative shrink-0">
+              {/* Avatar glow */}
+              <div className={cn(
+                "absolute inset-0 rounded-2xl bg-gradient-to-br blur-lg opacity-50",
+                c.grad,
+              )} />
+              <div className={cn(
+                "relative w-14 h-14 rounded-2xl bg-gradient-to-br grid place-items-center text-white font-bold text-base",
+                "ring-2 ring-white shadow-md",
+                c.grad,
+              )}>
+                {getInitials(u.fullName, u.email)}
+              </div>
+              {/* Status dot */}
+              <span className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-white grid place-items-center",
+                isActive ? 'bg-emerald-500' : 'bg-rose-500',
+              )}>
+                {isActive
+                  ? <CheckCircle2 className="h-2.5 w-2.5 text-white" />
+                  : <XCircle className="h-2.5 w-2.5 text-white" />}
+              </span>
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[15px] font-bold tracking-tight text-slate-900 truncate">
+                  {u.fullName || '—'}
+                </span>
+                {isSuper && <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+              </div>
+              <div className="flex items-center gap-1 mt-0.5 text-[11.5px] text-slate-500 min-w-0">
+                <Mail className="h-3 w-3 shrink-0" />
+                <span className="truncate">{u.email}</span>
+              </div>
+            </div>
+
+            {/* Quick actions — hover'da */}
+            {canManage && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={onEdit}
+                  title="Tahrirlash"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={onToggle}
+                  title={isActive ? 'Bloklash' : 'Faollashtirish'}
+                  className={cn(
+                    "w-8 h-8 rounded-lg grid place-items-center transition-colors",
+                    isActive
+                      ? "bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white"
+                      : "bg-slate-100 hover:bg-emerald-600 text-slate-600 hover:text-white",
+                  )}
+                >
+                  {isActive ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                </button>
+                <button
+                  onClick={onDelete}
+                  title="O'chirish"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Role badge */}
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            <span className={cn(
+              "inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 ring-inset",
+              c.bg, c.text,
+            )}>
+              {isSuper ? <Crown className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
+              {role}
+            </span>
+            {isRecent && isActive && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                               bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 text-[10px] font-semibold">
+                <Sparkles className="h-2.5 w-2.5" /> Faol foydalanuvchi
+              </span>
+            )}
+          </div>
+
+          {/* Info grid */}
+          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/60 ring-1 ring-slate-100">
+            <div className="space-y-0.5">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1">
+                <Clock className="h-2.5 w-2.5" />
+                Oxirgi kirish
+              </div>
+              <div className="text-[11.5px] font-semibold text-slate-700">
+                {u.lastLoginAt
+                  ? lastLoginAgo === 0
+                    ? <span className="text-emerald-700">Bugun</span>
+                    : lastLoginAgo === 1
+                      ? <span className="text-emerald-600">Kecha</span>
+                      : lastLoginAgo && lastLoginAgo <= 7
+                        ? <span className="text-amber-600">{lastLoginAgo} kun oldin</span>
+                        : <span className="text-slate-500">{lastLoginAgo} kun oldin</span>
+                  : <span className="text-slate-400 italic">Hech qachon</span>}
+              </div>
+            </div>
+            <div className="space-y-0.5 text-right">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+                Yaratilgan
+              </div>
+              <div className="text-[11.5px] font-semibold text-slate-700">
+                {formatDateTime(u.createdAt)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Admin jadval ko'rinishi — kompakt, tartibli ro'yxat.
+ */
+function AdminTable({
+  items, canManage, onEdit, onToggle, onDelete,
+}: {
+  items: AdminItem[];
+  canManage: boolean;
+  onEdit: (u: AdminItem) => void;
+  onToggle: (u: AdminItem) => void;
+  onDelete: (u: AdminItem) => void;
+}) {
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead className="bg-slate-50 text-slate-500 uppercase text-[10.5px] tracking-wider">
+            <tr>
+              <th className="text-left px-4 py-3">Foydalanuvchi</th>
+              <th className="text-left px-3 py-3">Rol</th>
+              <th className="text-left px-3 py-3">Status</th>
+              <th className="text-left px-3 py-3">Oxirgi kirish</th>
+              <th className="text-left px-3 py-3">Yaratilgan</th>
+              <th className="text-right px-4 py-3">Amallar</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {items.map((u) => {
+              const role = u.roleRef?.label || '—';
+              const roleKey = u.roleRef?.name || '';
+              const c = getRoleColor(roleKey);
+              const isSuper = roleKey === 'SUPERADMIN';
+              return (
+                <tr key={u.id} className={cn(
+                  "hover:bg-slate-50/60 transition-colors",
+                  !u.isActive && "opacity-50 bg-rose-50/30",
+                )}>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className={cn(
+                        "w-9 h-9 rounded-full grid place-items-center text-white text-[11px] font-bold bg-gradient-to-br shrink-0",
+                        c.grad,
+                      )}>
+                        {getInitials(u.fullName, u.email)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-slate-900 flex items-center gap-1">
+                          {u.fullName || '—'}
+                          {isSuper && <Crown className="h-3 w-3 text-amber-500" />}
+                        </div>
+                        <div className="text-[11px] text-slate-500 truncate">{u.email}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-3">
+                    <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold", c.bg, c.text)}>
+                      <Shield className="h-2.5 w-2.5" /> {role}
+                    </span>
+                  </td>
+                  <td className="px-3 py-3">
+                    {u.isActive ? (
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700 text-[12px] font-semibold">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
+                        </span>
+                        Faol
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-rose-600 text-[12px] font-semibold">
+                        <Lock className="h-3 w-3" />
+                        Bloklangan
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-3 text-slate-700 text-[12px]">
+                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : <span className="text-slate-400 italic">Hech qachon</span>}
+                  </td>
+                  <td className="px-3 py-3 text-slate-700 text-[12px]">
+                    {formatDateTime(u.createdAt)}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {canManage && (
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          onClick={() => onEdit(u)}
+                          title="Tahrirlash"
+                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => onToggle(u)}
+                          title={u.isActive ? 'Bloklash' : 'Faollashtirish'}
+                          className={cn(
+                            "w-8 h-8 rounded-lg grid place-items-center transition-colors",
+                            u.isActive
+                              ? "bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white"
+                              : "bg-slate-100 hover:bg-emerald-600 text-slate-600 hover:text-white",
+                          )}
+                        >
+                          {u.isActive ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                        </button>
+                        <button
+                          onClick={() => onDelete(u)}
+                          title="O'chirish"
+                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
