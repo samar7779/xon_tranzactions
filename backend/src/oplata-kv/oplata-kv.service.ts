@@ -423,9 +423,22 @@ export class OplataKvService {
     });
 
     if (txList.length === 0) {
+      // ── MUHIM: cleanup HAR DOIM bajariladi, hatto yangi tranzaksiya bo'lmasa ham ──
+      // User talabi: XATO shartnomalardan split avtomatik tozalanishi kerak
+      let xatoCleanedCount = 0;
+      try {
+        xatoCleanedCount = await this.cleanupSplitsForXatoContracts();
+        if (xatoCleanedCount > 0) {
+          this.log.log(`sync (early return): XATO split cleanup — ${xatoCleanedCount} qator tozalandi`);
+        }
+      } catch (e: any) {
+        this.log.warn(`sync XATO cleanup xato (early return): ${e?.message}`);
+      }
       return {
         ok: true,
+        version: 'v4-xato-cleanup-sync',
         total: 0, added: 0, updated: 0, skipped: 0,
+        xatoCleanedRows: xatoCleanedCount,
         duration: Math.round((Date.now() - startedAt) / 1000),
         minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
       };
