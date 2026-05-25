@@ -176,6 +176,10 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   sources?: string;
 
+  @ApiPropertyOptional({ description: "Faqat XATO qatorlar: 'true' bo'lsa CRM da topilmaganlar ko'rsatiladi" })
+  @IsOptional() @IsString()
+  xatoOnly?: string;
+
   // ─── Distinct endpoint uchun (ListOplataKvDto qayta ishlatilgani uchun) ───
   @ApiPropertyOptional({ description: 'Distinct uchun ustun nomi (faqat /distinct endpoint)' })
   @IsOptional() @IsString()

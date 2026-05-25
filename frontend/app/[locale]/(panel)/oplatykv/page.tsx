@@ -128,7 +128,9 @@ export default function OplataKvPage() {
   const canCreate = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_CREATE);
   const canEdit = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
   const canDelete = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
-  const canImport = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
+  // Eslatma: canImport uchun legacy fallback YO'Q — faqat aniq OPLATAKV_IMPORT bo'lsagina,
+  // chunki Download (export) iconini rolda IMPORT'ni olib tashlash orqali yashirish imkonini berish kerak.
+  const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   // Eski "canManage" — yaratish | tahrir | o'chirish'dan birortasi mavjud bo'lsa true (bir umumiy "biror narsa qila olaman" flag)
   const canManage = canCreate || canEdit || canDelete || canImport;
 
@@ -272,6 +274,18 @@ export default function OplataKvPage() {
   );
 
   // URL params for list query
+  // Helper: contractNo filter ichida "XATO" tanlangan bo'lsa — xatoOnly=true qilib yuborish
+  // (boshqa contractNo qiymatlar saqlanadi; faqat XATO qayta tarjima qilinadi)
+  const applyXatoToParams = (p: URLSearchParams) => {
+    const cnSet = columnFilters['contractNo'];
+    if (cnSet && cnSet.has('XATO')) {
+      p.set('xatoOnly', 'true');
+      const rest = Array.from(cnSet).filter((v) => v !== 'XATO');
+      if (rest.length > 0) p.set('contractNos', rest.join(','));
+      else p.delete('contractNos');
+    }
+  };
+
   const qs = useMemo(() => {
     const p = new URLSearchParams();
     p.set('page', String(page));
@@ -284,6 +298,7 @@ export default function OplataKvPage() {
       const set = columnFilters[col];
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
+    applyXatoToParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, perPage, q, dateFrom, dateTo, columnFiltersKey]);
@@ -298,6 +313,7 @@ export default function OplataKvPage() {
       const set = columnFilters[col];
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
+    applyXatoToParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, dateFrom, dateTo, columnFiltersKey]);
