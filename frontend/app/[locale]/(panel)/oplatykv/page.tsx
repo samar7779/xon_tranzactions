@@ -53,6 +53,7 @@ interface OplataKvItem {
   importBatchId?: string | null;
   sourceTxId?: string | null;
   crmXato?: boolean;
+  contractSource?: 'manual' | 'ariza' | null;  // Tranzaksiyada qanday qo'yilgan
 }
 
 // Manba (qaysi yo'l bilan qo'shilgan) — manual / excel / transaction
@@ -586,7 +587,32 @@ export default function OplataKvPage() {
                           XATO
                         </span>
                       ) : (
-                        it.contractNo
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className={cn(
+                              it.contractSource === 'ariza'   && 'text-violet-800',
+                              it.contractSource === 'manual'  && 'text-amber-800',
+                            )}
+                          >
+                            {it.contractNo}
+                          </span>
+                          {it.contractSource === 'ariza' && (
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+                              title="Tranzaksiyada Ariza orqali kiritilgan (hujjat biriktirilgan)"
+                            >
+                              ARIZA
+                            </span>
+                          )}
+                          {it.contractSource === 'manual' && (
+                            <span
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                              title="Tranzaksiyada qo'lda kiritilgan (CRM tekshirilmagan)"
+                            >
+                              QO'LDA
+                            </span>
+                          )}
+                        </span>
                       )}
                     </td>
                     <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
@@ -1687,6 +1713,22 @@ function OplataKvDetailDialog({
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
+                  )}
+                  {row.contractSource === 'ariza' && (
+                    <span
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-violet-500/30 ring-violet-300/50 text-violet-50 whitespace-nowrap"
+                      title="Tranzaksiyada Ariza orqali kiritilgan (hujjat biriktirilgan)"
+                    >
+                      📎 ARIZA
+                    </span>
+                  )}
+                  {row.contractSource === 'manual' && (
+                    <span
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-amber-500/30 ring-amber-300/50 text-amber-50 whitespace-nowrap"
+                      title="Tranzaksiyada qo'lda kiritilgan (CRM tekshirilmagan)"
+                    >
+                      ✍ QO'LDA
+                    </span>
                   )}
                 </>
               )}
