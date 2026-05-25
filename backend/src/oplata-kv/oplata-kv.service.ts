@@ -807,6 +807,56 @@ export class OplataKvService {
   }
 
   /**
+   * XATO shartnomalardagi (CRM da topilmagan) eski split qiymatlarini tozalash.
+   * Avvalgi "all-monthly" fallback tufayli to'lgan bo'lishi mumkin —
+   * endi user qoidasi: CRM da yo'q bo'lsa, split umuman qo'yilmaydi.
+   *
+   * Returns: tozalangan qatorlar soni.
+   */
+  private async cleanupSplitsForXatoContracts(contractNo?: string): Promise<number> {
+    // 1) Qaysi sourceTxId-li qatorlarda split qiymatlari bor — distinct contract olamiz
+    const filled = await this.prisma.oplataKv.findMany({
+      where: {
+        sourceTxId: { not: null },
+        ...(contractNo ? { contractNo } : {}),
+        OR: [
+          { firstInstallment: { not: null } },
+          { monthlyAmount: { not: null } },
+          { paymentCategory: { not: null } },
+        ],
+      },
+      select: { contractNo: true },
+      distinct: ['contractNo'],
+    });
+    const contractNos = filled.map((r) => r.contractNo);
+    if (contractNos.length === 0) return 0;
+
+    // 2) Bu contractlardan qaysilari CRM da verified (found=true)
+    const verified = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: contractNos }, found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+
+    // 3) Verified bo'lmaganlar = XATO → split qiymatlarini null qilamiz
+    const xatoContracts = contractNos.filter((cn) => !verifiedSet.has(cn));
+    if (xatoContracts.length === 0) return 0;
+
+    const result = await this.prisma.oplataKv.updateMany({
+      where: {
+        sourceTxId: { not: null },
+        contractNo: { in: xatoContracts },
+      },
+      data: {
+        firstInstallment: null,
+        monthlyAmount: null,
+        paymentCategory: null,
+      },
+    });
+    return result.count;
+  }
+
+  /**
    * Tranzaksiyadan kelgan qatorlarda paymentAmount BOR lekin firstInstallment va
    * monthlyAmount yo'q bo'lganlarni CRM payment_histories asosida ajratish.
    *
@@ -819,10 +869,23 @@ export class OplataKvService {
    *   - running_monthly (shu contractda shu sanagacha jami monthlyAmount)
    *   - refund <= running_monthly -> hammasi monthly
    *   - refund > running_monthly -> monthly=running_monthly, qolgan -> initial
+   *
+   * MUHIM: Agar CRM da shartnoma topilmasa (XATO) — split qilinmaydi (skip).
+   * Mavjud qiymatlar cleanupSplitsForXatoContracts() da tozalanadi.
    */
   async splitInstallments(opts: { limit?: number; contractNo?: string; force?: boolean; actor?: Actor } = {}) {
     const startedAt = Date.now();
     const limit = Math.min(opts.limit || 5000, 20000);
+
+    // ─── CLEANUP: XATO shartnomalardan eski split qiymatlarini olib tashlash ───
+    // User talabi: "shartnoma raqami bolmasa tolovlarni bolish muymkin emas"
+    // CRM da topilmagan shartnomalar (found=false yoki cache'da yo'q) bo'lganlar
+    // firstInstallment/monthlyAmount ga ega bo'lib qolgan bo'lishi mumkin (eski "all-monthly"
+    // fallback dan). Ularni tozalaymiz — split mumkin emas.
+    const xatoCleanup = await this.cleanupSplitsForXatoContracts(opts.contractNo);
+    if (xatoCleanup > 0) {
+      this.log.log(`splitInstallments: XATO cleanup — ${xatoCleanup} qator tozalandi`);
+    }
 
     // Filter: agar contractNo berilsa — faqat shu shartnoma uchun
     // force=true bo'lsa firstInstallment/monthlyAmount bor bo'lsa ham qayta hisoblaydi
@@ -884,11 +947,17 @@ export class OplataKvService {
       await Promise.all(batch.map(async ([contractNo, items]) => {
         try {
           // CRM'dan detail (initial plan summasi va payment_histories)
-          // Agar CRM topilmasa -> fallback (initialPlan=0 -> hammasi monthly)
+          // User talabi: shartnoma CRM da bo'lmasa — split umuman qilinmaydi (1-vznos va
+          // ежемесячный bo'sh qoladi). Hech qanday fallback yo'q.
           const resp: any = await this.crmService.show({ contract: contractNo }).catch(() => null);
           const detail = resp?.ok ? resp.detail : null;
+          if (!detail) {
+            // CRM da topilmadi — bu XATO shartnoma. Split mumkin emas.
+            // Mavjud qiymatlar (agar bo'lsa) cleanupSplitsForXatoContracts() da tozalangan.
+            notFound += items.length;
+            return;
+          }
           // CRM dagi initial total reja (1-vznos jami summasi shartnoma bo'yicha)
-          // CRM topilmasa initialPlan = 0 -> hammasi monthly'ga ketadi (fallback, baribir filled bo'ladi)
           const initialPlan = Number(detail?.initial?.total?.amount || 0);
 
           // Eski running totals — shu contractda BU BATCH'gacha bo'lgan jami
