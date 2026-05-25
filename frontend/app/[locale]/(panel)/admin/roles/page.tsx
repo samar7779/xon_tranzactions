@@ -140,9 +140,16 @@ function RoleDialog({
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
-  // Collapsible state — qaysi modullar ochiq
+  // Collapsible state — default'da barcha modullar ochiq (sahifa ochiq emas)
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [openPages, setOpenPages] = useState<Set<string>>(new Set());
+
+  // Modal birinchi ochilganda barcha modullarni avtomatik ochish
+  useEffect(() => {
+    if (open && permTree.length > 0) {
+      setOpenModules(new Set(permTree.map((m) => m.module)));
+    }
+  }, [open, permTree]);
 
   useEffect(() => {
     if (open) {
@@ -219,7 +226,7 @@ function RoleDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-5xl w-[95vw] max-h-[92vh] overflow-y-auto p-0"
+        className="max-w-5xl w-[95vw] max-h-[96vh] h-[96vh] overflow-y-auto p-0 flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
@@ -262,7 +269,7 @@ function RoleDialog({
                 <span className="font-bold text-indigo-700">{permissions.size}</span> ta belgilangan
               </span>
             </Label>
-            <div className="border rounded-xl divide-y divide-slate-100 max-h-[55vh] overflow-y-auto bg-slate-50/40">
+            <div className="border rounded-xl divide-y divide-slate-100 max-h-[72vh] min-h-[400px] overflow-y-auto bg-slate-50/40">
               {tree.map((mod) => {
                 const allItems = mod.pages.flatMap((p) => p.items);
                 const modCount = allItems.filter((i) => permissions.has(i.value)).length;
