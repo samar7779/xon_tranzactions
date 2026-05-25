@@ -2072,6 +2072,67 @@ function OplataKvFormDialog({
     return unique;
   }, [mappingsQuery.data, object]);
 
+  // ────────── CRM auto-lookup (faqat YANGI qatorda — contractNo o'zgarganda) ──────────
+  const [crmLookupState, setCrmLookupState] = useState<{
+    status: 'idle' | 'loading' | 'found' | 'not-found' | 'error';
+    msg?: string;
+  }>({ status: 'idle' });
+  const lookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLookupCnRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!open || isEdit) return;
+    const cn = contractNo.trim();
+    if (lookupTimerRef.current) {
+      clearTimeout(lookupTimerRef.current);
+      lookupTimerRef.current = null;
+    }
+    if (!cn) {
+      setCrmLookupState({ status: 'idle' });
+      lastLookupCnRef.current = '';
+      return;
+    }
+    if (cn.toUpperCase() === lastLookupCnRef.current.toUpperCase()) return;
+
+    lookupTimerRef.current = setTimeout(async () => {
+      lastLookupCnRef.current = cn;
+      setCrmLookupState({ status: 'loading' });
+      try {
+        const res = await api.get<{
+          ok: boolean; found: boolean;
+          customerName: string | null;
+          objectName: string | null;
+          objectNameOriginal: string | null;
+          error?: string;
+        }>(`/oplata-kv/crm-lookup?contractNo=${encodeURIComponent(cn)}`);
+        if (!res.ok) {
+          setCrmLookupState({ status: 'error', msg: res.error || "CRM so'rovi xato" });
+          return;
+        }
+        if (!res.found) {
+          setCrmLookupState({ status: 'not-found', msg: "CRM da topilmadi — qo'lda to'ldiring" });
+          return;
+        }
+        // Auto-fill — faqat bo'sh maydonlarga
+        if (res.customerName && !client.trim()) setClient(res.customerName);
+        if (res.objectName && !object.trim()) setObject(res.objectName);
+        setCrmLookupState({
+          status: 'found',
+          msg: res.objectNameOriginal && res.objectName !== res.objectNameOriginal
+            ? `Topildi · obyekt: "${res.objectNameOriginal}" → "${res.objectName}"`
+            : "CRM da topildi · ma'lumotlar to'ldirildi",
+        });
+      } catch (e: any) {
+        setCrmLookupState({ status: 'error', msg: e?.message || "So'rov xato" });
+      }
+    }, 600);
+
+    return () => {
+      if (lookupTimerRef.current) clearTimeout(lookupTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contractNo, open, isEdit]);
+
   useEffect(() => {
     if (!open) return;
     if (row) {
@@ -2179,6 +2240,27 @@ function OplataKvFormDialog({
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isFromTx} />
           </Field>
 
+          {/* CRM auto-lookup status (faqat yangi qatorda) */}
+          {!isEdit && crmLookupState.status !== 'idle' && (
+            <div className="col-span-2">
+              <div
+                className={cn(
+                  'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                  crmLookupState.status === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
+                  crmLookupState.status === 'found' && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                  crmLookupState.status === 'not-found' && 'bg-amber-50 text-amber-700 ring-amber-200',
+                  crmLookupState.status === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                )}
+              >
+                {crmLookupState.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {crmLookupState.status === 'found' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                {crmLookupState.status === 'not-found' && <AlertTriangle className="h-3.5 w-3.5" />}
+                {crmLookupState.status === 'error' && <X className="h-3.5 w-3.5" />}
+                {crmLookupState.status === 'loading' ? 'CRM tekshirilmoqda...' : crmLookupState.msg}
+              </div>
+            </div>
+          )}
+
           <Field label="Сумма оплаты" locked={isFromTx}>
             <MoneyInput value={paymentAmount} onChange={setPaymentAmount} placeholder="0" disabled={isFromTx} />
           </Field>
@@ -2236,7 +2318,18 @@ function OplataKvFormDialog({
           </Field>
 
           <Field label="Способ оплаты">
-            <Input value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} placeholder="naqd / karta / transfer" />
+            <Select value={paymentMethod || '__empty'} onValueChange={(v) => setPaymentMethod(v === '__empty' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Tanlang" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__empty">—</SelectItem>
+                <SelectItem value="Перечисление">Перечисление</SelectItem>
+                <SelectItem value="Наличные">Наличные</SelectItem>
+                {/* Joriy qiymat yuqorida bo'lmasa, uni ham qo'shamiz (eski qatorlar uchun) */}
+                {paymentMethod && !['Перечисление', 'Наличные'].includes(paymentMethod) && (
+                  <SelectItem value={paymentMethod}>{paymentMethod}</SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </Field>
           <Field label="Тип">
             <Input value={txType} onChange={(e) => setTxType(e.target.value)} />

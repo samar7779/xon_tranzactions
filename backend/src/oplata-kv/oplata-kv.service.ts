@@ -1573,6 +1573,112 @@ export class OplataKvService {
     };
   }
 
+  // ───────────────── FORM AUTO-FILL — CRM lookup by contractNo ─────────────────
+  /**
+   * Yangi qator qo'shish formi uchun: shartnoma raqami yozilganda
+   * mijoz va obyekt nomini avto to'ldirish uchun.
+   * Cache (crm_contracts) -> live CRM (agar kerak bo'lsa) -> object mapping qo'llaniladi.
+   */
+  async crmLookupForForm(contractNo: string): Promise<{
+    ok: boolean;
+    found: boolean;
+    contractNo: string;
+    customerName: string | null;
+    objectName: string | null;       // OplatyKv'ga yoziladigan (mapping qo'llanilgan)
+    objectNameOriginal: string | null; // CRM dan kelgan asl nom (mappingsiz)
+    error?: string;
+  }> {
+    if (!contractNo || !contractNo.trim()) {
+      return {
+        ok: false, found: false, contractNo: '',
+        customerName: null, objectName: null, objectNameOriginal: null,
+        error: "contractNo bo'sh",
+      };
+    }
+    const cn = contractNo.trim().toUpperCase();
+
+    // 1) Cache
+    const cached = await this.prisma.crmContract.findFirst({
+      where: { contractNumber: cn },
+      select: { customerName: true, objectName: true, found: true },
+    });
+
+    let customerName: string | null = cached?.customerName || null;
+    let objectNameOriginal: string | null = cached?.objectName || null;
+    let foundInCrm = !!cached?.found;
+
+    // 2) Cache yo'q yoki ma'lumotlar to'liq emas — live CRM so'rov
+    if (!cached || !customerName || !objectNameOriginal) {
+      try {
+        const resp: any = await this.crmService.show({ contract: cn });
+        const detail = resp?.detail || null;
+        if (resp?.ok && detail) {
+          foundInCrm = true;
+          // Mijoz (FIO) yig'ish
+          if (!customerName) {
+            const c = detail.client || {};
+            const f = (v: any): string => {
+              if (!v) return '';
+              if (typeof v === 'string') return v;
+              if (typeof v === 'object') return v.kirill || v.lotin || v.uz || v.ru || v.name || v.value || '';
+              return '';
+            };
+            const parts = [f(c.last_name), f(c.first_name), f(c.middle_name)].filter(Boolean);
+            customerName = parts.length > 0
+              ? parts.join(' ').trim()
+              : (c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || detail.fio || null);
+          }
+          // Obyekt nomi
+          if (!objectNameOriginal) {
+            const candidates = [
+              detail.object_name, detail.object,
+              detail.info?.object, detail.info?.object_name,
+              detail.client?.object_name, detail.client?.object,
+            ];
+            for (const cand of candidates) {
+              if (!cand) continue;
+              if (typeof cand === 'string' && cand.trim()) { objectNameOriginal = cand.trim(); break; }
+              if (typeof cand === 'object') {
+                const nm = cand.name || cand.value || cand.uz || cand.ru || cand.lotin || cand.kirill || cand.title;
+                if (nm && typeof nm === 'string' && nm.trim()) { objectNameOriginal = nm.trim(); break; }
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        // CRM xato — cache'da bo'lgani bilan qaytaramiz
+        if (!cached) {
+          return {
+            ok: false, found: false, contractNo: cn,
+            customerName: null, objectName: null, objectNameOriginal: null,
+            error: e?.message || 'CRM xatosi',
+          };
+        }
+      }
+    }
+
+    // 3) Object mapping qo'llash: CRM nomidan OplatyKv nomiga
+    let objectName: string | null = objectNameOriginal;
+    if (objectNameOriginal) {
+      const mapping = await this.prisma.oplataKvObjectMapping.findFirst({
+        where: { crmName: { equals: objectNameOriginal, mode: 'insensitive' } },
+        select: { oplataName: true },
+      });
+      if (mapping?.oplataName) {
+        objectName = mapping.oplataName;
+      }
+    }
+
+    return {
+      ok: true,
+      found: foundInCrm,
+      contractNo: cn,
+      customerName,
+      objectName,
+      objectNameOriginal,
+    };
+  }
+
   // ───────────────── OBJECT MAPPING (CRM nomi → OplatyKv nomi) ─────────────────
   async listObjectMappings() {
     const items = await this.prisma.oplataKvObjectMapping.findMany({
