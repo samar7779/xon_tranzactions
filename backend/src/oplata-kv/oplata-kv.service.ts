@@ -941,7 +941,81 @@ export class OplataKvService {
            )
       `;
     }
+    this.log.log(`cleanupSplitsForXatoContracts: affected=${affected}`);
     return affected;
+  }
+
+  /**
+   * DIAGNOSTIC: XATO splitlar holatini batafsil ko'rsatadi.
+   * - BEFORE: nechta qator XATO + split bor
+   * - SAMPLE: 5 ta misol qator (contract + summalar + CRM holati)
+   * - AFTER cleanup: qanchasi tozalandi
+   */
+  async debugXatoSplits(): Promise<any> {
+    // 1) BEFORE: source_tx_id li, splitlari bor qatorlar
+    const beforeRowsRaw: any[] = await this.prisma.$queryRaw`
+      SELECT id, contract_no, payment_amount, first_installment, monthly_amount, payment_category, source_tx_id
+        FROM oplata_kv
+       WHERE source_tx_id IS NOT NULL
+         AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
+       LIMIT 1000
+    `;
+
+    // 2) Bu qatorlar uchun CRM holati
+    const allContracts = Array.from(new Set(beforeRowsRaw.map((r) => r.contract_no)));
+    const crmRows: any[] = allContracts.length > 0
+      ? await this.prisma.$queryRaw`
+          SELECT contract_number, found
+            FROM crm_contracts
+           WHERE contract_number = ANY(${allContracts}::text[])
+        `
+      : [];
+    const crmMap = new Map(crmRows.map((c) => [c.contract_number, c.found]));
+
+    // 3) Klassifikatsiya
+    const classified = beforeRowsRaw.map((r) => ({
+      id: r.id,
+      contractNo: r.contract_no,
+      amount: r.payment_amount,
+      first: r.first_installment,
+      monthly: r.monthly_amount,
+      category: r.payment_category,
+      crmFound: crmMap.has(r.contract_no) ? crmMap.get(r.contract_no) : null,
+      // 'XATO' (crm da yo'q yoki found=false), 'VERIFIED' (found=true), 'MANUAL' nazariy
+      isXato: crmMap.get(r.contract_no) !== true,
+    }));
+
+    const xatoCount = classified.filter((c) => c.isXato).length;
+    const verifiedCount = classified.filter((c) => !c.isXato).length;
+    const sampleXato = classified.filter((c) => c.isXato).slice(0, 10);
+
+    // 4) RUN cleanup
+    const cleaned = await this.cleanupSplitsForXatoContracts();
+
+    // 5) AFTER state
+    const afterCountRaw: any[] = await this.prisma.$queryRaw`
+      SELECT COUNT(*)::int AS cnt
+        FROM oplata_kv
+       WHERE source_tx_id IS NOT NULL
+         AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
+    `;
+    const afterCount = Number(afterCountRaw[0]?.cnt || 0);
+
+    return {
+      ok: true,
+      before: {
+        totalWithSplits: beforeRowsRaw.length,
+        xatoCount,
+        verifiedCount,
+        sampleXato,
+      },
+      cleanupRun: {
+        rowsAffected: cleaned,
+      },
+      after: {
+        totalWithSplits: afterCount,
+      },
+    };
   }
 
   /**
