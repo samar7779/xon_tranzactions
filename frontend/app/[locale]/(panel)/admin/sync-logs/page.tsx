@@ -373,21 +373,48 @@ function SyncSettingsPanel() {
         ok: boolean; total: number; added: number; updated: number; skipped: number;
         skippedBreakdown?: { noData: number; exists: number; error: number };
         errorSamples?: Array<{ txId: string; reason: string }>;
-        objects?: { scanned: number; contracts: number; filled: number; notFound: number; errors: number };
+        xatoCleanedRows?: number;
+        fillResult?: { filled: number; notFound: number; total: number };
+        splitResult?: { filled: number; notFound: number; total: number; contracts: number };
         duration: number;
-      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 600_000 }),
+      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 900_000 }),  // 15 min — hammasi sinxron
     onSuccess: (r: any) => {
+      // Sync natijasi
       const bd = r.skippedBreakdown || {};
       const skipDetail = [
         bd.noData ? `${bd.noData} data yo'q` : null,
         bd.exists ? `${bd.exists} mavjud` : null,
         bd.error ? `${bd.error} xato` : null,
       ].filter(Boolean).join(', ');
-      const msg = `Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}${r.duration ? ` · ${r.duration}s` : ''}`;
-      toast.success(msg, { duration: 6000 });
-      if (r.objectsBackground) {
-        toast.info("Obyekt va Mijoz nomlari CRM dan ORQADA to'ldirilyapti — sahifani 1-2 daqiqadan keyin yangilang", { duration: 8000 });
+      toast.success(
+        `1) Sync · qo'shildi: ${r.added}, yangilandi: ${r.updated}, o'tkazildi: ${r.skipped}${skipDetail ? ` (${skipDetail})` : ''}`,
+        { duration: 7000 },
+      );
+
+      // XATO cleanup
+      if (r.xatoCleanedRows && r.xatoCleanedRows > 0) {
+        toast.success(`2) 🧹 XATO splitlar tozalandi · ${r.xatoCleanedRows} qator`, { duration: 7000 });
       }
+
+      // Object/Client fill
+      if (r.fillResult) {
+        toast.success(
+          `3) Obyekt/Mijoz · to'ldirildi: ${r.fillResult.filled}/${r.fillResult.total} (CRM topmadi: ${r.fillResult.notFound})`,
+          { duration: 7000 },
+        );
+      }
+
+      // Split installments
+      if (r.splitResult) {
+        toast.success(
+          `4) Split · ${r.splitResult.contracts} shartnoma · to'ldirildi: ${r.splitResult.filled}/${r.splitResult.total} (CRM topmadi: ${r.splitResult.notFound})`,
+          { duration: 7000 },
+        );
+      }
+
+      // Umumiy vaqt
+      toast.success(`✓ HAMMASI TUGADI · ${r.duration}s`, { duration: 5000 });
+
       if (r.errorSamples && r.errorSamples.length > 0) {
         toast.error(`Xato namunalari: ${r.errorSamples.slice(0, 2).map((s: any) => s.reason).join('; ')}`, { duration: 10000 });
       }
@@ -635,29 +662,11 @@ function SyncSettingsPanel() {
                 <Button
                   onClick={() => syncTxMut.mutate(oplatykvTxMinDate || null)}
                   disabled={syncTxMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white"
-                  title="Hozir tranzaksiyalardan import qilish + Obyektlarni CRM dan to'ldirish"
+                  className="h-10 px-5 gap-2 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/30"
+                  title="HAMMASINI bajaradi: 1) Sync tranzaksiyadan  2) XATO splitlarni tozalash  3) Obyekt/Mijoz CRM dan  4) 1 взнос/oylik split"
                 >
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Hozir sync
-                </Button>
-                <Button
-                  onClick={() => splitMut.mutate()}
-                  disabled={splitMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-violet-500 to-fuchsia-600 hover:from-violet-600 hover:to-fuchsia-700 text-white"
-                  title="paymentAmount'ni 1-vznos va oylik'ga ajratish (CRM payment_histories asosida)"
-                >
-                  {splitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Split now
-                </Button>
-                <Button
-                  onClick={() => cleanupXatoSplitsMut.mutate()}
-                  disabled={cleanupXatoSplitsMut.isPending}
-                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white"
-                  title="XATO shartnomalardan 1 взнос va oylik qiymatlarini DARHOL tozalash (atomar SQL)"
-                >
-                  {cleanupXatoSplitsMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  🧹 XATO splitlarni tozalash
+                  {syncTxMut.isPending ? 'Bajarilmoqda... (5-10 daqiqa)' : 'Hozir sync (HAMMASI)'}
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
