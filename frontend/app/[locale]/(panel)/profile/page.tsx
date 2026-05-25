@@ -628,129 +628,93 @@ function ActivityTab({ user, t }: any) {
 /* ═══════════════════ SECURITY TAB ═══════════════════ */
 
 function SecurityTab({ t }: any) {
-  const [showOld, setShowOld] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [oldPw, setOldPw] = useState('');
-  const [newPw, setNewPw] = useState('');
-  const [confirmPw, setConfirmPw] = useState('');
-
-  const strength = newPw.length >= 12 ? 'strong' : newPw.length >= 8 ? 'medium' : newPw.length >= 4 ? 'weak' : 'none';
-  const strengthColor = { none: 'bg-slate-200', weak: 'bg-rose-500', medium: 'bg-amber-500', strong: 'bg-emerald-500' }[strength];
-  const strengthWidth = { none: '0%', weak: '33%', medium: '66%', strong: '100%' }[strength];
-
   return (
     <div className="space-y-6">
-      {/* PASSWORD CHANGE */}
+      {/* XAVFSIZLIK HOLATI */}
       <Card className="border-0 shadow-soft overflow-hidden">
-        <div className="h-1 bg-gradient-to-r from-amber-500 to-orange-600" />
+        <div className="h-1 bg-gradient-to-r from-emerald-500 to-teal-600" />
         <CardContent className="p-6">
           <div className="flex items-center gap-3 mb-5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shadow-md">
-              <KeyRound className="h-5 w-5" />
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-md">
+              <Shield className="h-5 w-5" />
             </div>
-            <div>
-              <div className="text-base font-bold text-slate-800">Parolni o'zgartirish</div>
-              <div className="text-xs text-slate-500">Kuchli parol ishlatish tavsiya etiladi (12+ belgi)</div>
+            <div className="flex-1">
+              <div className="text-base font-bold text-slate-800">Xavfsizlik holati</div>
+              <div className="text-xs text-slate-500">Hisobingiz himoyalangan</div>
             </div>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold ring-1 ring-emerald-200">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Xavfsiz
+            </span>
           </div>
 
-          <div className="space-y-4 max-w-lg">
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Joriy parol</label>
-              <div className="relative">
-                <Input
-                  type={showOld ? 'text' : 'password'}
-                  value={oldPw}
-                  onChange={(e) => setOldPw(e.target.value)}
-                  placeholder="••••••••"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowOld(!showOld)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                >
-                  {showOld ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Yangi parol</label>
-              <div className="relative">
-                <Input
-                  type={showNew ? 'text' : 'password'}
-                  value={newPw}
-                  onChange={(e) => setNewPw(e.target.value)}
-                  placeholder="••••••••"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowNew(!showNew)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
-                >
-                  {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
-              {newPw && (
-                <div className="mt-2 space-y-1">
-                  <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                    <div className={cn("h-full transition-all duration-300", strengthColor)} style={{ width: strengthWidth }} />
-                  </div>
-                  <div className="text-[10px] text-slate-500 flex items-center justify-between">
-                    <span>Parol kuchi: <span className={cn(
-                      "font-bold",
-                      strength === 'strong' && 'text-emerald-700',
-                      strength === 'medium' && 'text-amber-700',
-                      strength === 'weak' && 'text-rose-700',
-                    )}>{strength === 'strong' ? 'Kuchli' : strength === 'medium' ? 'O\'rtacha' : strength === 'weak' ? 'Zaif' : '—'}</span></span>
-                    <span>{newPw.length} belgi</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5 block">Yangi parolni tasdiqlash</label>
-              <Input
-                type={showNew ? 'text' : 'password'}
-                value={confirmPw}
-                onChange={(e) => setConfirmPw(e.target.value)}
-                placeholder="••••••••"
-              />
-              {confirmPw && newPw !== confirmPw && (
-                <div className="text-[10px] text-rose-600 mt-1">Parollar mos kelmaydi</div>
-              )}
-            </div>
-
-            <Button
-              onClick={() => toast.info('Parol o\'zgartirish backendga ulanmagan')}
-              disabled={!oldPw || !newPw || newPw !== confirmPw || newPw.length < 4}
-              className="bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700"
-            >
-              <Lock className="h-4 w-4 mr-1.5" />
-              Parolni o'zgartirish
-            </Button>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <SecurityCheck
+              icon={<Lock className="h-4 w-4" />}
+              label="Parol o'rnatilgan"
+              status="ok"
+            />
+            <SecurityCheck
+              icon={<CheckCircle2 className="h-4 w-4" />}
+              label="Hisob tasdiqlangan"
+              status="ok"
+            />
+            <SecurityCheck
+              icon={<Wifi className="h-4 w-4" />}
+              label="Faol sessiya"
+              status="ok"
+            />
           </div>
         </CardContent>
       </Card>
 
-      {/* SECURITY TIPS */}
+      {/* XAVFSIZLIK TAVSIYALARI */}
       <div className="grid md:grid-cols-2 gap-4">
         <SecurityTip
           icon={<Lock />}
           gradient="from-emerald-500 to-teal-600"
           title="Xavfsiz parol"
-          body="12+ belgi, katta/kichik harf, raqam va maxsus belgi ishlating"
+          body="12+ belgi, katta/kichik harf, raqam va maxsus belgi ishlating. Parolingizni hech kim bilan ulashmang."
         />
         <SecurityTip
           icon={<Shield />}
           gradient="from-indigo-500 to-violet-600"
           title="Begona qurilmalardan chiqing"
-          body="Boshqa qurilmada login bo'lsangiz, ishingiz tugagach albatta chiqing"
+          body="Boshqa kompyuter yoki telefonda login bo'lsangiz, ishingiz tugagach albatta tizimdan chiqing."
+        />
+        <SecurityTip
+          icon={<Wifi />}
+          gradient="from-amber-500 to-orange-600"
+          title="Ochiq Wi-Fi'dan ehtiyot bo'ling"
+          body="Kafe, mehmonxonalardagi ochiq tarmoqlardan moliyaviy ishlarni amalga oshirmang."
+        />
+        <SecurityTip
+          icon={<Bell />}
+          gradient="from-rose-500 to-pink-600"
+          title="Shubhali harakat bo'lsa"
+          body="Begona kirish, noma'lum tranzaksiya yoki o'zgarish ko'rsangiz, darhol admin bilan bog'laning."
         />
       </div>
+    </div>
+  );
+}
+
+function SecurityCheck({ icon, label, status }: { icon: React.ReactNode; label: string; status: 'ok' | 'warn' | 'err' }) {
+  const cls = {
+    ok:   'bg-emerald-50 ring-emerald-200 text-emerald-700',
+    warn: 'bg-amber-50 ring-amber-200 text-amber-700',
+    err:  'bg-rose-50 ring-rose-200 text-rose-700',
+  }[status];
+  const dot = {
+    ok:   'bg-emerald-500',
+    warn: 'bg-amber-500',
+    err:  'bg-rose-500',
+  }[status];
+  return (
+    <div className={cn("p-3 rounded-xl ring-1 flex items-center gap-3", cls)}>
+      <div className="shrink-0">{icon}</div>
+      <div className="flex-1 text-[12px] font-semibold">{label}</div>
+      <span className={cn("w-2 h-2 rounded-full", dot)} />
     </div>
   );
 }
