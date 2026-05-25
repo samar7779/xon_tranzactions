@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, ShieldCheck, Pencil, Trash2, Lock, MoreVertical,
   Users, Shield, Check, ChevronDown, ChevronRight,
+  Sparkles, Activity, Crown, Zap, Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,83 +93,21 @@ export default function RolesPage() {
         {(rolesData?.items?.length ?? 0) === 0 ? (
           <Card><CardContent className="p-0"><EmptyState icon={ShieldCheck} title="Hali rollar yo'q" /></CardContent></Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {rolesData!.items.map((r) => {
               const grad = getRoleGrad(r.name);
               const coverage = totalPerms > 0 ? Math.round((r.permissions.length / totalPerms) * 100) : 0;
               return (
-                <Card key={r.id} className="group relative border-0 shadow-soft card-hover overflow-hidden">
-                  <div className={cn("h-1.5 bg-gradient-to-r", grad)} />
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className={cn("w-11 h-11 rounded-xl bg-gradient-to-br grid place-items-center text-white shrink-0 shadow-sm", grad)}>
-                          <ShieldCheck className="h-5 w-5" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[14px] font-bold tracking-tight truncate">{r.label}</span>
-                            {r.isSystem && <Lock className="h-3 w-3 text-slate-400 shrink-0" />}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-500 truncate">{r.name}</div>
-                        </div>
-                      </div>
-                      {canManage && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 -mr-1">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(r)}>
-                              <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(r.id)}>
-                              <Trash2 className="h-4 w-4 mr-2" /> O'chirish
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-
-                    {r.description && (
-                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mb-3">{r.description}</p>
-                    )}
-
-                    {/* Coverage bar */}
-                    <div className="mb-3">
-                      <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
-                        <span>Ruxsatlar qamrovi</span>
-                        <span className="font-semibold tabular-nums text-slate-700">{r.permissions.length} / {totalPerms}</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                        <div className={cn("h-full bg-gradient-to-r transition-all", grad)} style={{ width: `${coverage}%` }} />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-1 mt-3">
-                      {r.permissions.slice(0, 4).map((p) => (
-                        <span key={p} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-50 ring-1 ring-slate-100 text-slate-600">{p}</span>
-                      ))}
-                      {r.permissions.length > 4 && (
-                        <span className="text-[10px] text-slate-500 font-medium px-1">+{r.permissions.length - 4}</span>
-                      )}
-                    </div>
-
-                    <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="inline-flex items-center gap-1 text-slate-500">
-                        <Users className="h-3 w-3" /> {r._count?.users ?? 0} ta foydalanuvchi
-                      </span>
-                      {r.isSystem && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-                          <Lock className="h-2.5 w-2.5" /> System
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                <ProRoleCard
+                  key={r.id}
+                  role={r}
+                  grad={grad}
+                  coverage={coverage}
+                  totalPerms={totalPerms}
+                  canManage={canManage}
+                  onEdit={() => openEdit(r)}
+                  onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(r.id)}
+                />
               );
             })}
           </div>
@@ -230,7 +169,8 @@ function RoleDialog({
       // Joriy foydalanuvchining roli o'zgargan bo'lishi mumkin —
       // ruxsatlarni darrov /auth/me dan yangilaymiz (sidebar/route guard uchun).
       useAuth.getState().hydrate();
-      onOpenChange(false);
+      // Modal yopilmaydi — user yana o'zgartirish kiritishi mumkin.
+      // Faqat X yoki ESC bilan yopiladi.
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -278,7 +218,11 @@ function RoleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto p-0">
+      <DialogContent
+        className="max-w-5xl w-[95vw] max-h-[92vh] overflow-y-auto p-0"
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
         <div className="bg-gradient-to-br from-indigo-500 to-purple-600 px-6 py-5 text-white relative overflow-hidden">
           <div className="absolute inset-0 bg-dots opacity-15" />
           <div className="relative">
@@ -434,5 +378,219 @@ function RoleDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Pro-level role card — modern, glassmorphic, info-dense lekin toza.
+ * Hover'da quick action tugmalar paydo bo'ladi, coverage circular ring bilan,
+ * modul bo'yicha permissions guruhlangan visualizatsiya.
+ */
+function ProRoleCard({
+  role: r, grad, coverage, totalPerms, canManage, onEdit, onDelete,
+}: {
+  role: Role;
+  grad: string;
+  coverage: number;
+  totalPerms: number;
+  canManage: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  // Permissions'larni modul bo'yicha guruhlash (visualizatsiya uchun)
+  const byModule: Record<string, number> = {};
+  r.permissions.forEach((p) => {
+    const mod = p.split(':')[0];
+    byModule[mod] = (byModule[mod] || 0) + 1;
+  });
+  const modules = Object.entries(byModule).slice(0, 6);
+
+  // Coverage ring uchun SVG params
+  const RADIUS = 28;
+  const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+  const dashOffset = CIRCUMFERENCE - (coverage / 100) * CIRCUMFERENCE;
+
+  // Status: super = SUPERADMIN, system = boshqa system rollar, custom = foydalanuvchi
+  const isSuper = r.name === 'SUPERADMIN';
+  const status = isSuper ? 'super' : r.isSystem ? 'system' : 'custom';
+
+  return (
+    <div className="group relative">
+      {/* Glow halo (hover'da yorqinlashadi) */}
+      <div className={cn(
+        "absolute -inset-0.5 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-40 blur-xl transition-opacity duration-500 -z-10",
+        grad,
+      )} />
+
+      <div className="relative bg-white rounded-2xl ring-1 ring-slate-200/80
+                      shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.18)]
+                      hover:-translate-y-1 hover:ring-slate-300
+                      transition-all duration-300 overflow-hidden">
+        {/* Top accent bar */}
+        <div className={cn("h-1 bg-gradient-to-r", grad)} />
+
+        {/* Body */}
+        <div className="p-5">
+          {/* Header: icon + name + actions */}
+          <div className="flex items-start gap-4 mb-4">
+            {/* Big rounded icon with glow */}
+            <div className="relative shrink-0">
+              <div className={cn(
+                "absolute inset-0 rounded-2xl bg-gradient-to-br blur-lg opacity-50",
+                grad,
+              )} />
+              <div className={cn(
+                "relative w-14 h-14 rounded-2xl bg-gradient-to-br grid place-items-center text-white",
+                "ring-2 ring-white shadow-md",
+                grad,
+              )}>
+                {isSuper ? <Crown className="h-6 w-6" /> : <ShieldCheck className="h-6 w-6" />}
+              </div>
+              {/* Status dot */}
+              <span className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full ring-2 ring-white",
+                status === 'super' ? 'bg-amber-400' : status === 'system' ? 'bg-slate-400' : 'bg-emerald-500',
+              )} />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[16px] font-bold tracking-tight text-slate-900 truncate">{r.label}</span>
+                {isSuper && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200 px-1.5 py-0.5 rounded-full">
+                    <Sparkles className="h-2.5 w-2.5" /> Super
+                  </span>
+                )}
+                {r.isSystem && !isSuper && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 ring-1 ring-slate-200 px-1.5 py-0.5 rounded-full">
+                    <Lock className="h-2.5 w-2.5" /> System
+                  </span>
+                )}
+                {!r.isSystem && (
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-0.5 rounded-full">
+                    <Activity className="h-2.5 w-2.5" /> Custom
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-[10.5px] font-mono text-slate-500 truncate">{r.name}</div>
+            </div>
+
+            {/* Actions — hover'da ko'rinadi */}
+            {canManage && (
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={onEdit}
+                  title="Tahrirlash"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+                {!r.isSystem && (
+                  <button
+                    onClick={onDelete}
+                    title="O'chirish"
+                    className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          {r.description ? (
+            <p className="text-[12px] text-slate-600 line-clamp-2 leading-relaxed mb-4 min-h-[32px]">{r.description}</p>
+          ) : (
+            <p className="text-[12px] text-slate-400 italic mb-4 min-h-[32px]">Tavsif yo'q</p>
+          )}
+
+          {/* Metrics grid: coverage ring + stats */}
+          <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/60 ring-1 ring-slate-100">
+            {/* Coverage ring (SVG) */}
+            <div className="col-span-1 flex items-center justify-center">
+              <div className="relative">
+                <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
+                  <circle cx="36" cy="36" r={RADIUS} fill="none" stroke="rgb(226,232,240)" strokeWidth="6" />
+                  <circle
+                    cx="36" cy="36" r={RADIUS}
+                    fill="none"
+                    stroke={`url(#grad-${r.id})`}
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={CIRCUMFERENCE}
+                    strokeDashoffset={dashOffset}
+                    className="transition-all duration-1000 ease-out"
+                  />
+                  <defs>
+                    <linearGradient id={`grad-${r.id}`} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#6366f1" />
+                      <stop offset="100%" stopColor="#a855f7" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+                <div className="absolute inset-0 grid place-items-center">
+                  <div className="text-center">
+                    <div className="text-[15px] font-bold text-slate-800 tabular-nums leading-none">{coverage}%</div>
+                    <div className="text-[8px] uppercase tracking-wider text-slate-500 mt-0.5">qamrov</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="col-span-2 flex flex-col justify-center gap-1.5">
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <Zap className="h-3 w-3 text-indigo-500" />
+                  Ruxsatlar
+                </span>
+                <span className="font-bold tabular-nums text-[13px] text-slate-900">
+                  {r.permissions.length}<span className="text-[10px] text-slate-400 font-normal">/{totalPerms}</span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <Users className="h-3 w-3 text-emerald-500" />
+                  Foydalanuvchi
+                </span>
+                <span className="font-bold tabular-nums text-[13px] text-slate-900">
+                  {r._count?.users ?? 0}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
+                  <Eye className="h-3 w-3 text-cyan-500" />
+                  Modul
+                </span>
+                <span className="font-bold tabular-nums text-[13px] text-slate-900">
+                  {Object.keys(byModule).length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Module breakdown — chip'lar */}
+          <div className="flex flex-wrap gap-1.5">
+            {modules.map(([mod, count]) => (
+              <span
+                key={mod}
+                className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-md
+                           bg-slate-50 ring-1 ring-slate-200 text-slate-700"
+              >
+                <span className="font-semibold">{mod}</span>
+                <span className="text-slate-400">·</span>
+                <span className="text-indigo-600 font-bold">{count}</span>
+              </span>
+            ))}
+            {Object.keys(byModule).length > 6 && (
+              <span className="text-[10px] text-slate-500 font-medium px-1.5 py-1">
+                +{Object.keys(byModule).length - 6}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

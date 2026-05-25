@@ -17,19 +17,32 @@ interface NavItem {
   href: string;
   key: string;
   icon: React.ComponentType<{ className?: string }>;
-  permission?: string;
+  /** Bitta yoki bir nechta permission'lardan birortasi yetarli */
+  permissions?: string[];
   group?: string;
 }
 
+const ADMIN_PERMS = [
+  PERMS.USERS_VIEW,
+  PERMS.ROLES_VIEW,
+  PERMS.ADMIN_LOGIN_VIEW,
+  PERMS.COUNTERPARTIES_VIEW,
+  PERMS.SYNC_VIEW,
+  PERMS.API_EXPLORER_VIEW,
+  PERMS.CLEANUP_VIEW,
+  PERMS.IMPORT_VIEW,
+];
+
 const NAV: NavItem[] = [
-  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permission: PERMS.DASHBOARD_VIEW },
-  { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permission: PERMS.TRANSACTIONS_VIEW },
+  { href: '/dashboard',    key: 'dashboard',    icon: LayoutDashboard,  group: 'main',  permissions: [PERMS.DASHBOARD_VIEW] },
+  { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permissions: [PERMS.TRANSACTIONS_VIEW] },
   // ОплатыКв — CRM + Billing bitta bo'lim, tab bar bilan
-  { href: '/oplatykv',     key: 'oplatykv',     icon: Home,             group: 'main',  permission: PERMS.CRM_VIEW },
+  { href: '/oplatykv',     key: 'oplatykv',     icon: Home,             group: 'main',  permissions: [PERMS.CRM_VIEW, PERMS.OPLATAKV_VIEW] },
 
-  { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permission: PERMS.BANKS_VIEW },
+  { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permissions: [PERMS.BANKS_VIEW, PERMS.ACCOUNTS_VIEW, PERMS.CREDENTIALS_VIEW] },
 
-  { href: '/admin',        key: 'adminPanel',   icon: ShieldCheck,      group: 'system', permission: PERMS.USERS_VIEW },
+  // Admin panel — har qanday admin permission'i bo'lsa link ko'rinadi
+  { href: '/admin',        key: 'adminPanel',   icon: ShieldCheck,      group: 'system', permissions: ADMIN_PERMS },
 ];
 
 const GROUP_KEY: Record<string, string> = {
@@ -44,13 +57,14 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
 
-  const can = (perm?: string) => {
-    if (!perm) return true;
+  /** Kamida bittasi mavjud bo'lsa true (bir nechta permissions'dan birortasi yetarli) */
+  const canAny = (perms?: string[]) => {
+    if (!perms || perms.length === 0) return true;
     if (!user) return false;
-    return user.permissions?.includes(perm) ?? false;
+    return perms.some((p) => user.permissions?.includes(p));
   };
 
-  const visibleItems = NAV.filter((n) => can(n.permission));
+  const visibleItems = NAV.filter((n) => canAny(n.permissions));
   const groups = Array.from(new Set(visibleItems.map((i) => i.group || 'main')));
 
   return (
