@@ -123,13 +123,12 @@ function amountCls(v: string | number | null | undefined): string {
 export default function OplataKvPage() {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  // Legacy + yangi granular permissions
-  const canManageLegacy = !!user?.permissions?.includes(PERMS.OPLATAKV_MANAGE);
-  const canCreate = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_CREATE);
-  const canEdit = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
-  const canDelete = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
-  // Eslatma: canImport uchun legacy fallback YO'Q — faqat aniq OPLATAKV_IMPORT bo'lsagina,
-  // chunki Download (export) iconini rolda IMPORT'ni olib tashlash orqali yashirish imkonini berish kerak.
+  // Granular permissions — har bir action faqat aniq permission'ga bog'liq.
+  // Legacy OPLATAKV_MANAGE fallback YO'Q (rolda boshqa ruxsatni olib tashlasa,
+  // legacy MANAGE yashirin ravishda icon'ni tirik qoldirib qo'ymasligi uchun).
+  const canCreate = !!user?.permissions?.includes(PERMS.OPLATAKV_CREATE);
+  const canEdit = !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
+  const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   // Eski "canManage" — yaratish | tahrir | o'chirish'dan birortasi mavjud bo'lsa true (bir umumiy "biror narsa qila olaman" flag)
   const canManage = canCreate || canEdit || canDelete || canImport;
