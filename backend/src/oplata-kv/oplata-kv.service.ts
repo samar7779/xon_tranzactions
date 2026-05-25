@@ -378,6 +378,7 @@ export class OplataKvService {
         description: true,
         fromName: true,
         toName: true,
+        subcategory: { select: { name: true } },  // 'Взносы за квартиры' yoki 'Возврат взносов за кв.'
       },
       orderBy: { txnDate: 'desc' },  // Yangilar avval (limit bilan eng yangilarini olamiz)
       take: limit,
@@ -424,7 +425,7 @@ export class OplataKvService {
     const allDedupKeys = validTxs.map((t) => t.externalId || t.id);
     const existingRows = await this.prisma.oplataKv.findMany({
       where: { sourceTxId: { in: allDedupKeys } },
-      select: { id: true, sourceTxId: true, paymentAmount: true, contractNo: true, date: true },
+      select: { id: true, sourceTxId: true, paymentAmount: true, contractNo: true, date: true, txType: true },
     });
     const existingMap = new Map(existingRows.map((r) => [r.sourceTxId!, r]));
 
@@ -451,12 +452,17 @@ export class OplataKvService {
       // Client nomi — IN bo'lsa yuboruvchi, OUT bo'lsa qabul qiluvchi
       const txParty = tx.direction === 'IN' ? tx.fromName : (tx as any).toName;
 
+      // txType — Transaction subcategory.name dan olinadi (default fallback)
+      // Misol: 'Взносы за квартиры' (kirim), 'Возврат взносов за кв.' (chiqim/refund)
+      const txTypeName = (tx as any).subcategory?.name
+        || (tx.direction === 'IN' ? 'Взносы за квартиры' : 'Возврат взносов за кв.');
+
       const baseData = {
         contractNo: tx.contractNumber!,
         date: tx.txnDate!,
         paymentAmount: amount,
         purpose: tx.description || null,
-        txType: 'Взносы за квартиры',
+        txType: txTypeName,
         client: crm?.customerName || txParty || null,
         object: mapObject(crm?.objectName),
       };
@@ -465,11 +471,13 @@ export class OplataKvService {
         const amountChanged   = Number(existing.paymentAmount || 0) !== Number(amount);
         const contractChanged = existing.contractNo !== tx.contractNumber;
         const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate!).getTime();
-        if (amountChanged || contractChanged || dateChanged) {
+        const txTypeChanged   = (existing.txType || '') !== txTypeName;
+        if (amountChanged || contractChanged || dateChanged || txTypeChanged) {
           const changedFields = [
             amountChanged && 'paymentAmount',
             contractChanged && 'contractNo',
             dateChanged && 'date',
+            txTypeChanged && 'txType',
           ].filter(Boolean) as string[];
           toUpdate.push({
             id: existing.id,
