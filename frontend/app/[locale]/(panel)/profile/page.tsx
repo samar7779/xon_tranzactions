@@ -18,6 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Topbar } from '@/components/topbar';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useAvatar, setAvatar } from '@/lib/use-avatar';
 import { cn, formatDateTime } from '@/lib/utils';
 
 interface MeResponse {
@@ -46,14 +47,8 @@ export default function ProfilePage() {
 
   const user = me || (cachedUser as any as MeResponse | null);
   const [tab, setTab] = useState<Tab>('profile');
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (user?.id && typeof window !== 'undefined') {
-      const stored = localStorage.getItem(`avatar_${user.id}`);
-      if (stored) setAvatarUrl(stored);
-    }
-  }, [user?.id]);
+  // useAvatar — reaktiv (boshqa joylar bilan sinxron)
+  const avatarUrl = useAvatar(user?.id);
 
   const initial = (user?.fullName || user?.email || '?').charAt(0).toUpperCase();
   const permissions = user?.permissions || [];
@@ -70,6 +65,7 @@ export default function ProfilePage() {
   else { powerKey = 'powerLow'; powerColor = 'from-slate-500 to-slate-700'; }
 
   function handleAvatarUpload(file: File) {
+    if (!user?.id) return;
     if (file.size > 2 * 1024 * 1024) {
       toast.error('Rasm hajmi 2MB dan oshmasligi kerak');
       return;
@@ -77,16 +73,15 @@ export default function ProfilePage() {
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
-      setAvatarUrl(dataUrl);
-      if (user?.id) localStorage.setItem(`avatar_${user.id}`, dataUrl);
-      toast.success('Profil rasmi yangilandi');
+      setAvatar(user.id, dataUrl); // emit qiladi — barcha komponentlar yangilaydi
+      toast.success('Profil rasmi yangilandi — barcha joylarda ko\'rinadi');
     };
     reader.readAsDataURL(file);
   }
 
   function removeAvatar() {
-    setAvatarUrl(null);
-    if (user?.id) localStorage.removeItem(`avatar_${user.id}`);
+    if (!user?.id) return;
+    setAvatar(user.id, null);
     toast.success('Rasm olib tashlandi');
   }
 
