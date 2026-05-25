@@ -1189,6 +1189,31 @@ export class OplataKvService {
       });
     }
 
+    // ── MUHIM FILTER: XATO shartnomalarni split query'dan CHETLATAMIZ ──
+    // User talabi qattiq: shartnoma XATO bo'lsa unga split BAJARILMAYDI (umuman).
+    // CRM live API ba'zan stale cache bilan farq qilishi mumkin, shuning uchun
+    // SQL darajasida cheklov qo'yamiz — faqat CrmContract.found=true bo'lganlar.
+    // (NULL: cache'da yo'q ham XATO sanaladi)
+    const verifiedRows = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedContracts = verifiedRows.map((c) => c.contractNumber);
+    if (verifiedContracts.length === 0) {
+      return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
+    }
+    // contractNo IN (verified) — XATO/cache-miss kontraktlar tashlanadi
+    // contractNo allaqachon set bo'lsa (opts.contractNo) — kesishma topamiz
+    if (opts.contractNo) {
+      if (!verifiedContracts.includes(opts.contractNo)) {
+        // Berilgan kontrakt XATO — split umuman bajarilmaydi
+        return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
+      }
+      // Allaqachon where.contractNo = opts.contractNo bor (yuqorida)
+    } else {
+      where.contractNo = { in: verifiedContracts };
+    }
+
     const rows = await this.prisma.oplataKv.findMany({
       where,
       select: { id: true, contractNo: true, date: true, paymentAmount: true },
