@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useAvatar, setAvatar } from '@/lib/use-avatar';
 import { cn, formatDateTime } from '@/lib/utils';
+import { PomodoroTimer } from '@/components/pomodoro-timer';
 
 interface MeResponse {
   id: string;
@@ -376,6 +377,9 @@ function ProfileTab({ user, avatarUrl, initial, onAvatarUpload, onAvatarRemove }
         onUpload={onAvatarUpload}
         onRemove={onAvatarRemove}
       />
+
+      {/* POMODORO FOCUS TIMER — qumli soat + 3 dizayn */}
+      <PomodoroTimer />
 
       {/* LOGIN HISTORY */}
       <LoginHistorySection user={user} />
