@@ -277,12 +277,81 @@ export class OplataKvService {
     return where;
   }
 
+  /**
+   * XATO contractNo'lar ro'yxati — list endpoint XATO filter uchun.
+   * Tx-manba qatorlardagi contractNos dan CRM da found=true bo'lganlarni chiqarib tashlaymiz.
+   * Eski "isContractManual=true" lar ham XATO emas (manual/ariza), shularni ham chiqarib tashlaymiz.
+   */
+  private async getXatoContractNos(): Promise<{ contracts: string[]; manualSourceTxIds: string[] }> {
+    // 1) Barcha tx-manba qatorlarning unique contract no'lari
+    const txRows = await this.prisma.oplataKv.findMany({
+      where: { sourceTxId: { not: null } },
+      select: { contractNo: true, sourceTxId: true },
+    });
+    const allContractNos = Array.from(new Set(txRows.map((r) => r.contractNo)));
+    if (allContractNos.length === 0) return { contracts: [], manualSourceTxIds: [] };
+
+    // 2) Verified — CRM da found=true
+    const verified = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: allContractNos }, found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+
+    // 3) Manual/ariza tx — XATO emas
+    const allSourceTxIds = Array.from(new Set(
+      txRows.map((r) => r.sourceTxId).filter((x): x is string => !!x),
+    ));
+    const manualTx = await this.prisma.transaction.findMany({
+      where: {
+        OR: [{ externalId: { in: allSourceTxIds } }, { id: { in: allSourceTxIds } }],
+        isContractManual: true,
+      },
+      select: { id: true, externalId: true },
+    });
+    const manualTxIdSet = new Set<string>();
+    manualTx.forEach((t) => {
+      if (t.externalId) manualTxIdSet.add(t.externalId);
+      manualTxIdSet.add(t.id);
+    });
+
+    // XATO contracts = unverified contracts
+    const xatoContracts = allContractNos.filter((cn) => !verifiedSet.has(cn));
+    return { contracts: xatoContracts, manualSourceTxIds: Array.from(manualTxIdSet) };
+  }
+
   // ───────────────── LIST ─────────────────
   async list(q: ListOplataKvDto) {
     const page = Math.max(1, Number(q.page) || 1);
     const perPage = Math.min(200, Math.max(1, Number(q.perPage) || 50));
 
     const where = this.buildWhere(q);
+
+    // ─── XATO ONLY filter — faqat XATO qatorlarni ko'rsatish ───
+    const xatoOnly = q.xatoOnly === 'true' || q.xatoOnly === '1';
+    if (xatoOnly) {
+      const { contracts: xatoContracts, manualSourceTxIds } = await this.getXatoContractNos();
+      if (xatoContracts.length === 0) {
+        // Hech qanday XATO qator yo'q — bo'sh natija qaytaramiz
+        return {
+          ok: true, page, perPage, total: 0, pageCount: 1, items: [],
+          sums: { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 },
+        };
+      }
+      // XATO = tx-manba qator, contract verified emas, manual emas
+      const xatoFilter: Prisma.OplataKvWhereInput = {
+        sourceTxId: { not: null },
+        contractNo: { in: xatoContracts },
+        NOT: manualSourceTxIds.length > 0
+          ? { sourceTxId: { in: manualSourceTxIds } }
+          : undefined,
+      };
+      if (where.AND) {
+        (where.AND as any[]).push(xatoFilter);
+      } else {
+        where.AND = [xatoFilter];
+      }
+    }
 
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
@@ -1774,6 +1843,15 @@ export class OplataKvService {
       });
       if (nullCount > 0) {
         values.unshift({ id: '__null__', name: `(bo'sh)` });
+      }
+    }
+
+    // contractNo uchun MAXSUS: 'XATO' tanlash imkoniyati (CRM da topilmaganlar)
+    // Frontend buni xatoOnly=true ga aylantiradi
+    if (column === 'contractNo') {
+      // Search bilan ham mos kelishi kerak ("xato" yozsa chiqsin)
+      if (!search || 'XATO'.toLowerCase().includes(search.toLowerCase())) {
+        values.unshift({ id: 'XATO', name: '⚠ XATO — CRM da topilmadi' });
       }
     }
 
