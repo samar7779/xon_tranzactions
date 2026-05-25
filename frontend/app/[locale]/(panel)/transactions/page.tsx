@@ -75,6 +75,11 @@ export default function TransactionsPage() {
   const user = useAuth((s) => s.user);
   const canManagePayments = !!user?.permissions?.includes(PERMS.PAYMENTS_MANAGE);
   const canManageCategories = !!user?.permissions?.includes(PERMS.CATEGORIES_MANAGE);
+  // Granular action permissions (yangi rollar tizimi)
+  const canManualEdit = !!user?.permissions?.includes(PERMS.TRANSACTIONS_MANUAL_EDIT);
+  const canManualContract = !!user?.permissions?.includes(PERMS.TRANSACTIONS_MANUAL_CONTRACT);
+  const canApplication = !!user?.permissions?.includes(PERMS.TRANSACTIONS_APPLICATION);
+  const canAutoCategorize = !!user?.permissions?.includes(PERMS.TRANSACTIONS_AUTO_CATEGORIZE);
 
   // Filter state'lar (oddiy useState — hech qanday persistance yo'q)
   const [page, setPage] = useState(1);
@@ -1116,6 +1121,10 @@ export default function TransactionsPage() {
         row={detailRow}
         onClose={() => setDetailRow(null)}
         canManage={canManageCategories}
+        canManualEdit={canManualEdit}
+        canManualContract={canManualContract}
+        canApplication={canApplication}
+        canAutoCategorize={canAutoCategorize}
       />
 
       {/* ═══ ESKI TARIXNI YUKLASH (BACKFILL) ═══ */}
@@ -1864,7 +1873,20 @@ function StatBox({
   );
 }
 
-function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClose: () => void; canManage: boolean }) {
+function TransactionDetailDialog({
+  row, onClose, canManage,
+  canManualEdit = false, canManualContract = false, canApplication = false, canAutoCategorize = false,
+}: {
+  row: any;
+  onClose: () => void;
+  canManage: boolean;
+  canManualEdit?: boolean;
+  canManualContract?: boolean;
+  canApplication?: boolean;
+  canAutoCategorize?: boolean;
+}) {
+  // Hech bo'lmaganda bitta action mavjud bo'lsa "panel" ko'rinadi
+  const showActionPanel = canManualEdit || canManualContract || canApplication || canAutoCategorize;
   const t = useTranslations('transactions');
   const qc = useQueryClient();
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
@@ -2165,7 +2187,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
             />
 
             {/* Avto-kategoriyalash + Qo'lda tahrirlash tugmalari */}
-            {canManage && (
+            {(canManage && showActionPanel) && (
               <div className="px-4 py-3 bg-slate-50/50">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600">
@@ -2174,7 +2196,7 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                       : "Qoidalar bo'yicha avto-aniqlash yoki qo'lda kiritish"}
                   </div>
                   <div className="flex items-center gap-2">
-                    {!liveRow.category && (
+                    {canAutoCategorize && !liveRow.category && (
                       <button
                         onClick={() => categorizeMut.mutate(false)}
                         disabled={categorizeMut.isPending}
@@ -2186,36 +2208,42 @@ function TransactionDetailDialog({ row, onClose, canManage }: { row: any; onClos
                         Avto-kategoriyalash
                       </button>
                     )}
-                    <button
-                      onClick={() => setManualEditOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-indigo-400 hover:text-indigo-700 transition-colors"
-                    >
-                      <FileText className="h-3 w-3" />
-                      Qo'lda tahrirlash
-                    </button>
+                    {canManualEdit && (
+                      <button
+                        onClick={() => setManualEditOpen(true)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-indigo-400 hover:text-indigo-700 transition-colors"
+                      >
+                        <FileText className="h-3 w-3" />
+                        Qo'lda tahrirlash
+                      </button>
+                    )}
                     {/* Shartnomani qo'lda (CRM tekshirmasdan) */}
-                    <button
-                      onClick={() => setManualContractOpen(true)}
-                      title="Shartnoma raqamini qo'lda kiritish (CRM tekshirmaydi)"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-amber-500/40 transition-all"
-                    >
-                      <FileSignature className="h-3 w-3" />
-                      Qo'lda shartnoma
-                    </button>
+                    {canManualContract && (
+                      <button
+                        onClick={() => setManualContractOpen(true)}
+                        title="Shartnoma raqamini qo'lda kiritish (CRM tekshirmaydi)"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-amber-500/40 transition-all"
+                      >
+                        <FileSignature className="h-3 w-3" />
+                        Qo'lda shartnoma
+                      </button>
+                    )}
                     {/* Ariza biriktirish */}
-                    <button
-                      onClick={() => setAttachmentsOpen(true)}
-                      title="Ariza biriktirish (PDF/DOCX/Image) — Telegram'ga xabar"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                      Ariza
-                      {(liveRow._attachmentCount || 0) > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-1 grid place-items-center">
-                          {liveRow._attachmentCount}
-                        </span>
-                      )}
-                    </button>
+                    {canApplication && (
+                      <button
+                        onClick={() => setAttachmentsOpen(true)}
+                        title="Ariza biriktirish (PDF/DOCX/Image) — Telegram'ga xabar"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
+                      >
+                        <Paperclip className="h-3 w-3" />
+                        Ariza
+                        {(liveRow._attachmentCount || 0) > 0 && (
+                          <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-1 grid place-items-center">
+                            {liveRow._attachmentCount}
+                          </span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
 

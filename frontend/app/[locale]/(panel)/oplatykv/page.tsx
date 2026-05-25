@@ -122,7 +122,14 @@ function amountCls(v: string | number | null | undefined): string {
 export default function OplataKvPage() {
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
-  const canManage = !!user?.permissions?.includes(PERMS.OPLATAKV_MANAGE);
+  // Legacy + yangi granular permissions
+  const canManageLegacy = !!user?.permissions?.includes(PERMS.OPLATAKV_MANAGE);
+  const canCreate = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_CREATE);
+  const canEdit = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
+  const canDelete = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
+  const canImport = canManageLegacy || !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
+  // Eski "canManage" — yaratish | tahrir | o'chirish'dan birortasi mavjud bo'lsa true (bir umumiy "biror narsa qila olaman" flag)
+  const canManage = canCreate || canEdit || canDelete || canImport;
 
   // Filters
   const [q, setQ] = useState('');
@@ -498,7 +505,7 @@ export default function OplataKvPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {canManage && (
+              {canCreate && (
                 <button
                   onClick={() => setCreateOpen(true)}
                   className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md grid place-items-center transition-colors"
