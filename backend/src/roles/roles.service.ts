@@ -1,15 +1,15 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
-import { ALL_PERMISSIONS, PERMISSION_GROUPS } from '../auth/permissions';
+import { ALL_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_TREE } from '../auth/permissions';
 
 @Injectable()
 export class RolesService {
   constructor(private prisma: PrismaService) {}
 
-  /** Mavjud permissions ro'yxati (UI uchun, guruh bilan) */
+  /** Mavjud permissions ro'yxati (UI uchun) — yangi ierarxik tree + eski groups (backward compat) */
   permissionsCatalog() {
-    return { ok: true, all: ALL_PERMISSIONS, groups: PERMISSION_GROUPS };
+    return { ok: true, all: ALL_PERMISSIONS, groups: PERMISSION_GROUPS, tree: PERMISSION_TREE };
   }
 
   async list() {
