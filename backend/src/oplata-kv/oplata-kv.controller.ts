@@ -171,19 +171,12 @@ export class OplataKvController {
 
   @Post(':id/split')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
-  @ApiOperation({ summary: "Bitta qator uchun split — shu shartnoma bo'yicha qayta hisoblaydi (force)" })
+  @ApiOperation({ summary: "Bitta qator uchun split — faqat shu qator qayta hisoblanadi (boshqalarga tegmaydi)" })
   async splitOne(
     @Param('id') id: string,
     @CurrentUser() user?: AuthUser,
   ) {
-    const row = await this.svc.findOne(id);
-    const contractNo = (row as any)?.item?.contractNo;
-    if (!contractNo) throw new BadRequestException('Shartnoma raqami topilmadi');
-    return this.svc.splitInstallments({
-      contractNo,
-      force: true,
-      actor: actorFrom(user),
-    });
+    return this.svc.splitSingleRow(id, actorFrom(user));
   }
 
   @Delete('cleanup-xato-contracts')

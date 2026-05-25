@@ -1060,6 +1060,123 @@ export class OplataKvService {
   }
 
   /**
+   * BITTA qator uchun split — modal'dan Re-split bosilganda ishlatiladi.
+   * User talabi: "qolda bita tolov uchun split qilinsa shu shartnomani barcha
+   * tolovi emas aynan shu toilovni ozini split qilasan qolgan tolovlaridan
+   * malumot olib".
+   *
+   * Mantiq:
+   *  1) Shartnoma CRM da bo'lishi shart (XATO bo'lsa — xato qaytaradi)
+   *  2) Bu qatordan ilgariga (date < shu qator sanasi) jami initial/monthly
+   *     summalari boshqa qatorlardan olinadi (running total)
+   *  3) initialPlan asosida shu qator uchun split hisoblanadi
+   *  4) Faqat shu qator yangilanadi — boshqa qatorlarga tegmaymiz
+   */
+  async splitSingleRow(id: string, actor?: Actor): Promise<{
+    ok: boolean;
+    error?: string;
+    item?: { firstInstallment: number; monthlyAmount: number; paymentCategory: string | null };
+  }> {
+    const row = await this.prisma.oplataKv.findUnique({
+      where: { id },
+      select: { id: true, contractNo: true, date: true, paymentAmount: true },
+    });
+    if (!row) return { ok: false, error: 'Qator topilmadi' };
+    if (!row.paymentAmount) return { ok: false, error: 'paymentAmount yo\'q' };
+
+    // CRM tekshirish — XATO shartnoma uchun split mumkin emas
+    const resp: any = await this.crmService.show({ contract: row.contractNo }).catch(() => null);
+    const detail = resp?.ok ? resp.detail : null;
+    if (!detail) {
+      return { ok: false, error: 'Shartnoma CRM da topilmadi — split mumkin emas (XATO)' };
+    }
+    const initialPlan = Number(detail?.initial?.total?.amount || 0);
+
+    // Running totals — shu shartnomadagi date < shu_qator.date bo'lganlardan
+    const existingSums = await this.prisma.oplataKv.aggregate({
+      where: {
+        contractNo: row.contractNo,
+        date: { lt: row.date },
+        id: { not: row.id },
+      },
+      _sum: { firstInstallment: true, monthlyAmount: true },
+    });
+    let runningInitial = Number(existingSums._sum.firstInstallment || 0);
+    let runningMonthly = Number(existingSums._sum.monthlyAmount || 0);
+
+    const amount = Number(row.paymentAmount);
+    let firstInstallment = 0;
+    let monthlyAmount = 0;
+    let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
+
+    if (amount > 0) {
+      const remainingInitial = initialPlan > 0
+        ? Math.max(0, initialPlan - runningInitial)
+        : 0;
+      if (initialPlan <= 0 || remainingInitial <= 0) {
+        monthlyAmount = amount;
+      } else if (remainingInitial >= amount) {
+        firstInstallment = amount;
+      } else {
+        firstInstallment = remainingInitial;
+        monthlyAmount = amount - remainingInitial;
+      }
+    } else if (amount < 0) {
+      const refund = -amount;
+      if (refund <= runningMonthly) {
+        monthlyAmount = amount;
+      } else if (runningMonthly > 0) {
+        monthlyAmount = -runningMonthly;
+        firstInstallment = -(refund - runningMonthly);
+      } else {
+        firstInstallment = amount;
+      }
+    } else {
+      return { ok: false, error: 'Summa 0 — split kerak emas' };
+    }
+
+    if (firstInstallment !== 0 && monthlyAmount !== 0) category = 'GENERAL';
+    else if (firstInstallment !== 0) category = 'FIRST';
+    else category = 'MONTHLY';
+
+    await this.prisma.oplataKv.update({
+      where: { id: row.id },
+      data: {
+        firstInstallment: firstInstallment !== 0 ? new Prisma.Decimal(firstInstallment) : null,
+        monthlyAmount:    monthlyAmount    !== 0 ? new Prisma.Decimal(monthlyAmount)    : null,
+        paymentCategory:  category as OplataKvCategory,
+      },
+    });
+
+    // History
+    try {
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id,
+          action: 'edited',
+          actorType: actor?.id ? 'user' : 'system',
+          actorId: actor?.id || null,
+          actorName: actor?.name || 'split (single)',
+          fieldsChanged: ['firstInstallment', 'monthlyAmount', 'paymentCategory'],
+          changes: {
+            firstInstallment: { new: firstInstallment },
+            monthlyAmount: { new: monthlyAmount },
+            paymentCategory: { new: category },
+          } as any,
+          note: `Bitta qator uchun split qayta hisoblandi (runningInitial=${runningInitial}, runningMonthly=${runningMonthly}, initialPlan=${initialPlan})`,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`splitSingleRow history xato (${id}): ${e?.message}`);
+    }
+
+    return {
+      ok: true,
+      item: { firstInstallment, monthlyAmount, paymentCategory: category },
+    };
+  }
+
+  /**
    * UI uchun — oxirgi sync vaqti.
    */
   async getLastSyncInfo() {
