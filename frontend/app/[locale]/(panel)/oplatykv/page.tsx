@@ -383,6 +383,15 @@ export default function OplataKvPage() {
                 )}
               </div>
 
+              {/* Akt Sverka — shartnoma bo'yicha tarix (kalendardan oldin, neytral stil) */}
+              <button
+                onClick={() => setAktSverkaOpen(true)}
+                className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 text-slate-600 hover:bg-slate-100 grid place-items-center transition-colors"
+                title="Akt Sverka — shartnoma bo'yicha to'lov tarixi"
+              >
+                <FileCheck2 className="h-4 w-4" />
+              </button>
+
               {/* Sana filtri — icon ichida (collapsed) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -433,15 +442,6 @@ export default function OplataKvPage() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              {/* Akt Sverka — shartnoma bo'yicha tarix */}
-              <button
-                onClick={() => setAktSverkaOpen(true)}
-                className="h-10 w-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-md shadow-amber-500/30 grid place-items-center transition-all hover:scale-105"
-                title="Akt Sverka — shartnoma bo'yicha to'lov tarixi"
-              >
-                <FileCheck2 className="h-4 w-4" />
-              </button>
 
               {/* Ustun filter rejimi toggle — faqat ikon */}
               <button
