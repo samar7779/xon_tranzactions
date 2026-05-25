@@ -37,7 +37,10 @@ export const PERMS = {
   ADMIN_LOGIN_VIEW: 'admin_login:view',
   COUNTERPARTIES_VIEW: 'counterparties:view',
   COUNTERPARTIES_MANAGE: 'counterparties:manage',
-  SYNC_VIEW: 'sync:view',
+  SYNC_VIEW: 'sync:view',                  // Umumiy (legacy)
+  SYNC_HISTORY_VIEW: 'sync:history_view',  // Tarix tab
+  SYNC_SETTINGS_VIEW: 'sync:settings_view',// Sozlamalar tab — ko'rish
+  SYNC_SETTINGS_EDIT: 'sync:settings_edit',// Sozlamalar saqlash
   SYNC_RUN: 'sync:run',
   API_EXPLORER_VIEW: 'api_explorer:view',
   CLEANUP_VIEW: 'cleanup:view',
