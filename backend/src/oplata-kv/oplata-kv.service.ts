@@ -120,7 +120,6 @@ export class OplataKvService {
         const result = await this.syncFromTransactions({
           minDate, limit: 1000,
           actor: { id: null, name: 'cron · day' },
-          runInline: false,  // Cron — bg ishlatadi (lock bilan, response kutilmaydi)
         });
         this.log.log(`Auto-sync DAY DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
         // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
@@ -136,7 +135,6 @@ export class OplataKvService {
         const result = await this.syncFromTransactions({
           minDate,
           actor: { id: null, name: 'cron · night-batch' },
-          runInline: false,  // Cron — bg ishlatadi
         });
         this.log.log(`Auto-sync NIGHT BATCH DONE: added=${result.added} updated=${result.updated} skipped=${result.skipped}`);
         // Auto XATO cleanup OLIB TASHLANDI — user xohlamadi (tolovlar o'chmasin)
@@ -494,43 +492,37 @@ export class OplataKvService {
     });
 
     if (txList.length === 0) {
-      // Yangi tx yo'q bo'lsa ham — fill+split bajariladi (XATO cleanup split ichida)
-      let fillR: any = { total: 0, filled: 0, notFound: 0 };
-      let splitR: any = { total: 0, filled: 0, notFound: 0, contracts: 0, xatoCleaned: 0 };
+      // Yangi tx yo'q — tezda XATO cleanup + bg fill/split ishga tushiramiz
+      let xatoQuickClean2 = 0;
+      try { xatoQuickClean2 = await this.cleanupSplitsForXatoContracts(); } catch {}
 
-      if (opts.runInline !== false) {
-        try {
-          fillR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-          this.log.log(`sync inline (early-return) fill: filled=${fillR.filled}/${fillR.total}`);
-          splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
-          this.log.log(`sync inline (early-return) split: filled=${splitR.filled}/${splitR.total} xatoCleaned=${splitR.xatoCleaned}`);
-        } catch (e: any) {
-          this.log.warn(`sync inline (early-return) xato: ${e?.message}`);
-        }
-      } else {
-        // Cron — bg
-        if (!OplataKvService.fillingInProgress) {
-          OplataKvService.fillingInProgress = true;
-          setImmediate(async () => {
-            try {
-              await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-              await this.splitInstallments({ limit: 20000, actor: opts.actor });
-            } catch (e: any) {
-              this.log.warn(`bg job xato (cron early-return): ${e?.message}`);
-            } finally {
-              OplataKvService.fillingInProgress = false;
-            }
-          });
-        }
+      if (!OplataKvService.fillingInProgress) {
+        OplataKvService.fillingInProgress = true;
+        OplataKvService.bgStartedAt = Date.now();
+        OplataKvService.bgPhase = 'fill';
+        OplataKvService.bgResult = null;
+        setImmediate(async () => {
+          try {
+            const fillR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+            OplataKvService.bgPhase = 'split';
+            const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+            OplataKvService.bgResult = { fill: fillR, split: splitR, finishedAt: Date.now() };
+            OplataKvService.bgPhase = 'done';
+          } catch (e: any) {
+            OplataKvService.bgPhase = 'error';
+            OplataKvService.bgResult = { error: e?.message };
+          } finally {
+            OplataKvService.fillingInProgress = false;
+          }
+        });
       }
 
       return {
         ok: true,
-        version: 'v7-merged-cleanup',
+        version: 'v8-bg-poll',
         total: 0, added: 0, updated: 0, skipped: 0,
-        fillResult: { filled: fillR.filled, notFound: fillR.notFound, total: fillR.total },
-        splitResult: { filled: splitR.filled, notFound: splitR.notFound, total: splitR.total, contracts: splitR.contracts, xatoCleaned: splitR.xatoCleaned || 0 },
-        objectsBackground: opts.runInline === false,
+        xatoQuickClean: xatoQuickClean2,
+        objectsBackground: true,
         duration: Math.round((Date.now() - startedAt) / 1000),
         minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
       };
@@ -713,40 +705,43 @@ export class OplataKvService {
       `syncDuration=${syncDuration}s`,
     );
 
-    // ── SINXRON: obyekt/client to'ldirish + split (bg emas — JAVOBDA HAMMASI tugagan) ──
-    // User talabi: "bta bosganda togrlansa" — bitta tugma hammasini bajarsin.
-    // XATO cleanup splitInstallments ichida avtomatik bajariladi (alohida bosqich kerak emas)
-    // Cron yo'lida bg ishlatadi (lock bilan), lekin user qo'lda sync bossa kutadi.
-    let fillResult: any = { total: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
-    let splitResult: any = { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: 0 };
-    if (opts.runInline !== false) {
-      try {
-        fillResult = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-        this.log.log(
-          `sync inline fillMissingObjects: scanned=${fillResult.total} filled=${fillResult.filled} notFound=${fillResult.notFound} errors=${fillResult.errors} duration=${fillResult.duration}s`,
-        );
-        splitResult = await this.splitInstallments({ limit: 20000, actor: opts.actor });
-        this.log.log(
-          `sync inline splitInstallments: scanned=${splitResult.total} contracts=${splitResult.contracts} filled=${splitResult.filled} notFound=${splitResult.notFound} errors=${splitResult.errors} duration=${splitResult.duration}s`,
-        );
-      } catch (e: any) {
-        this.log.warn(`sync inline fill/split xato: ${e?.message}`);
-      }
-    } else {
-      // Cron — bg ishlatadi (lock bilan)
-      if (!OplataKvService.fillingInProgress) {
-        OplataKvService.fillingInProgress = true;
-        setImmediate(async () => {
-          try {
-            await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
-            await this.splitInstallments({ limit: 20000, actor: opts.actor });
-          } catch (e: any) {
-            this.log.warn(`bg job xato (cron): ${e?.message}`);
-          } finally {
-            OplataKvService.fillingInProgress = false;
-          }
-        });
-      }
+    // ── SINXRON: XATO splitlarni tezda tozalash (tez updateMany, ~100ms) ──
+    let xatoQuickClean = 0;
+    try {
+      xatoQuickClean = await this.cleanupSplitsForXatoContracts();
+    } catch {}
+
+    // ── BG: obyekt/client to'ldirish + split (nginx timeoutdan saqlanish) ──
+    // FILL+SPLIT 5-15 daqiqa davom etishi mumkin — orqada ishlatamiz, response tez qaytadi.
+    // User modal'da bg jarayonni /oplata-kv/bg-status orqali poll qiladi.
+    const fillResult: any = { total: 0, filled: 0, notFound: 0, errors: 0, duration: 0 };
+    const splitResult: any = { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoQuickClean };
+    if (!OplataKvService.fillingInProgress) {
+      OplataKvService.fillingInProgress = true;
+      OplataKvService.bgStartedAt = Date.now();
+      OplataKvService.bgPhase = 'fill';
+      OplataKvService.bgResult = null;
+      setImmediate(async () => {
+        try {
+          const fillR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+          OplataKvService.bgPhase = 'split';
+          const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+          OplataKvService.bgResult = {
+            fill: fillR,
+            split: splitR,
+            finishedAt: Date.now(),
+            duration: Math.round((Date.now() - (OplataKvService.bgStartedAt || Date.now())) / 1000),
+          };
+          OplataKvService.bgPhase = 'done';
+          this.log.log(`bg DONE: fill=${fillR.filled}/${fillR.total} split=${splitR.filled}/${splitR.total} xatoCleaned=${splitR.xatoCleaned}`);
+        } catch (e: any) {
+          OplataKvService.bgPhase = 'error';
+          OplataKvService.bgResult = { error: e?.message || 'bg xato' };
+          this.log.warn(`bg job xato: ${e?.message}`);
+        } finally {
+          OplataKvService.fillingInProgress = false;
+        }
+      });
     }
 
     const totalDuration = Math.round((Date.now() - startedAt) / 1000);
@@ -755,7 +750,7 @@ export class OplataKvService {
     );
     return {
       ok: true,
-      version: 'v7-merged-cleanup',  // Marker — XATO cleanup split ichida
+      version: 'v8-bg-poll',
       total: txList.length,
       added,
       updated,
@@ -766,19 +761,8 @@ export class OplataKvService {
         error:  skippedError,
       },
       errorSamples,
-      objectsBackground: opts.runInline === false,
-      fillResult: {
-        filled: fillResult.filled,
-        notFound: fillResult.notFound,
-        total: fillResult.total,
-      },
-      splitResult: {
-        filled: splitResult.filled,
-        notFound: splitResult.notFound,
-        total: splitResult.total,
-        contracts: splitResult.contracts,
-        xatoCleaned: splitResult.xatoCleaned || 0,  // Split ichida tozalangan XATO qatorlar
-      },
+      objectsBackground: true,
+      xatoQuickClean,  // Sinxron tozalangan XATO splitlar (response qaytishidan oldin)
       duration: totalDuration,
       syncDuration,
       minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
@@ -787,6 +771,24 @@ export class OplataKvService {
 
   // Static flag — bir vaqtda faqat 1 ta background fill ishlaydi (DB raqobatidan saqlanish)
   private static fillingInProgress = false;
+  // BG holati — frontend modal poll qiladi
+  private static bgStartedAt: number | null = null;
+  private static bgPhase: 'fill' | 'split' | 'done' | 'error' | null = null;
+  private static bgResult: any = null;
+
+  /** Bg job holati — sync modal'da progress poll uchun */
+  getBgStatus() {
+    return {
+      ok: true,
+      running: OplataKvService.fillingInProgress,
+      phase: OplataKvService.bgPhase,
+      startedAt: OplataKvService.bgStartedAt,
+      elapsed: OplataKvService.bgStartedAt
+        ? Math.round((Date.now() - OplataKvService.bgStartedAt) / 1000)
+        : 0,
+      result: OplataKvService.bgResult,
+    };
+  }
 
   /**
    * Tranzaksiya-manba qatorlardan obyekt nomi yo'q bo'lganlarni CRM dan to'ldirish.
@@ -990,6 +992,75 @@ export class OplataKvService {
     }
     this.log.log(`cleanupSplitsForXatoContracts: affected=${affected}`);
     return affected;
+  }
+
+  /**
+   * DIAGNOSTIC: Tranzaksiyalar va OplatyKv ortasidagi farqni tahlil qilish.
+   * Sync sharti: category=CLIENT + contractNumber NOT NULL + direction IN|OUT
+   * Bu yerda nima nima sababdan tushib qolganini sanaymiz.
+   */
+  async debugSyncDiff(opts: { dateFrom?: string; dateTo?: string } = {}) {
+    const dateFilter: any = {};
+    if (opts.dateFrom) dateFilter.gte = new Date(opts.dateFrom);
+    if (opts.dateTo) {
+      const dt = new Date(opts.dateTo);
+      dt.setUTCHours(23, 59, 59, 999);
+      dateFilter.lte = dt;
+    }
+    const txWhereBase: any = { category: { code: 'CLIENT' } };
+    if (Object.keys(dateFilter).length > 0) txWhereBase.txnDate = dateFilter;
+
+    // 1) Tranzaksiyalar — CLIENT toifa, sana oralig'i
+    const txTotal = await this.prisma.transaction.count({ where: txWhereBase });
+
+    // 2) Sync sharti: contractNumber NOT NULL
+    const txSyncable = await this.prisma.transaction.count({
+      where: { ...txWhereBase, contractNumber: { not: null } },
+    });
+
+    // 3) Shartnoma yo'q — sync ololmaydi
+    const txNoContract = await this.prisma.transaction.count({
+      where: { ...txWhereBase, contractNumber: null },
+    });
+
+    // 4) Tranzaksiyaning direction bo'yicha taqsimi
+    const txByDirection = await this.prisma.transaction.groupBy({
+      by: ['direction'],
+      where: txWhereBase,
+      _count: true,
+    });
+
+    // 5) OplatyKv da source=transaction qatorlar (shu oraliqda)
+    const oplataWhere: any = { sourceTxId: { not: null } };
+    if (Object.keys(dateFilter).length > 0) oplataWhere.date = dateFilter;
+    const oplataFromTx = await this.prisma.oplataKv.count({ where: oplataWhere });
+
+    // 6) Sample: shartnomasi yo'q CLIENT tx (5 ta)
+    const sampleNoContract = await this.prisma.transaction.findMany({
+      where: { ...txWhereBase, contractNumber: null },
+      select: { id: true, externalId: true, txnDate: true, amount: true, direction: true, description: true, fromName: true, toName: true },
+      orderBy: { txnDate: 'desc' },
+      take: 5,
+    });
+
+    return {
+      ok: true,
+      dateRange: { from: opts.dateFrom || null, to: opts.dateTo || null },
+      transactions: {
+        total: txTotal,                    // CLIENT toifa, sana oralig'i (Tranzaksiyalar UI ko'rsatadi)
+        syncable: txSyncable,              // contractNumber bor (sync olishi mumkin)
+        skippedNoContract: txNoContract,   // contractNumber NULL (sync ololmaydi)
+        byDirection: txByDirection.map((d) => ({ direction: d.direction, count: d._count })),
+      },
+      oplataKv: {
+        fromTransactions: oplataFromTx,    // shu oraliqda tx-manba qatorlar soni
+      },
+      diff: {
+        txMinusOplata: txTotal - oplataFromTx,
+        syncableMinusOplata: txSyncable - oplataFromTx,  // bu kichikroq bo'lishi kerak — sync hali yetib bormagan / xato
+      },
+      sampleNoContract,
+    };
   }
 
   /**
