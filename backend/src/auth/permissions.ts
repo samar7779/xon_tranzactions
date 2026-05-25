@@ -63,9 +63,12 @@ export const PERMISSIONS = {
   COUNTERPARTIES_VIEW: 'counterparties:view',
   COUNTERPARTIES_MANAGE: 'counterparties:manage',
 
-  // Sync
-  SYNC_VIEW: 'sync:view',
-  SYNC_RUN: 'sync:run',
+  // Sync (sahifa ichidagi tablar uchun granular)
+  SYNC_VIEW: 'sync:view',                 // Umumiy ko'rish (legacy — ikkala tab'ni beradi)
+  SYNC_HISTORY_VIEW: 'sync:history_view', // Tarix tab
+  SYNC_SETTINGS_VIEW: 'sync:settings_view', // Sozlamalar tab — ko'rish
+  SYNC_SETTINGS_EDIT: 'sync:settings_edit', // Sozlamalarni saqlash
+  SYNC_RUN: 'sync:run',                   // Manual sync ishga tushirish
 
   // API Explorer
   API_EXPLORER_VIEW: 'api_explorer:view',
@@ -207,8 +210,12 @@ export const PERMISSION_TREE: PermModule[] = [
       },
       {
         name: 'Sync tarixi',
+        description: 'Sync sahifasi (2 ta tab: Tarix + Sozlamalar)',
         items: [
-          { value: PERMISSIONS.SYNC_VIEW, label: 'Sync log ko\'rish' },
+          { value: PERMISSIONS.SYNC_VIEW, label: 'Umumiy ko\'rish (ikkala tab)' },
+          { value: PERMISSIONS.SYNC_HISTORY_VIEW, label: 'Tarix tab' },
+          { value: PERMISSIONS.SYNC_SETTINGS_VIEW, label: 'Sozlamalar tab — ko\'rish' },
+          { value: PERMISSIONS.SYNC_SETTINGS_EDIT, label: 'Sozlamalarni saqlash' },
           { value: PERMISSIONS.SYNC_RUN, label: 'Manual sync ishga tushirish' },
         ],
       },
@@ -315,7 +322,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE,
       PERMISSIONS.CREDENTIALS_VIEW, PERMISSIONS.CREDENTIALS_MANAGE, PERMISSIONS.CREDENTIALS_TEST,
       PERMISSIONS.BANKS_VIEW, PERMISSIONS.BANKS_MANAGE,
-      PERMISSIONS.SYNC_VIEW, PERMISSIONS.SYNC_RUN,
+      PERMISSIONS.SYNC_VIEW, PERMISSIONS.SYNC_HISTORY_VIEW, PERMISSIONS.SYNC_SETTINGS_VIEW, PERMISSIONS.SYNC_SETTINGS_EDIT, PERMISSIONS.SYNC_RUN,
       PERMISSIONS.ADMIN_LOGIN_VIEW,
       PERMISSIONS.API_EXPLORER_VIEW,
       PERMISSIONS.CLEANUP_VIEW, PERMISSIONS.CLEANUP_RUN,

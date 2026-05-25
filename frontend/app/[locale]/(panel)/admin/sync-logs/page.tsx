@@ -19,6 +19,8 @@ import { EmptyState } from '@/components/empty-state';
 import { Sparkline } from '@/components/sparkline';
 import { api } from '@/lib/api';
 import { cn, formatDateTime } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 
 const STATUS_CONFIG: Record<string, { icon: any; label: string; cls: string; dot: string }> = {
   SUCCESS: { icon: CheckCircle2, label: 'Muvaffaqiyatli', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
@@ -43,7 +45,14 @@ type SubTab = 'history' | 'settings';
 const PAGE_SIZE = 20;
 
 export default function SyncLogsPage() {
-  const [subTab, setSubTab] = useState<SubTab>('history');
+  const user = useAuth((s) => s.user);
+  const hasAll = !!user?.permissions?.includes(PERMS.SYNC_VIEW);
+  const canHistory = hasAll || !!user?.permissions?.includes(PERMS.SYNC_HISTORY_VIEW);
+  const canSettings = hasAll || !!user?.permissions?.includes(PERMS.SYNC_SETTINGS_VIEW);
+
+  // Birinchi mavjud tab'ni default qilamiz
+  const defaultTab: SubTab = canHistory ? 'history' : canSettings ? 'settings' : 'history';
+  const [subTab, setSubTab] = useState<SubTab>(defaultTab);
   const [statusFilter, setStatusFilter] = useState('all');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
@@ -91,31 +100,37 @@ export default function SyncLogsPage() {
   return (
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
-        {/* Sub-tab bar — Tarix / Sozlamalar */}
-        <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
-          <button
-            onClick={() => setSubTab('history')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-              subTab === 'history' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+        {/* Sub-tab bar — Tarix / Sozlamalar (faqat ruxsat berilganlar) */}
+        {(canHistory || canSettings) && (
+          <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
+            {canHistory && (
+              <button
+                onClick={() => setSubTab('history')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+                  subTab === 'history' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <History className="h-3.5 w-3.5" /> Tarix
+              </button>
             )}
-          >
-            <History className="h-3.5 w-3.5" /> Tarix
-          </button>
-          <button
-            onClick={() => setSubTab('settings')}
-            className={cn(
-              'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-              subTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+            {canSettings && (
+              <button
+                onClick={() => setSubTab('settings')}
+                className={cn(
+                  'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
+                  subTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <Settings className="h-3.5 w-3.5" /> Sozlamalar
+              </button>
             )}
-          >
-            <Settings className="h-3.5 w-3.5" /> Sozlamalar
-          </button>
-        </div>
+          </div>
+        )}
 
-        {subTab === 'settings' && <SyncSettingsPanel />}
+        {subTab === 'settings' && canSettings && <SyncSettingsPanel />}
 
-        {subTab === 'history' && <>
+        {subTab === 'history' && canHistory && <>
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">Sync tarixi</div>
