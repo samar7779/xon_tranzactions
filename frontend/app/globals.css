@@ -67,6 +67,37 @@
     --shadow-glow-rose:  0 0 0 1px rgb(244 63 94 / 0.15),  0 12px 36px -8px rgb(244 63 94 / 0.35);
   }
 
+  /* ─── DARK MODE — html.dark bo'lganda ─── */
+  html.dark {
+    --background: 222 47% 8%;
+    --foreground: 220 14% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 220 14% 96%;
+    --popover: 222 47% 13%;
+    --popover-foreground: 220 14% 96%;
+    --primary: 239 84% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 47% 18%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 222 47% 14%;
+    --muted-foreground: 220 9% 70%;
+    --accent: 222 47% 18%;
+    --accent-foreground: 220 14% 96%;
+    --border: 222 47% 18%;
+    --input: 222 47% 18%;
+    --ring: 239 84% 65%;
+    --sidebar: 222 47% 10%;
+    --sidebar-foreground: 220 14% 96%;
+    --sidebar-muted: 220 9% 60%;
+    --sidebar-border: 222 47% 18%;
+  }
+  html.dark body {
+    background-image:
+      radial-gradient(circle 600px at 0% 0%,   hsl(239 80% 50% / 0.18), transparent 60%),
+      radial-gradient(circle 700px at 100% 0%, hsl(199 89% 48% / 0.10), transparent 60%),
+      radial-gradient(circle 500px at 100% 100%, hsl(280 70% 50% / 0.12), transparent 55%);
+  }
+
   * { @apply border-border; }
   *::selection { background: hsl(var(--primary) / 0.18); }
 

@@ -10,6 +10,7 @@ import {
 import { useRef } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
+import { useAvatar } from '@/lib/use-avatar';
 import { PERMS } from '@/lib/permissions';
 import { api } from '@/lib/api';
 import {
@@ -35,6 +36,8 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const logout = useAuth((s) => s.logout);
   const toggleMobileNav = useUI((s) => s.toggleMobileNav);
   const initial = (user?.fullName || user?.email || '?').charAt(0).toUpperCase();
+  // Reaktiv avatar — profilda yuklanganda darrov yangilanadi
+  const avatarUrl = useAvatar(user?.id);
 
   const canSeeSync = !!user?.permissions?.includes(PERMS.SYNC_VIEW);
   const { data: syncLogs } = useQuery({
@@ -242,9 +245,14 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-2 pl-1 pr-2.5 py-1 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm transition-colors group">
-                  <span className="relative w-9 h-9 rounded-full bg-gradient-to-br from-white/40 to-white/10 ring-1 ring-white/50 grid place-items-center text-white text-sm font-bold shadow-sm">
-                    {initial}
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-indigo-600" />
+                  <span className="relative w-9 h-9 rounded-full bg-gradient-to-br from-white/40 to-white/10 ring-1 ring-white/50 grid place-items-center text-white text-sm font-bold shadow-sm overflow-hidden">
+                    {avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      initial
+                    )}
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-indigo-600 z-10" />
                   </span>
                   <div className="hidden sm:block min-w-0 text-left">
                     <div className="text-[12px] font-semibold truncate max-w-[180px]">{user?.fullName || user?.email || '—'}</div>
