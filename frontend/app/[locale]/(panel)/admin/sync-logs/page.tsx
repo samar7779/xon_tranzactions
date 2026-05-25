@@ -371,22 +371,23 @@ function SyncSettingsPanel() {
   const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [syncResult, setSyncResult] = useState<any>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [bgStatus, setBgStatus] = useState<any>(null);
 
-  // Tranzaksiyalardan sync (HAMMASI) — modal bilan progress ko'rsatadi
+  // Tranzaksiyalardan sync (sinxron sync + bg fill/split)
   const syncTxMut = useMutation({
     mutationFn: (minDate: string | null) =>
       api.post<{
         ok: boolean; total: number; added: number; updated: number; skipped: number;
         skippedBreakdown?: { noData: number; exists: number; error: number };
         errorSamples?: Array<{ txId: string; reason: string }>;
-        xatoCleanedRows?: number;
-        fillResult?: { filled: number; notFound: number; total: number };
-        splitResult?: { filled: number; notFound: number; total: number; contracts: number };
+        xatoQuickClean?: number;
+        objectsBackground?: boolean;
         duration: number;
-      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 900_000 }),
+      }>('/oplata-kv/sync-from-transactions', { minDate }, { timeout: 120_000 }),  // 2 min — sync qismi tez
     onMutate: () => {
       setSyncResult(null);
       setSyncError(null);
+      setBgStatus(null);
       setSyncModalOpen(true);
     },
     onSuccess: (r: any) => {
@@ -399,6 +400,26 @@ function SyncSettingsPanel() {
       setSyncError(e?.message || 'Sync xato');
     },
   });
+
+  // BG status polling — sync tugagandan keyin 5 sekundda bir
+  useEffect(() => {
+    if (!syncResult || !syncResult.objectsBackground) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const s: any = await api.get('/oplata-kv/bg-status');
+        if (cancelled) return;
+        setBgStatus(s);
+        if (s.running) {
+          setTimeout(poll, 5000);
+        }
+      } catch {
+        if (!cancelled) setTimeout(poll, 10000);
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, [syncResult]);
 
   // XATO contractlarni tozalash (CRM da topilmaganlar)
   const cleanupXatoMut = useMutation({
@@ -548,6 +569,7 @@ function SyncSettingsPanel() {
         onClose={() => setSyncModalOpen(false)}
         isPending={syncTxMut.isPending}
         result={syncResult}
+        bgStatus={bgStatus}
         error={syncError}
       />
 
@@ -1078,12 +1100,14 @@ function SyncProgressDialog({
   onClose,
   isPending,
   result,
+  bgStatus,
   error,
 }: {
   open: boolean;
   onClose: () => void;
   isPending: boolean;
   result: any | null;
+  bgStatus: any | null;
   error: string | null;
 }) {
   // Elapsed timer (faqat pending paytda yangilanadi)
@@ -1130,7 +1154,14 @@ function SyncProgressDialog({
     }
   }, [open]);
 
-  const done = !!result && !isPending;
+  // Bg jarayon holati (sync tugagandan keyin orqada davom etadi)
+  const bgRunning = bgStatus?.running;
+  const bgPhase = bgStatus?.phase;  // 'fill' | 'split' | 'done' | 'error'
+  const bgFinished = bgStatus?.phase === 'done';
+  const bgFill = bgStatus?.result?.fill;
+  const bgSplit = bgStatus?.result?.split;
+
+  const done = !!result && !isPending && !bgRunning && (bgFinished || !bgStatus);
   const errored = !!error && !isPending;
 
   // Bosqichlar tavsifi
@@ -1138,10 +1169,18 @@ function SyncProgressDialog({
     {
       icon: RefreshCcw,
       title: 'Tranzaksiyalardan sync',
-      desc: 'Yangi tranzaksiyalarni OplatyKv ga qo\'shish/yangilash',
+      desc: 'Yangi tranzaksiyalarni OplatyKv ga qo\'shish/yangilash + XATO splitlar tozalanadi (atomar)',
+      done: !!result,
+      active: isPending,
       result: result && (
         <>
           Qo'shildi: <b>{result.added}</b>, yangilandi: <b>{result.updated}</b>, o'tkazildi: <b>{result.skipped}</b>
+          {result.xatoQuickClean > 0 && (
+            <>
+              <br />
+              🧹 XATO splitlar tozalandi: <b>{result.xatoQuickClean}</b> qator
+            </>
+          )}
         </>
       ),
       color: 'emerald',
@@ -1149,10 +1188,12 @@ function SyncProgressDialog({
     {
       icon: Layers,
       title: 'Obyekt va Mijoz to\'ldirish',
-      desc: 'CRM dan obyekt/mijoz nomi olib qatorlarga yoziladi',
-      result: result?.fillResult && (
+      desc: 'CRM dan obyekt/mijoz nomi olib qatorlarga yoziladi (orqada)',
+      done: !!bgFill,
+      active: bgRunning && bgPhase === 'fill',
+      result: bgFill && (
         <>
-          To'ldirildi: <b>{result.fillResult.filled}</b>/{result.fillResult.total} · CRM topmadi: <b>{result.fillResult.notFound}</b>
+          To'ldirildi: <b>{bgFill.filled}</b>/{bgFill.total} · CRM topmadi: <b>{bgFill.notFound}</b>
         </>
       ),
       color: 'indigo',
@@ -1160,14 +1201,16 @@ function SyncProgressDialog({
     {
       icon: Split,
       title: '1 взнос va Oylik ajratish',
-      desc: 'CRM payment_histories asosida split + XATO splitlarni tozalash',
-      result: result?.splitResult && (
+      desc: 'CRM payment_histories asosida split (orqada) — XATO ga split qilinmaydi',
+      done: !!bgSplit,
+      active: bgRunning && bgPhase === 'split',
+      result: bgSplit && (
         <>
-          {result.splitResult.contracts} shartnoma · To'ldirildi: <b>{result.splitResult.filled}</b>/{result.splitResult.total} · CRM topmadi: <b>{result.splitResult.notFound}</b>
-          {result.splitResult.xatoCleaned > 0 && (
+          {bgSplit.contracts} shartnoma · To'ldirildi: <b>{bgSplit.filled}</b>/{bgSplit.total} · CRM topmadi: <b>{bgSplit.notFound}</b>
+          {bgSplit.xatoCleaned > 0 && (
             <>
               <br />
-              🧹 XATO splitlar tozalandi: <b>{result.splitResult.xatoCleaned}</b> qator
+              🧹 XATO splitlar tozalandi: <b>{bgSplit.xatoCleaned}</b> qator
             </>
           )}
         </>
@@ -1232,8 +1275,8 @@ function SyncProgressDialog({
         {/* Body — steps */}
         <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto bg-slate-50/40">
           {steps.map((step, idx) => {
-            const isActive = isPending && idx === activeStep;
-            const isDone = done || idx < activeStep;
+            const isActive = step.active;
+            const isDone = step.done;
             const cmap = colorMap[step.color];
             const Icon = step.icon;
 

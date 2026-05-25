@@ -184,6 +184,20 @@ export class OplataKvController {
     return this.svc.debugXatoSplits();
   }
 
+  @Get('bg-status')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Background job (fill+split) holati — modal poll qiladi" })
+  async bgStatus() {
+    return this.svc.getBgStatus();
+  }
+
+  @Get('debug-sync-diff')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "DIAGNOSTIC: Tx vs OplatyKv ortasidagi farq tahlili" })
+  async debugSyncDiff(@Query('dateFrom') dateFrom?: string, @Query('dateTo') dateTo?: string) {
+    return this.svc.debugSyncDiff({ dateFrom, dateTo });
+  }
+
   @Post(':id/split')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Bitta qator uchun split — faqat shu qator qayta hisoblanadi (boshqalarga tegmaydi)" })
