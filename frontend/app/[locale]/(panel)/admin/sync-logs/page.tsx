@@ -435,6 +435,40 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'XATO splits cleanup xato'),
   });
 
+  // DEBUG: XATO splitlar holatini console'ga to'kadi (debug uchun)
+  const debugXatoMut = useMutation({
+    mutationFn: () => api.get<any>('/oplata-kv/debug-xato-splits'),
+    onSuccess: (r: any) => {
+      console.log('═══════════════════════════════════════════');
+      console.log('🔍 XATO SPLITS DEBUG');
+      console.log('═══════════════════════════════════════════');
+      console.log('BEFORE:', {
+        totalWithSplits: r.before?.totalWithSplits,
+        xatoCount: r.before?.xatoCount,
+        verifiedCount: r.before?.verifiedCount,
+      });
+      console.log('CLEANUP RAN:', r.cleanupRun);
+      console.log('AFTER:', r.after);
+      console.log('───────────────────────────────────────────');
+      console.log('XATO SAMPLE (10 ta):');
+      console.table(r.before?.sampleXato || []);
+      console.log('═══════════════════════════════════════════');
+      console.log('FULL JSON:', r);
+
+      const before = r.before?.xatoCount || 0;
+      const affected = r.cleanupRun?.rowsAffected || 0;
+      const after = r.after?.totalWithSplits || 0;
+      toast.success(
+        `🔍 BEFORE: ${before} XATO+split · CLEANUP: ${affected} ta yangilandi · AFTER: ${after} qoldi. F12 → Console'da to'liq ma'lumot.`,
+        { duration: 15000 },
+      );
+    },
+    onError: (e: any) => {
+      console.error('Debug xato:', e);
+      toast.error(e?.message || 'Debug xato');
+    },
+  });
+
   // Tranzaksiya-manba qatorlarni tozalash (date range)
   const cleanupTxMut = useMutation({
     mutationFn: (range: { dateFrom: string | null; dateTo: string | null }) => {
@@ -654,6 +688,16 @@ function SyncSettingsPanel() {
                 >
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   {syncTxMut.isPending ? 'Bajarilmoqda... (5-10 daqiqa)' : 'Hozir sync (HAMMASI)'}
+                </Button>
+                <Button
+                  onClick={() => debugXatoMut.mutate()}
+                  disabled={debugXatoMut.isPending}
+                  variant="outline"
+                  className="h-10 px-4 gap-2 border-slate-300 text-slate-700 hover:bg-slate-100"
+                  title="DEBUG: F12 → Console'ga XATO split holatini to'kadi (tahlil uchun)"
+                >
+                  {debugXatoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  🔍 Debug XATO
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
