@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import {
   Play, Pause, RotateCcw, Sparkles, Droplets, Circle, Hash,
   Coffee, Brain, Flame, Settings as SettingsIcon, Volume2, VolumeX,
+  CheckCircle2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -287,24 +288,56 @@ export function PomodoroTimer() {
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Zamonaviy dizayn</label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2 block">Zamonaviy dizayn — har birini ko'rib turing</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {STYLE_OPTIONS.map((opt) => {
-                const Icon = opt.icon;
                 const active = style === opt.value;
                 return (
                   <button
                     key={opt.value}
                     onClick={() => changeStyle(opt.value)}
                     className={cn(
-                      "flex flex-col items-center gap-1 p-2 rounded-lg ring-1 transition-all",
+                      "group relative rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1",
                       active
-                        ? "bg-indigo-50 ring-indigo-300 text-indigo-700 shadow-sm"
-                        : "bg-white ring-slate-200 text-slate-600 hover:ring-slate-300",
+                        ? "ring-2 ring-indigo-500 shadow-[0_15px_40px_-10px_rgba(99,102,241,0.5)]"
+                        : "ring-1 ring-slate-200 hover:ring-indigo-300 hover:shadow-lg",
                     )}
                   >
-                    <Icon className="h-4 w-4" />
-                    <span className="text-[10px] font-semibold">{opt.label}</span>
+                    {/* Active glow */}
+                    {active && (
+                      <div className="absolute -inset-0.5 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-500 opacity-40 blur-lg -z-10" />
+                    )}
+
+                    {/* Top: Mini live preview */}
+                    <div className={cn(
+                      "h-24 flex items-center justify-center relative overflow-hidden",
+                      active
+                        ? "bg-gradient-to-br from-amber-50 to-orange-100"
+                        : "bg-slate-50",
+                    )}>
+                      <StylePreview style={opt.value} active={active} mode={mode} />
+                    </div>
+
+                    {/* Bottom: Label */}
+                    <div className={cn(
+                      "px-2 py-2.5 text-center transition-colors",
+                      active
+                        ? "bg-gradient-to-br from-indigo-50 to-violet-50"
+                        : "bg-white",
+                    )}>
+                      <div className={cn(
+                        "text-[12px] font-bold tracking-tight",
+                        active ? "text-indigo-700" : "text-slate-700",
+                      )}>
+                        {opt.label}
+                      </div>
+                      {active && (
+                        <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-600 text-white text-[8px] uppercase tracking-wider font-bold">
+                          <CheckCircle2 className="h-2.5 w-2.5" />
+                          Tanlangan
+                        </div>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -633,6 +666,116 @@ function MinimalRing({ progress, mode, timeStr }: { progress: number; mode: Mode
             {mode === 'focus' ? 'Fokus' : 'Dam olish'}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════ STYLE PREVIEW — har dizayn uchun mini live ═════════════════════ */
+
+function StylePreview({ style, active, mode }: { style: TimerStyle; active: boolean; mode: Mode }) {
+  const accent1 = mode === 'focus' ? '#f59e0b' : '#06b6d4';
+  const accent2 = mode === 'focus' ? '#f97316' : '#0ea5e9';
+
+  if (style === 'orb') {
+    return (
+      <div className="relative">
+        <div className="absolute inset-0 rounded-full blur-xl opacity-50" style={{ background: accent1 }} />
+        <div
+          className="relative w-16 h-16 rounded-full grid place-items-center text-white font-black text-[10px] shadow-lg"
+          style={{
+            background: `radial-gradient(circle at 30% 30%, ${accent1}, ${accent2} 70%, ${accent2})`,
+            boxShadow: `inset 0 -4px 8px rgba(0,0,0,0.3), inset 6px 6px 12px rgba(255,255,255,0.4), 0 8px 20px ${accent1}80`,
+          }}
+        >
+          <div className="absolute top-1 left-2 w-5 h-5 rounded-full blur-md bg-white/50" />
+          <span className="relative drop-shadow">25:00</span>
+        </div>
+        {/* Orbit dot */}
+        {active && (
+          <div className="absolute inset-0 animate-[spin_4s_linear_infinite]">
+            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-white shadow-md" style={{ boxShadow: `0 0 6px ${accent1}` }} />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (style === 'liquid') {
+    return (
+      <svg viewBox="0 0 60 80" width="44" height="58">
+        <defs>
+          <linearGradient id={`prev-liq-${active ? 'a' : 'i'}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={accent1} stopOpacity="0.9" />
+            <stop offset="100%" stopColor={accent2} />
+          </linearGradient>
+          <clipPath id={`prev-clip-${active ? 'a' : 'i'}`}>
+            <path d="M 15 8 L 45 8 L 47 72 Q 30 76 13 72 Z" />
+          </clipPath>
+        </defs>
+        {/* Glass */}
+        <path d="M 15 8 L 45 8 L 47 72 Q 30 76 13 72 Z" fill="rgba(148,163,184,0.15)" stroke="rgba(148,163,184,0.6)" strokeWidth="1" />
+        {/* Water — 60% to'la */}
+        <g clipPath={`url(#prev-clip-${active ? 'a' : 'i'})`}>
+          <rect x="0" y="34" width="60" height="50" fill={`url(#prev-liq-${active ? 'a' : 'i'})`} />
+          {active && (
+            <path d="M 0 34 Q 15 31 30 34 T 60 34 L 60 80 L 0 80 Z" fill={`url(#prev-liq-${active ? 'a' : 'i'})`} opacity="0.7">
+              <animate
+                attributeName="d"
+                dur="2s"
+                repeatCount="indefinite"
+                values="M 0 34 Q 15 31 30 34 T 60 34 L 60 80 L 0 80 Z;M 0 34 Q 15 37 30 34 T 60 34 L 60 80 L 0 80 Z;M 0 34 Q 15 31 30 34 T 60 34 L 60 80 L 0 80 Z"
+              />
+            </path>
+          )}
+        </g>
+        {/* Rim */}
+        <ellipse cx="30" cy="8" rx="15" ry="2" fill="rgba(255,255,255,0.4)" />
+      </svg>
+    );
+  }
+
+  if (style === 'ring') {
+    const R = 18;
+    const C = 2 * Math.PI * R;
+    return (
+      <div className="relative">
+        <svg width="60" height="60" viewBox="0 0 60 60" className="-rotate-90">
+          <circle cx="30" cy="30" r={R} fill="none" stroke="rgb(226,232,240)" strokeWidth="4" />
+          <circle
+            cx="30" cy="30" r={R}
+            fill="none"
+            stroke={accent1}
+            strokeWidth="4"
+            strokeLinecap="round"
+            strokeDasharray={C}
+            strokeDashoffset={C * 0.4}
+            style={{ filter: `drop-shadow(0 0 3px ${accent1})` }}
+          />
+        </svg>
+        <div className="absolute inset-0 grid place-items-center">
+          <span className="text-[9px] font-black tabular-nums text-slate-700">25:00</span>
+        </div>
+      </div>
+    );
+  }
+
+  // display
+  return (
+    <div
+      className="px-3 py-2 rounded-lg"
+      style={{
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,252,0.85))',
+        boxShadow: `0 4px 12px ${accent1}40`,
+      }}
+    >
+      <div
+        className="text-xl font-black tabular-nums bg-clip-text text-transparent"
+        style={{
+          backgroundImage: `linear-gradient(135deg, ${accent1}, ${accent2})`,
+        }}
+      >
+        25:00
       </div>
     </div>
   );
