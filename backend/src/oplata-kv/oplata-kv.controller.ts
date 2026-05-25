@@ -169,6 +169,14 @@ export class OplataKvController {
     return this.svc.splitInstallments({ limit: body?.limit, actor: actorFrom(user) });
   }
 
+  @Post('cleanup-xato-splits')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "XATO shartnomalardan 1-vznos/oylik split qiymatlarini darhol tozalash" })
+  async cleanupXatoSplits() {
+    const cleaned = await this.svc.cleanupSplitsForXatoContracts();
+    return { ok: true, cleaned };
+  }
+
   @Post(':id/split')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Bitta qator uchun split — faqat shu qator qayta hisoblanadi (boshqalarga tegmaydi)" })
