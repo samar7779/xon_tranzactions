@@ -423,8 +423,9 @@ export class OplataKvService {
     });
 
     if (txList.length === 0) {
-      // ── MUHIM: cleanup HAR DOIM bajariladi, hatto yangi tranzaksiya bo'lmasa ham ──
-      // User talabi: XATO shartnomalardan split avtomatik tozalanishi kerak
+      // ── MUHIM: cleanup + bg fill/split HAR DOIM bajariladi, hatto yangi tx yo'q bo'lsa ham ──
+      // User talabi: 1) XATO splitlar avtomatik tozalanishi
+      //              2) sync qilgan paytda split ham ishlash kerak (yarim qolgan rowlar uchun)
       let xatoCleanedCount = 0;
       try {
         xatoCleanedCount = await this.cleanupSplitsForXatoContracts();
@@ -434,11 +435,31 @@ export class OplataKvService {
       } catch (e: any) {
         this.log.warn(`sync XATO cleanup xato (early return): ${e?.message}`);
       }
+
+      // Bg fill/split — yangi tx yo'q bo'lsa ham, oldingi sync'lardan qolgan
+      // yarim-bajarilgan qatorlarni tugatadi (object/client + verified split)
+      if (!OplataKvService.fillingInProgress) {
+        OplataKvService.fillingInProgress = true;
+        setImmediate(async () => {
+          try {
+            const objR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+            this.log.log(`bg fillMissingObjects (early-return) DONE: filled=${objR.filled}/${objR.total}`);
+            const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+            this.log.log(`bg splitInstallments (early-return) DONE: filled=${splitR.filled}/${splitR.total}`);
+          } catch (e: any) {
+            this.log.warn(`bg job xato (early-return): ${e?.message}`);
+          } finally {
+            OplataKvService.fillingInProgress = false;
+          }
+        });
+      }
+
       return {
         ok: true,
-        version: 'v4-xato-cleanup-sync',
+        version: 'v5-cleanup-always',
         total: 0, added: 0, updated: 0, skipped: 0,
         xatoCleanedRows: xatoCleanedCount,
+        objectsBackground: true,
         duration: Math.round((Date.now() - startedAt) / 1000),
         minDate: minDate ? minDate.toISOString().slice(0, 10) : null,
       };
