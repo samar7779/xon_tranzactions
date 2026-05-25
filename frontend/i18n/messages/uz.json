@@ -477,6 +477,10 @@
     "contractNumberLabel": "Shartnoma raqami",
     "contractNumberPlaceholder": "Masalan: 12345VTN26MP"
   },
+  "setup": {
+    "title": "Banklar",
+    "subtitle": "Banklar, ulanishlar va hisob raqamlari"
+  },
   "accounts": {
     "title": "Bank hisoblari",
     "subtitle": "Kuzatiladigan hisob raqamlar",

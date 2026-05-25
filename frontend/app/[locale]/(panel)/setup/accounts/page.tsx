@@ -31,6 +31,8 @@ import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
 export default function AccountsPage() {
   const tc = useTranslations('common');
+  const t = useTranslations('accounts');
+  const tNav = useTranslations('nav');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   const canManage = !!user?.permissions?.includes(PERMS.ACCOUNTS_MANAGE);
@@ -138,21 +140,21 @@ export default function AccountsPage() {
         {/* ═══ TOP STATS ═══ */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <BigStat
-            label="Jami qoldiq"
+            label={t('totalBalance')}
             value={formatMoney(totalBalance)}
-            sub={`${totalCount} ta hisob`}
+            sub={t('accountsCount', { count: totalCount })}
             color="indigo"
             icon={Wallet}
           />
           <BigStat
-            label="Faol sync"
+            label={t('activeSync')}
             value={`${onlineCount} / ${totalCount}`}
-            sub="Avto-yangilanish yoqilgan"
+            sub={t('autoRefreshOn')}
             color="emerald"
             icon={Power}
           />
           <BigStat
-            label="Banklar"
+            label={tNav('banks')}
             value={String(byBank.length)}
             sub={byBank.slice(0, 2).map(([, v]) => v.name).join(' · ') || '—'}
             color="purple"
@@ -168,7 +170,7 @@ export default function AccountsPage() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
                   className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
-                  placeholder="Hisob raqami, MFO, bank yoki egasi..."
+                  placeholder={t('searchPlaceholder')}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -210,10 +212,10 @@ export default function AccountsPage() {
                     ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                     : "bg-slate-50 ring-1 ring-slate-200 text-slate-700",
                 )}>
-                  <SelectValue placeholder="Hamma banklar" />
+                  <SelectValue placeholder={t('allBanks')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Hamma banklar</SelectItem>
+                  <SelectItem value="all">{t('allBanks')}</SelectItem>
                   {sortedBanks.filter((b: any) => b.isActive).map((b: any) => (
                     <SelectItem key={b.id} value={b.id}>
                       <span className="flex items-center gap-2">
@@ -240,10 +242,10 @@ export default function AccountsPage() {
                     ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
                     : "bg-slate-50 ring-1 ring-slate-200 text-slate-700",
                 )}>
-                  <SelectValue placeholder="Sync holati" />
+                  <SelectValue placeholder={t('syncEnabled')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Barchasi</SelectItem>
+                  <SelectItem value="all">{t('allFilter')}</SelectItem>
                   <SelectItem value="on">Sync ON</SelectItem>
                   <SelectItem value="off">Sync OFF</SelectItem>
                 </SelectContent>
@@ -256,14 +258,14 @@ export default function AccountsPage() {
                     "px-3 h-9 rounded-lg transition-colors",
                     view === 'grid' ? "bg-white shadow-sm text-slate-900" : "text-slate-500",
                   )}
-                >Karta</button>
+                >{t('cardView')}</button>
                 <button
                   onClick={() => setView('list')}
                   className={cn(
                     "px-3 h-9 rounded-lg transition-colors",
                     view === 'list' ? "bg-white shadow-sm text-slate-900" : "text-slate-500",
                   )}
-                >Jadval</button>
+                >{t('tableView')}</button>
               </div>
 
               {canManage && (
@@ -603,6 +605,7 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
 
 // ─────────── Bulk import dialog — paste qilib ko'p hisob qo'shish ───────────
 function BulkImportDialog({ creds }: { creds: any[] }) {
+  const t = useTranslations('accounts');
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [credentialId, setCredentialId] = useState('');
@@ -657,7 +660,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="rounded-full font-medium gap-1.5">
-          <FileSpreadsheet className="h-3.5 w-3.5" /> Ko'p qo'shish
+          <FileSpreadsheet className="h-3.5 w-3.5" /> {t('bulkAdd')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">

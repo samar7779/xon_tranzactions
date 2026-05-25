@@ -2,25 +2,28 @@
 
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Building2, KeyRound, Wallet } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
 const TABS = [
-  { key: 'banks',       label: 'Banklar',          icon: Building2 },
-  { key: 'credentials', label: 'Bank ulanishlari', icon: KeyRound },
-  { key: 'accounts',    label: 'Bank hisoblari',   icon: Wallet },
+  { key: 'banks',       tKey: 'banks',       icon: Building2 },
+  { key: 'credentials', tKey: 'credentials', icon: KeyRound },
+  { key: 'accounts',    tKey: 'accounts',    icon: Wallet },
 ];
 
 export default function SetupLayout({ children }: { children: React.ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
+  const tNav = useTranslations('nav');
+  const tSetup = useTranslations('setup');
 
   const activeTab = TABS.find((t) => pathname.includes(`/setup/${t.key}`))?.key || 'banks';
 
   return (
     <>
-      <Topbar title="Banklar" subtitle="Banklar, ulanishlar va hisob raqamlari" />
+      <Topbar title={tSetup('title')} subtitle={tSetup('subtitle')} />
 
       {/* Tab bar */}
       <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200">
@@ -41,7 +44,7 @@ export default function SetupLayout({ children }: { children: React.ReactNode })
                   )}
                 >
                   <Icon className="h-4 w-4" />
-                  {tab.label}
+                  {tNav(tab.tKey)}
                 </Link>
               );
             })}

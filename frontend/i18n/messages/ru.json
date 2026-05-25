@@ -477,6 +477,10 @@
     "contractNumberLabel": "Номер договора",
     "contractNumberPlaceholder": "Например: 12345VTN26MP"
   },
+  "setup": {
+    "title": "Банки",
+    "subtitle": "Банки, подключения и счета"
+  },
   "accounts": {
     "title": "Банковские счета",
     "subtitle": "Отслеживаемые счета",
