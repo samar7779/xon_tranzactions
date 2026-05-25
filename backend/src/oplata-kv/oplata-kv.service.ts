@@ -723,9 +723,11 @@ export class OplataKvService {
       OplataKvService.bgResult = null;
       setImmediate(async () => {
         try {
-          const fillR = await this.fillMissingObjects({ limit: 20000, actor: opts.actor });
+          // KAMAYTIRILGAN limit (DB connection pool'ni saqlash uchun)
+          // 20000 emas 3000 — boshqa requestlar 502 olmasin
+          const fillR = await this.fillMissingObjects({ limit: 3000, actor: opts.actor });
           OplataKvService.bgPhase = 'split';
-          const splitR = await this.splitInstallments({ limit: 20000, actor: opts.actor });
+          const splitR = await this.splitInstallments({ limit: 3000, actor: opts.actor });
           OplataKvService.bgResult = {
             fill: fillR,
             split: splitR,
@@ -1189,37 +1191,50 @@ export class OplataKvService {
       });
     }
 
-    // ── MUHIM FILTER: XATO shartnomalarni split query'dan CHETLATAMIZ ──
-    // User talabi qattiq: shartnoma XATO bo'lsa unga split BAJARILMAYDI (umuman).
-    // CRM live API ba'zan stale cache bilan farq qilishi mumkin, shuning uchun
-    // SQL darajasida cheklov qo'yamiz — faqat CrmContract.found=true bo'lganlar.
-    // (NULL: cache'da yo'q ham XATO sanaladi)
-    const verifiedRows = await this.prisma.crmContract.findMany({
-      where: { found: true },
-      select: { contractNumber: true },
-    });
-    const verifiedContracts = verifiedRows.map((c) => c.contractNumber);
-    if (verifiedContracts.length === 0) {
-      return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
-    }
-    // contractNo IN (verified) — XATO/cache-miss kontraktlar tashlanadi
-    // contractNo allaqachon set bo'lsa (opts.contractNo) — kesishma topamiz
+    // ── XATO shartnomalarni split query'dan CHETLATAMIZ — raw SQL bilan tezroq ──
+    // Avvalgi yondashuv (findMany + IN clause katta array) DB pool'ni egallab,
+    // boshqa requestlar 502 olardi. Endi NOT EXISTS subquery — atomar, tez.
     if (opts.contractNo) {
-      if (!verifiedContracts.includes(opts.contractNo)) {
-        // Berilgan kontrakt XATO — split umuman bajarilmaydi
+      // Single contract — cache tekshirish (kichik query)
+      const verified = await this.prisma.crmContract.findUnique({
+        where: { contractNumber: opts.contractNo },
+        select: { found: true },
+      });
+      if (!verified || !verified.found) {
+        // XATO — split yo'q
         return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
       }
-      // Allaqachon where.contractNo = opts.contractNo bor (yuqorida)
-    } else {
-      where.contractNo = { in: verifiedContracts };
     }
-
-    const rows = await this.prisma.oplataKv.findMany({
-      where,
-      select: { id: true, contractNo: true, date: true, paymentAmount: true },
-      orderBy: { date: 'asc' },
-      take: limit,
-    });
+    // For batch case: raw SQL bilan filter qo'shamiz (Prisma'ning JOIN/EXISTS sintaksisi yo'q)
+    let rows: Array<{ id: string; contractNo: string; date: Date; paymentAmount: any }>;
+    if (opts.contractNo) {
+      rows = await this.prisma.oplataKv.findMany({
+        where,
+        select: { id: true, contractNo: true, date: true, paymentAmount: true },
+        orderBy: { date: 'asc' },
+        take: limit,
+      });
+    } else {
+      // Raw SQL — XATO kontraktlar SQL darajasida tashlanadi (no IN array)
+      const forceClause = opts.force
+        ? ''
+        : 'AND first_installment IS NULL AND monthly_amount IS NULL AND payment_category IS NULL';
+      const rawRows: any[] = await this.prisma.$queryRawUnsafe(`
+        SELECT id, contract_no AS "contractNo", date, payment_amount AS "paymentAmount"
+          FROM oplata_kv
+         WHERE source_tx_id IS NOT NULL
+           AND payment_amount IS NOT NULL
+           ${forceClause}
+           AND EXISTS (
+             SELECT 1 FROM crm_contracts c
+             WHERE c.contract_number = oplata_kv.contract_no
+               AND c.found = true
+           )
+         ORDER BY date ASC
+         LIMIT $1
+      `, limit);
+      rows = rawRows;
+    }
     if (rows.length === 0) {
       return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
     }
@@ -1817,6 +1832,21 @@ export class OplataKvService {
   /** Filtr bo'yicha BARCHA qatorlarni qaytaradi (export uchun). */
   private async fetchAllForExport(q: ListOplataKvDto) {
     const where = this.buildWhere(q);
+
+    // XATO ONLY filter — list bilan bir xil logika
+    const xatoOnly = q.xatoOnly === 'true' || q.xatoOnly === '1';
+    if (xatoOnly) {
+      const { contracts: xatoContracts, manualSourceTxIds } = await this.getXatoContractNos();
+      if (xatoContracts.length === 0) return [];
+      const xatoFilter: any = {
+        sourceTxId: { not: null },
+        contractNo: { in: xatoContracts },
+        NOT: manualSourceTxIds.length > 0 ? { sourceTxId: { in: manualSourceTxIds } } : undefined,
+      };
+      if (where.AND) (where.AND as any[]).push(xatoFilter);
+      else where.AND = [xatoFilter];
+    }
+
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
     return this.prisma.oplataKv.findMany({
