@@ -205,16 +205,6 @@ export default function OplataKvPage() {
     }
   };
 
-  // ─── Export — filter-aware ───
-  // qsForExport: page/perPage'siz, qolgan filtrlar
-  const qsForExport = useMemo(() => {
-    const p = new URLSearchParams();
-    if (q.trim()) p.set('q', q.trim());
-    if (dateFrom) p.set('dateFrom', dateFrom);
-    if (dateTo)   p.set('dateTo', dateTo);
-    return p.toString();
-  }, [q, dateFrom, dateTo]);
-
   const [exporting, setExporting] = useState<null | 'xlsx' | 'json' | 'pdf'>(null);
 
   const downloadExcel = async () => {
@@ -302,6 +292,21 @@ export default function OplataKvPage() {
 
   // Filter popoverga uzatish uchun — barcha AKTIV column filterlar (page'siz)
   const activeFilterParams = useMemo(() => {
+    const p = new URLSearchParams();
+    if (q.trim()) p.set('q', q.trim());
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo)   p.set('dateTo', dateTo);
+    for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
+      const set = columnFilters[col];
+      if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
+    }
+    applyXatoToParams(p);
+    return p.toString();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, dateFrom, dateTo, columnFiltersKey]);
+
+  // ─── Export — filter-aware (BARCHA filtrlar — column + xatoOnly) ───
+  const qsForExport = useMemo(() => {
     const p = new URLSearchParams();
     if (q.trim()) p.set('q', q.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
