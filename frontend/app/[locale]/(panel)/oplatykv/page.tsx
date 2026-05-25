@@ -2144,7 +2144,7 @@ function OplataKvFormDialog({
             {isEdit ? 'Qatorni tahrirlash' : 'Yangi qator'}
           </DialogTitle>
           <DialogDescription>
-            ОплатыКв jadvali · har qanday o'zgarish history'ga avto yoziladi
+            ОплатыКв jadvali · har qanday o'zgarish history'ga avto yoziladi.
           </DialogDescription>
         </DialogHeader>
 
