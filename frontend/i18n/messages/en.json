@@ -481,6 +481,8 @@
     "title": "Bank accounts",
     "subtitle": "Tracked accounts",
     "add": "Add account",
+    "addAccount": "Add account",
+    "bulkAdd": "Bulk add",
     "edit": "Edit",
     "delete": "Delete",
     "branch": "Branch (MFO)",
@@ -491,7 +493,16 @@
     "syncEnabled": "Sync enabled",
     "lastSync": "Last sync",
     "syncNow": "Sync now",
-    "noData": "No accounts yet"
+    "noData": "No accounts yet",
+    "totalBalance": "Total balance",
+    "accountsCount": "{count} accounts",
+    "activeSync": "Active sync",
+    "autoRefreshOn": "Auto-refresh enabled",
+    "searchPlaceholder": "Account no, MFO, bank or owner...",
+    "allBanks": "All banks",
+    "allFilter": "All",
+    "cardView": "Cards",
+    "tableView": "Table"
   },
   "credentials": {
     "title": "Bank connections",

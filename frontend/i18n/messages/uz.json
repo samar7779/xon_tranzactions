@@ -481,6 +481,8 @@
     "title": "Bank hisoblari",
     "subtitle": "Kuzatiladigan hisob raqamlar",
     "add": "Hisob qo'shish",
+    "addAccount": "Hisob qo'shish",
+    "bulkAdd": "Ko'p qo'shish",
     "edit": "Tahrirlash",
     "delete": "O'chirish",
     "branch": "MFO",
@@ -491,7 +493,16 @@
     "syncEnabled": "Sync yoqilgan",
     "lastSync": "Oxirgi sync",
     "syncNow": "Hozir sinxronizatsiya",
-    "noData": "Hali hisob qo'shilmagan"
+    "noData": "Hali hisob qo'shilmagan",
+    "totalBalance": "Jami qoldiq",
+    "accountsCount": "{count} ta hisob",
+    "activeSync": "Faol sync",
+    "autoRefreshOn": "Avto-yangilanish yoqilgan",
+    "searchPlaceholder": "Hisob raqami, MFO, bank yoki egasi...",
+    "allBanks": "Hamma banklar",
+    "allFilter": "Barchasi",
+    "cardView": "Karta",
+    "tableView": "Jadval"
   },
   "credentials": {
     "title": "Bank ulanishlari",
