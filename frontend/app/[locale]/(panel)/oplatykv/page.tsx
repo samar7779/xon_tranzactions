@@ -469,42 +469,44 @@ export default function OplataKvPage() {
                 )}
               </button>
 
-              {/* Download dropdown — faqat ikon */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 grid place-items-center transition-colors"
-                    title="Yuklab olish"
-                  >
-                    {exporting
-                      ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
-                      : <Download className="h-4 w-4" />}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-[220px]">
-                  <DropdownMenuItem onClick={downloadExcel} className="gap-2 cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-                    <div className="flex-1">
-                      <div className="text-[13px] font-semibold">Excel (.xlsx)</div>
-                      <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={downloadJson} className="gap-2 cursor-pointer">
-                    <FileJson className="h-4 w-4 text-amber-600" />
-                    <div className="flex-1">
-                      <div className="text-[13px] font-semibold">JSON (.json)</div>
-                      <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={printPdf} className="gap-2 cursor-pointer">
-                    <Printer className="h-4 w-4 text-indigo-600" />
-                    <div className="flex-1">
-                      <div className="text-[13px] font-semibold">Chop etish / PDF</div>
-                      <div className="text-[10.5px] text-slate-500">Brauzer print dialogi</div>
-                    </div>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* Download dropdown — faqat ikon (import permission bilan gating) */}
+              {canImport && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 grid place-items-center transition-colors"
+                      title="Yuklab olish"
+                    >
+                      {exporting
+                        ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                        : <Download className="h-4 w-4" />}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-[220px]">
+                    <DropdownMenuItem onClick={downloadExcel} className="gap-2 cursor-pointer">
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                      <div className="flex-1">
+                        <div className="text-[13px] font-semibold">Excel (.xlsx)</div>
+                        <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={downloadJson} className="gap-2 cursor-pointer">
+                      <FileJson className="h-4 w-4 text-amber-600" />
+                      <div className="flex-1">
+                        <div className="text-[13px] font-semibold">JSON (.json)</div>
+                        <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={printPdf} className="gap-2 cursor-pointer">
+                      <Printer className="h-4 w-4 text-indigo-600" />
+                      <div className="flex-1">
+                        <div className="text-[13px] font-semibold">Chop etish / PDF</div>
+                        <div className="text-[10.5px] text-slate-500">Brauzer print dialogi</div>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               {canCreate && (
                 <button
