@@ -11,7 +11,7 @@ import {
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
-  CheckCircle2, AlertTriangle,
+  CheckCircle2, AlertTriangle, Lock,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -1958,6 +1958,75 @@ function CountCard({ label, count }: { label: string; count: number }) {
 // ─────────────────────────────────────────────────────────
 // Create / Edit dialog
 // ─────────────────────────────────────────────────────────
+// ──────────────────────────────────────────
+// Pul (money) input helper'lari
+// ──────────────────────────────────────────
+/** Stringni faqat raqamlar va '-' belgisiga qisqartiradi (raw saqlash uchun) */
+function parseMoneyRaw(s: string): string {
+  // Faqat raqamlar, '-' (boshida), va '.' (decimal) — ming separator (probel/vergul) tashlanadi
+  const cleaned = s.replace(/[^\d.-]/g, '');
+  // '-' faqat birinchi belgida
+  const sign = cleaned.startsWith('-') ? '-' : '';
+  const rest = cleaned.replace(/-/g, '');
+  // Faqat 1 ta '.'
+  const parts = rest.split('.');
+  const result = parts.length > 1
+    ? parts[0] + '.' + parts.slice(1).join('').slice(0, 2)
+    : parts[0];
+  return sign + result;
+}
+
+/** Raw stringni '198 424' ko'rinishida formatlaydi */
+function formatMoneyDisplay(raw: string): string {
+  if (!raw || raw === '-') return raw;
+  const sign = raw.startsWith('-') ? '-' : '';
+  const abs = raw.replace(/^-/, '');
+  const [intPart, decPart] = abs.split('.');
+  const intFormatted = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return sign + intFormatted + (decPart !== undefined ? '.' + decPart : '');
+}
+
+/** Saqlanish uchun raw'dan number — bo'sh bo'lsa undefined */
+function moneyToNumber(raw: string): number | undefined {
+  if (!raw || raw === '-' || raw.trim() === '') return undefined;
+  const n = Number(raw);
+  return isNaN(n) ? undefined : n;
+}
+
+/**
+ * Pul (money) input — display'da '198 424', state'da raw '198424'.
+ * onChange raw qiymatni qaytaradi.
+ */
+function MoneyInput({
+  value, onChange, placeholder, disabled, className,
+}: {
+  value: string;
+  onChange: (raw: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <Input
+      value={formatMoneyDisplay(value)}
+      onChange={(e) => onChange(parseMoneyRaw(e.target.value))}
+      placeholder={placeholder}
+      disabled={disabled}
+      inputMode="decimal"
+      className={className}
+    />
+  );
+}
+
+// ──────────────────────────────────────────
+// Object mapping query — Объект dropdown uchun
+// ──────────────────────────────────────────
+interface ObjectMapping {
+  id: string;
+  crmName: string;
+  oplataName: string;
+}
+
 function OplataKvFormDialog({
   open, row, onClose, onSaved,
 }: {
@@ -1965,6 +2034,8 @@ function OplataKvFormDialog({
   onClose: () => void; onSaved: () => void;
 }) {
   const isEdit = !!row;
+  // Tranzaksiyadan kelgan qator — asosiy maydonlarni lock qilamiz
+  const isFromTx = !!row?.sourceTxId;
 
   const [contractNo, setContractNo] = useState('');
   const [date, setDate] = useState('');
@@ -1978,6 +2049,21 @@ function OplataKvFormDialog({
   const [object, setObject] = useState('');
   const [client, setClient] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
+
+  // Объект dropdown — mapping'lardagi oplataName ro'yxati
+  const mappingsQuery = useQuery({
+    queryKey: ['oplatykv-object-mappings'],
+    queryFn: () => api.get<{ ok: boolean; items: ObjectMapping[] }>('/oplata-kv/object-mappings'),
+    enabled: open,
+    staleTime: 5 * 60_000,
+  });
+  const objectOptions = useMemo(() => {
+    const list = mappingsQuery.data?.items?.map((m) => m.oplataName) || [];
+    const unique = Array.from(new Set(list.filter(Boolean))).sort((a, b) => a.localeCompare(b));
+    // Joriy qiymat ro'yxatda bo'lmasa, oldiga qo'shamiz
+    if (object && !unique.includes(object)) unique.unshift(object);
+    return unique;
+  }, [mappingsQuery.data, object]);
 
   useEffect(() => {
     if (!open) return;
@@ -2002,20 +2088,32 @@ function OplataKvFormDialog({
     }
   }, [open, row]);
 
+  // ────────── Validatsiya: 1 взнос + ежемесячный === Сумма оплаты ──────────
+  const sumValidation = useMemo(() => {
+    const p = moneyToNumber(paymentAmount);
+    const f = moneyToNumber(firstInstallment);
+    const m = moneyToNumber(monthlyAmount);
+    // Agar paymentAmount yoki ikkalasi (first + monthly) ham bo'sh bo'lsa — tekshirmaymiz
+    if (p === undefined) return { ok: true, msg: '' };
+    if (f === undefined && m === undefined) return { ok: true, msg: '' };
+    const sumFM = (f ?? 0) + (m ?? 0);
+    // Floating tolerance (kichik xatolik uchun)
+    const eq = Math.abs(sumFM - p) < 0.01;
+    if (eq) return { ok: true, msg: `Tekshirildi: ${formatMoney(sumFM)} = ${formatMoney(p)}` };
+    return {
+      ok: false,
+      msg: `1 взнос + ежемесячный = ${formatMoney(sumFM)} · lekin Сумма оплаты = ${formatMoney(p)} (farq: ${formatMoney(sumFM - p)})`,
+    };
+  }, [paymentAmount, firstInstallment, monthlyAmount]);
+
   const saveMut = useMutation({
     mutationFn: async () => {
-      const numOrUndef = (s: string) => {
-        const v = s.trim();
-        if (v === '') return undefined;
-        const n = Number(v.replace(/\s+/g, '').replace(',', '.'));
-        return isNaN(n) ? undefined : n;
-      };
       const body: any = {
         contractNo: contractNo.trim(),
         date,
-        paymentAmount:    numOrUndef(paymentAmount),
-        firstInstallment: numOrUndef(firstInstallment),
-        monthlyAmount:    numOrUndef(monthlyAmount),
+        paymentAmount:    moneyToNumber(paymentAmount),
+        firstInstallment: moneyToNumber(firstInstallment),
+        monthlyAmount:    moneyToNumber(monthlyAmount),
         purpose: purpose.trim() || undefined,
         txType: txType.trim() || undefined,
         note: note.trim() || undefined,
@@ -2050,23 +2148,39 @@ function OplataKvFormDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Bankdan kelgan qator info banner */}
+        {isFromTx && (
+          <div className="mt-1 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 flex items-start gap-2">
+            <Lock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+            <div className="text-[12px] text-amber-900 leading-relaxed">
+              <b>Bankdan kelgan qator</b> — Дог №, Дата, Сумма оплаты, Клиент, Назначение
+              maydonlari tahrirlab bo'lmaydi. Qolgan maydonlarni o'zgartirishingiz mumkin.
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3 py-2">
-          <Field label="Дог № *">
-            <Input value={contractNo} onChange={(e) => setContractNo(e.target.value)} placeholder="7331MSO26KK" />
+          <Field label="Дог № *" locked={isFromTx}>
+            <Input
+              value={contractNo}
+              onChange={(e) => setContractNo(e.target.value)}
+              placeholder="7331MSO26KK"
+              disabled={isFromTx}
+            />
           </Field>
-          <Field label="Дата *">
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Field label="Дата *" locked={isFromTx}>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={isFromTx} />
           </Field>
 
-          <Field label="Сумма оплаты">
-            <Input value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0" inputMode="decimal" />
+          <Field label="Сумма оплаты" locked={isFromTx}>
+            <MoneyInput value={paymentAmount} onChange={setPaymentAmount} placeholder="0" disabled={isFromTx} />
           </Field>
           <Field label="1 взнос">
-            <Input value={firstInstallment} onChange={(e) => setFirstInstallment(e.target.value)} placeholder="0" inputMode="decimal" />
+            <MoneyInput value={firstInstallment} onChange={setFirstInstallment} placeholder="0" />
           </Field>
 
           <Field label="ежемесячный">
-            <Input value={monthlyAmount} onChange={(e) => setMonthlyAmount(e.target.value)} placeholder="0" inputMode="decimal" />
+            <MoneyInput value={monthlyAmount} onChange={setMonthlyAmount} placeholder="0" />
           </Field>
           <Field label="Оплата (turi)">
             <Select value={paymentCategory || 'none'} onValueChange={(v) => setPaymentCategory(v === 'none' ? '' : v)}>
@@ -2080,11 +2194,38 @@ function OplataKvFormDialog({
             </Select>
           </Field>
 
-          <Field label="Клиент">
-            <Input value={client} onChange={(e) => setClient(e.target.value)} />
+          {/* Sum validation status — 2 ustunni egallaydi */}
+          {(paymentAmount || firstInstallment || monthlyAmount) && (
+            <div className="col-span-2">
+              <div
+                className={cn(
+                  'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                  sumValidation.ok
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                    : 'bg-rose-50 text-rose-700 ring-rose-200',
+                )}
+              >
+                {sumValidation.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
+                {sumValidation.msg || '1 взнос + ежемесячный = Сумма оплаты bo\'lishi shart'}
+              </div>
+            </div>
+          )}
+
+          <Field label="Клиент" locked={isFromTx}>
+            <Input value={client} onChange={(e) => setClient(e.target.value)} disabled={isFromTx} />
           </Field>
           <Field label="Объект">
-            <Input value={object} onChange={(e) => setObject(e.target.value)} />
+            <Select value={object || '__empty'} onValueChange={(v) => setObject(v === '__empty' ? '' : v)}>
+              <SelectTrigger>
+                <SelectValue placeholder={mappingsQuery.isLoading ? 'Yuklanmoqda...' : 'Obyekt tanlang'} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__empty">—</SelectItem>
+                {objectOptions.map((opt) => (
+                  <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           <Field label="Способ оплаты">
@@ -2094,8 +2235,8 @@ function OplataKvFormDialog({
             <Input value={txType} onChange={(e) => setTxType(e.target.value)} />
           </Field>
 
-          <Field label="Назначение платежа" full>
-            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} />
+          <Field label="Назначение платежа" full locked={isFromTx}>
+            <Input value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={isFromTx} />
           </Field>
 
           <Field label="Примечание" full>
@@ -2107,7 +2248,7 @@ function OplataKvFormDialog({
           <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
           <Button
             onClick={() => saveMut.mutate()}
-            disabled={!contractNo.trim() || !date || saveMut.isPending}
+            disabled={!contractNo.trim() || !date || !sumValidation.ok || saveMut.isPending}
             className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
           >
             {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
@@ -2119,10 +2260,20 @@ function OplataKvFormDialog({
   );
 }
 
-function Field({ label, full, children }: { label: string; full?: boolean; children: React.ReactNode }) {
+function Field({
+  label, full, locked, children,
+}: { label: string; full?: boolean; locked?: boolean; children: React.ReactNode }) {
   return (
     <div className={cn('space-y-1', full && 'col-span-2')}>
-      <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{label}</label>
+      <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 inline-flex items-center gap-1">
+        {label}
+        {locked && (
+          <Lock
+            className="h-3 w-3 text-amber-500"
+            aria-label="Bankdan kelgan — tahrirlab bo'lmaydi"
+          />
+        )}
+      </label>
       {children}
     </div>
   );
