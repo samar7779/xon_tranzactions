@@ -130,8 +130,6 @@ export default function OplataKvPage() {
   const canEdit = !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
-  // Eski "canManage" — yaratish | tahrir | o'chirish'dan birortasi mavjud bo'lsa true (bir umumiy "biror narsa qila olaman" flag)
-  const canManage = canCreate || canEdit || canDelete || canImport;
 
   // Filters
   const [q, setQ] = useState('');
@@ -707,7 +705,8 @@ export default function OplataKvPage() {
           Detail yopilmaydi — Edit/Delete/Tarix ustida ochiladi, yopilganda detail ko'rinadi */}
       <OplataKvDetailDialog
         row={detailRow}
-        canManage={canManage}
+        canEdit={canEdit}
+        canDelete={canDelete}
         onClose={() => setDetailRow(null)}
         onEdit={(it) => setEditRow(it)}
         onDelete={(it) => setDeleteRow(it)}
@@ -1669,10 +1668,11 @@ function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; opla
 // Detail dialog — qator bosilganda barcha ma'lumotni chiroyli ko'rinishda
 // ─────────────────────────────────────────────────────────
 function OplataKvDetailDialog({
-  row, canManage, onClose, onEdit, onDelete, onHistory, onCopyId, copiedId,
+  row, canEdit, canDelete, onClose, onEdit, onDelete, onHistory, onCopyId, copiedId,
 }: {
   row: OplataKvItem | null;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
   onClose: () => void;
   onEdit: (r: OplataKvItem) => void;
   onDelete: (r: OplataKvItem) => void;
@@ -1829,7 +1829,7 @@ function OplataKvDetailDialog({
             >
               <History className="h-4 w-4" /> Tarix
             </button>
-            {row.sourceTxId && canManage && (
+            {row.sourceTxId && canEdit && (
               <button
                 onClick={async () => {
                   if (!confirm(`Shu shartnoma (${row.contractNo}) bo'yicha to'lovlarni qayta hisoblash (split)?`)) return;
@@ -1849,21 +1849,21 @@ function OplataKvDetailDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {canManage && (
-              <>
-                <button
-                  onClick={() => onDelete(row)}
-                  className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 ring-1 ring-rose-200 transition-colors inline-flex items-center gap-1.5"
-                >
-                  <Trash2 className="h-4 w-4" /> O'chirish
-                </button>
-                <button
-                  onClick={() => onEdit(row)}
-                  className="h-10 px-4 rounded-xl text-[13px] font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-md inline-flex items-center gap-1.5"
-                >
-                  <Edit3 className="h-4 w-4" /> Tahrirlash
-                </button>
-              </>
+            {canDelete && (
+              <button
+                onClick={() => onDelete(row)}
+                className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 ring-1 ring-rose-200 transition-colors inline-flex items-center gap-1.5"
+              >
+                <Trash2 className="h-4 w-4" /> O'chirish
+              </button>
+            )}
+            {canEdit && (
+              <button
+                onClick={() => onEdit(row)}
+                className="h-10 px-4 rounded-xl text-[13px] font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-md inline-flex items-center gap-1.5"
+              >
+                <Edit3 className="h-4 w-4" /> Tahrirlash
+              </button>
             )}
           </div>
         </div>
