@@ -837,49 +837,47 @@ export class OplataKvService {
    * Avvalgi "all-monthly" fallback tufayli to'lgan bo'lishi mumkin —
    * endi user qoidasi: CRM da yo'q bo'lsa, split umuman qo'yilmaydi.
    *
+   * Atomar raw SQL — bitta UPDATE statement bilan barcha XATO qatorlar
+   * tozalanadi. Bu Prisma updateMany dan ko'ra ishonchli (race condition yo'q,
+   * distinct query'siz).
+   *
    * Returns: tozalangan qatorlar soni.
    */
-  private async cleanupSplitsForXatoContracts(contractNo?: string): Promise<number> {
-    // 1) Qaysi sourceTxId-li qatorlarda split qiymatlari bor — distinct contract olamiz
-    const filled = await this.prisma.oplataKv.findMany({
-      where: {
-        sourceTxId: { not: null },
-        ...(contractNo ? { contractNo } : {}),
-        OR: [
-          { firstInstallment: { not: null } },
-          { monthlyAmount: { not: null } },
-          { paymentCategory: { not: null } },
-        ],
-      },
-      select: { contractNo: true },
-      distinct: ['contractNo'],
-    });
-    const contractNos = filled.map((r) => r.contractNo);
-    if (contractNos.length === 0) return 0;
-
-    // 2) Bu contractlardan qaysilari CRM da verified (found=true)
-    const verified = await this.prisma.crmContract.findMany({
-      where: { contractNumber: { in: contractNos }, found: true },
-      select: { contractNumber: true },
-    });
-    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
-
-    // 3) Verified bo'lmaganlar = XATO → split qiymatlarini null qilamiz
-    const xatoContracts = contractNos.filter((cn) => !verifiedSet.has(cn));
-    if (xatoContracts.length === 0) return 0;
-
-    const result = await this.prisma.oplataKv.updateMany({
-      where: {
-        sourceTxId: { not: null },
-        contractNo: { in: xatoContracts },
-      },
-      data: {
-        firstInstallment: null,
-        monthlyAmount: null,
-        paymentCategory: null,
-      },
-    });
-    return result.count;
+  async cleanupSplitsForXatoContracts(contractNo?: string): Promise<number> {
+    // XATO = source_tx_id li qator, contract_no CRM da found=true emas
+    // (qator bor lekin found=false, yoki cache'da umuman yo'q — ikkalasi ham XATO)
+    let affected: number;
+    if (contractNo) {
+      affected = await this.prisma.$executeRaw`
+        UPDATE oplata_kv
+           SET first_installment = NULL,
+               monthly_amount    = NULL,
+               payment_category  = NULL
+         WHERE source_tx_id IS NOT NULL
+           AND contract_no = ${contractNo}
+           AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
+           AND NOT EXISTS (
+             SELECT 1 FROM crm_contracts c
+             WHERE c.contract_number = oplata_kv.contract_no
+               AND c.found = true
+           )
+      `;
+    } else {
+      affected = await this.prisma.$executeRaw`
+        UPDATE oplata_kv
+           SET first_installment = NULL,
+               monthly_amount    = NULL,
+               payment_category  = NULL
+         WHERE source_tx_id IS NOT NULL
+           AND (first_installment IS NOT NULL OR monthly_amount IS NOT NULL OR payment_category IS NOT NULL)
+           AND NOT EXISTS (
+             SELECT 1 FROM crm_contracts c
+             WHERE c.contract_number = oplata_kv.contract_no
+               AND c.found = true
+           )
+      `;
+    }
+    return affected;
   }
 
   /**
