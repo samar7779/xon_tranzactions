@@ -6,34 +6,39 @@ import { useTranslations } from 'next-intl';
 import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 
 const TABS = [
-  { key: 'users',          tKey: 'users',          icon: Users },
-  { key: 'roles',          tKey: 'roles',          icon: ShieldCheck },
-  { key: 'login',          tKey: 'login',          icon: KeyRound },
-  { key: 'counterparties', tKey: 'counterparties', icon: Briefcase },
-  { key: 'sync-logs',      tKey: 'syncLogs',       icon: History },
-  { key: 'api-explorer',   tKey: 'apiExplorer',    icon: Zap },
-  { key: 'cleanup',        tKey: 'cleanup',        icon: Trash2 },
-  { key: 'import',         tKey: 'import',         icon: Upload },
+  { key: 'users',          tKey: 'users',          icon: Users,        perm: PERMS.USERS_VIEW },
+  { key: 'roles',          tKey: 'roles',          icon: ShieldCheck,  perm: PERMS.ROLES_VIEW },
+  { key: 'login',          tKey: 'login',          icon: KeyRound,     perm: PERMS.ADMIN_LOGIN_VIEW },
+  { key: 'counterparties', tKey: 'counterparties', icon: Briefcase,    perm: PERMS.COUNTERPARTIES_VIEW },
+  { key: 'sync-logs',      tKey: 'syncLogs',       icon: History,      perm: PERMS.SYNC_VIEW },
+  { key: 'api-explorer',   tKey: 'apiExplorer',    icon: Zap,          perm: PERMS.API_EXPLORER_VIEW },
+  { key: 'cleanup',        tKey: 'cleanup',        icon: Trash2,       perm: PERMS.CLEANUP_VIEW },
+  { key: 'import',         tKey: 'import',         icon: Upload,       perm: PERMS.IMPORT_VIEW },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
   const t = useTranslations('admin');
+  const user = useAuth((s) => s.user);
 
-  const activeTab = TABS.find((tab) => pathname.includes(`/admin/${tab.key}`))?.key || 'users';
+  // Faqat ruxsat berilgan tab'lar ko'rinadi
+  const visibleTabs = TABS.filter((tab) => user?.permissions?.includes(tab.perm));
+  const activeTab = visibleTabs.find((tab) => pathname.includes(`/admin/${tab.key}`))?.key || visibleTabs[0]?.key;
 
   return (
     <>
       <Topbar title={t('title')} subtitle={t('subtitle')} />
 
-      {/* Tab bar */}
+      {/* Tab bar — faqat ruxsat berilgan tab'lar */}
       <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200">
         <div className="px-6 lg:px-8">
           <div className="flex items-center gap-1 -mb-px overflow-x-auto">
-            {TABS.map((tab) => {
+            {visibleTabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.key;
               return (
