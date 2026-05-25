@@ -416,6 +416,20 @@ function SyncSettingsPanel() {
     onError: (e: any) => toast.error(e?.message || 'Split xato'),
   });
 
+  // XATO splitlarni darhol tozalash (raw SQL — atomar)
+  const cleanupXatoSplitsMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; cleaned: number }>('/oplata-kv/cleanup-xato-splits', {}, { timeout: 60_000 }),
+    onSuccess: (r: any) => {
+      toast.success(
+        r.cleaned > 0
+          ? `🧹 XATO splitlar tozalandi — ${r.cleaned} qator (1 взнос/oylik null)`
+          : '✓ XATO splitlar yo\'q (hammasi toza)',
+        { duration: 8000 },
+      );
+    },
+    onError: (e: any) => toast.error(e?.message || 'XATO splits cleanup xato'),
+  });
+
   // Tranzaksiya-manba qatorlarni tozalash (date range)
   const cleanupTxMut = useMutation({
     mutationFn: (range: { dateFrom: string | null; dateTo: string | null }) => {
@@ -635,6 +649,15 @@ function SyncSettingsPanel() {
                 >
                   {splitMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                   Split now
+                </Button>
+                <Button
+                  onClick={() => cleanupXatoSplitsMut.mutate()}
+                  disabled={cleanupXatoSplitsMut.isPending}
+                  className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white"
+                  title="XATO shartnomalardan 1 взнос va oylik qiymatlarini DARHOL tozalash (atomar SQL)"
+                >
+                  {cleanupXatoSplitsMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  🧹 XATO splitlarni tozalash
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400">
