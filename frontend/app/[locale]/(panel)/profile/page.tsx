@@ -11,11 +11,13 @@ import {
   Smartphone, Wifi, LogIn, ChevronRight, Eye, EyeOff, Palette,
   Bell, MapPin, Calendar, ImagePlus, Sun, Moon, FileEdit, LogOut,
   Cog, Eye as EyeIcon, Database, Award, Target, Flame, TrendingUp,
+  Timer,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Topbar } from '@/components/topbar';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useAvatar, setAvatar } from '@/lib/use-avatar';
@@ -48,6 +50,7 @@ export default function ProfilePage() {
 
   const user = me || (cachedUser as any as MeResponse | null);
   const [tab, setTab] = useState<Tab>('profile');
+  const [timerOpen, setTimerOpen] = useState(false);
   // useAvatar — reaktiv (boshqa joylar bilan sinxron)
   const avatarUrl = useAvatar(user?.id);
 
@@ -104,6 +107,7 @@ export default function ProfilePage() {
             actionCount={actionCount}
             moduleCount={moduleCount}
             t={t}
+            onTimerClick={() => setTimerOpen(true)}
           />
 
           {/* ═══ TAB BAR ═══ */}
@@ -145,13 +149,20 @@ export default function ProfilePage() {
           {tab === 'settings' && <SettingsTab />}
         </div>
       </div>
+
+      {/* POMODORO TIMER MODAL — Timer iconni Hero'da bosish bilan ochiladi */}
+      <Dialog open={timerOpen} onOpenChange={setTimerOpen}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+          <PomodoroTimer />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
 
 /* ═══════════════════ ULTRA HERO ═══════════════════ */
 
-function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, t }: any) {
+function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, t, onTimerClick }: any) {
   // Hisob yashi (kunlarda)
   const daysActive = user?.createdAt
     ? Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000)
@@ -301,30 +312,32 @@ function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, ac
             </div>
           </div>
 
-          {/* RIGHT — power level big visualization */}
+          {/* RIGHT — Pomodoro Timer button (avval power level edi) */}
           <div className="shrink-0 hidden lg:block">
-            <div className={cn(
-              'relative p-1.5 rounded-3xl bg-gradient-to-br shadow-2xl',
-              powerColor,
-            )}>
-              <div className="px-6 py-5 rounded-[20px] bg-purple-950/60 backdrop-blur-md text-center min-w-[180px]">
-                <div className="text-[10px] uppercase tracking-[0.25em] font-bold text-white/70 mb-2 flex items-center justify-center gap-1.5">
-                  <Zap className="h-3 w-3" />
-                  Daraja
-                </div>
-                <div className="text-3xl font-black tracking-tight text-white mb-3">{t(powerKey)}</div>
-                {/* Mini progress */}
-                <div className="h-1.5 rounded-full bg-white/15 overflow-hidden">
-                  <div
-                    className={cn('h-full rounded-full bg-gradient-to-r animate-pulse', powerColor)}
-                    style={{ width: `${Math.min(100, isSuper ? 100 : (actionCount / 22) * 100)}%`, animationDuration: '3s' }}
-                  />
-                </div>
-                <div className="mt-2 text-[9px] uppercase tracking-wider text-white/50 font-bold">
-                  {isSuper ? '100%' : `${Math.round((actionCount / 22) * 100)}%`} kuch
-                </div>
+            <button
+              onClick={onTimerClick}
+              title="Pomodoro Fokus Timer'ni ochish"
+              className="group relative"
+            >
+              {/* Pulsing glow rings */}
+              <span className="absolute inset-0 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 blur-2xl opacity-50 group-hover:opacity-80 transition-opacity" />
+              <span className="absolute inset-0 rounded-3xl bg-gradient-to-br from-amber-400 to-orange-500 animate-ping opacity-30" style={{ animationDuration: '3s' }} />
+
+              <div className="relative w-24 h-24 rounded-3xl bg-gradient-to-br from-amber-400 via-orange-500 to-rose-600 grid place-items-center shadow-2xl ring-4 ring-white/30
+                              group-hover:scale-105 group-active:scale-95 transition-transform duration-300">
+                <Timer className="h-12 w-12 text-white drop-shadow-lg" strokeWidth={2.2} />
+                {/* Tick marks */}
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-white/70 rounded-full" />
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-0.5 h-2 bg-white/70 rounded-full" />
+                <span className="absolute left-1 top-1/2 -translate-y-1/2 h-0.5 w-2 bg-white/70 rounded-full" />
+                <span className="absolute right-1 top-1/2 -translate-y-1/2 h-0.5 w-2 bg-white/70 rounded-full" />
               </div>
-            </div>
+
+              {/* Label */}
+              <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 text-[10px] uppercase tracking-[0.25em] font-bold text-white/90 whitespace-nowrap">
+                Pomodoro
+              </div>
+            </button>
           </div>
         </div>
       </div>
@@ -377,9 +390,6 @@ function ProfileTab({ user, avatarUrl, initial, onAvatarUpload, onAvatarRemove }
         onUpload={onAvatarUpload}
         onRemove={onAvatarRemove}
       />
-
-      {/* POMODORO FOCUS TIMER — qumli soat + 3 dizayn */}
-      <PomodoroTimer />
 
       {/* LOGIN HISTORY */}
       <LoginHistorySection user={user} />
