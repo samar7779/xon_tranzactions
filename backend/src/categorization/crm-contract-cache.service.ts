@@ -51,7 +51,13 @@ export class CrmContractCacheService {
    */
   async lookup(contractNumber: string, opts?: { forceRefresh?: boolean }): Promise<CachedContract | null> {
     if (!contractNumber) return null;
-    const key = contractNumber.trim().toUpperCase();
+    // № va N° simbollarini olib tashlaymiz + bo'shliqlarni tozalaymiz
+    const key = contractNumber
+      .replace(/№/g, '')
+      .replace(/N°/g, '')
+      .replace(/\s+/g, '')
+      .trim()
+      .toUpperCase();
     if (!key) return null;
 
     if (opts?.forceRefresh) {

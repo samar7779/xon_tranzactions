@@ -161,6 +161,16 @@ export class CategorizationController {
     return this.svc.refreshContractCache(body.contractNumber);
   }
 
+  @Post('cleanup-contract-symbols')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "Eski qatorlardagi № va bo'shliqlarni Transaction.contractNumber dan tozalash",
+    description: "DB dagi mavjud Transaction.contractNumber qiymatlarda № yoki bo'shliq bo'lsa olib tashlaydi. Yangi yozuvlar avtomatik tozalanadi.",
+  })
+  async cleanupContractSymbols() {
+    return this.svc.cleanupContractNumberSymbols();
+  }
+
   @Get('recheck-xato/fixed')
   @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
   @ApiOperation({ summary: "Tuzatilgan shartnomalar to'liq ro'yxati + tx ID lari" })
