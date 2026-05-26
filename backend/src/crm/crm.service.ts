@@ -325,23 +325,45 @@ export class CrmService {
     let detail: any = r.ok ? (r.data?.data || null) : null;
     const contractNo = (opts.contract || detail?.contract || '').toString().trim();
 
-    // ── FALLBACK: /show qaytarmasa /index dan urunamiz (cancelled qaytishi mumkin) ──
-    // XonSaroy CRM /show ba'zan cancelled shartnomalarni qaytarmaydi.
-    // /index esa cancelled=1 bilan ularni qaytaradi. Aniq kontraktni topib qaytaramiz.
+    // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (cancelled kontraktlar uchun) ──
+    // XonSaroy /show showByContract → setById → Not found qaytishi mumkin (cancelled bo'lsa).
+    // /index esa cancelled bo'lganlarni ham qaytaradi (search). Bir nechta cancelled
+    // parametr variantlarini yuboramiz — XonSaroy noma'lumlarni e'tiborsiz qoldiradi.
     if (!detail && contractNo) {
       try {
         const idxRes = await this.call('/index', {
           contract: contractNo,
-          'per-page': 5,
+          'per-page': 50,  // ko'proq item — exact match topish ehtimoli yuqori
           cancelled: 1,
+          is_cancelled: 1,
+          include_cancelled: 1,
+          with_cancelled: 1,
+          status: 'all',
         });
         if (idxRes.ok) {
           const items: any[] = idxRes.data?.data || [];
+          this.log.log(`CRM /index fallback: ${contractNo} uchun ${items.length} ta item topildi`);
+          // 1) Exact match (UPPER)
           const exact = items.find((it) => String(it.contract || '').toUpperCase() === contractNo.toUpperCase());
           if (exact) {
             detail = exact;
-            this.log.log(`CRM /show fallback /index: ${contractNo} topildi (status=${detail.status || '-'})`);
+            this.log.log(`  → exact match: status=${exact.status || '-'}`);
+          } else if (items.length > 0) {
+            // 2) Trimmed/normalized match (whitespace, dash bilan farqlar)
+            const norm = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+            const target = norm(contractNo);
+            const fuzzy = items.find((it) => norm(String(it.contract || '')) === target);
+            if (fuzzy) {
+              detail = fuzzy;
+              this.log.log(`  → normalized match: ${fuzzy.contract} (status=${fuzzy.status || '-'})`);
+            } else {
+              // Topilmadi — sample log qilamiz
+              const sample = items.slice(0, 3).map((i) => i.contract).join(', ');
+              this.log.log(`  → exact/normalized match yo'q. Sample: ${sample}`);
+            }
           }
+        } else {
+          this.log.warn(`CRM /index fallback xato: ${(idxRes as any).status} ${(idxRes as any).error?.slice(0, 150)}`);
         }
       } catch (e: any) {
         this.log.warn(`CRM /show -> /index fallback xato (${contractNo}): ${e?.message}`);
