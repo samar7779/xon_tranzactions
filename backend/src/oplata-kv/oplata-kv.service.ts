@@ -3098,6 +3098,22 @@ export class OplataKvService {
       return { sourceRow, destRows };
     });
 
+    // Split (1 взнос / ежемесячный hisoblash) — barcha yangi qatorlar uchun.
+    // Source qator avval (manfiy summa — refund logikasi), keyin destinations.
+    // Tartib muhim: aggregate'lar ketma-ket o'qiladi, shu sababli await bilan ketma-ket.
+    try {
+      await this.splitSingleRow(created.sourceRow.id, input.actor);
+      for (const r of created.destRows) {
+        try {
+          await this.splitSingleRow(r.id, input.actor);
+        } catch (e: any) {
+          this.log.warn(`Perereboska dest split xato (${r.id}): ${e?.message}`);
+        }
+      }
+    } catch (e: any) {
+      this.log.warn(`Perereboska source split xato: ${e?.message}`);
+    }
+
     // Telegram xabar
     void this.notifyPerereboskaTelegram('created', {
       groupId,
