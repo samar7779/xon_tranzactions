@@ -1045,13 +1045,20 @@ export default function TransactionsPage() {
                                   </button>
                                 </div>
                               ) : (
-                                // Verified — shartnoma raqami ko'rinadi
-                                <code
-                                  className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 bg-indigo-50 ring-indigo-200"
-                                  title={it.contractCustomer || ''}
-                                >
-                                  {it.contractNumber}
-                                </code>
+                                // Verified — shartnoma raqami ko'rinadi (+ BEKOR badge agar cancelled)
+                                <div className="flex items-center gap-1">
+                                  <code
+                                    className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 bg-indigo-50 ring-indigo-200"
+                                    title={it.contractCustomer || ''}
+                                  >
+                                    {it.contractNumber}
+                                  </code>
+                                  {it.contractCrmStatus && /cancel|отмен|бекор/i.test(it.contractCrmStatus) && (
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 ring-1 ring-orange-200" title={`CRM: ${it.contractCrmStatus}`}>
+                                      ⊘ bekor
+                                    </span>
+                                  )}
+                                </div>
                               )
                             ) : (
                               <span className="text-[10px] text-slate-300">—</span>
@@ -2176,6 +2183,11 @@ function TransactionDetailDialog({
                       {liveRow.contractCustomer && (
                         <span className="text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[220px]" title={liveRow.contractCustomer}>
                           ✓ {liveRow.contractCustomer}
+                        </span>
+                      )}
+                      {liveRow.contractCrmStatus && /cancel|отмен|бекор/i.test(liveRow.contractCrmStatus) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 ring-1 ring-orange-200" title={`CRM status: ${liveRow.contractCrmStatus}`}>
+                          ⊘ BEKOR
                         </span>
                       )}
                     </div>
