@@ -14,7 +14,7 @@ import {
   Hash, Receipt, Link2, History, Loader2, AlertCircle, AlertTriangle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
-  Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, RefreshCw,
+  Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -1945,26 +1945,6 @@ function TransactionDetailDialog({
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
-  // CRM cache stale bo'lsa — bitta shartnomani DARHOL qayta tekshirish
-  const refreshCrmCacheMut = useMutation({
-    mutationFn: (contractNumber: string) =>
-      api.post<{ ok: boolean; found: boolean; customerName: string | null; objectName: string | null }>(
-        '/categorization/refresh-contract-cache',
-        { contractNumber },
-      ),
-    onSuccess: (r) => {
-      if (r.found) {
-        toast.success(`✓ CRM da topildi: ${r.customerName || r.objectName || 'tasdiqlandi'}`, { duration: 6000 });
-        qc.invalidateQueries({ queryKey: ['transactions'] });
-        qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
-        liveQuery.refetch();
-      } else {
-        toast.error(`CRM da topilmadi — haqiqatdan ham mavjud emas (cache yangilandi)`, { duration: 6000 });
-        liveQuery.refetch();
-      }
-    },
-    onError: (e: any) => toast.error(e?.message || 'CRM tekshirish xato'),
-  });
 
   const setCounterpartyMut = useMutation({
     mutationFn: (counterpartyId: string | null) =>
@@ -2177,20 +2157,9 @@ function TransactionDetailDialog({
                     </div>
                   ) : liveRow.contractStatus === 'unverified' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <code className="inline-block font-mono text-[12px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded ring-1 ring-rose-200">
-                        {liveRow.contractNumber}
-                      </code>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
                         <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
                       </span>
-                      <button
-                        onClick={() => refreshCrmCacheMut.mutate(liveRow.contractNumber)}
-                        disabled={refreshCrmCacheMut.isPending}
-                        title="CRM da qayta tekshirish (cache yangilash) — agar CRM da bor bo'lsa-yu, sistema 'XATO' devotgan bo'lsa"
-                        className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-sm hover:shadow-md hover:shadow-emerald-500/40 hover:scale-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {refreshCrmCacheMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                      </button>
                       <button
                         onClick={() => setLookupContractDetail({ contract: liveRow.contractNumber, description: liveRow.description })}
                         title="AI yordamida o'xshash shartnomalarni topish"
