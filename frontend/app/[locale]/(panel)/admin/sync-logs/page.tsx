@@ -8,6 +8,7 @@ import {
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
   Plus, Trash2, ArrowRight, Building2, Sparkles, Trash, Layers, Split,
+  Download, FileText, ArrowRightLeft,
 } from 'lucide-react';
 // Clock allaqachon import qilingan
 import { Card, CardContent } from '@/components/ui/card';
@@ -997,6 +998,103 @@ function SyncSettingsPanel() {
               </div>
             </div>
           )}
+
+          {/* ── EXPORT ZIP — Arizalar + Переброска ── */}
+          <div className="mt-5 pt-5 border-t border-slate-100">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600 flex items-center gap-1.5">
+              <Download className="h-3.5 w-3.5" />
+              Hujjatlarni ZIP qilib yuklab olish
+            </Label>
+            <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+              Tizimdagi barcha biriktirilgan hujjatlarni bir arxivda yuklab olish.
+              Har bir hujjat shartnoma raqami bo'yicha papkalarga taqsimlanadi.
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/oplata-kv/export/arizas-zip`;
+                  // JWT cookie/header bo'lmagani uchun token query'da yuborish kerak — soddalashtirilgan variant
+                  const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
+                  // fetch + blob orqali yuklab olamiz (auth header bilan)
+                  (async () => {
+                    try {
+                      toast.info("Arizalar yig'ilmoqda...");
+                      const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/oplata-kv/export/arizas-zip`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      });
+                      if (!r.ok) throw new Error(`Status ${r.status}`);
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `arizalar_${new Date().toISOString().slice(0, 10)}.zip`;
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                      URL.revokeObjectURL(url);
+                      toast.success('Arizalar ZIP yuklab olindi');
+                    } catch (e: any) {
+                      toast.error(e?.message || "Yuklab olishda xato");
+                    }
+                  })();
+                }}
+                className="group rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200 hover:ring-amber-400 hover:shadow-md transition-all p-4 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shadow">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-bold text-slate-900">Arizalarni yuklash</div>
+                    <div className="text-[11px] text-slate-600">Barcha ariza fayllari (PDF, rasmlar) — ZIP</div>
+                  </div>
+                  <Download className="h-4 w-4 text-amber-600 group-hover:translate-y-0.5 transition-transform" />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
+                  (async () => {
+                    try {
+                      toast.info("Переброска fayllari yig'ilmoqda...");
+                      const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/oplata-kv/export/perereboski-zip`, {
+                        headers: token ? { Authorization: `Bearer ${token}` } : {},
+                      });
+                      if (!r.ok) throw new Error(`Status ${r.status}`);
+                      const blob = await r.blob();
+                      const url = URL.createObjectURL(blob);
+                      const link = document.createElement('a');
+                      link.href = url;
+                      link.download = `perereboski_${new Date().toISOString().slice(0, 10)}.zip`;
+                      document.body.appendChild(link);
+                      link.click();
+                      link.remove();
+                      URL.revokeObjectURL(url);
+                      toast.success('Переброска ZIP yuklab olindi');
+                    } catch (e: any) {
+                      toast.error(e?.message || "Yuklab olishda xato");
+                    }
+                  })();
+                }}
+                className="group rounded-xl bg-gradient-to-br from-fuchsia-50 to-pink-50 ring-1 ring-fuchsia-200 hover:ring-fuchsia-400 hover:shadow-md transition-all p-4 text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-600 grid place-items-center text-white shadow">
+                    <ArrowRightLeft className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13.5px] font-bold text-slate-900">Перереброскаlarni yuklash</div>
+                    <div className="text-[11px] text-slate-600">Barcha o'tkazma fayllari — ZIP</div>
+                  </div>
+                  <Download className="h-4 w-4 text-fuchsia-600 group-hover:translate-y-0.5 transition-transform" />
+                </div>
+              </button>
+            </div>
+          </div>
         </CardContent>
         )}
       </Card>

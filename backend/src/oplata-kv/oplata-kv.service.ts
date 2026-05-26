@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'crypto';
+import * as path from 'path';
+import * as fs from 'fs/promises';
 import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -51,12 +56,24 @@ interface PreviewState {
 @Injectable()
 export class OplataKvService {
   private readonly log = new Logger(OplataKvService.name);
+  private readonly uploadsDir: string;
+  private readonly tgToken: string;
+  private readonly tgChat: string;
+  private readonly appUrl: string;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crmService: CrmService,
     private readonly crmCache: CrmContractCacheService,
     private readonly settings: SettingsService,
-  ) {}
+    private readonly config: ConfigService,
+    private readonly http: HttpService,
+  ) {
+    this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
+    this.tgToken = this.config.get<string>('TG_BOT_TOKEN') || '';
+    this.tgChat = this.config.get<string>('ATTACHMENTS_NOTIFY_CHAT') || '-5150947522';
+    this.appUrl = this.config.get<string>('APP_URL') || 'https://transactions.xonapps.uz';
+  }
 
   // Auto-sync uchun oxirgi ishga tushgan vaqt
   private lastAutoSyncAt: Date | null = null;
@@ -2868,5 +2885,482 @@ export class OplataKvService {
     if (t.includes('1 взнос') || t.includes('первый') || t.includes('1-взнос')) return 'FIRST';
     if (t.includes('общий') || t.includes('общая') || t === 'общ') return 'GENERAL';
     return null;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // ПЕРЕБРОСКА — shartnomadan shartnomaga pul o'tkazma
+  // ════════════════════════════════════════════════════════════════════
+
+  /**
+   * Shartnoma qoldig'i — barcha tegishli OplataKv qatorlaridagi paymentAmount summasi.
+   * Перереброска uchun: foydalanuvchi shu summadan oshib transfer qila olmaydi.
+   * CRM dan ham mijoz/obyekt nomini olib qaytaramiz (form auto-fill uchun).
+   */
+  async contractBalance(contractNo: string) {
+    if (!contractNo || !contractNo.trim()) {
+      throw new BadRequestException("contractNo bo'sh");
+    }
+    const cn = contractNo.trim();
+
+    // Joriy jami summa (barcha tegishli to'lovlar)
+    const sums = await this.prisma.oplataKv.aggregate({
+      where: { contractNo: cn },
+      _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+      _count: true,
+    });
+
+    const totalPaid = Number(sums._sum.paymentAmount || 0);
+    const totalFirst = Number(sums._sum.firstInstallment || 0);
+    const totalMonthly = Number(sums._sum.monthlyAmount || 0);
+
+    // CRM dan mijoz va obyekt — auto-fill uchun
+    const crmLookup = await this.crmLookupForForm(cn).catch(() => null);
+
+    return {
+      ok: true,
+      contractNo: cn,
+      totalPaid,
+      totalFirst,
+      totalMonthly,
+      rowCount: sums._count,
+      customerName: crmLookup?.customerName || null,
+      objectName: crmLookup?.objectName || null,
+      foundInCrm: !!crmLookup?.found,
+    };
+  }
+
+  /**
+   * Переброска yaratish — bitta source qator (manfiy summa) + N ta dest qatorlar (musbat).
+   * Validatsiya:
+   *   - source CRM da mavjud
+   *   - har bir destination CRM da mavjud
+   *   - source amount > 0 (UI da minus avto qo'shiladi)
+   *   - destinations summasi === source amount
+   *   - source qoldig'i amount dan kam emas
+   *   - obyekt nomlari teng (source + barcha destinations)
+   *   - file majburiy
+   */
+  async createPerereboska(input: {
+    fromContractNo: string;
+    amount: number;                 // jami summa (musbat)
+    date: string;                   // YYYY-MM-DD
+    destinations: Array<{ contractNo: string; amount: number }>;
+    note?: string;
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number };
+    actor: Actor;
+  }) {
+    const fromCn = (input.fromContractNo || '').trim().toUpperCase();
+    if (!fromCn) throw new BadRequestException("Manba shartnoma bo'sh");
+    if (!(input.amount > 0)) throw new BadRequestException("Summa 0 dan katta bo'lishi shart");
+    if (!input.destinations?.length) throw new BadRequestException("Kamida 1 ta maqsadli shartnoma kerak");
+    if (!input.date) throw new BadRequestException("Sana kerak");
+    if (!input.file?.buffer) throw new BadRequestException("Hujjat (file) majburiy");
+    if (input.file.size > 25 * 1024 * 1024) throw new BadRequestException("Fayl 25 MB dan oshmasligi kerak");
+
+    // Source o'zini o'ziga otkaza olmaydi
+    for (const d of input.destinations) {
+      const dn = (d.contractNo || '').trim().toUpperCase();
+      if (!dn) throw new BadRequestException("Maqsadli shartnoma bo'sh");
+      if (dn === fromCn) throw new BadRequestException("Maqsadli shartnoma manba bilan bir xil bo'la olmaydi");
+      if (!(d.amount > 0)) throw new BadRequestException(`Maqsadli summa noto'g'ri: ${dn}`);
+    }
+
+    // Destinations summasi === source amount
+    const destSum = input.destinations.reduce((s, d) => s + Number(d.amount), 0);
+    if (Math.abs(destSum - input.amount) > 0.01) {
+      throw new BadRequestException(
+        `Maqsadli summalar jami (${destSum.toFixed(2)}) manba summasiga (${input.amount.toFixed(2)}) teng emas`,
+      );
+    }
+
+    // CRM tekshirish — source
+    const fromCrm = await this.crmLookupForForm(fromCn);
+    if (!fromCrm.found) {
+      throw new BadRequestException(`Manba shartnoma CRM da topilmadi: ${fromCn}`);
+    }
+    if (!fromCrm.objectName) {
+      throw new BadRequestException(`Manba shartnoma obyekti aniqlanmadi: ${fromCn}`);
+    }
+
+    // Source qoldig'i tekshirish
+    const balance = await this.contractBalance(fromCn);
+    if (balance.totalPaid < input.amount - 0.01) {
+      throw new BadRequestException(
+        `Manba qoldig'i yetarli emas: ${balance.totalPaid.toFixed(2)} < ${input.amount.toFixed(2)}`,
+      );
+    }
+
+    // CRM tekshirish — har bir destination + obyekt teng
+    const destCrms: Array<{ contractNo: string; customerName: string | null; objectName: string | null }> = [];
+    for (const d of input.destinations) {
+      const dn = (d.contractNo || '').trim().toUpperCase();
+      const dCrm = await this.crmLookupForForm(dn);
+      if (!dCrm.found) {
+        throw new BadRequestException(`Maqsadli shartnoma CRM da topilmadi: ${dn}`);
+      }
+      if (!dCrm.objectName) {
+        throw new BadRequestException(`Maqsadli shartnoma obyekti aniqlanmadi: ${dn}`);
+      }
+      if (dCrm.objectName !== fromCrm.objectName) {
+        throw new BadRequestException(
+          `Obyekt nomi mos kelmaydi: ${dn} (${dCrm.objectName}) ≠ ${fromCn} (${fromCrm.objectName})`,
+        );
+      }
+      destCrms.push({ contractNo: dn, customerName: dCrm.customerName, objectName: dCrm.objectName });
+    }
+
+    // Faylni saqlash
+    const groupId = randomUUID();
+    const safeName = input.file.originalname.replace(/[^\w\d.\-_ ()\[\]а-яёА-ЯЁa-zA-Z0-9]/g, '_').slice(0, 200);
+    const dir = path.join(this.uploadsDir, 'perereboska', groupId);
+    await fs.mkdir(dir, { recursive: true });
+    const filePath = path.join(dir, safeName);
+    await fs.writeFile(filePath, input.file.buffer);
+
+    const dateObj = new Date(input.date);
+    if (isNaN(dateObj.getTime())) throw new BadRequestException("Sana noto'g'ri formatda");
+
+    const note = (input.note || '').trim() || null;
+    const TX_TYPE = 'Переброска';
+
+    // Tranzaksiya bilan barcha qatorlarni yaratamiz
+    const created = await this.prisma.$transaction(async (tx) => {
+      // 1) Source qator (manfiy summa)
+      const sourceRow = await tx.oplataKv.create({
+        data: {
+          contractNo: fromCn,
+          date: dateObj,
+          paymentAmount: -input.amount, // MANFIY — pul olinmoqda
+          firstInstallment: null,
+          monthlyAmount: null,
+          purpose: `Переброска: ${fromCn} → ${input.destinations.map((d) => d.contractNo.toUpperCase()).join(', ')}`,
+          txType: TX_TYPE,
+          note,
+          paymentCategory: null,
+          object: fromCrm.objectName,
+          client: fromCrm.customerName,
+          paymentMethod: TX_TYPE,
+          createdById: input.actor.id,
+          createdByName: input.actor.name,
+          perereboskaGroupId: groupId,
+          perereboskaFilePath: filePath,
+          perereboskaFileName: safeName,
+          perereboskaFileMime: input.file.mimetype.slice(0, 128),
+          perereboskaFileSize: input.file.size,
+        },
+      });
+
+      // 2) Destinations (musbat summalar)
+      const destRows: any[] = [];
+      for (let i = 0; i < input.destinations.length; i++) {
+        const d = input.destinations[i];
+        const dc = destCrms[i];
+        const r = await tx.oplataKv.create({
+          data: {
+            contractNo: dc.contractNo,
+            date: dateObj,
+            paymentAmount: d.amount,
+            firstInstallment: null,
+            monthlyAmount: null,
+            purpose: `Переброска: ${fromCn} → ${dc.contractNo}`,
+            txType: TX_TYPE,
+            note,
+            paymentCategory: null,
+            object: dc.objectName,
+            client: dc.customerName,
+            paymentMethod: TX_TYPE,
+            createdById: input.actor.id,
+            createdByName: input.actor.name,
+            perereboskaGroupId: groupId,
+            // File faqat source qatorda saqlanadi (qaytarilish ham source orqali)
+          },
+        });
+        destRows.push(r);
+      }
+
+      // History (audit)
+      try {
+        await tx.oplataKvHistory.create({
+          data: {
+            oplataKvId: sourceRow.id,
+            action: 'created',
+            actorType: input.actor.id ? 'user' : 'system',
+            actorId: input.actor.id,
+            actorName: input.actor.name,
+            note: `Переброска yaratildi: ${fromCn} → ${destRows.length} ta shartnoma · ${input.amount}`,
+            changes: { groupId, amount: input.amount, destinations: input.destinations } as any,
+          },
+        });
+      } catch (e: any) {
+        this.log.warn(`Perereboska history xato: ${e?.message}`);
+      }
+
+      return { sourceRow, destRows };
+    });
+
+    // Telegram xabar
+    void this.notifyPerereboskaTelegram('created', {
+      groupId,
+      fromCn,
+      objectName: fromCrm.objectName,
+      amount: input.amount,
+      destinations: destCrms.map((d, i) => ({ contractNo: d.contractNo, amount: input.destinations[i].amount })),
+      actor: input.actor,
+      filePath,
+      fileName: safeName,
+      fileMime: input.file.mimetype,
+    });
+
+    return {
+      ok: true,
+      groupId,
+      sourceId: created.sourceRow.id,
+      destIds: created.destRows.map((r) => r.id),
+      amount: input.amount,
+    };
+  }
+
+  /**
+   * Перереброска guruh'ini o'chirish — barcha tegishli qatorlar + file.
+   * Telegram'ga xabar yuboriladi.
+   */
+  async deletePerereboskaGroup(groupId: string, actor: Actor) {
+    if (!groupId) throw new BadRequestException("groupId bo'sh");
+
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { perereboskaGroupId: groupId },
+      orderBy: { paymentAmount: 'asc' }, // source (manfiy) avval
+    });
+    if (rows.length === 0) throw new NotFoundException('Перереброска guruh topilmadi');
+
+    const sourceRow = rows.find((r) => Number(r.paymentAmount || 0) < 0) || rows[0];
+    const filePath = sourceRow.perereboskaFilePath;
+    let fileBuffer: Buffer | null = null;
+    if (filePath) {
+      try { fileBuffer = await fs.readFile(filePath); } catch {}
+    }
+
+    // DB'dan o'chirish
+    await this.prisma.oplataKv.deleteMany({ where: { perereboskaGroupId: groupId } });
+
+    // Diskdan o'chirish
+    if (filePath) {
+      try {
+        await fs.unlink(filePath);
+        await fs.rmdir(path.dirname(filePath)).catch(() => {});
+      } catch (e: any) {
+        this.log.warn(`Perereboska file o'chirilmadi: ${e?.message}`);
+      }
+    }
+
+    // Telegram
+    void this.notifyPerereboskaTelegram('deleted', {
+      groupId,
+      fromCn: sourceRow.contractNo,
+      objectName: sourceRow.object,
+      amount: Math.abs(Number(sourceRow.paymentAmount || 0)),
+      destinations: rows
+        .filter((r) => r.id !== sourceRow.id)
+        .map((r) => ({ contractNo: r.contractNo, amount: Number(r.paymentAmount || 0) })),
+      actor,
+      filePath: null,
+      fileName: sourceRow.perereboskaFileName || 'document',
+      fileMime: sourceRow.perereboskaFileMime || 'application/octet-stream',
+      fileBuffer,
+    });
+
+    return { ok: true, deleted: rows.length, groupId };
+  }
+
+  /** Перереброска guruh fayli — download uchun */
+  async getPerereboskaFile(groupId: string) {
+    const source = await this.prisma.oplataKv.findFirst({
+      where: { perereboskaGroupId: groupId, perereboskaFilePath: { not: null } },
+    });
+    if (!source || !source.perereboskaFilePath) {
+      throw new NotFoundException("Перереброска fayli topilmadi");
+    }
+    try {
+      await fs.access(source.perereboskaFilePath);
+    } catch {
+      throw new NotFoundException("Fayl diskda yo'q");
+    }
+    return {
+      filePath: source.perereboskaFilePath,
+      fileName: source.perereboskaFileName || 'document',
+      fileMime: source.perereboskaFileMime || 'application/octet-stream',
+      fileSize: source.perereboskaFileSize || 0,
+    };
+  }
+
+  /** Telegram notification — Перереброска create/delete */
+  private async notifyPerereboskaTelegram(
+    action: 'created' | 'deleted',
+    payload: {
+      groupId: string;
+      fromCn: string;
+      objectName: string | null;
+      amount: number;
+      destinations: Array<{ contractNo: string; amount: number }>;
+      actor: Actor;
+      filePath: string | null;
+      fileName: string;
+      fileMime: string;
+      fileBuffer?: Buffer | null;
+    },
+  ) {
+    if (!this.tgToken || !this.tgChat) return;
+    try {
+      const icon = action === 'created' ? '🔄' : '🗑️';
+      const verb = action === 'created' ? 'yaratildi' : "o'chirildi";
+      const actor = payload.actor.name || '?';
+      const date = new Date().toLocaleString('uz-UZ', {
+        timeZone: 'Asia/Tashkent',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+      });
+      const fmt = (n: number) =>
+        new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(n);
+      const destText = payload.destinations
+        .map((d) => `   • <code>${this.escape(d.contractNo)}</code> · ${fmt(d.amount)}`)
+        .join('\n');
+
+      const caption = [
+        `${icon} <b>Переброска ${verb}</b>`,
+        ``,
+        `📤 Manba: <code>${this.escape(payload.fromCn)}</code>`,
+        payload.objectName ? `🏢 Obyekt: <b>${this.escape(payload.objectName)}</b>` : null,
+        `💰 Summa: <b>${fmt(payload.amount)}</b>`,
+        ``,
+        `📥 Maqsadli (${payload.destinations.length}):`,
+        destText,
+        ``,
+        `👤 ${this.escape(actor)}`,
+        `🕒 ${date}`,
+        `🆔 <code>${this.escape(payload.groupId)}</code>`,
+      ].filter(Boolean).join('\n');
+
+      const hasFile = !!(payload.filePath || payload.fileBuffer);
+      if (hasFile) {
+        const isImage = (payload.fileMime || '').startsWith('image/');
+        const endpoint = isImage ? 'sendPhoto' : 'sendDocument';
+        const fileField = isImage ? 'photo' : 'document';
+
+        const fsMod = await import('fs');
+        const FormData = (await import('form-data')).default;
+        const form = new FormData();
+        form.append('chat_id', this.tgChat);
+        form.append('caption', caption);
+        form.append('parse_mode', 'HTML');
+
+        const fileSource = payload.fileBuffer
+          ? payload.fileBuffer
+          : fsMod.createReadStream(payload.filePath!);
+
+        form.append(fileField, fileSource, {
+          filename: payload.fileName,
+          contentType: payload.fileMime || 'application/octet-stream',
+        });
+
+        await firstValueFrom(
+          this.http.post(
+            `https://api.telegram.org/bot${this.tgToken}/${endpoint}`,
+            form,
+            { headers: form.getHeaders(), timeout: 30000, maxBodyLength: 50 * 1024 * 1024 },
+          ),
+        );
+        return;
+      }
+
+      await firstValueFrom(
+        this.http.post(
+          `https://api.telegram.org/bot${this.tgToken}/sendMessage`,
+          {
+            chat_id: this.tgChat,
+            text: caption,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+          },
+          { timeout: 8000 },
+        ),
+      );
+    } catch (e: any) {
+      this.log.warn(`Perereboska Telegram xato: ${e?.message}`);
+    }
+  }
+
+  private escape(s: string | null | undefined): string {
+    if (!s) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // ZIP EXPORT — Arizalar va Перереброска fayllari
+  // ════════════════════════════════════════════════════════════════════
+
+  /** Barcha ariza fayllarini ZIP qilib qaytarish (Stream) */
+  async exportArizasZip(res: any) {
+    const arch = (await import('archiver')).default;
+    const zip = arch('zip', { zlib: { level: 5 } });
+
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="arizalar_${new Date().toISOString().slice(0, 10)}.zip"`,
+    });
+    zip.pipe(res);
+
+    const arizas = await this.prisma.transactionAttachment.findMany({
+      orderBy: { uploadedAt: 'desc' },
+      take: 10_000,
+    });
+
+    let added = 0;
+    for (const a of arizas) {
+      try {
+        await fs.access(a.storagePath);
+        // Fayl nomida shartnoma yoki tx id
+        const subDir = a.contractNumber ? `${a.contractNumber}/` : 'no-contract/';
+        zip.file(a.storagePath, { name: `${subDir}${a.id}__${a.filename}` });
+        added++;
+      } catch {
+        // Disk faylida yo'q
+      }
+    }
+    this.log.log(`Arizas ZIP: ${added}/${arizas.length} fayl qo'shildi`);
+    await zip.finalize();
+  }
+
+  /** Barcha Переброска fayllarini ZIP qilib qaytarish (Stream) */
+  async exportPerereboskiZip(res: any) {
+    const arch = (await import('archiver')).default;
+    const zip = arch('zip', { zlib: { level: 5 } });
+
+    res.set({
+      'Content-Type': 'application/zip',
+      'Content-Disposition': `attachment; filename="perereboski_${new Date().toISOString().slice(0, 10)}.zip"`,
+    });
+    zip.pipe(res);
+
+    const sources = await this.prisma.oplataKv.findMany({
+      where: { perereboskaFilePath: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    });
+
+    let added = 0;
+    for (const s of sources) {
+      if (!s.perereboskaFilePath) continue;
+      try {
+        await fs.access(s.perereboskaFilePath);
+        const fname = s.perereboskaFileName || 'file';
+        const subDir = s.contractNo ? `${s.contractNo}/` : 'no-contract/';
+        zip.file(s.perereboskaFilePath, {
+          name: `${subDir}${s.perereboskaGroupId}__${fname}`,
+        });
+        added++;
+      } catch {}
+    }
+    this.log.log(`Perereboska ZIP: ${added}/${sources.length} fayl qo'shildi`);
+    await zip.finalize();
   }
 }

@@ -831,6 +831,15 @@ model OplataKv {
   importBatchId     String?  @map("import_batch_id") @db.VarChar(50)     // ImportBatch.id (agar import bilan kelgan bo'lsa)
   sourceTxId        String?  @unique @map("source_tx_id") @db.VarChar(255) // Transaction externalId (bank kompozit) yoki cuid (dedup uchun unique)
 
+  // Переброска (shartnomadan shartnomaga pul o'tkazma) — guruh ID
+  // Source qator (manfiy summa) + N ta destination qator (musbat summa) bir guruhga bog'lanadi.
+  // perereboskaFilePath — biriktirilgan hujjat (majburiy) — faqat source qatorda saqlanadi.
+  perereboskaGroupId   String?  @map("perereboska_group_id") @db.VarChar(50)
+  perereboskaFilePath  String?  @map("perereboska_file_path") @db.Text
+  perereboskaFileName  String?  @map("perereboska_file_name") @db.VarChar(255)
+  perereboskaFileMime  String?  @map("perereboska_file_mime") @db.VarChar(128)
+  perereboskaFileSize  Int?     @map("perereboska_file_size")
+
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
 
@@ -840,6 +849,7 @@ model OplataKv {
   @@index([object])
   @@index([paymentCategory])
   @@index([importBatchId])
+  @@index([perereboskaGroupId])
   @@map("oplata_kv")
 }
 
