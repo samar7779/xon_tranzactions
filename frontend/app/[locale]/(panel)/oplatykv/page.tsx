@@ -2777,6 +2777,17 @@ function PerereboskaDialog({
     d.foundInCrm && d.contractNo.trim() && (moneyToNumber(d.amount) || 0) > 0,
   );
 
+  // Manba shartnoma maqsadli ro'yxatda bo'lmasligi kerak (o'z-o'ziga otkazma — qadag'an)
+  const fromCnNorm = fromCn.trim().toUpperCase();
+  const sameAsSource = (cn: string) =>
+    !!fromCnNorm && cn.trim().toUpperCase() === fromCnNorm;
+  const noSelfTransfer = destinations.every((d) => !sameAsSource(d.contractNo));
+  // Maqsadli shartnomalar bir-biri bilan ham takrorlanmasligi kerak (ixtiyoriy lekin foydali)
+  const destDuplicates = destinations
+    .map((d) => d.contractNo.trim().toUpperCase())
+    .filter(Boolean);
+  const hasDuplicateDest = new Set(destDuplicates).size !== destDuplicates.length;
+
   const canSave =
     !!fromInfo?.foundInCrm &&
     !!fromInfo?.objectName &&
@@ -2786,6 +2797,8 @@ function PerereboskaDialog({
     everyDestFoundAndPositive &&
     allObjectsMatch &&
     destSumOk &&
+    noSelfTransfer &&
+    !hasDuplicateDest &&
     !!date &&
     !!file &&
     !submitting;
@@ -2992,8 +3005,19 @@ function PerereboskaDialog({
             {destinations.map((d, idx) => {
               const objMatch = !d.foundInCrm || d.objectName === fromInfo?.objectName;
               const dAmt = moneyToNumber(d.amount);
+              const isSelfTransfer = sameAsSource(d.contractNo);
+              // Bir xil destination ikkinchi marta yozilganmi
+              const dCnNorm = d.contractNo.trim().toUpperCase();
+              const isDuplicateOfPrev = !!dCnNorm && destinations
+                .slice(0, idx)
+                .some((p) => p.contractNo.trim().toUpperCase() === dCnNorm);
               return (
-                <div key={idx} className="rounded-lg bg-slate-50/60 ring-1 ring-slate-200 p-3 space-y-2.5">
+                <div key={idx} className={cn(
+                  'rounded-lg ring-1 p-3 space-y-2.5',
+                  isSelfTransfer || isDuplicateOfPrev
+                    ? 'bg-rose-50/60 ring-rose-200'
+                    : 'bg-slate-50/60 ring-slate-200',
+                )}>
                   <div className="flex items-center justify-between">
                     <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
                       #{idx + 1}
@@ -3030,8 +3054,35 @@ function PerereboskaDialog({
                       />
                     </Field>
                   </div>
+                  {/* Self-transfer warning — manba va maqsadli bir xil shartnoma bo'lmasligi */}
+                  {isSelfTransfer && (
+                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                        <div className="font-bold mb-0.5">O'z-o'ziga o'tkazma mumkin emas</div>
+                        <div className="text-rose-700">
+                          <code className="font-mono font-bold">{fromCn.trim()}</code> manba shartnoma
+                          bo'lib turibdi — uni maqsadli ro'yxatga qo'sha olmaysiz.
+                          Boshqa shartnoma raqamini kiriting.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Duplicate destination warning */}
+                  {isDuplicateOfPrev && (
+                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                        <div className="font-bold mb-0.5">Maqsadli shartnoma takrorlanmoqda</div>
+                        <div className="text-rose-700">
+                          <code className="font-mono font-bold">{d.contractNo.trim()}</code> yuqorida
+                          allaqachon mavjud — har bir shartnoma faqat bir marta.
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   {/* Loading/error pill */}
-                  {(d.lookupStatus === 'loading' || d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (
+                  {!isSelfTransfer && !isDuplicateOfPrev && (d.lookupStatus === 'loading' || d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (
                     <div className={cn(
                       'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
                       d.lookupStatus === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
@@ -3043,7 +3094,7 @@ function PerereboskaDialog({
                     </div>
                   )}
                   {/* Object mismatch warning */}
-                  {d.lookupStatus === 'found' && !objMatch && (
+                  {!isSelfTransfer && !isDuplicateOfPrev && d.lookupStatus === 'found' && !objMatch && (
                     <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
                       <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
                       <div className="text-[12.5px] text-rose-800 leading-relaxed">
@@ -3058,7 +3109,7 @@ function PerereboskaDialog({
                     </div>
                   )}
                   {/* Found OK — cards */}
-                  {d.lookupStatus === 'found' && objMatch && (
+                  {!isSelfTransfer && !isDuplicateOfPrev && d.lookupStatus === 'found' && objMatch && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2 sm:col-span-1">
                         <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">
@@ -3181,10 +3232,12 @@ function PerereboskaDialog({
         {/* Footer — sticky, shrink-0, doim ko'rinadigan */}
         <div className="shrink-0 px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-between gap-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.06)]">
           <div className="text-[11px] text-slate-500 flex-1 min-w-0 truncate">
-            {!canSave && fromInfo?.foundInCrm && !file && '⚠ Hujjat (file) tanlanmagan'}
-            {!canSave && fromInfo?.foundInCrm && file && !destSumOk && '⚠ Maqsadli summalar manbaga teng emas'}
-            {!canSave && fromInfo?.foundInCrm && file && destSumOk && !allObjectsMatch && '⚠ Obyekt nomlari mos kelmaydi'}
-            {!canSave && fromInfo?.foundInCrm && file && destSumOk && allObjectsMatch && overBalance && '⚠ Summa qoldiqdan oshib ketdi'}
+            {!canSave && fromInfo?.foundInCrm && !noSelfTransfer && "⚠ Manba shartnoma maqsadli ro'yxatda — o'z-o'ziga otkazma mumkin emas"}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && hasDuplicateDest && '⚠ Maqsadli shartnomalar takrorlanmoqda'}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && !file && '⚠ Hujjat (file) tanlanmagan'}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && !destSumOk && '⚠ Maqsadli summalar manbaga teng emas'}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && !allObjectsMatch && '⚠ Obyekt nomlari mos kelmaydi'}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && allObjectsMatch && overBalance && '⚠ Summa qoldiqdan oshib ketdi'}
             {canSave && '✓ Saqlashga tayyor'}
           </div>
           <div className="flex items-center gap-2 shrink-0">
