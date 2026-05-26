@@ -162,7 +162,13 @@ export class CrmService {
    */
   async search(contractNumber: string, perPage = 20) {
     if (!contractNumber?.trim()) return { ok: false, error: 'contract kerak' };
-    const r = await this.call('/index', { contract: contractNumber.trim(), 'per-page': perPage });
+    // cancelled=1 — XonSaroy CRM ga bekor qilingan shartnomalarni ham kiritish uchun
+    // (default'da XonSaroy cancelled'larni yashirib qo'yadi)
+    const r = await this.call('/index', {
+      contract: contractNumber.trim(),
+      'per-page': perPage,
+      cancelled: 1,
+    });
     if (!r.ok) return r;
     const items: any[] = r.data?.data || [];
 
@@ -317,6 +323,8 @@ export class CrmService {
     const body: Record<string, any> = {};
     if (opts.contract) body.contract = opts.contract.trim();
     else body.id = opts.id;
+    // cancelled=1 — bekor qilingan shartnomalar ham qaytsin
+    body.cancelled = 1;
     const r = await this.call('/show', body);
     if (!r.ok) return r;
     const detail: any = r.data?.data || null;
