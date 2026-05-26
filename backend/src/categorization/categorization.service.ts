@@ -936,17 +936,16 @@ export class CategorizationService {
     // ── 1) Shartnoma raqamini ajratamiz (description'dan) — bir nechta variantlarni sinab ko'ramiz
     // User talabi: "shartnomadan keyin probel bor ekan ... shuni xato devoti"
     // Misol: "985VTN24GX P АХИМОВ" — bu yerda "P" shartnomaning bir qismi bo'lishi mumkin.
-    // extractContractCandidates qaytaradi: ["985VTN24GXP", "985VTN24GX"]
-    // CRM da qaysi biri verified bo'lsa shuni tanlaymiz.
+    // extractContractCandidates: ["985VTN24GX", "985VTN24GXP", "985VTN24GXPA"]
+    // CRM da qaysi biri verified bo'lsa shuni tanlaymiz. Hech biri topilmasa — birinchisi.
     if (!contractNumber) {
       const candidates = extractContractCandidates(tx.description);
       if (candidates.length > 0) {
-        // Birinchi variantni default qilamiz, lekin verified ni izlaymiz
-        contractNumber = candidates[0];
+        contractNumber = candidates[0];  // default asosiy
         for (const cand of candidates) {
           const c = await this.crmCache.lookup(cand);
           if (c?.found) {
-            contractNumber = cand;
+            contractNumber = cand;  // verified topildi — uni ishlatamiz
             break;
           }
         }

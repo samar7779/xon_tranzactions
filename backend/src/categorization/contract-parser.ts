@@ -84,13 +84,17 @@ export function extractContractNumber(description: string | null | undefined): s
 
 /**
  * Tranzaksiya izohidan shartnoma uchun BARCHA mumkin bo'lgan variantlarni qaytaradi.
- * Asosiy ekstraksiya + davomi (agar bo'lsa).
  *
- * Misol: "...ШАРТНОМА  №  985VTN24GX P АХИМОВ..."
- *   → ["985VTN24GXP", "985VTN24GX"]  (davomi avval, asosiy keyin)
+ * Misol: "...ШАРТНОМА  №  985VTN24GX P АХИМОВ..." yoki "985VTN24GX PAHIMOV"
+ *   → ["985VTN24GX", "985VTN24GXP", "985VTN24GXPA"]
  *
  * Caller bularning har birini CRM da tekshirishi kerak — qaysi biri verified
- * bo'lsa shuni ishlatadi.
+ * bo'lsa shuni ishlatadi. Hech qaysi topilmasa, BIRINCHI variant (asosiy) ishlatiladi.
+ *
+ * Mantiq:
+ * 1. Asosiy ekstraksiya (4 chars tail typically)
+ * 2. Davomi bilan: tail dan keyin space + 1-2 alphanum (boundary bilan)
+ * 3. Tutash davom: tail oxiriga +1, +2 alphanum belgi (description'da keyingi belgilar)
  */
 export function extractContractCandidates(description: string | null | undefined): string[] {
   if (!description) return [];
@@ -101,18 +105,30 @@ export function extractContractCandidates(description: string | null | undefined
 
   const candidates: string[] = [];
 
-  // Davom bilan birga (oldindan tekshiriladi — agar topilsa, ustun)
-  const mCont = CONTRACT_RE_WITH_CONT.exec(clean);
-  if (mCont) {
-    const withCont = (mCont[1] + mCont[2] + mCont[3] + mCont[4]).replace(/\s+/g, '').toUpperCase();
-    candidates.push(withCont);
+  // 1) Asosiy (davom yo'q) — eng ishonchli, BIRINCHI bo'lib qaytariladi
+  const m = CONTRACT_RE.exec(clean);
+  if (!m) return [];
+
+  const base = (m[1] + m[2] + m[3]).replace(/\s+/g, '').toUpperCase();
+  candidates.push(base);
+
+  // 2) Asosiy match dan keyin 1-2 alphanum belgi bor bo'lsa (space yoki tutash)
+  // Bu tail ni uzaytirgan variantlar — fallback uchun
+  const matchEnd = m.index + m[0].length;
+  const afterMatch = clean.slice(matchEnd, matchEnd + 10);  // keyingi 10 belgini ko'ramiz
+
+  // Variant: tail + (optional spaces) + 1 alphanum
+  const extOne = afterMatch.match(/^\s*([A-Z0-9])/i);
+  if (extOne) {
+    const v1 = (base + extOne[1]).toUpperCase();
+    if (!candidates.includes(v1)) candidates.push(v1);
   }
 
-  // Asosiy (davom yo'q)
-  const m = CONTRACT_RE.exec(clean);
-  if (m) {
-    const base = (m[1] + m[2] + m[3]).replace(/\s+/g, '').toUpperCase();
-    if (!candidates.includes(base)) candidates.push(base);
+  // Variant: tail + (optional spaces) + 2 alphanum (tutash)
+  const extTwo = afterMatch.match(/^\s*([A-Z0-9]{2})/i);
+  if (extTwo) {
+    const v2 = (base + extTwo[1]).toUpperCase();
+    if (!candidates.includes(v2)) candidates.push(v2);
   }
 
   return candidates;
