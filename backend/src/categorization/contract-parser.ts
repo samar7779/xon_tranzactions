@@ -34,6 +34,14 @@ const CONTRACT_RE = new RegExp(
   'i',
 );
 
+// Davomi regex — tail dan keyin BITTA space + 1-2 alphanum + space/end bo'lsa qo'shamiz
+// Misol: "985VTN24GX P АХИМОВ" → 985 + VTN + 24GX + ' P ' → 985VTN24GXP
+// Lekin "985VTN24GX PAHIMOV" (P customer ismidan) → davom qo'shilmaydi
+const CONTRACT_RE_WITH_CONT = new RegExp(
+  `(\\d{1,6})\\s*(${CODE_PATTERN})\\s*([A-Z0-9]{2,6})\\s([A-Z0-9]{1,2})(?=\\s|[.,;)\\]]|$)`,
+  'i',
+);
+
 // Kirill harflarni Lotinga moslashtirish (matnda aralash kelganda)
 const CYR_TO_LAT: Record<string, string> = {
   'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O',
@@ -72,6 +80,42 @@ export function extractContractNumber(description: string | null | undefined): s
 
   // 4) O/0 variantlarini ham birga qaytaramiz (kim chaqiruvchi qaror qiladi qaysi DB'ga mos)
   return normalized;
+}
+
+/**
+ * Tranzaksiya izohidan shartnoma uchun BARCHA mumkin bo'lgan variantlarni qaytaradi.
+ * Asosiy ekstraksiya + davomi (agar bo'lsa).
+ *
+ * Misol: "...ШАРТНОМА  №  985VTN24GX P АХИМОВ..."
+ *   → ["985VTN24GXP", "985VTN24GX"]  (davomi avval, asosiy keyin)
+ *
+ * Caller bularning har birini CRM da tekshirishi kerak — qaysi biri verified
+ * bo'lsa shuni ishlatadi.
+ */
+export function extractContractCandidates(description: string | null | undefined): string[] {
+  if (!description) return [];
+
+  const clean = transliterate(String(description))
+    .replace(/№/g, '')
+    .replace(/N°/g, '');
+
+  const candidates: string[] = [];
+
+  // Davom bilan birga (oldindan tekshiriladi — agar topilsa, ustun)
+  const mCont = CONTRACT_RE_WITH_CONT.exec(clean);
+  if (mCont) {
+    const withCont = (mCont[1] + mCont[2] + mCont[3] + mCont[4]).replace(/\s+/g, '').toUpperCase();
+    candidates.push(withCont);
+  }
+
+  // Asosiy (davom yo'q)
+  const m = CONTRACT_RE.exec(clean);
+  if (m) {
+    const base = (m[1] + m[2] + m[3]).replace(/\s+/g, '').toUpperCase();
+    if (!candidates.includes(base)) candidates.push(base);
+  }
+
+  return candidates;
 }
 
 /**

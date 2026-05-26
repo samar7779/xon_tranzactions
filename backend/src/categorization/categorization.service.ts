@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from './crm-contract-cache.service';
-import { extractContractNumber } from './contract-parser';
+import { extractContractNumber, extractContractCandidates } from './contract-parser';
 
 /**
  * Tranzaksiya kategoriyalash xizmati.
@@ -933,9 +933,24 @@ export class CategorizationService {
     let contractNumber: string | null = tx.contractNumber;
     let reason = '';
 
-    // ── 1) Shartnoma raqamini ajratamiz (description'dan)
+    // ── 1) Shartnoma raqamini ajratamiz (description'dan) — bir nechta variantlarni sinab ko'ramiz
+    // User talabi: "shartnomadan keyin probel bor ekan ... shuni xato devoti"
+    // Misol: "985VTN24GX P АХИМОВ" — bu yerda "P" shartnomaning bir qismi bo'lishi mumkin.
+    // extractContractCandidates qaytaradi: ["985VTN24GXP", "985VTN24GX"]
+    // CRM da qaysi biri verified bo'lsa shuni tanlaymiz.
     if (!contractNumber) {
-      contractNumber = extractContractNumber(tx.description);
+      const candidates = extractContractCandidates(tx.description);
+      if (candidates.length > 0) {
+        // Birinchi variantni default qilamiz, lekin verified ni izlaymiz
+        contractNumber = candidates[0];
+        for (const cand of candidates) {
+          const c = await this.crmCache.lookup(cand);
+          if (c?.found) {
+            contractNumber = cand;
+            break;
+          }
+        }
+      }
     }
 
     // ── 2) Klient/Физ.Л/Юр.Л — shartnoma raqami description'da topilsa, CLIENT
