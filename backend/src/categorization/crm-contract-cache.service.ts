@@ -114,17 +114,22 @@ export class CrmContractCacheService {
         const detail: any = (res as any)?.detail;
         if ((res as any)?.ok && detail) {
           // XonSaroy client object'dan F.I.O. yig'ish (last + first + middle)
+          // Strukturalar: c.first_name, c.attributes.first_name, c.client.attributes.first_name
           const buildName = (c: any): string | null => {
             if (!c) return null;
             if (typeof c === 'string') return c.trim() || null;
             const f = (v: any): string => {
               if (!v) return '';
               if (typeof v === 'string') return v;
-              return v.kirill || v.lotin || '';
+              return v.lotin || v.kirill || v.uz || v.ru || '';
             };
-            const name = [f(c.last_name), f(c.first_name), f(c.middle_name)].filter(Boolean).join(' ').trim();
+            // Avval c.attributes da qarash (XonSaroy v4 strukturasi)
+            const src = c.attributes && (c.attributes.first_name || c.attributes.last_name)
+              ? c.attributes
+              : c;
+            const name = [f(src.last_name), f(src.first_name), f(src.middle_name)].filter(Boolean).join(' ').trim();
             if (name) return name;
-            return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || null;
+            return src.full_name_lotin || src.full_name_kirill || src.full_name || src.name || src.fio || null;
           };
           // Xavfsiz qisqartirish — DB VarChar cheklovlariga sig'sin
           const trunc = (s: any, max: number): string | null => {
@@ -133,9 +138,25 @@ export class CrmContractCacheService {
             return str.length > max ? str.slice(0, max) : str;
           };
           const customerName = buildName(detail.client) || detail.fio || null; // Text — limit yo'q
-          const status = trunc(String(detail.status || detail.contract_status || '').toLowerCase() || null, 128);
+          // Status XonSaroy da OBJECT bo'lishi mumkin: { type: 'cancelled', name: {uz, ru}, color }
+          // type ni asosiy hisoblaymiz (cancelled, active, etc) — string bo'lsa o'zini ishlatamiz
+          const extractStatus = (s: any): string | null => {
+            if (!s) return null;
+            if (typeof s === 'string') return s.toLowerCase() || null;
+            if (typeof s === 'object') {
+              const t = s.type || s.key || s.value?.type || s.name?.uz || s.name?.ru || s.name;
+              if (typeof t === 'string') return t.toLowerCase();
+              if (typeof t === 'object') return (t.uz || t.ru || '').toLowerCase() || null;
+            }
+            return null;
+          };
+          // deleted_at to'ldirilgan bo'lsa — bekor qilingan deb hisoblaymiz
+          const statusRaw = extractStatus(detail.status || detail.contract_status);
+          const status = trunc(detail.deleted_at && !statusRaw ? 'cancelled' : statusRaw, 128);
           // Obyekt nomi — CRM bir necha joyda saqlashi mumkin
           const extractObject = (d: any): string | null => {
+            // XonSaroy v4 deep struktura: order_apartments[0].apartment.block.building.object.name
+            const deep = d?.order_apartments?.[0]?.apartment?.block?.building?.object?.name;
             const candidates = [
               d?.object_name,
               d?.object,
@@ -143,12 +164,12 @@ export class CrmContractCacheService {
               d?.info?.object_name,
               d?.client?.object_name,
               d?.client?.object,
+              deep,
             ];
             for (const c of candidates) {
               if (!c) continue;
               if (typeof c === 'string' && c.trim()) return c.trim();
               if (typeof c === 'object') {
-                // {name: 'X', uz: 'X', ru: 'X', lotin: 'X', kirill: 'X'}
                 const nm = c.name || c.value || c.uz || c.ru || c.lotin || c.kirill || c.title;
                 if (nm && typeof nm === 'string' && nm.trim()) return nm.trim();
               }
