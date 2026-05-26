@@ -2830,12 +2830,12 @@ function PerereboskaDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
       <DialogContent
-        className="sm:max-w-[820px] p-0 overflow-hidden gap-0 max-h-[92vh]"
+        className="sm:max-w-[1100px] w-[96vw] p-0 overflow-hidden gap-0 max-h-[95vh] flex flex-col"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
         {/* Hero header */}
-        <div className="bg-gradient-to-br from-fuchsia-600 via-pink-600 to-rose-600 px-6 pt-5 pb-4 text-white">
+        <div className="bg-gradient-to-br from-fuchsia-600 via-pink-600 to-rose-600 px-6 pt-5 pb-4 text-white shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
               <ArrowRightLeft className="h-5 w-5" />
@@ -2850,8 +2850,8 @@ function PerereboskaDialog({
           </div>
         </div>
 
-        {/* Body — scrollable */}
-        <div className="overflow-y-auto p-5 space-y-5 bg-slate-50/30">
+        {/* Body — scrollable (flex-1 minh-0 to allow shrink so footer stays visible) */}
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/30">
           {/* SOURCE block */}
           <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
             <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
@@ -2870,39 +2870,45 @@ function PerereboskaDialog({
                 <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={submitting} />
               </Field>
             </div>
-            {fromLookup.status !== 'idle' && (
+            {/* Loading/not-found/error status faqat (found bo'lsa kartalar ko'rsatiladi) */}
+            {fromLookup.status !== 'idle' && fromLookup.status !== 'found' && (
               <div className={cn(
-                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                'rounded-lg px-3 py-2.5 text-[12.5px] font-medium ring-1 inline-flex items-center gap-2',
                 fromLookup.status === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
-                fromLookup.status === 'found' && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
                 fromLookup.status === 'not-found' && 'bg-rose-50 text-rose-700 ring-rose-200',
                 fromLookup.status === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
               )}>
-                {fromLookup.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                {fromLookup.status === 'found' && <CheckCircle2 className="h-3.5 w-3.5" />}
-                {fromLookup.status !== 'loading' && fromLookup.status !== 'found' && <X className="h-3.5 w-3.5" />}
+                {fromLookup.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
+                {fromLookup.status !== 'loading' && <X className="h-4 w-4" />}
                 {fromLookup.status === 'loading' ? 'CRM tekshirilmoqda...' : fromLookup.msg}
               </div>
             )}
             {fromInfo?.foundInCrm && (
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Mijoz</div>
-                  <div className="text-[12.5px] font-semibold text-slate-800 truncate" title={fromInfo.customerName || ''}>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/50 ring-1 ring-slate-200 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5">
+                    <User2 className="h-3 w-3" /> Mijoz
+                  </div>
+                  <div className="text-[13px] font-bold text-slate-800 leading-tight" title={fromInfo.customerName || ''}>
                     {fromInfo.customerName || '—'}
                   </div>
                 </div>
-                <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-violet-700">Obyekt</div>
-                  <div className="text-[12.5px] font-bold text-violet-900 truncate">
+                <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100/50 ring-1 ring-violet-200 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-700 mb-1.5">
+                    <Building2 className="h-3 w-3" /> Obyekt
+                  </div>
+                  <div className="text-[15px] font-black text-violet-900 leading-tight">
                     {fromInfo.objectName || '—'}
                   </div>
                 </div>
-                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">Qoldiq</div>
-                  <div className="text-[13px] font-black text-emerald-800">
+                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-1 ring-emerald-200 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-1.5">
+                    <Wallet className="h-3 w-3" /> Joriy qoldiq
+                  </div>
+                  <div className="text-[16px] font-black text-emerald-800 leading-tight tabular-nums">
                     {formatMoney(fromInfo.totalPaid)}
                   </div>
+                  <div className="text-[10px] text-emerald-600/70 mt-0.5">UZS</div>
                 </div>
               </div>
             )}
@@ -2926,25 +2932,40 @@ function PerereboskaDialog({
               </div>
             </Field>
             {amountNum !== undefined && fromInfo && (
-              <div className={cn(
-                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1',
-                overBalance
-                  ? 'bg-rose-50 text-rose-700 ring-rose-200'
-                  : 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-              )}>
-                {overBalance ? (
-                  <span className="inline-flex items-center gap-1.5">
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Summa qoldiqdan oshib ketdi: {formatMoney(amountNum)} &gt; {formatMoney(fromInfo.totalPaid)}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Bu shartnomadan <b>−{formatMoney(amountNum)}</b> olinadi.
-                    Qoldiq: <b>{formatMoney(fromInfo.totalPaid - amountNum)}</b>
-                  </span>
-                )}
-              </div>
+              overBalance ? (
+                <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+                  <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                  <div className="text-[13px] text-rose-800 leading-relaxed">
+                    <div className="font-bold mb-0.5">Summa qoldiqdan oshib ketdi</div>
+                    <div className="text-rose-700">
+                      Yozildi: <b className="tabular-nums">{formatMoney(amountNum)}</b>
+                      <span className="mx-1.5 text-rose-400">›</span>
+                      Qoldiq: <b className="tabular-nums">{formatMoney(fromInfo.totalPaid)}</b>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 ring-1 ring-rose-200 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-rose-600 mb-1">Olinadi (−)</div>
+                    <div className="text-[16px] font-black text-rose-700 tabular-nums leading-tight">
+                      −{formatMoney(amountNum)}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Hozirgi qoldiq</div>
+                    <div className="text-[14.5px] font-bold text-slate-700 tabular-nums leading-tight">
+                      {formatMoney(fromInfo.totalPaid)}
+                    </div>
+                  </div>
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-1">Yangi qoldiq</div>
+                    <div className="text-[16px] font-black text-emerald-800 tabular-nums leading-tight">
+                      {formatMoney(fromInfo.totalPaid - amountNum)}
+                    </div>
+                  </div>
+                </div>
+              )
             )}
           </div>
 
@@ -3009,32 +3030,67 @@ function PerereboskaDialog({
                       />
                     </Field>
                   </div>
-                  {d.lookupStatus !== 'idle' && (
+                  {/* Loading/error pill */}
+                  {(d.lookupStatus === 'loading' || d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (
                     <div className={cn(
-                      'rounded px-2 py-1.5 text-[11.5px] font-medium ring-1 inline-flex items-center gap-1.5',
+                      'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
                       d.lookupStatus === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
-                      d.lookupStatus === 'found' && objMatch && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-                      d.lookupStatus === 'found' && !objMatch && 'bg-rose-50 text-rose-700 ring-rose-200',
-                      d.lookupStatus === 'not-found' && 'bg-rose-50 text-rose-700 ring-rose-200',
-                      d.lookupStatus === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                      d.lookupStatus !== 'loading' && 'bg-rose-50 text-rose-700 ring-rose-200',
                     )}>
-                      {d.lookupStatus === 'loading' && <Loader2 className="h-3 w-3 animate-spin" />}
-                      {d.lookupStatus === 'found' && objMatch && <CheckCircle2 className="h-3 w-3" />}
-                      {d.lookupStatus === 'found' && !objMatch && <AlertTriangle className="h-3 w-3" />}
-                      {d.lookupStatus === 'not-found' && <X className="h-3 w-3" />}
-                      {d.lookupStatus === 'loading' && 'CRM tekshirilmoqda...'}
-                      {d.lookupStatus === 'found' && !objMatch && (
-                        <span>Obyekt mos kelmaydi: <b>{d.objectName}</b> ≠ <b>{fromInfo?.objectName}</b></span>
-                      )}
-                      {d.lookupStatus === 'found' && objMatch && (
-                        <span>
-                          <b>{d.customerName || '?'}</b> · Joriy: {formatMoney(d.totalPaid)}
-                          {dAmt !== undefined && dAmt > 0 && (
-                            <> · Kelajak: <b>{formatMoney(d.totalPaid + dAmt)}</b></>
-                          )}
-                        </span>
-                      )}
-                      {(d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (d.lookupMsg || 'Xato')}
+                      {d.lookupStatus === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {d.lookupStatus !== 'loading' && <X className="h-3.5 w-3.5" />}
+                      {d.lookupStatus === 'loading' ? 'CRM tekshirilmoqda...' : (d.lookupMsg || 'Xato')}
+                    </div>
+                  )}
+                  {/* Object mismatch warning */}
+                  {d.lookupStatus === 'found' && !objMatch && (
+                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                        <div className="font-bold mb-0.5">Obyekt nomi mos kelmaydi</div>
+                        <div className="text-rose-700">
+                          <b>{d.objectName}</b>
+                          <span className="mx-1.5 text-rose-400">≠</span>
+                          <b>{fromInfo?.objectName}</b>
+                          <span className="ml-1.5 text-rose-500/80">— faqat bir xil obyekt o'rtasida transfer mumkin</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {/* Found OK — cards */}
+                  {d.lookupStatus === 'found' && objMatch && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2 sm:col-span-1">
+                        <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">
+                          <User2 className="h-2.5 w-2.5" /> Mijoz
+                        </div>
+                        <div className="text-[12px] font-semibold text-slate-800 truncate" title={d.customerName || ''}>
+                          {d.customerName || '—'}
+                        </div>
+                      </div>
+                      <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2">
+                        <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Joriy</div>
+                        <div className="text-[12.5px] font-bold text-slate-700 tabular-nums">
+                          {formatMoney(d.totalPaid)}
+                        </div>
+                      </div>
+                      <div className={cn(
+                        'rounded-lg px-3 py-2 ring-1',
+                        dAmt !== undefined && dAmt > 0
+                          ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200'
+                          : 'bg-slate-50 ring-slate-200',
+                      )}>
+                        <div className={cn(
+                          'text-[9.5px] uppercase tracking-wider font-bold mb-0.5',
+                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-700' : 'text-slate-500',
+                        )}>Kelajak (+ otkazma)</div>
+                        <div className={cn(
+                          'text-[12.5px] font-black tabular-nums',
+                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-800' : 'text-slate-400',
+                        )}>
+                          {dAmt !== undefined && dAmt > 0 ? formatMoney(d.totalPaid + dAmt) : '—'}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -3044,18 +3100,41 @@ function PerereboskaDialog({
             {/* Dest summa indikator */}
             {amountNum !== undefined && (
               <div className={cn(
-                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                'rounded-xl p-3.5 ring-1 flex items-center gap-3',
                 destSumOk
-                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                  : 'bg-rose-50 text-rose-700 ring-rose-200',
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200'
+                  : 'bg-gradient-to-br from-rose-50 to-pink-50 ring-rose-200',
               )}>
-                {destSumOk
-                  ? <CheckCircle2 className="h-3.5 w-3.5" />
-                  : <AlertTriangle className="h-3.5 w-3.5" />}
-                Jami maqsadli: <b>{formatMoney(destSumNum)}</b> · Manba: <b>{formatMoney(amountNum)}</b>
-                {!destSumOk && (
-                  <span className="ml-1">(farq: {formatMoney(destSumNum - amountNum)})</span>
-                )}
+                <div className={cn(
+                  'w-10 h-10 rounded-xl grid place-items-center shrink-0',
+                  destSumOk ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white',
+                )}>
+                  {destSumOk
+                    ? <CheckCircle2 className="h-5 w-5" />
+                    : <AlertTriangle className="h-5 w-5" />}
+                </div>
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 text-[12px]">
+                  <div>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700' : 'text-rose-700')}>Jami maqsadli</div>
+                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900' : 'text-rose-900')}>
+                      {formatMoney(destSumNum)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700' : 'text-rose-700')}>Manba</div>
+                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900' : 'text-rose-900')}>
+                      {formatMoney(amountNum)}
+                    </div>
+                  </div>
+                  {!destSumOk && (
+                    <div>
+                      <div className="text-[9.5px] uppercase tracking-wider font-bold text-rose-700">Farq</div>
+                      <div className="text-[14px] font-black text-rose-900 tabular-nums">
+                        {formatMoney(destSumNum - amountNum)}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -3099,22 +3178,26 @@ function PerereboskaDialog({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
-          <div className="text-[11px] text-slate-500">
-            {!canSave && fromInfo?.foundInCrm && 'Barcha shartlar bajarilishi kerak'}
+        {/* Footer — sticky, shrink-0, doim ko'rinadigan */}
+        <div className="shrink-0 px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-between gap-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.06)]">
+          <div className="text-[11px] text-slate-500 flex-1 min-w-0 truncate">
+            {!canSave && fromInfo?.foundInCrm && !file && '⚠ Hujjat (file) tanlanmagan'}
+            {!canSave && fromInfo?.foundInCrm && file && !destSumOk && '⚠ Maqsadli summalar manbaga teng emas'}
+            {!canSave && fromInfo?.foundInCrm && file && destSumOk && !allObjectsMatch && '⚠ Obyekt nomlari mos kelmaydi'}
+            {!canSave && fromInfo?.foundInCrm && file && destSumOk && allObjectsMatch && overBalance && '⚠ Summa qoldiqdan oshib ketdi'}
+            {canSave && '✓ Saqlashga tayyor'}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button variant="ghost" onClick={onClose} disabled={submitting}>Bekor qilish</Button>
             <Button
               onClick={handleSave}
               disabled={!canSave}
-              className="bg-gradient-to-br from-fuchsia-600 to-pink-600 text-white"
+              className="bg-gradient-to-br from-fuchsia-600 to-pink-600 text-white shadow-lg shadow-fuchsia-500/30 hover:shadow-fuchsia-500/50 h-10 px-5"
             >
               {submitting
                 ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                : <ArrowRightLeft className="h-4 w-4 mr-1.5" />}
-              {submitting ? 'Saqlanmoqda...' : 'Tasdiqlash'}
+                : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
+              {submitting ? 'Saqlanmoqda...' : "Tasdiqlash va saqlash"}
             </Button>
           </div>
         </div>

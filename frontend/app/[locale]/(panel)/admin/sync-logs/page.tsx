@@ -517,6 +517,8 @@ function SyncSettingsPanel() {
   // Accordion holati — kartochkalar default yashirin
   const [openSync, setOpenSync] = useState(false);
   const [openOplata, setOpenOplata] = useState(false);
+  // Ichidagi sozlamalar (4 ta funksiya) default yashirin — ZIP downloads va eslatma ko'rinadi
+  const [showOplataSettings, setShowOplataSettings] = useState(false);
 
   // Object mapping — CRUD
   const mappingsQuery = useQuery({
@@ -669,9 +671,30 @@ function SyncSettingsPanel() {
             bo'lganlar qo'shiladi. Dedup — Transaction ID orqali.
           </div>
 
-          {isLoading ? (
+          {/* Sozlamalar collapse — 4 ta funksiya bir tugma orqasiga yashiriladi */}
+          <button
+            type="button"
+            onClick={() => setShowOplataSettings((v) => !v)}
+            className={cn(
+              'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg ring-1 transition-colors text-left',
+              showOplataSettings
+                ? 'bg-amber-50 ring-amber-200 text-amber-900'
+                : 'bg-slate-50 ring-slate-200 hover:bg-slate-100 text-slate-700',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              <span className="text-[12.5px] font-semibold">Sozlamalar va vositalar</span>
+              <span className="text-[10.5px] text-slate-500">
+                · Auto-import sana · Cron · Vaqt oraliqlari · Tx cleanup · Object mapping
+              </span>
+            </div>
+            <ChevronDown className={cn('h-4 w-4 text-slate-400 transition-transform', showOplataSettings && 'rotate-180')} />
+          </button>
+
+          {showOplataSettings && isLoading ? (
             <Skeleton className="h-10 w-64" />
-          ) : (
+          ) : showOplataSettings && (
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
                 ОплатыКв TX minimal sana
