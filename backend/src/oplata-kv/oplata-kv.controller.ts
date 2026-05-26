@@ -110,6 +110,97 @@ export class OplataKvController {
     return this.svc.crmLookupForForm(contractNo);
   }
 
+  // ═══ ПЕРЕБРОСКА ═══
+  @Get('contract-balance')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Shartnoma qoldig\'i (Перереброска uchun)' })
+  contractBalance(@Query('contractNo') contractNo: string) {
+    return this.svc.contractBalance(contractNo);
+  }
+
+  @Post('perereboska')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_CREATE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Переброска yaratish — shartnomadan shartnomaga pul o\'tkazma' })
+  async createPerereboska(
+    @UploadedFile() file: any,
+    @Body() body: {
+      fromContractNo: string;
+      amount: string | number;
+      date: string;
+      destinations: string; // JSON string [{ contractNo, amount }]
+      note?: string;
+    },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Hujjat (file) majburiy');
+    let destinations: Array<{ contractNo: string; amount: number }> = [];
+    try {
+      const parsed = typeof body.destinations === 'string'
+        ? JSON.parse(body.destinations)
+        : body.destinations;
+      destinations = (parsed || []).map((d: any) => ({
+        contractNo: String(d.contractNo || ''),
+        amount: Number(d.amount),
+      }));
+    } catch {
+      throw new BadRequestException("destinations JSON noto'g'ri");
+    }
+    return this.svc.createPerereboska({
+      fromContractNo: body.fromContractNo,
+      amount: Number(body.amount),
+      date: body.date,
+      destinations,
+      note: body.note,
+      file: {
+        buffer: file.buffer,
+        originalname: fixFileName(file.originalname) || 'file',
+        mimetype: file.mimetype || 'application/octet-stream',
+        size: file.size,
+      },
+      actor: actorFrom(user),
+    });
+  }
+
+  @Delete('perereboska/:groupId')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_DELETE)
+  @ApiOperation({ summary: 'Перереброска guruh\'ini o\'chirish (barcha qatorlar + file)' })
+  deletePerereboska(@Param('groupId') groupId: string, @CurrentUser() user?: AuthUser) {
+    return this.svc.deletePerereboskaGroup(groupId, actorFrom(user));
+  }
+
+  @Get('perereboska/:groupId/file')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Перереброска hujjatini yuklab olish' })
+  async downloadPerereboskaFile(
+    @Param('groupId') groupId: string,
+    @Res() res: Response,
+  ) {
+    const info = await this.svc.getPerereboskaFile(groupId);
+    const { createReadStream } = await import('fs');
+    res.set({
+      'Content-Type': info.fileMime,
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(info.fileName)}`,
+      'Content-Length': String(info.fileSize),
+    });
+    createReadStream(info.filePath).pipe(res);
+  }
+
+  // ═══ ZIP EXPORT — Arizalar / Перереброска ═══
+  @Get('export/arizas-zip')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Barcha ariza fayllarini ZIP qilib yuklab berish' })
+  async exportArizasZip(@Res() res: Response) {
+    return this.svc.exportArizasZip(res);
+  }
+
+  @Get('export/perereboski-zip')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Barcha Перереброска fayllarini ZIP qilib yuklab berish' })
+  async exportPerereboskiZip(@Res() res: Response) {
+    return this.svc.exportPerereboskiZip(res);
+  }
+
   @Post('sync-from-transactions')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: "Tranzaksiyalardan auto-import — CLIENT/IN/contractNo > minDate" })

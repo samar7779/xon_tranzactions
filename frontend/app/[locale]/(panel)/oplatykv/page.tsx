@@ -11,7 +11,8 @@ import {
   Receipt, User2, Home, CreditCard, FileText, Tag as TagIcon, Activity,
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
-  CheckCircle2, AlertTriangle, Lock,
+  CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
+  PlusCircle, Paperclip, Wallet, Building2,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
@@ -54,6 +55,8 @@ interface OplataKvItem {
   sourceTxId?: string | null;
   crmXato?: boolean;
   contractSource?: 'manual' | 'ariza' | null;  // Tranzaksiyada qanday qo'yilgan
+  perereboskaGroupId?: string | null;
+  perereboskaFileName?: string | null;
 }
 
 // Manba (qaysi yo'l bilan qo'shilgan) — manual / excel / transaction
@@ -142,6 +145,8 @@ export default function OplataKvPage() {
   const [detailRow, setDetailRow] = useState<OplataKvItem | null>(null);
   const [editRow, setEditRow] = useState<OplataKvItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [addChoiceOpen, setAddChoiceOpen] = useState(false);
+  const [perereboskaOpen, setPerereboskaOpen] = useState(false);
   const [deleteRow, setDeleteRow] = useState<OplataKvItem | null>(null);
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -528,7 +533,7 @@ export default function OplataKvPage() {
 
               {canCreate && (
                 <button
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => setAddChoiceOpen(true)}
                   className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md grid place-items-center transition-colors"
                   title="Yangi qator"
                 >
@@ -718,6 +723,21 @@ export default function OplataKvPage() {
         onHistory={(it) => setHistoryRow(it)}
         onCopyId={copyId}
         copiedId={copiedId}
+      />
+
+      {/* Yangi qoshish — Choice modal (Oddiy / Переброска) */}
+      <AddChoiceDialog
+        open={addChoiceOpen}
+        onClose={() => setAddChoiceOpen(false)}
+        onPickManual={() => { setAddChoiceOpen(false); setCreateOpen(true); }}
+        onPickPerereboska={() => { setAddChoiceOpen(false); setPerereboskaOpen(true); }}
+      />
+
+      {/* Переброска form */}
+      <PerereboskaDialog
+        open={perereboskaOpen}
+        onClose={() => setPerereboskaOpen(false)}
+        onSaved={() => qc.invalidateQueries({ queryKey: ['oplata-kv'] })}
       />
 
       {/* Create / Edit dialog */}
@@ -2392,10 +2412,20 @@ function Field({
 function DeleteConfirmDialog({ row, onClose, onDeleted }: {
   row: OplataKvItem | null; onClose: () => void; onDeleted: () => void;
 }) {
+  const isPerereboska = !!row?.perereboskaGroupId;
   const delMut = useMutation({
-    mutationFn: () => api.delete(`/oplata-kv/${row!.id}`),
-    onSuccess: () => { toast.success('Qator o\'chirildi'); onDeleted(); onClose(); },
-    onError: (e: any) => toast.error(e?.message || 'O\'chirib bo\'lmadi'),
+    mutationFn: () => {
+      // Перереброска guruh — barchasini o'chiramiz
+      if (isPerereboska && row?.perereboskaGroupId) {
+        return api.delete(`/oplata-kv/perereboska/${row.perereboskaGroupId}`);
+      }
+      return api.delete(`/oplata-kv/${row!.id}`);
+    },
+    onSuccess: () => {
+      toast.success(isPerereboska ? "Переброска guruh o'chirildi" : "Qator o'chirildi");
+      onDeleted(); onClose();
+    },
+    onError: (e: any) => toast.error(e?.message || "O'chirib bo'lmadi"),
   });
 
   return (
@@ -2416,6 +2446,15 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
             <div><b>Дата:</b> {fmtDateRu(row.date)}</div>
             <div><b>Клиент:</b> {row.client || '—'}</div>
             <div><b>Объект:</b> {row.object || '—'}</div>
+            {isPerereboska && (
+              <div className="mt-2 pt-2 border-t border-rose-200 text-[12px] text-rose-800 inline-flex items-start gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                <span>
+                  Bu <b>Переброска</b> guruhiga tegishli qator — butun guruh
+                  (manba + barcha maqsadlar) o'chiriladi va Telegram'ga xabar yuboriladi.
+                </span>
+              </div>
+            )}
           </div>
         )}
 
@@ -2512,5 +2551,574 @@ function ActionBadge({ action }: { action: string }) {
     <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ring-1', cls)}>
       {action}
     </span>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// ADD CHOICE DIALOG — "Qoshish" bosilganda 2 ta variantni tanlash
+// ═════════════════════════════════════════════════════════════════════
+function AddChoiceDialog({
+  open, onClose, onPickManual, onPickPerereboska,
+}: {
+  open: boolean; onClose: () => void;
+  onPickManual: () => void;
+  onPickPerereboska: () => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden gap-0">
+        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
+          <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
+            Yangi yozuv
+          </div>
+          <div className="text-xl font-black tracking-tight">Qaysi turdagi yozuv qo'shamiz?</div>
+          <div className="text-[12px] text-white/80 mt-1">
+            Oddiy to'lov yoki shartnomadan shartnomaga pul o'tkazma (Переброска)
+          </div>
+        </div>
+        <div className="p-5 grid grid-cols-2 gap-4 bg-slate-50/40">
+          {/* Variant 1: Oddiy */}
+          <button
+            onClick={onPickManual}
+            className="group relative rounded-2xl bg-white ring-2 ring-slate-200 hover:ring-indigo-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
+          >
+            <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 opacity-50 group-hover:opacity-80 transition-opacity" />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md mb-3">
+                <PlusCircle className="h-6 w-6" />
+              </div>
+              <div className="font-bold text-slate-900 text-[15px]">Oddiy to'lov</div>
+              <div className="text-[11.5px] text-slate-500 mt-1 leading-relaxed">
+                Bitta shartnoma uchun to'lov ma'lumotini qo'lda kiritish. CRM
+                tekshiruvi avtomatik.
+              </div>
+              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 inline-flex items-center gap-1">
+                Boshlash <ChevronRight className="h-3 w-3" />
+              </div>
+            </div>
+          </button>
+
+          {/* Variant 2: Переброска */}
+          <button
+            onClick={onPickPerereboska}
+            className="group relative rounded-2xl bg-white ring-2 ring-slate-200 hover:ring-fuchsia-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
+          >
+            <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-gradient-to-br from-fuchsia-100 to-amber-100 opacity-50 group-hover:opacity-80 transition-opacity" />
+            <div className="relative">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-600 grid place-items-center text-white shadow-md mb-3">
+                <ArrowRightLeft className="h-6 w-6" />
+              </div>
+              <div className="font-bold text-slate-900 text-[15px] inline-flex items-center gap-1.5">
+                Переброска
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200">
+                  YANGI
+                </span>
+              </div>
+              <div className="text-[11.5px] text-slate-500 mt-1 leading-relaxed">
+                Bir shartnomadan boshqa shartnoma(lar)ga pul o'tkazma.
+                Obyekt nomlari teng bo'lishi shart, hujjat majburiy.
+              </div>
+              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-fuchsia-600 inline-flex items-center gap-1">
+                Boshlash <ChevronRight className="h-3 w-3" />
+              </div>
+            </div>
+          </button>
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 bg-white flex justify-end">
+          <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// PERERBOSKA DIALOG — shartnomadan shartnomaga pul o'tkazma
+// ═════════════════════════════════════════════════════════════════════
+interface PerereboskaDest {
+  contractNo: string;
+  amount: string;          // raw money string
+  customerName: string | null;
+  objectName: string | null;
+  foundInCrm: boolean;
+  totalPaid: number;       // hozirgi jami to'lov (yangi qator qo'shilgandan keyingi hisob uchun)
+  lookupStatus: 'idle' | 'loading' | 'found' | 'not-found' | 'error';
+  lookupMsg?: string;
+}
+
+function PerereboskaDialog({
+  open, onClose, onSaved,
+}: { open: boolean; onClose: () => void; onSaved: () => void; }) {
+  const [fromCn, setFromCn] = useState('');
+  const [date, setDate] = useState('');
+  const [amount, setAmount] = useState('');             // raw money
+  const [note, setNote] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+
+  // Source CRM holati
+  const [fromInfo, setFromInfo] = useState<{
+    customerName: string | null; objectName: string | null;
+    totalPaid: number; foundInCrm: boolean;
+  } | null>(null);
+  const [fromLookup, setFromLookup] = useState<{
+    status: 'idle' | 'loading' | 'found' | 'not-found' | 'error'; msg?: string;
+  }>({ status: 'idle' });
+
+  const [destinations, setDestinations] = useState<PerereboskaDest[]>([
+    { contractNo: '', amount: '', customerName: null, objectName: null, foundInCrm: false, totalPaid: 0, lookupStatus: 'idle' },
+  ]);
+
+  const [submitting, setSubmitting] = useState(false);
+
+  // Reset on close/open
+  useEffect(() => {
+    if (!open) return;
+    setFromCn('');
+    setDate(new Date().toISOString().slice(0, 10));
+    setAmount('');
+    setNote('');
+    setFile(null);
+    setFromInfo(null);
+    setFromLookup({ status: 'idle' });
+    setDestinations([{ contractNo: '', amount: '', customerName: null, objectName: null, foundInCrm: false, totalPaid: 0, lookupStatus: 'idle' }]);
+  }, [open]);
+
+  // ────── Source lookup (debounced) ──────
+  const sourceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    if (sourceTimerRef.current) clearTimeout(sourceTimerRef.current);
+    const cn = fromCn.trim();
+    if (!cn) {
+      setFromLookup({ status: 'idle' });
+      setFromInfo(null);
+      return;
+    }
+    sourceTimerRef.current = setTimeout(async () => {
+      setFromLookup({ status: 'loading' });
+      try {
+        const res = await api.get<{
+          ok: boolean; totalPaid: number;
+          customerName: string | null; objectName: string | null;
+          foundInCrm: boolean;
+        }>(`/oplata-kv/contract-balance?contractNo=${encodeURIComponent(cn)}`);
+        if (!res.foundInCrm) {
+          setFromLookup({ status: 'not-found', msg: "CRM da topilmadi" });
+          setFromInfo(null);
+        } else {
+          setFromInfo({
+            customerName: res.customerName,
+            objectName: res.objectName,
+            totalPaid: res.totalPaid,
+            foundInCrm: true,
+          });
+          setFromLookup({
+            status: 'found',
+            msg: `Mijoz: ${res.customerName || '?'} · Obyekt: ${res.objectName || '?'} · Qoldiq: ${formatMoney(res.totalPaid)}`,
+          });
+        }
+      } catch (e: any) {
+        setFromLookup({ status: 'error', msg: e?.message || "So'rov xato" });
+        setFromInfo(null);
+      }
+    }, 600);
+    return () => { if (sourceTimerRef.current) clearTimeout(sourceTimerRef.current); };
+  }, [fromCn, open]);
+
+  // ────── Destination lookup (per index, debounced) ──────
+  const destTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const lookupDestination = (idx: number, cn: string) => {
+    if (destTimersRef.current[idx]) clearTimeout(destTimersRef.current[idx]);
+    if (!cn.trim()) {
+      setDestinations((prev) => prev.map((d, i) => i === idx ? {
+        ...d, customerName: null, objectName: null, foundInCrm: false, totalPaid: 0, lookupStatus: 'idle', lookupMsg: undefined,
+      } : d));
+      return;
+    }
+    destTimersRef.current[idx] = setTimeout(async () => {
+      setDestinations((prev) => prev.map((d, i) => i === idx ? { ...d, lookupStatus: 'loading' } : d));
+      try {
+        const res = await api.get<{
+          ok: boolean; totalPaid: number;
+          customerName: string | null; objectName: string | null; foundInCrm: boolean;
+        }>(`/oplata-kv/contract-balance?contractNo=${encodeURIComponent(cn.trim())}`);
+        if (!res.foundInCrm) {
+          setDestinations((prev) => prev.map((d, i) => i === idx ? {
+            ...d, customerName: null, objectName: null, foundInCrm: false, totalPaid: 0,
+            lookupStatus: 'not-found', lookupMsg: 'CRM da topilmadi',
+          } : d));
+        } else {
+          setDestinations((prev) => prev.map((d, i) => i === idx ? {
+            ...d,
+            customerName: res.customerName,
+            objectName: res.objectName,
+            foundInCrm: true,
+            totalPaid: res.totalPaid,
+            lookupStatus: 'found',
+            lookupMsg: `Joriy: ${formatMoney(res.totalPaid)}`,
+          } : d));
+        }
+      } catch (e: any) {
+        setDestinations((prev) => prev.map((d, i) => i === idx ? {
+          ...d, lookupStatus: 'error', lookupMsg: e?.message || "So'rov xato",
+        } : d));
+      }
+    }, 600);
+  };
+
+  // ────── Validatsiya ──────
+  const amountNum = moneyToNumber(amount);
+  const destSumNum = destinations.reduce((s, d) => s + (moneyToNumber(d.amount) || 0), 0);
+  const destSumOk = amountNum !== undefined && Math.abs(destSumNum - amountNum) < 0.01;
+  const allObjectsMatch = !!fromInfo?.objectName
+    && destinations.every((d) => !d.foundInCrm || d.objectName === fromInfo.objectName);
+  const overBalance = !!fromInfo && amountNum !== undefined && amountNum > fromInfo.totalPaid + 0.01;
+  const everyDestFoundAndPositive = destinations.every((d) =>
+    d.foundInCrm && d.contractNo.trim() && (moneyToNumber(d.amount) || 0) > 0,
+  );
+
+  const canSave =
+    !!fromInfo?.foundInCrm &&
+    !!fromInfo?.objectName &&
+    amountNum !== undefined && amountNum > 0 &&
+    !overBalance &&
+    destinations.length > 0 &&
+    everyDestFoundAndPositive &&
+    allObjectsMatch &&
+    destSumOk &&
+    !!date &&
+    !!file &&
+    !submitting;
+
+  const handleSave = async () => {
+    if (!canSave || !file) return;
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append('fromContractNo', fromCn.trim());
+      fd.append('amount', String(amountNum));
+      fd.append('date', date);
+      fd.append('note', note);
+      fd.append('destinations', JSON.stringify(
+        destinations.map((d) => ({
+          contractNo: d.contractNo.trim(),
+          amount: moneyToNumber(d.amount),
+        })),
+      ));
+      fd.append('file', file);
+
+      await api.postForm('/oplata-kv/perereboska', fd, { timeout: 60_000 });
+      toast.success("Переброска saqlandi va Telegram'ga yuborildi");
+      onSaved();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || 'Xatolik');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const addDestination = () => {
+    setDestinations((prev) => [...prev, {
+      contractNo: '', amount: '', customerName: null, objectName: null, foundInCrm: false, totalPaid: 0, lookupStatus: 'idle',
+    }]);
+  };
+  const removeDestination = (idx: number) => {
+    setDestinations((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && !submitting && onClose()}>
+      <DialogContent
+        className="sm:max-w-[820px] p-0 overflow-hidden gap-0 max-h-[92vh]"
+        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+      >
+        {/* Hero header */}
+        <div className="bg-gradient-to-br from-fuchsia-600 via-pink-600 to-rose-600 px-6 pt-5 pb-4 text-white">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
+              <ArrowRightLeft className="h-5 w-5" />
+            </div>
+            <div className="flex-1">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Yangi tranzaksiya</div>
+              <div className="text-xl font-black tracking-tight">Переброска</div>
+            </div>
+          </div>
+          <div className="text-[11.5px] text-white/80 mt-2">
+            Bir shartnomadan boshqa shartnoma(lar)ga pul o'tkazish. Obyekt nomlari teng bo'lishi shart · Hujjat majburiy
+          </div>
+        </div>
+
+        {/* Body — scrollable */}
+        <div className="overflow-y-auto p-5 space-y-5 bg-slate-50/30">
+          {/* SOURCE block */}
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+              <Upload className="h-4 w-4" /> 1. Manba shartnoma (qaysidan)
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="ДОГ № *">
+                <Input
+                  value={fromCn}
+                  onChange={(e) => setFromCn(e.target.value)}
+                  placeholder="606ZUR236J"
+                  disabled={submitting}
+                />
+              </Field>
+              <Field label="Дата *">
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={submitting} />
+              </Field>
+            </div>
+            {fromLookup.status !== 'idle' && (
+              <div className={cn(
+                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                fromLookup.status === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
+                fromLookup.status === 'found' && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                fromLookup.status === 'not-found' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                fromLookup.status === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+              )}>
+                {fromLookup.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {fromLookup.status === 'found' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                {fromLookup.status !== 'loading' && fromLookup.status !== 'found' && <X className="h-3.5 w-3.5" />}
+                {fromLookup.status === 'loading' ? 'CRM tekshirilmoqda...' : fromLookup.msg}
+              </div>
+            )}
+            {fromInfo?.foundInCrm && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">Mijoz</div>
+                  <div className="text-[12.5px] font-semibold text-slate-800 truncate" title={fromInfo.customerName || ''}>
+                    {fromInfo.customerName || '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-violet-50 ring-1 ring-violet-200 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-violet-700">Obyekt</div>
+                  <div className="text-[12.5px] font-bold text-violet-900 truncate">
+                    {fromInfo.objectName || '—'}
+                  </div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700">Qoldiq</div>
+                  <div className="text-[13px] font-black text-emerald-800">
+                    {formatMoney(fromInfo.totalPaid)}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* AMOUNT block */}
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+              <Wallet className="h-4 w-4" /> 2. Otkazma summasi
+            </div>
+            <Field label="Summa (manfiy) *">
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-600 font-bold pointer-events-none">−</span>
+                <MoneyInput
+                  value={amount}
+                  onChange={setAmount}
+                  placeholder="100 000"
+                  disabled={submitting}
+                  className="pl-7"
+                />
+              </div>
+            </Field>
+            {amountNum !== undefined && fromInfo && (
+              <div className={cn(
+                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1',
+                overBalance
+                  ? 'bg-rose-50 text-rose-700 ring-rose-200'
+                  : 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+              )}>
+                {overBalance ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    Summa qoldiqdan oshib ketdi: {formatMoney(amountNum)} &gt; {formatMoney(fromInfo.totalPaid)}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Bu shartnomadan <b>−{formatMoney(amountNum)}</b> olinadi.
+                    Qoldiq: <b>{formatMoney(fromInfo.totalPaid - amountNum)}</b>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* DESTINATIONS block */}
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+                <Building2 className="h-4 w-4" /> 3. Maqsadli shartnoma(lar) ({destinations.length})
+              </div>
+              <button
+                onClick={addDestination}
+                disabled={submitting}
+                className="h-7 px-2.5 rounded-lg text-[11px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 ring-1 ring-fuchsia-200 transition-colors inline-flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Yana shartnoma
+              </button>
+            </div>
+            {!fromInfo?.objectName && (
+              <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] text-amber-800 inline-flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Avval manba shartnoma'ni tanlang (obyekt nomi keladigan joydan)
+              </div>
+            )}
+            {destinations.map((d, idx) => {
+              const objMatch = !d.foundInCrm || d.objectName === fromInfo?.objectName;
+              const dAmt = moneyToNumber(d.amount);
+              return (
+                <div key={idx} className="rounded-lg bg-slate-50/60 ring-1 ring-slate-200 p-3 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                      #{idx + 1}
+                    </div>
+                    {destinations.length > 1 && (
+                      <button
+                        onClick={() => removeDestination(idx)}
+                        disabled={submitting}
+                        className="w-6 h-6 rounded grid place-items-center text-rose-500 hover:bg-rose-50"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="ДОГ № *">
+                      <Input
+                        value={d.contractNo}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDestinations((prev) => prev.map((x, i) => i === idx ? { ...x, contractNo: v } : x));
+                          lookupDestination(idx, v);
+                        }}
+                        placeholder="1020AFS25QZ"
+                        disabled={submitting}
+                      />
+                    </Field>
+                    <Field label="Summa *">
+                      <MoneyInput
+                        value={d.amount}
+                        onChange={(v) => setDestinations((prev) => prev.map((x, i) => i === idx ? { ...x, amount: v } : x))}
+                        placeholder="50 000"
+                        disabled={submitting}
+                      />
+                    </Field>
+                  </div>
+                  {d.lookupStatus !== 'idle' && (
+                    <div className={cn(
+                      'rounded px-2 py-1.5 text-[11.5px] font-medium ring-1 inline-flex items-center gap-1.5',
+                      d.lookupStatus === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
+                      d.lookupStatus === 'found' && objMatch && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+                      d.lookupStatus === 'found' && !objMatch && 'bg-rose-50 text-rose-700 ring-rose-200',
+                      d.lookupStatus === 'not-found' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                      d.lookupStatus === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                    )}>
+                      {d.lookupStatus === 'loading' && <Loader2 className="h-3 w-3 animate-spin" />}
+                      {d.lookupStatus === 'found' && objMatch && <CheckCircle2 className="h-3 w-3" />}
+                      {d.lookupStatus === 'found' && !objMatch && <AlertTriangle className="h-3 w-3" />}
+                      {d.lookupStatus === 'not-found' && <X className="h-3 w-3" />}
+                      {d.lookupStatus === 'loading' && 'CRM tekshirilmoqda...'}
+                      {d.lookupStatus === 'found' && !objMatch && (
+                        <span>Obyekt mos kelmaydi: <b>{d.objectName}</b> ≠ <b>{fromInfo?.objectName}</b></span>
+                      )}
+                      {d.lookupStatus === 'found' && objMatch && (
+                        <span>
+                          <b>{d.customerName || '?'}</b> · Joriy: {formatMoney(d.totalPaid)}
+                          {dAmt !== undefined && dAmt > 0 && (
+                            <> · Kelajak: <b>{formatMoney(d.totalPaid + dAmt)}</b></>
+                          )}
+                        </span>
+                      )}
+                      {(d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (d.lookupMsg || 'Xato')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Dest summa indikator */}
+            {amountNum !== undefined && (
+              <div className={cn(
+                'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
+                destSumOk
+                  ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                  : 'bg-rose-50 text-rose-700 ring-rose-200',
+              )}>
+                {destSumOk
+                  ? <CheckCircle2 className="h-3.5 w-3.5" />
+                  : <AlertTriangle className="h-3.5 w-3.5" />}
+                Jami maqsadli: <b>{formatMoney(destSumNum)}</b> · Manba: <b>{formatMoney(amountNum)}</b>
+                {!destSumOk && (
+                  <span className="ml-1">(farq: {formatMoney(destSumNum - amountNum)})</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* FILE + NOTE block */}
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+              <Paperclip className="h-4 w-4" /> 4. Hujjat va izoh
+            </div>
+            <Field label="Hujjat (rasm / PDF) *" full>
+              <label className={cn(
+                "flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 cursor-pointer transition-colors",
+                file ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-300 hover:border-fuchsia-400 hover:bg-fuchsia-50/30',
+              )}>
+                <Upload className={cn("h-5 w-5", file ? 'text-emerald-600' : 'text-slate-500')} />
+                <div className="flex-1 min-w-0">
+                  {file ? (
+                    <>
+                      <div className="text-[12.5px] font-bold text-emerald-700 truncate">{file.name}</div>
+                      <div className="text-[10.5px] text-slate-500">{(file.size / 1024).toFixed(1)} KB · {file.type}</div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-[12.5px] font-semibold text-slate-700">Hujjat tanlash</div>
+                      <div className="text-[10.5px] text-slate-500">Rasm yoki PDF · maksimum 25 MB</div>
+                    </>
+                  )}
+                </div>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*,application/pdf"
+                  onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  disabled={submitting}
+                />
+              </label>
+            </Field>
+            <Field label="Izoh (Примечание)" full>
+              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ixtiyoriy" disabled={submitting} />
+            </Field>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 py-3 border-t border-slate-100 bg-white flex items-center justify-between gap-3">
+          <div className="text-[11px] text-slate-500">
+            {!canSave && fromInfo?.foundInCrm && 'Barcha shartlar bajarilishi kerak'}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={onClose} disabled={submitting}>Bekor qilish</Button>
+            <Button
+              onClick={handleSave}
+              disabled={!canSave}
+              className="bg-gradient-to-br from-fuchsia-600 to-pink-600 text-white"
+            >
+              {submitting
+                ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                : <ArrowRightLeft className="h-4 w-4 mr-1.5" />}
+              {submitting ? 'Saqlanmoqda...' : 'Tasdiqlash'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
