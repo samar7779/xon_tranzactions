@@ -464,6 +464,37 @@ export class CategorizationService {
   }
 
   /**
+   * Bitta shartnomani CRM da QAYTA tekshirish — eski cache o'chiriladi va fresh lookup.
+   * Foydalanuvchi 'CRM topmadi' deb hisoblangan shartnoma haqiqatda CRM da bor deb
+   * o'ylaganda chaqiriladi (cache stale bo'lsa).
+   */
+  async refreshContractCache(contractNumber: string): Promise<{
+    ok: boolean;
+    found: boolean;
+    customerName: string | null;
+    objectName: string | null;
+    contractNumber: string;
+  }> {
+    const key = contractNumber.trim().toUpperCase();
+    if (!key) throw new BadRequestException('Shartnoma raqami bo\'sh');
+
+    // Eski cache (found=false ham, true ham) o'chiramiz — fresh lookup
+    await this.prisma.crmContract.deleteMany({
+      where: { contractNumber: key },
+    });
+
+    // Yangi lookup
+    const result = await this.crmCache.lookup(key);
+    return {
+      ok: true,
+      found: !!result?.found,
+      customerName: result?.customerName || null,
+      objectName: result?.objectName || null,
+      contractNumber: key,
+    };
+  }
+
+  /**
    * Foydalanuvchi qo'lda kategoriya qo'yadi — har doim ustidan yoziladi.
    * subcategoryId null bo'lsa, faqat top-level qo'yiladi.
    */
