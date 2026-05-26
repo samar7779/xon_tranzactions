@@ -464,6 +464,54 @@ export class CategorizationService {
   }
 
   /**
+   * Bir martalik: DB dagi Transaction.contractNumber larda № yoki bo'shliq bo'lganlarni
+   * tozalaydi (eski qatorlar uchun, yangi yozuvlar avtomatik tozalanadi).
+   * Returns: nechta qator yangilangani.
+   */
+  async cleanupContractNumberSymbols(): Promise<{ ok: true; cleaned: number; samples: Array<{ id: string; old: string; new: string }> }> {
+    // № yoki bo'shliq bo'lgan contractNumber li tx larni topamiz
+    const dirty = await this.prisma.transaction.findMany({
+      where: {
+        OR: [
+          { contractNumber: { contains: '№' } },
+          { contractNumber: { contains: ' ' } },
+        ],
+      },
+      select: { id: true, contractNumber: true },
+      take: 5000,
+    });
+
+    let cleaned = 0;
+    const samples: Array<{ id: string; old: string; new: string }> = [];
+
+    for (const tx of dirty) {
+      if (!tx.contractNumber) continue;
+      const newContract = tx.contractNumber
+        .replace(/№/g, '')
+        .replace(/N°/g, '')
+        .replace(/\s+/g, '')
+        .trim()
+        .toUpperCase();
+      if (newContract === tx.contractNumber) continue;
+      if (!newContract) continue;
+      try {
+        await this.prisma.transaction.update({
+          where: { id: tx.id },
+          data: { contractNumber: newContract },
+        });
+        if (samples.length < 10) {
+          samples.push({ id: tx.id, old: tx.contractNumber, new: newContract });
+        }
+        cleaned++;
+      } catch (e: any) {
+        this.log.warn(`cleanupContractNumberSymbols xato (${tx.id}): ${e?.message}`);
+      }
+    }
+    this.log.log(`cleanupContractNumberSymbols: ${cleaned}/${dirty.length} qator yangilandi`);
+    return { ok: true, cleaned, samples };
+  }
+
+  /**
    * Bitta shartnomani CRM da QAYTA tekshirish — eski cache o'chiriladi va fresh lookup.
    * Foydalanuvchi 'CRM topmadi' deb hisoblangan shartnoma haqiqatda CRM da bor deb
    * o'ylaganda chaqiriladi (cache stale bo'lsa).
@@ -556,7 +604,10 @@ export class CategorizationService {
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
-    const newContract = contractNumber?.trim().toUpperCase() || null;
+    // № va N° simbollarini olib tashlaymiz + bo'shliqlarni tozalaymiz
+    const newContract = contractNumber
+      ? contractNumber.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase() || null
+      : null;
     let verified = false;
     let customerName: string | null = null;
 
@@ -689,7 +740,10 @@ export class CategorizationService {
     });
     if (!old) throw new BadRequestException('Tranzaksiya topilmadi');
 
-    const newContract = contractNumber?.trim().toUpperCase() || null;
+    // № va N° simbollarini olib tashlaymiz + bo'shliqlarni tozalaymiz
+    const newContract = contractNumber
+      ? contractNumber.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase() || null
+      : null;
     if (newContract && newContract.length > 128) {
       throw new BadRequestException('Shartnoma raqami juda uzun (max 128 belgi)');
     }
