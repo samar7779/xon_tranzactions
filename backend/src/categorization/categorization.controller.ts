@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -146,6 +146,19 @@ export class CategorizationController {
   @ApiOperation({ summary: 'Qayta tekshirish holati (progress + oxirgi 20 ta tuzatilgan)' })
   recheckStatus() {
     return this.svc.getRecheckStatus();
+  }
+
+  @Post('refresh-contract-cache')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "BITTA shartnomani CRM da DARHOL qayta tekshirish (cache o'chiriladi)",
+    description: "User aniq shartnomani CRM da bor deb hisoblayotgan bo'lsa va sistema 'XATO' deyayotgan bo'lsa, cache stale bo'lishi mumkin. Bu endpoint cache o'chiradi va live CRM lookup qiladi.",
+  })
+  async refreshContractCache(@Body() body: { contractNumber: string }) {
+    if (!body?.contractNumber) {
+      throw new BadRequestException('contractNumber kerak');
+    }
+    return this.svc.refreshContractCache(body.contractNumber);
   }
 
   @Get('recheck-xato/fixed')
