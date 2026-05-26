@@ -191,14 +191,28 @@ export class OplataKvController {
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Barcha ariza fayllarini ZIP qilib yuklab berish' })
   async exportArizasZip(@Res() res: Response) {
-    return this.svc.exportArizasZip(res);
+    try {
+      await this.svc.exportArizasZip(res);
+    } catch (e: any) {
+      console.error('[exportArizasZip] xato:', e?.stack || e?.message || e);
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: e?.message || 'ZIP yaratishda xato' });
+      }
+    }
   }
 
   @Get('export/perereboski-zip')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Barcha Перереброска fayllarini ZIP qilib yuklab berish' })
   async exportPerereboskiZip(@Res() res: Response) {
-    return this.svc.exportPerereboskiZip(res);
+    try {
+      await this.svc.exportPerereboskiZip(res);
+    } catch (e: any) {
+      console.error('[exportPerereboskiZip] xato:', e?.stack || e?.message || e);
+      if (!res.headersSent) {
+        res.status(500).json({ ok: false, error: e?.message || 'ZIP yaratishda xato' });
+      }
+    }
   }
 
   @Post('sync-from-transactions')

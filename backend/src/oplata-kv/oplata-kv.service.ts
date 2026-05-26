@@ -7,8 +7,6 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as ExcelJS from 'exceljs';
-// archiver — CJS modul, default function import
-import archiver from 'archiver';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -3316,9 +3314,21 @@ export class OplataKvService {
   // ZIP EXPORT — Arizalar va Перереброска fayllari
   // ════════════════════════════════════════════════════════════════════
 
+  /** archiver modulini xavfsiz yuklash (paket yo'q bo'lsa aniq xato beradi) */
+  private loadArchiver(): any {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require('archiver');
+      return mod.default || mod;
+    } catch (e: any) {
+      this.log.error(`archiver moduli yuklanmadi: ${e?.message}`);
+      throw new Error("archiver paketi o'rnatilmagan");
+    }
+  }
+
   /** Barcha ariza fayllarini ZIP qilib qaytarish (Stream) */
   async exportArizasZip(res: any) {
-    // archiver CJS modul — `archiver as any` orqali default export'siz chaqiramiz
+    const archiver = this.loadArchiver();
     const zip = archiver('zip', { zlib: { level: 5 } });
 
     zip.on('error', (err: any) => {
@@ -3356,6 +3366,7 @@ export class OplataKvService {
 
   /** Barcha Переброска fayllarini ZIP qilib qaytarish (Stream) */
   async exportPerereboskiZip(res: any) {
+    const archiver = this.loadArchiver();
     const zip = archiver('zip', { zlib: { level: 5 } });
 
     zip.on('error', (err: any) => {
