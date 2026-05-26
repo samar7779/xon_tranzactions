@@ -162,12 +162,10 @@ export class CrmService {
    */
   async search(contractNumber: string, perPage = 20) {
     if (!contractNumber?.trim()) return { ok: false, error: 'contract kerak' };
-    // cancelled=1 — XonSaroy CRM ga bekor qilingan shartnomalarni ham kiritish uchun
-    // (default'da XonSaroy cancelled'larni yashirib qo'yadi)
     const r = await this.call('/index', {
       contract: contractNumber.trim(),
       'per-page': perPage,
-      cancelled: 1,
+      cancelled: 1,  // bekor qilinganlar ham
     });
     if (!r.ok) return r;
     const items: any[] = r.data?.data || [];
@@ -323,20 +321,45 @@ export class CrmService {
     const body: Record<string, any> = {};
     if (opts.contract) body.contract = opts.contract.trim();
     else body.id = opts.id;
-    // cancelled=1 — bekor qilingan shartnomalar ham qaytsin
-    body.cancelled = 1;
     const r = await this.call('/show', body);
-    if (!r.ok) return r;
-    const detail: any = r.data?.data || null;
-
-    // MySQL'dan qo'shimcha client ma'lumotlarini olishga urinish
+    let detail: any = r.ok ? (r.data?.data || null) : null;
     const contractNo = (opts.contract || detail?.contract || '').toString().trim();
+
+    // ── FALLBACK: /show qaytarmasa /index dan urunamiz (cancelled qaytishi mumkin) ──
+    // XonSaroy CRM /show ba'zan cancelled shartnomalarni qaytarmaydi.
+    // /index esa cancelled=1 bilan ularni qaytaradi. Aniq kontraktni topib qaytaramiz.
+    if (!detail && contractNo) {
+      try {
+        const idxRes = await this.call('/index', {
+          contract: contractNo,
+          'per-page': 5,
+          cancelled: 1,
+        });
+        if (idxRes.ok) {
+          const items: any[] = idxRes.data?.data || [];
+          const exact = items.find((it) => String(it.contract || '').toUpperCase() === contractNo.toUpperCase());
+          if (exact) {
+            detail = exact;
+            this.log.log(`CRM /show fallback /index: ${contractNo} topildi (status=${detail.status || '-'})`);
+          }
+        }
+      } catch (e: any) {
+        this.log.warn(`CRM /show -> /index fallback xato (${contractNo}): ${e?.message}`);
+      }
+    }
+
     if (detail && contractNo) {
       const extras = await this.fetchClientExtras(contractNo);
       if (extras) {
         detail.client = { ...(detail.client || {}), ...extras };
       }
     }
+
+    if (!detail) {
+      if (!r.ok) return r;
+      return { ok: true, detail: null };
+    }
     return { ok: true, detail };
   }
+
 }

@@ -30,7 +30,9 @@ export interface CachedContract {
 }
 
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 soat
-const NOT_FOUND_RETRY_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // 7 kunda 1 marta qayta urinish
+// Avval 7 kun edi — juda uzoq. Endi 4 soatda bir marta XATO shartnomalar
+// qayta CRM ga tekshiriladi (CRM ma'lumotlari tezroq sinxronlanadi).
+const NOT_FOUND_RETRY_AFTER_MS = 4 * 60 * 60 * 1000; // 4 soat
 
 @Injectable()
 export class CrmContractCacheService {
@@ -44,11 +46,21 @@ export class CrmContractCacheService {
   /**
    * Shartnoma raqami bo'yicha kesh + CRM lookup.
    * O/0 variantlarini ham tekshiradi.
+   *
+   * @param opts.forceRefresh — true bo'lsa cache o'chiriladi va fresh CRM lookup qilinadi
    */
-  async lookup(contractNumber: string): Promise<CachedContract | null> {
+  async lookup(contractNumber: string, opts?: { forceRefresh?: boolean }): Promise<CachedContract | null> {
     if (!contractNumber) return null;
     const key = contractNumber.trim().toUpperCase();
     if (!key) return null;
+
+    if (opts?.forceRefresh) {
+      // Cache o'chiramiz — fresh lookup
+      const variants = contractVariants(key).slice(0, 16);
+      await this.prisma.crmContract.deleteMany({
+        where: { contractNumber: { in: variants } },
+      });
+    }
 
     // Parallel chaqiruvlarni birlashtirish
     const existing = this.inflight.get(key);
@@ -73,7 +85,13 @@ export class CrmContractCacheService {
       if (!stale) {
         return toCached(cached);
       }
-      // Eskirgan — fonda yangilash (kutmaymiz)
+      // Eskirgan + found=false → SINXRON yangilab ko'ramiz (CRM ma'lumoti yangilangan bo'lishi mumkin)
+      // Eskirgan + found=true → fonda yangilab keshdan qaytaramiz (tez)
+      if (!cached.found) {
+        // Cache o'chiramiz va yangidan CRM ga so'raymiz
+        await this.prisma.crmContract.deleteMany({ where: { contractNumber: { in: variants } } });
+        return this.fetchFromCrmAndCache(key);
+      }
       this.refreshInBackground(cached.contractNumber).catch(() => { /* ignore */ });
       return toCached(cached);
     }
