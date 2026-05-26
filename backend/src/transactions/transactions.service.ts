@@ -308,7 +308,7 @@ export class TransactionsService {
       contractNums.size > 0
         ? this.prisma.crmContract.findMany({
             where: { contractNumber: { in: Array.from(contractNums) } },
-            select: { contractNumber: true, found: true, customerName: true, objectName: true },
+            select: { contractNumber: true, found: true, customerName: true, objectName: true, status: true },
           })
         : Promise.resolve([]),
     ]);
@@ -327,17 +327,19 @@ export class TransactionsService {
       const acc = tx.direction === 'IN' ? tx.fromAccount : tx.toAccount;
       const code = tx.category?.code;
 
-      // Shartnoma holati + CRM mijoz nomi
+      // Shartnoma holati + CRM mijoz nomi + CRM status (cancelled belgilash uchun)
       let contractStatus: 'verified' | 'unverified' | 'manual' | null = null;
       let contractCustomer: string | null = null;
+      let contractCrmStatus: string | null = null;  // CRM dagi shartnoma statusi (cancelled/active/etc)
       if (tx.contractNumber) {
         if (tx.isContractManual) {
-          contractStatus = 'manual'; // qo'lda kiritilgan — XATO emas
+          contractStatus = 'manual';
         } else {
           const crm = crmByContract.get(tx.contractNumber);
           if (crm) {
             contractStatus = crm.found ? 'verified' : 'unverified';
             contractCustomer = crm.customerName || null;
+            contractCrmStatus = crm.status || null;
           } else {
             contractStatus = 'unverified';
           }
@@ -368,7 +370,7 @@ export class TransactionsService {
         counterpartyDisplay = tx.category.name;
       }
       const hasAttachment = (tx._count?.attachments ?? 0) > 0;
-      return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, hasAttachment };
+      return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, contractCrmStatus, hasAttachment };
     });
 
     return { ok: true, total, page, perPage, items: enriched };
@@ -644,19 +646,21 @@ export class TransactionsService {
       tx.contractNumber
         ? this.prisma.crmContract.findUnique({
             where: { contractNumber: tx.contractNumber },
-            select: { found: true, customerName: true, objectName: true },
+            select: { found: true, customerName: true, objectName: true, status: true },
           })
         : Promise.resolve(null),
     ]);
 
     let contractStatus: 'verified' | 'unverified' | 'manual' | null = null;
     let contractCustomer: string | null = null;
+    let contractCrmStatus: string | null = null;
     if (tx.contractNumber) {
       if (tx.isContractManual) {
-        contractStatus = 'manual'; // qo'lda kiritilgan — XATO emas
+        contractStatus = 'manual';
       } else if (crmRow) {
         contractStatus = crmRow.found ? 'verified' : 'unverified';
         contractCustomer = crmRow.customerName || null;
+        contractCrmStatus = crmRow.status || null;
       } else {
         contractStatus = 'unverified';
       }
@@ -678,7 +682,7 @@ export class TransactionsService {
     }
 
     const hasAttachment = (tx._count?.attachments ?? 0) > 0;
-    return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, hasAttachment };
+    return { ...tx, counterpartyDisplay, contractStatus, contractCustomer, contractCrmStatus, hasAttachment };
   }
 
   /**
