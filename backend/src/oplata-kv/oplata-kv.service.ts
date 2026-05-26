@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as ExcelJS from 'exceljs';
+// archiver — CJS modul, default function import
+import archiver from 'archiver';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -3316,8 +3318,13 @@ export class OplataKvService {
 
   /** Barcha ariza fayllarini ZIP qilib qaytarish (Stream) */
   async exportArizasZip(res: any) {
-    const arch = (await import('archiver')).default;
-    const zip = arch('zip', { zlib: { level: 5 } });
+    // archiver CJS modul — `archiver as any` orqali default export'siz chaqiramiz
+    const zip = archiver('zip', { zlib: { level: 5 } });
+
+    zip.on('error', (err: any) => {
+      this.log.error(`Arizas ZIP archive xato: ${err?.message}`);
+      try { res.status(500).end(); } catch {}
+    });
 
     res.set({
       'Content-Type': 'application/zip',
@@ -3332,24 +3339,29 @@ export class OplataKvService {
 
     let added = 0;
     for (const a of arizas) {
+      if (!a.storagePath) continue;
       try {
         await fs.access(a.storagePath);
-        // Fayl nomida shartnoma yoki tx id
         const subDir = a.contractNumber ? `${a.contractNumber}/` : 'no-contract/';
         zip.file(a.storagePath, { name: `${subDir}${a.id}__${a.filename}` });
         added++;
       } catch {
-        // Disk faylida yo'q
+        // Disk faylida yo'q — skip
       }
     }
     this.log.log(`Arizas ZIP: ${added}/${arizas.length} fayl qo'shildi`);
+    // Bo'sh arxiv ham yaratiladi (foydalanuvchiga bo'sh ZIP yuboriladi)
     await zip.finalize();
   }
 
   /** Barcha Переброска fayllarini ZIP qilib qaytarish (Stream) */
   async exportPerereboskiZip(res: any) {
-    const arch = (await import('archiver')).default;
-    const zip = arch('zip', { zlib: { level: 5 } });
+    const zip = archiver('zip', { zlib: { level: 5 } });
+
+    zip.on('error', (err: any) => {
+      this.log.error(`Perereboski ZIP archive xato: ${err?.message}`);
+      try { res.status(500).end(); } catch {}
+    });
 
     res.set({
       'Content-Type': 'application/zip',
