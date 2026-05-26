@@ -2261,7 +2261,7 @@ function OplataKvFormDialog({
             </div>
           )}
 
-          <Field label="Сумма оплаты" locked={isFromTx}>
+          <Field label="Сумма оплаты *" locked={isFromTx}>
             <MoneyInput value={paymentAmount} onChange={setPaymentAmount} placeholder="0" disabled={isFromTx} />
           </Field>
           <Field label="1 взнос">
@@ -2348,7 +2348,14 @@ function OplataKvFormDialog({
           <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
           <Button
             onClick={() => saveMut.mutate()}
-            disabled={!contractNo.trim() || !date || !sumValidation.ok || saveMut.isPending}
+            disabled={
+              !contractNo.trim() ||
+              !date ||
+              !paymentAmount.trim() ||
+              moneyToNumber(paymentAmount) === undefined ||
+              !sumValidation.ok ||
+              saveMut.isPending
+            }
             className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
           >
             {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
