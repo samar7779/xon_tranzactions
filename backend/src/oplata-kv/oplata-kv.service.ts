@@ -467,8 +467,12 @@ export class OplataKvService {
       contractNumber: { not: null },
     };
     if (minDate) {
+      // MUHIM: minDate "YYYY-MM-DD" — Tashkent (UTC+5) sanasini bildiradi.
+      // Tashkent end-of-day = 23:59:59 +05:00 = 18:59:59 UTC shu sanada.
+      // Avval setUTCHours(23,59,59) edi — bu UTC tunini ifodalardi va 01.05 ning 00:00–05:00 Tashkent
+      // tranzaksiyalari (UTC da 30.04 19:00–00:00) skip bo'lardi.
       const dayEnd = new Date(minDate);
-      dayEnd.setUTCHours(23, 59, 59, 999);
+      dayEnd.setUTCHours(18, 59, 59, 999);  // 23:59:59 Tashkent (UTC+5)
       where.txnDate = { gt: dayEnd };
     }
 
@@ -1002,11 +1006,16 @@ export class OplataKvService {
    * Bu yerda nima nima sababdan tushib qolganini sanaymiz.
    */
   async debugSyncDiff(opts: { dateFrom?: string; dateTo?: string } = {}) {
+    // Tashkent (UTC+5) sana oralig'i: 00:00 Tashkent = 19:00 UTC oldingi kuni
     const dateFilter: any = {};
-    if (opts.dateFrom) dateFilter.gte = new Date(opts.dateFrom);
+    if (opts.dateFrom) {
+      const df = new Date(opts.dateFrom);
+      df.setUTCHours(-5, 0, 0, 0);  // 00:00 Tashkent = -5:00 UTC same date (= 19:00 oldingi UTC kuni)
+      dateFilter.gte = df;
+    }
     if (opts.dateTo) {
       const dt = new Date(opts.dateTo);
-      dt.setUTCHours(23, 59, 59, 999);
+      dt.setUTCHours(18, 59, 59, 999);  // 23:59:59 Tashkent (UTC+5)
       dateFilter.lte = dt;
     }
     const txWhereBase: any = { category: { code: 'CLIENT' } };
