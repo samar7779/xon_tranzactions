@@ -321,24 +321,37 @@ export class CrmService {
     const body: Record<string, any> = {};
     if (opts.contract) body.contract = opts.contract.trim();
     else body.id = opts.id;
+    // Laravel SoftDelete + Microcrud uchun deleted/cancelled qatorlarni ham qaytarish
+    // (XonSaroy noma'lum parametrlarni e'tiborsiz qoldiradi)
+    body.trashed = 1;
+    body.with_trashed = 1;
+    body.with_deleted = 1;
+    body.include_trashed = 1;
+    body.include_deleted = 1;
+    body.cancelled = 1;
+    body.with_cancelled = 1;
+    body.status = 'all';
     const r = await this.call('/show', body);
     let detail: any = r.ok ? (r.data?.data || null) : null;
     const contractNo = (opts.contract || detail?.contract || '').toString().trim();
 
-    // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (cancelled kontraktlar uchun) ──
-    // XonSaroy /show showByContract → setById → Not found qaytishi mumkin (cancelled bo'lsa).
-    // /index esa cancelled bo'lganlarni ham qaytaradi (search). Bir nechta cancelled
-    // parametr variantlarini yuboramiz — XonSaroy noma'lumlarni e'tiborsiz qoldiradi.
+    // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (deleted/cancelled uchun) ──
     if (!detail && contractNo) {
       try {
         const idxRes = await this.call('/index', {
           contract: contractNo,
-          'per-page': 50,  // ko'proq item — exact match topish ehtimoli yuqori
+          'per-page': 50,
           cancelled: 1,
           is_cancelled: 1,
           include_cancelled: 1,
           with_cancelled: 1,
           status: 'all',
+          // Laravel SoftDelete: deleted_at to'ldirilgan rowlar
+          trashed: 1,
+          with_trashed: 1,
+          with_deleted: 1,
+          include_trashed: 1,
+          include_deleted: 1,
         });
         if (idxRes.ok) {
           const items: any[] = idxRes.data?.data || [];
