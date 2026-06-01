@@ -19,6 +19,7 @@ import {
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
+import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -95,6 +96,7 @@ export default function TransactionsPage() {
   const [detailRow, setDetailRow] = useState<any>(null);
   const [idSearchOpen, setIdSearchOpen] = useState(false);
   const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
+  const [vipiskaDebugOpen, setVipiskaDebugOpen] = useState(false);
   const [todayStatsOpen, setTodayStatsOpen] = useState(false);
   const [extraToolsOpen, setExtraToolsOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
@@ -669,6 +671,10 @@ export default function TransactionsPage() {
                     <ScanLine className="h-4 w-4 mr-2 text-indigo-600" />
                     <span className="flex-1">Bank ID inspector</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setVipiskaDebugOpen(true)} className="cursor-pointer">
+                    <Search className="h-4 w-4 mr-2 text-cyan-600" />
+                    <span className="flex-1">Vipiska tekshiruvi</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filterlar</DropdownMenuLabel>
                   <DropdownMenuItem
@@ -687,6 +693,12 @@ export default function TransactionsPage() {
                 hideTrigger
                 controlledOpen={idInspectorTrigger > 0}
                 onControlledOpenChange={(o) => { if (!o) setIdInspectorTrigger(0); }}
+              />
+
+              {/* Vipiska tekshiruvi dialog */}
+              <VipiskaDebugDialog
+                open={vipiskaDebugOpen}
+                onClose={() => setVipiskaDebugOpen(false)}
               />
 
               {/* EXPORT — paperclip stilida, settingsdan keyin */}
