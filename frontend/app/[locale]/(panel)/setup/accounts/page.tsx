@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
   Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet, Download, Loader2,
+  Calendar, CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +43,7 @@ export default function AccountsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [exporting, setExporting] = useState(false);
+  const [backfillAccount, setBackfillAccount] = useState<any>(null);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['bank-accounts'],
@@ -301,6 +303,7 @@ export default function AccountsPage() {
                 onSync={() => syncMut.mutate(a.id)}
                 onDelete={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}
                 onToggleSync={() => toggleSyncMut.mutate({ id: a.id, enabled: !a.syncEnabled })}
+                onBackfill={() => setBackfillAccount(a)}
                 busy={syncMut.isPending}
               />
             ))}
@@ -365,6 +368,9 @@ export default function AccountsPage() {
                                   <DropdownMenuItem onClick={() => syncMut.mutate(a.id)} disabled={syncMut.isPending}>
                                     <RefreshCw className={cn("h-4 w-4 mr-2", syncMut.isPending && "animate-spin")} /> Hozir sync
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setBackfillAccount(a)}>
+                                    <Calendar className="h-4 w-4 mr-2 text-indigo-600" /> Sana orqali sync (backfill)
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => toggleSyncMut.mutate({ id: a.id, enabled: !a.syncEnabled })}>
                                     {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
                                     {a.syncEnabled ? 'Sync o\'chirish' : 'Sync yoqish'}
@@ -387,6 +393,15 @@ export default function AccountsPage() {
           </Card>
         )}
       </div>
+
+      {/* Backfill dialog — hisob bo'yicha eski sanani sync qilish */}
+      <AccountBackfillDialog
+        account={backfillAccount}
+        onClose={() => setBackfillAccount(null)}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+        }}
+      />
     </>
   );
 }
@@ -425,13 +440,14 @@ function BigStat({
 }
 
 function AccountCard({
-  account: a, canManage, onSync, onDelete, onToggleSync, busy,
+  account: a, canManage, onSync, onDelete, onToggleSync, onBackfill, busy,
 }: {
   account: any;
   canManage: boolean;
   onSync: () => void;
   onDelete: () => void;
   onToggleSync: () => void;
+  onBackfill: () => void;
   busy: boolean;
 }) {
   const balance = Number(a.balance || 0);
@@ -456,6 +472,9 @@ function AccountCard({
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onSync} disabled={busy}>
                   <RefreshCw className={cn("h-4 w-4 mr-2", busy && "animate-spin")} /> Hozir sync
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={onBackfill}>
+                  <Calendar className="h-4 w-4 mr-2 text-indigo-600" /> Sana orqali sync (backfill)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onToggleSync}>
                   {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
@@ -771,6 +790,177 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
             disabled={mut.isPending || !credentialId || !branch || validCount === 0}
           >
             {mut.isPending ? 'Qo\'shilmoqda...' : `${validCount} ta hisobni qo'shish`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ──────────── Backfill dialog (per-account, sana orqali sync) ────────────
+function AccountBackfillDialog({
+  account, onClose, onSuccess,
+}: {
+  account: any | null;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const [dateFrom, setDateFrom] = useState(sevenDaysAgo);
+  const [dateTo, setDateTo] = useState(today);
+  const [result, setResult] = useState<any>(null);
+
+  // Account o'zgarganda sana'larni reset (bir oyga oxirgi default)
+  useMemo(() => {
+    if (account) {
+      const d = new Date();
+      d.setDate(d.getDate() - 7);
+      setDateFrom(d.toISOString().slice(0, 10));
+      setDateTo(new Date().toISOString().slice(0, 10));
+      setResult(null);
+    }
+  }, [account?.id]);
+
+  const backfillMut = useMutation({
+    mutationFn: () => api.post('/sync/backfill', {
+      scope: 'account',
+      accountId: account?.id,
+      dateFrom,
+      dateTo,
+    }, { timeout: 60_000 }),
+    onSuccess: (r: any) => {
+      setResult(r);
+      if (r?.ok) {
+        toast.success(`Backfill boshlandi · ${r?.accounts ?? 1} hisob · ${r?.dates?.length ?? 0} sana`);
+        onSuccess();
+      } else {
+        toast.error(r?.error || 'Backfill xato');
+      }
+    },
+    onError: (e: any) => {
+      setResult({ ok: false, error: e?.message || 'Xato' });
+      toast.error(e?.message || 'So\'rov xato');
+    },
+  });
+
+  // Sana farqi (ko'rsatish uchun)
+  const dayDiff = (() => {
+    if (!dateFrom || !dateTo) return 0;
+    const a = new Date(dateFrom);
+    const b = new Date(dateTo);
+    const diff = Math.floor((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return diff;
+  })();
+
+  const isOpen = !!account;
+  return (
+    <Dialog open={isOpen} onOpenChange={(v) => { if (!v) { onClose(); setResult(null); } }}>
+      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden gap-0">
+        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 px-6 pt-5 pb-4 text-white">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
+              <Calendar className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Sync orqa sanaga</div>
+              <div className="text-lg font-black tracking-tight">Backfill</div>
+            </div>
+          </div>
+          {account && (
+            <div className="text-[11.5px] text-white/85 mt-2 font-mono truncate">
+              {account.bank?.name} · {account.accountNo}
+              {account.ownerName && <span className="ml-1 opacity-80">· {account.ownerName}</span>}
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="text-[12px] text-slate-600 leading-relaxed">
+            Tanlangan sana oralig'i uchun bank API'sidan tranzaksiyalarni qayta yuklab DB'ga
+            qo'shadi (dublikatlar avtomatik o'tkazib yuboriladi). Fonda ishlaydi.
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                Sanadan
+              </Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                max={today}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-10"
+              />
+            </div>
+            <div>
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                Sanagacha
+              </Label>
+              <Input
+                type="date"
+                value={dateTo}
+                max={today}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-10"
+              />
+            </div>
+          </div>
+
+          {dateFrom && dateTo && dayDiff > 0 && (
+            <div className={cn(
+              'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
+              dayDiff > 90
+                ? 'bg-amber-50 ring-amber-200 text-amber-800'
+                : 'bg-slate-50 ring-slate-200 text-slate-700',
+            )}>
+              <Calendar className="h-3.5 w-3.5" />
+              <span><b>{dayDiff}</b> ta kun tanlandi</span>
+              {dayDiff > 90 && <span className="text-amber-600">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
+            </div>
+          )}
+
+          {result && result.ok && (
+            <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 flex items-start gap-2.5">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+              <div className="text-[12.5px] text-emerald-800">
+                <div className="font-bold mb-0.5">Backfill ishga tushdi</div>
+                <div className="text-emerald-700">
+                  {result.accounts ?? 1} ta hisob · {result.dates?.length ?? 0} ta sana fonda sync qilinmoqda.
+                  Natijani Tranzaksiyalar sahifasida ko'rishingiz mumkin.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {result && !result.ok && (
+            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+              <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+              <div className="text-[12.5px] text-rose-800">
+                <div className="font-bold mb-0.5">Xato</div>
+                <div className="text-rose-700">{result.error || "Noma'lum xato"}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+          <Button variant="ghost" onClick={onClose}>Yopish</Button>
+          <Button
+            onClick={() => backfillMut.mutate()}
+            disabled={!dateFrom || !dateTo || dayDiff <= 0 || backfillMut.isPending}
+            className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+          >
+            {backfillMut.isPending
+              ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+              : <RefreshCw className="h-4 w-4 mr-1.5" />}
+            {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Backfill ishga tushirish'}
           </Button>
         </DialogFooter>
       </DialogContent>
