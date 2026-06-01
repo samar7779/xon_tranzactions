@@ -523,6 +523,8 @@ function SyncSettingsPanel() {
   // Bank API Debug Fetch
   const [openDebugFetch, setOpenDebugFetch] = useState(false);
   const [debugAccountId, setDebugAccountId] = useState('');
+  const [debugAccountSearch, setDebugAccountSearch] = useState('');
+  const [debugAccountOpen, setDebugAccountOpen] = useState(false);
   const [debugDate, setDebugDate] = useState('');
   const [debugNums, setDebugNums] = useState('');
   const [debugResult, setDebugResult] = useState<any>(null);
@@ -700,23 +702,86 @@ function SyncSettingsPanel() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
+              {/* Searchable account combobox */}
+              <div className="relative">
                 <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                  Bank hisobi *
+                  Bank hisobi * (qidirish: hisob raqami yoki ism)
                 </Label>
-                <select
-                  value={debugAccountId}
-                  onChange={(e) => setDebugAccountId(e.target.value)}
-                  className="w-full h-10 px-3 text-[12.5px] rounded-md border border-slate-300 focus:ring-2 focus:ring-cyan-500"
-                  disabled={debugAccountsQuery.isLoading}
-                >
-                  <option value="">— tanlang —</option>
-                  {(debugAccountsQuery.data?.items || []).map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.bank?.name} · {a.accountNo}{a.ownerName ? ` (${a.ownerName})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                  <Input
+                    type="text"
+                    value={debugAccountSearch}
+                    onChange={(e) => {
+                      setDebugAccountSearch(e.target.value);
+                      setDebugAccountOpen(true);
+                      if (debugAccountId) setDebugAccountId('');
+                    }}
+                    onFocus={() => setDebugAccountOpen(true)}
+                    placeholder={debugAccountsQuery.isLoading ? 'Yuklanmoqda...' : "Qidirish: '29896', 'XONSAROY', 'XURSHID'..."}
+                    className="h-10 pl-9 pr-3 text-[12.5px]"
+                  />
+                </div>
+                {debugAccountOpen && (debugAccountsQuery.data?.items?.length || 0) > 0 && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setDebugAccountOpen(false)}
+                    />
+                    <div className="absolute z-30 left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto rounded-lg bg-white ring-1 ring-slate-200 shadow-lg">
+                      {(() => {
+                        const q = debugAccountSearch.trim().toLowerCase();
+                        const allItems = debugAccountsQuery.data?.items || [];
+                        const filtered = q
+                          ? allItems.filter((a) => {
+                              const haystack = [
+                                a.accountNo, a.ownerName, a.branch,
+                                a.bank?.name, a.bank?.code,
+                              ].filter(Boolean).join(' ').toLowerCase();
+                              return haystack.includes(q);
+                            })
+                          : allItems;
+                        if (filtered.length === 0) {
+                          return (
+                            <div className="px-3 py-4 text-center text-[12px] text-slate-500">
+                              Hech narsa topilmadi
+                            </div>
+                          );
+                        }
+                        return filtered.slice(0, 100).map((a) => (
+                          <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => {
+                              setDebugAccountId(a.id);
+                              setDebugAccountSearch(`${a.accountNo}${a.ownerName ? ' · ' + a.ownerName : ''}`);
+                              setDebugAccountOpen(false);
+                            }}
+                            className={cn(
+                              'w-full text-left px-3 py-2 hover:bg-cyan-50 transition-colors border-b border-slate-100 last:border-b-0',
+                              debugAccountId === a.id && 'bg-cyan-50',
+                            )}
+                          >
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                                {a.bank?.name || '?'}
+                              </span>
+                              <span className="font-mono text-[12px] font-bold text-slate-800">{a.accountNo}</span>
+                            </div>
+                            {a.ownerName && (
+                              <div className="text-[11px] text-slate-600 mt-0.5 truncate">{a.ownerName}</div>
+                            )}
+                          </button>
+                        ));
+                      })()}
+                    </div>
+                  </>
+                )}
+                {debugAccountId && (
+                  <div className="absolute right-2 top-9 text-[10px] text-emerald-600 font-bold">
+                    ✓ tanlandi
+                  </div>
+                )}
               </div>
               <div>
                 <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
