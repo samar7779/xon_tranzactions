@@ -87,7 +87,7 @@ export function VipiskaDebugDialog({
     <Dialog open={open} onOpenChange={(v) => {
       if (!v) { reset(); onClose(); }
     }}>
-      <DialogContent className="sm:max-w-[1280px] w-[96vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+      <DialogContent className="sm:max-w-[1280px] w-[96vw] p-0 overflow-hidden gap-0 h-[88vh] max-h-[88vh] flex flex-col">
         <div className="bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-600 px-6 pt-5 pb-4 text-white shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
