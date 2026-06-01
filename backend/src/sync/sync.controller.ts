@@ -93,6 +93,36 @@ export class SyncController {
     }
   }
 
+  @Post('debug-fetch-raw')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: "DEBUG: Bank API'dan raw tranzaksiyalarni olish (DB ga yozmasdan)" })
+  async debugFetchRaw(@Body() body: {
+    accountId: string;
+    dates: string[];           // dd.MM.yyyy formatda yoki YYYY-MM-DD
+    searchNums?: string[];
+  }) {
+    if (!body?.accountId) return { ok: false, error: 'accountId kerak' };
+    if (!body?.dates?.length) return { ok: false, error: "Kamida 1 ta sana kerak (dd.MM.yyyy)" };
+    // YYYY-MM-DD'ni dd.MM.yyyy ga aylantirish
+    const normDates = body.dates.map((d) => {
+      const s = d.trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        const [y, m, dd] = s.split('-');
+        return `${dd}.${m}.${y}`;
+      }
+      return s;
+    });
+    try {
+      return await this.svc.debugFetchRaw({
+        accountId: body.accountId,
+        dates: normDates,
+        searchNums: body.searchNums,
+      });
+    } catch (e: any) {
+      return { ok: false, error: e?.message || "Debug xatosi" };
+    }
+  }
+
   @Post('run-all')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
   @ApiOperation({ summary: 'Barcha faol hisoblarni sync qilish (fonda, intervalga qaramay)' })

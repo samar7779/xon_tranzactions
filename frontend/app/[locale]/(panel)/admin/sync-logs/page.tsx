@@ -520,6 +520,36 @@ function SyncSettingsPanel() {
   // Ichidagi sozlamalar (4 ta funksiya) default yashirin — ZIP downloads va eslatma ko'rinadi
   const [showOplataSettings, setShowOplataSettings] = useState(false);
 
+  // Bank API Debug Fetch
+  const [openDebugFetch, setOpenDebugFetch] = useState(false);
+  const [debugAccountId, setDebugAccountId] = useState('');
+  const [debugDate, setDebugDate] = useState('');
+  const [debugNums, setDebugNums] = useState('');
+  const [debugResult, setDebugResult] = useState<any>(null);
+  const debugAccountsQuery = useQuery({
+    queryKey: ['bank-accounts-debug'],
+    queryFn: () => api.get<{ items: Array<{ id: string; accountNo: string; branch: string; ownerName: string | null; bank: { name: string; code: string } }> }>('/bank-accounts'),
+    enabled: openDebugFetch,
+  });
+  const debugFetchMut = useMutation({
+    mutationFn: () => api.post('/sync/debug-fetch-raw', {
+      accountId: debugAccountId,
+      dates: [debugDate], // dd.MM.yyyy yoki YYYY-MM-DD — backend ikkalasini ham qabul qiladi
+      searchNums: debugNums.trim()
+        ? debugNums.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)
+        : undefined,
+    }, { timeout: 60_000 }),
+    onSuccess: (r: any) => {
+      setDebugResult(r);
+      if (r?.ok) toast.success(`${r.totals.matched}/${r.totals.fetched} ta qator topildi`);
+      else toast.error(r?.error || 'Xato');
+    },
+    onError: (e: any) => {
+      setDebugResult({ ok: false, error: e?.message || 'So\'rov xato' });
+      toast.error(e?.message || 'So\'rov xato');
+    },
+  });
+
   // Object mapping — CRUD
   const mappingsQuery = useQuery({
     queryKey: ['oplatykv-object-mappings'],
@@ -641,6 +671,197 @@ function SyncSettingsPanel() {
             </div>
           )}
         </CardContent>
+        )}
+      </Card>
+
+      {/* BANK API DEBUG FETCH — vipiska tekshirish (DB ga yozmaydi) */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setOpenDebugFetch((v) => !v)}
+          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+        >
+          <div className="w-9 h-9 rounded-xl bg-cyan-50 grid place-items-center shrink-0">
+            <Search className="h-5 w-5 text-cyan-600" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-base font-bold text-slate-800">Bank API tekshiruvi — vipiska solishtirish</div>
+            <div className="text-[11.5px] text-slate-500 mt-0.5">
+              Bank API'dan raw tranzaksiyalarni olib ko'rsatadi (DB ga yozilmaydi). Document raqami bo'yicha qidirish ham mumkin.
+            </div>
+          </div>
+          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openDebugFetch && 'rotate-180')} />
+        </button>
+        {openDebugFetch && (
+          <CardContent className="px-6 pb-6 pt-2 space-y-4 border-t border-slate-100">
+            <div className="text-[12px] text-slate-500">
+              Bank vipiska'sida bor lekin DB'da yo'q tranzaksiyalarni tekshirish uchun.
+              Document raqamlari (№ док) bo'yicha qidirsangiz — faqat shu raqamli qatorlar qaytariladi.
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                  Bank hisobi *
+                </Label>
+                <select
+                  value={debugAccountId}
+                  onChange={(e) => setDebugAccountId(e.target.value)}
+                  className="w-full h-10 px-3 text-[12.5px] rounded-md border border-slate-300 focus:ring-2 focus:ring-cyan-500"
+                  disabled={debugAccountsQuery.isLoading}
+                >
+                  <option value="">— tanlang —</option>
+                  {(debugAccountsQuery.data?.items || []).map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.bank?.name} · {a.accountNo}{a.ownerName ? ` (${a.ownerName})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                  Sana * (YYYY-MM-DD yoki DD.MM.YYYY)
+                </Label>
+                <Input
+                  type="date"
+                  value={debugDate}
+                  onChange={(e) => setDebugDate(e.target.value)}
+                  className="h-10"
+                />
+              </div>
+              <div>
+                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                  № док (qidirish, vergul bilan)
+                </Label>
+                <Input
+                  type="text"
+                  value={debugNums}
+                  onChange={(e) => setDebugNums(e.target.value)}
+                  placeholder="13142667, 13162958, 13162995"
+                  className="h-10 text-[12.5px] font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => { setDebugResult(null); debugFetchMut.mutate(); }}
+                disabled={!debugAccountId || !debugDate || debugFetchMut.isPending}
+                className="h-10 px-5 gap-2 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
+              >
+                {debugFetchMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                Bank API'dan tekshirish
+              </Button>
+              {debugResult && (
+                <Button variant="ghost" onClick={() => setDebugResult(null)} className="text-slate-500">
+                  <X className="h-4 w-4 mr-1" /> Tozalash
+                </Button>
+              )}
+            </div>
+
+            {/* Natija */}
+            {debugResult && debugResult.ok && (
+              <div className="space-y-3">
+                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-600 text-white grid place-items-center">
+                    <Database className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 grid grid-cols-3 gap-3 text-[12px]">
+                    <div>
+                      <div className="text-[9.5px] uppercase font-bold text-slate-500">Bank API javobi</div>
+                      <div className="text-[14px] font-black text-slate-800">{debugResult.totals?.fetched ?? 0} ta qator</div>
+                    </div>
+                    <div>
+                      <div className="text-[9.5px] uppercase font-bold text-slate-500">Filtr natijasi</div>
+                      <div className="text-[14px] font-black text-cyan-700">{debugResult.totals?.matched ?? 0} ta moslik</div>
+                    </div>
+                    <div>
+                      <div className="text-[9.5px] uppercase font-bold text-slate-500">Bank</div>
+                      <div className="text-[12.5px] font-bold text-slate-700">{debugResult.bank?.name}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {debugResult.errors?.length > 0 && (
+                  <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 text-[12px] text-rose-800">
+                    <b>Xato(lar):</b> {debugResult.errors.join(' · ')}
+                  </div>
+                )}
+
+                {(debugResult.items || []).length === 0 ? (
+                  <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-6 text-center">
+                    <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-2" />
+                    <div className="text-[13px] font-bold text-amber-800">
+                      Bank API'da bunday qator topilmadi
+                    </div>
+                    <div className="text-[11.5px] text-amber-700 mt-1">
+                      Bu degani — vipiska'dagi qator bank API'sida ham yo'q
+                      (bank vipiska'si va API ma'lumotlari mos kelmagan bo'lishi mumkin)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                    <table className="w-full text-[11.5px]">
+                      <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600">
+                        <tr>
+                          <th className="px-3 py-2 text-left">№ док</th>
+                          <th className="px-3 py-2 text-left">Sana</th>
+                          <th className="px-3 py-2 text-right">Summa</th>
+                          <th className="px-3 py-2 text-center">Yo'nalish</th>
+                          <th className="px-3 py-2 text-left">Yuboruvchi</th>
+                          <th className="px-3 py-2 text-left">Composite ID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {debugResult.items.map((it: any, i: number) => (
+                          <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
+                            <td className="px-3 py-2 font-mono font-bold">{it.num}</td>
+                            <td className="px-3 py-2">{it.ddate}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                              {new Intl.NumberFormat('ru-RU').format(it.amount)}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={cn(
+                                'px-1.5 py-0.5 rounded text-[9.5px] font-bold',
+                                it.direction === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
+                              )}>
+                                {it.direction === 'IN' ? '⬇ KIRIM' : '⬆ CHIQIM'}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 truncate max-w-[200px]" title={it.sender?.name}>
+                              {it.sender?.name || '—'}
+                            </td>
+                            <td className="px-3 py-2 font-mono text-[10px] truncate max-w-[280px]" title={it.compositeId}>
+                              {it.compositeId}
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(it.compositeId);
+                                  toast.success('Composite ID nusxalandi');
+                                }}
+                                className="ml-1 text-cyan-600 hover:text-cyan-800"
+                                title="Nusxalash"
+                              >
+                                📋
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+            {debugResult && !debugResult.ok && (
+              <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+                <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                <div className="text-[13px] text-rose-800">
+                  <div className="font-bold mb-0.5">Xato</div>
+                  <div className="text-rose-700">{debugResult.error || 'Noma\'lum xato'}</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
         )}
       </Card>
 
