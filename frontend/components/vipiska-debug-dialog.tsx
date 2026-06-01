@@ -87,7 +87,7 @@ export function VipiskaDebugDialog({
     <Dialog open={open} onOpenChange={(v) => {
       if (!v) { reset(); onClose(); }
     }}>
-      <DialogContent className="sm:max-w-[1000px] w-[96vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+      <DialogContent className="sm:max-w-[1280px] w-[96vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
         <div className="bg-gradient-to-br from-cyan-600 via-sky-600 to-blue-600 px-6 pt-5 pb-4 text-white shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
@@ -104,11 +104,16 @@ export function VipiskaDebugDialog({
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Searchable account combobox */}
-            <div className="relative">
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                Bank hisobi * (qidirish: raqami yoki ism)
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+            {/* Searchable account combobox — kengaytirildi (6 ustun) */}
+            <div className="relative md:col-span-6">
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 flex items-center justify-between">
+                <span>Bank hisobi * (qidirish: raqami yoki ism)</span>
+                {accountId && (
+                  <span className="text-[10px] text-emerald-600 font-bold normal-case tracking-normal">
+                    ✓ tanlandi
+                  </span>
+                )}
               </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
@@ -122,8 +127,26 @@ export function VipiskaDebugDialog({
                   }}
                   onFocus={() => setAccountOpen(true)}
                   placeholder={accountsQuery.isLoading ? 'Yuklanmoqda...' : "Qidirish: '29896', 'XONSAROY'..."}
-                  className="h-10 pl-9 pr-3 text-[12.5px]"
+                  className={cn(
+                    "h-10 pl-9 text-[12.5px]",
+                    accountId ? "pr-9 text-ellipsis" : "pr-3",
+                  )}
+                  title={accountSearch}
                 />
+                {accountId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountId('');
+                      setAccountSearch('');
+                      setAccountOpen(true);
+                    }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded hover:bg-slate-100 text-slate-400 hover:text-rose-600 transition-colors"
+                    title="Tozalash"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
               {accountOpen && (accountsQuery.data?.items?.length || 0) > 0 && (
                 <>
@@ -177,14 +200,9 @@ export function VipiskaDebugDialog({
                   </div>
                 </>
               )}
-              {accountId && (
-                <div className="absolute right-2 top-9 text-[10px] text-emerald-600 font-bold">
-                  ✓ tanlandi
-                </div>
-              )}
             </div>
 
-            <div>
+            <div className="md:col-span-2">
               <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
                 Sana *
               </Label>
@@ -196,7 +214,7 @@ export function VipiskaDebugDialog({
               />
             </div>
 
-            <div>
+            <div className="md:col-span-4">
               <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
                 № док (vergul bilan)
               </Label>
