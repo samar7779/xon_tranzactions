@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -827,8 +827,9 @@ function AccountBackfillDialog({
     }
   }, [account?.id]);
 
+  const [startedAt, setStartedAt] = useState<string | null>(null);
   const backfillMut = useMutation({
-    mutationFn: () => api.post('/sync/backfill', {
+    mutationFn: () => api.post<any>('/sync/backfill', {
       scope: 'account',
       accountId: account?.id,
       dateFrom,
@@ -837,7 +838,9 @@ function AccountBackfillDialog({
     onSuccess: (r: any) => {
       setResult(r);
       if (r?.ok) {
-        toast.success(`Backfill boshlandi · ${r?.accounts ?? 1} hisob · ${r?.dates?.length ?? 0} sana`);
+        toast.success(`Backfill ishga tushdi · ${r?.days ?? 0} ta sana`);
+        // startedAt saqlash — polling shu vaqtdan boshlanadi
+        if (r?.startedAt) setStartedAt(r.startedAt);
         onSuccess();
       } else {
         toast.error(r?.error || 'Backfill xato');
@@ -849,6 +852,41 @@ function AccountBackfillDialog({
     },
   });
 
+  // Real-time polling — backfill boshlangandan keyin har 2 sekundda status tekshiriladi
+  const statusQuery = useQuery({
+    queryKey: ['backfill-status', startedAt, account?.id],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>(
+      `/sync/backfill/status?since=${encodeURIComponent(startedAt!)}`,
+    ),
+    enabled: !!startedAt && !!account?.id,
+    refetchInterval: (q) => {
+      const data = q.state.data as { items?: any[] } | undefined;
+      const items = data?.items || [];
+      // Faqat shu account uchun loglar
+      const myLogs = items.filter((l: any) => l.accountId === account?.id);
+      // Hamma tugagan bo'lsa polling to'xtatamiz
+      const allDone = myLogs.length > 0 && myLogs.every((l: any) => l.status !== 'RUNNING');
+      return allDone ? false : 2000;
+    },
+    refetchIntervalInBackground: true,
+  });
+
+  // Bu hisob bilan bog'liq loglar (eng yangi avval)
+  const myLogs = useMemo(() => {
+    if (!statusQuery.data?.items || !account?.id) return [];
+    return statusQuery.data.items
+      .filter((l: any) => l.accountId === account.id)
+      .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }, [statusQuery.data, account?.id]);
+
+  const runningCount = myLogs.filter((l: any) => l.status === 'RUNNING').length;
+  const totalFetched = myLogs.reduce((s: number, l: any) => s + (l.fetched || 0), 0);
+  const totalSaved = myLogs.reduce((s: number, l: any) => s + (l.saved || 0), 0);
+  const totalErrors = myLogs.reduce((s: number, l: any) => s + (l.errors || 0), 0);
+  const finishedCount = myLogs.filter((l: any) => l.status === 'SUCCESS').length;
+  const failedCount = myLogs.filter((l: any) => l.status === 'FAILED').length;
+  const isAllDone = myLogs.length > 0 && runningCount === 0;
+
   // Sana farqi (ko'rsatish uchun)
   const dayDiff = (() => {
     if (!dateFrom || !dateTo) return 0;
@@ -858,10 +896,25 @@ function AccountBackfillDialog({
     return diff;
   })();
 
+  // Modal yopilganda holat tozalash
+  useEffect(() => {
+    if (!account) {
+      setResult(null);
+      setStartedAt(null);
+    }
+  }, [account?.id]);
+
   const isOpen = !!account;
   return (
-    <Dialog open={isOpen} onOpenChange={(v) => { if (!v) { onClose(); setResult(null); } }}>
-      <DialogContent className="sm:max-w-[560px] p-0 overflow-hidden gap-0">
+    <Dialog open={isOpen} onOpenChange={(v) => {
+      if (!v) {
+        // RUNNING bo'lsa ham yopib bo'ladi, lekin polling to'xtaydi
+        setResult(null);
+        setStartedAt(null);
+        onClose();
+      }
+    }}>
+      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
         <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 px-6 pt-5 pb-4 text-white">
           <div className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
@@ -880,63 +933,36 @@ function AccountBackfillDialog({
           )}
         </div>
 
-        <div className="p-5 space-y-4">
-          <div className="text-[12px] text-slate-600 leading-relaxed">
-            Tanlangan sana oralig'i uchun bank API'sidan tranzaksiyalarni qayta yuklab DB'ga
-            qo'shadi (dublikatlar avtomatik o'tkazib yuboriladi). Fonda ishlaydi.
-          </div>
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          {!result?.ok && (
+            <>
+              <div className="text-[12px] text-slate-600 leading-relaxed">
+                Tanlangan sana oralig'i uchun bank API'sidan tranzaksiyalarni qayta yuklab
+                DB'ga qo'shadi (dublikatlar avtomatik o'tkazib yuboriladi).
+              </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                Sanadan
-              </Label>
-              <Input
-                type="date"
-                value={dateFrom}
-                max={today}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-10"
-              />
-            </div>
-            <div>
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
-                Sanagacha
-              </Label>
-              <Input
-                type="date"
-                value={dateTo}
-                max={today}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-10"
-              />
-            </div>
-          </div>
-
-          {dateFrom && dateTo && dayDiff > 0 && (
-            <div className={cn(
-              'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
-              dayDiff > 90
-                ? 'bg-amber-50 ring-amber-200 text-amber-800'
-                : 'bg-slate-50 ring-slate-200 text-slate-700',
-            )}>
-              <Calendar className="h-3.5 w-3.5" />
-              <span><b>{dayDiff}</b> ta kun tanlandi</span>
-              {dayDiff > 90 && <span className="text-amber-600">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
-            </div>
-          )}
-
-          {result && result.ok && (
-            <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 flex items-start gap-2.5">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
-              <div className="text-[12.5px] text-emerald-800">
-                <div className="font-bold mb-0.5">Backfill ishga tushdi</div>
-                <div className="text-emerald-700">
-                  {result.accounts ?? 1} ta hisob · {result.dates?.length ?? 0} ta sana fonda sync qilinmoqda.
-                  Natijani Tranzaksiyalar sahifasida ko'rishingiz mumkin.
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanadan</Label>
+                  <Input type="date" value={dateFrom} max={today} onChange={(e) => setDateFrom(e.target.value)} className="h-10" />
+                </div>
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanagacha</Label>
+                  <Input type="date" value={dateTo} max={today} onChange={(e) => setDateTo(e.target.value)} className="h-10" />
                 </div>
               </div>
-            </div>
+
+              {dateFrom && dateTo && dayDiff > 0 && (
+                <div className={cn(
+                  'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
+                  dayDiff > 90 ? 'bg-amber-50 ring-amber-200 text-amber-800' : 'bg-slate-50 ring-slate-200 text-slate-700',
+                )}>
+                  <Calendar className="h-3.5 w-3.5" />
+                  <span><b>{dayDiff}</b> ta kun tanlandi</span>
+                  {dayDiff > 90 && <span className="text-amber-600">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
+                </div>
+              )}
+            </>
           )}
 
           {result && !result.ok && (
@@ -948,20 +974,161 @@ function AccountBackfillDialog({
               </div>
             </div>
           )}
+
+          {/* REAL-TIME PROGRESS */}
+          {result?.ok && (
+            <>
+              {/* Status banner — RUNNING / DONE / FAILED */}
+              <div className={cn(
+                'rounded-xl ring-1 px-4 py-3 flex items-center gap-3',
+                runningCount > 0 && 'bg-indigo-50 ring-indigo-200',
+                isAllDone && failedCount === 0 && 'bg-emerald-50 ring-emerald-200',
+                isAllDone && failedCount > 0 && 'bg-rose-50 ring-rose-200',
+              )}>
+                <div className={cn(
+                  'w-10 h-10 rounded-xl grid place-items-center text-white shrink-0',
+                  runningCount > 0 && 'bg-indigo-600',
+                  isAllDone && failedCount === 0 && 'bg-emerald-600',
+                  isAllDone && failedCount > 0 && 'bg-rose-600',
+                )}>
+                  {runningCount > 0
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : isAllDone && failedCount === 0
+                      ? <CheckCircle2 className="h-5 w-5" />
+                      : <X className="h-5 w-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold">
+                    {runningCount > 0 && `Sync qilinmoqda... (${runningCount}/${myLogs.length || result.days || 1})`}
+                    {isAllDone && failedCount === 0 && 'Backfill muvaffaqiyatli yakunlandi'}
+                    {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
+                    {myLogs.length === 0 && '⏳ Boshlanmoqda...'}
+                  </div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    {result.actualFrom} → {result.actualTo} · {result.days ?? 1} ta sana
+                  </div>
+                </div>
+              </div>
+
+              {/* Statistika kartalari */}
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500">Bajarildi</div>
+                  <div className="text-[18px] font-black text-slate-800 tabular-nums">
+                    {finishedCount + failedCount}<span className="text-[12px] text-slate-400 font-normal">/{result.days ?? 1}</span>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-cyan-50 ring-1 ring-cyan-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700">Bankdan olindi</div>
+                  <div className="text-[18px] font-black text-cyan-800 tabular-nums">{totalFetched}</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700">DB ga saqlandi</div>
+                  <div className="text-[18px] font-black text-emerald-800 tabular-nums">{totalSaved}</div>
+                </div>
+                <div className={cn(
+                  'rounded-lg ring-1 px-3 py-2.5',
+                  totalErrors > 0 ? 'bg-rose-50 ring-rose-200' : 'bg-slate-50 ring-slate-200',
+                )}>
+                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', totalErrors > 0 ? 'text-rose-700' : 'text-slate-500')}>
+                    Xato
+                  </div>
+                  <div className={cn('text-[18px] font-black tabular-nums', totalErrors > 0 ? 'text-rose-700' : 'text-slate-400')}>
+                    {totalErrors}
+                  </div>
+                </div>
+              </div>
+
+              {/* Per-day log ro'yxati */}
+              {myLogs.length > 0 && (
+                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                  <div className="bg-slate-100 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 flex items-center justify-between">
+                    <span>Sana bo'yicha jarayon</span>
+                    <span className="font-normal text-[9.5px] normal-case tracking-normal">
+                      {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
+                    </span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {myLogs.map((log: any) => (
+                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                        <div className={cn(
+                          'w-7 h-7 rounded-lg grid place-items-center shrink-0',
+                          log.status === 'RUNNING' && 'bg-indigo-100 text-indigo-600',
+                          log.status === 'SUCCESS' && 'bg-emerald-100 text-emerald-700',
+                          log.status === 'FAILED' && 'bg-rose-100 text-rose-700',
+                        )}>
+                          {log.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          {log.status === 'SUCCESS' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                          {log.status === 'FAILED' && <X className="h-3.5 w-3.5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12px] font-mono text-slate-700 truncate" title={log.source}>
+                            {log.source}
+                          </div>
+                          {log.errorMessage && (
+                            <div className="text-[10.5px] text-rose-600 truncate" title={log.errorMessage}>
+                              ⚠ {log.errorMessage}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] tabular-nums shrink-0">
+                          <span className="text-cyan-700" title="Bank API javobi">
+                            <b>{log.fetched ?? 0}</b><span className="text-slate-400">fetch</span>
+                          </span>
+                          <span className="text-emerald-700" title="DB ga saqlangan">
+                            <b>{log.saved ?? 0}</b><span className="text-slate-400">saved</span>
+                          </span>
+                          {log.errors > 0 && (
+                            <span className="text-rose-700" title="Xato">
+                              <b>{log.errors}</b><span className="text-slate-400">err</span>
+                            </span>
+                          )}
+                          {log.durationMs && (
+                            <span className="text-slate-500" title="Vaqt">
+                              {(log.durationMs / 1000).toFixed(1)}s
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
 
-        <DialogFooter className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
-          <Button variant="ghost" onClick={onClose}>Yopish</Button>
-          <Button
-            onClick={() => backfillMut.mutate()}
-            disabled={!dateFrom || !dateTo || dayDiff <= 0 || backfillMut.isPending}
-            className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
-          >
-            {backfillMut.isPending
-              ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-              : <RefreshCw className="h-4 w-4 mr-1.5" />}
-            {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Backfill ishga tushirish'}
-          </Button>
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+          {result?.ok ? (
+            <>
+              <Button variant="ghost" onClick={onClose}>
+                {runningCount > 0 ? "Fonda davom ettirib yopish" : "Yopish"}
+              </Button>
+              {isAllDone && (
+                <Button
+                  onClick={() => { setResult(null); setStartedAt(null); }}
+                  variant="outline"
+                  className="border-indigo-300 text-indigo-700"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+              <Button
+                onClick={() => backfillMut.mutate()}
+                disabled={!dateFrom || !dateTo || dayDiff <= 0 || backfillMut.isPending}
+                className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+              >
+                {backfillMut.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  : <RefreshCw className="h-4 w-4 mr-1.5" />}
+                {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Backfill ishga tushirish'}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
