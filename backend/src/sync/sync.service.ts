@@ -78,6 +78,124 @@ export class SyncService {
    * Bank prefiksi (oldida): Ipak Yo'li tranzaksiyalari IP_ bilan boshlanadi
    *   — Kapitalbank ID'lari bilan ajratish uchun (ba'zan bir xil ko'rinishda kelishi mumkin)
    */
+  /**
+   * DEBUG: Bank API'dan bitta hisob uchun sanaga oid raw tranzaksiyalarni oladi
+   * (DB ga saqlanmaydi). Foydalanuvchi vipiska'dagi qatorlar bank javobida
+   * mavjudligini tekshirishi mumkin.
+   *
+   * Filter sifatida searchNums (document numbers) berilsa, faqat shu nums'larga
+   * tegishli qatorlar qaytariladi (qulay solishtiruv uchun).
+   */
+  async debugFetchRaw(opts: {
+    accountId: string;
+    dates: string[];           // dd.MM.yyyy formatda
+    searchNums?: string[];      // ixtiyoriy — faqat shu document nums'lar
+  }): Promise<{
+    ok: boolean;
+    account: { id: string; accountNo: string; branch: string; ownerName: string | null };
+    bank: { code: string; name: string };
+    dates: string[];
+    items: Array<{
+      ddate: string;
+      num: string;
+      general_id: string;
+      b2_id: string | null;
+      acc_ct: string;
+      acc_dt: string;
+      amount: number;
+      direction: 'IN' | 'OUT';
+      compositeId: string;
+      sender: { name: string; inn: string };
+      receiver: { name: string; inn: string };
+      details: string;
+      rawAll: any;
+    }>;
+    totals: { fetched: number; matched: number };
+    errors: string[];
+  }> {
+    const acc = await this.prisma.bankAccount.findUnique({
+      where: { id: opts.accountId },
+      include: { bank: true },
+    });
+    if (!acc) throw new Error("Hisob topilmadi");
+
+    // Bank credential — shu hisob qaysi credential bilan sync qilinadi?
+    const cred = await this.prisma.bankCredential.findFirst({
+      where: { bankId: acc.bankId, isActive: true },
+      include: { bank: true },
+    });
+    if (!cred) throw new Error(`Bank credential topilmadi (${acc.bank.name})`);
+    // Yuqoridagi findFirst-da `include: { bank }` ishlamasligi mumkin (eski Prisma),
+    // shuning uchun bank ma'lumotini alohida olamiz fallback uchun
+    const bank = (cred as any).bank || acc.bank;
+
+    const password = this.crypto.decrypt(cred.passwordEnc);
+    const login = (cred.loginPrefix || '') + cred.loginName;
+    const numsSet = opts.searchNums && opts.searchNums.length > 0
+      ? new Set(opts.searchNums.map((n) => n.trim()))
+      : null;
+
+    const allItems: any[] = [];
+    const errors: string[] = [];
+    let fetched = 0;
+
+    for (const dateStr of opts.dates) {
+      try {
+        const result = await this.kb.getDoc1C({
+          baseUrl: bank.apiBaseUrl!,
+          login,
+          password,
+          branch: acc.branch,
+          account: acc.accountNo,
+          date: dateStr,
+          useProxy: cred.useProxy === true,
+        });
+        const items = result?.content || [];
+        fetched += items.length;
+        for (const it of items) {
+          // Yo'nalish: acc_dt === bizning account → IN (kirim), aks holda OUT
+          const direction: 'IN' | 'OUT' = it.acc_dt === acc.accountNo ? 'IN' : 'OUT';
+          const compositeId = this.makeCompositeId(it, acc.accountNo, bank.code);
+          const num = String(it.num || '');
+          if (numsSet && !numsSet.has(num)) continue;
+          allItems.push({
+            ddate: it.ddate,
+            num,
+            general_id: it.general_id || '',
+            b2_id: it.b2_id || null,
+            acc_ct: it.acc_ct || '',
+            acc_dt: it.acc_dt || '',
+            amount: Number(it.amount || 0),
+            direction,
+            compositeId,
+            sender: {
+              name: String((it as any).debit_name || (it as any).acc_dt_name || ''),
+              inn: String((it as any).debit_inn || (it as any).acc_dt_inn || ''),
+            },
+            receiver: {
+              name: String((it as any).credit_name || (it as any).acc_ct_name || ''),
+              inn: String((it as any).credit_inn || (it as any).acc_ct_inn || ''),
+            },
+            details: String((it as any).details || (it as any).naznach || ''),
+            rawAll: it,
+          });
+        }
+      } catch (e: any) {
+        errors.push(`${dateStr}: ${e?.message?.slice(0, 200) || 'unknown error'}`);
+      }
+    }
+
+    return {
+      ok: true,
+      account: { id: acc.id, accountNo: acc.accountNo, branch: acc.branch, ownerName: acc.ownerName },
+      bank: { code: bank.code, name: bank.name },
+      dates: opts.dates,
+      items: allItems,
+      totals: { fetched, matched: allItems.length },
+      errors,
+    };
+  }
+
   /** Public — sverka fixMissing flow ham composite id'ni ishlatadi */
   makeCompositeId(item: KbDoc1CItem, ourAccount: string, bankCode?: string): string {
     const sign = item.acc_dt === ourAccount ? '+' : '-';
