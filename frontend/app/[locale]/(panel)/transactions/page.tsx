@@ -2100,12 +2100,14 @@ function TransactionDetailDialog({
             <InfoRow
               icon={<Briefcase className="h-3.5 w-3.5" />}
               label="Kontragent"
-              // Faqat biz qoygan kontragent:
+              // Priority:
               //   1) manualCounterparty.name (qo'lda tanlagan)
-              //   2) YOKI kategoriya nomi (CLIENT/BANK/MINFIN/...)
+              //   2) importCounterpartyText (IMPORT'da Excel "Контрагент" ustuni)
+              //   3) YOKI kategoriya nomi (CLIENT/BANK/MINFIN/...)
               // CRM mijoz nomi (contractCustomer) bu yerga TUSHMAYDI — SHARTNOMA qatorida bor
               value={
                 liveRow.manualCounterparty?.name
+                  || (liveRow.source === 'IMPORT' ? liveRow.importCounterpartyText : null)
                   || liveRow.category?.name
                   || null
               }
