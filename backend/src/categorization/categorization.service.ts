@@ -852,16 +852,30 @@ export class CategorizationService {
           description: true,
           fromName: true,
           toName: true,
+          source: true,
           subcategory: { select: { name: true } },
           category: { select: { code: true, name: true } },
+          importCounterpartyText: true,
         },
       });
       if (!tx || !tx.txnDate) return { updated: false, skipped: 'error' };
 
-      // FAQAT CLIENT (Клиент/Физ.Л/Юр.Л) kategoriyali to'lovlar OplatyKv'ga tushadi.
+      // CLIENT (Клиент/Физ.Л/Юр.Л) belgisini tekshirish — barcha mumkin
+      // bo'lgan kanallar bo'yicha:
+      //   1) category.code === 'CLIENT' (auto-categorization)
+      //   2) category.name matn 'Клиент' yoki 'Физ.Л' yoki 'Юр.Л' bilan boshlanadi
+      //   3) IMPORT manbada importCounterpartyText shu pattern'ga mos
       // Boshqa kategoriyalar (BANK, MINFIN, SALARY...) — OplatyKv'da yo'q,
       // shuning uchun propagation kerak emas.
-      if (tx.category?.code !== 'CLIENT') {
+      const clientPattern = /клиент|физ\.?\s*л|юр\.?\s*л/i;
+      const isClient =
+        tx.category?.code === 'CLIENT' ||
+        (tx.category?.name && clientPattern.test(tx.category.name)) ||
+        (tx.source === 'IMPORT' && tx.importCounterpartyText && clientPattern.test(tx.importCounterpartyText));
+      if (!isClient) {
+        this.log.log(`OplatyKv propagation skipped (not CLIENT): txId=${p.txId}, ` +
+          `code=${tx.category?.code}, name=${tx.category?.name}, source=${tx.source}, ` +
+          `importCp=${tx.importCounterpartyText}`);
         return { updated: false, skipped: 'not-client' };
       }
 
