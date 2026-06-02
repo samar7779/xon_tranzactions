@@ -81,10 +81,21 @@ type OplataKvSyncResult = {
   txType?: string | null;
 };
 
+// Propagation muvaffaqiyatli bo'lgan OplataKv qatorida split (1 взнос / oylik)
+// hisoblash uchun /oplata-kv/:id/split endpoint'ni chaqiradi (fire-and-forget).
+function triggerOplataKvSplit(oplataKvId: string | undefined) {
+  if (!oplataKvId) return;
+  api.post(`/oplata-kv/${oplataKvId}/split`, {}).catch(() => {
+    // sokin xato — background cron baribir keyin hisoblaydi
+  });
+}
+
 // OplataKv propagation natijasini foydalanuvchiga toast bilan ko'rsatish
 function showOplataKvSyncToast(sync: OplataKvSyncResult | undefined) {
   if (!sync) return;
   if (sync.updated) {
+    // Split (1 взнос / oylik) chaqirish — fonda ishlaydi, javobni kutmaymiz
+    triggerOplataKvSplit(sync.oplataKvId);
     // Real-time yangilangan ma'lumotlar ko'rsatiladi
     const amountNum = sync.paymentAmount ? Number(sync.paymentAmount) : 0;
     const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountNum);

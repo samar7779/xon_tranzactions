@@ -840,6 +840,10 @@ model OplataKv {
   perereboskaFileMime  String?  @map("perereboska_file_mime") @db.VarChar(128)
   perereboskaFileSize  Int?     @map("perereboska_file_size")
 
+  // Tranzaksiyada qo'lda shartnoma tuzatilganda (ariza yoki manual) — true.
+  // Manba (МАНБА) ustunida "Qo'lda" badge ko'rsatish uchun.
+  wasManuallyEdited    Boolean  @default(false) @map("was_manually_edited")
+
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
 

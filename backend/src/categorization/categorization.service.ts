@@ -837,7 +837,48 @@ export class CategorizationService {
     client?: string | null;
     txType?: string | null;
   }> {
-    if (!p.newContract) return { updated: false, skipped: 'no-new-contract' };
+    // Agar yangi shartnoma null bo'lsa — bog'langan OplataKv qatorni tozalash:
+    // contractNo='xato' qilamiz va sourceTxId'ni uzamiz. Foydalanuvchi keyin
+    // OplataKv'da qo'lda tartibga solishi mumkin.
+    if (!p.newContract) {
+      const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
+      if (dedupKeys.length === 0) return { updated: false, skipped: 'no-new-contract' };
+      try {
+        const linked = await this.prisma.oplataKv.findFirst({
+          where: { sourceTxId: { in: dedupKeys } },
+          select: { id: true, contractNo: true },
+        });
+        if (linked) {
+          await this.prisma.oplataKv.update({
+            where: { id: linked.id },
+            data: {
+              contractNo: 'xato',  // shartnoma noma'lum belgi
+              sourceTxId: null,    // bog'lanish uziladi
+              firstInstallment: null,
+              monthlyAmount: null,
+              paymentCategory: null,
+              object: null,
+            },
+          });
+          await this.prisma.oplataKvHistory.create({
+            data: {
+              oplataKvId: linked.id,
+              action: 'edited',
+              actorType: 'system',
+              actorId: null,
+              actorName: p.actorEmail ? `tranzaksiyadan (${p.actorEmail})` : 'tranzaksiyadan',
+              fieldsChanged: ['contractNo', 'sourceTxId', 'firstInstallment', 'monthlyAmount', 'object'],
+              changes: { contractNo: { old: linked.contractNo, new: 'xato' } } as any,
+              note: `Tranzaksiyada shartnoma raqami tozalandi (${p.reason}, txId: ${p.txId}) — OplataKv qator XATO holatga qaytarildi`,
+            },
+          });
+          this.log.log(`OplataKv ${linked.id} reset to xato — tx ${p.txId} contract cleared`);
+        }
+      } catch (e: any) {
+        this.log.warn(`OplataKv reset xato (txId=${p.txId}): ${e?.message}`);
+      }
+      return { updated: false, skipped: 'no-new-contract' };
+    }
 
     try {
       const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
@@ -1002,10 +1043,13 @@ export class CategorizationService {
           txType: txTypeName,
           client: crm?.customerName || txParty || null,
           object: mappedObject,
-          // Splitni reset qilamiz — background splitInstallments CRM payment_histories
-          // bilan qayta hisoblaydi (yangi shartnoma uchun)
+          // Splitni reset qilamiz — frontend'dan /oplata-kv/:id/split chaqirib
+          // (yoki background splitInstallments) qayta hisoblanadi
           firstInstallment: null,
           monthlyAmount: null,
+          paymentCategory: null,
+          // MANBA ustunida "Qo'lda" badge ko'rsatish uchun
+          wasManuallyEdited: true,
         },
       });
 
