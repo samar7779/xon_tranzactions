@@ -3910,8 +3910,13 @@ function AttachmentsDialog({
       }
       // 2) Shartnoma saqlash (qo'lda — CRM tekshirmasdan)
       const trimmedContract = contract.trim().toUpperCase();
+      let contractSaveResult: {
+        ok: boolean;
+        contractNumber: string | null;
+        oplataKvSync?: OplataKvSyncResult;
+      } | null = null;
       if (trimmedContract && trimmedContract !== (row.contractNumber || '')) {
-        await api.post(`/categorization/transactions/${txId}/set-contract-manual`, {
+        contractSaveResult = await api.post(`/categorization/transactions/${txId}/set-contract-manual`, {
           contractNumber: trimmedContract,
         });
       }
@@ -3923,6 +3928,11 @@ function AttachmentsDialog({
       await api.postForm(`/transactions/${txId}/attachments`, fd, { timeout: 120_000 });
 
       toast.success("Ariza saqlandi · Telegram'ga xabar yuborildi");
+      // OplataKv propagation natijasi — alohida toast
+      if (contractSaveResult?.oplataKvSync) {
+        showOplataKvSyncToast(contractSaveResult.oplataKvSync);
+        qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      }
       refetch();
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-detail', txId] });
