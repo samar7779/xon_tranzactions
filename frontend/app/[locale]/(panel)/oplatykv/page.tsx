@@ -57,10 +57,13 @@ interface OplataKvItem {
   contractSource?: 'manual' | 'ariza' | null;  // Tranzaksiyada qanday qo'yilgan
   perereboskaGroupId?: string | null;
   perereboskaFileName?: string | null;
+  wasManuallyEdited?: boolean;
 }
 
 // Manba (qaysi yo'l bilan qo'shilgan) — manual / excel / transaction
+// wasManuallyEdited=true bo'lsa "qo'lda" badge ko'rsatamiz (manba nima bo'lishidan qat'iy nazar).
 function getSource(it: OplataKvItem): 'manual' | 'excel' | 'transaction' {
+  if (it.wasManuallyEdited) return 'manual';
   if (it.sourceTxId) return 'transaction';
   if (it.importBatchId) return 'excel';
   return 'manual';
