@@ -80,6 +80,23 @@ export class OplataKvService {
   private lastNightBatchDay: number | null = null;  // Tunda 1 marta — qaysi sana
 
   /**
+   * Tashkent kunidagi sanani UTC-midnight Date ko'rinishida qaytaradi.
+   * Bu @db.Date ustunlariga saqlash uchun zarur — aks holda timezone shift
+   * sodir bo'ladi: masalan Transaction.txnDate = 2026-06-01T00:00:00+05:00
+   * (Tashkent yarim tuni) = 2026-05-31T19:00:00Z UTC. To'g'ridan-to'g'ri
+   * @db.Date'ga saqlasak Prisma UTC sanasini olib '2026-05-31' qiladi.
+   * Bu funksiya orqali esa to'g'ri '2026-06-01' bo'lib saqlanadi.
+   */
+  private toTashkentDateOnly(d: Date): Date {
+    const tashTime = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+    return new Date(Date.UTC(
+      tashTime.getUTCFullYear(),
+      tashTime.getUTCMonth(),
+      tashTime.getUTCDate(),
+    ));
+  }
+
+  /**
    * Tashkent vaqti bo'yicha hour qaytaradi (UTC+5)
    */
   private getTashkentHourMinute(): { hour: number; minute: number } {
@@ -613,9 +630,13 @@ export class OplataKvService {
       const txTypeName = (tx as any).subcategory?.name
         || (tx.direction === 'IN' ? 'Взносы за квартиры' : 'Возврат взносов за кв.');
 
+      // Sana — Tashkent timezone bo'yicha (txnDate UTC bo'lishi mumkin,
+      // shuning uchun toTashkentDateOnly orqali to'g'ri kalendar sanasini olamiz)
+      const tashkentDate = this.toTashkentDateOnly(tx.txnDate!);
+
       const baseData = {
         contractNo: tx.contractNumber!,
-        date: tx.txnDate!,
+        date: tashkentDate,
         paymentAmount: amount,
         purpose: tx.description || null,
         txType: txTypeName,
@@ -626,7 +647,7 @@ export class OplataKvService {
       if (existing) {
         const amountChanged   = Number(existing.paymentAmount || 0) !== Number(amount);
         const contractChanged = existing.contractNo !== tx.contractNumber;
-        const dateChanged     = new Date(existing.date).getTime() !== new Date(tx.txnDate!).getTime();
+        const dateChanged     = new Date(existing.date).getTime() !== tashkentDate.getTime();
         const txTypeChanged   = (existing.txType || '') !== txTypeName;
         if (amountChanged || contractChanged || dateChanged || txTypeChanged) {
           const changedFields = [
