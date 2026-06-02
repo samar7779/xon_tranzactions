@@ -819,16 +819,8 @@ export class CategorizationService {
 
     try {
       const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
-      if (dedupKeys.length === 0) return;
 
-      // 1) OplatyKv qatorini topish (sourceTxId bo'yicha)
-      const row = await this.prisma.oplataKv.findFirst({
-        where: { sourceTxId: { in: dedupKeys } },
-        select: { id: true, contractNo: true },
-      });
-      if (!row) return; // OplatyKv'da hali sync qilinmagan — sync vaqtida to'g'ri qo'yiladi
-
-      // 2) Tranzaksiyaning to'liq holatini o'qish — barcha qaytariladigan maydonlar
+      // 1) Tranzaksiyaning to'liq holatini o'qish — barcha qaytariladigan maydonlar
       const tx = await this.prisma.transaction.findUnique({
         where: { id: p.txId },
         select: {
@@ -842,6 +834,61 @@ export class CategorizationService {
         },
       });
       if (!tx || !tx.txnDate) return;
+
+      // 2) OplatyKv qatorini topish — 2 ta strategiya:
+      //    a) sourceTxId bo'yicha (tx-sync orqali yaratilgan qatorlar)
+      //    b) Excel-import qatorlar (sourceTxId=null) — eski shartnoma + sana + summa orqali
+      let row: { id: string; contractNo: string } | null = null;
+
+      if (dedupKeys.length > 0) {
+        row = await this.prisma.oplataKv.findFirst({
+          where: { sourceTxId: { in: dedupKeys } },
+          select: { id: true, contractNo: true },
+        });
+      }
+
+      // Fallback — Excel-import qatorlar uchun (eski shartnoma "xato" yoki "no_contract" bo'lganda)
+      if (!row && p.oldContract) {
+        const rawAmount = Math.abs(Number(tx.amount));
+        const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount;
+        // Sana — Tashkent kalendari kuni
+        const tashTime = new Date(tx.txnDate.getTime() + 5 * 60 * 60 * 1000);
+        const dayStart = new Date(Date.UTC(
+          tashTime.getUTCFullYear(), tashTime.getUTCMonth(), tashTime.getUTCDate(),
+        ));
+        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
+
+        const candidates = await this.prisma.oplataKv.findMany({
+          where: {
+            contractNo: p.oldContract,
+            date: { gte: dayStart, lte: dayEnd },
+            paymentAmount: new Prisma.Decimal(signedAmount),
+            sourceTxId: null,  // Faqat tx-sync orqali kelmaganlari (Excel/manual)
+          },
+          select: { id: true, contractNo: true },
+          take: 2,  // Faqat 1 ta moslik bo'lishini tekshiramiz
+        });
+
+        if (candidates.length === 1) {
+          row = candidates[0];
+          // Topgan qatorni tx ga bog'laymiz (kelajakda dublikat sync bo'lmasin)
+          if (p.externalId || p.txId) {
+            try {
+              await this.prisma.oplataKv.update({
+                where: { id: row.id },
+                data: { sourceTxId: p.externalId || p.txId },
+              });
+              this.log.log(`OplatyKv ${row.id} linked to tx ${p.txId} via fallback match`);
+            } catch (e: any) {
+              this.log.warn(`OplatyKv sourceTxId link xato: ${e?.message}`);
+            }
+          }
+        } else if (candidates.length > 1) {
+          this.log.warn(`OplatyKv fallback match: ${candidates.length} ta moslik topildi (txId=${p.txId}) — propagation skip`);
+        }
+      }
+
+      if (!row) return; // Hech narsa topilmadi — sync vaqtida to'g'ri qo'yiladi (yangi qator yaratiladi)
 
       // 3) CRM cache'dan yangi shartnoma uchun obyekt/mijoz olish (bor bo'lsa)
       const crm = await this.prisma.crmContract.findFirst({
@@ -860,19 +907,25 @@ export class CategorizationService {
       }
 
       // 5) Yangi qiymatlarni hisoblash (syncFromTransactions bilan bir xil mantiq)
-      const rawAmount = Math.abs(Number(tx.amount));
-      const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount;
+      const finalRawAmount = Math.abs(Number(tx.amount));
+      const finalSignedAmount = tx.direction === 'IN' ? finalRawAmount : -finalRawAmount;
       const txParty = tx.direction === 'IN' ? tx.fromName : tx.toName;
       const txTypeName = (tx as any).subcategory?.name
         || (tx.direction === 'IN' ? 'Взносы за квартиры' : 'Возврат взносов за кв.');
+
+      // Sana — Tashkent kalendari (timezone shift'ni oldini olish)
+      const tashTimeUpd = new Date(tx.txnDate.getTime() + 5 * 60 * 60 * 1000);
+      const tashkentDateUpd = new Date(Date.UTC(
+        tashTimeUpd.getUTCFullYear(), tashTimeUpd.getUTCMonth(), tashTimeUpd.getUTCDate(),
+      ));
 
       // 6) Atomic update — barcha derivat maydonlar
       await this.prisma.oplataKv.update({
         where: { id: row.id },
         data: {
           contractNo: p.newContract,
-          date: tx.txnDate,
-          paymentAmount: new Prisma.Decimal(signedAmount),
+          date: tashkentDateUpd,
+          paymentAmount: new Prisma.Decimal(finalSignedAmount),
           purpose: tx.description || null,
           txType: txTypeName,
           client: crm?.customerName || txParty || null,
