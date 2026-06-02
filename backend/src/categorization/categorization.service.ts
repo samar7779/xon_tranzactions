@@ -636,9 +636,10 @@ export class CategorizationService {
       },
     });
 
+    const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+
     // Tarixga to'g'ridan-to'g'ri yozish (logHistory'da kategoriya o'zgarmagani uchun skip bo'lar edi)
     if (old.contractNumber !== newContract) {
-      const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
       try {
         await this.prisma.transactionCategoryHistory.create({
           data: {
@@ -659,20 +660,19 @@ export class CategorizationService {
       } catch (e: any) {
         this.log.warn(`setContract history yozishda xato (${txId}): ${e?.message}`);
       }
-
-      // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
-      const oplataKvSync = await this.syncContractChangeToOplataKv({
-        txId,
-        externalId: old.externalId,
-        oldContract: old.contractNumber,
-        newContract,
-        actorEmail: u?.email || null,
-        reason: 'setContract',
-      });
-      return { ok: true, verified, customerName, oplataKvSync };
     }
 
-    return { ok: true, verified, customerName };
+    // OplataKv propagation — HAR safar ishlaydi (user feedback uchun)
+    const oplataKvSync = await this.syncContractChangeToOplataKv({
+      txId,
+      externalId: old.externalId,
+      oldContract: old.contractNumber,
+      newContract,
+      actorEmail: u?.email || null,
+      reason: 'setContract',
+    });
+
+    return { ok: true, verified, customerName, oplataKvSync };
   }
 
   /**
@@ -766,10 +766,10 @@ export class CategorizationService {
       },
     });
 
-    // Tarixga yozish — action='contract' (frontend amber rang bilan render qiladi)
-    // old/new contract qiymatlari oldCategoryName/newCategoryName ga yoziladi (UI tushunadi)
+    const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+
+    // Tarixga yozish — faqat haqiqiy o'zgarish bo'lganda
     if (old.contractNumber !== newContract) {
-      const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
       try {
         await this.prisma.transactionCategoryHistory.create({
           data: {
@@ -788,20 +788,21 @@ export class CategorizationService {
       } catch (e: any) {
         this.log.warn(`setContractManual history yozishda xato (${txId}): ${e?.message}`);
       }
-
-      // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
-      const oplataKvSync = await this.syncContractChangeToOplataKv({
-        txId,
-        externalId: old.externalId,
-        oldContract: old.contractNumber,
-        newContract,
-        actorEmail: u?.email || null,
-        reason: 'setContractManual',
-      });
-      return { ok: true, contractNumber: newContract, oplataKvSync };
     }
 
-    return { ok: true, contractNumber: newContract };
+    // OplataKv propagation — HAR safar ishlaydi (user feedback uchun)
+    // Eski shartnoma = yangi bo'lsa ham, OplataKv qaytarilgan ma'lumotlarni ko'rsatish
+    // foydalanuvchiga shartnoma sinxron ekanligini bildiradi.
+    const oplataKvSync = await this.syncContractChangeToOplataKv({
+      txId,
+      externalId: old.externalId,
+      oldContract: old.contractNumber,
+      newContract,
+      actorEmail: u?.email || null,
+      reason: 'setContractManual',
+    });
+
+    return { ok: true, contractNumber: newContract, oplataKvSync };
   }
 
   /**
