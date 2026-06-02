@@ -891,8 +891,11 @@ export class CategorizationService {
         });
       }
 
-      // Fallback — Excel-import qatorlar uchun (eski shartnoma "xato" yoki "no_contract" bo'lganda)
-      if (!row && p.oldContract) {
+      // Fallback — Excel-import qatorlar uchun
+      // 2 ta strategiya:
+      //   (a) Eski shartnoma + sana + summa bo'yicha (eski shartnoma "xato" deb saqlangan bo'lsa)
+      //   (b) Faqat sana + summa bo'yicha (har qanday shartnoma) — agar (a) topa olmasa
+      if (!row) {
         const rawAmount = Math.abs(Number(tx.amount));
         const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount;
         // Sana — Tashkent kalendari kuni
@@ -902,33 +905,58 @@ export class CategorizationService {
         ));
         const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000 - 1);
 
-        const candidates = await this.prisma.oplataKv.findMany({
-          where: {
-            contractNo: p.oldContract,
-            date: { gte: dayStart, lte: dayEnd },
-            paymentAmount: new Prisma.Decimal(signedAmount),
-            sourceTxId: null,  // Faqat tx-sync orqali kelmaganlari (Excel/manual)
-          },
-          select: { id: true, contractNo: true },
-          take: 2,  // Faqat 1 ta moslik bo'lishini tekshiramiz
-        });
-
-        if (candidates.length === 1) {
-          row = candidates[0];
-          // Topgan qatorni tx ga bog'laymiz (kelajakda dublikat sync bo'lmasin)
-          if (p.externalId || p.txId) {
-            try {
-              await this.prisma.oplataKv.update({
-                where: { id: row.id },
-                data: { sourceTxId: p.externalId || p.txId },
-              });
-              this.log.log(`OplatyKv ${row.id} linked to tx ${p.txId} via fallback match`);
-            } catch (e: any) {
-              this.log.warn(`OplatyKv sourceTxId link xato: ${e?.message}`);
-            }
+        // Strategy (a) — old contract + date + amount
+        if (p.oldContract && p.oldContract !== p.newContract) {
+          const candidates = await this.prisma.oplataKv.findMany({
+            where: {
+              contractNo: p.oldContract,
+              date: { gte: dayStart, lte: dayEnd },
+              paymentAmount: new Prisma.Decimal(signedAmount),
+              sourceTxId: null,
+            },
+            select: { id: true, contractNo: true },
+            take: 2,
+          });
+          if (candidates.length === 1) {
+            row = candidates[0];
+          } else if (candidates.length > 1) {
+            this.log.warn(`OplatyKv strategy-a: ${candidates.length} ta moslik (txId=${p.txId})`);
           }
-        } else if (candidates.length > 1) {
-          this.log.warn(`OplatyKv fallback match: ${candidates.length} ta moslik topildi (txId=${p.txId}) — propagation skip`);
+        }
+
+        // Strategy (b) — faqat sana + summa (har qanday contractNo, lekin newContract'dan farqli)
+        // Bu hol: foydalanuvchi avval shartnomani to'g'irlagan (Transaction'da), lekin
+        // o'sha vaqtda propagation ishlamagan (OplataKv'da hali eski "xato" turibdi).
+        if (!row) {
+          const candidates = await this.prisma.oplataKv.findMany({
+            where: {
+              date: { gte: dayStart, lte: dayEnd },
+              paymentAmount: new Prisma.Decimal(signedAmount),
+              sourceTxId: null,
+              NOT: { contractNo: p.newContract }, // Yangi shartnoma bilan teng emas — yangilanish kerak
+            },
+            select: { id: true, contractNo: true },
+            take: 2,
+          });
+          if (candidates.length === 1) {
+            row = candidates[0];
+            this.log.log(`OplatyKv strategy-b: matched by date+amount, old contractNo=${row.contractNo} (txId=${p.txId})`);
+          } else if (candidates.length > 1) {
+            this.log.warn(`OplatyKv strategy-b: ${candidates.length} ta moslik (txId=${p.txId})`);
+          }
+        }
+
+        // Topgan qatorni tx ga bog'laymiz (kelajakda dublikat sync bo'lmasin)
+        if (row && (p.externalId || p.txId)) {
+          try {
+            await this.prisma.oplataKv.update({
+              where: { id: row.id },
+              data: { sourceTxId: p.externalId || p.txId },
+            });
+            this.log.log(`OplatyKv ${row.id} linked to tx ${p.txId} via fallback match`);
+          } catch (e: any) {
+            this.log.warn(`OplatyKv sourceTxId link xato: ${e?.message}`);
+          }
         }
       }
 
