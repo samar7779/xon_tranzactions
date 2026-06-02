@@ -68,6 +68,51 @@ function columnValueFor(it: any, col: string): string | null {
   }
 }
 
+// Backend syncContractChangeToOplataKv natijasi
+type OplataKvSyncResult = {
+  updated: boolean;
+  skipped?: 'not-client' | 'no-row' | 'no-new-contract' | 'multiple-matches' | 'error';
+  oplataKvId?: string;
+  contractNo?: string;
+  date?: string;
+  paymentAmount?: string;
+  object?: string | null;
+  client?: string | null;
+  txType?: string | null;
+};
+
+// OplataKv propagation natijasini foydalanuvchiga toast bilan ko'rsatish
+function showOplataKvSyncToast(sync: OplataKvSyncResult | undefined) {
+  if (!sync) return;
+  if (sync.updated) {
+    // Real-time yangilangan ma'lumotlar ko'rsatiladi
+    const amountNum = sync.paymentAmount ? Number(sync.paymentAmount) : 0;
+    const formattedAmount = new Intl.NumberFormat('ru-RU').format(amountNum);
+    toast.success(
+      `✓ ОплатыКв jadvalida ham to'g'rilandi`,
+      {
+        description: [
+          `Shartnoma: ${sync.contractNo}`,
+          `Mijoz: ${sync.client || '—'}`,
+          `Obyekt: ${sync.object || '—'}`,
+          `Summa: ${amountNum < 0 ? '−' : '+'}${formattedAmount.replace('-', '')} UZS · ${sync.date}`,
+        ].join('\n'),
+        duration: 6000,
+      },
+    );
+  } else if (sync.skipped === 'not-client') {
+    // CLIENT kategoriya emas — OplataKv'ga tegmaymiz (silently)
+    return;
+  } else if (sync.skipped === 'no-row') {
+    // OplataKv'da bunday qator yo'q — yangi qator sync vaqtida yaratiladi
+    return;
+  } else if (sync.skipped === 'multiple-matches') {
+    toast.warning("ОплатыКв'da bir nechta mos qator — qo'lda tekshiring");
+  } else if (sync.skipped === 'error') {
+    toast.error("ОплатыКв sinxronizatsiyasida xato (logga yozildi)");
+  }
+}
+
 export default function TransactionsPage() {
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
@@ -1950,15 +1995,26 @@ function TransactionDetailDialog({
   });
 
   const setContractMut = useMutation({
-    mutationFn: (contractNumber: string | null) =>
-      api.post<{ ok: boolean; verified: boolean; customerName: string | null }>(`/categorization/transactions/${row.id}/set-contract`, { contractNumber }),
+    mutationFn: (contractNumber: string | null) => {
+      const loadingId = toast.loading('Shartnoma saqlanmoqda...');
+      return api.post<{
+        ok: boolean;
+        verified: boolean;
+        customerName: string | null;
+        oplataKvSync?: OplataKvSyncResult;
+      }>(`/categorization/transactions/${row.id}/set-contract`, { contractNumber })
+        .finally(() => toast.dismiss(loadingId));
+    },
     onSuccess: (r) => {
       toast.success(`Shartnoma saqlandi — ${r.customerName || 'CRM tasdiqladi'}`);
+      // OplataKv'da ham yangilangan bo'lsa alohida xabar
+      showOplataKvSyncToast(r.oplataKvSync);
       // Jadval va detail darrov yangilanishi uchun — invalidate + force refetch
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
       qc.invalidateQueries({ queryKey: ['tx-distinct'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       liveQuery.refetch();
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
@@ -1983,16 +2039,25 @@ function TransactionDetailDialog({
 
   // Qo'lda shartnoma kiritish (CRM tekshirmaydi)
   const setContractManualMut = useMutation({
-    mutationFn: (contractNumber: string | null) =>
-      api.post<{ ok: boolean; contractNumber: string | null }>(
+    mutationFn: (contractNumber: string | null) => {
+      const loadingId = toast.loading('Shartnoma saqlanmoqda...');
+      return api.post<{
+        ok: boolean;
+        contractNumber: string | null;
+        oplataKvSync?: OplataKvSyncResult;
+      }>(
         `/categorization/transactions/${row.id}/set-contract-manual`,
         { contractNumber },
-      ),
+      ).finally(() => toast.dismiss(loadingId));
+    },
     onSuccess: (r) => {
       toast.success(r.contractNumber ? `Shartnoma saqlandi: ${r.contractNumber}` : 'Shartnoma o\'chirildi');
+      // OplataKv'da ham yangilangan bo'lsa alohida xabar
+      showOplataKvSyncToast(r.oplataKvSync);
       setManualContractOpen(false);
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       liveQuery.refetch();
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),

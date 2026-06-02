@@ -597,7 +597,12 @@ export class CategorizationService {
    * Shartnoma raqamini qo'lda o'zgartirish — CRM'da tasdiqlanmasa rad etadi.
    * Faqat verified shartnomalarni qabul qiladi (yoki null — o'chirish).
    */
-  async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; verified: boolean; customerName: string | null }> {
+  async setContract(txId: string, contractNumber: string | null, actorId: string): Promise<{
+    ok: true;
+    verified: boolean;
+    customerName: string | null;
+    oplataKvSync?: Awaited<ReturnType<typeof this.syncContractChangeToOplataKv>>;
+  }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
       select: { contractNumber: true, categoryId: true, subcategoryId: true, externalId: true },
@@ -656,7 +661,7 @@ export class CategorizationService {
       }
 
       // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
-      await this.syncContractChangeToOplataKv({
+      const oplataKvSync = await this.syncContractChangeToOplataKv({
         txId,
         externalId: old.externalId,
         oldContract: old.contractNumber,
@@ -664,6 +669,7 @@ export class CategorizationService {
         actorEmail: u?.email || null,
         reason: 'setContract',
       });
+      return { ok: true, verified, customerName, oplataKvSync };
     }
 
     return { ok: true, verified, customerName };
@@ -733,7 +739,11 @@ export class CategorizationService {
    * setContract() dan farqi: CRM'da bo'lmasa ham qabul qiladi.
    * Foydalanuvchi javobgar (masalan, CRM'ga hali qo'shilmagan yangi shartnoma).
    */
-  async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{ ok: true; contractNumber: string | null }> {
+  async setContractManual(txId: string, contractNumber: string | null, actorId: string): Promise<{
+    ok: true;
+    contractNumber: string | null;
+    oplataKvSync?: Awaited<ReturnType<typeof this.syncContractChangeToOplataKv>>;
+  }> {
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
       select: { contractNumber: true, isContractManual: true, externalId: true },
@@ -780,7 +790,7 @@ export class CategorizationService {
       }
 
       // OplatyKv ga propagation — sourceTxId bo'yicha topilgan qatorni yangilash
-      await this.syncContractChangeToOplataKv({
+      const oplataKvSync = await this.syncContractChangeToOplataKv({
         txId,
         externalId: old.externalId,
         oldContract: old.contractNumber,
@@ -788,6 +798,7 @@ export class CategorizationService {
         actorEmail: u?.email || null,
         reason: 'setContractManual',
       });
+      return { ok: true, contractNumber: newContract, oplataKvSync };
     }
 
     return { ok: true, contractNumber: newContract };
@@ -814,8 +825,18 @@ export class CategorizationService {
     newContract: string | null;
     actorEmail: string | null;
     reason: string;
-  }): Promise<void> {
-    if (!p.newContract) return; // null bo'lsa hech narsa qilmaymiz (kelajakda DELETE qilish mumkin)
+  }): Promise<{
+    updated: boolean;
+    skipped?: 'not-client' | 'no-row' | 'no-new-contract' | 'multiple-matches' | 'error';
+    oplataKvId?: string;
+    contractNo?: string;
+    date?: string;
+    paymentAmount?: string;
+    object?: string | null;
+    client?: string | null;
+    txType?: string | null;
+  }> {
+    if (!p.newContract) return { updated: false, skipped: 'no-new-contract' };
 
     try {
       const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
@@ -831,9 +852,17 @@ export class CategorizationService {
           fromName: true,
           toName: true,
           subcategory: { select: { name: true } },
+          category: { select: { code: true, name: true } },
         },
       });
-      if (!tx || !tx.txnDate) return;
+      if (!tx || !tx.txnDate) return { updated: false, skipped: 'error' };
+
+      // FAQAT CLIENT (Клиент/Физ.Л/Юр.Л) kategoriyali to'lovlar OplatyKv'ga tushadi.
+      // Boshqa kategoriyalar (BANK, MINFIN, SALARY...) — OplatyKv'da yo'q,
+      // shuning uchun propagation kerak emas.
+      if (tx.category?.code !== 'CLIENT') {
+        return { updated: false, skipped: 'not-client' };
+      }
 
       // 2) OplatyKv qatorini topish — 2 ta strategiya:
       //    a) sourceTxId bo'yicha (tx-sync orqali yaratilgan qatorlar)
@@ -888,7 +917,7 @@ export class CategorizationService {
         }
       }
 
-      if (!row) return; // Hech narsa topilmadi — sync vaqtida to'g'ri qo'yiladi (yangi qator yaratiladi)
+      if (!row) return { updated: false, skipped: 'no-row' };
 
       // 3) CRM cache'dan yangi shartnoma uchun obyekt/mijoz olish (bor bo'lsa)
       const crm = await this.prisma.crmContract.findFirst({
@@ -954,9 +983,21 @@ export class CategorizationService {
           note: `Tranzaksiya contractNumber o'zgartirildi (${p.reason}, txId: ${p.txId}) — barcha maydonlar tranzaksiyadan qayta o'qildi`,
         },
       });
+
+      return {
+        updated: true,
+        oplataKvId: row.id,
+        contractNo: p.newContract,
+        date: tashkentDateUpd.toISOString().slice(0, 10),
+        paymentAmount: String(finalSignedAmount),
+        object: mappedObject,
+        client: crm?.customerName || txParty || null,
+        txType: txTypeName,
+      };
     } catch (e: any) {
       // Bu bog'liq operatsiya — asosiy setContract muvaffaqiyatli qaytishi kerak
       this.log.warn(`syncContractChangeToOplataKv xato (txId=${p.txId}): ${e?.message}`);
+      return { updated: false, skipped: 'error' };
     }
   }
 
