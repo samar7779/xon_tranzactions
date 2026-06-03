@@ -116,14 +116,18 @@ export class AttachmentsService {
       this.log.warn(`Attachment history xato: ${e?.message}`);
     }
 
-    // Telegram xabar (file ham bilan)
-    void this.notifyTelegram('uploaded', {
+    // Telegram xabar (file ham bilan) — sinxron, natijani qaytarish uchun
+    const tg = await this.notifyTelegram('uploaded', {
       attachment: { ...att, storagePath: diskPath },
       transaction: tx,
       filePath: diskPath,
     });
 
-    return { ok: true, item: { ...att, storagePath: diskPath } };
+    return {
+      ok: true,
+      item: { ...att, storagePath: diskPath },
+      telegram: tg,
+    };
   }
 
   /** Faylni o'qish — download uchun stream */
@@ -182,14 +186,14 @@ export class AttachmentsService {
     }
 
     // Telegram xabar — fayl ham yuboriladi (buffer bilan)
-    void this.notifyTelegram('deleted', {
+    const tg = await this.notifyTelegram('deleted', {
       attachment: att,
       transaction: att.transaction,
       deletedBy,
       fileBuffer,
     });
 
-    return { ok: true, deleted: att.filename };
+    return { ok: true, deleted: att.filename, telegram: tg };
   }
 
   /** Telegram notification — uploaded va deleted ikkalasida ham fayl yuboriladi */
@@ -199,10 +203,11 @@ export class AttachmentsService {
     deletedBy?: string;
     filePath?: string;
     fileBuffer?: Buffer | null;
-  }) {
+  }): Promise<{ ok: boolean; chat?: string; error?: string }> {
     if (!this.tgToken || !this.tgChat) {
-      this.log.warn(`Ariza ${action} Telegram skip: tgToken=${this.tgToken ? 'set' : 'EMPTY'}, tgChat=${this.tgChat || 'EMPTY'}`);
-      return;
+      const reason = `tgToken=${this.tgToken ? 'set' : 'EMPTY'}, tgChat=${this.tgChat || 'EMPTY'}`;
+      this.log.warn(`Ariza ${action} Telegram skip: ${reason}`);
+      return { ok: false, error: `Telegram konfiguratsiya yo'q: ${reason}` };
     }
     this.log.log(`Ariza ${action} Telegram yuborilmoqda → chat=${this.tgChat}, file=${payload.attachment?.filename}`);
     try {
@@ -261,7 +266,8 @@ export class AttachmentsService {
             { headers: form.getHeaders(), timeout: 30000, maxBodyLength: 50 * 1024 * 1024 },
           ),
         );
-        return;
+        this.log.log(`Ariza ${action} Telegram yuborildi → chat=${this.tgChat}`);
+        return { ok: true, chat: this.tgChat };
       }
 
       // Aks holda (fayl yo'q) — oddiy matn
@@ -277,14 +283,16 @@ export class AttachmentsService {
           { timeout: 8000 },
         ),
       );
+      this.log.log(`Ariza ${action} Telegram (matn) yuborildi → chat=${this.tgChat}`);
+      return { ok: true, chat: this.tgChat };
     } catch (e: any) {
       const respData = e?.response?.data
-        ? JSON.stringify(e.response.data).slice(0, 500)
+        ? JSON.stringify(e.response.data).slice(0, 300)
         : '';
       const respStatus = e?.response?.status;
-      this.log.error(
-        `Telegram ariza ${action} xato: ${e?.message}${respStatus ? ` · HTTP ${respStatus}` : ''}${respData ? ` · ${respData}` : ''}`,
-      );
+      const errSummary = `${e?.message}${respStatus ? ` · HTTP ${respStatus}` : ''}${respData ? ` · ${respData}` : ''}`;
+      this.log.error(`Telegram ariza ${action} xato: ${errSummary}`);
+      return { ok: false, chat: this.tgChat, error: errSummary.slice(0, 300) };
     }
   }
 
