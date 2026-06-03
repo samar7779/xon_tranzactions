@@ -880,6 +880,11 @@ function SuggestionRow({
   const statusKey = item.status?.key || '';
   const tone = STATUS_TONE[statusKey] || STATUS_TONE.waiting;
   const price = Number(item.price || item.total_price || 0);
+  // Trashed (soft-deleted) — Laravel SoftDelete: deleted_at to'ldirilgan
+  const isTrashed = !!(item.deleted_at || item.is_trashed || item.trashed);
+  // I18n etiketkalar — locale'ga qarab
+  const trashedLabel = apiLang === 'ru' ? 'УДАЛЁН' : "BEKOR QILINGAN";
+  const activeLabel = apiLang === 'ru' ? 'АКТИВНЫЙ' : 'FAOL';
 
   return (
     <button
@@ -898,10 +903,25 @@ function SuggestionRow({
         <FileText className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className={cn('font-mono text-[13px] font-bold truncate', active ? 'text-indigo-700' : 'text-slate-800')}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className={cn(
+            'font-mono text-[13px] font-bold truncate',
+            isTrashed ? 'text-rose-600 line-through decoration-rose-300 decoration-2' : (active ? 'text-indigo-700' : 'text-slate-800'),
+          )}>
             {contract}
           </span>
+          {/* Trashed (bekor qilingan) — eng yorqin badge */}
+          {isTrashed ? (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200">
+              <span className="w-1 h-1 rounded-full bg-rose-500" />
+              {trashedLabel}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200">
+              <span className="w-1 h-1 rounded-full bg-emerald-500" />
+              {activeLabel}
+            </span>
+          )}
           {status && (
             <span className={cn(
               'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset',
