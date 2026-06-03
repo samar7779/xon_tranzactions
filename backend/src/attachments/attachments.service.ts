@@ -31,8 +31,17 @@ export class AttachmentsService {
   ) {
     this.uploadsDir = config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
     this.tgToken = config.get<string>('TG_BOT_TOKEN') || '';
-    this.tgChat = config.get<string>('ATTACHMENTS_NOTIFY_CHAT') || '-5150947522';
+    // Ariza notifikatsiyalari uchun chat — kichik tartib bilan fallback:
+    // 1) ATTACHMENTS_NOTIFY_CHAT (alohida)
+    // 2) DEPLOY_NOTIFY_CHAT (umumiy deploy/notify guruh)
+    // Hardcode default olib tashlandi — bot a'zo bo'lmagan guruhga yuborish urinishini oldini olish
+    this.tgChat = config.get<string>('ATTACHMENTS_NOTIFY_CHAT')
+      || config.get<string>('DEPLOY_NOTIFY_CHAT')
+      || '';
     this.appUrl = config.get<string>('APP_URL') || 'https://transactions.xonapps.uz';
+    if (!this.tgToken || !this.tgChat) {
+      this.log.warn(`Telegram notification o'chiq: tgToken=${this.tgToken ? 'set' : 'EMPTY'}, tgChat=${this.tgChat ? this.tgChat : 'EMPTY'}`);
+    }
   }
 
   /** Tranzaksiya uchun barcha biriktirilgan fayllar */
