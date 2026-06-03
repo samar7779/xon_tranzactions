@@ -507,68 +507,67 @@ export class SyncService {
 
     const externalId = this.makeCompositeId(item, accountNo, bankCode);
 
+    // Sanalar (oldindan — dedup ichida ham kerak)
+    const txnDate = this.parseKbDate(item.ddate) || new Date();
+    const valueDate = this.parseKbDate(item.vdate);
+    const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
+
     // Mavjudligini tekshirish — FAQAT shu account doirasida
-    // (bir tranzaksiya 2 ta account uchun ikki yozuv bo'lishi kerak — sender va receiver)
-    let existing = await this.prisma.transaction.findFirst({
+    // 1) Standard dedup: externalId/b2_id/general_id/bankB2Id
+    // 2) DATE-SHIFT: shu general_id bilan ±15 kun atrofida yozuv bormi
+    const shiftWindowMs = 15 * 24 * 60 * 60 * 1000;
+    const dateFrom = new Date(txnDate.getTime() - shiftWindowMs);
+    const dateTo = new Date(txnDate.getTime() + shiftWindowMs);
+    const existing = await this.prisma.transaction.findFirst({
       where: {
-        accountId, // muhim — boshqa accountning yozuvini dublikat deb skip qilmaslik
+        accountId,
         OR: [
           { externalId },
           { externalId: item.b2_id || undefined },
           { externalId: item.general_id || undefined },
           { bankB2Id: item.b2_id || undefined },
+          // DATE-SHIFT — shu general_id bor composite ±15 kun atrofida
+          ...(item.general_id ? [{
+            AND: [
+              { externalId: { contains: `_${item.general_id}_` } },
+              { txnDate: { gte: dateFrom, lte: dateTo } },
+            ],
+          }] : []),
         ],
       },
     });
-    if (existing) return false;
 
-    // Sanalar
-    const txnDate = this.parseKbDate(item.ddate) || new Date();
-    const valueDate = this.parseKbDate(item.vdate);
-    const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
-
-    // ── DATE-SHIFT DETECTION ──
-    // Bank ba'zan tranzaksiyaning sanasini o'zgartiradi (proвotka). Composite ID
-    // sana'ni o'z ichiga olgani uchun yangi qator deb hisoblanadi va dublikat
-    // bo'ladi. Buni oldini olish — agar:
-    //   - shu accountda
-    //   - shu general_id bilan
-    //   - shu summa va acc_dt/acc_ct bilan
-    //   - sana ±15 kun atrofida
-    // boshqa yozuv mavjud bo'lsa — uni topib SANA'ni yangilaymiz (yangi yozuv
-    // yaratmasdan).
-    if (item.general_id) {
-      const shiftWindowMs = 15 * 24 * 60 * 60 * 1000;
-      const dateFrom = new Date(txnDate.getTime() - shiftWindowMs);
-      const dateTo = new Date(txnDate.getTime() + shiftWindowMs);
-      const amountTiyin = item.amount != null ? String(item.amount) : null;
-      if (amountTiyin) {
-        const shifted = await this.prisma.transaction.findFirst({
-          where: {
-            accountId,
-            externalId: { contains: `_${item.general_id}_` },
-            txnDate: { gte: dateFrom, lte: dateTo },
-            NOT: { externalId },
-          },
-        });
-        if (shifted) {
-          // Bizning yozuv eski composite (boshqa sana) bilan saqlangan ekan.
-          // Yangi composite, txnDate va externalId bilan UPDATE qilamiz.
+    if (existing) {
+      // ── DATE-SHIFT UPDATE ──
+      // Mavjud yozuvning sanasi yoki externalId yangi keladigan'dan farq qilsa,
+      // bu bank tomonida sanani ko'chirish hodisasi (proвotka o'zgargan).
+      // Eski yozuvni yangi sana + composite bilan UPDATE qilamiz.
+      const existingDateMs = existing.txnDate.getTime();
+      const newDateMs = txnDate.getTime();
+      const dateChanged = existingDateMs !== newDateMs;
+      const externalIdChanged = existing.externalId !== externalId;
+      if (dateChanged || externalIdChanged) {
+        try {
           await this.prisma.transaction.update({
-            where: { id: shifted.id },
+            where: { id: existing.id },
             data: {
-              externalId, // yangi composite
-              txnDate,    // yangi sana
+              externalId,            // yangi composite
+              txnDate,               // yangi sana
               valueDate,
               syncedAt: new Date(),
+              ...(item.b2_id ? { bankB2Id: item.b2_id } : {}),
             },
           });
           this.logger.log(
-            `Date-shift: tx ${shifted.id} sanasi ko'chirildi (${shifted.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}), externalId yangilandi`,
+            `Date-shift: tx ${existing.id} yangilandi — ` +
+            `sana ${existing.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}, ` +
+            `composite ID yangi`,
           );
-          return false; // qayta hisoblamaymiz, lekin saqlandi
+        } catch (e: any) {
+          this.logger.warn(`Date-shift update xato (${existing.id}): ${e?.message}`);
         }
       }
+      return false; // yangi yozuv yaratilmaydi
     }
 
     // Yo'nalish: bank dir maydoni ba'zan noto'g'ri kelganligi tufayli, acc_ct/acc_dt'dan aniqlaymiz
