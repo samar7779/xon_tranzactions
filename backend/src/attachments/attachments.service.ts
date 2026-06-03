@@ -202,7 +202,11 @@ export class AttachmentsService {
     filePath?: string;
     fileBuffer?: Buffer | null;
   }) {
-    if (!this.tgToken || !this.tgChat) return;
+    if (!this.tgToken || !this.tgChat) {
+      this.log.warn(`Ariza ${action} Telegram skip: tgToken=${this.tgToken ? 'set' : 'EMPTY'}, tgChat=${this.tgChat || 'EMPTY'}`);
+      return;
+    }
+    this.log.log(`Ariza ${action} Telegram yuborilmoqda → chat=${this.tgChat}, file=${payload.attachment?.filename}`);
     try {
       const a = payload.attachment;
       const t = payload.transaction;
@@ -276,7 +280,13 @@ export class AttachmentsService {
         ),
       );
     } catch (e: any) {
-      this.log.warn(`Telegram notification xato: ${e?.message}`);
+      const respData = e?.response?.data
+        ? JSON.stringify(e.response.data).slice(0, 500)
+        : '';
+      const respStatus = e?.response?.status;
+      this.log.error(
+        `Telegram ariza ${action} xato: ${e?.message}${respStatus ? ` · HTTP ${respStatus}` : ''}${respData ? ` · ${respData}` : ''}`,
+      );
     }
   }
 
