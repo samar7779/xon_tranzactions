@@ -1003,17 +1003,37 @@ export class CategorizationService {
 
       if (!row) return { updated: false, skipped: 'no-row' };
 
-      // 3) CRM cache'dan yangi shartnoma uchun obyekt/mijoz olish (bor bo'lsa)
-      const crm = await this.prisma.crmContract.findFirst({
-        where: { contractNumber: p.newContract },
-        select: { customerName: true, objectName: true },
-      });
+      // 3) CRM ma'lumotlarini olish — avval cache, agar bo'sh bo'lsa LIVE CRM API
+      //    (objectName bo'sh bo'lsa user ko'rmaydi, shuning uchun aktiv lookup)
+      let crmCustomer: string | null = null;
+      let crmObject: string | null = null;
+      try {
+        const cached = await this.crmCache.lookup(p.newContract);
+        if (cached) {
+          crmCustomer = cached.customerName || null;
+          crmObject = cached.objectName || null;
+        }
+      } catch (e: any) {
+        this.log.warn(`CRM lookup xato (${p.newContract}): ${e?.message}`);
+      }
+      // Fallback — cache'dan olib bo'lmagan bo'lsa, DB'dagi yozuvni o'qiymiz
+      if (!crmCustomer || !crmObject) {
+        const fromDb = await this.prisma.crmContract.findFirst({
+          where: { contractNumber: p.newContract },
+          select: { customerName: true, objectName: true },
+        });
+        if (fromDb) {
+          crmCustomer = crmCustomer || fromDb.customerName;
+          crmObject = crmObject || fromDb.objectName;
+        }
+      }
+      const crm = { customerName: crmCustomer, objectName: crmObject };
 
       // 4) Object mapping (CRM nomi -> OplatyKv nomi)
       let mappedObject: string | null = null;
-      if (crm?.objectName) {
+      if (crm.objectName) {
         const mapping = await this.prisma.oplataKvObjectMapping.findFirst({
-          where: { crmName: crm.objectName },
+          where: { crmName: { equals: crm.objectName, mode: 'insensitive' } },
           select: { oplataName: true },
         });
         mappedObject = mapping?.oplataName || crm.objectName;
