@@ -1389,10 +1389,19 @@ export class OplataKvService {
               continue; // 0 - hech narsa
             }
 
-            // Category aniqlash
-            if (firstInstallment !== 0 && monthlyAmount !== 0) category = 'GENERAL';
-            else if (firstInstallment !== 0) category = 'FIRST';
-            else category = 'MONTHLY';
+            // Category aniqlash — qaysi qism ko'p bo'lsa shu kategoriya
+            // (teng bo'lsa boshlang'ich) — GENERAL endi ishlatilmaydi
+            if (firstInstallment === 0 && monthlyAmount === 0) {
+              category = 'MONTHLY';
+            } else if (firstInstallment !== 0 && monthlyAmount === 0) {
+              category = 'FIRST';
+            } else if (firstInstallment === 0 && monthlyAmount !== 0) {
+              category = 'MONTHLY';
+            } else {
+              const absFirst = Math.abs(firstInstallment);
+              const absMonthly = Math.abs(monthlyAmount);
+              category = absMonthly > absFirst ? 'MONTHLY' : 'FIRST';
+            }
 
             await this.prisma.oplataKv.update({
               where: { id: item.id },
@@ -1503,9 +1512,25 @@ export class OplataKvService {
       return { ok: false, error: 'Summa 0 — split kerak emas' };
     }
 
-    if (firstInstallment !== 0 && monthlyAmount !== 0) category = 'GENERAL';
-    else if (firstInstallment !== 0) category = 'FIRST';
-    else category = 'MONTHLY';
+    // Kategoriya — qaysi qism ko'p bo'lsa, shu kategoriya tanlanadi:
+    //   firstInstallment > monthlyAmount   → FIRST  (boshlang'ich ko'p)
+    //   monthlyAmount > firstInstallment   → MONTHLY (oylik ko'p)
+    //   teng (har ikkisi 0 emas)           → FIRST (default boshlang'ich)
+    //   biri 0                              → boshqasiga teng
+    // Qiyoslashda absolyut qiymat olinadi — refund (manfiy) holatlar ham
+    // to'g'ri taqsimlanadi.
+    if (firstInstallment === 0 && monthlyAmount === 0) {
+      category = 'MONTHLY'; // hech narsa yo'q — default
+    } else if (firstInstallment !== 0 && monthlyAmount === 0) {
+      category = 'FIRST';
+    } else if (firstInstallment === 0 && monthlyAmount !== 0) {
+      category = 'MONTHLY';
+    } else {
+      // Ikkalasi ham non-zero — qaysi katta?
+      const absFirst = Math.abs(firstInstallment);
+      const absMonthly = Math.abs(monthlyAmount);
+      category = absMonthly > absFirst ? 'MONTHLY' : 'FIRST';
+    }
 
     await this.prisma.oplataKv.update({
       where: { id: row.id },
