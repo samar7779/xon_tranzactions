@@ -1720,6 +1720,18 @@ function OplataKvDetailDialog({
   onCopyId: (id: string) => void;
   copiedId: string | null;
 }) {
+  // Live query — qator ma'lumotini real-time olib turadi (split/edit'dan keyin avto refresh)
+  const initialRow = row;
+  const detailQuery = useQuery({
+    queryKey: ['oplata-kv-detail', initialRow?.id],
+    queryFn: () => api.get<{ ok: boolean; item: OplataKvItem }>(`/oplata-kv/${initialRow!.id}`),
+    enabled: !!initialRow?.id,
+    initialData: initialRow ? { ok: true as const, item: initialRow } : undefined,
+  });
+  const isRefetching = detailQuery.isFetching && !detailQuery.isLoading;
+  // Original 'row' o'zgaruvchini live ma'lumot bilan almashtiramiz —
+  // shu sababli quyidagi barcha row.X references avtomatik live data ko'rsatadi
+  row = detailQuery.data?.item || initialRow;
   if (!row) return null;
   const catCls = row.paymentCategory ? CATEGORY_CLS[row.paymentCategory] : '';
   const catLabel = row.paymentCategory ? CATEGORY_LABEL[row.paymentCategory] : '—';
@@ -1727,7 +1739,10 @@ function OplataKvDetailDialog({
   return (
     <Dialog open={!!row} onOpenChange={(o) => !o && onClose()}>
       <DialogContent
-        className="sm:max-w-3xl p-0 overflow-hidden gap-0"
+        className={cn(
+          'sm:max-w-3xl p-0 overflow-hidden gap-0 transition-shadow',
+          isRefetching && 'ring-2 ring-fuchsia-400 ring-offset-2',
+        )}
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
       >
