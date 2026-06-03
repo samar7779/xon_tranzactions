@@ -321,8 +321,14 @@ export class CrmService {
     const body: Record<string, any> = {};
     if (opts.contract) body.contract = opts.contract.trim();
     else body.id = opts.id;
-    // Laravel SoftDelete + Microcrud uchun deleted/cancelled qatorlarni ham qaytarish
-    // (XonSaroy noma'lum parametrlarni e'tiborsiz qoldiradi)
+    // ── XonSaroy CRM Laravel SoftDelete logikasi ──
+    // PHP backend:
+    //   if (!empty($data['trashed_status']) && $service->is_soft_delete()) {
+    //     case -1: onlyTrashed; case 1: withTrashed; default: activeOnly;
+    //   }
+    // To'g'ri param nomi: trashed_status=1 (with trashed)
+    body.trashed_status = 1; // PRIMARY — active + trashed
+    // Eski variantlar — xavfsizlik uchun qoldiramiz (boshqa endpoint'lar uchun)
     body.trashed = 1;
     body.with_trashed = 1;
     body.with_deleted = 1;
@@ -331,9 +337,24 @@ export class CrmService {
     body.cancelled = 1;
     body.with_cancelled = 1;
     body.status = 'all';
-    const r = await this.call('/show', body);
+    let r = await this.call('/show', body);
     let detail: any = r.ok ? (r.data?.data || null) : null;
-    const contractNo = (opts.contract || detail?.contract || '').toString().trim();
+    let contractNo = (opts.contract || detail?.contract || '').toString().trim();
+
+    // RETRY — agar trashed_status=1 bilan topilmasa, trashed_status=-1 (faqat trashed) bilan
+    if (!detail && contractNo) {
+      const bodyOnlyTrashed = { ...body, trashed_status: -1 };
+      try {
+        const r2 = await this.call('/show', bodyOnlyTrashed);
+        if (r2.ok && r2.data?.data) {
+          detail = r2.data.data;
+          this.log.log(`CRM /show trashed_status=-1 muvaffaqiyatli (${contractNo})`);
+          r = r2;
+        }
+      } catch (e: any) {
+        this.log.warn(`CRM /show trashed_status=-1 xato (${contractNo}): ${e?.message}`);
+      }
+    }
 
     // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (deleted/cancelled uchun) ──
     if (!detail && contractNo) {
@@ -347,6 +368,9 @@ export class CrmService {
           with_cancelled: 1,
           status: 'all',
           // Laravel SoftDelete: deleted_at to'ldirilgan rowlar
+          // PRIMARY trashed_status=1 — withTrashed (active+trashed)
+          trashed_status: 1,
+          // Eski variantlar — boshqa endpoint'lar uchun
           trashed: 1,
           with_trashed: 1,
           with_deleted: 1,
