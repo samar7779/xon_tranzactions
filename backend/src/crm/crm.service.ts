@@ -327,8 +327,11 @@ export class CrmService {
     //     case -1: onlyTrashed; case 1: withTrashed; default: activeOnly;
     //   }
     // To'g'ri param nomi: trashed_status=1 (with trashed)
-    body.trashed_status = 1; // PRIMARY — active + trashed
+    // XonSaroy CRM aniqlangan param: is_trashed=1 (active + trashed birga)
+    // Aniq URL misol: app.xonsaroy.uz/contracts?limit=20&is_trashed=1
+    body.is_trashed = 1;
     // Eski variantlar — xavfsizlik uchun qoldiramiz (boshqa endpoint'lar uchun)
+    body.trashed_status = 1;
     body.trashed = 1;
     body.with_trashed = 1;
     body.with_deleted = 1;
@@ -337,24 +340,9 @@ export class CrmService {
     body.cancelled = 1;
     body.with_cancelled = 1;
     body.status = 'all';
-    let r = await this.call('/show', body);
+    const r = await this.call('/show', body);
     let detail: any = r.ok ? (r.data?.data || null) : null;
-    let contractNo = (opts.contract || detail?.contract || '').toString().trim();
-
-    // RETRY — agar trashed_status=1 bilan topilmasa, trashed_status=-1 (faqat trashed) bilan
-    if (!detail && contractNo) {
-      const bodyOnlyTrashed = { ...body, trashed_status: -1 };
-      try {
-        const r2 = await this.call('/show', bodyOnlyTrashed);
-        if (r2.ok && r2.data?.data) {
-          detail = r2.data.data;
-          this.log.log(`CRM /show trashed_status=-1 muvaffaqiyatli (${contractNo})`);
-          r = r2;
-        }
-      } catch (e: any) {
-        this.log.warn(`CRM /show trashed_status=-1 xato (${contractNo}): ${e?.message}`);
-      }
-    }
+    const contractNo = (opts.contract || detail?.contract || '').toString().trim();
 
     // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (deleted/cancelled uchun) ──
     if (!detail && contractNo) {
@@ -362,15 +350,15 @@ export class CrmService {
         const idxRes = await this.call('/index', {
           contract: contractNo,
           'per-page': 50,
+          // PRIMARY — XonSaroy CRM URL'da aniqlangan: is_trashed=1
+          is_trashed: 1,
+          // Eski variantlar — boshqa endpoint'lar uchun xavfsizlik
+          trashed_status: 1,
           cancelled: 1,
           is_cancelled: 1,
           include_cancelled: 1,
           with_cancelled: 1,
           status: 'all',
-          // Laravel SoftDelete: deleted_at to'ldirilgan rowlar
-          // PRIMARY trashed_status=1 — withTrashed (active+trashed)
-          trashed_status: 1,
-          // Eski variantlar — boshqa endpoint'lar uchun
           trashed: 1,
           with_trashed: 1,
           with_deleted: 1,
