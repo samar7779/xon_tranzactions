@@ -509,7 +509,7 @@ export class SyncService {
 
     // Mavjudligini tekshirish — FAQAT shu account doirasida
     // (bir tranzaksiya 2 ta account uchun ikki yozuv bo'lishi kerak — sender va receiver)
-    const existing = await this.prisma.transaction.findFirst({
+    let existing = await this.prisma.transaction.findFirst({
       where: {
         accountId, // muhim — boshqa accountning yozuvini dublikat deb skip qilmaslik
         OR: [
@@ -526,6 +526,50 @@ export class SyncService {
     const txnDate = this.parseKbDate(item.ddate) || new Date();
     const valueDate = this.parseKbDate(item.vdate);
     const inputAt = this.parseKbDateTime(item.input_date, item.input_time);
+
+    // ── DATE-SHIFT DETECTION ──
+    // Bank ba'zan tranzaksiyaning sanasini o'zgartiradi (proвotka). Composite ID
+    // sana'ni o'z ichiga olgani uchun yangi qator deb hisoblanadi va dublikat
+    // bo'ladi. Buni oldini olish — agar:
+    //   - shu accountda
+    //   - shu general_id bilan
+    //   - shu summa va acc_dt/acc_ct bilan
+    //   - sana ±15 kun atrofida
+    // boshqa yozuv mavjud bo'lsa — uni topib SANA'ni yangilaymiz (yangi yozuv
+    // yaratmasdan).
+    if (item.general_id) {
+      const shiftWindowMs = 15 * 24 * 60 * 60 * 1000;
+      const dateFrom = new Date(txnDate.getTime() - shiftWindowMs);
+      const dateTo = new Date(txnDate.getTime() + shiftWindowMs);
+      const amountTiyin = item.amount != null ? String(item.amount) : null;
+      if (amountTiyin) {
+        const shifted = await this.prisma.transaction.findFirst({
+          where: {
+            accountId,
+            externalId: { contains: `_${item.general_id}_` },
+            txnDate: { gte: dateFrom, lte: dateTo },
+            NOT: { externalId },
+          },
+        });
+        if (shifted) {
+          // Bizning yozuv eski composite (boshqa sana) bilan saqlangan ekan.
+          // Yangi composite, txnDate va externalId bilan UPDATE qilamiz.
+          await this.prisma.transaction.update({
+            where: { id: shifted.id },
+            data: {
+              externalId, // yangi composite
+              txnDate,    // yangi sana
+              valueDate,
+              syncedAt: new Date(),
+            },
+          });
+          this.logger.log(
+            `Date-shift: tx ${shifted.id} sanasi ko'chirildi (${shifted.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}), externalId yangilandi`,
+          );
+          return false; // qayta hisoblamaymiz, lekin saqlandi
+        }
+      }
+    }
 
     // Yo'nalish: bank dir maydoni ba'zan noto'g'ri kelganligi tufayli, acc_ct/acc_dt'dan aniqlaymiz
     //   acc_ct = kreditlanadigan hisob (kim oladi)  → bizning hisob bo'lsa KIRIM
