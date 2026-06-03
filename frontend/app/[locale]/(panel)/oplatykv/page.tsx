@@ -137,12 +137,24 @@ export default function OplataKvPage() {
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
 
-  // Filters
-  const [q, setQ] = useState('');
+  // Filters — URL query orqali persist qilinadi (refresh'da yo'qolmaydi)
+  const [q, setQ] = useState(() => {
+    if (typeof window === 'undefined') return '';
+    return new URLSearchParams(window.location.search).get('q') || '';
+  });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
+
+  // q o'zgarganda URL'ni yangilash (browser history'ga emas, replace)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    if (q) url.searchParams.set('q', q);
+    else url.searchParams.delete('q');
+    window.history.replaceState({}, '', url.toString());
+  }, [q]);
 
   // Dialog state
   const [detailRow, setDetailRow] = useState<OplataKvItem | null>(null);
@@ -1858,22 +1870,7 @@ function OplataKvDetailDialog({
               <History className="h-4 w-4" /> Tarix
             </button>
             {row.sourceTxId && canEdit && (
-              <button
-                onClick={async () => {
-                  if (!confirm(`Shu shartnoma (${row.contractNo}) bo'yicha to'lovlarni qayta hisoblash (split)?`)) return;
-                  try {
-                    const r: any = await api.post(`/oplata-kv/${row.id}/split`, {});
-                    toast.success(`Split: ${r.filled} qator yangilandi (${r.contracts || 1} shartnoma)`);
-                    setTimeout(() => window.location.reload(), 1200);
-                  } catch (e: any) {
-                    toast.error(e?.message || 'Split xato');
-                  }
-                }}
-                className="h-10 px-3 rounded-xl text-[13px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 ring-1 ring-fuchsia-200 transition-colors inline-flex items-center gap-1.5"
-                title="Bu shartnoma bo'yicha 1-vznos/oylik qayta hisoblash"
-              >
-                <Receipt className="h-4 w-4" /> Re-split
-              </button>
+              <ReSplitButton row={row} />
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -1897,6 +1894,49 @@ function OplataKvDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// Re-split tugmasi — modal yopilmaydi, jonli React Query invalidate orqali refresh
+function ReSplitButton({ row }: { row: OplataKvItem }) {
+  const qc = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const splitMut = useMutation({
+    mutationFn: () => api.post<{ filled?: number; contracts?: number }>(`/oplata-kv/${row.id}/split`, {}),
+    onSuccess: (r) => {
+      toast.success(`Split: ${r.filled ?? 1} qator yangilandi (${r.contracts ?? 1} shartnoma)`);
+      // React Query orqali jonli yangilash (sahifa reload qilinmaydi, modal yopilmaydi)
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv-detail', row.id] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv-history', row.id] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Split xato'),
+  });
+  return (
+    <button
+      onClick={() => {
+        if (confirming) {
+          splitMut.mutate();
+          setConfirming(false);
+        } else {
+          setConfirming(true);
+          setTimeout(() => setConfirming(false), 3000);
+        }
+      }}
+      disabled={splitMut.isPending}
+      className={cn(
+        'h-10 px-3 rounded-xl text-[13px] font-semibold transition-all inline-flex items-center gap-1.5 ring-1',
+        confirming
+          ? 'bg-fuchsia-600 text-white ring-fuchsia-600 shadow-lg shadow-fuchsia-500/30 scale-105'
+          : 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200 hover:bg-fuchsia-100',
+      )}
+      title="Bu shartnoma bo'yicha 1-vznos/oylik qayta hisoblash"
+    >
+      {splitMut.isPending
+        ? <Loader2 className="h-4 w-4 animate-spin" />
+        : <Receipt className="h-4 w-4" />}
+      {confirming ? 'Bosib tasdiqlang' : 'Re-split'}
+    </button>
   );
 }
 
