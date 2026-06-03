@@ -3936,9 +3936,25 @@ function AttachmentsDialog({
       fd.append('file', file);
       if (trimmedContract) fd.append('contractNumber', trimmedContract);
       fd.append('type', 'ariza');
-      await api.postForm(`/transactions/${txId}/attachments`, fd, { timeout: 120_000 });
+      const uploadResp = await api.postForm<{
+        ok: boolean;
+        item: any;
+        telegram?: { ok: boolean; chat?: string; error?: string };
+      }>(`/transactions/${txId}/attachments`, fd, { timeout: 120_000 });
 
-      toast.success("Ariza saqlandi · Telegram'ga xabar yuborildi");
+      // Telegram natijasi aniq ko'rsatiladi (yolg'on xabar bermaymiz)
+      if (uploadResp.telegram?.ok) {
+        toast.success("Ariza saqlandi · Telegram'ga yuborildi", {
+          description: `Chat: ${uploadResp.telegram.chat || '?'}`,
+        });
+      } else {
+        toast.success('Ariza saqlandi', {
+          description: uploadResp.telegram?.error
+            ? `⚠ Telegram xato: ${uploadResp.telegram.error.slice(0, 200)}`
+            : "Telegram'ga yuborilmadi (konfiguratsiya yo'q)",
+          duration: 8000,
+        });
+      }
       // OplataKv propagation natijasi — alohida toast
       if (contractSaveResult?.oplataKvSync) {
         showOplataKvSyncToast(contractSaveResult.oplataKvSync);
@@ -3965,8 +3981,21 @@ function AttachmentsDialog({
     if (!confirm("Arizani o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.")) return;
     setDeletingId(attId);
     try {
-      await api.delete(`/transactions/${txId}/attachments/${attId}`);
-      toast.success("Ariza o'chirildi · Telegram'ga xabar yuborildi");
+      const delResp = await api.delete<{
+        ok: boolean;
+        deleted: string;
+        telegram?: { ok: boolean; chat?: string; error?: string };
+      }>(`/transactions/${txId}/attachments/${attId}`);
+      if (delResp.telegram?.ok) {
+        toast.success("Ariza o'chirildi · Telegram'ga yuborildi");
+      } else {
+        toast.success("Ariza o'chirildi", {
+          description: delResp.telegram?.error
+            ? `⚠ Telegram xato: ${delResp.telegram.error.slice(0, 200)}`
+            : "Telegram'ga yuborilmadi",
+          duration: 8000,
+        });
+      }
       refetch();
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', txId] });
