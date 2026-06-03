@@ -39,7 +39,7 @@ export class AttachmentsService {
       || config.get<string>('DEPLOY_NOTIFY_CHAT')
       || '-5150947522';
     this.appUrl = config.get<string>('APP_URL') || 'https://transactions.xonapps.uz';
-    this.log.log(`Ariza Telegram notify: chat=${this.tgChat}, token=${this.tgToken ? 'set' : 'EMPTY'}`);
+    this.log.log(`[boot] Ariza Telegram notify konfiguratsiya: chat=${this.tgChat}, token=${this.tgToken ? 'set' : 'EMPTY'}, appUrl=${this.appUrl}`);
   }
 
   /** Tranzaksiya uchun barcha biriktirilgan fayllar */
