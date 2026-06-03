@@ -1003,8 +1003,11 @@ export class CategorizationService {
 
       if (!row) return { updated: false, skipped: 'no-row' };
 
-      // 3) CRM ma'lumotlarini olish — avval cache, agar bo'sh bo'lsa LIVE CRM API
-      //    (objectName bo'sh bo'lsa user ko'rmaydi, shuning uchun aktiv lookup)
+      // 3) CRM ma'lumotlarini olish — multi-layer fallback
+      //    a) Cache'dan o'qish (oddiy lookup)
+      //    b) DB'dagi yozuvni o'qish
+      //    c) Object yo'q bo'lsa — forceRefresh bilan LIVE CRM API'ga
+      //       so'rov yuborish (cache'ni majburiy yangilash)
       let crmCustomer: string | null = null;
       let crmObject: string | null = null;
       try {
@@ -1016,7 +1019,6 @@ export class CategorizationService {
       } catch (e: any) {
         this.log.warn(`CRM lookup xato (${p.newContract}): ${e?.message}`);
       }
-      // Fallback — cache'dan olib bo'lmagan bo'lsa, DB'dagi yozuvni o'qiymiz
       if (!crmCustomer || !crmObject) {
         const fromDb = await this.prisma.crmContract.findFirst({
           where: { contractNumber: p.newContract },
@@ -1025,6 +1027,19 @@ export class CategorizationService {
         if (fromDb) {
           crmCustomer = crmCustomer || fromDb.customerName;
           crmObject = crmObject || fromDb.objectName;
+        }
+      }
+      // Agar object hali ham bo'sh bo'lsa — forceRefresh bilan CRM API'dan tortish
+      if (!crmObject) {
+        try {
+          const fresh = await this.crmCache.lookup(p.newContract, { forceRefresh: true });
+          if (fresh) {
+            crmCustomer = crmCustomer || fresh.customerName || null;
+            crmObject = fresh.objectName || null;
+            this.log.log(`CRM forceRefresh (${p.newContract}): customer=${crmCustomer ? 'set' : 'NULL'}, object=${crmObject || 'NULL'}`);
+          }
+        } catch (e: any) {
+          this.log.warn(`CRM forceRefresh xato (${p.newContract}): ${e?.message}`);
         }
       }
       const crm = { customerName: crmCustomer, objectName: crmObject };
