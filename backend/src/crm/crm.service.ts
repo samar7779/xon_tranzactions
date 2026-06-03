@@ -166,9 +166,14 @@ export class CrmService {
       contract: contractNumber.trim(),
       'per-page': perPage,
       cancelled: 1,  // bekor qilinganlar ham
+      is_trashed: 1, // XonSaroy CRM Laravel SoftDelete: withTrashed = active + trashed
+      trashed_status: 1,
+      with_trashed: 1,
     });
+    this.log.log(`CRM /search → /index (contract=${contractNumber}, is_trashed=1, status=${(r as any).ok ? 'OK' : (r as any).status || 'err'})`);
     if (!r.ok) return r;
     const items: any[] = r.data?.data || [];
+    this.log.log(`  → ${items.length} ta item topildi`);
 
     if (items.length === 0) return { ok: true, total: 0, items: [] };
 
@@ -403,6 +408,17 @@ export class CrmService {
     }
 
     if (!detail) {
+      // 422 'The selected contract is invalid' — bu trashed contractlar uchun
+      // normal javob (CRM globalValidation rejects). Foydalanuvchiga xato
+      // qaytarmasdan, sokin null qaytaramiz — fallback /index muvaffaqiyatsiz
+      // bo'lsa ham, ariza/manual saqlash davom etishi mumkin.
+      const isValidationError = !r.ok
+        && (r as any).status === 422
+        && /selected contract is invalid/i.test(JSON.stringify((r as any).error || ''));
+      if (isValidationError) {
+        this.log.log(`CRM /show 422 (validation) + /index miss → silent null (contract=${contractNo})`);
+        return { ok: true, detail: null };
+      }
       if (!r.ok) return r;
       return { ok: true, detail: null };
     }
