@@ -44,6 +44,7 @@ export default function AccountsPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [exporting, setExporting] = useState(false);
   const [backfillAccount, setBackfillAccount] = useState<any>(null);
+  const [bulkBackfillOpen, setBulkBackfillOpen] = useState(false);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ['bank-accounts'],
@@ -190,10 +191,21 @@ export default function AccountsPage() {
                   variant="outline"
                   onClick={() => syncAllMut.mutate()}
                   disabled={syncAllMut.isPending}
-                  title="Barcha hisoblarni sync qilish"
+                  title="Barcha hisoblarni sync qilish (bugungi kun)"
                   className="h-10 w-10 p-0 rounded-xl shrink-0"
                 >
                   <RefreshCw className={cn('h-4 w-4', syncAllMut.isPending && 'animate-spin')} />
+                </Button>
+              )}
+              {canManage && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setBulkBackfillOpen(true)}
+                  title="Barcha hisoblar bo'yicha orqa sanaga sync (Sync chegarasi shartlarida)"
+                  className="h-10 w-10 p-0 rounded-xl shrink-0 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100"
+                >
+                  <Calendar className="h-4 w-4 text-indigo-700" />
                 </Button>
               )}
               <Button
@@ -398,6 +410,15 @@ export default function AccountsPage() {
       <AccountBackfillDialog
         account={backfillAccount}
         onClose={() => setBackfillAccount(null)}
+        onSuccess={() => {
+          qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+        }}
+      />
+
+      {/* Bulk backfill — barcha hisoblar bo'yicha orqa sanaga sync */}
+      <BulkBackfillDialog
+        open={bulkBackfillOpen}
+        onClose={() => setBulkBackfillOpen(false)}
         onSuccess={() => {
           qc.invalidateQueries({ queryKey: ['bank-accounts'] });
         }}
@@ -1126,6 +1147,342 @@ function AccountBackfillDialog({
                   ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                   : <RefreshCw className="h-4 w-4 mr-1.5" />}
                 {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Backfill ishga tushirish'}
+              </Button>
+            </>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ──────────── Bulk backfill (barcha hisoblar bo'yicha orqa sanaga sync) ────────────
+function BulkBackfillDialog({
+  open, onClose, onSuccess,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Sync chegarasi (minimal sana)
+  const settingsQuery = useQuery({
+    queryKey: ['sync-settings'],
+    queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null }>('/sync/settings'),
+    enabled: open,
+  });
+  const syncMinDate = settingsQuery.data?.syncMinDate || null;
+
+  const defaultFrom = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(today);
+  const [result, setResult] = useState<any>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
+
+  // Yangidan ochilganda reset
+  useMemo(() => {
+    if (open) {
+      setResult(null);
+      setStartedAt(null);
+      // Default — Sync chegarasidan boshlab (agar bor bo'lsa) yoki -30 kun
+      const min = syncMinDate || defaultFrom;
+      setDateFrom(min);
+      setDateTo(today);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, syncMinDate]);
+
+  const backfillMut = useMutation({
+    mutationFn: () => api.post<any>('/sync/backfill', {
+      scope: 'all',
+      dateFrom,
+      dateTo,
+    }, { timeout: 60_000 }),
+    onSuccess: (r: any) => {
+      setResult(r);
+      if (r?.ok) {
+        toast.success(`Backfill boshlandi · ${r.accounts ?? 0} hisob · ${r.days ?? 0} sana`);
+        if (r?.startedAt) setStartedAt(r.startedAt);
+        onSuccess();
+      } else {
+        toast.error(r?.error || 'Backfill xato');
+      }
+    },
+    onError: (e: any) => {
+      setResult({ ok: false, error: e?.message || 'Xato' });
+      toast.error(e?.message || "So'rov xato");
+    },
+  });
+
+  // Polling — barcha sync log'lar status
+  const statusQuery = useQuery({
+    queryKey: ['bulk-backfill-status', startedAt],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>(
+      `/sync/backfill/status?since=${encodeURIComponent(startedAt!)}`,
+    ),
+    enabled: !!startedAt,
+    refetchInterval: (q) => {
+      const data = q.state.data as { items?: any[] } | undefined;
+      const items = data?.items || [];
+      const allDone = items.length > 0 && items.every((l: any) => l.status !== 'RUNNING');
+      return allDone ? false : 3000;
+    },
+  });
+
+  const logs = useMemo(() => {
+    if (!statusQuery.data?.items) return [];
+    return [...statusQuery.data.items].sort(
+      (a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+    );
+  }, [statusQuery.data]);
+
+  const runningCount = logs.filter((l: any) => l.status === 'RUNNING').length;
+  const finishedCount = logs.filter((l: any) => l.status === 'SUCCESS').length;
+  const failedCount = logs.filter((l: any) => l.status === 'FAILED').length;
+  const totalFetched = logs.reduce((s: number, l: any) => s + (l.fetched || 0), 0);
+  const totalSaved = logs.reduce((s: number, l: any) => s + (l.saved || 0), 0);
+  const isAllDone = logs.length > 0 && runningCount === 0;
+
+  // Sync chegarasi shartini tekshirish
+  const fromTooEarly = !!syncMinDate && dateFrom < syncMinDate;
+  const dayDiff = (() => {
+    if (!dateFrom || !dateTo) return 0;
+    const a = new Date(dateFrom);
+    const b = new Date(dateTo);
+    return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+  })();
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => {
+      if (!v) {
+        setResult(null);
+        setStartedAt(null);
+        onClose();
+      }
+    }}>
+      <DialogContent className="sm:max-w-[720px] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-purple-600 px-6 pt-5 pb-4 text-white shrink-0">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
+              <Calendar className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Bulk sync</div>
+              <div className="text-lg font-black tracking-tight">Barcha hisoblar — orqa sanaga sync</div>
+            </div>
+          </div>
+          <div className="text-[11.5px] text-white/85 mt-2 leading-relaxed">
+            Tanlangan sana oralig'ida barcha sync yoqilgan hisoblar uchun bank API'sidan
+            tranzaksiyalarni qayta yuklab oladi. Sync chegarasidan oldingi sanalarga chiqib
+            ketmaydi.
+          </div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+          {syncMinDate && (
+            <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Sync chegarasi (minimal sana): <b className="tabular-nums">{syncMinDate}</b> — bundan oldinga chiqib bo'lmaydi
+            </div>
+          )}
+
+          {!result?.ok && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanadan</Label>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    min={syncMinDate || undefined}
+                    max={today}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="h-10"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanagacha</Label>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    min={syncMinDate || undefined}
+                    max={today}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="h-10"
+                  />
+                </div>
+              </div>
+
+              {fromTooEarly && (
+                <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 text-[12px] text-rose-800 inline-flex items-center gap-2">
+                  <X className="h-3.5 w-3.5" />
+                  Sanadan {syncMinDate} dan oldin bo'lmasligi kerak
+                </div>
+              )}
+
+              {!fromTooEarly && dayDiff > 0 && (
+                <div className={cn(
+                  'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
+                  dayDiff > 60 ? 'bg-amber-50 ring-amber-200 text-amber-800' : 'bg-slate-50 ring-slate-200 text-slate-700',
+                )}>
+                  <Calendar className="h-3.5 w-3.5" />
+                  <b>{dayDiff}</b> ta kun · barcha sync yoqilgan hisoblar uchun
+                  {dayDiff > 60 && <span className="text-amber-600">· uzoq vaqt ketishi mumkin</span>}
+                </div>
+              )}
+            </>
+          )}
+
+          {result && !result.ok && (
+            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
+              <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+              <div className="text-[12.5px] text-rose-800">
+                <div className="font-bold mb-0.5">Xato</div>
+                <div className="text-rose-700">{result.error || "Noma'lum xato"}</div>
+              </div>
+            </div>
+          )}
+
+          {result?.ok && (
+            <>
+              <div className={cn(
+                'rounded-xl ring-1 px-4 py-3 flex items-center gap-3',
+                runningCount > 0 && 'bg-indigo-50 ring-indigo-200',
+                isAllDone && failedCount === 0 && 'bg-emerald-50 ring-emerald-200',
+                isAllDone && failedCount > 0 && 'bg-rose-50 ring-rose-200',
+              )}>
+                <div className={cn(
+                  'w-10 h-10 rounded-xl grid place-items-center text-white shrink-0',
+                  runningCount > 0 && 'bg-indigo-600',
+                  isAllDone && failedCount === 0 && 'bg-emerald-600',
+                  isAllDone && failedCount > 0 && 'bg-rose-600',
+                )}>
+                  {runningCount > 0
+                    ? <Loader2 className="h-5 w-5 animate-spin" />
+                    : isAllDone && failedCount === 0
+                      ? <CheckCircle2 className="h-5 w-5" />
+                      : <X className="h-5 w-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold">
+                    {runningCount > 0 && `Sync qilinmoqda... (${finishedCount + failedCount}/${result.accounts ?? 0})`}
+                    {isAllDone && failedCount === 0 && `Backfill yakunlandi — ${result.accounts ?? 0} hisob`}
+                    {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
+                    {logs.length === 0 && '⏳ Boshlanmoqda...'}
+                  </div>
+                  <div className="text-[11px] text-slate-600 mt-0.5">
+                    {result.actualFrom} → {result.actualTo} · {result.accounts ?? 0} hisob · {result.days ?? 0} sana
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500">Bajarildi</div>
+                  <div className="text-[16px] font-black text-slate-800 tabular-nums">
+                    {finishedCount + failedCount}<span className="text-[11px] text-slate-400 font-normal">/{result.accounts ?? 0}</span>
+                  </div>
+                </div>
+                <div className="rounded-lg bg-cyan-50 ring-1 ring-cyan-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700">Olindi</div>
+                  <div className="text-[16px] font-black text-cyan-800 tabular-nums">{totalFetched}</div>
+                </div>
+                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700">Saqlandi</div>
+                  <div className="text-[16px] font-black text-emerald-800 tabular-nums">{totalSaved}</div>
+                </div>
+                <div className={cn(
+                  'rounded-lg ring-1 px-3 py-2.5',
+                  failedCount > 0 ? 'bg-rose-50 ring-rose-200' : 'bg-slate-50 ring-slate-200',
+                )}>
+                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', failedCount > 0 ? 'text-rose-700' : 'text-slate-500')}>
+                    Xato
+                  </div>
+                  <div className={cn('text-[16px] font-black tabular-nums', failedCount > 0 ? 'text-rose-700' : 'text-slate-400')}>
+                    {failedCount}
+                  </div>
+                </div>
+              </div>
+
+              {logs.length > 0 && (
+                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                  <div className="bg-slate-100 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 flex items-center justify-between">
+                    <span>Hisob bo'yicha jarayon ({logs.length})</span>
+                    <span className="font-normal text-[9.5px] normal-case tracking-normal">
+                      {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
+                    </span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {logs.map((log: any) => (
+                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                        <div className={cn(
+                          'w-7 h-7 rounded-lg grid place-items-center shrink-0',
+                          log.status === 'RUNNING' && 'bg-indigo-100 text-indigo-600',
+                          log.status === 'SUCCESS' && 'bg-emerald-100 text-emerald-700',
+                          log.status === 'FAILED' && 'bg-rose-100 text-rose-700',
+                        )}>
+                          {log.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                          {log.status === 'SUCCESS' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                          {log.status === 'FAILED' && <X className="h-3.5 w-3.5" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11.5px] font-mono text-slate-700 truncate" title={log.source}>
+                            {log.source}
+                          </div>
+                          {log.errorMessage && (
+                            <div className="text-[10px] text-rose-600 truncate" title={log.errorMessage}>
+                              ⚠ {log.errorMessage}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10.5px] tabular-nums shrink-0">
+                          <span className="text-cyan-700"><b>{log.fetched ?? 0}</b></span>
+                          <span className="text-emerald-700"><b>{log.saved ?? 0}</b></span>
+                          {log.errors > 0 && <span className="text-rose-700"><b>{log.errors}</b></span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+          {result?.ok ? (
+            <>
+              <Button variant="ghost" onClick={onClose}>
+                {runningCount > 0 ? 'Fonda davom ettirib yopish' : 'Yopish'}
+              </Button>
+              {isAllDone && (
+                <Button
+                  onClick={() => { setResult(null); setStartedAt(null); }}
+                  variant="outline"
+                  className="border-indigo-300 text-indigo-700"
+                >
+                  <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+              <Button
+                onClick={() => backfillMut.mutate()}
+                disabled={!dateFrom || !dateTo || dayDiff <= 0 || fromTooEarly || backfillMut.isPending}
+                className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+              >
+                {backfillMut.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                  : <Calendar className="h-4 w-4 mr-1.5" />}
+                {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Hammasini sync qilish'}
               </Button>
             </>
           )}
