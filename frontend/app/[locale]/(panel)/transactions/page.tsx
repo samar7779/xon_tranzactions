@@ -14,7 +14,7 @@ import {
   Hash, Receipt, Link2, History, Loader2, AlertCircle, AlertTriangle,
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
-  Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine,
+  Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -968,10 +968,11 @@ export default function TransactionsPage() {
                           <td className="px-4 py-3 max-w-[220px]">
                             {(() => {
                               const isImport = it.source === 'IMPORT';
-                              const bankName = it.account?.bank?.name || it.bank?.name || (isImport ? it.importBankNameText : null);
+                              const isAloqa = it.source === 'ALOQA_BANK';
+                              const bankName = it.account?.bank?.name || it.bank?.name || ((isImport || isAloqa) ? it.importBankNameText : null);
                               const bankCode = it.account?.bank?.code || it.bank?.code || '';
                               const accountNo = it.account?.accountNo
-                                || (isImport ? (it.direction === 'OUT' ? it.fromAccount : it.toAccount) : '');
+                                || ((isImport || isAloqa) ? (it.direction === 'OUT' ? it.fromAccount : it.toAccount) : '');
                               return (
                                 <div className="flex items-center gap-2">
                                   <BankLogo code={bankCode} name={bankName} size={28} rounded="rounded-lg" />
@@ -980,6 +981,12 @@ export default function TransactionsPage() {
                                       <span className="truncate">{bankName || '—'}</span>
                                       {isImport && (
                                         <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">IMP</span>
+                                      )}
+                                      {isAloqa && (
+                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 inline-flex items-center gap-0.5" title="Aloqa Bank — read-only">
+                                          <Lock className="h-2 w-2" />
+                                          ALB
+                                        </span>
                                       )}
                                     </div>
                                     {it.account?.ownerName && (
@@ -1960,8 +1967,10 @@ function TransactionDetailDialog({
   canApplication?: boolean;
   canAutoCategorize?: boolean;
 }) {
-  // Hech bo'lmaganda bitta action mavjud bo'lsa "panel" ko'rinadi
-  const showActionPanel = canManualEdit || canManualContract || canApplication || canAutoCategorize;
+  // ALOQA_BANK source — read-only. Hech qanday tahrir tugmasi ishlamaydi.
+  const isAloqaBank = row.source === 'ALOQA_BANK';
+  // Hech bo'lmaganda bitta action mavjud bo'lsa "panel" ko'rinadi (read-only bo'lmasa)
+  const showActionPanel = !isAloqaBank && (canManualEdit || canManualContract || canApplication || canAutoCategorize);
   const t = useTranslations('transactions');
   const qc = useQueryClient();
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
@@ -2288,6 +2297,17 @@ function TransactionDetailDialog({
               showClear={canManage && !!liveRow.contractNumber}
               onClear={() => setContractMut.mutate(null)}
             />
+
+            {/* Aloqa Bank read-only banner */}
+            {isAloqaBank && (
+              <div className="mx-4 mb-3 rounded-lg ring-1 ring-amber-200 bg-amber-50/60 px-3 py-2 flex items-start gap-2">
+                <Lock className="h-3.5 w-3.5 text-amber-700 mt-0.5 shrink-0" />
+                <div className="text-[11.5px] text-amber-900 leading-relaxed">
+                  <b>Aloqa Bank Excel</b> manbasidan kelgan tranzaksiya — <b>read-only</b>.
+                  Kategoriya, shartnoma, ariza va boshqa tahrirlar bloklangan. Faqat batch tarixidan o'chirish mumkin.
+                </div>
+              </div>
+            )}
 
             {/* Avto-kategoriyalash + Qo'lda tahrirlash tugmalari */}
             {(canManage && showActionPanel) && (

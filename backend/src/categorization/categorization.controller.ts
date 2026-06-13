@@ -18,6 +18,24 @@ export class CategorizationController {
     private prisma: PrismaService,
   ) {}
 
+  /**
+   * Aloqa Bank manbasidan kelgan tranzaksiyalar — read-only. Edit/category/contract
+   * tugmalari ulariga ishlamasligi kerak. Bu helper har bir mutatsiya endpoint'ida
+   * chaqiriladi.
+   */
+  private async assertEditable(txId: string): Promise<void> {
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { source: true },
+    });
+    if (!tx) throw new BadRequestException('Tranzaksiya topilmadi');
+    if (tx.source === 'ALOQA_BANK') {
+      throw new BadRequestException(
+        "Aloqa Bank Excel import qatorlarini tahrirlash mumkin emas (read-only)",
+      );
+    }
+  }
+
   // ─── Kategoriyalar ro'yxati ────────────────────────────────────
   @Get('categories')
   @RequirePermissions(PERMISSIONS.CATEGORIES_VIEW)
@@ -39,11 +57,12 @@ export class CategorizationController {
   @Post('transactions/:id/categorize')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Bitta tranzaksiyani avto-kategoriyalash (force=true bo\'lsa mavjudni ham qayta hisoblaydi)' })
-  categorizeOne(
+  async categorizeOne(
     @Param('id') id: string,
     @Query('force') force: string,
     @CurrentUser('id') userId: string,
   ) {
+    await this.assertEditable(id);
     return this.svc.categorizeOne(id, { force: force === 'true', actor: 'manual', actorId: userId });
   }
 
@@ -51,11 +70,12 @@ export class CategorizationController {
   @Post('transactions/:id/set')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Tranzaksiyaga qo\'lda kategoriya qo\'yish (har doim ustidan yoziladi)' })
-  setManual(
+  async setManual(
     @Param('id') id: string,
     @Body() body: { categoryId: string | null; subcategoryId?: string | null },
     @CurrentUser('id') userId: string,
   ) {
+    await this.assertEditable(id);
     return this.svc.setManual(id, body, userId);
   }
 
@@ -63,11 +83,12 @@ export class CategorizationController {
   @Post('transactions/:id/set-contract')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Shartnoma raqamini qo\'lda o\'zgartirish (CRM\'da ham tasdiqlanadi)' })
-  setContract(
+  async setContract(
     @Param('id') id: string,
     @Body() body: { contractNumber: string | null },
     @CurrentUser('id') userId: string,
   ) {
+    await this.assertEditable(id);
     return this.svc.setContract(id, body.contractNumber, userId);
   }
 
@@ -75,11 +96,12 @@ export class CategorizationController {
   @Post('transactions/:id/set-counterparty')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Tranzaksiyaga Counterparty\'ni qo\'lda biriktirish (INN avto-lookup ustidan)' })
-  setCounterparty(
+  async setCounterparty(
     @Param('id') id: string,
     @Body() body: { counterpartyId: string | null },
     @CurrentUser('id') userId: string,
   ) {
+    await this.assertEditable(id);
     return this.svc.setCounterparty(id, body.counterpartyId, userId);
   }
 
@@ -87,11 +109,12 @@ export class CategorizationController {
   @Post('transactions/:id/set-contract-manual')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Shartnoma raqamini qo\'lda kiritish (CRM tekshirmaydi)' })
-  setContractManual(
+  async setContractManual(
     @Param('id') id: string,
     @Body() body: { contractNumber: string | null },
     @CurrentUser('id') userId: string,
   ) {
+    await this.assertEditable(id);
     return this.svc.setContractManual(id, body.contractNumber, userId);
   }
 

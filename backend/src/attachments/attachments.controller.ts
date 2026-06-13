@@ -11,13 +11,31 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AttachmentsService } from './attachments.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 @ApiTags('attachments')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('transactions/:txId/attachments')
 export class AttachmentsController {
-  constructor(private readonly svc: AttachmentsService) {}
+  constructor(
+    private readonly svc: AttachmentsService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /** ALOQA_BANK source bo'lsa ariza qo'shish/o'chirish bloklanadi */
+  private async assertEditable(txId: string): Promise<void> {
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id: txId },
+      select: { source: true },
+    });
+    if (!tx) throw new BadRequestException('Tranzaksiya topilmadi');
+    if (tx.source === 'ALOQA_BANK') {
+      throw new BadRequestException(
+        "Aloqa Bank Excel import qatorlariga ariza biriktirib bo'lmaydi (read-only)",
+      );
+    }
+  }
 
   @Get()
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
@@ -37,6 +55,7 @@ export class AttachmentsController {
     @CurrentUser('email') email?: string,
   ) {
     if (!file?.buffer) throw new BadRequestException('Fayl yuborilmadi');
+    await this.assertEditable(txId);
     return this.svc.upload(txId, file, {
       type: body?.type,
       contractNumber: body?.contractNumber || null,
@@ -65,11 +84,12 @@ export class AttachmentsController {
   @Delete(':attId')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: 'Faylni o\'chirish (diskdan + DB + Telegram xabar)' })
-  delete(
+  async delete(
     @Param('txId') txId: string,
     @Param('attId') attId: string,
     @CurrentUser('email') email?: string,
   ) {
+    await this.assertEditable(txId);
     return this.svc.delete(txId, attId, email);
   }
 }

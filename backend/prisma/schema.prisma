@@ -277,8 +277,9 @@ enum TxnDirection {
 
 enum TxnSource {
   SYNC           // Bank API'dan avtomatik sync
-  IMPORT         // Qo'lda Excel'dan import qilingan
+  IMPORT         // Qo'lda Excel'dan import qilingan (standart format)
   MANUAL         // Qo'lda admin tomonidan kiritilgan (kelajakda)
+  ALOQA_BANK     // Aloqa Bank Excel import (read-only — edit/delete/category bloklangan)
 }
 
 // ─────────────────────────────────────────────────────────────────
