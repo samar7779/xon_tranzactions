@@ -31,6 +31,18 @@ export class ImportController {
     return this.svc.importExcel(file.buffer, email, file?.originalname);
   }
 
+  @Post('aloqa-bank')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: "Aloqa Bank Excel format (10 ustun, shartnoma yo'q) — read-only" })
+  async importAloqaBank(
+    @UploadedFile() file: any,
+    @CurrentUser('email') email?: string,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Excel fayl yuborilmadi');
+    return this.svc.importExcelAloqaBank(file.buffer, email, file?.originalname);
+  }
+
   // ─── Batch management ───────────────────────────────────────────────
 
   @Get('batches')

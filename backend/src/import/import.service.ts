@@ -344,6 +344,255 @@ export class ImportService {
     return { ...result, batchId: batch.id };
   }
 
+  // ═══ ALOQA BANK IMPORT ═══════════════════════════════════════════════
+  // Aloqa Bank uchun alohida Excel format (10 ustun, shartnoma raqami yo'q).
+  // Source: ALOQA_BANK → edit/delete/category bloklanadi.
+  // Batch kind: 'aloqa-bank' — alohida tarix tabida ko'rinadi.
+
+  async importExcelAloqaBank(
+    buffer: Buffer,
+    importedBy?: string,
+    fileName?: string,
+  ): Promise<{
+    total: number;
+    added: number;
+    skipped: number;
+    errors: number;
+    errorRows: Array<{ row: number; reason: string }>;
+    batchId?: string;
+  }> {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer as any);
+    const ws = wb.worksheets[0];
+    if (!ws) throw new BadRequestException("Excel bo'sh");
+
+    // Import batch — alohida 'aloqa-bank' kind bilan
+    const batch = await this.prisma.importBatch.create({
+      data: {
+        kind: 'aloqa-bank',
+        fileName: fileName?.slice(0, 255) || null,
+        fileSize: buffer.length,
+        importedBy: importedBy?.slice(0, 190) || null,
+      },
+    });
+
+    const result = {
+      total: 0,
+      added: 0,
+      skipped: 0,
+      errors: 0,
+      errorRows: [] as Array<{ row: number; reason: string }>,
+    };
+
+    const rowsToProcess: Array<{
+      rowNum: number;
+      accountNo: string;
+      bankNameText: string;
+      txnDate: Date;
+      accountNameText: string;
+      counterpartyText: string;
+      categoryText: string;
+      debit: number;
+      credit: number;
+      purpose: string;
+      externalId: string;
+    }> = [];
+
+    // Aloqa Bank format (10 ustun, shartnoma yo'q):
+    //   A: Р/С
+    //   B: Банк Названия
+    //   C: ДАТА (13.05.2026)
+    //   D: Наименование счета
+    //   E: Контрагент
+    //   F: Категория
+    //   G: ОборотДебет
+    //   H: ОборотКредит
+    //   I: Назначение платежа
+    //   J: ID
+    ws.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // header
+
+      const accountNo = this.cellText(row.getCell(1));
+      const bankNameText = this.cellText(row.getCell(2));
+      const txnDate = this.parseDate(row.getCell(3).value);
+      const accountNameText = this.cellText(row.getCell(4));
+      const counterpartyText = this.cellText(row.getCell(5));
+      const categoryText = this.cellText(row.getCell(6));
+      const debit = this.parseAmount(row.getCell(7).value);
+      const credit = this.parseAmount(row.getCell(8).value);
+      const purpose = this.cellText(row.getCell(9));
+      const externalId = this.cellText(row.getCell(10));
+
+      if (!accountNo && !externalId && debit === 0 && credit === 0) return;
+      result.total++;
+
+      if (!externalId) {
+        result.errors++;
+        result.errorRows.push({ row: rowNumber, reason: "ID (J ustun) bo'sh" });
+        return;
+      }
+      if (!accountNo) {
+        result.errors++;
+        result.errorRows.push({ row: rowNumber, reason: "P/C (A ustun) bo'sh" });
+        return;
+      }
+      if (!txnDate) {
+        result.errors++;
+        result.errorRows.push({ row: rowNumber, reason: "Sana noto'g'ri (C ustun)" });
+        return;
+      }
+      if (debit === 0 && credit === 0) {
+        result.errors++;
+        result.errorRows.push({ row: rowNumber, reason: 'Debet va Kredit ikkalasi 0' });
+        return;
+      }
+      if (debit > 0 && credit > 0) {
+        result.errors++;
+        result.errorRows.push({
+          row: rowNumber,
+          reason: "Debet va Kredit ikkalasi ham > 0 (bittasi bo'lishi kerak)",
+        });
+        return;
+      }
+
+      rowsToProcess.push({
+        rowNum: rowNumber,
+        accountNo, bankNameText, txnDate, accountNameText, counterpartyText,
+        categoryText, debit, credit, purpose, externalId,
+      });
+    });
+
+    if (rowsToProcess.length === 0) return { ...result, batchId: batch.id };
+
+    // Aloqa Bank ID prefiksi (boshqa import'lar bilan kollision bo'lmasin)
+    // Misol: 'ALB_<original_id>' — Aloqa Bank source bilan birlashganda noyob bo'ladi
+    const ALOQA_PREFIX = 'ALB_';
+    rowsToProcess.forEach((r) => {
+      if (!r.externalId.startsWith(ALOQA_PREFIX)) {
+        r.externalId = ALOQA_PREFIX + r.externalId;
+      }
+    });
+
+    // Hisoblar va kategoriyalarni topish (parallel)
+    const uniqAccountNos = Array.from(new Set(rowsToProcess.map((r) => r.accountNo)));
+    const accounts = await this.prisma.bankAccount.findMany({
+      where: { accountNo: { in: uniqAccountNos } },
+      include: { bank: true },
+    });
+    const accByNo = new Map(accounts.map((a) => [a.accountNo, a]));
+
+    const uniqCategoryNames = Array.from(
+      new Set(rowsToProcess.map((r) => r.categoryText).filter(Boolean)),
+    );
+    const categories = uniqCategoryNames.length > 0
+      ? await this.prisma.category.findMany({
+          where: { OR: uniqCategoryNames.map((n) => ({ name: { equals: n, mode: 'insensitive' } })) },
+        })
+      : [];
+    const catByName = new Map(categories.map((c) => [c.name.toLowerCase(), c]));
+
+    // Mavjud externalId'lar (dublikat skip)
+    const uniqIds = Array.from(new Set(rowsToProcess.map((r) => r.externalId)));
+    const existing = await this.prisma.transaction.findMany({
+      where: { externalId: { in: uniqIds } },
+      select: { externalId: true },
+    });
+    const existingIds = new Set(existing.map((e) => e.externalId));
+
+    const newRows = rowsToProcess.filter((r) => {
+      if (existingIds.has(r.externalId)) {
+        result.skipped++;
+        return false;
+      }
+      return true;
+    });
+
+    if (newRows.length === 0) {
+      // Batch statistikasini yangilash
+      await this.prisma.importBatch.update({
+        where: { id: batch.id },
+        data: { rowsTotal: result.total, rowsAdded: 0, rowsSkipped: result.skipped, rowsErrors: result.errors },
+      });
+      return { ...result, batchId: batch.id };
+    }
+
+    const importedAt = new Date();
+    const BATCH_SIZE = 500;
+    const trunc = (s: string | null | undefined, max: number) =>
+      s == null ? null : (s.length > max ? s.slice(0, max) : s);
+
+    const txnData = newRows.map((r) => {
+      const acc = accByNo.get(r.accountNo);
+      const direction: TxnDirection = r.credit > 0 ? 'IN' : 'OUT';
+      const amount = r.credit > 0 ? r.credit : r.debit;
+      const matchedCat = r.categoryText ? catByName.get(r.categoryText.toLowerCase()) : null;
+      return {
+        externalId: trunc(r.externalId, 190),
+        type: 'OTHER' as TxnType,
+        status: 'COMPLETED' as TxnStatus,
+        direction,
+        amount: new Prisma.Decimal(amount),
+        currency: 'UZS',
+        fromAccount: trunc(direction === 'OUT' ? r.accountNo : null, 64),
+        fromName: direction === 'OUT' ? r.accountNameText || null : r.counterpartyText || null,
+        toAccount: trunc(direction === 'IN' ? r.accountNo : null, 64),
+        toName: direction === 'IN' ? r.accountNameText || null : r.counterpartyText || null,
+        description: r.purpose || null,
+        bankId: acc?.bankId ?? null,
+        accountId: acc?.id ?? null,
+        categoryId: matchedCat?.id ?? null,
+        source: 'ALOQA_BANK' as TxnSource,  // ← ASOSIY: ALOQA_BANK source
+        importCategoryText: r.categoryText || null,
+        importCounterpartyText: r.counterpartyText || null,
+        importBankNameText: r.bankNameText || (acc?.bank?.name ?? null),
+        importedBy: trunc(importedBy || null, 190),
+        importedAt,
+        importBatchId: batch.id,
+        txnDate: r.txnDate,
+      };
+    });
+
+    for (let i = 0; i < txnData.length; i += BATCH_SIZE) {
+      const chunk = txnData.slice(i, i + BATCH_SIZE);
+      try {
+        const r = await this.prisma.transaction.createMany({
+          data: chunk,
+          skipDuplicates: true,
+        });
+        result.added += r.count;
+      } catch (e: any) {
+        this.log.warn(`Aloqa createMany xato (${i}-${i + chunk.length}): ${e?.message?.slice(0, 200)}`);
+        for (let j = 0; j < chunk.length; j++) {
+          try {
+            await this.prisma.transaction.create({ data: chunk[j] });
+            result.added++;
+          } catch (e2: any) {
+            result.errors++;
+            result.errorRows.push({
+              row: newRows[i + j].rowNum,
+              reason: e2?.message?.slice(0, 200) || "Noma'lum xato",
+            });
+          }
+        }
+      }
+    }
+
+    await this.prisma.importBatch.update({
+      where: { id: batch.id },
+      data: {
+        rowsTotal: result.total,
+        rowsAdded: result.added,
+        rowsSkipped: result.skipped,
+        rowsErrors: result.errors,
+      },
+    });
+
+    this.log.log(
+      `Aloqa Bank import: batch ${batch.id} — jami ${result.total}, qo'shildi ${result.added}, skip ${result.skipped}, xato ${result.errors}`,
+    );
+    return { ...result, batchId: batch.id };
+  }
+
   // ═══ BATCH MANAGEMENT ═══════════════════════════════════════════════
 
   /** Barcha import batch'lar (yangi avval) — frontend tarix uchun */
