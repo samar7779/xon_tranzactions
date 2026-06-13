@@ -1968,7 +1968,8 @@ function TransactionDetailDialog({
   canAutoCategorize?: boolean;
 }) {
   // ALOQA_BANK source — read-only. Hech qanday tahrir tugmasi ishlamaydi.
-  const isAloqaBank = row.source === 'ALOQA_BANK';
+  // row prop ba'zan null (dialog yopilgan paytda) — xavfsiz tekshirish
+  const isAloqaBank = row?.source === 'ALOQA_BANK';
   // Hech bo'lmaganda bitta action mavjud bo'lsa "panel" ko'rinadi (read-only bo'lmasa)
   const showActionPanel = !isAloqaBank && (canManualEdit || canManualContract || canApplication || canAutoCategorize);
   const t = useTranslations('transactions');
