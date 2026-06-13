@@ -392,23 +392,25 @@ export class ImportService {
       accountNameText: string;
       counterpartyText: string;
       categoryText: string;
+      contractNumber: string;
       debit: number;
       credit: number;
       purpose: string;
       externalId: string;
     }> = [];
 
-    // Aloqa Bank format (10 ustun, shartnoma yo'q):
-    //   A: Р/С
+    // Aloqa Bank format (11 ustun, mavjud transactions formati bilan bir xil):
+    //   A: Р/С (hisob raqami)
     //   B: Банк Названия
     //   C: ДАТА (13.05.2026)
     //   D: Наименование счета
     //   E: Контрагент
     //   F: Категория
-    //   G: ОборотДебет
-    //   H: ОборотКредит
-    //   I: Назначение платежа
-    //   J: ID
+    //   G: №Заявка/Дог (shartnoma raqami — saqlanadi, lekin edit bloklangan)
+    //   H: ОборотДебет
+    //   I: ОборотКредит
+    //   J: Назначение платежа
+    //   K: ID
     ws.eachRow((row, rowNumber) => {
       if (rowNumber === 1) return; // header
 
@@ -418,17 +420,18 @@ export class ImportService {
       const accountNameText = this.cellText(row.getCell(4));
       const counterpartyText = this.cellText(row.getCell(5));
       const categoryText = this.cellText(row.getCell(6));
-      const debit = this.parseAmount(row.getCell(7).value);
-      const credit = this.parseAmount(row.getCell(8).value);
-      const purpose = this.cellText(row.getCell(9));
-      const externalId = this.cellText(row.getCell(10));
+      const contractNumber = this.cellText(row.getCell(7));
+      const debit = this.parseAmount(row.getCell(8).value);
+      const credit = this.parseAmount(row.getCell(9).value);
+      const purpose = this.cellText(row.getCell(10));
+      const externalId = this.cellText(row.getCell(11));
 
       if (!accountNo && !externalId && debit === 0 && credit === 0) return;
       result.total++;
 
       if (!externalId) {
         result.errors++;
-        result.errorRows.push({ row: rowNumber, reason: "ID (J ustun) bo'sh" });
+        result.errorRows.push({ row: rowNumber, reason: "ID (K ustun) bo'sh" });
         return;
       }
       if (!accountNo) {
@@ -458,7 +461,7 @@ export class ImportService {
       rowsToProcess.push({
         rowNum: rowNumber,
         accountNo, bankNameText, txnDate, accountNameText, counterpartyText,
-        categoryText, debit, credit, purpose, externalId,
+        categoryText, contractNumber, debit, credit, purpose, externalId,
       });
     });
 
@@ -538,6 +541,7 @@ export class ImportService {
         toAccount: trunc(direction === 'IN' ? r.accountNo : null, 64),
         toName: direction === 'IN' ? r.accountNameText || null : r.counterpartyText || null,
         description: r.purpose || null,
+        contractNumber: trunc(r.contractNumber || null, 128),
         bankId: acc?.bankId ?? null,
         accountId: acc?.id ?? null,
         categoryId: matchedCat?.id ?? null,

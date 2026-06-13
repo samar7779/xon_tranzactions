@@ -39,7 +39,7 @@ interface KindDef {
 
 const KINDS: KindDef[] = [
   { key: 'transactions',   label: 'Tranzaksiyalar',  icon: Wallet,         description: "Bank vipiskasi formatiga moslangan Excel", available: true },
-  { key: 'aloqa-bank',     label: 'Aloqa Bank',      icon: Landmark,       description: "Aloqa Bank Excel format (10 ustun · read-only)", available: true },
+  { key: 'aloqa-bank',     label: 'Aloqa Bank',      icon: Landmark,       description: "Aloqa Bank Excel format (11 ustun · read-only)", available: true },
   { key: 'counterparties', label: 'Kontragentlar',   icon: Briefcase,      description: 'INN va Nom bo\'yicha (dublikat skip)',     available: true },
   { key: 'oplata-kv',      label: 'ОплатыКв',        icon: Home,           description: 'Kvartira to\'lovlari (ID bo\'yicha dublikat skip)', available: true },
 ];
@@ -298,10 +298,11 @@ const ALOQA_COLUMNS: Array<{ letter: string; header: string; description: string
   { letter: 'D', header: 'Наименование счета', description: 'Hisob egasi nomi' },
   { letter: 'E', header: 'Контрагент',         description: 'Counterparty matni' },
   { letter: 'F', header: 'Категория',          description: "Kategoriya nomi (mavjud ro'yxat bilan match)" },
-  { letter: 'G', header: 'ОборотДебет',        description: '> 0 bo\'lsa CHIQIM' },
-  { letter: 'H', header: 'ОборотКредит',       description: '> 0 bo\'lsa KIRIM' },
-  { letter: 'I', header: 'Назначение платежа', description: "To'lov maqsadi (description)" },
-  { letter: 'J', header: 'ID',                 description: 'Tranzaksiya identifikatori (dublikat skip uchun)', required: true },
+  { letter: 'G', header: '№Заявка/Дог',        description: 'Shartnoma / Ariza raqami (saqlanadi, lekin edit bloklangan)' },
+  { letter: 'H', header: 'ОборотДебет',        description: '> 0 bo\'lsa CHIQIM' },
+  { letter: 'I', header: 'ОборотКредит',       description: '> 0 bo\'lsa KIRIM' },
+  { letter: 'J', header: 'Назначение платежа', description: "To'lov maqsadi (description)" },
+  { letter: 'K', header: 'ID',                 description: 'Tranzaksiya identifikatori (dublikat skip uchun)', required: true },
 ];
 
 function AloqaBankImportPanel() {
@@ -429,7 +430,7 @@ function AloqaBankImportPanel() {
           className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
         >
           <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-          <div className="text-sm font-semibold text-slate-800">Excel format (10 ustun)</div>
+          <div className="text-sm font-semibold text-slate-800">Excel format (11 ustun)</div>
           <span className="ml-auto text-slate-400">
             {formatOpen
               ? <ChevronDown className="h-4 w-4" />
