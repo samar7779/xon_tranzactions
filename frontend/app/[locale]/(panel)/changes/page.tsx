@@ -21,6 +21,8 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn, formatMoney, formatDateTime } from '@/lib/utils';
+import { useHasPermission } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 
 interface ChangeItem {
   id: string;
@@ -45,6 +47,7 @@ interface ChangeItem {
 
 export default function ChangesPage() {
   const qc = useQueryClient();
+  const canCheck = useHasPermission(PERMS.CHANGED_TXN_CHECK);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [accountId, setAccountId] = useState<string>('all');
@@ -175,13 +178,15 @@ export default function ChangesPage() {
                 >
                   <X className="h-4 w-4" /> Tozalash
                 </Button>
-                <Button
-                  onClick={() => setCheckOpen(true)}
-                  className="h-10 gap-2 bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
-                  title="Sana orqali qo'lda tekshirish"
-                >
-                  <RefreshCw className="h-4 w-4" /> Tekshirish
-                </Button>
+                {canCheck && (
+                  <Button
+                    onClick={() => setCheckOpen(true)}
+                    className="h-10 gap-2 bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+                    title="Sana orqali qo'lda tekshirish"
+                  >
+                    <RefreshCw className="h-4 w-4" /> Tekshirish
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>

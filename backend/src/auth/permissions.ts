@@ -25,6 +25,10 @@ export const PERMISSIONS = {
   TRANSACTIONS_SVERKA_VIEW: 'transactions:sverka_view',
   TRANSACTIONS_SVERKA_FIX: 'transactions:sverka_fix',           // Sana tuzatish, fix-missing
 
+  // Tranzaksiyalar — O'zgargan to'lovlar tab (bank tomonida o'chirilgan/o'zgartirilganlar)
+  CHANGED_TXN_VIEW: 'changed_txn:view',                         // Sahifani ochish + ro'yxat
+  CHANGED_TXN_CHECK: 'changed_txn:check',                       // Qo'lda re-verify ishga tushirish
+
   // ОплатыКв
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',                           // Yangi qator qo'shish
@@ -134,6 +138,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW, label: 'Vipiska sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_VIEW, label: 'Sverka sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_FIX, label: 'Sverka\'da sana/yozuv tuzatish' },
+          { value: PERMISSIONS.CHANGED_TXN_VIEW, label: 'O\'zgargan to\'lovlar tab — ko\'rish' },
+          { value: PERMISSIONS.CHANGED_TXN_CHECK, label: 'O\'zgargan to\'lovlar — qo\'lda tekshirish (sana oralig\'i)' },
         ],
       },
       {
@@ -319,6 +325,8 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_FIX,
+      PERMISSIONS.CHANGED_TXN_VIEW,
+      PERMISSIONS.CHANGED_TXN_CHECK,
       PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE,
       PERMISSIONS.CREDENTIALS_VIEW, PERMISSIONS.CREDENTIALS_MANAGE, PERMISSIONS.CREDENTIALS_TEST,
       PERMISSIONS.BANKS_VIEW, PERMISSIONS.BANKS_MANAGE,
@@ -354,6 +362,8 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.TRANSACTIONS_AUTO_CATEGORIZE,
       PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_VIEW,
+      PERMISSIONS.CHANGED_TXN_VIEW,
+      PERMISSIONS.CHANGED_TXN_CHECK,
       PERMISSIONS.ACCOUNTS_VIEW,
       PERMISSIONS.SYNC_VIEW,
       PERMISSIONS.CUSTOMERS_VIEW, PERMISSIONS.CUSTOMERS_MANAGE,
@@ -378,6 +388,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.TRANSACTIONS_VIEW,
       PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_VIEW,
+      PERMISSIONS.CHANGED_TXN_VIEW,
       PERMISSIONS.ACCOUNTS_VIEW,
       PERMISSIONS.CREDENTIALS_VIEW,
       PERMISSIONS.BANKS_VIEW,

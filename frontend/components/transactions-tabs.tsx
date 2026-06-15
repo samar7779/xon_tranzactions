@@ -5,22 +5,25 @@ import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { BadgeDollarSign, FileSpreadsheet, Scale, AlertOctagon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useHasPermission } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 
 /**
  * Tranzaksiyalar bo'limining tab navigatsiyasi:
- * Tranzaksiyalar · Vipiska · Sverka. Har bir tab o'z route'iga olib boradi.
+ * Tranzaksiyalar · Vipiska · Sverka · O'zgargan to'lovlar (permission).
  */
 export function TransactionsTabs() {
   const t = useTranslations('nav');
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
+  const canSeeChanges = useHasPermission(PERMS.CHANGED_TXN_VIEW);
 
   const tabs = [
-    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null },
-    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null },
-    { href: '/check',        key: 'check',        icon: Scale,            label: null },
-    { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: "O'zgargan to'lovlar" },
-  ] as const;
+    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null as string | null, show: true },
+    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null as string | null, show: true },
+    { href: '/check',        key: 'check',        icon: Scale,            label: null as string | null, show: true },
+    { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: "O'zgargan to'lovlar", show: canSeeChanges },
+  ].filter((tab) => tab.show);
 
   return (
     <div className="bg-white border-b border-slate-200/70">

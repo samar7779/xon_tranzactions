@@ -31,6 +31,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/transactions', permission: PERMS.TRANSACTIONS_VIEW },
   { prefix: '/statement', permission: PERMS.TRANSACTIONS_VIEW },
   { prefix: '/check', permission: PERMS.TRANSACTIONS_VIEW },
+  { prefix: '/changes', permission: PERMS.CHANGED_TXN_VIEW },
   { prefix: '/customers', permission: PERMS.CUSTOMERS_VIEW },
   { prefix: '/contracts', permission: PERMS.CONTRACTS_VIEW },
   { prefix: '/oplatykv/crm', permission: PERMS.CRM_VIEW },

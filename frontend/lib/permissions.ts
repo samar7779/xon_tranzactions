@@ -12,6 +12,8 @@ export const PERMS = {
   TRANSACTIONS_VIPISKA_VIEW: 'transactions:vipiska_view',
   TRANSACTIONS_SVERKA_VIEW: 'transactions:sverka_view',
   TRANSACTIONS_SVERKA_FIX: 'transactions:sverka_fix',
+  CHANGED_TXN_VIEW: 'changed_txn:view',
+  CHANGED_TXN_CHECK: 'changed_txn:check',
 
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',
