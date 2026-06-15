@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { BadgeDollarSign, FileSpreadsheet, Scale } from 'lucide-react';
+import { BadgeDollarSign, FileSpreadsheet, Scale, AlertOctagon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -16,9 +16,10 @@ export function TransactionsTabs() {
   const pathname = usePathname();
 
   const tabs = [
-    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign },
-    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet },
-    { href: '/check',        key: 'check',        icon: Scale },
+    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null },
+    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null },
+    { href: '/check',        key: 'check',        icon: Scale,            label: null },
+    { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: "O'zgargan to'lovlar" },
   ] as const;
 
   return (
@@ -41,7 +42,7 @@ export function TransactionsTabs() {
               )}
             >
               <Icon className={cn('h-4 w-4', active ? 'text-indigo-600' : 'text-slate-400')} />
-              <span>{t(tab.key)}</span>
+              <span>{tab.label || t(tab.key)}</span>
             </Link>
           );
         })}
