@@ -655,12 +655,15 @@ export class ImportService {
     }
 
     // ─── Transactions batch (default) ─────────────────────────
+    // kind='transactions' → source='IMPORT'
+    // kind='aloqa-bank'   → source='ALOQA_BANK'
+    const batchSource: TxnSource = batch.kind === 'aloqa-bank' ? 'ALOQA_BANK' : 'IMPORT';
     const CHUNK = 500;
     let totalDeleted = 0;
 
     while (true) {
       const txns = await this.prisma.transaction.findMany({
-        where: { importBatchId: batchId, source: 'IMPORT' },
+        where: { importBatchId: batchId, source: batchSource },
         select: { id: true },
         take: CHUNK,
       });
@@ -693,8 +696,10 @@ export class ImportService {
     const batch = await this.prisma.importBatch.findUnique({ where: { id: batchId } });
     if (!batch) throw new BadRequestException('Batch topilmadi');
 
+    // kind ga qarab to'g'ri source bilan filtrlash (aloqa-bank ALOQA_BANK source'ga ega)
+    const batchSource: TxnSource = batch.kind === 'aloqa-bank' ? 'ALOQA_BANK' : 'IMPORT';
     const txns = await this.prisma.transaction.findMany({
-      where: { importBatchId: batchId, source: 'IMPORT' },
+      where: { importBatchId: batchId, source: batchSource },
       include: {
         bank: true,
         account: { include: { bank: true } }, // nested — account.bank ham kerak
