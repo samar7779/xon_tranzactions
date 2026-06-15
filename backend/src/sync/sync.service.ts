@@ -36,7 +36,10 @@ export class SyncService {
     private settings: SettingsService,
     config: ConfigService,
   ) {
-    this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '1'));
+    // Default 10 kun (oldindan 1 kun edi) — bank tomonida o'chirilgan yoki
+    // o'zgartirilgan tranzaksiyalarni aniqlash uchun har sync oxirgi 10 kunni
+    // qayta tekshiradi (re-verify).
+    this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '10'));
   }
 
   /**
@@ -392,26 +395,43 @@ export class SyncService {
     let errorMessage: string | null = null;
 
     let latestSaldoOut: number | null = null;
+    // Re-verify uchun barcha kunlarda kelgan bank itemlarini yig'amiz
+    const allFetchedItems: KbDoc1CItem[] = [];
+    const fetchedDayStarts: Date[] = []; // muvaffaqiyatli fetch qilingan kunlar (xato bo'lmaganlar)
     try {
       for (let i = 0; i < dateList.length; i++) {
         const dateStr = dateList[i];
-        const result = await this.kb.getDoc1C({
-          baseUrl: cred.bank.apiBaseUrl!,
-          login,
-          password,
-          branch: acc.branch,
-          account: acc.accountNo,
-          date: dateStr,
-          // sid o'tkazib yubormaymiz — har so'rovda yangi Basic Auth (#60101 'Session expired' xatosini oldini oladi)
-          useProxy: cred.useProxy === true,
-        });
-        const items = result?.content || [];
-        fetched += items.length;
-        // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq (backfill'da qoldiqqa tegmaymiz)
-        if (!isBackfill && i === 0 && result?.saldo_out != null) {
-          latestSaldoOut = Number(result.saldo_out);
+        let dayItems: KbDoc1CItem[] = [];
+        let daySaldoOut: number | null = null;
+        try {
+          const result = await this.kb.getDoc1C({
+            baseUrl: cred.bank.apiBaseUrl!,
+            login,
+            password,
+            branch: acc.branch,
+            account: acc.accountNo,
+            date: dateStr,
+            // sid o'tkazib yubormaymiz — har so'rovda yangi Basic Auth (#60101 'Session expired' xatosini oldini oladi)
+            useProxy: cred.useProxy === true,
+          });
+          dayItems = result?.content || [];
+          daySaldoOut = result?.saldo_out ?? null;
+        } catch (e: any) {
+          errors++;
+          this.logger.warn(`getDoc1C xato (${dateStr}): ${e?.message?.slice(0, 200)}`);
+          continue;
         }
-        for (const item of items) {
+        fetched += dayItems.length;
+        allFetchedItems.push(...dayItems);
+        // Bu kunni 'muvaffaqiyatli olingan' deb belgilaymiz — change detection
+        // faqat shu kunlardagi DB yozuvlarni tekshiradi (xato bo'lmagan)
+        const parsedDay = this.parseDdate(dateStr);
+        if (parsedDay) fetchedDayStarts.push(parsedDay);
+        // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq (backfill'da qoldiqqa tegmaymiz)
+        if (!isBackfill && i === 0 && daySaldoOut != null) {
+          latestSaldoOut = Number(daySaldoOut);
+        }
+        for (const item of dayItems) {
           try {
             const ok = await this.upsertOne(item, acc.id, acc.accountNo, cred.bankId, cred.bank.code);
             if (ok) saved++;
@@ -419,6 +439,29 @@ export class SyncService {
             errors++;
             this.logger.warn(`Upsert xato (${item.b2_id || item.general_id}): ${e?.message?.slice(0, 200)}`);
           }
+        }
+      }
+
+      // ── CHANGE DETECTION (re-verify) ──
+      // Backfill emas va kamida bitta kun muvaffaqiyatli olingan bo'lsa, mavjud
+      // DB yozuvlarni bank javobi bilan solishtirib o'chirilgan / o'zgartirilgan
+      // tranzaksiyalarni aniqlaymiz.
+      if (!isBackfill && fetchedDayStarts.length > 0) {
+        try {
+          const changeStats = await this.detectChanges({
+            account: acc,
+            bankCode: cred.bank.code,
+            fetchedItems: allFetchedItems,
+            fetchedDays: fetchedDayStarts,
+            actor: 'sync',
+          });
+          if (changeStats.deleted > 0 || changeStats.edited > 0) {
+            this.logger.log(
+              `Change detection (${acc.accountNo}): ${changeStats.deleted} ta o'chirilgan, ${changeStats.edited} ta o'zgartirilgan`,
+            );
+          }
+        } catch (e: any) {
+          this.logger.warn(`Change detection xato (${acc.accountNo}): ${e?.message?.slice(0, 200)}`);
         }
       }
 
@@ -690,6 +733,266 @@ export class SyncService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Bank javobi (fetchedItems) bilan DB'dagi mavjud tranzaksiyalarni solishtirib
+   * o'chirilgan / o'zgartirilgan yozuvlarni aniqlaydi.
+   *
+   * - DELETED: DB'da bor, lekin bank fetchedItems'da yo'q (general_id bo'yicha)
+   *   → DB'dan o'chiradi va ChangeLog'ga yozadi
+   * - EDITED: ikkalasi ham bor, lekin status/amount/direction/description farq qiladi
+   *   → DB'da yangilaydi va ChangeLog'ga yozadi
+   *
+   * Faqat fetchedDays oraligida'i DB yozuvlarni tekshiradi (xato bilan
+   * olinmagan kunlarda o'chirish noto'g'ri bo'lar edi).
+   */
+  async detectChanges(opts: {
+    account: { id: string; accountNo: string };
+    bankCode?: string;
+    fetchedItems: KbDoc1CItem[];
+    fetchedDays: Date[];          // muvaffaqiyatli olingan kunlarning Date list'i
+    actor: string;                // 'sync' | 'manual:<email>'
+  }): Promise<{ deleted: number; edited: number }> {
+    const { account, bankCode, fetchedItems, fetchedDays, actor } = opts;
+    if (fetchedDays.length === 0) return { deleted: 0, edited: 0 };
+
+    // Tekshirish oralig'i (eng erta va eng kech kun)
+    const sortedDays = [...fetchedDays].sort((a, b) => a.getTime() - b.getTime());
+    const minDay = new Date(sortedDays[0]); minDay.setHours(0, 0, 0, 0);
+    const maxDay = new Date(sortedDays[sortedDays.length - 1]); maxDay.setHours(23, 59, 59, 999);
+
+    // Bank javobini general_id va b2_id bo'yicha index qilamiz
+    const bankByGeneralId = new Map<string, KbDoc1CItem>();
+    const bankByB2Id = new Map<string, KbDoc1CItem>();
+    for (const it of fetchedItems) {
+      if (it.general_id) bankByGeneralId.set(String(it.general_id), it);
+      if (it.b2_id) bankByB2Id.set(String(it.b2_id), it);
+    }
+
+    // DB'dagi shu account uchun fetchedDays oraligidagi tranzaksiyalar
+    const dbTxs = await this.prisma.transaction.findMany({
+      where: {
+        accountId: account.id,
+        txnDate: { gte: minDay, lte: maxDay },
+        source: 'SYNC',  // faqat sync orqali kelgan yozuvlar (Import/Manual emas)
+      },
+    });
+
+    let deletedCount = 0;
+    let editedCount = 0;
+
+    for (const tx of dbTxs) {
+      // Bank javobida general_id yoki b2_id orqali topish
+      const ext = tx.externalId;
+      // Composite ID'dan general_id'ni ajratib olish (format: {gen_id}_{num}_{ddate}_..._{sign})
+      const extParts = ext.replace(/^IP_/, '').split('_');
+      const possibleGenId = extParts[0] && extParts[0] !== 'no_general_id' ? extParts[0] : null;
+
+      let bankItem: KbDoc1CItem | null = null;
+      if (possibleGenId && bankByGeneralId.has(possibleGenId)) {
+        bankItem = bankByGeneralId.get(possibleGenId)!;
+      } else if (tx.bankB2Id && bankByB2Id.has(tx.bankB2Id)) {
+        bankItem = bankByB2Id.get(tx.bankB2Id)!;
+      }
+
+      if (!bankItem) {
+        // DELETED — bank ro'yxatida yo'q
+        try {
+          // Snapshot saqlaymiz, keyin tranzaksiyani o'chiramiz
+          await this.prisma.transactionChangeLog.create({
+            data: {
+              txId: tx.id,
+              externalId: tx.externalId,
+              accountId: tx.accountId,
+              changeType: 'DELETED',
+              fieldsChanged: ['*'],
+              oldData: tx as any,
+              newData: null as any,
+              txnDate: tx.txnDate,
+              amount: tx.amount,
+              direction: tx.direction,
+              contractNumber: tx.contractNumber,
+              bankNameSnap: tx.importBankNameText,
+              accountNoSnap: account.accountNo,
+              detectedBy: actor,
+              note: `Bank ro'yxatida yo'q (${minDay.toISOString().slice(0, 10)} → ${maxDay.toISOString().slice(0, 10)} oralig'i tekshirildi)`,
+            },
+          });
+          await this.prisma.transaction.delete({ where: { id: tx.id } });
+          deletedCount++;
+        } catch (e: any) {
+          this.logger.warn(`Change-DELETED yozishda xato (${tx.id}): ${e?.message}`);
+        }
+        continue;
+      }
+
+      // EDITED — solishtirish
+      const newAmountSom = new Prisma.Decimal((bankItem.amount ?? 0) / 100);
+      const oldAmountSom = tx.amount;
+      let newDirection: TxnDirection = tx.direction;
+      if (bankItem.acc_ct === account.accountNo) newDirection = 'IN';
+      else if (bankItem.acc_dt === account.accountNo) newDirection = 'OUT';
+      const newStatus: TxnStatus =
+        bankItem.state === 3 ? 'COMPLETED'
+          : bankItem.state === 6 ? 'CANCELLED'
+          : bankItem.state === 16 ? 'PENDING'
+          : 'COMPLETED';
+      const newDescription = (bankItem as any).naznach || (bankItem as any).details || tx.description;
+
+      const fieldsChanged: string[] = [];
+      const changes: Record<string, { old: any; new: any }> = {};
+      if (!oldAmountSom.equals(newAmountSom)) {
+        fieldsChanged.push('amount');
+        changes.amount = { old: oldAmountSom.toString(), new: newAmountSom.toString() };
+      }
+      if (tx.status !== newStatus) {
+        fieldsChanged.push('status');
+        changes.status = { old: tx.status, new: newStatus };
+      }
+      if (tx.direction !== newDirection) {
+        fieldsChanged.push('direction');
+        changes.direction = { old: tx.direction, new: newDirection };
+      }
+      if (newDescription && tx.description !== newDescription) {
+        fieldsChanged.push('description');
+        changes.description = { old: tx.description, new: newDescription };
+      }
+
+      if (fieldsChanged.length === 0) continue; // hech narsa o'zgarmagan
+
+      try {
+        await this.prisma.transactionChangeLog.create({
+          data: {
+            txId: tx.id,
+            externalId: tx.externalId,
+            accountId: tx.accountId,
+            changeType: 'EDITED',
+            fieldsChanged,
+            oldData: changes as any,
+            newData: {
+              amount: newAmountSom.toString(),
+              status: newStatus,
+              direction: newDirection,
+              description: newDescription,
+            } as any,
+            txnDate: tx.txnDate,
+            amount: newAmountSom,
+            direction: newDirection,
+            contractNumber: tx.contractNumber,
+            bankNameSnap: tx.importBankNameText,
+            accountNoSnap: account.accountNo,
+            detectedBy: actor,
+            note: `Maydonlar o'zgarganligi aniqlandi: ${fieldsChanged.join(', ')}`,
+          },
+        });
+        await this.prisma.transaction.update({
+          where: { id: tx.id },
+          data: {
+            amount: newAmountSom,
+            status: newStatus,
+            direction: newDirection,
+            description: newDescription,
+            syncedAt: new Date(),
+          },
+        });
+        editedCount++;
+      } catch (e: any) {
+        this.logger.warn(`Change-EDITED yozishda xato (${tx.id}): ${e?.message}`);
+      }
+    }
+
+    return { deleted: deletedCount, edited: editedCount };
+  }
+
+  /**
+   * Qo'lda chaqirilgan sana oralig'i uchun re-verify. Sync minimal sana'dan
+   * oldinga chiqib bo'lmaydi. /transactions/check-changes endpoint chaqiradi.
+   */
+  async manualCheckChanges(opts: {
+    accountId?: string;       // null → barcha sync yoqilgan hisoblar
+    dateFrom: string;         // YYYY-MM-DD
+    dateTo: string;           // YYYY-MM-DD
+    actor: string;
+  }): Promise<{ ok: boolean; checked: number; deleted: number; edited: number; skippedAccounts: string[] }> {
+    const { accountId, dateFrom, dateTo, actor } = opts;
+    const minDate = await this.settings.getSyncMinDate();
+    if (minDate) {
+      const fromD = new Date(`${dateFrom}T00:00:00Z`);
+      if (fromD < minDate) {
+        throw new Error(`Sanadan ${dateFrom} sync chegarasi (${minDate.toISOString().slice(0, 10)}) dan oldin bo'lmasligi kerak`);
+      }
+    }
+    // Sana ro'yxati (dd.MM.yyyy)
+    const fromD = new Date(`${dateFrom}T00:00:00Z`);
+    const toD = new Date(`${dateTo}T00:00:00Z`);
+    if (fromD > toD) throw new Error('Sanadan sanagacha noto\'g\'ri');
+    const days: string[] = [];
+    for (let d = new Date(fromD); d <= toD; d.setUTCDate(d.getUTCDate() + 1)) {
+      days.push(format(d, 'dd.MM.yyyy'));
+    }
+
+    // Tekshirilishi kerak hisoblar
+    const accounts = await this.prisma.bankAccount.findMany({
+      where: accountId ? { id: accountId } : { syncEnabled: true },
+      include: { credential: { include: { bank: true } } },
+    });
+
+    let totalChecked = 0;
+    let totalDeleted = 0;
+    let totalEdited = 0;
+    const skipped: string[] = [];
+
+    for (const acc of accounts) {
+      const cred = (acc as any).credential;
+      if (!cred || !cred.bank?.apiBaseUrl) {
+        skipped.push(`${acc.accountNo} (credential yo'q)`);
+        continue;
+      }
+      if (cred.bank.apiKind !== 'KAPITALBANK_V3' && cred.bank.apiKind !== 'IPAK_YOLI_V1') {
+        skipped.push(`${acc.accountNo} (bank turi qo'llab-quvvatlanmaydi)`);
+        continue;
+      }
+      const password = this.crypto.decrypt(cred.passwordEnc);
+      const login = (cred.loginPrefix || '') + cred.loginName;
+
+      const fetchedItems: KbDoc1CItem[] = [];
+      const fetchedDays: Date[] = [];
+      for (const ds of days) {
+        try {
+          const result = await this.kb.getDoc1C({
+            baseUrl: cred.bank.apiBaseUrl!,
+            login,
+            password,
+            branch: acc.branch,
+            account: acc.accountNo,
+            date: ds,
+            useProxy: cred.useProxy === true,
+          });
+          fetchedItems.push(...(result?.content || []));
+          const parsed = this.parseDdate(ds);
+          if (parsed) fetchedDays.push(parsed);
+        } catch (e: any) {
+          this.logger.warn(`manualCheck getDoc1C xato (${acc.accountNo} · ${ds}): ${e?.message}`);
+        }
+      }
+      if (fetchedDays.length === 0) {
+        skipped.push(`${acc.accountNo} (kunlar olinmadi)`);
+        continue;
+      }
+      totalChecked++;
+      const stats = await this.detectChanges({
+        account: { id: acc.id, accountNo: acc.accountNo },
+        bankCode: cred.bank.code,
+        fetchedItems,
+        fetchedDays,
+        actor,
+      });
+      totalDeleted += stats.deleted;
+      totalEdited += stats.edited;
+    }
+
+    return { ok: true, checked: totalChecked, deleted: totalDeleted, edited: totalEdited, skippedAccounts: skipped };
   }
 
   private guessType(purpCode?: string, dtype?: string): TxnType {

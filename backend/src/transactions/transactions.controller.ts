@@ -10,6 +10,9 @@ import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { SyncService } from '../sync/sync.service';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('transactions')
 @ApiBearerAuth()
@@ -21,6 +24,8 @@ export class TransactionsController {
     private readonly statementSvc: StatementService,
     private readonly reconcileSvc: ReconcileService,
     private readonly inspectorSvc: InspectorService,
+    private readonly syncSvc: SyncService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post('inspect-id')
@@ -209,6 +214,85 @@ export class TransactionsController {
       'Content-Length': String(buffer.length),
     });
     res.end(buffer);
+  }
+
+  // ─── CHANGED TRANSACTIONS (re-verify history) ───────────────────────
+
+  @Get('changes/list')
+  @ApiOperation({ summary: "O'chirilgan / o'zgartirilgan tranzaksiyalar ro'yxati (filterlar bilan)" })
+  async listChanges(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('accountId') accountId?: string,
+    @Query('changeType') changeType?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+  ) {
+    const where: any = {};
+    if (accountId) where.accountId = accountId;
+    if (changeType === 'DELETED' || changeType === 'EDITED') where.changeType = changeType;
+    if (dateFrom || dateTo) {
+      where.detectedAt = {};
+      if (dateFrom) where.detectedAt.gte = new Date(`${dateFrom}T00:00:00Z`);
+      if (dateTo) where.detectedAt.lte = new Date(`${dateTo}T23:59:59.999Z`);
+    }
+    if (q && q.trim()) {
+      const term = q.trim();
+      where.OR = [
+        { externalId: { contains: term, mode: 'insensitive' } },
+        { contractNumber: { contains: term, mode: 'insensitive' } },
+        { accountNoSnap: { contains: term, mode: 'insensitive' } },
+        { bankNameSnap: { contains: term, mode: 'insensitive' } },
+      ];
+    }
+    const pageN = Math.max(1, Number(page) || 1);
+    const perPageN = Math.min(200, Math.max(10, Number(perPage) || 50));
+    const [total, items] = await Promise.all([
+      this.prisma.transactionChangeLog.count({ where }),
+      this.prisma.transactionChangeLog.findMany({
+        where,
+        orderBy: { detectedAt: 'desc' },
+        skip: (pageN - 1) * perPageN,
+        take: perPageN,
+      }),
+    ]);
+    // Account info bilan boyitish
+    const accIds = Array.from(new Set(items.map((i) => i.accountId).filter((x): x is string => !!x)));
+    const accounts = accIds.length > 0
+      ? await this.prisma.bankAccount.findMany({
+          where: { id: { in: accIds } },
+          include: { bank: true },
+        })
+      : [];
+    const accMap = new Map(accounts.map((a) => [a.id, a]));
+    return {
+      ok: true,
+      total,
+      page: pageN,
+      perPage: perPageN,
+      items: items.map((it) => ({
+        ...it,
+        account: it.accountId ? accMap.get(it.accountId) : null,
+      })),
+    };
+  }
+
+  @Post('changes/check')
+  @ApiOperation({ summary: "Qo'lda re-verify ishga tushirish (sana oralig'i)" })
+  async checkChanges(
+    @Body() body: { accountId?: string; dateFrom: string; dateTo: string },
+    @CurrentUser('email') email?: string,
+  ) {
+    if (!body?.dateFrom || !body?.dateTo) {
+      throw new BadRequestException('dateFrom va dateTo majburiy');
+    }
+    return this.syncSvc.manualCheckChanges({
+      accountId: body.accountId,
+      dateFrom: body.dateFrom,
+      dateTo: body.dateTo,
+      actor: email ? `manual:${email}` : 'manual',
+    });
   }
 
   @Get(':id')

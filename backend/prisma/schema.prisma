@@ -556,6 +556,49 @@ enum SyncStatus {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// TRANSACTION CHANGE LOG — bank tomonida o'chirilgan yoki o'zgartirilgan
+// tranzaksiyalar tarixi. Sync re-verify chog'ida farq aniqlansa, mavjud
+// yozuv update/delete qilinadi va shu yerga audit yoziladi.
+// ─────────────────────────────────────────────────────────────────
+model TransactionChangeLog {
+  id              String          @id @default(cuid())
+  // Eski tx ID (delete bo'lsa null bo'ladi — tx o'chirilgan)
+  txId            String?         @map("tx_id")
+  // Asl externalId (composite) — qidirish uchun
+  externalId      String          @map("external_id") @db.VarChar(255)
+  accountId       String?         @map("account_id")
+  changeType      TxChangeType    @map("change_type")
+  // O'zgargan field'lar nomlari (masalan ['status','amount'])
+  fieldsChanged   String[]        @map("fields_changed") @default([])
+  // Eski qiymatlar (delete uchun butun qator snapshot)
+  oldData         Json?           @map("old_data")
+  // Yangi qiymatlar (delete uchun null)
+  newData         Json?           @map("new_data")
+  // Qulay qidirish uchun snapshot fields (delete bo'lsa eski qiymat, edit uchun yangi)
+  txnDate         DateTime?       @map("txn_date")
+  amount          Decimal?        @db.Decimal(18, 2)
+  direction       TxnDirection?
+  contractNumber  String?         @map("contract_number") @db.VarChar(128)
+  bankNameSnap    String?         @map("bank_name_snap") @db.VarChar(120)
+  accountNoSnap   String?         @map("account_no_snap") @db.VarChar(64)
+  // Audit
+  detectedAt      DateTime        @default(now()) @map("detected_at")
+  detectedBy      String?         @map("detected_by") @db.VarChar(190)  // 'sync' | 'manual:<email>'
+  note            String?         @db.Text
+
+  @@index([detectedAt(sort: Desc)])
+  @@index([changeType])
+  @@index([accountId, detectedAt])
+  @@index([externalId])
+  @@map("transaction_change_logs")
+}
+
+enum TxChangeType {
+  DELETED   // bank tomonida o'chirilgan (yoki bekor qilingan)
+  EDITED    // bank field o'zgartirgan (status, amount, va h.k.)
+}
+
+// ─────────────────────────────────────────────────────────────────
 // SETTING — umumiy key/value sozlamalar (kelajakda kengayadi)
 // Hozir: syncMinDate — sync bu sanadan oldingi tranzaksiyalarni
 // olmaydi (import qilingan tarixiy ma'lumotlarni himoya qilish uchun)
