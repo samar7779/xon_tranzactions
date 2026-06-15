@@ -771,11 +771,15 @@ export class SyncService {
     }
 
     // DB'dagi shu account uchun fetchedDays oraligidagi tranzaksiyalar
+    // category — CLIENT (Клиент/Физ.Л/Юр.Л) tekshiruvi uchun, OplataKv cascade'da kerak
     const dbTxs = await this.prisma.transaction.findMany({
       where: {
         accountId: account.id,
         txnDate: { gte: minDay, lte: maxDay },
         source: 'SYNC',  // faqat sync orqali kelgan yozuvlar (Import/Manual emas)
+      },
+      include: {
+        category: { select: { code: true, name: true } },
       },
     });
 
@@ -819,6 +823,10 @@ export class SyncService {
               note: `Bank ro'yxatida yo'q (${minDay.toISOString().slice(0, 10)} → ${maxDay.toISOString().slice(0, 10)} oralig'i tekshirildi)`,
             },
           });
+          // OplatyKv cascade — CLIENT (Клиент/Физ.Л/Юр.Л) bo'lsa, OplatyKv'dan ham o'chiramiz
+          if (this.isClientTx(tx)) {
+            await this.cascadeOplataKvDelete(tx.externalId, tx.id, actor);
+          }
           await this.prisma.transaction.delete({ where: { id: tx.id } });
           deletedCount++;
         } catch (e: any) {
@@ -896,6 +904,16 @@ export class SyncService {
             syncedAt: new Date(),
           },
         });
+        // OplatyKv cascade — CLIENT bo'lsa va summa/yo'nalish o'zgargan bo'lsa
+        if (this.isClientTx(tx) && (changes.amount || changes.direction)) {
+          await this.cascadeOplataKvEdit(tx.externalId, tx.id, {
+            newAmount: newAmountSom,
+            newDirection,
+            oldAmount: oldAmountSom,
+            oldDirection: tx.direction,
+            actor,
+          });
+        }
         editedCount++;
       } catch (e: any) {
         this.logger.warn(`Change-EDITED yozishda xato (${tx.id}): ${e?.message}`);
@@ -903,6 +921,101 @@ export class SyncService {
     }
 
     return { deleted: deletedCount, edited: editedCount };
+  }
+
+  /**
+   * Tranzaksiya CLIENT (Клиент/Физ.Л/Юр.Л) kategoriyasiga tegishlimi?
+   * categorization.service.ts'dagi syncContractChangeToOplataKv bilan
+   * sinxron ishlaydi — bir xil pattern.
+   */
+  private isClientTx(tx: any): boolean {
+    const cat = tx?.category;
+    if (cat?.code === 'CLIENT') return true;
+    const clientPattern = /клиент|физ\.?\s*л|юр\.?\s*л/i;
+    if (cat?.name && clientPattern.test(cat.name)) return true;
+    return false;
+  }
+
+  /**
+   * Bank tomonida o'chirilgan CLIENT tranzaksiyasi — bog'langan OplataKv
+   * qatorini ham o'chiramiz va OplataKvHistory'ga audit yozuv qoldiramiz.
+   */
+  private async cascadeOplataKvDelete(externalId: string, txId: string, actor: string): Promise<void> {
+    try {
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { sourceTxId: { in: [externalId, txId] } },
+      });
+      if (!row) return;
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id,
+          action: 'deleted',
+          actorType: 'system',
+          actorId: null,
+          actorName: actor,
+          fieldsChanged: ['*'],
+          changes: row as any,
+          note: `Bank tomonida tranzaksiya o'chirilgani uchun avtomatik o'chirildi (txId=${txId})`,
+        },
+      });
+      await this.prisma.oplataKv.delete({ where: { id: row.id } });
+      this.logger.log(`OplataKv ${row.id} cascade-o'chirildi (tx ${txId} DELETED)`);
+    } catch (e: any) {
+      this.logger.warn(`OplataKv cascade-delete xato (tx=${txId}): ${e?.message}`);
+    }
+  }
+
+  /**
+   * Bank tomonida o'zgartirilgan CLIENT tranzaksiyasi — bog'langan OplataKv
+   * qatorida paymentAmount'ni (yo'nalishga qarab signed) yangilaymiz.
+   */
+  private async cascadeOplataKvEdit(
+    externalId: string,
+    txId: string,
+    opts: {
+      newAmount: Prisma.Decimal;
+      newDirection: TxnDirection;
+      oldAmount: Prisma.Decimal;
+      oldDirection: TxnDirection;
+      actor: string;
+    },
+  ): Promise<void> {
+    try {
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { sourceTxId: { in: [externalId, txId] } },
+        select: { id: true, paymentAmount: true },
+      });
+      if (!row) return;
+      const newSigned = opts.newDirection === 'IN'
+        ? opts.newAmount
+        : opts.newAmount.negated();
+      const oldSigned = row.paymentAmount;
+      if (oldSigned && oldSigned.equals(newSigned)) return;
+      await this.prisma.oplataKv.update({
+        where: { id: row.id },
+        data: { paymentAmount: newSigned },
+      });
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id,
+          action: 'edited',
+          actorType: 'system',
+          actorId: null,
+          actorName: opts.actor,
+          fieldsChanged: ['paymentAmount'],
+          changes: {
+            paymentAmount: {
+              old: oldSigned?.toString() ?? null,
+              new: newSigned.toString(),
+            },
+          } as any,
+          note: `Bank tomonida tranzaksiya o'zgargani uchun avtomatik yangilandi (txId=${txId})`,
+        },
+      });
+      this.logger.log(`OplataKv ${row.id} cascade-yangilandi (tx ${txId} EDITED, paymentAmount)`);
+    } catch (e: any) {
+      this.logger.warn(`OplataKv cascade-edit xato (tx=${txId}): ${e?.message}`);
+    }
   }
 
   /**

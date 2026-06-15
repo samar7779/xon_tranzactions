@@ -10,13 +10,16 @@ import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../auth/decorators/permissions.decorator';
+import { PERMISSIONS } from '../auth/permissions';
 import { SyncService } from '../sync/sync.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('transactions')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('transactions')
 export class TransactionsController {
   constructor(
@@ -219,6 +222,7 @@ export class TransactionsController {
   // ─── CHANGED TRANSACTIONS (re-verify history) ───────────────────────
 
   @Get('changes/list')
+  @RequirePermissions(PERMISSIONS.CHANGED_TXN_VIEW)
   @ApiOperation({ summary: "O'chirilgan / o'zgartirilgan tranzaksiyalar ro'yxati (filterlar bilan)" })
   async listChanges(
     @Query('dateFrom') dateFrom?: string,
@@ -279,6 +283,7 @@ export class TransactionsController {
   }
 
   @Post('changes/check')
+  @RequirePermissions(PERMISSIONS.CHANGED_TXN_CHECK)
   @ApiOperation({ summary: "Qo'lda re-verify ishga tushirish (sana oralig'i)" })
   async checkChanges(
     @Body() body: { accountId?: string; dateFrom: string; dateTo: string },
