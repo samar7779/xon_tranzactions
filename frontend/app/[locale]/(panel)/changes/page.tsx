@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   AlertOctagon, Trash2, Edit3, Search, Calendar, RefreshCw, Loader2,
   ChevronLeft, ChevronRight, X, CheckCircle2, ArrowRight, FileText,
-  Wallet, Activity, Filter, Database, Sparkles, Banknote, ListChecks,
+  Wallet, Activity, Filter, Database, Sparkles, Banknote, ListChecks, Wand2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -240,6 +240,30 @@ export default function ChangesPage() {
                 <RefreshCw className={cn('h-3.5 w-3.5', listQ.isFetching && 'animate-spin')} />
                 Yangilash
               </Button>
+              {canCheck && (
+                <Button
+                  onClick={async () => {
+                    if (!confirm("Status PENDING→COMPLETED bo'lgan barcha 'tahrirlangan' yozuvlarni o'chirasizmi?\n\n(Bu normal hayot sikli, bank tahriri emas — shovqin sifatida tushgan)")) return;
+                    try {
+                      const r: any = await api.post('/transactions/changes/cleanup-benign');
+                      if (r?.ok) {
+                        toast.success(`Tozalandi: ${r.deleted} ta yozuv`);
+                        qc.invalidateQueries({ queryKey: ['transactions-changes'] });
+                      } else {
+                        toast.error(r?.message || 'Tozalanmadi');
+                      }
+                    } catch (e: any) {
+                      toast.error(e?.message || 'Xato');
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="h-9 gap-1.5 text-amber-700 border-amber-200 hover:bg-amber-50"
+                  title="PENDING→COMPLETED (normal flow) yozuvlarini o'chirish"
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Noise tozalash
+                </Button>
+              )}
               {canCheck && (
                 <Button
                   onClick={() => setCheckOpen(true)}

@@ -288,6 +288,35 @@ export class TransactionsController {
     };
   }
 
+  @Post('changes/cleanup-benign')
+  @RequirePermissions(PERMISSIONS.CHANGED_TXN_CHECK)
+  @ApiOperation({ summary: "Noise tozalash — faqat status PENDING→COMPLETED bo'lgan EDITED yozuvlarini o'chiradi" })
+  async cleanupBenignChanges() {
+    // EDITED yozuvlar, fieldsChanged=['status'], oldData.status={old:'PENDING', new:'COMPLETED'}
+    // Bu normal hayot sikli — bank tahriri emas, noise.
+    const candidates = await this.prisma.transactionChangeLog.findMany({
+      where: {
+        changeType: 'EDITED',
+        fieldsChanged: { equals: ['status'] },
+      },
+      select: { id: true, oldData: true },
+    });
+    const toDelete: string[] = [];
+    for (const c of candidates) {
+      const od = c.oldData as any;
+      if (od?.status?.old === 'PENDING' && od?.status?.new === 'COMPLETED') {
+        toDelete.push(c.id);
+      }
+    }
+    if (toDelete.length === 0) {
+      return { ok: true, deleted: 0, message: 'Tozalanadigan noise topilmadi' };
+    }
+    const result = await this.prisma.transactionChangeLog.deleteMany({
+      where: { id: { in: toDelete } },
+    });
+    return { ok: true, deleted: result.count };
+  }
+
   @Post('changes/check')
   @RequirePermissions(PERMISSIONS.CHANGED_TXN_CHECK)
   @ApiOperation({ summary: "Qo'lda re-verify ishga tushirish (sana oralig'i)" })

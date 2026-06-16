@@ -854,7 +854,13 @@ export class SyncService {
         fieldsChanged.push('amount');
         changes.amount = { old: oldAmountSom.toString(), new: newAmountSom.toString() };
       }
-      if (tx.status !== newStatus) {
+      // Status: faqat haqiqiy "bank tahriri" hisoblanadi
+      //   PENDING → COMPLETED — normal hayot sikli (kutilayotgan to'lov tasdiqlandi), SKIP
+      //   PENDING → CANCELLED — bank rad qildi, LOG
+      //   COMPLETED → CANCELLED — bank qaytarib oldi, LOG
+      //   COMPLETED → PENDING — rollback, LOG
+      const isBenignStatusChange = tx.status === 'PENDING' && newStatus === 'COMPLETED';
+      if (tx.status !== newStatus && !isBenignStatusChange) {
         fieldsChanged.push('status');
         changes.status = { old: tx.status, new: newStatus };
       }
@@ -867,7 +873,22 @@ export class SyncService {
         changes.description = { old: tx.description, new: newDescription };
       }
 
-      if (fieldsChanged.length === 0) continue; // hech narsa o'zgarmagan
+      // Hech qanday log-worthy o'zgarish bo'lmasa — DBni yangilab continue qilamiz
+      // (PENDING→COMPLETED faqat status, lekin uni baribir DBda yangilash kerak — silent)
+      if (fieldsChanged.length === 0) {
+        if (tx.status !== newStatus) {
+          // Silent status update (PENDING → COMPLETED)
+          try {
+            await this.prisma.transaction.update({
+              where: { id: tx.id },
+              data: { status: newStatus, syncedAt: new Date() },
+            });
+          } catch (e: any) {
+            this.logger.warn(`Silent status update xato (${tx.id}): ${e?.message}`);
+          }
+        }
+        continue;
+      }
 
       try {
         await this.prisma.transactionChangeLog.create({
