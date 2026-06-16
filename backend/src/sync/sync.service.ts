@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -23,7 +23,7 @@ const KNOWN_FIELDS = new Set([
 ]);
 
 @Injectable()
-export class SyncService {
+export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private readonly daysBack: number;
 
@@ -40,6 +40,35 @@ export class SyncService {
     // o'zgartirilgan tranzaksiyalarni aniqlash uchun har sync oxirgi 10 kunni
     // qayta tekshiradi (re-verify).
     this.daysBack = Number(config.get<string>('TXN_SYNC_DAYS_BACK', '10'));
+  }
+
+  /**
+   * Boot paytida — mavjud TransactionChangeLog'da PENDING→COMPLETED noise
+   * yozuvlarini o'chiramiz. Bu normal hayot sikli, bank tahriri emas — eski
+   * detection ularni xato logladi. Endi log qilinmaydi, eski noise tozalanadi.
+   */
+  async onModuleInit() {
+    try {
+      const candidates = await this.prisma.transactionChangeLog.findMany({
+        where: { changeType: 'EDITED', fieldsChanged: { equals: ['status'] } },
+        select: { id: true, oldData: true },
+      });
+      const toDelete = candidates
+        .filter((c) => {
+          const od = c.oldData as any;
+          return od?.status?.old === 'PENDING' && od?.status?.new === 'COMPLETED';
+        })
+        .map((c) => c.id);
+      if (toDelete.length > 0) {
+        const r = await this.prisma.transactionChangeLog.deleteMany({
+          where: { id: { in: toDelete } },
+        });
+        this.logger.log(`Boot cleanup: ${r.count} ta PENDING→COMPLETED noise yozuv o'chirildi`);
+      }
+    } catch (e: any) {
+      // Bootstrap xatosi app'ni to'xtatmasin
+      this.logger.warn(`Change-log noise tozalashda xato: ${e?.message}`);
+    }
   }
 
   /**
