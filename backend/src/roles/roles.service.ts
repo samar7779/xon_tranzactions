@@ -1,11 +1,66 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
-import { ALL_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_TREE } from '../auth/permissions';
+import { ALL_PERMISSIONS, PERMISSION_GROUPS, PERMISSION_TREE, SYSTEM_ROLES } from '../auth/permissions';
 
 @Injectable()
-export class RolesService {
+export class RolesService implements OnModuleInit {
+  private readonly log = new Logger(RolesService.name);
+
   constructor(private prisma: PrismaService) {}
+
+  /**
+   * App boot — SYSTEM_ROLES (SUPERADMIN, ADMIN, ACCOUNTANT, VIEWER) ni DB bilan
+   * sinxronlash. Kod'ga qo'shilgan yangi permissions avtomatik mavjud rolga
+   * qo'shiladi. Admin qo'lda qo'shgan ruxsatlar HECH QACHON o'chirilmaydi —
+   * faqat yetishmagan default'lar qo'shiladi (union).
+   *
+   * SUPERADMIN istisno: har doim ALL_PERMISSIONS — bosh admin barcha
+   * ruxsatlarga ega bo'lishi shart (yangi feature qo'shilgach ham).
+   */
+  async onModuleInit() {
+    try {
+      for (const sysRole of SYSTEM_ROLES) {
+        const existing = await this.prisma.role.findUnique({ where: { name: sysRole.name } });
+        const defaultPerms = sysRole.permissions as string[];
+
+        if (!existing) {
+          await this.prisma.role.create({
+            data: {
+              name: sysRole.name,
+              label: sysRole.label,
+              description: sysRole.description,
+              permissions: defaultPerms,
+              isSystem: true,
+            },
+          });
+          this.log.log(`System rol yaratildi: ${sysRole.name} (${defaultPerms.length} ruxsat)`);
+          continue;
+        }
+
+        // SUPERADMIN — har doim hamma ruxsat
+        const targetPerms = sysRole.name === 'SUPERADMIN'
+          ? (ALL_PERMISSIONS as string[])
+          : Array.from(new Set([...(existing.permissions || []), ...defaultPerms]));
+
+        // Faqat o'zgargan bo'lsa update qilamiz
+        const existingSet = new Set(existing.permissions || []);
+        const targetSet = new Set(targetPerms);
+        const added = targetPerms.filter((p) => !existingSet.has(p));
+        const changed = added.length > 0 || targetSet.size !== existingSet.size;
+        if (changed) {
+          await this.prisma.role.update({
+            where: { id: existing.id },
+            data: { permissions: targetPerms, isSystem: true },
+          });
+          this.log.log(`System rol yangilandi: ${sysRole.name} — +${added.length} yangi ruxsat (${added.join(', ') || '—'})`);
+        }
+      }
+    } catch (e: any) {
+      // Bootstrap xatosi app'ni to'xtatmasin (masalan migration hali ishlamagan)
+      this.log.warn(`System rollarni sinxronlashda xato: ${e?.message}`);
+    }
+  }
 
   /** Mavjud permissions ro'yxati (UI uchun) — yangi ierarxik tree + eski groups (backward compat) */
   permissionsCatalog() {
