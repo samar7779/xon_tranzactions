@@ -5,7 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   AlertOctagon, Trash2, Edit3, Search, Calendar, RefreshCw, Loader2,
-  ChevronLeft, ChevronRight, X, CheckCircle2, ArrowRight, FileText, Wallet,
+  ChevronLeft, ChevronRight, X, CheckCircle2, ArrowRight, FileText,
+  Wallet, Activity, Filter, Database, Sparkles, Banknote, ListChecks,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -45,6 +46,15 @@ interface ChangeItem {
   account?: { id: string; accountNo: string; ownerName: string | null; bank?: { name: string; code: string } } | null;
 }
 
+interface ListResp {
+  ok: boolean;
+  total: number;
+  totals: { deleted: number; edited: number };
+  page: number;
+  perPage: number;
+  items: ChangeItem[];
+}
+
 export default function ChangesPage() {
   const qc = useQueryClient();
   const canCheck = useHasPermission(PERMS.CHANGED_TXN_CHECK);
@@ -54,7 +64,7 @@ export default function ChangesPage() {
   const [changeType, setChangeType] = useState<string>('all');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
-  const perPage = 25;
+  const [perPage, setPerPage] = useState(50);
   const [checkOpen, setCheckOpen] = useState(false);
   const [detail, setDetail] = useState<ChangeItem | null>(null);
 
@@ -64,7 +74,7 @@ export default function ChangesPage() {
   });
 
   const listQ = useQuery({
-    queryKey: ['transactions-changes', dateFrom, dateTo, accountId, changeType, q, page],
+    queryKey: ['transactions-changes', dateFrom, dateTo, accountId, changeType, q, page, perPage],
     queryFn: () => {
       const params = new URLSearchParams();
       if (dateFrom) params.set('dateFrom', dateFrom);
@@ -74,70 +84,83 @@ export default function ChangesPage() {
       if (q.trim()) params.set('q', q.trim());
       params.set('page', String(page));
       params.set('perPage', String(perPage));
-      return api.get<{ ok: boolean; total: number; items: ChangeItem[] }>(`/transactions/changes/list?${params}`);
+      return api.get<ListResp>(`/transactions/changes/list?${params}`);
     },
   });
 
   const items = listQ.data?.items || [];
   const total = listQ.data?.total || 0;
+  const totals = listQ.data?.totals || { deleted: 0, edited: 0 };
   const totalPages = Math.max(1, Math.ceil(total / perPage));
 
-  const deletedCount = items.filter((i) => i.changeType === 'DELETED').length;
-  const editedCount = items.filter((i) => i.changeType === 'EDITED').length;
+  const hasActiveFilters = !!(dateFrom || dateTo || (accountId !== 'all') || (changeType !== 'all') || q.trim());
+
+  // Aniq summa — sahifadagi yozuvlar bo'yicha
+  const pageAmount = items.reduce((acc, it) => acc + (it.amount ? Math.abs(Number(it.amount)) : 0), 0);
 
   return (
     <>
       <Topbar title="O'zgargan to'lovlar" subtitle="Bank tomonida o'chirilgan yoki o'zgartirilgan tranzaksiyalar tarixi" />
       <TransactionsTabs />
 
-      <div className="p-6 lg:p-8 space-y-6 max-w-[1600px] mx-auto">
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-0 shadow-soft">
-            <CardContent className="p-5">
-              <div className="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Jami yozuvlar</div>
-              <div className="text-3xl font-black text-slate-800 mt-1 tabular-nums">{total}</div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-soft">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-rose-600 font-bold inline-flex items-center gap-1">
-                    <Trash2 className="h-3 w-3" /> O'chirilgan (sahifada)
-                  </div>
-                  <div className="text-3xl font-black text-rose-700 mt-1 tabular-nums">{deletedCount}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="border-0 shadow-soft">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest text-amber-600 font-bold inline-flex items-center gap-1">
-                    <Edit3 className="h-3 w-3" /> Tahrirlangan (sahifada)
-                  </div>
-                  <div className="text-3xl font-black text-amber-700 mt-1 tabular-nums">{editedCount}</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="flex-1 p-3 sm:p-5 lg:p-6 space-y-5 w-full">
+        {/* ═══ KPI ROW ═══ */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
+          <KpiCard
+            label="Jami yozuvlar"
+            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            value={total.toLocaleString('ru-RU')}
+            icon={ListChecks}
+            tone="indigo"
+          />
+          <KpiCard
+            label="Bank o'chirgan"
+            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            value={totals.deleted.toLocaleString('ru-RU')}
+            icon={Trash2}
+            tone="rose"
+          />
+          <KpiCard
+            label="Bank o'zgartirgan"
+            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            value={totals.edited.toLocaleString('ru-RU')}
+            icon={Edit3}
+            tone="amber"
+          />
+          <KpiCard
+            label="Sahifa summasi"
+            sub={`${items.length} ta yozuv`}
+            value={formatMoney(pageAmount, 'UZS').replace(' UZS', '')}
+            suffix="UZS"
+            icon={Banknote}
+            tone="slate"
+          />
         </div>
 
-        {/* Filters */}
-        <Card className="border-0 shadow-soft">
-          <CardContent className="p-5">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
-              <div className="md:col-span-2 relative">
-                <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                <Input
-                  value={q}
-                  onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                  placeholder="Composite ID, shartnoma, hisob raqami..."
-                  className="h-10 pl-9 pr-3"
-                />
-              </div>
+        {/* ═══ FILTERS BAR (inline, no card wrapper) ═══ */}
+        <div className="bg-white rounded-2xl shadow-soft px-3 py-3 lg:px-4 lg:py-3 space-y-3">
+          <div className="grid grid-cols-12 gap-2.5">
+            {/* Search — keng */}
+            <div className="col-span-12 lg:col-span-4 relative">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Input
+                value={q}
+                onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                placeholder="Composite ID, shartnoma, hisob raqami, bank nomi..."
+                className="h-10 pl-9 pr-9"
+              />
+              {q && (
+                <button
+                  onClick={() => { setQ(''); setPage(1); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100"
+                >
+                  <X className="h-3.5 w-3.5 text-slate-400" />
+                </button>
+              )}
+            </div>
+
+            {/* Hisob */}
+            <div className="col-span-12 sm:col-span-6 lg:col-span-3">
               <Select value={accountId} onValueChange={(v) => { setAccountId(v); setPage(1); }}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Barcha hisoblar" /></SelectTrigger>
                 <SelectContent>
@@ -149,8 +172,12 @@ export default function ChangesPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Turi */}
+            <div className="col-span-6 sm:col-span-3 lg:col-span-2">
               <Select value={changeType} onValueChange={(v) => { setChangeType(v); setPage(1); }}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Turi" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Hammasi</SelectItem>
                   <SelectItem value="DELETED">O'chirilgan</SelectItem>
@@ -158,124 +185,211 @@ export default function ChangesPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div>
-                <Label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 block">Sanadan (aniqlangan)</Label>
-                <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-10" />
-              </div>
-              <div>
-                <Label className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1 block">Sanagacha</Label>
-                <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-10" />
-              </div>
-              <div className="flex items-end gap-2">
+
+            {/* Sanadan */}
+            <div className="col-span-6 sm:col-span-3 lg:col-span-2">
+              <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-10" />
+            </div>
+
+            {/* Sanagacha */}
+            <div className="col-span-6 sm:col-span-3 lg:col-span-1">
+              <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-10" />
+            </div>
+          </div>
+
+          {/* Bottom action row */}
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+            <div className="flex items-center gap-3 text-[11.5px] text-slate-500">
+              {hasActiveFilters ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 font-medium">
+                  <Filter className="h-3 w-3" /> filterlar aktiv
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                  <Filter className="h-3 w-3" /> filtrlar yo'q
+                </span>
+              )}
+              <span className="hidden lg:inline-flex items-center gap-1.5 text-slate-500">
+                <Database className="h-3 w-3" />
+                Sahifada: <b className="text-slate-700 tabular-nums">{items.length}</b> / {total.toLocaleString('ru-RU')}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {hasActiveFilters && (
                 <Button
-                  variant="outline"
-                  className="h-10 gap-2"
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 gap-1.5 text-slate-600"
                   onClick={() => {
                     setQ(''); setDateFrom(''); setDateTo('');
                     setAccountId('all'); setChangeType('all'); setPage(1);
                   }}
                 >
-                  <X className="h-4 w-4" /> Tozalash
+                  <X className="h-3.5 w-3.5" /> Tozalash
                 </Button>
-                {canCheck && (
-                  <Button
-                    onClick={() => setCheckOpen(true)}
-                    className="h-10 gap-2 bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
-                    title="Sana orqali qo'lda tekshirish"
-                  >
-                    <RefreshCw className="h-4 w-4" /> Tekshirish
-                  </Button>
-                )}
-              </div>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5"
+                onClick={() => listQ.refetch()}
+                disabled={listQ.isFetching}
+                title="Qayta yuklash"
+              >
+                <RefreshCw className={cn('h-3.5 w-3.5', listQ.isFetching && 'animate-spin')} />
+                Yangilash
+              </Button>
+              {canCheck && (
+                <Button
+                  onClick={() => setCheckOpen(true)}
+                  size="sm"
+                  className="h-9 gap-1.5 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all"
+                  title="Sana orqali qo'lda tekshirish"
+                >
+                  <Sparkles className="h-3.5 w-3.5" /> Qo'lda tekshirish
+                </Button>
+              )}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* List */}
-        <Card className="border-0 shadow-soft overflow-hidden">
+        {/* ═══ TABLE ═══ */}
+        <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
-              <thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-600 font-semibold">
-                <tr>
-                  <th className="px-4 py-3 text-left w-28">Turi</th>
-                  <th className="px-4 py-3 text-left">Aniqlangan</th>
-                  <th className="px-4 py-3 text-left">Bank · Hisob</th>
-                  <th className="px-4 py-3 text-left">Composite ID</th>
-                  <th className="px-4 py-3 text-left">Shartnoma</th>
-                  <th className="px-4 py-3 text-right">Summa</th>
-                  <th className="px-4 py-3 text-left">O'zgarishlar</th>
+              <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[10px] uppercase tracking-wider text-slate-600 font-bold">
+                <tr className="border-b border-slate-200">
+                  <th className="px-3 py-3 text-left w-12">#</th>
+                  <th className="px-3 py-3 text-left w-32">Turi</th>
+                  <th className="px-3 py-3 text-left whitespace-nowrap">Aniqlangan</th>
+                  <th className="px-3 py-3 text-left whitespace-nowrap">Tranzaksiya sanasi</th>
+                  <th className="px-3 py-3 text-left">Bank · Hisob</th>
+                  <th className="px-3 py-3 text-left">Composite ID</th>
+                  <th className="px-3 py-3 text-left">Shartnoma</th>
+                  <th className="px-3 py-3 text-right whitespace-nowrap">Summa</th>
+                  <th className="px-3 py-3 text-left">O'zgarishlar</th>
+                  <th className="px-3 py-3 text-left w-20">Kim</th>
                 </tr>
               </thead>
               <tbody>
                 {listQ.isLoading && (
-                  <tr><td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    <Loader2 className="h-5 w-5 animate-spin inline mr-2" /> Yuklanmoqda...
+                  <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-400">
+                    <Loader2 className="h-6 w-6 animate-spin inline mr-2" />
+                    <span className="font-medium">Yuklanmoqda...</span>
                   </td></tr>
                 )}
                 {!listQ.isLoading && items.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-12 text-center">
-                    <AlertOctagon className="h-10 w-10 text-slate-300 mx-auto mb-2" />
-                    <div className="text-[14px] font-semibold text-slate-700">Yozuvlar yo'q</div>
-                    <div className="text-[12px] text-slate-500 mt-1">
-                      Sync har safar ishlaganda avtomatik tekshiriladi. Yoki "Tekshirish" tugmasini bosing.
+                  <tr><td colSpan={10} className="px-4 py-20 text-center">
+                    <div className="inline-flex flex-col items-center max-w-md">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 grid place-items-center mb-3 ring-1 ring-slate-200">
+                        <AlertOctagon className="h-7 w-7 text-slate-400" />
+                      </div>
+                      <div className="text-[15px] font-bold text-slate-800">Yozuvlar topilmadi</div>
+                      <div className="text-[12.5px] text-slate-500 mt-1.5 leading-relaxed">
+                        {hasActiveFilters
+                          ? "Filterlar ostida hech narsa topilmadi. Filterni o'zgartiring yoki tozalang."
+                          : "Sync har safar ishlaganda avtomatik tekshiriladi. Hozircha bank tomonida o'zgargan to'lovlar yo'q."}
+                      </div>
+                      {canCheck && !hasActiveFilters && (
+                        <Button
+                          onClick={() => setCheckOpen(true)}
+                          variant="outline"
+                          className="mt-5 gap-2"
+                        >
+                          <Sparkles className="h-4 w-4" /> Qo'lda tekshirishni boshlash
+                        </Button>
+                      )}
                     </div>
                   </td></tr>
                 )}
-                {items.map((it) => {
+                {items.map((it, idx) => {
                   const isDel = it.changeType === 'DELETED';
+                  const rowNum = (page - 1) * perPage + idx + 1;
                   return (
                     <tr
                       key={it.id}
                       onClick={() => setDetail(it)}
                       className={cn(
-                        'border-t border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer',
-                        isDel && 'bg-rose-50/30',
+                        'border-b border-slate-100 hover:bg-indigo-50/30 transition-colors cursor-pointer group',
+                        isDel && 'bg-rose-50/20',
                       )}
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-3 py-3 text-[11px] text-slate-400 tabular-nums">{rowNum}</td>
+                      <td className="px-3 py-3">
                         <span className={cn(
-                          'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ring-1',
+                          'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap',
                           isDel
                             ? 'bg-rose-50 text-rose-700 ring-rose-200'
                             : 'bg-amber-50 text-amber-700 ring-amber-200',
                         )}>
                           {isDel ? <Trash2 className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
-                          {isDel ? "O'CHIRILGAN" : 'TAHRIR'}
+                          {isDel ? "O'CHIRILGAN" : 'TAHRIRLANGAN'}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-700 tabular-nums whitespace-nowrap">{formatDateTime(it.detectedAt)}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-800 text-[12px]">{it.bankNameSnap || it.account?.bank?.name || '—'}</div>
-                        <div className="text-[10px] text-slate-500 font-mono">{it.accountNoSnap || it.account?.accountNo || '—'}</div>
+                      <td className="px-3 py-3 text-slate-700 tabular-nums whitespace-nowrap text-[12px]">
+                        {formatDateTime(it.detectedAt)}
                       </td>
-                      <td className="px-4 py-3 font-mono text-[10.5px] text-slate-600 max-w-[260px] truncate" title={it.externalId}>
+                      <td className="px-3 py-3 text-slate-600 tabular-nums whitespace-nowrap text-[12px]">
+                        {it.txnDate ? new Date(it.txnDate).toLocaleDateString('ru-RU') : '—'}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="font-semibold text-slate-800 text-[12.5px] leading-tight">
+                          {it.bankNameSnap || it.account?.bank?.name || '—'}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500 font-mono mt-0.5">
+                          {it.accountNoSnap || it.account?.accountNo || '—'}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 font-mono text-[10.5px] text-slate-600 max-w-[200px] truncate" title={it.externalId}>
                         {it.externalId}
                       </td>
-                      <td className="px-4 py-3 font-mono text-[11.5px] text-indigo-700 font-semibold">{it.contractNumber || '—'}</td>
-                      <td className="px-4 py-3 text-right">
+                      <td className="px-3 py-3">
+                        {it.contractNumber ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 font-mono text-[11.5px] font-semibold">
+                            {it.contractNumber}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[11px]">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3 text-right whitespace-nowrap">
                         {it.amount ? (
                           <span className={cn(
-                            'tabular-nums font-semibold',
+                            'tabular-nums font-bold text-[13px]',
                             it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
                           )}>
-                            {it.direction === 'IN' ? '+' : '−'}{formatMoney(Math.abs(Number(it.amount)), 'UZS')}
+                            {it.direction === 'IN' ? '+' : '−'}{formatMoney(Math.abs(Number(it.amount)), 'UZS').replace(' UZS', '')}
+                            <span className="text-[10px] text-slate-400 ml-1 font-medium">UZS</span>
                           </span>
-                        ) : '—'}
+                        ) : <span className="text-slate-400">—</span>}
                       </td>
-                      <td className="px-4 py-3">
-                        {it.fieldsChanged && it.fieldsChanged.length > 0 ? (
+                      <td className="px-3 py-3">
+                        {isDel ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10px] font-bold ring-1 ring-rose-100">
+                            <Trash2 className="h-2.5 w-2.5" /> butun yozuv
+                          </span>
+                        ) : it.fieldsChanged && it.fieldsChanged.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {it.fieldsChanged.slice(0, 4).map((f) => (
-                              <span key={f} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-medium">{f}</span>
+                              <span key={f} className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-bold ring-1 ring-amber-100 font-mono">
+                                {f}
+                              </span>
                             ))}
                             {it.fieldsChanged.length > 4 && (
-                              <span className="text-[10px] text-slate-500">+{it.fieldsChanged.length - 4}</span>
+                              <span className="text-[10px] text-slate-500 px-1 py-0.5">+{it.fieldsChanged.length - 4}</span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-400">{isDel ? 'butun yozuv' : '—'}</span>
+                          <span className="text-[10px] text-slate-400">—</span>
                         )}
+                      </td>
+                      <td className="px-3 py-3 text-[10.5px] text-slate-500 max-w-[120px] truncate" title={it.detectedBy || ''}>
+                        {it.detectedBy ? (
+                          it.detectedBy.startsWith('manual:')
+                            ? <span className="text-indigo-700 font-medium">{it.detectedBy.replace('manual:', '')}</span>
+                            : <span className="text-slate-500">{it.detectedBy}</span>
+                        ) : '—'}
                       </td>
                     </tr>
                   );
@@ -283,26 +397,50 @@ export default function ChangesPage() {
               </tbody>
             </table>
           </div>
-          {total > perPage && (
-            <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-[12px] text-slate-600">
-              <div>Jami: <b className="tabular-nums">{total}</b> · sahifa {page}/{totalPages}</div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+
+          {/* Pagination footer */}
+          {total > 0 && (
+            <div className="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px] text-slate-600">
+              <div className="flex items-center gap-3">
+                <span>
+                  Jami: <b className="tabular-nums text-slate-800">{total.toLocaleString('ru-RU')}</b>
+                </span>
+                <span className="text-slate-300">·</span>
+                <span>
+                  Sahifa <b className="tabular-nums text-slate-800">{page}</b>/<b className="tabular-nums">{totalPages}</b>
+                </span>
+                <span className="text-slate-300 hidden sm:inline">·</span>
+                <div className="hidden sm:flex items-center gap-1.5">
+                  <Label className="text-[11px] text-slate-500 m-0">Sahifada:</Label>
+                  <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
+                    <SelectTrigger className="h-7 w-16 text-[11px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="25">25</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                      <SelectItem value="200">200</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(1)} className="h-8 px-2">«</Button>
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-8 px-2">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                <span className="px-2 text-[12px] font-semibold text-slate-700 tabular-nums">{page}</span>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="h-8 px-2">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(totalPages)} className="h-8 px-2">»</Button>
               </div>
             </div>
           )}
-        </Card>
+        </div>
       </div>
 
-      {/* Detail modal */}
+      {/* Modals */}
       <ChangeDetailDialog item={detail} onClose={() => setDetail(null)} />
-
-      {/* Check modal */}
       <ManualCheckDialog
         open={checkOpen}
         onClose={() => setCheckOpen(false)}
@@ -313,69 +451,125 @@ export default function ChangesPage() {
   );
 }
 
-// ────────────────────────────────────────────────────────
-// Detail dialog — eski vs yangi qiymatlarni ko'rsatadi
-// ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// KPI Card
+// ════════════════════════════════════════════════════════
+function KpiCard({
+  label, sub, value, suffix, icon: Icon, tone,
+}: {
+  label: string;
+  sub?: string;
+  value: string;
+  suffix?: string;
+  icon: any;
+  tone: 'indigo' | 'rose' | 'amber' | 'slate' | 'emerald';
+}) {
+  const tones: Record<string, { bg: string; ring: string; iconBg: string; iconText: string; valText: string }> = {
+    indigo: { bg: 'from-indigo-50/80 to-white', ring: 'ring-indigo-100', iconBg: 'bg-indigo-100 text-indigo-700', iconText: 'text-indigo-700', valText: 'text-slate-900' },
+    rose:   { bg: 'from-rose-50/80 to-white',   ring: 'ring-rose-100',   iconBg: 'bg-rose-100 text-rose-700',     iconText: 'text-rose-700',   valText: 'text-rose-700' },
+    amber:  { bg: 'from-amber-50/80 to-white',  ring: 'ring-amber-100',  iconBg: 'bg-amber-100 text-amber-700',   iconText: 'text-amber-700',  valText: 'text-amber-700' },
+    slate:  { bg: 'from-slate-50/80 to-white',  ring: 'ring-slate-200',  iconBg: 'bg-slate-100 text-slate-700',   iconText: 'text-slate-700',  valText: 'text-slate-900' },
+    emerald:{ bg: 'from-emerald-50/80 to-white',ring: 'ring-emerald-100',iconBg: 'bg-emerald-100 text-emerald-700',iconText: 'text-emerald-700',valText: 'text-emerald-700' },
+  };
+  const t = tones[tone];
+  return (
+    <div className={cn(
+      'relative rounded-2xl bg-gradient-to-br ring-1 shadow-soft overflow-hidden px-4 py-3.5 lg:px-5 lg:py-4 group hover:shadow-md transition-shadow',
+      t.bg, t.ring,
+    )}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <div className={cn('text-[10px] uppercase tracking-widest font-bold', t.iconText)}>
+            {label}
+          </div>
+          <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+            <div className={cn('text-2xl lg:text-3xl font-black tabular-nums leading-none', t.valText)}>
+              {value}
+            </div>
+            {suffix && <span className="text-[10px] text-slate-400 font-bold uppercase">{suffix}</span>}
+          </div>
+          {sub && <div className="text-[10.5px] text-slate-500 font-medium mt-1.5">{sub}</div>}
+        </div>
+        <div className={cn('w-10 h-10 lg:w-11 lg:h-11 rounded-xl grid place-items-center shrink-0 ring-1 ring-white/40', t.iconBg)}>
+          <Icon className="h-5 w-5" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════
+// Detail dialog
+// ════════════════════════════════════════════════════════
 function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClose: () => void }) {
   if (!item) return null;
   const isDel = item.changeType === 'DELETED';
   return (
     <Dialog open={!!item} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[760px] p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col">
+      <DialogContent className="sm:max-w-[820px] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
         <div className={cn(
           'px-6 pt-5 pb-4 text-white shrink-0',
           isDel
             ? 'bg-gradient-to-br from-rose-600 via-red-600 to-pink-600'
             : 'bg-gradient-to-br from-amber-500 via-orange-500 to-yellow-500',
         )}>
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center">
-              {isDel ? <Trash2 className="h-5 w-5" /> : <Edit3 className="h-5 w-5" />}
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 grid place-items-center ring-1 ring-white/30">
+              {isDel ? <Trash2 className="h-6 w-6" /> : <Edit3 className="h-6 w-6" />}
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-widest font-bold text-white/80">
                 {isDel ? "Bank tomonida o'chirilgan" : "Bank tomonida tahrirlangan"}
               </div>
-              <div className="text-lg font-black tracking-tight">
-                {item.bankNameSnap || item.account?.bank?.name || '—'} · {item.accountNoSnap || item.account?.accountNo || ''}
+              <div className="text-xl font-black tracking-tight leading-tight">
+                {item.bankNameSnap || item.account?.bank?.name || '—'}
+                <span className="text-white/70 mx-2">·</span>
+                <span className="text-white/90 font-mono text-base">{item.accountNoSnap || item.account?.accountNo || ''}</span>
               </div>
             </div>
           </div>
-          <div className="text-[11.5px] text-white/85 mt-2 font-mono break-all">{item.externalId}</div>
+          <div className="text-[11px] text-white/85 mt-3 font-mono break-all bg-black/15 rounded-lg px-3 py-1.5">
+            <span className="opacity-70 mr-2">ID:</span>{item.externalId}
+          </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-[12px]">
-            <InfoRow label="Aniqlangan" value={formatDateTime(item.detectedAt)} />
-            <InfoRow label="Aniqlovchi" value={item.detectedBy || '—'} />
-            <InfoRow label="Tranzaksiya sanasi" value={item.txnDate ? new Date(item.txnDate).toLocaleDateString('ru-RU') : '—'} />
-            <InfoRow label="Yo'nalish" value={item.direction === 'IN' ? 'Kirim' : item.direction === 'OUT' ? 'Chiqim' : '—'} />
-            <InfoRow label="Summa" value={item.amount ? formatMoney(Math.abs(Number(item.amount)), 'UZS') : '—'} />
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/40">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 text-[12px]">
+            <InfoRow label="Aniqlangan" value={formatDateTime(item.detectedAt)} icon={Calendar} />
+            <InfoRow label="Aniqlovchi" value={item.detectedBy || '—'} icon={Activity} />
+            <InfoRow label="Tranzaksiya sanasi" value={item.txnDate ? new Date(item.txnDate).toLocaleDateString('ru-RU') : '—'} icon={Calendar} />
+            <InfoRow label="Yo'nalish" value={item.direction === 'IN' ? '⬇ Kirim' : item.direction === 'OUT' ? '⬆ Chiqim' : '—'} />
+            <InfoRow label="Summa" value={item.amount ? formatMoney(Math.abs(Number(item.amount)), 'UZS') : '—'} mono />
             <InfoRow label="Shartnoma" value={item.contractNumber || '—'} mono />
           </div>
 
           {item.note && (
-            <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2 text-[12px] text-slate-700">
-              {item.note}
+            <div className="rounded-xl bg-white ring-1 ring-slate-200 px-3.5 py-2.5 text-[12px] text-slate-700 flex items-start gap-2">
+              <FileText className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+              <span>{item.note}</span>
             </div>
           )}
 
           {!isDel && item.fieldsChanged?.length > 0 && (
-            <div className="rounded-xl ring-1 ring-amber-200 bg-amber-50/40 overflow-hidden">
-              <div className="px-4 py-2 bg-amber-100/60 text-[11px] uppercase tracking-wider font-bold text-amber-800">
-                O'zgargan maydonlar
+            <div className="rounded-2xl ring-1 ring-amber-200 bg-white overflow-hidden shadow-soft">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-amber-100/80 to-amber-50 text-[11px] uppercase tracking-wider font-bold text-amber-800 flex items-center gap-2">
+                <Edit3 className="h-3.5 w-3.5" /> O'zgargan maydonlar ({item.fieldsChanged.length})
               </div>
-              <div className="divide-y divide-amber-200/50">
+              <div className="divide-y divide-amber-100">
                 {item.fieldsChanged.map((f) => {
                   const oldV = item.oldData?.[f]?.old ?? null;
                   const newV = item.oldData?.[f]?.new ?? null;
                   return (
-                    <div key={f} className="px-4 py-2.5 text-[12px] flex items-center gap-3">
-                      <div className="font-mono font-bold text-amber-900 w-32 shrink-0">{f}</div>
-                      <div className="flex-1 flex items-center gap-2 min-w-0">
-                        <code className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 break-all">{String(oldV ?? '—')}</code>
+                    <div key={f} className="px-4 py-3 text-[12px] flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
+                      <div className="font-mono font-bold text-amber-900 w-32 shrink-0 text-[11.5px]">{f}</div>
+                      <div className="flex-1 flex items-center gap-2 min-w-0 flex-wrap">
+                        <code className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 break-all font-mono text-[11.5px] font-semibold">
+                          {String(oldV ?? '—')}
+                        </code>
                         <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <code className="px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 break-all">{String(newV ?? '—')}</code>
+                        <code className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 break-all font-mono text-[11.5px] font-semibold">
+                          {String(newV ?? '—')}
+                        </code>
                       </div>
                     </div>
                   );
@@ -385,18 +579,18 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           )}
 
           {isDel && item.oldData && (
-            <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
-              <div className="px-4 py-2 bg-rose-100/60 text-[11px] uppercase tracking-wider font-bold text-rose-800">
-                O'chirilgan yozuv (snapshot)
+            <div className="rounded-2xl ring-1 ring-rose-200 bg-white overflow-hidden shadow-soft">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-rose-100/80 to-rose-50 text-[11px] uppercase tracking-wider font-bold text-rose-800 flex items-center gap-2">
+                <Trash2 className="h-3.5 w-3.5" /> O'chirilgan yozuv snapshot
               </div>
-              <pre className="px-4 py-3 text-[10.5px] font-mono text-slate-700 overflow-x-auto max-h-[300px]">
+              <pre className="px-4 py-3 text-[10.5px] font-mono text-slate-700 overflow-x-auto max-h-[320px] bg-slate-50/60">
                 {JSON.stringify(item.oldData, null, 2)}
               </pre>
             </div>
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-white">
           <Button variant="ghost" onClick={onClose}>Yopish</Button>
         </DialogFooter>
       </DialogContent>
@@ -404,18 +598,21 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, value, mono, icon: Icon }: { label: string; value: string; mono?: boolean; icon?: any }) {
   return (
-    <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2">
-      <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500">{label}</div>
-      <div className={cn('text-[12.5px] font-semibold text-slate-800 truncate', mono && 'font-mono')}>{value}</div>
+    <div className="rounded-xl bg-white ring-1 ring-slate-200 px-3 py-2 shadow-soft/50">
+      <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 flex items-center gap-1">
+        {Icon && <Icon className="h-3 w-3" />}
+        {label}
+      </div>
+      <div className={cn('text-[12.5px] font-bold text-slate-800 truncate mt-0.5', mono && 'font-mono')}>{value}</div>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────
-// Manual check dialog — sana orqali qo'lda tekshirish
-// ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// Manual check dialog
+// ════════════════════════════════════════════════════════
 function ManualCheckDialog({
   open, onClose, accounts, onSuccess,
 }: {
@@ -431,7 +628,6 @@ function ManualCheckDialog({
     return d.toISOString().slice(0, 10);
   })();
 
-  // Sync chegarasini olamiz
   const settingsQ = useQuery({
     queryKey: ['sync-settings-changes'],
     queryFn: () => api.get<{ ok: boolean; syncMinDate: string | null }>('/sync/settings'),
@@ -478,20 +674,26 @@ function ManualCheckDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { setResult(null); onClose(); } }}>
-      <DialogContent className="sm:max-w-[600px]">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-indigo-600" />
-            Qo'lda tekshirish (re-verify)
-          </DialogTitle>
-          <DialogDescription>
-            Tanlangan sana oralig'idagi mavjud tranzaksiyalarni bank API bilan solishtirib o'chirilgan/o'zgartirilganlarini aniqlaydi.
-          </DialogDescription>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-[620px] p-0 overflow-hidden gap-0">
+        <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 py-5 text-white">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-white/20 grid place-items-center ring-1 ring-white/30">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/85">Qo'lda re-verify</div>
+              <div className="text-xl font-black tracking-tight">Sana orqali tekshirish</div>
+            </div>
+          </div>
+          <div className="text-[12px] text-white/85 mt-3 leading-relaxed">
+            Tanlangan sana oralig'idagi mavjud tranzaksiyalarni bank API bilan solishtirib
+            o'chirilgan / o'zgartirilganlarini aniqlaydi.
+          </div>
+        </div>
 
-        <div className="space-y-4 py-2">
+        <div className="p-5 space-y-4">
           {minDate && (
-            <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800">
+            <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Sync chegarasi: <b className="tabular-nums">{minDate}</b> — bundan oldinga chiqib bo'lmaydi
             </div>
@@ -500,7 +702,7 @@ function ManualCheckDialog({
           {!result && (
             <>
               <div>
-                <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Hisob</Label>
+                <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Hisob</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -515,7 +717,7 @@ function ManualCheckDialog({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Sanadan</Label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -526,7 +728,7 @@ function ManualCheckDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Sanagacha</Label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -543,9 +745,10 @@ function ManualCheckDialog({
                 </div>
               )}
               {!fromTooEarly && dayDiff > 0 && (
-                <div className="text-[11px] text-slate-600 inline-flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  <b>{dayDiff}</b> ta kun · {accountId === 'all' ? 'barcha sync hisoblar' : '1 ta hisob'}
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-700 inline-flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                  <b className="tabular-nums">{dayDiff}</b> ta kun ·{' '}
+                  <b>{accountId === 'all' ? 'barcha sync hisoblar' : '1 ta hisob'}</b>
                 </div>
               )}
             </>
@@ -553,12 +756,14 @@ function ManualCheckDialog({
 
           {result?.ok && (
             <div className="space-y-3">
-              <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 flex items-start gap-2.5">
+              <div className="rounded-2xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
-                <div className="text-[12.5px] text-emerald-800">
-                  <div className="font-bold mb-0.5">Tekshirish yakunlandi</div>
-                  <div>
-                    {result.checked} hisob tekshirildi · <b>{result.deleted}</b> o'chirilgan · <b>{result.edited}</b> tahrirlangan
+                <div className="text-[12.5px] text-emerald-900">
+                  <div className="font-bold mb-1">Tekshirish yakunlandi</div>
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    <ResultBadge label="Tekshirildi" value={result.checked} color="indigo" />
+                    <ResultBadge label="O'chirilgan" value={result.deleted} color="rose" />
+                    <ResultBadge label="Tahrirlangan" value={result.edited} color="amber" />
                   </div>
                 </div>
               </div>
@@ -573,7 +778,7 @@ function ManualCheckDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
           {result?.ok ? (
             <Button onClick={onClose}>Yopish</Button>
           ) : (
@@ -582,9 +787,9 @@ function ManualCheckDialog({
               <Button
                 onClick={() => mut.mutate()}
                 disabled={mut.isPending || fromTooEarly || dayDiff <= 0}
-                className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
+                className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md"
               >
-                {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <RefreshCw className="h-4 w-4 mr-1.5" />}
+                {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
                 {mut.isPending ? 'Tekshirilmoqda...' : 'Tekshirishni boshlash'}
               </Button>
             </>
@@ -592,5 +797,19 @@ function ManualCheckDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' }) {
+  const styles: Record<string, string> = {
+    indigo: 'bg-indigo-100 text-indigo-800 ring-indigo-200',
+    rose: 'bg-rose-100 text-rose-800 ring-rose-200',
+    amber: 'bg-amber-100 text-amber-800 ring-amber-200',
+  };
+  return (
+    <div className={cn('rounded-lg px-2.5 py-1.5 ring-1 text-center', styles[color])}>
+      <div className="text-[9px] uppercase tracking-wider font-bold opacity-80">{label}</div>
+      <div className="text-lg font-black tabular-nums leading-none mt-0.5">{value ?? 0}</div>
+    </div>
   );
 }

@@ -252,8 +252,13 @@ export class TransactionsController {
     }
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(10, Number(perPage) || 50));
-    const [total, items] = await Promise.all([
+    // Aktiv filter ostida turli statistikalar — KPI cards uchun
+    const whereDeleted = { ...where, changeType: 'DELETED' as const };
+    const whereEdited = { ...where, changeType: 'EDITED' as const };
+    const [total, totalDeleted, totalEdited, items] = await Promise.all([
       this.prisma.transactionChangeLog.count({ where }),
+      this.prisma.transactionChangeLog.count({ where: whereDeleted }),
+      this.prisma.transactionChangeLog.count({ where: whereEdited }),
       this.prisma.transactionChangeLog.findMany({
         where,
         orderBy: { detectedAt: 'desc' },
@@ -273,6 +278,7 @@ export class TransactionsController {
     return {
       ok: true,
       total,
+      totals: { deleted: totalDeleted, edited: totalEdited },
       page: pageN,
       perPage: perPageN,
       items: items.map((it) => ({
