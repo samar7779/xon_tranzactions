@@ -1392,7 +1392,12 @@ function AktSverkaDialog({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.items.map((it) => (
+                      {/* Sana bo'yicha o'sish tartibida — eski tepada, yangi pastda (xronologik) */}
+                      {[...data.items].sort((a, b) => {
+                        const ta = a.date ? new Date(a.date).getTime() : 0;
+                        const tb = b.date ? new Date(b.date).getTime() : 0;
+                        return ta - tb;
+                      }).map((it) => (
                         <tr
                           key={it.id}
                           className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
@@ -1592,7 +1597,11 @@ function CrmSverkaView({
               <tbody>
                 {oplata.items.length === 0 ? (
                   <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-[12px]">To'lov yo'q</td></tr>
-                ) : oplata.items.map((it: OplataKvItem) => (
+                ) : [...oplata.items].sort((a: OplataKvItem, b: OplataKvItem) => {
+                  const ta = a.date ? new Date(a.date).getTime() : 0;
+                  const tb = b.date ? new Date(b.date).getTime() : 0;
+                  return ta - tb;
+                }).map((it: OplataKvItem) => (
                   <tr
                     key={it.id}
                     className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
