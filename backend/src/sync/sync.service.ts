@@ -43,9 +43,10 @@ export class SyncService implements OnModuleInit {
   }
 
   /**
-   * Boot paytida — mavjud TransactionChangeLog'da PENDING→COMPLETED noise
-   * yozuvlarini o'chiramiz. Bu normal hayot sikli, bank tahriri emas — eski
-   * detection ularni xato logladi. Endi log qilinmaydi, eski noise tozalanadi.
+   * Boot paytida — TransactionChangeLog'dagi status-only noise yozuvlarini
+   * o'chiramiz. Faqat status o'zgargan (boshqa hech narsa) va yangi status
+   * CANCELLED emas — bu bank tahriri emas, ichki state fluktuatsiyasi.
+   * Eski detection ularni xato logladi; endi log qilinmaydi, eski noise tozalanadi.
    */
   async onModuleInit() {
     try {
@@ -56,14 +57,16 @@ export class SyncService implements OnModuleInit {
       const toDelete = candidates
         .filter((c) => {
           const od = c.oldData as any;
-          return od?.status?.old === 'PENDING' && od?.status?.new === 'COMPLETED';
+          const newStatus = od?.status?.new;
+          // CANCELLED bo'lmagan har qanday status o'zgarishi — noise
+          return newStatus !== 'CANCELLED';
         })
         .map((c) => c.id);
       if (toDelete.length > 0) {
         const r = await this.prisma.transactionChangeLog.deleteMany({
           where: { id: { in: toDelete } },
         });
-        this.logger.log(`Boot cleanup: ${r.count} ta PENDING→COMPLETED noise yozuv o'chirildi`);
+        this.logger.log(`Boot cleanup: ${r.count} ta status noise yozuv o'chirildi (PENDING↔COMPLETED)`);
       }
     } catch (e: any) {
       // Bootstrap xatosi app'ni to'xtatmasin
@@ -883,13 +886,12 @@ export class SyncService implements OnModuleInit {
         fieldsChanged.push('amount');
         changes.amount = { old: oldAmountSom.toString(), new: newAmountSom.toString() };
       }
-      // Status: faqat haqiqiy "bank tahriri" hisoblanadi
-      //   PENDING → COMPLETED — normal hayot sikli (kutilayotgan to'lov tasdiqlandi), SKIP
-      //   PENDING → CANCELLED — bank rad qildi, LOG
-      //   COMPLETED → CANCELLED — bank qaytarib oldi, LOG
-      //   COMPLETED → PENDING — rollback, LOG
-      const isBenignStatusChange = tx.status === 'PENDING' && newStatus === 'COMPLETED';
-      if (tx.status !== newStatus && !isBenignStatusChange) {
+      // Status: faqat → CANCELLED bo'lganda "bank tahriri" hisoblanadi.
+      //   * → CANCELLED — bank rad qildi yoki qaytarib oldi, LOG
+      //   PENDING ↔ COMPLETED — banklar (ayniqsa IPak Yo'li) bir kun ichida
+      //     state'ni o'zgartirib turishi mumkin (ichki qayta ishlash, race),
+      //     bu bank tahriri emas — SKIP (DB silent yangilanadi)
+      if (tx.status !== newStatus && newStatus === 'CANCELLED') {
         fieldsChanged.push('status');
         changes.status = { old: tx.status, new: newStatus };
       }
