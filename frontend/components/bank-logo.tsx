@@ -10,7 +10,7 @@ const BANK_LOGOS: Record<string, string> = {
 // Logo orqa foni — ba'zi logolar oq fonda yaxshi ko'rinmaydi
 const BANK_LOGO_BG: Record<string, string> = {
   KAPITALBANK: 'bg-amber-400 ring-amber-300',  // sariq fon
-  IPAK_YULI: 'bg-white ring-slate-200',
+  IPAK_YULI: 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
 };
 
 // Bank kodi → brand rangi (logo yo'q banklar uchun fallback gradient)
@@ -66,7 +66,7 @@ export function BankLogo({
   const logo = BANK_LOGOS[code];
 
   if (logo) {
-    const bg = BANK_LOGO_BG[code] || 'bg-white ring-slate-200';
+    const bg = BANK_LOGO_BG[code] || 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700';
     return (
       <div
         className={cn('grid place-items-center ring-1 shrink-0 overflow-hidden', bg, rounded, className)}

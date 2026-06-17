@@ -22,7 +22,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
 
   if (data.length === 0) {
     return (
-      <div className={cn('grid place-items-center text-xs text-slate-400', className)} style={{ height }}>
+      <div className={cn('grid place-items-center text-xs text-slate-400 dark:text-slate-500', className)} style={{ height }}>
         Ma'lumot yo'q
       </div>
     );
@@ -77,7 +77,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
           {yTicks.map((t, i) => (
             <div
               key={i}
-              className="absolute right-2 text-[10px] text-slate-400 tabular-nums font-medium -translate-y-1/2"
+              className="absolute right-2 text-[10px] text-slate-400 dark:text-slate-500 tabular-nums font-medium -translate-y-1/2"
               style={{ top: `${(i / (yTicks.length - 1)) * 100}%` }}
             >
               {t}
@@ -87,7 +87,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
 
         {/* Plot maydoni */}
         <div
-          className="flex-1 relative rounded-lg bg-gradient-to-b from-slate-50/40 to-transparent overflow-hidden"
+          className="flex-1 relative rounded-lg bg-gradient-to-b from-slate-50/40 dark:from-slate-800/40 to-transparent overflow-hidden"
           style={{ height: H }}
           onMouseMove={onMove}
           onMouseLeave={() => setHover(null)}
@@ -101,7 +101,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
             return (
               <div
                 key={`wk-${i}`}
-                className="absolute top-0 bottom-0 bg-rose-100/60 pointer-events-none"
+                className="absolute top-0 bottom-0 bg-rose-100/60 dark:bg-rose-900/30 pointer-events-none"
                 style={{ left: `${left * 100}%`, width: `${(right - left) * 100}%` }}
               />
             );
@@ -201,14 +201,14 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
                 style={{ left: '100%', top: `${yTop(data[n - 1].outflow)}%` }}
               >
                 <span className="absolute inset-0 rounded-full bg-rose-400 animate-ping opacity-70" />
-                <span className="absolute inset-[3px] rounded-full bg-rose-500 ring-2 ring-white" />
+                <span className="absolute inset-[3px] rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
               </div>
               <div
                 className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 pointer-events-none"
                 style={{ left: '100%', top: `${yTop(data[n - 1].inflow)}%` }}
               >
                 <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />
-                <span className="absolute inset-[3px] rounded-full bg-emerald-500 ring-2 ring-white" />
+                <span className="absolute inset-[3px] rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
               </div>
             </>
           )}
@@ -217,11 +217,11 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
           {n <= 45 && data.map((d, i) => (
             <div key={`pt-${i}`}>
               <div
-                className="absolute w-[7px] h-[7px] rounded-full bg-emerald-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-[7px] h-[7px] rounded-full bg-emerald-500 ring-[1.5px] ring-white dark:ring-slate-900 pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(i) * 100}%`, top: `${yTop(d.inflow)}%` }}
               />
               <div
-                className="absolute w-[7px] h-[7px] rounded-full bg-rose-500 ring-[1.5px] ring-white pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-[7px] h-[7px] rounded-full bg-rose-500 ring-[1.5px] ring-white dark:ring-slate-900 pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(i) * 100}%`, top: `${yTop(d.outflow)}%` }}
               />
             </div>
@@ -236,17 +236,17 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
                 style={{ left: `${xFrac(h) * 100}%` }}
               />
               <div
-                className="absolute w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-3 h-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900 shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(h) * 100}%`, top: `${yTop(data[h].inflow)}%` }}
               />
               <div
-                className="absolute w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
+                className="absolute w-3 h-3 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900 shadow-md pointer-events-none -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${xFrac(h) * 100}%`, top: `${yTop(data[h].outflow)}%` }}
               />
               {/* Tooltip */}
               <div
-                className="absolute z-10 pointer-events-none -translate-x-1/2 bg-white rounded-xl
-                           shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 overflow-hidden"
+                className="absolute z-10 pointer-events-none -translate-x-1/2 bg-white dark:bg-slate-900 rounded-xl
+                           shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 dark:ring-slate-700 overflow-hidden"
                 style={{ left: `${Math.min(82, Math.max(18, xFrac(h) * 100))}%`, top: 10 }}
               >
                 <div className="bg-slate-900 text-white text-[11px] font-bold tabular-nums px-3 py-1.5">
@@ -255,19 +255,19 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
                 <div className="px-3 py-2 space-y-1">
                   <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-slate-500">Kirim</span>
-                    <span className="ml-auto font-bold text-emerald-700 tabular-nums">{formatFull(data[h].inflow)}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Kirim</span>
+                    <span className="ml-auto font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatFull(data[h].inflow)}</span>
                   </div>
                   <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span className="text-slate-500">Chiqim</span>
-                    <span className="ml-auto font-bold text-rose-700 tabular-nums">{formatFull(data[h].outflow)}</span>
+                    <span className="text-slate-500 dark:text-slate-400">Chiqim</span>
+                    <span className="ml-auto font-bold text-rose-700 dark:text-rose-300 tabular-nums">{formatFull(data[h].outflow)}</span>
                   </div>
-                  <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100">
-                    <span className="text-slate-500">Sof</span>
+                  <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <span className="text-slate-500 dark:text-slate-400">Sof</span>
                     <span className={cn(
                       "ml-auto font-bold tabular-nums",
-                      data[h].inflow - data[h].outflow >= 0 ? "text-emerald-700" : "text-rose-700",
+                      data[h].inflow - data[h].outflow >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
                     )}>
                       {data[h].inflow - data[h].outflow >= 0 ? '+' : ''}{formatFull(data[h].inflow - data[h].outflow)}
                     </span>
@@ -291,7 +291,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
                 key={i}
                 className={cn(
                   "absolute text-[10px] tabular-nums font-medium -translate-x-1/2",
-                  d.weekend ? "text-rose-500" : "text-slate-400",
+                  d.weekend ? "text-rose-500 dark:text-rose-400" : "text-slate-400 dark:text-slate-500",
                 )}
                 style={{ left: `${xFrac(i) * 100}%` }}
               >
@@ -303,7 +303,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
       </div>
 
       {/* Legenda */}
-      <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-slate-500">
+      <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Kirim
         </span>
@@ -311,7 +311,7 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
           <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Chiqim
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 ring-1 ring-rose-200" /> Dam olish kuni
+          <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 dark:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900" /> Dam olish kuni
         </span>
       </div>
     </div>
@@ -487,7 +487,7 @@ export function DonutChart({
       {(centerLabel || centerValue) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
           {centerValue && <div className="text-2xl font-bold tracking-tight tabular-nums">{centerValue}</div>}
-          {centerLabel && <div className="text-[10px] uppercase tracking-wider text-slate-500 mt-0.5">{centerLabel}</div>}
+          {centerLabel && <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">{centerLabel}</div>}
         </div>
       )}
     </div>
@@ -513,7 +513,7 @@ export function BarChart({ data, height = 180, className }: BarChartProps) {
               className="w-full rounded-t-md bg-gradient-to-t from-indigo-500 to-blue-400 transition-all duration-700"
               style={{ height: h, backgroundColor: d.color }}
             />
-            <div className="text-[10px] text-slate-500 truncate w-full text-center">{d.label}</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate w-full text-center">{d.label}</div>
           </div>
         );
       })}
@@ -537,7 +537,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
 
   if (data.length === 0) {
     return (
-      <div className={cn('grid place-items-center text-xs text-slate-400', className)} style={{ height }}>
+      <div className={cn('grid place-items-center text-xs text-slate-400 dark:text-slate-500', className)} style={{ height }}>
         Ma'lumot yo'q
       </div>
     );
@@ -555,7 +555,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
         {/* Chap o'q — pul */}
         <div className="w-14 shrink-0 relative">
           {moneyTicks.map((t, i) => (
-            <div key={i} className="absolute right-2 text-[10px] text-slate-400 tabular-nums -translate-y-1/2"
+            <div key={i} className="absolute right-2 text-[10px] text-slate-400 dark:text-slate-500 tabular-nums -translate-y-1/2"
               style={{ top: `${(i / 4) * 100}%` }}>{t}</div>
           ))}
         </div>
@@ -563,7 +563,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
         {/* Plot */}
         <div className="flex-1 relative" onMouseLeave={() => setHover(null)}>
           {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
-            <div key={i} className="absolute left-0 right-0 border-t border-slate-100" style={{ top: `${p * 100}%` }} />
+            <div key={i} className="absolute left-0 right-0 border-t border-slate-100 dark:border-slate-800" style={{ top: `${p * 100}%` }} />
           ))}
           <div className="absolute inset-0 flex items-end gap-1">
             {data.map((d, i) => (
@@ -571,7 +571,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
                 key={i}
                 className={cn(
                   'flex-1 h-full flex items-end justify-center gap-[2px] min-w-0 relative rounded-sm transition-colors',
-                  hover === i ? 'bg-slate-100' : d.weekend ? 'bg-amber-50' : '',
+                  hover === i ? 'bg-slate-100 dark:bg-slate-800' : d.weekend ? 'bg-amber-50 dark:bg-amber-950/40' : '',
                 )}
                 onMouseEnter={() => setHover(i)}
               >
@@ -580,24 +580,24 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
                 <div className="w-full max-w-[9px] rounded-t-sm bg-blue-500" style={{ height: `${(d.count / maxCount) * 100}%` }} />
 
                 {hover === i && (
-                  <div className="absolute z-10 bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-white rounded-xl
-                                  shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 overflow-hidden">
+                  <div className="absolute z-10 bottom-full mb-1.5 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 rounded-xl
+                                  shadow-[0_8px_30px_-6px_rgba(15,23,42,0.25)] ring-1 ring-slate-200/80 dark:ring-slate-700 overflow-hidden">
                     <div className="bg-slate-900 text-white text-[11px] font-bold tabular-nums px-3 py-1.5">{d.label}</div>
                     <div className="px-3 py-2 space-y-1">
                       <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                         <span className="w-2 h-2 rounded-sm bg-emerald-500" />
-                        <span className="text-slate-500">Kirim</span>
-                        <span className="ml-auto font-bold text-emerald-700 tabular-nums">{formatFull(d.inflow)}</span>
+                        <span className="text-slate-500 dark:text-slate-400">Kirim</span>
+                        <span className="ml-auto font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatFull(d.inflow)}</span>
                       </div>
                       <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                         <span className="w-2 h-2 rounded-sm bg-rose-500" />
-                        <span className="text-slate-500">Chiqim</span>
-                        <span className="ml-auto font-bold text-rose-700 tabular-nums">{formatFull(d.outflow)}</span>
+                        <span className="text-slate-500 dark:text-slate-400">Chiqim</span>
+                        <span className="ml-auto font-bold text-rose-700 dark:text-rose-300 tabular-nums">{formatFull(d.outflow)}</span>
                       </div>
-                      <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100">
+                      <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
                         <span className="w-2 h-2 rounded-sm bg-blue-500" />
-                        <span className="text-slate-500">Tranzaksiya</span>
-                        <span className="ml-auto font-bold text-blue-700 tabular-nums">{d.count} ta</span>
+                        <span className="text-slate-500 dark:text-slate-400">Tranzaksiya</span>
+                        <span className="ml-auto font-bold text-blue-700 dark:text-blue-300 tabular-nums">{d.count} ta</span>
                       </div>
                     </div>
                   </div>
@@ -625,7 +625,7 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
               key={i}
               className={cn(
                 'flex-1 text-[8px] text-center leading-tight tabular-nums',
-                d.weekend ? 'text-amber-600 font-semibold' : 'text-slate-400',
+                d.weekend ? 'text-amber-600 dark:text-amber-400 font-semibold' : 'text-slate-400 dark:text-slate-500',
               )}
             >
               {d.label}
@@ -636,11 +636,11 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
       </div>
 
       {/* Legenda */}
-      <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-500">
+      <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kirim</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" /> Chiqim</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500" /> Tranzaksiya soni</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-100 ring-1 ring-amber-300" /> Dam olish kuni</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-300 dark:ring-amber-900" /> Dam olish kuni</span>
       </div>
     </div>
   );

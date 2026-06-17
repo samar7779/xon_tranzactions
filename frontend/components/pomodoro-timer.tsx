@@ -209,11 +209,11 @@ export function PomodoroTimer() {
   const totalStr = totalH > 0 ? `${totalH}s ${totalM}d` : `${totalM} daqiqa`;
 
   return (
-    <div className="border-0 shadow-soft overflow-hidden rounded-2xl bg-white">
+    <div className="border-0 shadow-soft overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
       {/* Header */}
       <div className={cn(
-        "px-6 py-5 border-b border-slate-100 flex items-center gap-3",
-        mode === 'focus' ? 'bg-gradient-to-br from-amber-50 to-orange-50' : 'bg-gradient-to-br from-cyan-50 to-blue-50',
+        "px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3",
+        mode === 'focus' ? 'bg-gradient-to-br from-amber-50 dark:from-amber-950/40 to-orange-50 dark:to-orange-950/40' : 'bg-gradient-to-br from-cyan-50 dark:from-cyan-950/40 to-blue-50 dark:to-blue-950/40',
       )}>
         <div className={cn(
           "w-10 h-10 rounded-xl bg-gradient-to-br grid place-items-center text-white shadow-md",
@@ -222,10 +222,10 @@ export function PomodoroTimer() {
           {mode === 'focus' ? <Brain className="h-5 w-5" /> : <Coffee className="h-5 w-5" />}
         </div>
         <div className="flex-1">
-          <div className="text-base font-bold text-slate-900">
+          <div className="text-base font-bold text-slate-900 dark:text-slate-100">
             {mode === 'focus' ? 'Fokus rejimi' : 'Dam olish'}
           </div>
-          <div className="text-xs text-slate-500">
+          <div className="text-xs text-slate-500 dark:text-slate-400">
             Pomodoro · {mode === 'focus' ? `${focusMin} daqiqa ish` : `${breakMin} daqiqa dam`}
           </div>
         </div>
@@ -234,7 +234,7 @@ export function PomodoroTimer() {
             onClick={toggleMute}
             className={cn(
               "w-8 h-8 rounded-lg grid place-items-center transition-colors",
-              muted ? "bg-slate-100 text-slate-400" : "bg-emerald-50 text-emerald-700",
+              muted ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500" : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300",
             )}
             title={muted ? "Ovoz o'chirilgan" : "Ovoz yoqilgan"}
           >
@@ -244,7 +244,7 @@ export function PomodoroTimer() {
             onClick={() => setShowSettings(!showSettings)}
             className={cn(
               "w-8 h-8 rounded-lg grid place-items-center transition-colors",
-              showSettings ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500 hover:text-slate-700",
+              showSettings ? "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300",
             )}
           >
             <SettingsIcon className="h-4 w-4" />
@@ -254,10 +254,10 @@ export function PomodoroTimer() {
 
       {/* Settings */}
       {showSettings && (
-        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/60 space-y-3">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1 block">Fokus (daqiqa)</label>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">Fokus (daqiqa)</label>
               <input
                 type="number"
                 value={focusMin}
@@ -267,12 +267,12 @@ export function PomodoroTimer() {
                   localStorage.setItem('pomodoro-focus-min', String(v));
                   if (mode === 'focus' && !running) setSecondsLeft(v * 60);
                 }}
-                className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 text-sm bg-white"
+                className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 text-sm bg-white dark:bg-slate-900"
                 min={1} max={120}
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1 block">Dam (daqiqa)</label>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">Dam (daqiqa)</label>
               <input
                 type="number"
                 value={breakMin}
@@ -282,13 +282,13 @@ export function PomodoroTimer() {
                   localStorage.setItem('pomodoro-break-min', String(v));
                   if (mode === 'break' && !running) setSecondsLeft(v * 60);
                 }}
-                className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 text-sm bg-white"
+                className="w-full px-3 h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 text-sm bg-white dark:bg-slate-900"
                 min={1} max={60}
               />
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2 block">Zamonaviy dizayn — har birini ko'rib turing</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2 block">Zamonaviy dizayn — har birini ko'rib turing</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {STYLE_OPTIONS.map((opt) => {
                 const active = style === opt.value;
@@ -300,7 +300,7 @@ export function PomodoroTimer() {
                       "group relative rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1",
                       active
                         ? "ring-2 ring-indigo-500 shadow-[0_15px_40px_-10px_rgba(99,102,241,0.5)]"
-                        : "ring-1 ring-slate-200 hover:ring-indigo-300 hover:shadow-lg",
+                        : "ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 hover:shadow-lg",
                     )}
                   >
                     {/* Active glow */}
@@ -312,8 +312,8 @@ export function PomodoroTimer() {
                     <div className={cn(
                       "h-24 flex items-center justify-center relative overflow-hidden",
                       active
-                        ? "bg-gradient-to-br from-amber-50 to-orange-100"
-                        : "bg-slate-50",
+                        ? "bg-gradient-to-br from-amber-50 dark:from-amber-950/40 to-orange-100 dark:to-orange-900/30"
+                        : "bg-slate-50 dark:bg-slate-900",
                     )}>
                       <StylePreview style={opt.value} active={active} mode={mode} />
                     </div>
@@ -322,12 +322,12 @@ export function PomodoroTimer() {
                     <div className={cn(
                       "px-2 py-2.5 text-center transition-colors",
                       active
-                        ? "bg-gradient-to-br from-indigo-50 to-violet-50"
-                        : "bg-white",
+                        ? "bg-gradient-to-br from-indigo-50 dark:from-indigo-950/40 to-violet-50 dark:to-violet-950/40"
+                        : "bg-white dark:bg-slate-900",
                     )}>
                       <div className={cn(
                         "text-[12px] font-bold tracking-tight",
-                        active ? "text-indigo-700" : "text-slate-700",
+                        active ? "text-indigo-700 dark:text-indigo-300" : "text-slate-700 dark:text-slate-300",
                       )}>
                         {opt.label}
                       </div>
@@ -352,7 +352,7 @@ export function PomodoroTimer() {
           onClick={() => switchMode('focus')}
           className={cn(
             "flex-1 py-2 rounded-lg text-[12px] font-bold transition-all",
-            mode === 'focus' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 text-slate-500',
+            mode === 'focus' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
           )}
         >
           <Brain className="inline h-3.5 w-3.5 mr-1" /> Fokus
@@ -361,7 +361,7 @@ export function PomodoroTimer() {
           onClick={() => switchMode('break')}
           className={cn(
             "flex-1 py-2 rounded-lg text-[12px] font-bold transition-all",
-            mode === 'break' ? 'bg-cyan-500 text-white shadow-md' : 'bg-slate-100 text-slate-500',
+            mode === 'break' ? 'bg-cyan-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
           )}
         >
           <Coffee className="inline h-3.5 w-3.5 mr-1" /> Dam
@@ -405,7 +405,7 @@ export function PomodoroTimer() {
         )}
         <button
           onClick={reset}
-          className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors grid place-items-center shadow-sm"
+          className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors grid place-items-center shadow-sm"
           title="Qaytarish"
         >
           <RotateCcw className="h-4 w-4" />
@@ -413,14 +413,14 @@ export function PomodoroTimer() {
       </div>
 
       {/* Today's stats */}
-      <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 grid grid-cols-2 gap-3">
+      <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 grid place-items-center text-white shadow-md">
             <Flame className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Bugungi sessiya</div>
-            <div className="text-lg font-black text-slate-900 tabular-nums leading-none mt-0.5">{stats.sessions}</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Bugungi sessiya</div>
+            <div className="text-lg font-black text-slate-900 dark:text-slate-100 tabular-nums leading-none mt-0.5">{stats.sessions}</div>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -428,8 +428,8 @@ export function PomodoroTimer() {
             <Brain className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Jami fokus</div>
-            <div className="text-lg font-black text-slate-900 tabular-nums leading-none mt-0.5">{totalStr}</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Jami fokus</div>
+            <div className="text-lg font-black text-slate-900 dark:text-slate-100 tabular-nums leading-none mt-0.5">{totalStr}</div>
           </div>
         </div>
       </div>
@@ -658,11 +658,11 @@ function MinimalRing({ progress, mode, timeStr }: { progress: number; mode: Mode
         <div className="text-center">
           <div className={cn(
             "text-6xl font-black tabular-nums tracking-tight",
-            mode === 'focus' ? 'text-slate-900' : 'text-slate-900',
+            mode === 'focus' ? 'text-slate-900 dark:text-slate-100' : 'text-slate-900 dark:text-slate-100',
           )}>
             {timeStr}
           </div>
-          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 mt-2 font-bold">
+          <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 mt-2 font-bold">
             {mode === 'focus' ? 'Fokus' : 'Dam olish'}
           </div>
         </div>
@@ -754,7 +754,7 @@ function StylePreview({ style, active, mode }: { style: TimerStyle; active: bool
           />
         </svg>
         <div className="absolute inset-0 grid place-items-center">
-          <span className="text-[9px] font-black tabular-nums text-slate-700">25:00</span>
+          <span className="text-[9px] font-black tabular-nums text-slate-700 dark:text-slate-300">25:00</span>
         </div>
       </div>
     );

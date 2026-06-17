@@ -107,16 +107,16 @@ export function VipiskaDebugDialog({
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             {/* Searchable account combobox — kengaytirildi (6 ustun) */}
             <div className="relative md:col-span-6">
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 flex items-center justify-between">
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
                 <span>Bank hisobi * (qidirish: raqami yoki ism)</span>
                 {accountId && (
-                  <span className="text-[10px] text-emerald-600 font-bold normal-case tracking-normal">
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold normal-case tracking-normal">
                     ✓ tanlandi
                   </span>
                 )}
               </Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" />
                 <Input
                   type="text"
                   value={accountSearch}
@@ -141,7 +141,7 @@ export function VipiskaDebugDialog({
                       setAccountSearch('');
                       setAccountOpen(true);
                     }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded hover:bg-slate-100 text-slate-400 hover:text-rose-600 transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                     title="Tozalash"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -151,7 +151,7 @@ export function VipiskaDebugDialog({
               {accountOpen && (accountsQuery.data?.items?.length || 0) > 0 && (
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setAccountOpen(false)} />
-                  <div className="absolute z-30 left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto rounded-lg bg-white ring-1 ring-slate-200 shadow-lg">
+                  <div className="absolute z-30 left-0 right-0 top-full mt-1 max-h-72 overflow-y-auto rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-lg">
                     {(() => {
                       const q = accountSearch.trim().toLowerCase();
                       const allItems = accountsQuery.data?.items || [];
@@ -166,7 +166,7 @@ export function VipiskaDebugDialog({
                         : allItems;
                       if (filtered.length === 0) {
                         return (
-                          <div className="px-3 py-4 text-center text-[12px] text-slate-500">
+                          <div className="px-3 py-4 text-center text-[12px] text-slate-500 dark:text-slate-400">
                             Hech narsa topilmadi
                           </div>
                         );
@@ -181,18 +181,18 @@ export function VipiskaDebugDialog({
                             setAccountOpen(false);
                           }}
                           className={cn(
-                            'w-full text-left px-3 py-2 hover:bg-cyan-50 transition-colors border-b border-slate-100 last:border-b-0',
-                            accountId === a.id && 'bg-cyan-50',
+                            'w-full text-left px-3 py-2 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors border-b border-slate-100 dark:border-slate-800 last:border-b-0',
+                            accountId === a.id && 'bg-cyan-50 dark:bg-cyan-950/40',
                           )}
                         >
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
+                            <span className="text-[9.5px] uppercase font-bold px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">
                               {a.bank?.name || '?'}
                             </span>
-                            <span className="font-mono text-[12px] font-bold text-slate-800">{a.accountNo}</span>
+                            <span className="font-mono text-[12px] font-bold text-slate-800 dark:text-slate-200">{a.accountNo}</span>
                           </div>
                           {a.ownerName && (
-                            <div className="text-[11px] text-slate-600 mt-0.5 truncate">{a.ownerName}</div>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 truncate">{a.ownerName}</div>
                           )}
                         </button>
                       ));
@@ -203,7 +203,7 @@ export function VipiskaDebugDialog({
             </div>
 
             <div className="md:col-span-2">
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                 Sana *
               </Label>
               <Input
@@ -215,7 +215,7 @@ export function VipiskaDebugDialog({
             </div>
 
             <div className="md:col-span-4">
-              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+              <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                 № док (vergul bilan)
               </Label>
               <Input
@@ -238,7 +238,7 @@ export function VipiskaDebugDialog({
               Bank API'dan tekshirish
             </Button>
             {result && (
-              <Button variant="ghost" onClick={() => setResult(null)} className="text-slate-500">
+              <Button variant="ghost" onClick={() => setResult(null)} className="text-slate-500 dark:text-slate-400">
                 <X className="h-4 w-4 mr-1" /> Tozalash
               </Button>
             )}
@@ -246,46 +246,46 @@ export function VipiskaDebugDialog({
 
           {result && result.ok && (
             <div className="space-y-3">
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 flex items-center gap-3">
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3 flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-cyan-600 text-white grid place-items-center">
                   <Database className="h-5 w-5" />
                 </div>
                 <div className="flex-1 grid grid-cols-3 gap-3 text-[12px]">
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500">Bank API javobi</div>
-                    <div className="text-[14px] font-black text-slate-800">{result.totals?.fetched ?? 0} ta qator</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Bank API javobi</div>
+                    <div className="text-[14px] font-black text-slate-800 dark:text-slate-200">{result.totals?.fetched ?? 0} ta qator</div>
                   </div>
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500">Filtr natijasi</div>
-                    <div className="text-[14px] font-black text-cyan-700">{result.totals?.matched ?? 0} ta moslik</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Filtr natijasi</div>
+                    <div className="text-[14px] font-black text-cyan-700 dark:text-cyan-300">{result.totals?.matched ?? 0} ta moslik</div>
                   </div>
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500">Bank</div>
-                    <div className="text-[12.5px] font-bold text-slate-700">{result.bank?.name}</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Bank</div>
+                    <div className="text-[12.5px] font-bold text-slate-700 dark:text-slate-300">{result.bank?.name}</div>
                   </div>
                 </div>
               </div>
 
               {(result.errors?.length || 0) > 0 && (
-                <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 text-[12px] text-rose-800">
+                <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300">
                   <b>Xato(lar):</b> {result.errors!.join(' · ')}
                 </div>
               )}
 
               {(result.items || []).length === 0 ? (
-                <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-6 text-center">
-                  <AlertTriangle className="h-8 w-8 text-amber-600 mx-auto mb-2" />
-                  <div className="text-[13px] font-bold text-amber-800">
+                <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-6 text-center">
+                  <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
+                  <div className="text-[13px] font-bold text-amber-800 dark:text-amber-300">
                     Bank API'da bunday qator topilmadi
                   </div>
-                  <div className="text-[11.5px] text-amber-700 mt-1">
+                  <div className="text-[11.5px] text-amber-700 dark:text-amber-300 mt-1">
                     Vipiska Excel va bank API ma'lumotlari mos kelmagan bo'lishi mumkin
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
                   <table className="w-full text-[11.5px]">
-                    <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-600">
+                    <thead className="bg-slate-100 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       <tr>
                         <th className="px-3 py-2 text-left">№ док</th>
                         <th className="px-3 py-2 text-left">Sana</th>
@@ -297,7 +297,7 @@ export function VipiskaDebugDialog({
                     </thead>
                     <tbody>
                       {result.items!.map((it, i: number) => (
-                        <tr key={i} className="border-t border-slate-100 hover:bg-slate-50">
+                        <tr key={i} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800">
                           <td className="px-3 py-2 font-mono font-bold">{it.num}</td>
                           <td className="px-3 py-2">{it.ddate}</td>
                           <td className="px-3 py-2 text-right tabular-nums font-semibold">
@@ -306,7 +306,7 @@ export function VipiskaDebugDialog({
                           <td className="px-3 py-2 text-center">
                             <span className={cn(
                               'px-1.5 py-0.5 rounded text-[9.5px] font-bold',
-                              it.direction === 'IN' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
+                              it.direction === 'IN' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
                             )}>
                               {it.direction === 'IN' ? 'KIRIM' : 'CHIQIM'}
                             </span>
@@ -321,7 +321,7 @@ export function VipiskaDebugDialog({
                                 navigator.clipboard.writeText(it.compositeId);
                                 toast.success('Composite ID nusxalandi');
                               }}
-                              className="ml-1 text-cyan-600 hover:text-cyan-800"
+                              className="ml-1 text-cyan-600 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
                               title="Nusxalash"
                             >
                               📋
@@ -336,11 +336,11 @@ export function VipiskaDebugDialog({
             </div>
           )}
           {result && !result.ok && (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-              <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-              <div className="text-[13px] text-rose-800">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+              <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+              <div className="text-[13px] text-rose-800 dark:text-rose-300">
                 <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700">{result.error || "Noma'lum xato"}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
               </div>
             </div>
           )}

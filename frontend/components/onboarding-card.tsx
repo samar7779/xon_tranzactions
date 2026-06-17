@@ -63,20 +63,20 @@ export function OnboardingCard({
         <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
           <div>
             <div className="text-base lg:text-lg font-bold tracking-tight flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-600" />
+              <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
               Boshlash uchun yo'l-yo'riq
             </div>
-            <div className="text-sm text-slate-500 mt-0.5">{completed} / {steps.length} ta qadam bajarildi</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{completed} / {steps.length} ta qadam bajarildi</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-slate-500 mb-1">Bajarildi</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Bajarildi</div>
             <div className="flex gap-1.5">
               {steps.map((s, i) => (
                 <div
                   key={i}
                   className={cn(
                     "w-8 h-1.5 rounded-full transition-all",
-                    s.done ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-slate-200",
+                    s.done ? "bg-gradient-to-r from-emerald-500 to-emerald-400" : "bg-slate-200 dark:bg-slate-700",
                   )}
                 />
               ))}
@@ -93,7 +93,7 @@ export function OnboardingCard({
                 href={s.href}
                 className={cn(
                   "group relative overflow-hidden rounded-2xl p-5 transition-all hover:-translate-y-0.5",
-                  s.done ? "bg-emerald-50 ring-1 ring-emerald-200" : "bg-slate-50 hover:bg-white hover:shadow-pop ring-1 ring-slate-100",
+                  s.done ? "bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900" : "bg-slate-50 dark:bg-slate-900 hover:bg-white dark:hover:bg-slate-800 hover:shadow-pop ring-1 ring-slate-100 dark:ring-slate-800",
                 )}
               >
                 {/* Step number watermark */}
@@ -114,14 +114,14 @@ export function OnboardingCard({
                         <Check className="h-3.5 w-3.5" />
                       </div>
                     ) : (
-                      <div className="w-6 h-6 rounded-full bg-slate-200 text-slate-500 grid place-items-center text-[10px] font-bold">
+                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 grid place-items-center text-[10px] font-bold">
                         {s.num}
                       </div>
                     )}
                   </div>
                   <div className="font-semibold text-sm tracking-tight mb-1">{s.title}</div>
-                  <div className="text-xs text-slate-500 leading-relaxed">{s.description}</div>
-                  <div className="flex items-center gap-1 mt-3 text-xs font-medium text-indigo-600 group-hover:gap-2 transition-all">
+                  <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{s.description}</div>
+                  <div className="flex items-center gap-1 mt-3 text-xs font-medium text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
                     O'tish <ArrowRight className="h-3 w-3" />
                   </div>
                 </div>

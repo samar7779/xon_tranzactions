@@ -346,20 +346,20 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
-        <div ref={kunmaChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div ref={kunmaChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           {/* Header + boshqaruv */}
-          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900">
             <button
               type="button"
               onClick={() => setKunmaOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !kunmaOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !kunmaOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-emerald-600 grid place-items-center text-white">
                 <Activity className="h-3.5 w-3.5" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('dailyChart')}</div>
-              <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('dailyChart')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
@@ -374,7 +374,7 @@ export default function DashboardPage() {
                 value={chartBankId}
                 onValueChange={(v) => { setChartBankId(v); setChartAccountId('all'); }}
               >
-                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white border-slate-200">
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder={t('allBanks')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -391,23 +391,23 @@ export default function DashboardPage() {
                     </SelectItem>
                   ))}
                   {sortedChartBanks.filter((b: any) => !b.isActive).length > 0 && (
-                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold border-t border-slate-100 dark:border-slate-800 mt-1">
                       {t('inactiveBanks')}
                     </div>
                   )}
                   {sortedChartBanks.filter((b: any) => !b.isActive).map((b: any) => (
-                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400 dark:text-slate-500">{b.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
               {/* Hisob filtri — qidiruv bilan */}
               <Select value={chartAccountId} onValueChange={setChartAccountId}>
-                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder={t('allAccounts')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white dark:bg-slate-900 z-10">
                     <Input
                       value={accSearch}
                       onChange={(e) => setAccSearch(e.target.value)}
@@ -418,7 +418,7 @@ export default function DashboardPage() {
                   </div>
                   <SelectItem value="all">{t('allAccounts')}</SelectItem>
                   {chartAccounts.length === 0 ? (
-                    <div className="px-3 py-2 text-[11px] text-slate-400">{t('notFound')}</div>
+                    <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500">{t('notFound')}</div>
                   ) : (
                     chartAccounts.slice(0, 100).map((a: any) => (
                       <SelectItem key={a.id} value={a.id}>
@@ -430,7 +430,7 @@ export default function DashboardPage() {
               </Select>
 
               {/* Sana oralig'i presetlari */}
-              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+              <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                 <RangeBtn active={range === 'today'} onClick={() => setRange('today')}>{t('rangeToday')}</RangeBtn>
                 <RangeBtn active={range === '7d'} onClick={() => setRange('7d')}>{t('range7d')}</RangeBtn>
                 <RangeBtn active={range === '30d'} onClick={() => setRange('30d')}>{t('range30d')}</RangeBtn>
@@ -444,14 +444,14 @@ export default function DashboardPage() {
                     type="date"
                     value={customFrom}
                     onChange={(e) => setCustomFrom(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-blue-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-blue-400"
                   />
-                  <span className="text-slate-400 text-[11px]">→</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-[11px]">→</span>
                   <input
                     type="date"
                     value={customTo}
                     onChange={(e) => setCustomTo(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-blue-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-blue-400"
                   />
                 </div>
               )}
@@ -465,23 +465,23 @@ export default function DashboardPage() {
               <div className="flex items-center gap-5 mb-3 flex-wrap">
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalIn')}</span>
-                  <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('totalIn')}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                     {formatMoney(Number(daily?.totalIn || 0)).replace(' UZS', '')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOut')}</span>
-                  <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('totalOut')}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-rose-700 dark:text-rose-300">
                     {formatMoney(Number(daily?.totalOut || 0)).replace(' UZS', '')}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlow')}</span>
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('netFlow')}</span>
                   <span className={cn(
                     "text-[13px] font-bold tabular-nums",
-                    Number(daily?.net || 0) >= 0 ? "text-emerald-700" : "text-rose-700",
+                    Number(daily?.net || 0) >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
                   )}>
                     {Number(daily?.net || 0) >= 0 ? '+' : ''}{formatMoney(Number(daily?.net || 0)).replace(' UZS', '')}
                   </span>
@@ -489,9 +489,9 @@ export default function DashboardPage() {
               </div>
 
               {/* Grafik */}
-              <div className="bg-white">
+              <div className="bg-white dark:bg-slate-900">
                 {range === 'custom' && (!customFrom || !customTo) ? (
-                  <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                  <div className="h-[260px] grid place-items-center text-xs text-slate-400 dark:text-slate-500">
                     {t('selectDateRange')}
                   </div>
                 ) : dailyLoading ? (
@@ -505,19 +505,19 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KUNMA-KUN USTUNLI GRAFIK — alohida karta ═══ */}
-        <div ref={kunmaBarChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
-          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+        <div ref={kunmaBarChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60">
             <button
               type="button"
               onClick={() => setKunmaBarOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !kunmaBarOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !kunmaBarOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-amber-600 grid place-items-center text-white">
                 <BarChart3 className="h-3.5 w-3.5" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('barChart')}</div>
-              <div className="text-[10px] text-slate-500 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('barChart')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {chartFrom || '—'} → {chartTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2">
               <DownloadIconBtn
@@ -531,9 +531,9 @@ export default function DashboardPage() {
           </div>
           {kunmaBarOpen && (
             <div className="p-4">
-              <div className="bg-white">
+              <div className="bg-white dark:bg-slate-900">
                 {range === 'custom' && (!customFrom || !customTo) ? (
-                  <div className="h-[280px] grid place-items-center text-xs text-slate-400">
+                  <div className="h-[280px] grid place-items-center text-xs text-slate-400 dark:text-slate-500">
                     {t('selectDateRange')}
                   </div>
                 ) : dailyLoading ? (
@@ -547,20 +547,20 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ KLIENT TO'LOVLARI — Клиент / Физ.Л / Юр.Л kategoriya bo'yicha ═══ */}
-        <div ref={clientChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
+        <div ref={clientChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           {/* Header + boshqaruv */}
-          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-indigo-50/60 to-white">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-indigo-50/60 dark:from-indigo-950/40 to-white dark:to-slate-900">
             <button
               type="button"
               onClick={() => setClientOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !clientOpen && '-rotate-90')} />
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !clientOpen && '-rotate-90')} />
               <div className="w-6 h-6 rounded bg-indigo-600 grid place-items-center text-white">
                 <TrendingUp className="h-3.5 w-3.5" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">{t('clientPayments')}</div>
-              <div className="text-[10px] text-slate-500 truncate">· Клиент / Физ.Л / Юр.Л · {cliFrom || '—'} → {cliTo || '—'}</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('clientPayments')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· Клиент / Физ.Л / Юр.Л · {cliFrom || '—'} → {cliTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
@@ -575,7 +575,7 @@ export default function DashboardPage() {
                 value={cliBankId}
                 onValueChange={(v) => { setCliBankId(v); setCliAccountId('all'); }}
               >
-                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white border-slate-200">
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[130px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder={t('allBanks')} />
                 </SelectTrigger>
                 <SelectContent>
@@ -592,23 +592,23 @@ export default function DashboardPage() {
                     </SelectItem>
                   ))}
                   {sortedChartBanks.filter((b: any) => !b.isActive).length > 0 && (
-                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold border-t border-slate-100 dark:border-slate-800 mt-1">
                       {t('inactiveBanks')}
                     </div>
                   )}
                   {sortedChartBanks.filter((b: any) => !b.isActive).map((b: any) => (
-                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400 dark:text-slate-500">{b.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
 
               {/* Hisob filtri */}
               <Select value={cliAccountId} onValueChange={setCliAccountId}>
-                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white border-slate-200">
+                <SelectTrigger className="h-8 text-[11px] w-auto min-w-[150px] bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                   <SelectValue placeholder={t('allAccounts')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                  <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white dark:bg-slate-900 z-10">
                     <Input
                       value={cliAccSearch}
                       onChange={(e) => setCliAccSearch(e.target.value)}
@@ -619,7 +619,7 @@ export default function DashboardPage() {
                   </div>
                   <SelectItem value="all">{t('allAccounts')}</SelectItem>
                   {cliChartAccounts.length === 0 ? (
-                    <div className="px-3 py-2 text-[11px] text-slate-400">{t('notFound')}</div>
+                    <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500">{t('notFound')}</div>
                   ) : (
                     cliChartAccounts.slice(0, 100).map((a: any) => (
                       <SelectItem key={a.id} value={a.id}>
@@ -631,7 +631,7 @@ export default function DashboardPage() {
               </Select>
 
               {/* Sana oralig'i */}
-              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+              <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                 <RangeBtn active={cliRange === 'today'} onClick={() => setCliRange('today')}>{t('rangeToday')}</RangeBtn>
                 <RangeBtn active={cliRange === '7d'} onClick={() => setCliRange('7d')}>{t('range7d')}</RangeBtn>
                 <RangeBtn active={cliRange === '30d'} onClick={() => setCliRange('30d')}>{t('range30d')}</RangeBtn>
@@ -644,14 +644,14 @@ export default function DashboardPage() {
                     type="date"
                     value={cliCustomFrom}
                     onChange={(e) => setCliCustomFrom(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-indigo-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-indigo-400"
                   />
-                  <span className="text-slate-400 text-[11px]">→</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-[11px]">→</span>
                   <input
                     type="date"
                     value={cliCustomTo}
                     onChange={(e) => setCliCustomTo(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-indigo-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-indigo-400"
                   />
                 </div>
               )}
@@ -661,14 +661,14 @@ export default function DashboardPage() {
           {clientOpen && (
             <>
               {/* Subkategoriya tablari */}
-              <div className="px-4 pt-3 pb-2 flex items-center gap-1.5 flex-wrap border-b border-slate-100">
+              <div className="px-4 pt-3 pb-2 flex items-center gap-1.5 flex-wrap border-b border-slate-100 dark:border-slate-800">
                 <button
                   onClick={() => setCliSubCode('__all__')}
                   className={cn(
                     'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
                     cliSubCode === '__all__'
                       ? 'bg-indigo-600 text-white ring-indigo-600'
-                      : 'bg-white text-slate-600 ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   {t('allCategory')}
@@ -685,7 +685,7 @@ export default function DashboardPage() {
                       onClick={() => setCliSubCode(s.code)}
                       className={cn(
                         'px-2.5 h-7 rounded-md text-[11px] font-semibold ring-1 ring-inset transition-colors',
-                        active ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 bg-white text-slate-600 hover:bg-slate-50',
+                        active ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800',
                       )}
                       style={active ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                       title={`KIRIM: ${formatMoney(s.totalIn)} · CHIQIM: ${formatMoney(s.totalOut)} · ${s.count} ta`}
@@ -704,32 +704,32 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-5 mb-3 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalInShort')}</span>
-                    <span className="text-[13px] font-bold tabular-nums text-emerald-700">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('totalInShort')}</span>
+                    <span className="text-[13px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
                       {formatMoney(clientTotals.totalIn).replace(' UZS', '')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('totalOutShort')}</span>
-                    <span className="text-[13px] font-bold tabular-nums text-rose-700">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('totalOutShort')}</span>
+                    <span className="text-[13px] font-bold tabular-nums text-rose-700 dark:text-rose-300">
                       {formatMoney(clientTotals.totalOut).replace(' UZS', '')}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('netFlowShort')}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('netFlowShort')}</span>
                     <span className={cn(
                       "text-[13px] font-bold tabular-nums",
-                      clientTotals.net >= 0 ? "text-emerald-700" : "text-rose-700",
+                      clientTotals.net >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
                     )}>
                       {clientTotals.net >= 0 ? '+' : ''}{formatMoney(clientTotals.net).replace(' UZS', '')}
                     </span>
                   </div>
                 </div>
 
-                <div className="bg-white">
+                <div className="bg-white dark:bg-slate-900">
                   {cliRange === 'custom' && (!cliCustomFrom || !cliCustomTo) ? (
-                    <div className="h-[260px] grid place-items-center text-xs text-slate-400">
+                    <div className="h-[260px] grid place-items-center text-xs text-slate-400 dark:text-slate-500">
                       {t('selectDateRange')}
                     </div>
                   ) : clientLoading ? (
@@ -744,19 +744,19 @@ export default function DashboardPage() {
         </div>
 
         {/* ═══ XONPAY DEBITOR — XonPay'da ro'yxatda lekin bankga kelmagan to'lovlar ═══ */}
-        <div ref={xonpayChartRef} className="bg-white border border-slate-200 rounded overflow-hidden">
-          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 bg-gradient-to-r from-violet-50/60 to-white">
+        <div ref={xonpayChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-violet-50/60 dark:from-violet-950/40 to-white dark:to-slate-900">
             <button
               type="button"
               onClick={() => setXonpayOpen((o) => !o)}
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
-              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 transition-transform', !xonpayOpen && '-rotate-90')} />
-              <div className="w-7 h-7 rounded-md overflow-hidden bg-white ring-1 ring-slate-200 grid place-items-center shrink-0">
+              <ChevronDown className={cn('no-export h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !xonpayOpen && '-rotate-90')} />
+              <div className="w-7 h-7 rounded-md overflow-hidden bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center shrink-0">
                 <img src="/xonpay.jpg" alt="XonPay" className="w-full h-full object-cover" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 tracking-tight">Kutilayotgan to'lovlar (XonPay)</div>
-              <div className="text-[10px] text-slate-500 truncate">· debitor · {xonpayFrom || '—'} → {xonpayTo || '—'}</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Kutilayotgan to'lovlar (XonPay)</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· debitor · {xonpayFrom || '—'} → {xonpayTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
@@ -766,7 +766,7 @@ export default function DashboardPage() {
                   downloadChartPng(xonpayChartRef.current, `xonpay-debitor_${xonpayFrom || 'all'}_${xonpayTo || 'all'}.png`);
                 }}
               />
-              <div className="flex items-center bg-white border border-slate-200 rounded overflow-hidden">
+              <div className="flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                 <RangeBtn active={xonpayRange === 'yesterday'} onClick={() => setXonpayRange('yesterday')}>{tc('yesterday')}</RangeBtn>
                 <RangeBtn active={xonpayRange === '7d'} onClick={() => setXonpayRange('7d')}>{t('range7d')}</RangeBtn>
                 <RangeBtn active={xonpayRange === '30d'} onClick={() => setXonpayRange('30d')}>{t('range30d')}</RangeBtn>
@@ -778,14 +778,14 @@ export default function DashboardPage() {
                     type="date"
                     value={xonpayCustomFrom}
                     onChange={(e) => setXonpayCustomFrom(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-violet-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-violet-400"
                   />
-                  <span className="text-slate-400 text-[11px]">→</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-[11px]">→</span>
                   <input
                     type="date"
                     value={xonpayCustomTo}
                     onChange={(e) => setXonpayCustomTo(e.target.value)}
-                    className="h-8 text-[11px] px-2 bg-white border border-slate-200 rounded outline-none focus:border-violet-400"
+                    className="h-8 text-[11px] px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded outline-none focus:border-violet-400"
                   />
                 </div>
               )}
@@ -795,27 +795,27 @@ export default function DashboardPage() {
           {xonpayOpen && (
             <div className="p-4">
               {xonpayRange === 'custom' && (!xonpayCustomFrom || !xonpayCustomTo) ? (
-                <div className="h-[120px] grid place-items-center text-xs text-slate-400">
+                <div className="h-[120px] grid place-items-center text-xs text-slate-400 dark:text-slate-500">
                   {t('selectDateRange')}
                 </div>
               ) : xonpayLoading ? (
                 <Skeleton className="h-[160px] w-full" />
               ) : (
                 /* DEBITOR — XonPay'da bor lekin Kapital bankka tushmagan */
-                <div className="relative overflow-hidden rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-50/40 to-white p-5 sm:p-6">
+                <div className="relative overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-900 bg-gradient-to-br from-rose-50 dark:from-rose-950/40 via-rose-50/40 dark:via-rose-950/30 to-white dark:to-slate-900 p-5 sm:p-6">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <div className="text-[11px] sm:text-[12px] font-bold uppercase tracking-[0.15em] text-rose-700 mb-1">DEBITOR</div>
-                      <div className="text-[11px] sm:text-[12px] text-rose-600/80">XonPay'da bor, Kapital bankka kelmagan</div>
+                      <div className="text-[11px] sm:text-[12px] font-bold uppercase tracking-[0.15em] text-rose-700 dark:text-rose-300 mb-1">DEBITOR</div>
+                      <div className="text-[11px] sm:text-[12px] text-rose-600/80 dark:text-rose-400/80">XonPay'da bor, Kapital bankka kelmagan</div>
                     </div>
-                    <div className="w-11 h-11 rounded-xl bg-rose-100 grid place-items-center shrink-0">
-                      <AlertCircle className="h-5 w-5 text-rose-600 animate-pulse" />
+                    <div className="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-900/30 grid place-items-center shrink-0">
+                      <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 animate-pulse" />
                     </div>
                   </div>
-                  <div className="text-[28px] sm:text-[34px] font-bold tabular-nums text-rose-700 leading-tight">
+                  <div className="text-[28px] sm:text-[34px] font-bold tabular-nums text-rose-700 dark:text-rose-300 leading-tight">
                     {formatMoney(xonpayTotals.missing).replace(' UZS', '')}
                   </div>
-                  <div className="text-[12px] text-rose-700/80 mt-3 flex items-center gap-3 flex-wrap">
+                  <div className="text-[12px] text-rose-700/80 dark:text-rose-300/80 mt-3 flex items-center gap-3 flex-wrap">
                     <span>
                       <span className="font-bold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya kutilmoqda
                     </span>
@@ -849,12 +849,12 @@ export default function DashboardPage() {
               {accLoading ? (
                 <div className="p-4 space-y-2">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10" />)}</div>
               ) : totalAccounts === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">{t('noAccounts')}</div>
+                <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">{t('noAccounts')}</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
-                      <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                      <tr className="bg-slate-50 dark:bg-slate-900 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                         <th className="text-left px-3 py-2">{t('bankAccountHeader')}</th>
                         <th className="text-left px-3 py-2 w-24">{t('mfo')}</th>
                         <th className="text-right px-3 py-2 w-32">{t('balanceHeader')}</th>
@@ -862,7 +862,7 @@ export default function DashboardPage() {
                         <th className="text-left px-3 py-2 w-32">{t('lastSyncHeader')}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                       {(accounts!.items as any[])
                         .slice()
                         .sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0))
@@ -871,32 +871,32 @@ export default function DashboardPage() {
                           const colorIdx = byBank.findIndex((b) => b.id === a.bankId);
                           const color = BANK_COLORS[colorIdx >= 0 ? colorIdx : 0];
                           return (
-                            <tr key={a.id} className="hover:bg-slate-50 transition-colors">
+                            <tr key={a.id} className="hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                               <td className="px-3 py-2">
                                 <div className="flex items-center gap-2">
                                   <span className="w-1 h-6 rounded-sm shrink-0" style={{ backgroundColor: color }} />
                                   <div className="min-w-0">
-                                    <div className="font-semibold text-slate-900 truncate">{a.bank?.name || '—'}</div>
-                                    <div className="font-mono text-[10px] text-slate-500 truncate">{a.accountNo}</div>
+                                    <div className="font-semibold text-slate-900 dark:text-slate-100 truncate">{a.bank?.name || '—'}</div>
+                                    <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{a.accountNo}</div>
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-3 py-2 font-mono text-[11px] text-slate-700">{a.branch}</td>
-                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900">
+                              <td className="px-3 py-2 font-mono text-[11px] text-slate-700 dark:text-slate-300">{a.branch}</td>
+                              <td className="px-3 py-2 text-right font-semibold tabular-nums text-slate-900 dark:text-slate-100">
                                 {formatMoney(Number(a.balance || 0), a.currency)}
                               </td>
                               <td className="px-3 py-2">
                                 <span className={cn(
                                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
                                   a.syncEnabled
-                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    : "bg-slate-50 text-slate-500 border-slate-200",
+                                    ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900"
+                                    : "bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700",
                                 )}>
                                   <span className={cn("w-1 h-1 rounded-full", a.syncEnabled ? "bg-emerald-500" : "bg-slate-300")} />
                                   {a.syncEnabled ? 'ON' : 'OFF'}
                                 </span>
                               </td>
-                              <td className="px-3 py-2 text-[11px] text-slate-600 tabular-nums">
+                              <td className="px-3 py-2 text-[11px] text-slate-600 dark:text-slate-300 tabular-nums">
                                 {a.lastSyncedAt ? formatDateTime(a.lastSyncedAt) : '—'}
                               </td>
                             </tr>
@@ -919,18 +919,18 @@ export default function DashboardPage() {
                 {/* Big % */}
                 <div className="flex items-end justify-between">
                   <div>
-                    <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900">{syncStats.successRate}%</div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{t('successRate')}</div>
+                    <div className="text-3xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-100">{syncStats.successRate}%</div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{t('successRate')}</div>
                   </div>
                   <Link href={`/${locale}/admin/sync-logs`}>
-                    <button className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                    <button className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 flex items-center gap-1">
                       {t('details')} <ChevronRight className="h-3 w-3" />
                     </button>
                   </Link>
                 </div>
 
                 {/* Progress bar */}
-                <div className="h-1.5 bg-slate-100 rounded-sm overflow-hidden flex">
+                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden flex">
                   <div className="bg-emerald-500 transition-all" style={{ width: `${(syncStats.success / Math.max(1, syncStats.total)) * 100}%` }} />
                   <div className="bg-amber-500 transition-all" style={{ width: `${(syncStats.partial / Math.max(1, syncStats.total)) * 100}%` }} />
                   <div className="bg-rose-500 transition-all" style={{ width: `${(syncStats.failed / Math.max(1, syncStats.total)) * 100}%` }} />
@@ -950,9 +950,9 @@ export default function DashboardPage() {
             {/* Banks breakdown */}
             <DataPanel title={t('banksBreakdown')} subtitle={t('banksCount', { n: byBank.length })} collapsible>
               {byBank.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-500">{t('noBanks')}</div>
+                <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">{t('noBanks')}</div>
               ) : (
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 dark:divide-slate-700">
                   {byBank.map((b) => {
                     const pct = totalBalance > 0 ? (b.balance / totalBalance) * 100 : 0;
                     return (
@@ -960,16 +960,16 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: b.color }} />
-                            <span className="text-[12px] font-semibold text-slate-900 truncate">{b.name}</span>
-                            <span className="text-[10px] text-slate-500 shrink-0">{b.accounts} {t('accountsShort')}</span>
+                            <span className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 truncate">{b.name}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400 shrink-0">{b.accounts} {t('accountsShort')}</span>
                           </div>
-                          <span className="text-[11px] font-bold tabular-nums text-slate-700">{pct.toFixed(1)}%</span>
+                          <span className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-300">{pct.toFixed(1)}%</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1 bg-slate-100 rounded-sm overflow-hidden">
+                          <div className="flex-1 h-1 bg-slate-100 dark:bg-slate-800 rounded-sm overflow-hidden">
                             <div className="h-full transition-all" style={{ width: `${pct}%`, backgroundColor: b.color }} />
                           </div>
-                          <span className="text-[10px] tabular-nums text-slate-600 font-mono w-24 text-right">
+                          <span className="text-[10px] tabular-nums text-slate-600 dark:text-slate-300 font-mono w-24 text-right">
                             {formatMoney(b.balance).replace(' UZS', '')}
                           </span>
                         </div>
@@ -983,16 +983,16 @@ export default function DashboardPage() {
             {/* Recent failures alerts */}
             {syncStats.failed > 0 && (
               <DataPanel title={t('attention')} subtitle={t('syncErrors', { n: syncStats.failed })} tone="warning">
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 dark:divide-slate-700">
                   {(syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 3).map((l) => (
                     <Link key={l.id} href={`/${locale}/admin/sync-logs`} className="block">
-                      <div className="px-4 py-2.5 hover:bg-slate-50 transition-colors">
+                      <div className="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                         <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-3.5 w-3.5 text-rose-600 shrink-0 mt-0.5" />
+                          <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
                           <div className="flex-1 min-w-0">
-                            <div className="text-[11px] font-semibold text-slate-900 truncate">{l.source}</div>
-                            <div className="text-[10px] text-slate-500 line-clamp-2">{l.errorMessage}</div>
-                            <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{formatDateTime(l.startedAt)}</div>
+                            <div className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate">{l.source}</div>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2">{l.errorMessage}</div>
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums">{formatDateTime(l.startedAt)}</div>
                           </div>
                         </div>
                       </div>
@@ -1007,19 +1007,19 @@ export default function DashboardPage() {
               <div className="px-4 py-3">
                 <div className={cn(
                   "text-3xl font-bold tabular-nums tracking-tight",
-                  netFlow >= 0 ? "text-emerald-700" : "text-rose-700",
+                  netFlow >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
                 )}>
                   {netFlow >= 0 ? '+' : ''}{formatMoney(netFlow).replace(' UZS', '')}
                 </div>
-                <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mt-0.5">UZS</div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mt-0.5">UZS</div>
                 <div className="grid grid-cols-2 gap-2 mt-3 text-[11px]">
-                  <div className="rounded bg-emerald-50 border border-emerald-200 px-2 py-1.5">
-                    <div className="text-[9px] uppercase tracking-wider text-emerald-700 font-bold">{t('totalIn')}</div>
-                    <div className="font-semibold tabular-nums text-emerald-900">{formatMoney(inSum).replace(' UZS', '')}</div>
+                  <div className="rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900 px-2 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-bold">{t('totalIn')}</div>
+                    <div className="font-semibold tabular-nums text-emerald-900 dark:text-emerald-300">{formatMoney(inSum).replace(' UZS', '')}</div>
                   </div>
-                  <div className="rounded bg-rose-50 border border-rose-200 px-2 py-1.5">
-                    <div className="text-[9px] uppercase tracking-wider text-rose-700 font-bold">{t('totalOut')}</div>
-                    <div className="font-semibold tabular-nums text-rose-900">{formatMoney(outSum).replace(' UZS', '')}</div>
+                  <div className="rounded bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 px-2 py-1.5">
+                    <div className="text-[9px] uppercase tracking-wider text-rose-700 dark:text-rose-300 font-bold">{t('totalOut')}</div>
+                    <div className="font-semibold tabular-nums text-rose-900 dark:text-rose-300">{formatMoney(outSum).replace(' UZS', '')}</div>
                   </div>
                 </div>
               </div>
@@ -1044,19 +1044,19 @@ function DataTile({
   loading?: boolean;
 }) {
   const t = {
-    primary: 'text-slate-900',
-    success: 'text-emerald-700',
-    danger: 'text-rose-700',
+    primary: 'text-slate-900 dark:text-slate-100',
+    success: 'text-emerald-700 dark:text-emerald-300',
+    danger: 'text-rose-700 dark:text-rose-300',
   }[tone || 'primary'];
   return (
-    <div className="bg-white border border-slate-200 rounded px-3 py-2.5 hover:border-slate-300 transition-colors">
-      <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 truncate">{label}</div>
+    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 py-2.5 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+      <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 truncate">{label}</div>
       {loading ? (
         <Skeleton className="h-6 w-24" />
       ) : (
         <div className="flex items-baseline gap-1">
           <div className={cn("text-lg font-bold tracking-tight tabular-nums truncate", t)}>{value}</div>
-          {unit && <div className="text-[10px] text-slate-500 font-medium">{unit}</div>}
+          {unit && <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">{unit}</div>}
         </div>
       )}
     </div>
@@ -1076,26 +1076,26 @@ function DataPanel({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const headBg = tone === 'warning' ? 'bg-amber-50/40 border-amber-200' : tone === 'danger' ? 'bg-rose-50/40 border-rose-200' : 'bg-white border-slate-200';
+  const headBg = tone === 'warning' ? 'bg-amber-50/40 dark:bg-amber-950/40 border-amber-200 dark:border-amber-900' : tone === 'danger' ? 'bg-rose-50/40 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700';
 
   const head = (
     <div className="flex items-center gap-2 min-w-0">
       {collapsible && (
-        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 shrink-0 transition-transform duration-300", open && "rotate-180")} />
+        <ChevronDown className={cn("h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0 transition-transform duration-300", open && "rotate-180")} />
       )}
-      <div className="text-[12px] font-bold text-slate-900 tracking-tight truncate">{title}</div>
+      <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight truncate">{title}</div>
       {count !== undefined && (
-        <span className="text-[10px] font-semibold bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded tabular-nums">
+        <span className="text-[10px] font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded tabular-nums">
           {count}
         </span>
       )}
-      {subtitle && <div className="text-[10px] text-slate-500 truncate">· {subtitle}</div>}
+      {subtitle && <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {subtitle}</div>}
     </div>
   );
 
   return (
-    <div className={cn("bg-white border rounded overflow-hidden", headBg)}>
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 bg-slate-50/60">
+    <div className={cn("bg-white dark:bg-slate-900 border rounded overflow-hidden", headBg)}>
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60">
         {collapsible ? (
           <button
             type="button"
@@ -1113,11 +1113,11 @@ function DataPanel({
           open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
         )}>
           <div className="overflow-hidden">
-            <div className="bg-white">{children}</div>
+            <div className="bg-white dark:bg-slate-900">{children}</div>
           </div>
         </div>
       ) : (
-        <div className="bg-white">{children}</div>
+        <div className="bg-white dark:bg-slate-900">{children}</div>
       )}
     </div>
   );
@@ -1161,7 +1161,7 @@ function DownloadIconBtn({ onClick, title = 'PNG sifatida yuklab olish' }: { onC
     <button
       onClick={onClick}
       title={title}
-      className="no-export h-8 w-8 grid place-items-center bg-white border border-slate-200 rounded hover:bg-slate-50 hover:border-slate-300 text-slate-600 hover:text-slate-900 transition-colors"
+      className="no-export h-8 w-8 grid place-items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
     >
       <Download className="h-3.5 w-3.5" />
     </button>
@@ -1173,8 +1173,8 @@ function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () 
     <button
       onClick={onClick}
       className={cn(
-        "px-2.5 h-8 text-[11px] font-semibold transition-colors border-r border-slate-200 last:border-r-0",
-        active ? "bg-blue-600 text-white" : "bg-white text-slate-600 hover:bg-slate-50",
+        "px-2.5 h-8 text-[11px] font-semibold transition-colors border-r border-slate-200 dark:border-slate-700 last:border-r-0",
+        active ? "bg-blue-600 text-white" : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800",
       )}
     >
       {children}
@@ -1184,15 +1184,15 @@ function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () 
 
 function Mini({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
   const c = {
-    emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700' },
-    amber:   { dot: 'bg-amber-500',   text: 'text-amber-700' },
-    rose:    { dot: 'bg-rose-500',    text: 'text-rose-700' },
-    blue:    { dot: 'bg-blue-500',    text: 'text-blue-700' },
+    emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
+    amber:   { dot: 'bg-amber-500',   text: 'text-amber-700 dark:text-amber-300' },
+    rose:    { dot: 'bg-rose-500',    text: 'text-rose-700 dark:text-rose-300' },
+    blue:    { dot: 'bg-blue-500',    text: 'text-blue-700 dark:text-blue-300' },
   }[tone];
   return (
     <div className="text-center">
       <div className={cn("text-[14px] font-bold tabular-nums", c.text)}>{value}</div>
-      <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+      <div className="flex items-center justify-center gap-1 text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
         <span className={cn("w-1 h-1 rounded-full", c.dot)} />
         {label}
       </div>

@@ -121,7 +121,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-80">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center justify-between">
                     <span>{tn('title')}</span>
                     {failures.length > 0 && <span className="text-rose-600">{tn('errorsCount', { count: failures.length })}</span>}
                   </DropdownMenuLabel>
@@ -146,7 +146,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                             {hasDeployFailed    && <AlertCircle className="h-4 w-4 text-white" />}
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="text-[12px] font-semibold text-slate-800 flex items-center gap-1.5">
+                            <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                               {hasDeployRunning && (
                                 <>
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -156,15 +156,15 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                               {hasNewDeployVersion && 'Yangi versiya tayyor'}
                               {hasDeployFailed    && 'Deploy muvaffaqiyatsiz'}
                             </div>
-                            <div className="text-[10.5px] text-slate-500 leading-relaxed mt-0.5">
+                            <div className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">
                               {hasDeployRunning && (
                                 <span className="flex items-center gap-1">
-                                  <span className="tabular-nums font-semibold text-indigo-600">{deployStatus.progressPercent ?? 0}%</span>
-                                  <span className="text-slate-300">·</span>
+                                  <span className="tabular-nums font-semibold text-indigo-600 dark:text-indigo-400">{deployStatus.progressPercent ?? 0}%</span>
+                                  <span className="text-slate-300 dark:text-slate-600">·</span>
                                   <span>{deployStatus.elapsedSeconds ?? 0}s</span>
                                   {deployStatus.currentPhase && (
                                     <>
-                                      <span className="text-slate-300">·</span>
+                                      <span className="text-slate-300 dark:text-slate-600">·</span>
                                       <span className="truncate">{deployStatus.currentPhase}</span>
                                     </>
                                   )}
@@ -179,7 +179,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                             </div>
                             {/* Mini progress bar */}
                             {hasDeployRunning && (
-                              <div className="mt-1.5 h-1 bg-slate-100 rounded-full overflow-hidden">
+                              <div className="mt-1.5 h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                                 <div
                                   className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-1000"
                                   style={{ width: `${deployStatus.progressPercent ?? 1}%` }}
@@ -187,7 +187,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                               </div>
                             )}
                           </div>
-                          <Rocket className="h-3.5 w-3.5 text-slate-300 shrink-0" />
+                          <Rocket className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 shrink-0" />
                         </div>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
@@ -197,11 +197,11 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                   {/* Sync xatolari */}
                   {canSeeSync && failures.length === 0 && !hasDeployBadge && (
                     <div className="px-3 py-6 text-center">
-                      <div className="w-10 h-10 rounded-full bg-emerald-50 grid place-items-center mx-auto mb-2">
-                        <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                      <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center mx-auto mb-2">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                       </div>
-                      <div className="text-xs font-medium text-slate-700">{tn('allGood')}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">{tn('noErrors')}</div>
+                      <div className="text-xs font-medium text-slate-700 dark:text-slate-200">{tn('allGood')}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{tn('noErrors')}</div>
                     </div>
                   )}
                   {canSeeSync && failures.length > 0 && (
@@ -213,13 +213,13 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                           className="px-3 py-2 cursor-pointer"
                         >
                           <div className="flex items-start gap-2 w-full">
-                            <div className="w-7 h-7 rounded-lg bg-rose-50 grid place-items-center shrink-0">
-                              <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                            <div className="w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/40 grid place-items-center shrink-0">
+                              <AlertCircle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" />
                             </div>
                             <div className="min-w-0 flex-1">
-                              <div className="text-[12px] font-semibold text-slate-700">{tn('syncError')}</div>
-                              <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
-                              <div className="text-[10px] text-slate-400 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
+                              <div className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">{tn('syncError')}</div>
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 line-clamp-2 leading-relaxed">{l.errorMessage || l.source}</div>
+                              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 tabular-nums">{new Date(l.startedAt).toLocaleString('uz-UZ', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</div>
                             </div>
                           </div>
                         </DropdownMenuItem>

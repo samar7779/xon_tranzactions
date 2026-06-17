@@ -61,21 +61,21 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex-1 grid place-items-center p-8">
       <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-2xl bg-rose-50 grid place-items-center mx-auto mb-5">
+        <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/40 grid place-items-center mx-auto mb-5">
           <ShieldAlert className="h-8 w-8 text-rose-500" />
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
           Bu sahifaga ruxsatingiz yo'q
         </h1>
-        <p className="text-sm text-slate-500 mt-2 leading-relaxed">
+        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
           Bu bo'limni ko'rish uchun kerakli ruxsat rolingizga berilmagan.
           Agar bu xato deb hisoblasangiz, tizim administratoriga murojaat qiling.
         </p>
         <Link
           href={`/${locale}/dashboard`}
           className="inline-flex items-center gap-2 mt-6 px-4 h-10 rounded-xl
-                     bg-slate-900 text-white text-sm font-medium
-                     hover:bg-slate-800 transition-colors"
+                     bg-slate-900 dark:bg-slate-800 text-white text-sm font-medium
+                     hover:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
           Bosh sahifaga qaytish

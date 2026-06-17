@@ -78,16 +78,16 @@ function ratingGrade(rating: number | null | undefined): RatingGrade | null {
   const make = (letter: string, level: RatingGrade['level'], tone: RatingGrade['tone'], chip: string) => ({
     letter, level, tone, chip,
   });
-  if (r >= 96) return make('AAA', 'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
-  if (r >= 91) return make('AA',  'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
-  if (r >= 86) return make('A',   'Yuqori',    'emerald', 'bg-emerald-50 text-emerald-700 ring-emerald-200');
-  if (r >= 76) return make('BBB', "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
-  if (r >= 66) return make('BB',  "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
-  if (r >= 56) return make('B',   "O'rta",     'blue',    'bg-blue-50 text-blue-700 ring-blue-200');
-  if (r >= 51) return make('CCC', 'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
-  if (r >= 36) return make('CC',  'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
-  if (r >= 26) return make('C',   'Qoniqarli', 'amber',   'bg-amber-50 text-amber-700 ring-amber-200');
-  return make('D',   'Quyi',      'rose',    'bg-rose-50 text-rose-700 ring-rose-200');
+  if (r >= 96) return make('AAA', 'Yuqori',    'emerald', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900');
+  if (r >= 91) return make('AA',  'Yuqori',    'emerald', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900');
+  if (r >= 86) return make('A',   'Yuqori',    'emerald', 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900');
+  if (r >= 76) return make('BBB', "O'rta",     'blue',    'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900');
+  if (r >= 66) return make('BB',  "O'rta",     'blue',    'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900');
+  if (r >= 56) return make('B',   "O'rta",     'blue',    'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900');
+  if (r >= 51) return make('CCC', 'Qoniqarli', 'amber',   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900');
+  if (r >= 36) return make('CC',  'Qoniqarli', 'amber',   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900');
+  if (r >= 26) return make('C',   'Qoniqarli', 'amber',   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900');
+  return make('D',   'Quyi',      'rose',    'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900');
 }
 
 function isStandardInn(inn: string): boolean {
@@ -310,17 +310,17 @@ export default function CounterpartiesPage() {
           <CardContent className="p-4 flex items-center gap-2 flex-wrap">
             {/* Search */}
             <div className="relative flex-1 min-w-[240px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
               <Input
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setPage(1); }}
                 placeholder={t('search')}
-                className="pl-9 pr-8 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
+                className="pl-9 pr-8 h-10 rounded-xl bg-slate-50/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 focus-visible:bg-white dark:focus-visible:bg-slate-800"
               />
               {q && (
                 <button
                   onClick={() => { setQ(''); setPage(1); }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -415,7 +415,7 @@ export default function CounterpartiesPage() {
                   setQ(''); setRatingTier(''); setStatusFilter('');
                   setSortBy('addedAt'); setSortDir('desc'); setPage(1);
                 }}
-                className="text-[12px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1 px-3 h-10 rounded-xl hover:bg-rose-50 transition-colors"
+                className="text-[12px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium inline-flex items-center gap-1 px-3 h-10 rounded-xl hover:bg-rose-50 dark:hover:bg-rose-900/30 transition-colors"
               >
                 <X className="h-3.5 w-3.5" /> {t('filterReset')}
               </button>
@@ -423,7 +423,7 @@ export default function CounterpartiesPage() {
 
             {/* Actions — bitta dropdown ichida */}
             <div className="ml-auto flex items-center gap-2">
-              <div className="h-8 w-px bg-slate-200" />
+              <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -485,7 +485,7 @@ export default function CounterpartiesPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                    <tr className="bg-slate-50/80 dark:bg-slate-800 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                       <th className="text-left px-4 py-3 w-28">{t('innLabel')}</th>
                       <th className="text-left px-4 py-3">{t('nameLabel')}</th>
                       <th className="text-left px-4 py-3 w-48">{t('director')}</th>
@@ -496,7 +496,7 @@ export default function CounterpartiesPage() {
                       <th className="w-12"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {items.map((it) => {
                       const isRefreshing = refreshingInn === it.inn;
                       const grade = ratingGrade(it.rating ?? null);
@@ -504,15 +504,15 @@ export default function CounterpartiesPage() {
                       return (
                         <tr
                           key={it.inn}
-                          className="group cursor-pointer border-l-4 border-l-transparent hover:bg-indigo-50 hover:border-l-indigo-500 transition-all duration-150"
+                          className="group cursor-pointer border-l-4 border-l-transparent hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:border-l-indigo-500 transition-all duration-150"
                           onClick={() => setDetailRow(it)}
                         >
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[12px] font-bold text-slate-900">{it.inn}</span>
+                              <span className="font-mono text-[12px] font-bold text-slate-900 dark:text-slate-100">{it.inn}</span>
                               {manual && (
                                 <span
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-bold uppercase tracking-wider"
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[9px] font-bold uppercase tracking-wider"
                                   title="Nostandart INN — qo'lda kiritilgan, avto-yangilanmaydi"
                                 >
                                   Qo'lda
@@ -521,10 +521,10 @@ export default function CounterpartiesPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3 max-w-[300px]">
-                            <div className="font-semibold text-slate-900 truncate" title={it.name}>{it.name}</div>
+                            <div className="font-semibold text-slate-900 dark:text-slate-100 truncate" title={it.name}>{it.name}</div>
                             {it.oked && (
-                              <div className="text-[10px] text-slate-500 truncate flex items-center gap-1 mt-0.5" title={it.oked}>
-                                <Building2 className="h-2.5 w-2.5 text-slate-400" />
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1 mt-0.5" title={it.oked}>
+                                <Building2 className="h-2.5 w-2.5 text-slate-400 dark:text-slate-500" />
                                 {String(it.oked).replace(/^\d+\s*-\s*/, '')}
                               </div>
                             )}
@@ -549,14 +549,14 @@ export default function CounterpartiesPage() {
                                 </span>
                               </div>
                             ) : (
-                              <span className="text-slate-400 text-[11px]">—</span>
+                              <span className="text-slate-400 dark:text-slate-500 text-[11px]">—</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">{it.phone || '—'}</td>
-                          <td className="px-4 py-3 text-[11px] text-slate-600 truncate max-w-[200px]" title={it.vatStatus || ''}>
+                          <td className="px-4 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300 whitespace-nowrap">{it.phone || '—'}</td>
+                          <td className="px-4 py-3 text-[11px] text-slate-600 dark:text-slate-300 truncate max-w-[200px]" title={it.vatStatus || ''}>
                             {it.vatStatus || '—'}
                           </td>
-                          <td className="px-4 py-3 text-[11px] text-slate-500 whitespace-nowrap">
+                          <td className="px-4 py-3 text-[11px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
                             {isRefreshing ? (
                               <span className="inline-flex items-center gap-1 text-indigo-600">
                                 <Loader2 className="h-3 w-3 animate-spin" /> {t('syncing')}
@@ -619,15 +619,15 @@ export default function CounterpartiesPage() {
         {/* Pagination */}
         {total > 0 && (
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-700 tabular-nums">
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                 {((page - 1) * perPage) + 1}–{Math.min(page * perPage, total)}
               </span> / {t('ofTotal', { n: total })}
             </div>
 
             <div className="flex items-center gap-4 flex-wrap">
               {/* Har sahifada nechta */}
-              <div className="flex items-center gap-2 text-xs text-slate-600">
+              <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
                 <span>{t('perPageLabel')}</span>
                 <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
                   <SelectTrigger className="h-9 w-[78px] rounded-full text-xs font-semibold">
@@ -667,8 +667,8 @@ export default function CounterpartiesPage() {
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                {t('innLabel')} <span className="text-rose-500">*</span>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+                {t('innLabel')} <span className="text-rose-500 dark:text-rose-400">*</span>
               </Label>
               <Input
                 value={addInn}
@@ -679,8 +679,8 @@ export default function CounterpartiesPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-                {t('nameLabel')} <span className="text-rose-500">*</span>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+                {t('nameLabel')} <span className="text-rose-500 dark:text-rose-400">*</span>
               </Label>
               <Input
                 value={addName}
@@ -745,7 +745,7 @@ export default function CounterpartiesPage() {
             )}
             {importResult && (
               <div className="space-y-3">
-                <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500">{t('importResult')}</div>
+                <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('importResult')}</div>
                 <div className="grid grid-cols-4 gap-2">
                   <ImportStat label="Qo'shildi" value={importResult.added || 0} tone="emerald" />
                   <ImportStat label="Yangilandi" value={importResult.updated || 0} tone="blue" />
@@ -755,8 +755,8 @@ export default function CounterpartiesPage() {
 
                 {/* O'zgarmaganlar haqida qisqacha izoh */}
                 {importResult.skipped > 0 && (
-                  <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[11px] text-amber-900 flex items-start gap-2">
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-300 flex items-start gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div>
                       <b>{importResult.skipped} ta qator o'zgarmagan</b> — INN va nom DB'da xuddi shunday turibdi.
                       Ro'yxatga qo'shilmadi (UI'ni og'irlashtirmaslik uchun).
@@ -766,8 +766,8 @@ export default function CounterpartiesPage() {
 
                 {/* O'zgargan / xato qatorlar ro'yxati */}
                 {(importResult.rows || []).length > 0 ? (
-                  <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100">
-                    <div className="bg-slate-50 px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 sticky top-0">
+                  <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
+                    <div className="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 sticky top-0">
                       O'zgargan qatorlar ({(importResult.rows || []).length})
                     </div>
                     {(importResult.rows || []).map((r: any, i: number) => (
@@ -779,13 +779,13 @@ export default function CounterpartiesPage() {
                           r.status === 'skipped' ? 'bg-amber-500' : 'bg-rose-500',
                         )} />
                         <span className="font-mono font-bold">{r.inn}</span>
-                        <span className="text-slate-500 truncate flex-1">{r.name || ''}</span>
-                        {r.reason && <span className="text-slate-400 truncate" title={r.reason}>{r.reason}</span>}
+                        <span className="text-slate-500 dark:text-slate-400 truncate flex-1">{r.name || ''}</span>
+                        {r.reason && <span className="text-slate-400 dark:text-slate-500 truncate" title={r.reason}>{r.reason}</span>}
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-6 text-center text-[12px] text-slate-500">
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400">
                     <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
                     Hammasi o'z joyida — DB allaqachon Excel bilan bir xil. Hech narsa o'zgartirilmadi.
                   </div>
@@ -793,8 +793,8 @@ export default function CounterpartiesPage() {
 
                 {/* Faqat yangi/yangilangan qatorlar bo'lsa — refresh tavsiya */}
                 {(importResult.added > 0 || importResult.updated > 0) && (
-                  <div className="rounded-lg bg-indigo-50 ring-1 ring-indigo-200 px-3 py-2 text-[11px] text-indigo-900 flex items-start gap-2">
-                    <RefreshCw className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-0.5" />
+                  <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 px-3 py-2 text-[11px] text-indigo-900 dark:text-indigo-300 flex items-start gap-2">
+                    <RefreshCw className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                     <div>
                       Yangi qatorlar uchun direktor, telefon, reyting va boshqa ma'lumotlar
                       keyingi soatlik cron'da (08:00–22:00) avtomatik to'ldiriladi.
@@ -868,17 +868,17 @@ function KpiTile({
             )}>
               {icon}
             </div>
-            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 truncate">{label}</div>
+            <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 truncate">{label}</div>
           </div>
           <div className={cn(
-            'font-black tabular-nums tracking-tight text-slate-900 truncate',
+            'font-black tabular-nums tracking-tight text-slate-900 dark:text-slate-100 truncate',
             small ? 'text-sm' : 'text-3xl',
           )} title={value}>
             {value}
           </div>
-          {sub && <div className="text-[10px] text-slate-500 mt-1 truncate">{sub}</div>}
+          {sub && <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 truncate">{sub}</div>}
           {progress != null && (
-            <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+            <div className="mt-2 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
               <div
                 className={cn('h-full rounded-full bg-gradient-to-r transition-all duration-700', gradient)}
                 style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
@@ -917,11 +917,11 @@ function FilterDropdown({
           className={cn(
             'inline-flex items-center gap-1.5 px-3 h-10 rounded-xl text-[12px] font-semibold ring-1 transition-colors',
             isActive
-              ? 'bg-indigo-50 text-indigo-700 ring-indigo-200 hover:bg-indigo-100'
-              : 'bg-slate-50/60 text-slate-700 ring-slate-200 hover:bg-slate-100',
+              ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+              : 'bg-slate-50/60 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
           )}
         >
-          <span className={cn('shrink-0', isActive ? 'text-indigo-600' : 'text-slate-400')}>{icon}</span>
+          <span className={cn('shrink-0', isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500')}>{icon}</span>
           <span className="text-[10px] uppercase tracking-wider font-bold opacity-70">{label}:</span>
           <span className="truncate max-w-[140px]">{activeLabel || 'Hammasi'}</span>
           {isActive && (
@@ -943,7 +943,7 @@ function FilterDropdown({
               onClick={() => onChange(opt.v)}
               className={cn(
                 'cursor-pointer flex items-start gap-2',
-                selected && 'bg-indigo-50 focus:bg-indigo-100',
+                selected && 'bg-indigo-50 dark:bg-indigo-950/40 focus:bg-indigo-100 dark:focus:bg-indigo-900/30',
               )}
             >
               <span className={cn(
@@ -951,10 +951,10 @@ function FilterDropdown({
                 opt.tone ? toneDot[opt.tone] : 'bg-slate-300',
               )} />
               <div className="min-w-0 flex-1">
-                <div className={cn('text-[12px] font-semibold', selected && 'text-indigo-700')}>
+                <div className={cn('text-[12px] font-semibold', selected && 'text-indigo-700 dark:text-indigo-300')}>
                   {opt.label}
                 </div>
-                {opt.sub && <div className="text-[10px] text-slate-500 truncate">{opt.sub}</div>}
+                {opt.sub && <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">{opt.sub}</div>}
               </div>
               {selected && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 shrink-0 mt-1" />}
             </DropdownMenuItem>
@@ -967,10 +967,10 @@ function FilterDropdown({
 
 
 function ImportStat({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
-  const cls = tone === 'emerald' ? 'bg-emerald-50 ring-emerald-200 text-emerald-700'
-    : tone === 'blue' ? 'bg-blue-50 ring-blue-200 text-blue-700'
-    : tone === 'amber' ? 'bg-amber-50 ring-amber-200 text-amber-700'
-    : 'bg-rose-50 ring-rose-200 text-rose-700';
+  const cls = tone === 'emerald' ? 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300'
+    : tone === 'blue' ? 'bg-blue-50 dark:bg-blue-950/40 ring-blue-200 dark:ring-blue-900 text-blue-700 dark:text-blue-300'
+    : tone === 'amber' ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-700 dark:text-amber-300'
+    : 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300';
   return (
     <div className={cn('rounded-xl ring-1 px-3 py-2 text-center', cls)}>
       <div className="text-[9px] uppercase tracking-wider font-bold opacity-80">{label}</div>
@@ -1003,7 +1003,7 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
         <DialogDescription className="flex items-center gap-2">
           <span className="font-mono">{row.inn}</span>
           {manual && (
-            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 text-violet-700 text-[9px] font-bold uppercase tracking-wider">
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[9px] font-bold uppercase tracking-wider">
               Qo'lda kiritilgan
             </span>
           )}
@@ -1038,16 +1038,16 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
             <Building2 className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 mb-0.5">Faoliyat turi (OKED)</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-400 mb-0.5">Faoliyat turi (OKED)</div>
             {(() => {
               const m = String(row.oked).match(/^(\d+)\s*-\s*(.+)$/);
               return m ? (
                 <>
-                  <div className="text-sm font-bold text-slate-800 leading-snug">{m[2]}</div>
-                  <div className="text-[10px] text-indigo-700 font-mono mt-0.5">Kod: {m[1]}</div>
+                  <div className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug">{m[2]}</div>
+                  <div className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono mt-0.5">Kod: {m[1]}</div>
                 </>
               ) : (
-                <div className="text-sm font-bold text-slate-800">{row.oked}</div>
+                <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{row.oked}</div>
               );
             })()}
           </div>
@@ -1064,27 +1064,27 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
       </div>
 
       {row.address && (
-        <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
-          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
+        <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">
             <MapPin className="h-3 w-3" /> {t('address')}
           </div>
-          <div className="text-[13px] text-slate-800">{row.address}</div>
+          <div className="text-[13px] text-slate-800 dark:text-slate-200">{row.address}</div>
         </div>
       )}
 
       {/* Bank accounts */}
-      <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
-        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-2">
+      <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
+        <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">
           <Receipt className="h-3 w-3" /> {t('bankAccounts')}
         </div>
         {(row.bankAccounts || []).length === 0 ? (
-          <div className="text-[12px] text-slate-400 italic">{t('noBankAccounts')}</div>
+          <div className="text-[12px] text-slate-400 dark:text-slate-500 italic">{t('noBankAccounts')}</div>
         ) : (
           <div className="space-y-1.5">
             {(row.bankAccounts as any[]).map((b, i) => (
               <div key={i} className="flex items-center gap-2 text-[12px]">
-                <span className="font-mono font-bold text-slate-800">{b.account}</span>
-                {b.mfo && <span className="text-slate-500">· MFO {b.mfo}</span>}
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{b.account}</span>
+                {b.mfo && <span className="text-slate-500 dark:text-slate-400">· MFO {b.mfo}</span>}
               </div>
             ))}
           </div>
@@ -1092,34 +1092,34 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
       </div>
 
       {/* Meta */}
-      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
+      <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
         <div>
-          {t('addedBy')}: <b className="text-slate-700">{row.addedByUser?.fullName || row.addedByUser?.email || '—'}</b>
+          {t('addedBy')}: <b className="text-slate-700 dark:text-slate-300">{row.addedByUser?.fullName || row.addedByUser?.email || '—'}</b>
           {' · '}
           {row.addedAt && <span>{formatDateTime(row.addedAt)}</span>}
         </div>
         <div>
-          {t('lastFetched')}: <b className="text-slate-700">{row.lastFetchedAt ? formatDateTime(row.lastFetchedAt) : '—'}</b>
+          {t('lastFetched')}: <b className="text-slate-700 dark:text-slate-300">{row.lastFetchedAt ? formatDateTime(row.lastFetchedAt) : '—'}</b>
         </div>
       </div>
 
       {/* History (audit log) — collapsible, default closed */}
-      <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden bg-white">
+      <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden bg-white dark:bg-slate-900">
         <button
           type="button"
           onClick={() => setHistoryOpen((o) => !o)}
           className={cn(
             'w-full px-4 py-2.5 flex items-center gap-2 transition-colors text-left',
-            historyOpen ? 'bg-indigo-50/50' : 'hover:bg-slate-50',
+            historyOpen ? 'bg-indigo-50/50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800',
           )}
         >
           <ChevronDown className={cn(
             'h-4 w-4 transition-transform shrink-0',
-            historyOpen ? 'text-indigo-600' : 'text-slate-400 -rotate-90',
+            historyOpen ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 -rotate-90',
           )} />
-          <Clock className="h-3.5 w-3.5 text-slate-500" />
-          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-600">Tarix</span>
-          <span className="text-[10px] text-slate-500 ml-auto">
+          <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">Tarix</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-auto">
             {historyQuery.isLoading ? '…' : history.length ? `${history.length} ta yozuv` : 'bosing'}
           </span>
         </button>
@@ -1128,15 +1128,15 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
           historyOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
         )}>
           <div className="overflow-hidden">
-            <div className="border-t border-slate-100">
+            <div className="border-t border-slate-100 dark:border-slate-800">
               {historyQuery.isLoading ? (
-                <div className="px-4 py-4 text-[11px] text-slate-400 flex items-center gap-1.5">
+                <div className="px-4 py-4 text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
                   <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda…
                 </div>
               ) : history.length === 0 ? (
-                <div className="px-4 py-4 text-[11px] text-slate-400">Hozircha yozuv yo'q</div>
+                <div className="px-4 py-4 text-[11px] text-slate-400 dark:text-slate-500">Hozircha yozuv yo'q</div>
               ) : (
-                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                   {history.map((h) => (
                     <HistoryRow key={h.id} h={h} />
                   ))}
@@ -1170,19 +1170,19 @@ const FIELD_LABEL: Record<string, string> = {
 function HistoryRow({ h }: { h: any }) {
   const [open, setOpen] = useState(false);
   const actionMeta: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-    created:      { label: 'Qo\'shildi',         cls: 'bg-emerald-100 text-emerald-700', icon: <Plus className="h-3 w-3" /> },
-    imported:     { label: 'Import',             cls: 'bg-blue-100 text-blue-700',       icon: <Upload className="h-3 w-3" /> },
-    manual_edit:  { label: 'Tahrir',             cls: 'bg-violet-100 text-violet-700',   icon: <FileText className="h-3 w-3" /> },
-    refreshed:    { label: 'Yangilash',          cls: 'bg-indigo-100 text-indigo-700',   icon: <RefreshCw className="h-3 w-3" /> },
-    cron_refresh: { label: 'Avto-yangilash',     cls: 'bg-slate-100 text-slate-700',     icon: <Clock className="h-3 w-3" /> },
-    deleted:      { label: 'O\'chirildi',        cls: 'bg-rose-100 text-rose-700',       icon: <Trash2 className="h-3 w-3" /> },
+    created:      { label: 'Qo\'shildi',         cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', icon: <Plus className="h-3 w-3" /> },
+    imported:     { label: 'Import',             cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',       icon: <Upload className="h-3 w-3" /> },
+    manual_edit:  { label: 'Tahrir',             cls: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',   icon: <FileText className="h-3 w-3" /> },
+    refreshed:    { label: 'Yangilash',          cls: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',   icon: <RefreshCw className="h-3 w-3" /> },
+    cron_refresh: { label: 'Avto-yangilash',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',     icon: <Clock className="h-3 w-3" /> },
+    deleted:      { label: 'O\'chirildi',        cls: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',       icon: <Trash2 className="h-3 w-3" /> },
   };
-  const m = actionMeta[h.action] || { label: h.action, cls: 'bg-slate-100 text-slate-700', icon: null };
+  const m = actionMeta[h.action] || { label: h.action, cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300', icon: null };
   const changes = h.changes && typeof h.changes === 'object' ? h.changes : null;
   const hasChanges = changes && Object.keys(changes).length > 0;
 
   return (
-    <div className="px-4 py-2 hover:bg-slate-50/40">
+    <div className="px-4 py-2 hover:bg-slate-50/40 dark:hover:bg-slate-800">
       <button
         type="button"
         onClick={() => hasChanges && setOpen((o) => !o)}
@@ -1192,10 +1192,10 @@ function HistoryRow({ h }: { h: any }) {
           {m.icon} {m.label}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] text-slate-700 flex items-center gap-1.5 flex-wrap">
+          <div className="text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1.5 flex-wrap">
             <b>{h.actorName || '—'}</b>
             {h.source && h.source !== 'none' && (
-              <span className="text-slate-500">· {h.source}</span>
+              <span className="text-slate-500 dark:text-slate-400">· {h.source}</span>
             )}
             {hasChanges && (
               <span className="text-[10px] text-indigo-600 font-semibold inline-flex items-center gap-0.5">
@@ -1208,23 +1208,23 @@ function HistoryRow({ h }: { h: any }) {
             <div className="text-[10px] text-slate-500 truncate" title={h.note}>{h.note}</div>
           )}
         </div>
-        <div className="text-[10px] text-slate-400 tabular-nums shrink-0 pt-0.5">{formatDateTime(h.createdAt)}</div>
+        <div className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums shrink-0 pt-0.5">{formatDateTime(h.createdAt)}</div>
       </button>
 
       {/* O'zgarishlar tafsiloti */}
       {hasChanges && open && (
-        <div className="mt-2 ml-1 space-y-1.5 rounded-lg bg-slate-50 ring-1 ring-slate-200 p-2.5">
+        <div className="mt-2 ml-1 space-y-1.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 p-2.5">
           {Object.entries(changes).map(([field, diff]: [string, any]) => (
             <div key={field} className="text-[11px]">
-              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">
+              <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
                 {FIELD_LABEL[field] || field}
               </div>
               <div className="flex items-start gap-1.5 flex-wrap">
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 ring-1 ring-rose-200 line-through max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.old)}>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 line-through max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.old)}>
                   {formatHistoryValue(diff.old) || '—'}
                 </span>
-                <span className="text-slate-400 text-[10px] pt-0.5">→</span>
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.new)}>
+                <span className="text-slate-400 dark:text-slate-500 text-[10px] pt-0.5">→</span>
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.new)}>
                   {formatHistoryValue(diff.new) || '—'}
                 </span>
               </div>
@@ -1324,9 +1324,9 @@ function CounterpartyEditForm({
       </div>
 
       {/* Bank hisoblari */}
-      <div className="space-y-2 pt-2 border-t border-slate-100">
+      <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
         <div className="flex items-center justify-between">
-          <Label className="text-[11px] uppercase tracking-wider font-bold text-slate-500">{t('bankAccounts')}</Label>
+          <Label className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{t('bankAccounts')}</Label>
           <Button
             type="button"
             size="sm"
@@ -1370,7 +1370,7 @@ function CounterpartyEditForm({
         ))}
       </div>
 
-      <div className="flex items-center gap-2 pt-3 border-t border-slate-100">
+      <div className="flex items-center gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
         <Button variant="outline" onClick={onCancel} disabled={busy} className="flex-1">
           {tc('cancel')}
         </Button>
@@ -1397,7 +1397,7 @@ function EditField({
 }) {
   return (
     <div className={cn('space-y-1', fullWidth && 'md:col-span-2')}>
-      <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500">{label}</Label>
+      <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{label}</Label>
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -1417,12 +1417,12 @@ function DetailField({
   fullWidth?: boolean;
 }) {
   return (
-    <div className={cn('rounded-xl ring-1 ring-slate-200 px-3 py-2', fullWidth && 'md:col-span-2')}>
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">
-        <span className="text-slate-400">{icon}</span>
+    <div className={cn('rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2', fullWidth && 'md:col-span-2')}>
+      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">
+        <span className="text-slate-400 dark:text-slate-500">{icon}</span>
         {label}
       </div>
-      <div className={cn('text-[13px] text-slate-800 break-words', mono && 'font-mono text-[12px]', !value && 'text-slate-400 italic')}>
+      <div className={cn('text-[13px] text-slate-800 dark:text-slate-200 break-words', mono && 'font-mono text-[12px]', !value && 'text-slate-400 dark:text-slate-500 italic')}>
         {value || '—'}
       </div>
     </div>
@@ -1446,7 +1446,7 @@ function PageJumper({
   }
 
   return (
-    <div className="flex items-center gap-2 text-xs text-slate-600">
+    <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
       <span>{label}</span>
       <Input
         type="number"

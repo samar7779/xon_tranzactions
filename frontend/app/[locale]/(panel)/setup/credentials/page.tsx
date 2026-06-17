@@ -174,27 +174,27 @@ function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => voi
           <RevealRow label="Login" value={data.loginFull} onCopy={() => copy('Login', data.loginFull)} copied={copiedField === 'Login'} />
           <RevealRow label="Bank MFO" value={data.branch || '—'} onCopy={() => copy('MFO', data.branch || '')} copied={copiedField === 'MFO'} />
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">Parol</div>
-            <div className="flex items-center gap-2 bg-amber-50 ring-1 ring-amber-200 rounded-xl px-3 py-2.5">
-              <code className="flex-1 font-mono text-sm text-slate-900 break-all select-all">
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">Parol</div>
+            <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-xl px-3 py-2.5">
+              <code className="flex-1 font-mono text-sm text-slate-900 dark:text-slate-100 break-all select-all">
                 {showPwd ? data.password : '•'.repeat(Math.min(data.password.length, 16))}
               </code>
               <button
                 type="button"
                 onClick={() => setShowPwd((s) => !s)}
-                className="text-amber-700 hover:text-amber-900 shrink-0 p-1"
+                className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-300 shrink-0 p-1"
               >
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
               <button
                 type="button"
                 onClick={() => copy('Parol', data.password)}
-                className="text-amber-700 hover:text-amber-900 shrink-0 p-1"
+                className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-300 shrink-0 p-1"
               >
                 {copiedField === 'Parol' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
-            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-rose-600">
+            <div className="flex items-center gap-1.5 mt-2 text-[10px] text-rose-600 dark:text-rose-400">
               <Shield className="h-3 w-3" />
               Ehtiyot bo'ling: parolni faqat ishonchli joyda nusxalang. Bu amal logga yoziladi.
             </div>
@@ -208,10 +208,10 @@ function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => voi
 function RevealRow({ label, value, onCopy, copied }: { label: string; value: string; onCopy: () => void; copied: boolean }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-1.5">{label}</div>
-      <div className="flex items-center gap-2 bg-slate-50 ring-1 ring-slate-200 rounded-xl px-3 py-2">
-        <code className="flex-1 font-mono text-sm text-slate-900 break-all">{value}</code>
-        <button type="button" onClick={onCopy} className="text-slate-500 hover:text-slate-900 shrink-0 p-1">
+      <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">{label}</div>
+      <div className="flex items-center gap-2 bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl px-3 py-2">
+        <code className="flex-1 font-mono text-sm text-slate-900 dark:text-slate-100 break-all">{value}</code>
+        <button type="button" onClick={onCopy} className="text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 shrink-0 p-1">
           {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
         </button>
       </div>
@@ -238,7 +238,7 @@ function KpiTile({
       <div className={cn("absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-30 bg-gradient-to-br", m.grad)} />
       <CardContent className="p-5 relative">
         <div className="flex items-start justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 dark:text-slate-400">{label}</div>
           <div className={cn("w-9 h-9 rounded-xl grid place-items-center bg-gradient-to-br text-white shadow-sm", m.grad)}>
             <Icon className="h-4 w-4" />
           </div>
@@ -251,9 +251,9 @@ function KpiTile({
 
 function InfoTile({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg bg-slate-50 ring-1 ring-slate-100 px-2.5 py-1.5 min-w-0">
-      <div className="text-[9px] uppercase tracking-[0.1em] text-slate-400 font-bold mb-0.5">{label}</div>
-      <div className="text-[11px] font-medium text-slate-700 truncate">{children}</div>
+    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800 px-2.5 py-1.5 min-w-0">
+      <div className="text-[9px] uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 font-bold mb-0.5">{label}</div>
+      <div className="text-[11px] font-medium text-slate-700 dark:text-slate-300 truncate">{children}</div>
     </div>
   );
 }
@@ -271,15 +271,15 @@ function CredentialCard({
 }) {
   const login = (c.loginPrefix || '') + (c.loginName || '');
   return (
-    <Card className="group border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all overflow-hidden bg-white">
+    <Card className="group border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
       <CardContent className="p-0">
         {/* Header */}
         <div className="px-4 pt-4 pb-3 space-y-3">
           <div className="flex items-center gap-3">
             <BankLogo code={c.bank?.code || ''} name={c.bank?.name} size={42} />
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{c.label}</div>
-              <div className="text-[11px] text-slate-500 truncate">{c.bank?.name}</div>
+              <div className="text-[13px] font-bold truncate tracking-tight text-slate-900 dark:text-slate-100">{c.label}</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{c.bank?.name}</div>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -295,12 +295,12 @@ function CredentialCard({
                   <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
                 </DropdownMenuItem>
                 {onReveal && (
-                  <DropdownMenuItem onClick={onReveal} className="text-amber-700">
+                  <DropdownMenuItem onClick={onReveal} className="text-amber-700 dark:text-amber-300">
                     <Eye className="h-4 w-4 mr-2" /> Parolni ko'rsatish
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-rose-600" onClick={onDelete}>
+                <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={onDelete}>
                   <Trash2 className="h-4 w-4 mr-2" /> O'chirish
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -311,9 +311,9 @@ function CredentialCard({
           <div className="flex items-center gap-2">
             <span className={cn(
               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0",
-              status === 'ok' && "bg-emerald-100 text-emerald-700",
-              status === 'error' && "bg-rose-100 text-rose-700",
-              status === 'untested' && "bg-slate-100 text-slate-500",
+              status === 'ok' && "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300",
+              status === 'error' && "bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300",
+              status === 'untested' && "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
             )}>
               <span className="relative flex h-1.5 w-1.5">
                 {status === 'ok' && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
@@ -326,7 +326,7 @@ function CredentialCard({
               </span>
               {status === 'ok' ? 'Ulangan' : status === 'error' ? 'Xato' : 'Tekshirilmagan'}
             </span>
-            <span className="text-[10px] text-slate-400 flex-1 truncate">
+            <span className="text-[10px] text-slate-400 dark:text-slate-500 flex-1 truncate">
               {c.lastVerifiedAt ? formatDateTime(c.lastVerifiedAt) : 'Hech tekshirilmagan'}
             </span>
             <Button
@@ -346,19 +346,19 @@ function CredentialCard({
           <InfoTile label="Avtorizatsiya">
             <span className="flex items-center gap-1">
               {c.authMode === 'IP_WHITELIST'
-                ? <><Globe className="h-3 w-3 text-slate-400" /> IP Whitelist</>
-                : <><Lock className="h-3 w-3 text-slate-400" /> SMS SID</>}
+                ? <><Globe className="h-3 w-3 text-slate-400 dark:text-slate-500" /> IP Whitelist</>
+                : <><Lock className="h-3 w-3 text-slate-400 dark:text-slate-500" /> SMS SID</>}
             </span>
           </InfoTile>
           <InfoTile label="Yo'l">
-            <span className={cn("font-semibold", c.useProxy ? "text-emerald-700" : "text-slate-600")}>
+            <span className={cn("font-semibold", c.useProxy ? "text-emerald-700 dark:text-emerald-300" : "text-slate-600 dark:text-slate-300")}>
               {c.useProxy ? 'ahost orqali' : "to'g'ridan-to'g'ri"}
             </span>
           </InfoTile>
         </div>
 
         {c.lastError && (
-          <div className="mx-4 mb-4 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-2.5 py-2 text-[11px] text-rose-700 line-clamp-2">
+          <div className="mx-4 mb-4 rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-2.5 py-2 text-[11px] text-rose-700 dark:text-rose-300 line-clamp-2">
             <AlertCircle className="h-3 w-3 inline mr-1 -mt-0.5" /> {c.lastError}
           </div>
         )}
@@ -441,7 +441,7 @@ function CredDialog({
         <div className="px-6 py-5 space-y-4 max-h-[60vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
                 {t('bank')} <span className="text-rose-500">*</span>
               </Label>
               <Select value={form.bankId} onValueChange={(v) => setForm({ ...form, bankId: v })}>
@@ -451,7 +451,7 @@ function CredDialog({
                 <SelectContent>
                   {banks.filter((b) => b.isActive).length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-emerald-700 bg-emerald-50">
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
                         ✓ Aktiv (API ishlaydi)
                       </div>
                       {banks.filter((b) => b.isActive).map((b) => (
@@ -466,7 +466,7 @@ function CredDialog({
                   )}
                   {banks.filter((b) => !b.isActive).length > 0 && (
                     <>
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-500 bg-slate-50 mt-1">
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 mt-1">
                         🚧 Kelajakda (tanlash mumkin emas)
                       </div>
                       {banks.filter((b) => !b.isActive).map((b) => (
@@ -483,7 +483,7 @@ function CredDialog({
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('authMode')}</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('authMode')}</Label>
               <Select value={form.authMode} onValueChange={(v) => setForm({ ...form, authMode: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -495,7 +495,7 @@ function CredDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('label')}</Label>
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('label')}</Label>
             <Input
               value={form.label}
               onChange={(e) => setForm({ ...form, label: e.target.value })}
@@ -505,7 +505,7 @@ function CredDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               API login <span className="text-rose-500">*</span>
             </Label>
             <div className="flex gap-2">
@@ -524,11 +524,11 @@ function CredDialog({
                 className={cn('flex-1 font-mono', !form.loginName && 'ring-1 ring-rose-200')}
               />
             </div>
-            <div className="text-[10px] text-slate-500">Prefiks (KapitalBank uchun "IB#") + login nomi</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">Prefiks (KapitalBank uchun "IB#") + login nomi</div>
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">{t('password')}</Label>
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('password')}</Label>
             <div className="relative">
               <Input
                 type={showPwd ? 'text' : 'password'}
@@ -541,18 +541,18 @@ function CredDialog({
               <button
                 type="button"
                 onClick={() => setShowPwd((s) => !s)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-0.5"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-0.5"
               >
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
             {isEdit && (
-              <div className="text-[10px] text-slate-500">Parolni o'zgartirish uchun yangi parolni kiriting</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Parolni o'zgartirish uchun yangi parolni kiriting</div>
             )}
           </div>
 
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               {t('branch')} <span className="text-rose-500">*</span>
             </Label>
             <Input
@@ -563,13 +563,13 @@ function CredDialog({
               autoComplete="off"
               className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
             />
-            <div className="text-[10px] text-slate-500">5 xonalik MFO kod — majburiy</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod — majburiy</div>
           </div>
 
           {/* ahost proxy toggle */}
           <div className={cn(
             "rounded-xl p-3 transition-all flex items-center gap-3 ring-1",
-            form.useProxy ? "bg-emerald-50/60 ring-emerald-200" : "bg-slate-50 ring-slate-200",
+            form.useProxy ? "bg-emerald-50/60 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900" : "bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700",
           )}>
             <button
               type="button"
@@ -585,8 +585,8 @@ function CredDialog({
               )} />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-bold text-slate-900">ahost orqali yuborish</div>
-              <div className="text-[10px] text-slate-600 mt-0.5">
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">ahost orqali yuborish</div>
+              <div className="text-[10px] text-slate-600 dark:text-slate-300 mt-0.5">
                 {form.useProxy
                   ? "Bank API'ga so'rovlar ahost (37.153.159.11) orqali — IP whitelist'da bor"
                   : "To'g'ridan-to'g'ri bizning server (185.228.88.247) dan — whitelist talab qiladi"}
@@ -596,7 +596,7 @@ function CredDialog({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-200 bg-slate-50/60 flex justify-end gap-2">
+        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 flex justify-end gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
           <Button
             onClick={() => mut.mutate()}

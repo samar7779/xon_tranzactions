@@ -134,7 +134,7 @@ export function DeployModal() {
           {/* RUNNING — to'liq */}
           {activeKind === 'running' && (
             <div
-              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
+              className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
               onClick={(e) => e.stopPropagation()}
             >
               {/* HERO — toza, ozroq joy egallaydi */}
@@ -178,27 +178,27 @@ export function DeployModal() {
               <div className="p-6 space-y-5">
                 {/* Katta progress bar — % o'rtada */}
                 <div className="space-y-2">
-                  <div className="relative h-9 bg-slate-100 rounded-2xl overflow-hidden ring-1 ring-slate-200/60">
+                  <div className="relative h-9 bg-slate-100 dark:bg-slate-800 rounded-2xl overflow-hidden ring-1 ring-slate-200/60 dark:ring-slate-700">
                     <div
                       className="h-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 transition-all duration-1000 ease-out relative"
                       style={{ width: `${data.progressPercent ?? 1}%` }}
                     >
                       <div className="absolute inset-0 bg-white/20 animate-shimmer" />
                     </div>
-                    <div className="absolute inset-0 flex items-center justify-center font-black tabular-nums text-slate-900 text-base drop-shadow-sm">
+                    <div className="absolute inset-0 flex items-center justify-center font-black tabular-nums text-slate-900 dark:text-slate-100 text-base drop-shadow-sm">
                       {data.progressPercent ?? 0}%
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-[12px] text-slate-600 font-medium tabular-nums">
+                  <div className="flex items-center justify-between text-[12px] text-slate-600 dark:text-slate-300 font-medium tabular-nums">
                     <span>
-                      <span className="text-slate-400">{t('elapsed')}:</span>{' '}
-                      <b className="text-slate-800">{data.elapsedSeconds ?? 0}{t('second')}</b>
+                      <span className="text-slate-400 dark:text-slate-500">{t('elapsed')}:</span>{' '}
+                      <b className="text-slate-800 dark:text-slate-200">{data.elapsedSeconds ?? 0}{t('second')}</b>
                     </span>
-                    <span className="text-indigo-600">
+                    <span className="text-indigo-600 dark:text-indigo-400">
                       {data.estimatedRemainingSeconds === null || data.estimatedRemainingSeconds === undefined
                         ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Yakunlanmoqda...</span>
                         : <>
-                            <span className="text-slate-400">{t('remaining')}:</span>{' '}
+                            <span className="text-slate-400 dark:text-slate-500">{t('remaining')}:</span>{' '}
                             <b>~{data.estimatedRemainingSeconds}{t('second')}</b>
                           </>}
                     </span>
@@ -208,15 +208,15 @@ export function DeployModal() {
                 {/* Joriy faza — katta, ko'rinarli */}
                 {data.currentPhase && (
                   <div className="rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 p-[1.5px] shadow-lg shadow-indigo-500/20">
-                    <div className="rounded-2xl bg-white p-4 flex items-center gap-3">
+                    <div className="rounded-2xl bg-white dark:bg-slate-900 p-4 flex items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shrink-0 shadow-lg shadow-indigo-500/30">
                         <Loader2 className="h-6 w-6 text-white animate-spin" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-[10px] uppercase tracking-widest font-bold text-indigo-600">
+                        <div className="text-[10px] uppercase tracking-widest font-bold text-indigo-600 dark:text-indigo-400">
                           {t('phase')}
                         </div>
-                        <div className="text-base font-bold text-slate-900 mt-0.5 leading-tight">
+                        <div className="text-base font-bold text-slate-900 dark:text-slate-100 mt-0.5 leading-tight">
                           {phaseLabel(data.currentPhase)}
                         </div>
                       </div>
@@ -228,13 +228,13 @@ export function DeployModal() {
                 {/* Bajarilgan ro'yxat */}
                 <div>
                   <div className="flex items-center gap-2 mb-2.5">
-                    <div className="w-6 h-6 rounded-md bg-emerald-100 grid place-items-center">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />
+                    <div className="w-6 h-6 rounded-md bg-emerald-100 dark:bg-emerald-900/30 grid place-items-center">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                     </div>
-                    <h3 className="text-[12px] font-bold text-slate-700">
+                    <h3 className="text-[12px] font-bold text-slate-700 dark:text-slate-300">
                       {t('completedTitle')}
                       {data.completedPhases && data.completedPhases.length > 0 && (
-                        <span className="text-slate-400 font-medium ml-1">
+                        <span className="text-slate-400 dark:text-slate-500 font-medium ml-1">
                           · {data.completedPhases.length}
                         </span>
                       )}
@@ -242,18 +242,18 @@ export function DeployModal() {
                   </div>
                   <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                     {(!data.completedPhases || data.completedPhases.length === 0) ? (
-                      <div className="text-[12px] text-slate-400 italic py-3 text-center">
+                      <div className="text-[12px] text-slate-400 dark:text-slate-500 italic py-3 text-center">
                         {t('waiting')}
                       </div>
                     ) : (
                       data.completedPhases.map((ph, i) => (
                         <div
                           key={`${i}-${ph}`}
-                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-emerald-50/50 hover:bg-emerald-50 transition-colors animate-slide-in"
+                          className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-emerald-50/50 dark:bg-emerald-950/40 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors animate-slide-in"
                           style={{ animationDelay: `${i * 25}ms` }}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                          <span className="text-[12.5px] text-slate-700 font-medium truncate flex-1">
+                          <span className="text-[12.5px] text-slate-700 dark:text-slate-300 font-medium truncate flex-1">
                             {phaseLabel(ph)}
                           </span>
                         </div>
@@ -268,7 +268,7 @@ export function DeployModal() {
           {/* NEW VERSION — to'liq */}
           {activeKind === 'newVersion' && (
             <div
-              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
+              className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="relative h-36 bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-500 overflow-hidden">
@@ -295,17 +295,17 @@ export function DeployModal() {
 
               <div className="p-6 space-y-4">
                 <div className="text-center">
-                  <h2 className="text-2xl font-black text-slate-900 mb-1.5">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-slate-100 mb-1.5">
                     {t('newVersionTitle')}
                   </h2>
-                  <p className="text-[13px] text-slate-600 leading-relaxed">
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">
                     {t('newVersionDesc')}
                   </p>
                 </div>
 
-                <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 font-mono">
+                <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 dark:text-slate-500 font-mono">
                   <span>{t('newVersionCommit')}:</span>
-                  <code className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold">
+                  <code className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold">
                     {data.currentCommit}
                   </code>
                 </div>
@@ -313,7 +313,7 @@ export function DeployModal() {
                 <div className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
                   <button
                     onClick={() => setDismissedNewVersion(data.currentCommit || null)}
-                    className="flex-1 h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-colors"
+                    className="flex-1 h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-colors"
                   >
                     {t('newVersionLater')}
                   </button>
@@ -332,7 +332,7 @@ export function DeployModal() {
           {/* FAILED — to'liq */}
           {activeKind === 'failed' && (
             <div
-              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
+              className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="relative h-32 bg-gradient-to-br from-rose-500 via-red-500 to-orange-500 overflow-hidden">
@@ -352,19 +352,19 @@ export function DeployModal() {
 
               <div className="p-6 space-y-4">
                 <div className="text-center">
-                  <h2 className="text-xl font-black text-slate-900">{t('failedTitle')}</h2>
-                  <p className="text-[13px] text-slate-600 mt-2 leading-relaxed">{t('failedDesc')}</p>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">{t('failedTitle')}</h2>
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">{t('failedDesc')}</p>
                 </div>
 
                 {data.error && (
-                  <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 p-3 text-[11px] font-mono text-rose-900 max-h-32 overflow-y-auto break-all">
+                  <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[11px] font-mono text-rose-900 dark:text-rose-300 max-h-32 overflow-y-auto break-all">
                     {data.error}
                   </div>
                 )}
 
                 <button
                   onClick={() => setDismissedFailed(data.startedAt || null)}
-                  className="w-full h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition-colors"
+                  className="w-full h-11 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-sm transition-colors"
                 >
                   {t('closeBtn')}
                 </button>

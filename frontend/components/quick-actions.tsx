@@ -87,7 +87,7 @@ export function QuickActions({ accountsCount = 0 }: { accountsCount?: number }) 
           {actions.map((a) => {
             const Icon = a.icon;
             const content = (
-              <div className="group relative rounded-2xl bg-slate-50 hover:bg-white hover:shadow-pop hover:-translate-y-0.5 transition-all p-4 ring-1 ring-slate-100 cursor-pointer h-full">
+              <div className="group relative rounded-2xl bg-slate-50 hover:bg-white dark:bg-slate-800/50 dark:hover:bg-slate-800 hover:shadow-pop hover:-translate-y-0.5 transition-all p-4 ring-1 ring-slate-100 dark:ring-slate-700 cursor-pointer h-full">
                 <div className="flex items-start justify-between mb-3">
                   <div className={cn(
                     "w-10 h-10 rounded-xl bg-gradient-to-br grid place-items-center shadow-sm text-white",
@@ -95,10 +95,10 @@ export function QuickActions({ accountsCount = 0 }: { accountsCount?: number }) 
                   )}>
                     <Icon className={cn("h-5 w-5", a.label === 'Hozir sync' && syncMut.isPending && 'animate-spin')} />
                   </div>
-                  <ArrowRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-0.5 transition-all" />
+                  <ArrowRight className="h-3.5 w-3.5 text-slate-300 dark:text-slate-600 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all" />
                 </div>
                 <div className="font-semibold text-sm tracking-tight">{a.label}</div>
-                <div className="text-[11px] text-slate-500 mt-0.5">{a.badge || a.description}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">{a.badge || a.description}</div>
               </div>
             );
             if (a.href) {

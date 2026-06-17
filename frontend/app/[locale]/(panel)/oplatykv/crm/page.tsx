@@ -35,11 +35,11 @@ interface ContractDetail {
 }
 
 const STATUS_TONE: Record<string, { cls: string; dot: string }> = {
-  paid:       { cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
-  partially:  { cls: 'bg-amber-50 text-amber-700 ring-amber-200',       dot: 'bg-amber-500' },
-  waiting:    { cls: 'bg-slate-50 text-slate-700 ring-slate-200',       dot: 'bg-slate-400' },
-  overdue:    { cls: 'bg-rose-50 text-rose-700 ring-rose-200',          dot: 'bg-rose-500' },
-  sold:       { cls: 'bg-indigo-50 text-indigo-700 ring-indigo-200',    dot: 'bg-indigo-500' },
+  paid:       { cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500' },
+  partially:  { cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',       dot: 'bg-amber-500' },
+  waiting:    { cls: 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',       dot: 'bg-slate-400' },
+  overdue:    { cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',          dot: 'bg-rose-500' },
+  sold:       { cls: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',    dot: 'bg-indigo-500' },
 };
 
 const LS_RECENT = 'crm.recentContracts';
@@ -167,7 +167,7 @@ export default function CrmPage() {
   const info = detail?.info || {};
   const statusKey = detail?.status?.key || '';
   const statusName = detail?.status?.value?.name?.[apiLang] || statusKey || '—';
-  const statusTone = STATUS_TONE[statusKey] || { cls: 'bg-slate-50 text-slate-700 ring-slate-200', dot: 'bg-slate-400' };
+  const statusTone = STATUS_TONE[statusKey] || { cls: 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700', dot: 'bg-slate-400' };
 
   const initialTotal = detail?.initial?.total || {};
   const monthlyTotal = detail?.monthly?.total || {};
@@ -241,24 +241,24 @@ export default function CrmPage() {
 
           {/* ═══ Search bar — clean elevated card with autocomplete ═══ */}
           <Card className="border-0 shadow-soft overflow-visible">
-            <div className="relative px-5 py-5 bg-white">
+            <div className="relative px-5 py-5 bg-white dark:bg-slate-900">
               <div className="flex items-center gap-4">
                 {/* Compact icon */}
                 <div className="relative shrink-0">
                   <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-indigo-500/30">
                     <BookUser className="h-6 w-6" />
                   </div>
-                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white">
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900">
                     <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />
                   </span>
                 </div>
 
                 {/* Search input with dropdown */}
                 <div className="flex-1 min-w-0" ref={searchRef}>
-                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 mb-1.5">
+                  <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 dark:text-slate-400 mb-1.5">
                     <span>XonSaroy CRM</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-300" />
-                    <span className="text-slate-400 normal-case tracking-normal font-medium">{t('exampleHint')}</span>
+                    <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
+                    <span className="text-slate-400 dark:text-slate-500 normal-case tracking-normal font-medium">{t('exampleHint')}</span>
                   </div>
 
                   <div className="relative">
@@ -286,7 +286,7 @@ export default function CrmPage() {
 
                     <Search className={cn(
                       'absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 transition-colors z-10',
-                      q || focused ? 'text-indigo-500' : 'text-slate-400',
+                      q || focused ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500',
                     )} />
                     <Input
                       value={q}
@@ -296,16 +296,16 @@ export default function CrmPage() {
                       placeholder={t('searchPlaceholder')}
                       className={cn(
                         'relative pl-12 pr-32 h-12 text-base rounded-2xl',
-                        'bg-slate-50/70 border-slate-200',
-                        'focus-visible:bg-white focus-visible:ring-0 focus-visible:ring-offset-0',
+                        'bg-slate-50/70 dark:bg-slate-900 border-slate-200 dark:border-slate-700',
+                        'focus-visible:bg-white dark:focus-visible:bg-slate-800 focus-visible:ring-0 focus-visible:ring-offset-0',
                         'focus-visible:shadow-[0_0_0_3px_rgba(99,102,241,0.12)]',
-                        'focus-visible:border-indigo-300',
+                        'focus-visible:border-indigo-300 dark:focus-visible:border-indigo-700',
                       )}
                     />
                     {q && !showMut.isPending && (
                       <button
                         onClick={() => { setQ(''); setDebouncedQ(''); setDetail(null); setActiveContract(''); setHighlight(-1); }}
-                        className="absolute right-[110px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors z-10"
+                        className="absolute right-[110px] top-1/2 -translate-y-1/2 w-7 h-7 rounded-full grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors z-10"
                         aria-label={tc('reset')}
                       >
                         <X className="h-4 w-4" />
@@ -325,25 +325,25 @@ export default function CrmPage() {
 
                     {/* Autocomplete dropdown */}
                     {showDropdown && (
-                      <div className="absolute top-full left-0 right-0 mt-2 z-30 rounded-2xl bg-white ring-1 ring-slate-200 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.35)] overflow-hidden">
+                      <div className="absolute top-full left-0 right-0 mt-2 z-30 rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.35)] overflow-hidden">
                         {suggesting && suggestions.length === 0 ? (
-                          <div className="px-4 py-3 text-[12px] text-slate-500 flex items-center gap-2">
+                          <div className="px-4 py-3 text-[12px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
                             <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('searching')}
                           </div>
                         ) : suggestions.length === 0 ? (
-                          <div className="px-4 py-6 text-[12px] text-slate-500 text-center">
-                            <Search className="h-6 w-6 text-slate-300 mx-auto mb-1.5" />
+                          <div className="px-4 py-6 text-[12px] text-slate-500 dark:text-slate-400 text-center">
+                            <Search className="h-6 w-6 text-slate-300 dark:text-slate-600 mx-auto mb-1.5" />
                             {t('notFound')}
                           </div>
                         ) : (
                           <>
-                            <div className="px-4 py-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-400 bg-slate-50/70 flex items-center justify-between">
+                            <div className="px-4 py-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-400 dark:text-slate-500 bg-slate-50/70 dark:bg-slate-900 flex items-center justify-between">
                               <span>{suggestions.length} {suggestions.length === 1 ? '' : ''}</span>
-                              <span className="flex items-center gap-1 text-slate-400 normal-case tracking-normal font-medium">
+                              <span className="flex items-center gap-1 text-slate-400 dark:text-slate-500 normal-case tracking-normal font-medium">
                                 <CornerDownLeft className="h-2.5 w-2.5" /> Enter
                               </span>
                             </div>
-                            <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-50">
+                            <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
                               {suggestions.map((s, i) => (
                                 <SuggestionRow
                                   key={s.id || s.contract || i}
@@ -369,7 +369,7 @@ export default function CrmPage() {
           {!detail && !showMut.isPending && recent.length > 0 && (
             <Card className="border-0 shadow-soft overflow-hidden">
               <CardContent className="p-4 flex items-center gap-3 flex-wrap">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 shrink-0">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 shrink-0">
                   <History className="h-3.5 w-3.5" />
                   {t('recentSearches')}
                 </div>
@@ -378,7 +378,7 @@ export default function CrmPage() {
                     <button
                       key={c}
                       onClick={() => { setQ(c); runSearch(c); }}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 hover:bg-indigo-50 hover:ring-1 hover:ring-indigo-200 text-[12px] font-mono font-semibold text-slate-700 hover:text-indigo-700 transition-all"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:ring-1 hover:ring-indigo-200 dark:hover:ring-indigo-900 text-[12px] font-mono font-semibold text-slate-700 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition-all"
                     >
                       <FileText className="h-3 w-3" />
                       {c}
@@ -387,7 +387,7 @@ export default function CrmPage() {
                 </div>
                 <button
                   onClick={clearRecent}
-                  className="text-[11px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1"
+                  className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium inline-flex items-center gap-1"
                 >
                   <X className="h-3 w-3" /> {t('clearRecent')}
                 </button>
@@ -414,11 +414,11 @@ export default function CrmPage() {
           {!showMut.isPending && !detail && (
             <Card className="border-0 shadow-soft overflow-hidden">
               <CardContent className="p-12 text-center">
-                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-100 grid place-items-center mx-auto mb-4">
-                  <BookOpen className="h-9 w-9 text-indigo-500" />
+                <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-100 dark:ring-indigo-900 grid place-items-center mx-auto mb-4">
+                  <BookOpen className="h-9 w-9 text-indigo-500 dark:text-indigo-400" />
                 </div>
-                <div className="text-lg font-bold tracking-tight text-slate-800">{t('searchHint')}</div>
-                <div className="text-xs text-slate-500 mt-1">{t('subtitle')}</div>
+                <div className="text-lg font-bold tracking-tight text-slate-800 dark:text-slate-200">{t('searchHint')}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">{t('subtitle')}</div>
               </CardContent>
             </Card>
           )}
@@ -434,10 +434,10 @@ export default function CrmPage() {
                       <Building2 className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-lg lg:text-xl font-black tracking-tight text-slate-900 truncate leading-tight">
+                      <div className="text-lg lg:text-xl font-black tracking-tight text-slate-900 dark:text-slate-100 truncate leading-tight">
                         {info.object || '—'}
                       </div>
-                      <div className="text-[12px] text-slate-500 truncate flex items-center gap-1.5">
+                      <div className="text-[12px] text-slate-500 dark:text-slate-400 truncate flex items-center gap-1.5">
                         <User className="h-3 w-3" />
                         {fullName || '—'}
                       </div>
@@ -445,8 +445,8 @@ export default function CrmPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="text-right">
-                      <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-slate-400">{t('contractNumber')}</div>
-                      <div className="font-mono text-base font-bold tabular-nums text-violet-700">{activeContract}</div>
+                      <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-slate-400 dark:text-slate-500">{t('contractNumber')}</div>
+                      <div className="font-mono text-base font-bold tabular-nums text-violet-700 dark:text-violet-300">{activeContract}</div>
                     </div>
                     <span className={cn(
                       'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset',
@@ -494,7 +494,7 @@ export default function CrmPage() {
                   onClick={() => setOpenClient((o) => !o)}
                   className={cn(
                     'w-full px-5 py-4 flex items-center justify-between gap-3 transition-colors text-left',
-                    openClient ? 'bg-emerald-50/40' : 'hover:bg-slate-50',
+                    openClient ? 'bg-emerald-50/40 dark:bg-emerald-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800',
                   )}
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -502,12 +502,12 @@ export default function CrmPage() {
                       <User className="h-4 w-4" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-base font-bold tracking-tight text-slate-800">{t('openClient')}</div>
-                      <div className="text-[12px] text-slate-500 truncate">{fullName || '—'}</div>
+                      <div className="text-base font-bold tracking-tight text-slate-800 dark:text-slate-200">{t('openClient')}</div>
+                      <div className="text-[12px] text-slate-500 dark:text-slate-400 truncate">{fullName || '—'}</div>
                     </div>
                   </div>
                   <ChevronDown className={cn(
-                    'h-5 w-5 text-slate-400 transition-transform duration-200 shrink-0',
+                    'h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform duration-200 shrink-0',
                     openClient ? 'rotate-0' : '-rotate-90',
                   )} />
                 </button>
@@ -516,12 +516,12 @@ export default function CrmPage() {
                   openClient ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
                 )}>
                   <div className="overflow-hidden">
-                    <div className="border-t border-slate-100 p-5 space-y-5">
+                    <div className="border-t border-slate-100 dark:border-slate-800 p-5 space-y-5">
 
                       {/* ─── Apartment / object details (moved here from hero) ─── */}
                       <div>
-                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2 flex items-center gap-1.5">
-                          <Building2 className="h-3 w-3 text-violet-500" />
+                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                          <Building2 className="h-3 w-3 text-violet-500 dark:text-violet-400" />
                           {t('object')}
                         </div>
                         <div className="flex items-center gap-2 flex-wrap">
@@ -551,8 +551,8 @@ export default function CrmPage() {
 
                       {/* ─── Client info ─── */}
                       <div>
-                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-2 flex items-center gap-1.5">
-                          <User className="h-3 w-3 text-emerald-500" />
+                        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
                           {t('openClient')}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-1">
@@ -591,23 +591,23 @@ export default function CrmPage() {
 
               {/* ═══ Payment list (history) — accordion ═══ */}
               <Card className="border-0 shadow-soft overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shadow-md shadow-amber-500/20">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <div>
-                      <div className="text-base font-bold tracking-tight text-slate-800">{t('paymentList')}</div>
-                      <div className="text-[11px] text-slate-500">
-                        <span className="text-slate-400">{t('totalPaidLabel')}: </span>
-                        <span className="font-bold tabular-nums text-emerald-700">{formatMoney(totalPaid, 'UZS')}</span>
+                      <div className="text-base font-bold tracking-tight text-slate-800 dark:text-slate-200">{t('paymentList')}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="text-slate-400 dark:text-slate-500">{t('totalPaidLabel')}: </span>
+                        <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{formatMoney(totalPaid, 'UZS')}</span>
                       </div>
                     </div>
                   </div>
                 </div>
                 <CardContent className="p-4 space-y-2">
                   {(detail.payment_histories || []).length === 0 ? (
-                    <div className="px-5 py-10 text-center text-xs text-slate-500">{t('noHistory')}</div>
+                    <div className="px-5 py-10 text-center text-xs text-slate-500 dark:text-slate-400">{t('noHistory')}</div>
                   ) : (
                     <>
                       {histGroups.initial.length > 0 && (
@@ -619,7 +619,7 @@ export default function CrmPage() {
                           open={openHistInit}
                           onToggle={() => setOpenHistInit((o) => !o)}
                         >
-                          <div className="divide-y divide-slate-100">
+                          <div className="divide-y divide-slate-100 dark:divide-slate-700">
                             {histGroups.initial.map((h: any, i: number) => (
                               <HistoryRow key={`hi-${i}`} h={h} idx={i + 1} apiLang={apiLang} t={t} />
                             ))}
@@ -635,7 +635,7 @@ export default function CrmPage() {
                           open={openHistMonth}
                           onToggle={() => setOpenHistMonth((o) => !o)}
                         >
-                          <div className="divide-y divide-slate-100">
+                          <div className="divide-y divide-slate-100 dark:divide-slate-700">
                             {histGroups.monthly.map((h: any, i: number) => (
                               <HistoryRow key={`hm-${i}`} h={h} idx={i + 1} apiLang={apiLang} t={t} />
                             ))}
@@ -649,16 +649,16 @@ export default function CrmPage() {
 
               {/* ═══ Schedule — accordion ═══ */}
               <Card className="border-0 shadow-soft overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-3">
                     <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md shadow-indigo-500/20">
                       <Calendar className="h-4 w-4" />
                     </div>
                     <div>
-                      <div className="text-base font-bold tracking-tight text-slate-800">
+                      <div className="text-base font-bold tracking-tight text-slate-800 dark:text-slate-200">
                         {t('scheduleTitle')}
                         {monthsCount > 0 && (
-                          <span className="ml-2 text-[12px] font-medium text-slate-400">
+                          <span className="ml-2 text-[12px] font-medium text-slate-400 dark:text-slate-500">
                             ({t('installmentMonths', { n: monthsCount })})
                           </span>
                         )}
@@ -668,7 +668,7 @@ export default function CrmPage() {
                 </div>
                 <CardContent className="p-4 space-y-2">
                   {(detail.initial?.schedules || []).length === 0 && (detail.monthly?.schedules || []).length === 0 ? (
-                    <div className="text-center py-10 text-xs text-slate-500">{t('noSchedule')}</div>
+                    <div className="text-center py-10 text-xs text-slate-500 dark:text-slate-400">{t('noSchedule')}</div>
                   ) : (
                     <>
                       {(detail.initial?.schedules || []).length > 0 && (
@@ -731,40 +731,40 @@ function KpiCard({
   icon?: React.ReactNode;
 }) {
   const metaMap = {
-    emerald: 'text-emerald-700',
-    amber:   'text-amber-700',
-    rose:    'text-rose-700',
+    emerald: 'text-emerald-700 dark:text-emerald-300',
+    amber:   'text-amber-700 dark:text-amber-300',
+    rose:    'text-rose-700 dark:text-rose-300',
   } as const;
   return (
     <Card className="border-0 shadow-soft overflow-hidden group hover:shadow-md transition-all">
       <CardContent className="p-5">
         <div className="flex items-start justify-between gap-3 mb-2">
-          <div className="text-[13px] font-bold text-violet-600 truncate flex-1">{label}</div>
+          <div className="text-[13px] font-bold text-violet-600 dark:text-violet-400 truncate flex-1">{label}</div>
           {icon && (
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 via-violet-600 to-purple-600 grid place-items-center text-white shadow-md shadow-violet-500/25 shrink-0 group-hover:scale-110 transition-transform">
               {icon}
             </div>
           )}
         </div>
-        <div className="text-[28px] lg:text-[30px] font-black tabular-nums tracking-tight text-slate-900 truncate leading-tight" title={value}>
+        <div className="text-[28px] lg:text-[30px] font-black tabular-nums tracking-tight text-slate-900 dark:text-slate-100 truncate leading-tight" title={value}>
           {value}
         </div>
         {meta && (
           <div className={cn(
             'text-[12px] font-medium tabular-nums mt-1 truncate',
-            metaTone ? metaMap[metaTone] : 'text-slate-500',
+            metaTone ? metaMap[metaTone] : 'text-slate-500 dark:text-slate-400',
           )}>
             {meta}
           </div>
         )}
         <div className="mt-4 flex items-center gap-3">
-          <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div className="flex-1 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-violet-500 to-violet-600 transition-all duration-700"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <div className="text-[12px] font-bold tabular-nums text-slate-500 shrink-0">{pct.toFixed(1)} %</div>
+          <div className="text-[12px] font-bold tabular-nums text-slate-500 dark:text-slate-400 shrink-0">{pct.toFixed(1)} %</div>
         </div>
       </CardContent>
     </Card>
@@ -785,13 +785,13 @@ function GroupRow({
 }) {
   const style = KIND_STYLE[kind];
   return (
-    <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden bg-white">
+    <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden bg-white dark:bg-slate-900">
       <button
         type="button"
         onClick={onToggle}
         className={cn(
           'w-full px-4 py-3 flex items-center gap-3 transition-colors text-left',
-          open ? style.bg : 'hover:bg-slate-50',
+          open ? style.bg : 'hover:bg-slate-50 dark:hover:bg-slate-800',
         )}
       >
         {/* Arrow */}
@@ -822,10 +822,10 @@ function GroupRow({
 
         {/* Amount */}
         <div className="text-right shrink-0 tabular-nums">
-          <div className="text-sm font-bold text-slate-800">
+          <div className="text-sm font-bold text-slate-800 dark:text-slate-200">
             {formatMoney(amount, 'UZS')}
             {amountTotal != null && amountTotal !== amount && (
-              <span className="text-slate-400 font-normal"> / {formatMoney(amountTotal, 'UZS')}</span>
+              <span className="text-slate-400 dark:text-slate-500 font-normal"> / {formatMoney(amountTotal, 'UZS')}</span>
             )}
           </div>
         </div>
@@ -835,7 +835,7 @@ function GroupRow({
         open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
       )}>
         <div className="overflow-hidden">
-          <div className="border-t border-slate-100 bg-slate-50/30">
+          <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900">
             {children}
           </div>
         </div>
@@ -846,8 +846,8 @@ function GroupRow({
 
 function Chip({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 hover:bg-slate-200 ring-1 ring-slate-200 text-[11px] font-semibold text-slate-700 transition-colors">
-      <span className="text-slate-400">{icon}</span>
+    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-[11px] font-semibold text-slate-700 dark:text-slate-300 transition-colors">
+      <span className="text-slate-400 dark:text-slate-500">{icon}</span>
       {label}
     </span>
   );
@@ -893,12 +893,12 @@ function SuggestionRow({
       onMouseEnter={onHover}
       className={cn(
         'w-full px-4 py-2.5 text-left transition-colors flex items-center gap-3',
-        active ? 'bg-indigo-50' : 'hover:bg-slate-50',
+        active ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800',
       )}
     >
       <div className={cn(
         'w-9 h-9 rounded-xl grid place-items-center shrink-0',
-        active ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-500',
+        active ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
       )}>
         <FileText className="h-4 w-4" />
       </div>
@@ -906,18 +906,18 @@ function SuggestionRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className={cn(
             'font-mono text-[13px] font-bold truncate',
-            isTrashed ? 'text-rose-600 line-through decoration-rose-300 decoration-2' : (active ? 'text-indigo-700' : 'text-slate-800'),
+            isTrashed ? 'text-rose-600 dark:text-rose-400 line-through decoration-rose-300 decoration-2' : (active ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'),
           )}>
             {contract}
           </span>
           {/* Trashed (bekor qilingan) — eng yorqin badge */}
           {isTrashed ? (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-rose-50 text-rose-700 ring-rose-200">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900">
               <span className="w-1 h-1 rounded-full bg-rose-500" />
               {trashedLabel}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-emerald-50 text-emerald-700 ring-emerald-200">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 ring-inset bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
               <span className="w-1 h-1 rounded-full bg-emerald-500" />
               {activeLabel}
             </span>
@@ -932,18 +932,18 @@ function SuggestionRow({
             </span>
           )}
         </div>
-        <div className="text-[11px] text-slate-500 truncate mt-0.5">
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
           {obj}
-          {obj && clientName && <span className="text-slate-300 mx-1">·</span>}
+          {obj && clientName && <span className="text-slate-300 dark:text-slate-600 mx-1">·</span>}
           {clientName}
         </div>
       </div>
       {price > 0 && (
         <div className="text-right shrink-0">
-          <div className="text-[11px] font-bold tabular-nums text-slate-700">{formatMoney(price, 'UZS')}</div>
+          <div className="text-[11px] font-bold tabular-nums text-slate-700 dark:text-slate-300">{formatMoney(price, 'UZS')}</div>
         </div>
       )}
-      <ChevronRight className={cn('h-4 w-4 shrink-0', active ? 'text-indigo-500' : 'text-slate-300')} />
+      <ChevronRight className={cn('h-4 w-4 shrink-0', active ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-300 dark:text-slate-600')} />
     </button>
   );
 }
@@ -951,28 +951,28 @@ function SuggestionRow({
 // Toifa (kind) uchun ranglar — Boshlang'ich vs Oylik
 const KIND_STYLE: Record<string, { bg: string; text: string; ring: string; bar: string; chipBg: string; chipText: string }> = {
   initial: {
-    bg: 'bg-violet-50/60',
-    text: 'text-violet-700',
-    ring: 'ring-violet-200',
+    bg: 'bg-violet-50/60 dark:bg-violet-950/40',
+    text: 'text-violet-700 dark:text-violet-300',
+    ring: 'ring-violet-200 dark:ring-violet-900',
     bar: 'from-violet-500 to-purple-600',
     chipBg: 'bg-gradient-to-r from-violet-500 to-purple-600',
     chipText: 'text-white',
   },
   monthly: {
-    bg: 'bg-blue-50/60',
-    text: 'text-blue-700',
-    ring: 'ring-blue-200',
+    bg: 'bg-blue-50/60 dark:bg-blue-950/40',
+    text: 'text-blue-700 dark:text-blue-300',
+    ring: 'ring-blue-200 dark:ring-blue-900',
     bar: 'from-blue-500 to-indigo-600',
     chipBg: 'bg-gradient-to-r from-blue-500 to-indigo-600',
     chipText: 'text-white',
   },
   other: {
-    bg: 'bg-slate-50/60',
-    text: 'text-slate-600',
-    ring: 'ring-slate-200',
+    bg: 'bg-slate-50/60 dark:bg-slate-900',
+    text: 'text-slate-600 dark:text-slate-300',
+    ring: 'ring-slate-200 dark:ring-slate-700',
     bar: 'from-slate-400 to-slate-600',
-    chipBg: 'bg-slate-200',
-    chipText: 'text-slate-700',
+    chipBg: 'bg-slate-200 dark:bg-slate-700',
+    chipText: 'text-slate-700 dark:text-slate-300',
   },
 };
 
@@ -989,7 +989,7 @@ function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: '
 
   return (
     <div className={cn(
-      'group relative rounded-xl ring-1 ring-slate-200 bg-white hover:ring-indigo-300 hover:shadow-md transition-all overflow-hidden',
+      'group relative rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 hover:ring-indigo-300 dark:hover:ring-indigo-700 hover:shadow-md transition-all overflow-hidden',
     )}>
       {/* Left status bar */}
       <div className={cn('absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b', kindStyle.bar)} />
@@ -1006,24 +1006,24 @@ function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: '
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             {idx != null && (
-              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 tabular-nums">
+              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 tabular-nums">
                 #{idx}
               </span>
             )}
-            <span className="text-[13px] font-bold tabular-nums text-slate-800">
+            <span className="text-[13px] font-bold tabular-nums text-slate-800 dark:text-slate-200">
               {fmtDate(item?.date_payment)}
             </span>
           </div>
           {paid > 0 && left > 0 && (
-            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
               <span className="inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-emerald-700 font-bold tabular-nums">{formatMoney(paid, 'UZS')}</span>
+                <span className="text-emerald-700 dark:text-emerald-300 font-bold tabular-nums">{formatMoney(paid, 'UZS')}</span>
               </span>
-              <span className="text-slate-300">·</span>
+              <span className="text-slate-300 dark:text-slate-600">·</span>
               <span className="inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                <span className="text-amber-700 font-bold tabular-nums">{formatMoney(left, 'UZS')}</span>
+                <span className="text-amber-700 dark:text-amber-300 font-bold tabular-nums">{formatMoney(left, 'UZS')}</span>
               </span>
             </div>
           )}
@@ -1031,10 +1031,10 @@ function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: '
 
         <div className="text-right shrink-0 flex items-center gap-2">
           <div>
-            <div className="text-sm font-black tabular-nums text-slate-900">{formatMoney(amount, 'UZS')}</div>
+            <div className="text-sm font-black tabular-nums text-slate-900 dark:text-slate-100">{formatMoney(amount, 'UZS')}</div>
           </div>
           <ChevronDown className={cn(
-            'h-4 w-4 text-slate-400 transition-transform duration-200 shrink-0',
+            'h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform duration-200 shrink-0',
             open && 'rotate-180',
           )} />
         </div>
@@ -1046,7 +1046,7 @@ function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: '
         open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
       )}>
         <div className="overflow-hidden">
-          <div className="pl-4 pr-4 pb-3 pt-1 space-y-2 border-t border-slate-100 mt-1">
+          <div className="pl-4 pr-4 pb-3 pt-1 space-y-2 border-t border-slate-100 dark:border-slate-800 mt-1">
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <DetailMini label={t('amount')} value={formatMoney(amount, 'UZS')} tone="slate" />
               <DetailMini
@@ -1057,10 +1057,10 @@ function ScheduleRow({ item, idx, kind, t }: { item: any; idx?: number; kind?: '
               {paid > 0 && <DetailMini label={t('schedulePaid')} value={formatMoney(paid, 'UZS')} tone="emerald" />}
               {left > 0 && <DetailMini label={t('scheduleLeft')} value={formatMoney(left, 'UZS')} tone="amber" />}
             </div>
-            <div className="rounded-lg bg-slate-50 ring-1 ring-slate-100 px-3 py-2 flex items-start gap-2">
-              <Tag className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />
-              <div className="text-[11px] text-slate-700 leading-relaxed">
-                {purpose || <span className="text-slate-400 italic">{t('noPurpose')}</span>}
+            <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-700 px-3 py-2 flex items-start gap-2">
+              <Tag className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+              <div className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                {purpose || <span className="text-slate-400 dark:text-slate-500 italic">{t('noPurpose')}</span>}
               </div>
             </div>
           </div>
@@ -1100,21 +1100,21 @@ function HistoryRow({ h, idx, apiLang, t }: { h: any; idx: number; apiLang: 'uz'
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full pl-4 pr-5 py-3 text-left hover:bg-slate-50 transition-colors"
+        className="w-full pl-4 pr-5 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 text-[10px] font-bold text-slate-600 tabular-nums">
+            <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-600 dark:text-slate-300 tabular-nums">
               #{idx}
             </span>
-            <div className="text-sm font-black tabular-nums text-slate-900 truncate">
+            <div className="text-sm font-black tabular-nums text-slate-900 dark:text-slate-100 truncate">
               {formatMoney(Number(h?.amount || 0), 'UZS')}
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <div className="text-[11px] text-slate-500 tabular-nums">{fmtDate(h?.date_paid)}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">{fmtDate(h?.date_paid)}</div>
             <ChevronDown className={cn(
-              'h-3.5 w-3.5 text-slate-400 transition-transform duration-200',
+              'h-3.5 w-3.5 text-slate-400 dark:text-slate-500 transition-transform duration-200',
               open && 'rotate-180',
             )} />
           </div>
@@ -1130,7 +1130,7 @@ function HistoryRow({ h, idx, apiLang, t }: { h: any; idx: number; apiLang: 'uz'
             {kindLabel}
           </span>
           {/* Method */}
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-semibold text-slate-700">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-semibold text-slate-700 dark:text-slate-300">
             <CreditCard className="h-2.5 w-2.5" />
             <span className="capitalize">{methodName}</span>
           </span>
@@ -1152,15 +1152,15 @@ function HistoryRow({ h, idx, apiLang, t }: { h: any; idx: number; apiLang: 'uz'
         open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
       )}>
         <div className="overflow-hidden">
-          <div className="pl-4 pr-5 pb-3 pt-1 space-y-2 border-t border-slate-100">
+          <div className="pl-4 pr-5 pb-3 pt-1 space-y-2 border-t border-slate-100 dark:border-slate-800">
             {/* Purpose */}
-            <div className="rounded-lg bg-gradient-to-br from-indigo-50/60 to-violet-50/30 ring-1 ring-indigo-100 px-3 py-2">
-              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] font-bold text-indigo-600 mb-1">
+            <div className="rounded-lg bg-gradient-to-br from-indigo-50/60 to-violet-50/30 ring-1 ring-indigo-100 dark:ring-indigo-900 px-3 py-2">
+              <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-[0.15em] font-bold text-indigo-600 dark:text-indigo-400 mb-1">
                 <Tag className="h-3 w-3" />
                 {t('purpose')}
               </div>
-              <div className="text-[12px] text-slate-700 leading-relaxed">
-                {purpose || <span className="text-slate-400 italic">{t('noPurpose')}</span>}
+              <div className="text-[12px] text-slate-700 dark:text-slate-300 leading-relaxed">
+                {purpose || <span className="text-slate-400 dark:text-slate-500 italic">{t('noPurpose')}</span>}
               </div>
             </div>
 
@@ -1187,10 +1187,10 @@ function DetailMini({
   mono?: boolean;
 }) {
   const map = {
-    slate:   'bg-slate-50 text-slate-800 ring-slate-200',
-    emerald: 'bg-emerald-50 text-emerald-800 ring-emerald-200',
-    amber:   'bg-amber-50 text-amber-800 ring-amber-200',
-    rose:    'bg-rose-50 text-rose-800 ring-rose-200',
+    slate:   'bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 ring-slate-200 dark:ring-slate-700',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+    amber:   'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+    rose:    'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
   } as const;
   return (
     <div className={cn('rounded-lg ring-1 px-2.5 py-1.5', map[tone])}>
@@ -1211,12 +1211,12 @@ function InfoRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-50 last:border-0">
-      <div className="flex items-center gap-1.5 text-[12px] text-slate-500 shrink-0">
-        <span className="text-slate-400">{icon}</span>
+    <div className="flex items-center justify-between gap-3 py-1.5 border-b border-slate-50 dark:border-slate-800 last:border-0">
+      <div className="flex items-center gap-1.5 text-[12px] text-slate-500 dark:text-slate-400 shrink-0">
+        <span className="text-slate-400 dark:text-slate-500">{icon}</span>
         {label}
       </div>
-      <div className={cn('text-[13px] text-slate-800 text-right truncate', mono && 'font-mono text-[12px]')}>
+      <div className={cn('text-[13px] text-slate-800 dark:text-slate-200 text-right truncate', mono && 'font-mono text-[12px]')}>
         {value || '—'}
       </div>
     </div>

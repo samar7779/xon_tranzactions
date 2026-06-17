@@ -170,15 +170,15 @@ export default function AccountsPage() {
           <CardContent className="p-4 lg:p-5">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200 focus-visible:bg-white"
+                  className="pl-9 h-10 rounded-xl bg-slate-50/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 focus-visible:bg-white"
                   placeholder={t('searchPlaceholder')}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
                 {q && (
-                  <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
+                  <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" onClick={() => setQ('')}>
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
@@ -203,9 +203,9 @@ export default function AccountsPage() {
                   variant="outline"
                   onClick={() => setBulkBackfillOpen(true)}
                   title="Barcha hisoblar bo'yicha orqa sanaga sync (Sync chegarasi shartlarida)"
-                  className="h-10 w-10 p-0 rounded-xl shrink-0 border-indigo-200 bg-indigo-50/40 hover:bg-indigo-100"
+                  className="h-10 w-10 p-0 rounded-xl shrink-0 border-indigo-200 dark:border-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
                 >
-                  <Calendar className="h-4 w-4 text-indigo-700" />
+                  <Calendar className="h-4 w-4 text-indigo-700 dark:text-indigo-300" />
                 </Button>
               )}
               <Button
@@ -223,8 +223,8 @@ export default function AccountsPage() {
                 <SelectTrigger className={cn(
                   "h-10 rounded-xl text-sm font-medium w-auto min-w-[160px] border-0",
                   bankFilter !== 'all'
-                    ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                    : "bg-slate-50 ring-1 ring-slate-200 text-slate-700",
+                    ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900"
+                    : "bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300",
                 )}>
                   <SelectValue placeholder={t('allBanks')} />
                 </SelectTrigger>
@@ -239,12 +239,12 @@ export default function AccountsPage() {
                     </SelectItem>
                   ))}
                   {sortedBanks.filter((b: any) => !b.isActive).length > 0 && (
-                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-semibold border-t border-slate-100 mt-1">
+                    <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold border-t border-slate-100 dark:border-slate-800 mt-1">
                       Aktiv emas
                     </div>
                   )}
                   {sortedBanks.filter((b: any) => !b.isActive).map((b: any) => (
-                    <SelectItem key={b.id} value={b.id} className="text-slate-400">{b.name}</SelectItem>
+                    <SelectItem key={b.id} value={b.id} className="text-slate-400 dark:text-slate-500">{b.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -253,8 +253,8 @@ export default function AccountsPage() {
                 <SelectTrigger className={cn(
                   "h-10 rounded-xl text-sm font-medium w-auto min-w-[140px] border-0",
                   statusFilter !== 'all'
-                    ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                    : "bg-slate-50 ring-1 ring-slate-200 text-slate-700",
+                    ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900"
+                    : "bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300",
                 )}>
                   <SelectValue placeholder={t('syncEnabled')} />
                 </SelectTrigger>
@@ -265,19 +265,19 @@ export default function AccountsPage() {
                 </SelectContent>
               </Select>
 
-              <div className="ml-auto inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-medium">
+              <div className="ml-auto inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 text-xs font-medium">
                 <button
                   onClick={() => setView('grid')}
                   className={cn(
                     "px-3 h-9 rounded-lg transition-colors",
-                    view === 'grid' ? "bg-white shadow-sm text-slate-900" : "text-slate-500",
+                    view === 'grid' ? "bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400",
                   )}
                 >{t('cardView')}</button>
                 <button
                   onClick={() => setView('list')}
                   className={cn(
                     "px-3 h-9 rounded-lg transition-colors",
-                    view === 'list' ? "bg-white shadow-sm text-slate-900" : "text-slate-500",
+                    view === 'list' ? "bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400",
                   )}
                 >{t('tableView')}</button>
               </div>
@@ -326,7 +326,7 @@ export default function AccountsPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                    <tr className="bg-slate-50/80 dark:bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                       <th className="text-left px-4 py-3">Bank · MFO</th>
                       <th className="text-left px-4 py-3">Hisob raqami</th>
                       <th className="text-left px-4 py-3">Egasi</th>
@@ -336,16 +336,16 @@ export default function AccountsPage() {
                       <th className="w-12"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                     {filtered.map((a) => {
                       return (
-                        <tr key={a.id} className="hover:bg-slate-50/60 transition-colors group">
+                        <tr key={a.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors group">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2.5">
                               <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={36} />
                               <div className="min-w-0">
                                 <div className="text-[13px] font-semibold truncate">{a.bank?.name || '—'}</div>
-                                <div className="font-mono text-[10px] text-slate-500">MFO {a.branch}</div>
+                                <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400">MFO {a.branch}</div>
                               </div>
                             </div>
                           </td>
@@ -359,13 +359,13 @@ export default function AccountsPage() {
                           <td className="px-4 py-3">
                             <span className={cn(
                               "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-inset",
-                              a.syncEnabled ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : "bg-slate-50 text-slate-500 ring-slate-200",
+                              a.syncEnabled ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900" : "bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700",
                             )}>
                               <span className={cn("w-1.5 h-1.5 rounded-full", a.syncEnabled ? "bg-emerald-500" : "bg-slate-300")} />
                               {a.syncEnabled ? 'ON' : 'OFF'}
                             </span>
                           </td>
-                          <td className="px-4 py-3 text-[11px] text-slate-500 tabular-nums">
+                          <td className="px-4 py-3 text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
                             {a.lastSyncedAt ? formatDateTime(a.lastSyncedAt) : '—'}
                           </td>
                           <td className="px-4 py-3">
@@ -381,14 +381,14 @@ export default function AccountsPage() {
                                     <RefreshCw className={cn("h-4 w-4 mr-2", syncMut.isPending && "animate-spin")} /> Hozir sync
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setBackfillAccount(a)}>
-                                    <Calendar className="h-4 w-4 mr-2 text-indigo-600" /> Sana orqali sync (backfill)
+                                    <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Sana orqali sync (backfill)
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => toggleSyncMut.mutate({ id: a.id, enabled: !a.syncEnabled })}>
                                     {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
                                     {a.syncEnabled ? 'Sync o\'chirish' : 'Sync yoqish'}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-rose-600" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}>
+                                  <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}>
                                     <Trash2 className="h-4 w-4 mr-2" /> O'chirish
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
@@ -448,13 +448,13 @@ function BigStat({
       <div className={cn("absolute -top-16 -right-16 w-44 h-44 rounded-full blur-3xl opacity-30 bg-gradient-to-br", m.grad)} />
       <CardContent className="p-6 relative">
         <div className="flex items-start justify-between mb-3">
-          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 dark:text-slate-400">{label}</div>
           <div className={cn("w-10 h-10 rounded-xl grid place-items-center bg-gradient-to-br text-white shadow-sm", m.grad)}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
         <div className="text-2xl lg:text-3xl font-bold tracking-tight tabular-nums">{value}</div>
-        <div className="text-[11px] text-slate-500 mt-1 truncate">{sub}</div>
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">{sub}</div>
       </CardContent>
     </Card>
   );
@@ -474,14 +474,14 @@ function AccountCard({
   const balance = Number(a.balance || 0);
   const hasBalance = balance > 0;
   return (
-    <Card className="group relative border border-slate-200 shadow-sm hover:shadow-lg hover:border-slate-300 transition-all overflow-hidden bg-white">
+    <Card className="group relative border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
       <CardContent className="p-0">
         {/* Header — bank logo, name, menu */}
         <div className="flex items-center gap-3 px-4 pt-4 pb-3">
           <BankLogo code={a.bank?.code || ''} name={a.bank?.name} size={40} />
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-bold truncate tracking-tight text-slate-900">{a.bank?.name}</div>
-            <div className="text-[10px] font-mono text-slate-400">MFO {a.branch} · {a.currency}</div>
+            <div className="text-[13px] font-bold truncate tracking-tight text-slate-900 dark:text-slate-100">{a.bank?.name}</div>
+            <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500">MFO {a.branch} · {a.currency}</div>
           </div>
           {canManage && (
             <DropdownMenu>
@@ -495,14 +495,14 @@ function AccountCard({
                   <RefreshCw className={cn("h-4 w-4 mr-2", busy && "animate-spin")} /> Hozir sync
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onBackfill}>
-                  <Calendar className="h-4 w-4 mr-2 text-indigo-600" /> Sana orqali sync (backfill)
+                  <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Sana orqali sync (backfill)
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onToggleSync}>
                   {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
                   {a.syncEnabled ? 'Sync o\'chirish' : 'Sync yoqish'}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-rose-600" onClick={onDelete}>
+                <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={onDelete}>
                   <Trash2 className="h-4 w-4 mr-2" /> O'chirish
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -512,29 +512,29 @@ function AccountCard({
 
         {/* Owner name */}
         <div className="px-4 pb-2">
-          <div className="text-[13px] font-semibold text-slate-800 truncate">{a.ownerName || '—'}</div>
-          <div className="font-mono text-[11px] text-slate-400 tracking-tight">{formatAccount(a.accountNo)}</div>
+          <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate">{a.ownerName || '—'}</div>
+          <div className="font-mono text-[11px] text-slate-400 dark:text-slate-500 tracking-tight">{formatAccount(a.accountNo)}</div>
         </div>
 
         {/* Balance — big, prominent */}
         <div className={cn(
           "mx-4 mb-3 rounded-xl px-4 py-3",
-          hasBalance ? "bg-gradient-to-br from-indigo-50 to-blue-50 ring-1 ring-indigo-100" : "bg-slate-50 ring-1 ring-slate-100",
+          hasBalance ? "bg-gradient-to-br from-indigo-50 to-blue-50 ring-1 ring-indigo-100 dark:ring-indigo-900" : "bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800",
         )}>
-          <div className="text-[9px] uppercase tracking-[0.15em] text-slate-500 font-bold mb-0.5">Qoldiq</div>
+          <div className="text-[9px] uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400 font-bold mb-0.5">Qoldiq</div>
           <div className={cn(
             "text-xl font-bold tracking-tight tabular-nums",
-            hasBalance ? "text-indigo-900" : "text-slate-400",
+            hasBalance ? "text-indigo-900 dark:text-indigo-300" : "text-slate-400 dark:text-slate-500",
           )}>
             {formatMoney(balance, a.currency)}
           </div>
         </div>
 
         {/* Footer — sync status + last sync */}
-        <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 bg-slate-50/40">
+        <div className="flex items-center justify-between px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
           <span className={cn(
             "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold",
-            a.syncEnabled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-500",
+            a.syncEnabled ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : "bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400",
           )}>
             <span className="relative flex h-1.5 w-1.5">
               {a.syncEnabled && <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />}
@@ -542,7 +542,7 @@ function AccountCard({
             </span>
             {a.syncEnabled ? 'Sync ON' : 'Sync OFF'}
           </span>
-          <div className="text-[10px] text-slate-400 flex items-center gap-1 tabular-nums">
+          <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 tabular-nums">
             {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : 'Hech sync bo\'lmagan'}
           </div>
         </div>
@@ -598,7 +598,7 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
               </SelectContent>
             </Select>
             {creds.length === 0 && (
-              <p className="text-xs text-slate-500">Avval Bank ulanishi qo'shing → Sozlash → Bank ulanishlari</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Avval Bank ulanishi qo'shing → Sozlash → Bank ulanishlari</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -609,9 +609,9 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
                 onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
                 placeholder="00974"
                 maxLength={5}
-                className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
+                className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200 dark:ring-rose-900')}
               />
-              <div className="text-[10px] text-slate-500">5 xonalik MFO kod — majburiy</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod — majburiy</div>
             </div>
             <div className="space-y-2">
               <Label>Valyuta <span className="text-rose-500">*</span></Label>
@@ -704,7 +704,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
-        <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
+        <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
           <DialogTitle className="text-white text-base font-bold">Ko'p hisob qo'shish</DialogTitle>
           <DialogDescription className="text-white/85 text-xs mt-1">
             Excel/Sheets'dan nusxalab paste qiling — formatda: "NOMI &nbsp;&nbsp; HISOB_NO" (har qatorda bittadan)
@@ -715,7 +715,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {/* Settings */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank ulanishi</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank ulanishi</Label>
               <Select value={credentialId} onValueChange={setCredentialId}>
                 <SelectTrigger><SelectValue placeholder="— tanlang —" /></SelectTrigger>
                 <SelectContent>
@@ -726,11 +726,11 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">MFO</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">MFO</Label>
               <Input value={branch} onChange={(e) => setBranch(e.target.value.replace(/\D/g, '').slice(0, 5))} className="font-mono" maxLength={5} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Valyuta</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Valyuta</Label>
               <Select value={currency} onValueChange={setCurrency}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -741,29 +741,29 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Tahlil</Label>
-              <div className="h-9 rounded-md ring-1 ring-slate-200 px-3 flex items-center text-[12px] font-medium">
-                <span className="text-emerald-700">{validCount}</span>
-                <span className="text-slate-400 mx-1">/</span>
-                <span className="text-slate-700">{parsed.length}</span>
-                {invalidCount > 0 && <span className="text-rose-600 ml-2">({invalidCount} xato)</span>}
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Tahlil</Label>
+              <div className="h-9 rounded-md ring-1 ring-slate-200 dark:ring-slate-700 px-3 flex items-center text-[12px] font-medium">
+                <span className="text-emerald-700 dark:text-emerald-300">{validCount}</span>
+                <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
+                <span className="text-slate-700 dark:text-slate-300">{parsed.length}</span>
+                {invalidCount > 0 && <span className="text-rose-600 dark:text-rose-400 ml-2">({invalidCount} xato)</span>}
               </div>
             </div>
           </div>
 
           {/* Paste area */}
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               Hisoblar ro'yxati (paste)
             </Label>
             <textarea
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
               rows={10}
-              className="w-full font-mono text-[12px] rounded-xl border border-slate-200 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
+              className="w-full font-mono text-[12px] rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500"
               placeholder={"APELSIN RESIDENCE\t20208000904501402001\nART-ZAL BARAKA BIZNES\t20208000004793065002\n..."}
             />
-            <div className="text-[10px] text-slate-500">
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">
               Tab yoki bo'sh joy bilan ajratilgan. Hisob raqami 20 belgilik bo'lishi shart.
             </div>
           </div>
@@ -771,21 +771,21 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {/* Preview parsed */}
           {parsed.length > 0 && (
             <div>
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 mb-1.5 block">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">
                 Qabul qilinadigan ro'yxat (birinchi 10 ta)
               </Label>
-              <div className="rounded-xl border border-slate-200 max-h-44 overflow-y-auto divide-y divide-slate-100 bg-slate-50/40">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700 bg-slate-50/40 dark:bg-slate-900/40">
                 {parsed.slice(0, 10).map((p: any, i: number) => (
-                  <div key={i} className={cn("px-3 py-1.5 text-[11px] flex items-center gap-3", p.error && "bg-rose-50/40")}>
-                    <span className={cn("inline-block w-5 text-center font-bold", p.error ? "text-rose-600" : "text-emerald-600")}>
+                  <div key={i} className={cn("px-3 py-1.5 text-[11px] flex items-center gap-3", p.error && "bg-rose-50/40 dark:bg-rose-950/40")}>
+                    <span className={cn("inline-block w-5 text-center font-bold", p.error ? "text-rose-600 dark:text-rose-400" : "text-emerald-600 dark:text-emerald-400")}>
                       {p.error ? '✗' : '✓'}
                     </span>
-                    <span className="font-mono text-slate-700 w-44 truncate">{p.accountNo}</span>
-                    <span className="text-slate-600 truncate flex-1">{p.ownerName || (p.error || '—')}</span>
+                    <span className="font-mono text-slate-700 dark:text-slate-300 w-44 truncate">{p.accountNo}</span>
+                    <span className="text-slate-600 dark:text-slate-300 truncate flex-1">{p.ownerName || (p.error || '—')}</span>
                   </div>
                 ))}
                 {parsed.length > 10 && (
-                  <div className="px-3 py-1.5 text-[10px] text-slate-500 text-center">… va yana {parsed.length - 10} ta</div>
+                  <div className="px-3 py-1.5 text-[10px] text-slate-500 dark:text-slate-400 text-center">… va yana {parsed.length - 10} ta</div>
                 )}
               </div>
             </div>
@@ -793,18 +793,18 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
 
           {/* Result after import */}
           {result && (
-            <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 space-y-1 text-[12px]">
-              <div className="font-bold text-emerald-900">Natija:</div>
+            <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-4 py-3 space-y-1 text-[12px]">
+              <div className="font-bold text-emerald-900 dark:text-emerald-300">Natija:</div>
               <div>✓ <span className="font-semibold">{result.added}</span> ta yangi qo'shildi</div>
               <div>↺ <span className="font-semibold">{result.skipped}</span> ta allaqachon mavjud (skip)</div>
               {result.errors?.length > 0 && (
-                <div className="text-rose-700">✗ <span className="font-semibold">{result.errors.length}</span> ta xato</div>
+                <div className="text-rose-700 dark:text-rose-300">✗ <span className="font-semibold">{result.errors.length}</span> ta xato</div>
               )}
             </div>
           )}
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-slate-200 bg-slate-50/60">
+        <DialogFooter className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60">
           <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Bekor qilish</Button>
           <Button
             onClick={() => mut.mutate()}
@@ -957,18 +957,18 @@ function AccountBackfillDialog({
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           {!result?.ok && (
             <>
-              <div className="text-[12px] text-slate-600 leading-relaxed">
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed">
                 Tanlangan sana oralig'i uchun bank API'sidan tranzaksiyalarni qayta yuklab
                 DB'ga qo'shadi (dublikatlar avtomatik o'tkazib yuboriladi).
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanadan</Label>
                   <Input type="date" value={dateFrom} max={today} onChange={(e) => setDateFrom(e.target.value)} className="h-10" />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanagacha</Label>
                   <Input type="date" value={dateTo} max={today} onChange={(e) => setDateTo(e.target.value)} className="h-10" />
                 </div>
               </div>
@@ -976,22 +976,22 @@ function AccountBackfillDialog({
               {dateFrom && dateTo && dayDiff > 0 && (
                 <div className={cn(
                   'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
-                  dayDiff > 90 ? 'bg-amber-50 ring-amber-200 text-amber-800' : 'bg-slate-50 ring-slate-200 text-slate-700',
+                  dayDiff > 90 ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300',
                 )}>
                   <Calendar className="h-3.5 w-3.5" />
                   <span><b>{dayDiff}</b> ta kun tanlandi</span>
-                  {dayDiff > 90 && <span className="text-amber-600">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
+                  {dayDiff > 90 && <span className="text-amber-600 dark:text-amber-400">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
                 </div>
               )}
             </>
           )}
 
           {result && !result.ok && (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-              <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-              <div className="text-[12.5px] text-rose-800">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+              <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+              <div className="text-[12.5px] text-rose-800 dark:text-rose-300">
                 <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700">{result.error || "Noma'lum xato"}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
               </div>
             </div>
           )}
@@ -1002,9 +1002,9 @@ function AccountBackfillDialog({
               {/* Status banner — RUNNING / DONE / FAILED */}
               <div className={cn(
                 'rounded-xl ring-1 px-4 py-3 flex items-center gap-3',
-                runningCount > 0 && 'bg-indigo-50 ring-indigo-200',
-                isAllDone && failedCount === 0 && 'bg-emerald-50 ring-emerald-200',
-                isAllDone && failedCount > 0 && 'bg-rose-50 ring-rose-200',
+                runningCount > 0 && 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900',
+                isAllDone && failedCount === 0 && 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900',
+                isAllDone && failedCount > 0 && 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900',
               )}>
                 <div className={cn(
                   'w-10 h-10 rounded-xl grid place-items-center text-white shrink-0',
@@ -1025,7 +1025,7 @@ function AccountBackfillDialog({
                     {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
                     {myLogs.length === 0 && '⏳ Boshlanmoqda...'}
                   </div>
-                  <div className="text-[11px] text-slate-600 mt-0.5">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                     {result.actualFrom} → {result.actualTo} · {result.days ?? 1} ta sana
                   </div>
                 </div>
@@ -1033,28 +1033,28 @@ function AccountBackfillDialog({
 
               {/* Statistika kartalari */}
               <div className="grid grid-cols-4 gap-2">
-                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500">Bajarildi</div>
-                  <div className="text-[18px] font-black text-slate-800 tabular-nums">
-                    {finishedCount + failedCount}<span className="text-[12px] text-slate-400 font-normal">/{result.days ?? 1}</span>
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Bajarildi</div>
+                  <div className="text-[18px] font-black text-slate-800 dark:text-slate-200 tabular-nums">
+                    {finishedCount + failedCount}<span className="text-[12px] text-slate-400 dark:text-slate-500 font-normal">/{result.days ?? 1}</span>
                   </div>
                 </div>
-                <div className="rounded-lg bg-cyan-50 ring-1 ring-cyan-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700">Bankdan olindi</div>
-                  <div className="text-[18px] font-black text-cyan-800 tabular-nums">{totalFetched}</div>
+                <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">Bankdan olindi</div>
+                  <div className="text-[18px] font-black text-cyan-800 dark:text-cyan-300 tabular-nums">{totalFetched}</div>
                 </div>
-                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700">DB ga saqlandi</div>
-                  <div className="text-[18px] font-black text-emerald-800 tabular-nums">{totalSaved}</div>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">DB ga saqlandi</div>
+                  <div className="text-[18px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums">{totalSaved}</div>
                 </div>
                 <div className={cn(
                   'rounded-lg ring-1 px-3 py-2.5',
-                  totalErrors > 0 ? 'bg-rose-50 ring-rose-200' : 'bg-slate-50 ring-slate-200',
+                  totalErrors > 0 ? 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                 )}>
-                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', totalErrors > 0 ? 'text-rose-700' : 'text-slate-500')}>
+                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', totalErrors > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400')}>
                     Xato
                   </div>
-                  <div className={cn('text-[18px] font-black tabular-nums', totalErrors > 0 ? 'text-rose-700' : 'text-slate-400')}>
+                  <div className={cn('text-[18px] font-black tabular-nums', totalErrors > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 dark:text-slate-500')}>
                     {totalErrors}
                   </div>
                 </div>
@@ -1062,8 +1062,8 @@ function AccountBackfillDialog({
 
               {/* Per-day log ro'yxati */}
               {myLogs.length > 0 && (
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                  <div className="bg-slate-100 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 flex items-center justify-between">
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                  <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
                     <span>Sana bo'yicha jarayon</span>
                     <span className="font-normal text-[9.5px] normal-case tracking-normal">
                       {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
@@ -1071,41 +1071,41 @@ function AccountBackfillDialog({
                   </div>
                   <div className="max-h-64 overflow-y-auto">
                     {myLogs.map((log: any) => (
-                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800">
                         <div className={cn(
                           'w-7 h-7 rounded-lg grid place-items-center shrink-0',
-                          log.status === 'RUNNING' && 'bg-indigo-100 text-indigo-600',
-                          log.status === 'SUCCESS' && 'bg-emerald-100 text-emerald-700',
-                          log.status === 'FAILED' && 'bg-rose-100 text-rose-700',
+                          log.status === 'RUNNING' && 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+                          log.status === 'SUCCESS' && 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+                          log.status === 'FAILED' && 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
                         )}>
                           {log.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                           {log.status === 'SUCCESS' && <CheckCircle2 className="h-3.5 w-3.5" />}
                           {log.status === 'FAILED' && <X className="h-3.5 w-3.5" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[12px] font-mono text-slate-700 truncate" title={log.source}>
+                          <div className="text-[12px] font-mono text-slate-700 dark:text-slate-300 truncate" title={log.source}>
                             {log.source}
                           </div>
                           {log.errorMessage && (
-                            <div className="text-[10.5px] text-rose-600 truncate" title={log.errorMessage}>
+                            <div className="text-[10.5px] text-rose-600 dark:text-rose-400 truncate" title={log.errorMessage}>
                               ⚠ {log.errorMessage}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-[11px] tabular-nums shrink-0">
-                          <span className="text-cyan-700" title="Bank API javobi">
-                            <b>{log.fetched ?? 0}</b><span className="text-slate-400">fetch</span>
+                          <span className="text-cyan-700 dark:text-cyan-300" title="Bank API javobi">
+                            <b>{log.fetched ?? 0}</b><span className="text-slate-400 dark:text-slate-500">fetch</span>
                           </span>
-                          <span className="text-emerald-700" title="DB ga saqlangan">
-                            <b>{log.saved ?? 0}</b><span className="text-slate-400">saved</span>
+                          <span className="text-emerald-700 dark:text-emerald-300" title="DB ga saqlangan">
+                            <b>{log.saved ?? 0}</b><span className="text-slate-400 dark:text-slate-500">saved</span>
                           </span>
                           {log.errors > 0 && (
-                            <span className="text-rose-700" title="Xato">
-                              <b>{log.errors}</b><span className="text-slate-400">err</span>
+                            <span className="text-rose-700 dark:text-rose-300" title="Xato">
+                              <b>{log.errors}</b><span className="text-slate-400 dark:text-slate-500">err</span>
                             </span>
                           )}
                           {log.durationMs && (
-                            <span className="text-slate-500" title="Vaqt">
+                            <span className="text-slate-500 dark:text-slate-400" title="Vaqt">
                               {(log.durationMs / 1000).toFixed(1)}s
                             </span>
                           )}
@@ -1119,7 +1119,7 @@ function AccountBackfillDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
           {result?.ok ? (
             <>
               <Button variant="ghost" onClick={onClose}>
@@ -1129,7 +1129,7 @@ function AccountBackfillDialog({
                 <Button
                   onClick={() => { setResult(null); setStartedAt(null); }}
                   variant="outline"
-                  className="border-indigo-300 text-indigo-700"
+                  className="border-indigo-300 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300"
                 >
                   <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
                 </Button>
@@ -1286,7 +1286,7 @@ function BulkBackfillDialog({
 
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           {syncMinDate && (
-            <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800">
+            <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800 dark:text-amber-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Sync chegarasi (minimal sana): <b className="tabular-nums">{syncMinDate}</b> — bundan oldinga chiqib bo'lmaydi
             </div>
@@ -1296,7 +1296,7 @@ function BulkBackfillDialog({
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanadan</Label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -1307,7 +1307,7 @@ function BulkBackfillDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanagacha</Label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -1320,7 +1320,7 @@ function BulkBackfillDialog({
               </div>
 
               {fromTooEarly && (
-                <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 text-[12px] text-rose-800 inline-flex items-center gap-2">
+                <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-center gap-2">
                   <X className="h-3.5 w-3.5" />
                   Sanadan {syncMinDate} dan oldin bo'lmasligi kerak
                 </div>
@@ -1329,22 +1329,22 @@ function BulkBackfillDialog({
               {!fromTooEarly && dayDiff > 0 && (
                 <div className={cn(
                   'rounded-lg ring-1 px-3 py-2 text-[12px] inline-flex items-center gap-2',
-                  dayDiff > 60 ? 'bg-amber-50 ring-amber-200 text-amber-800' : 'bg-slate-50 ring-slate-200 text-slate-700',
+                  dayDiff > 60 ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300',
                 )}>
                   <Calendar className="h-3.5 w-3.5" />
                   <b>{dayDiff}</b> ta kun · barcha sync yoqilgan hisoblar uchun
-                  {dayDiff > 60 && <span className="text-amber-600">· uzoq vaqt ketishi mumkin</span>}
+                  {dayDiff > 60 && <span className="text-amber-600 dark:text-amber-400">· uzoq vaqt ketishi mumkin</span>}
                 </div>
               )}
             </>
           )}
 
           {result && !result.ok && (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-              <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-              <div className="text-[12.5px] text-rose-800">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+              <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+              <div className="text-[12.5px] text-rose-800 dark:text-rose-300">
                 <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700">{result.error || "Noma'lum xato"}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
               </div>
             </div>
           )}
@@ -1353,9 +1353,9 @@ function BulkBackfillDialog({
             <>
               <div className={cn(
                 'rounded-xl ring-1 px-4 py-3 flex items-center gap-3',
-                runningCount > 0 && 'bg-indigo-50 ring-indigo-200',
-                isAllDone && failedCount === 0 && 'bg-emerald-50 ring-emerald-200',
-                isAllDone && failedCount > 0 && 'bg-rose-50 ring-rose-200',
+                runningCount > 0 && 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900',
+                isAllDone && failedCount === 0 && 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900',
+                isAllDone && failedCount > 0 && 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900',
               )}>
                 <div className={cn(
                   'w-10 h-10 rounded-xl grid place-items-center text-white shrink-0',
@@ -1376,43 +1376,43 @@ function BulkBackfillDialog({
                     {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
                     {logs.length === 0 && '⏳ Boshlanmoqda...'}
                   </div>
-                  <div className="text-[11px] text-slate-600 mt-0.5">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                     {result.actualFrom} → {result.actualTo} · {result.accounts ?? 0} hisob · {result.days ?? 0} sana
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-4 gap-2">
-                <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500">Bajarildi</div>
-                  <div className="text-[16px] font-black text-slate-800 tabular-nums">
-                    {finishedCount + failedCount}<span className="text-[11px] text-slate-400 font-normal">/{result.accounts ?? 0}</span>
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Bajarildi</div>
+                  <div className="text-[16px] font-black text-slate-800 dark:text-slate-200 tabular-nums">
+                    {finishedCount + failedCount}<span className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">/{result.accounts ?? 0}</span>
                   </div>
                 </div>
-                <div className="rounded-lg bg-cyan-50 ring-1 ring-cyan-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700">Olindi</div>
-                  <div className="text-[16px] font-black text-cyan-800 tabular-nums">{totalFetched}</div>
+                <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">Olindi</div>
+                  <div className="text-[16px] font-black text-cyan-800 dark:text-cyan-300 tabular-nums">{totalFetched}</div>
                 </div>
-                <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700">Saqlandi</div>
-                  <div className="text-[16px] font-black text-emerald-800 tabular-nums">{totalSaved}</div>
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">Saqlandi</div>
+                  <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums">{totalSaved}</div>
                 </div>
                 <div className={cn(
                   'rounded-lg ring-1 px-3 py-2.5',
-                  failedCount > 0 ? 'bg-rose-50 ring-rose-200' : 'bg-slate-50 ring-slate-200',
+                  failedCount > 0 ? 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                 )}>
-                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', failedCount > 0 ? 'text-rose-700' : 'text-slate-500')}>
+                  <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', failedCount > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400')}>
                     Xato
                   </div>
-                  <div className={cn('text-[16px] font-black tabular-nums', failedCount > 0 ? 'text-rose-700' : 'text-slate-400')}>
+                  <div className={cn('text-[16px] font-black tabular-nums', failedCount > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 dark:text-slate-500')}>
                     {failedCount}
                   </div>
                 </div>
               </div>
 
               {logs.length > 0 && (
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                  <div className="bg-slate-100 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 flex items-center justify-between">
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                  <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
                     <span>Hisob bo'yicha jarayon ({logs.length})</span>
                     <span className="font-normal text-[9.5px] normal-case tracking-normal">
                       {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
@@ -1420,31 +1420,31 @@ function BulkBackfillDialog({
                   </div>
                   <div className="max-h-60 overflow-y-auto">
                     {logs.map((log: any) => (
-                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                      <div key={log.id} className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 last:border-b-0 hover:bg-slate-50 dark:hover:bg-slate-800">
                         <div className={cn(
                           'w-7 h-7 rounded-lg grid place-items-center shrink-0',
-                          log.status === 'RUNNING' && 'bg-indigo-100 text-indigo-600',
-                          log.status === 'SUCCESS' && 'bg-emerald-100 text-emerald-700',
-                          log.status === 'FAILED' && 'bg-rose-100 text-rose-700',
+                          log.status === 'RUNNING' && 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400',
+                          log.status === 'SUCCESS' && 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+                          log.status === 'FAILED' && 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
                         )}>
                           {log.status === 'RUNNING' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                           {log.status === 'SUCCESS' && <CheckCircle2 className="h-3.5 w-3.5" />}
                           {log.status === 'FAILED' && <X className="h-3.5 w-3.5" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="text-[11.5px] font-mono text-slate-700 truncate" title={log.source}>
+                          <div className="text-[11.5px] font-mono text-slate-700 dark:text-slate-300 truncate" title={log.source}>
                             {log.source}
                           </div>
                           {log.errorMessage && (
-                            <div className="text-[10px] text-rose-600 truncate" title={log.errorMessage}>
+                            <div className="text-[10px] text-rose-600 dark:text-rose-400 truncate" title={log.errorMessage}>
                               ⚠ {log.errorMessage}
                             </div>
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-[10.5px] tabular-nums shrink-0">
-                          <span className="text-cyan-700"><b>{log.fetched ?? 0}</b></span>
-                          <span className="text-emerald-700"><b>{log.saved ?? 0}</b></span>
-                          {log.errors > 0 && <span className="text-rose-700"><b>{log.errors}</b></span>}
+                          <span className="text-cyan-700 dark:text-cyan-300"><b>{log.fetched ?? 0}</b></span>
+                          <span className="text-emerald-700 dark:text-emerald-300"><b>{log.saved ?? 0}</b></span>
+                          {log.errors > 0 && <span className="text-rose-700 dark:text-rose-300"><b>{log.errors}</b></span>}
                         </div>
                       </div>
                     ))}
@@ -1455,7 +1455,7 @@ function BulkBackfillDialog({
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/40">
           {result?.ok ? (
             <>
               <Button variant="ghost" onClick={onClose}>
@@ -1465,7 +1465,7 @@ function BulkBackfillDialog({
                 <Button
                   onClick={() => { setResult(null); setStartedAt(null); }}
                   variant="outline"
-                  className="border-indigo-300 text-indigo-700"
+                  className="border-indigo-300 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300"
                 >
                   <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
                 </Button>

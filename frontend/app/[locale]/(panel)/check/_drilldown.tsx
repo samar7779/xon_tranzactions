@@ -175,20 +175,20 @@ export function AccountDrilldown({
       onClick={onClose}
     >
       <div
-        className="bg-white w-full max-w-[920px] h-full overflow-y-auto shadow-2xl flex flex-col"
+        className="bg-white dark:bg-slate-900 w-full max-w-[920px] h-full overflow-y-auto shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center gap-3 sticky top-0 bg-white z-10">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center gap-3 sticky top-0 bg-white dark:bg-slate-900 z-10">
           <div className="min-w-0 flex-1">
-            <h2 className="text-[15px] font-bold text-slate-900 truncate">
+            <h2 className="text-[15px] font-bold text-slate-900 dark:text-slate-100 truncate">
               {item.bankName} · <span className="font-mono">{item.accountNo}</span>
             </h2>
-            <div className="text-[11px] text-slate-500 truncate">{item.ownerName || '—'}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{item.ownerName || '—'}</div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 hover:bg-rose-100 hover:text-rose-700 transition"
+            className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-300 transition"
             aria-label="Yopish"
           >
             <X className="h-4 w-4" />
@@ -196,10 +196,10 @@ export function AccountDrilldown({
         </div>
 
         {/* Period selector */}
-        <div className="px-6 py-4 bg-slate-50/60 border-b border-slate-100">
+        <div className="px-6 py-4 bg-slate-50/60 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-end gap-3 flex-wrap">
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-600">Sanadan</label>
+              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Sanadan</label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -208,7 +208,7 @@ export function AccountDrilldown({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-600">Sanagacha</label>
+              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Sanagacha</label>
               <Input
                 type="date"
                 value={dateTo}
@@ -227,7 +227,7 @@ export function AccountDrilldown({
                 <><RefreshCw className="h-4 w-4 mr-1.5" /> Davr uchun tekshir</>
               )}
             </Button>
-            <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" />
               {isSingleDay
                 ? "Bitta kun — xato bo'lsa sababini aniqlash mumkin"
@@ -239,12 +239,12 @@ export function AccountDrilldown({
         {/* Result body */}
         <div className="flex-1 p-6 space-y-5">
           {data.status === 'error' ? (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 p-5">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-5">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                 <div>
-                  <div className="text-[13px] font-semibold text-rose-900">Sverka bajarilmadi</div>
-                  <div className="text-[12px] text-rose-700 mt-1">{data.error || "noma'lum xato"}</div>
+                  <div className="text-[13px] font-semibold text-rose-900 dark:text-rose-300">Sverka bajarilmadi</div>
+                  <div className="text-[12px] text-rose-700 dark:text-rose-400 mt-1">{data.error || "noma'lum xato"}</div>
                 </div>
               </div>
             </div>
@@ -253,12 +253,12 @@ export function AccountDrilldown({
               {/* Status banner */}
               <div className={cn(
                 'rounded-xl p-4 flex items-center gap-3',
-                data.status === 'ok' ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-amber-50 ring-1 ring-amber-200',
+                data.status === 'ok' ? 'bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900' : 'bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900',
               )}>
                 {data.status === 'ok' ? (
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
                 ) : (
-                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                  <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
                 )}
                 <div className="text-[13px] font-semibold">
                   {data.status === 'ok'
@@ -266,7 +266,7 @@ export function AccountDrilldown({
                     : 'Farq aniqlandi — quyidagi jadvalda ko\'rib chiqing'}
                 </div>
                 {data.partial && (
-                  <span className="ml-auto text-[11px] text-amber-700">
+                  <span className="ml-auto text-[11px] text-amber-700 dark:text-amber-300">
                     ⚠ {data.failedDays} kun bankdan ma'lumotsiz
                   </span>
                 )}
@@ -285,12 +285,12 @@ export function AccountDrilldown({
 
               {/* Diagnostika tugmasi va natija */}
               {data.status === 'mismatch' && isSingleDay && (
-                <div className="rounded-xl border border-slate-200 p-4 space-y-3">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                   <div className="flex items-center gap-3">
-                    <Search className="h-5 w-5 text-indigo-600" />
+                    <Search className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     <div className="flex-1">
-                      <div className="text-[13px] font-semibold text-slate-900">Farq sababini topish</div>
-                      <div className="text-[11px] text-slate-500">Bankdagi har bir tranzaksiyani AllTranzactions bilan solishtiramiz va yetishmayotgan/ortiqcha yozuvlarni topamiz</div>
+                      <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">Farq sababini topish</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Bankdagi har bir tranzaksiyani AllTranzactions bilan solishtiramiz va yetishmayotgan/ortiqcha yozuvlarni topamiz</div>
                     </div>
                     <Button
                       size="sm"
@@ -331,50 +331,50 @@ function ReconcileTable({ data }: { data: ReconcileData }) {
   if (!data.bank || !data.db || !data.diff) return null;
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const diffCls = (n: number) =>
-    Math.abs(n) < 1 ? 'text-emerald-700' : 'text-amber-700';
+    Math.abs(n) < 1 ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300';
 
   return (
-    <div className="rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden">
+    <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
       <table className="w-full text-[13px]">
         <thead>
-          <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+          <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
             <th className="text-left px-4 py-2.5">Ko'rsatkich</th>
             <th className="text-right px-4 py-2.5">Bank</th>
             <th className="text-right px-4 py-2.5">AllTranzactions</th>
             <th className="text-right px-4 py-2.5">Farq</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 tabular-nums">
+        <tbody className="divide-y divide-slate-100 dark:divide-slate-800 tabular-nums">
           <tr>
-            <td className="px-4 py-3 text-slate-700">
-              <span className="flex items-center gap-2"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600" /> Kirim oboroti</span>
+            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+              <span className="flex items-center gap-2"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Kirim oboroti</span>
             </td>
-            <td className="px-4 py-3 text-right font-semibold text-emerald-700">{m(data.bank.credit)}</td>
-            <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-              {m(data.db.inflow)} <span className="text-[10px] text-slate-400">· {data.db.inCount} ta</span>
+            <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300">{m(data.bank.credit)}</td>
+            <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300">
+              {m(data.db.inflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {data.db.inCount} ta</span>
             </td>
             <td className={cn('px-4 py-3 text-right font-bold', diffCls(data.diff.credit))}>{m(data.diff.credit)}</td>
           </tr>
           <tr>
-            <td className="px-4 py-3 text-slate-700">
-              <span className="flex items-center gap-2"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600" /> Chiqim oboroti</span>
+            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+              <span className="flex items-center gap-2"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" /> Chiqim oboroti</span>
             </td>
-            <td className="px-4 py-3 text-right font-semibold text-rose-700">{m(data.bank.debit)}</td>
-            <td className="px-4 py-3 text-right font-semibold text-rose-700">
-              {m(data.db.outflow)} <span className="text-[10px] text-slate-400">· {data.db.outCount} ta</span>
+            <td className="px-4 py-3 text-right font-semibold text-rose-700 dark:text-rose-300">{m(data.bank.debit)}</td>
+            <td className="px-4 py-3 text-right font-semibold text-rose-700 dark:text-rose-300">
+              {m(data.db.outflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {data.db.outCount} ta</span>
             </td>
             <td className={cn('px-4 py-3 text-right font-bold', diffCls(data.diff.debit))}>{m(data.diff.debit)}</td>
           </tr>
-          <tr className="bg-slate-50/60">
-            <td className="px-4 py-3 text-slate-700">Ochilish saldosi</td>
+          <tr className="bg-slate-50/60 dark:bg-slate-800/60">
+            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">Ochilish saldosi</td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.bank.opening)}</td>
-            <td className="px-4 py-3 text-right text-slate-400">—</td>
-            <td className="px-4 py-3 text-right text-slate-400">—</td>
+            <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500">—</td>
+            <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500">—</td>
           </tr>
           <tr>
-            <td className="px-4 py-3 text-slate-700">
+            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
               Yopilish saldosi
-              <div className="text-[10px] text-slate-400">ochilish + kirim − chiqim</div>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500">ochilish + kirim − chiqim</div>
             </td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.bank.closing)}</td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.diff.computedClosing)}</td>
@@ -417,23 +417,23 @@ function DiagnoseResult({
   return (
     <div className="space-y-3">
       {data._debug && (
-        <div className="rounded-lg bg-slate-100 ring-1 ring-slate-300 p-2.5 text-[10px] font-mono text-slate-700 space-y-0.5">
-          <div className="font-bold text-slate-900">DEBUG (vaqtinchalik)</div>
+        <div className="rounded-lg bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-300 dark:ring-slate-700 p-2.5 text-[10px] font-mono text-slate-700 dark:text-slate-300 space-y-0.5">
+          <div className="font-bold text-slate-900 dark:text-slate-100">DEBUG (vaqtinchalik)</div>
           <div>Qidirilgan kunlar: {data._debug.searchedDates.join(', ') || '(yo\'q)'}</div>
           <div>Har kunda content[] hajmi: {Object.entries(data._debug.itemsPerDate).map(([d, n]) => `${d}=${n}`).join(' · ')}</div>
           <div>Neighbor indeks o'lchami (b2/gen/ext kalitlar): <b>{data._debug.neighborIndexSize}</b></div>
-          <div>Unmatched DB: <b>{data._debug.unmatchedDbCount}</b> · Ulardan neighbor'da topilgan: <b className="text-emerald-700">{data._debug.foundByNeighborCount}</b></div>
+          <div>Unmatched DB: <b>{data._debug.unmatchedDbCount}</b> · Ulardan neighbor'da topilgan: <b className="text-emerald-700 dark:text-emerald-300">{data._debug.foundByNeighborCount}</b></div>
         </div>
       )}
-      <div className="flex items-center gap-4 text-[12px] text-slate-600 flex-wrap">
-        <span>Bankda: <b className="text-slate-900">{data.bankCount}</b></span>
-        <span>AllTranzactions: <b className="text-slate-900">{data.dbCount}</b></span>
-        <span>Mos: <b className="text-emerald-700">{data.matchedCount}</b></span>
+      <div className="flex items-center gap-4 text-[12px] text-slate-600 dark:text-slate-300 flex-wrap">
+        <span>Bankda: <b className="text-slate-900 dark:text-slate-100">{data.bankCount}</b></span>
+        <span>AllTranzactions: <b className="text-slate-900 dark:text-slate-100">{data.dbCount}</b></span>
+        <span>Mos: <b className="text-emerald-700 dark:text-emerald-300">{data.matchedCount}</b></span>
         {mismatch.length > 0 && (
-          <span>Summa farqli: <b className="text-orange-700">{mismatch.length}</b></span>
+          <span>Summa farqli: <b className="text-orange-700 dark:text-orange-300">{mismatch.length}</b></span>
         )}
         {data.fallbackUsed && (
-          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-indigo-700 bg-indigo-50 ring-1 ring-indigo-200 px-2 py-0.5 rounded-full">
+          <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 px-2 py-0.5 rounded-full">
             <CheckCircle2 className="h-3 w-3" />
             GetDocuments fallback
           </span>
@@ -441,7 +441,7 @@ function DiagnoseResult({
       </div>
 
       {data.fallbackError && (
-        <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-[11px] text-rose-800 flex items-start gap-2">
+        <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[11px] text-rose-800 dark:text-rose-300 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
             <div className="font-semibold">GetDocuments fallback urinib ko'rildi, lekin xato:</div>
@@ -452,11 +452,11 @@ function DiagnoseResult({
 
       {data.bankOnly.length === 0 && data.dbOnly.length === 0 ? (
         data.bankCount === 0 && data.dbCount === 0 ? (
-          <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 p-3 text-[12px] text-amber-900 flex items-start gap-2">
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 text-[12px] text-amber-900 dark:text-amber-300 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
               <div className="font-semibold">Bank tranzaksiyalar ro'yxati bo'sh</div>
-              <div className="mt-0.5 text-amber-800">
+              <div className="mt-0.5 text-amber-800 dark:text-amber-300">
                 Bank shu kun uchun na GetDoc1C, na GetDocuments orqali individual yozuv qaytarmadi.
                 Bu odatda dam olish/non-operatsion kunda bo'ladi. AllTranzactions'da ham hech narsa yo'q.
                 Farq qaerdandir oldingi kunlardan keladi — boshqa kunlarni tekshirib ko'ring.
@@ -464,7 +464,7 @@ function DiagnoseResult({
             </div>
           </div>
         ) : mismatch.length === 0 ? (
-          <div className="rounded-lg bg-emerald-50 ring-1 ring-emerald-200 p-3 text-[12px] text-emerald-800 flex items-center gap-2">
+          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3 text-[12px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
             Yozuvlar to'liq mos — farq, ehtimol, yaxlitlash xatosi yoki kalit indekslar muammosi
           </div>
@@ -504,24 +504,24 @@ function DiagnoseResult({
 
 function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; diffSum: number }) {
   return (
-    <div className="rounded-lg border border-orange-200 bg-orange-50/40 overflow-hidden">
-      <div className="px-3 py-2 bg-orange-50 border-b border-orange-200 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 text-[12px] font-semibold text-orange-900">
+    <div className="rounded-lg border border-orange-200 dark:border-orange-900 bg-orange-50/40 dark:bg-orange-950/20 overflow-hidden">
+      <div className="px-3 py-2 bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900 flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2 text-[12px] font-semibold text-orange-900 dark:text-orange-300">
           <AlertTriangle className="h-4 w-4" />
           Summa farqli yozuvlar — ID mos, lekin bank vs AllTranzactions summasi farqli
         </div>
         <div className="flex items-center gap-3 text-[11px]">
-          <span className="text-orange-700">
+          <span className="text-orange-700 dark:text-orange-300">
             {items.length} ta yozuv
           </span>
-          <span className="text-orange-900 font-bold tabular-nums">
+          <span className="text-orange-900 dark:text-orange-300 font-bold tabular-nums">
             Jami farq: {formatMoney(diffSum)} so'm
           </span>
         </div>
       </div>
       <div className="max-h-[420px] overflow-auto">
         <table className="w-full text-[11px]">
-          <thead className="bg-orange-50/60 text-orange-700 sticky top-0">
+          <thead className="bg-orange-50/60 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 sticky top-0">
             <tr>
               <th className="text-left px-2 py-1.5 font-medium">№ / b2_id</th>
               <th className="text-left px-2 py-1.5 font-medium">Yo'nalish</th>
@@ -532,51 +532,51 @@ function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; 
               <th className="text-left px-2 py-1.5 font-medium">Maqsad</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-orange-100">
+          <tbody className="divide-y divide-orange-100 dark:divide-orange-900">
             {items.map((it) => (
-              <tr key={it.txId} className="hover:bg-orange-50/60">
+              <tr key={it.txId} className="hover:bg-orange-50/60 dark:hover:bg-orange-950/30">
                 <td className="px-2 py-1.5 align-top">
-                  <div className="font-semibold text-slate-800">{it.docNumber || '—'}</div>
+                  <div className="font-semibold text-slate-800 dark:text-slate-200">{it.docNumber || '—'}</div>
                   {it.b2Id && (
-                    <div className="text-[9px] text-slate-500 font-mono truncate max-w-[120px]" title={it.b2Id}>
+                    <div className="text-[9px] text-slate-500 dark:text-slate-400 font-mono truncate max-w-[120px]" title={it.b2Id}>
                       {it.b2Id}
                     </div>
                   )}
                 </td>
                 <td className="px-2 py-1.5 align-top">
                   {it.direction === 'IN' ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
                       <ArrowDownLeft className="h-3 w-3" /> Kirim
                     </span>
                   ) : it.direction === 'OUT' ? (
-                    <span className="inline-flex items-center gap-1 text-rose-700">
+                    <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
                       <ArrowUpRight className="h-3 w-3" /> Chiqim
                     </span>
                   ) : (
-                    <span className="text-slate-400">—</span>
+                    <span className="text-slate-400 dark:text-slate-500">—</span>
                   )}
                 </td>
-                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900">
+                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900 dark:text-slate-100">
                   {formatMoney(it.bankAmount)}
                 </td>
-                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900">
+                <td className="px-2 py-1.5 align-top text-right tabular-nums text-slate-900 dark:text-slate-100">
                   {formatMoney(it.dbAmount)}
                 </td>
                 <td className={cn(
                   'px-2 py-1.5 align-top text-right tabular-nums font-bold',
-                  it.diff > 0 ? 'text-orange-700' : 'text-purple-700',
+                  it.diff > 0 ? 'text-orange-700 dark:text-orange-300' : 'text-purple-700 dark:text-purple-300',
                 )}>
                   {it.diff > 0 ? '+' : ''}{formatMoney(it.diff)}
                 </td>
-                <td className="px-2 py-1.5 align-top text-slate-600">
+                <td className="px-2 py-1.5 align-top text-slate-600 dark:text-slate-300">
                   <div className="truncate max-w-[180px]" title={it.fromName || ''}>
                     {it.fromName || it.fromAccount || '—'}
                   </div>
-                  <div className="text-[9px] text-slate-400 truncate max-w-[180px]" title={it.toName || ''}>
+                  <div className="text-[9px] text-slate-400 dark:text-slate-500 truncate max-w-[180px]" title={it.toName || ''}>
                     → {it.toName || it.toAccount || '—'}
                   </div>
                 </td>
-                <td className="px-2 py-1.5 align-top text-slate-600">
+                <td className="px-2 py-1.5 align-top text-slate-600 dark:text-slate-300">
                   <div className="truncate max-w-[220px]" title={it.purpose || ''}>
                     {it.purpose || '—'}
                   </div>
@@ -607,9 +607,9 @@ function DiagPanel({
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
   const toneCls = tone === 'amber'
-    ? 'border-amber-200 bg-amber-50/40'
-    : 'border-rose-200 bg-rose-50/40';
-  const headCls = tone === 'amber' ? 'text-amber-800' : 'text-rose-800';
+    ? 'border-amber-200 dark:border-amber-900 bg-amber-50/40 dark:bg-amber-950/20'
+    : 'border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20';
+  const headCls = tone === 'amber' ? 'text-amber-800 dark:text-amber-300' : 'text-rose-800 dark:text-rose-300';
 
   // Faqat haqiqatdan qo'shilishi mumkin bo'lgan item'lar (boshqa sana ostida
   // saqlanmaganlar) — bulk button uchun
@@ -723,9 +723,9 @@ function DiagPanel({
         </div>
       </div>
       {items.length === 0 ? (
-        <div className="p-3 text-[11px] text-slate-500">{empty}</div>
+        <div className="p-3 text-[11px] text-slate-500 dark:text-slate-400">{empty}</div>
       ) : (
-        <div className="divide-y divide-slate-100 max-h-[320px] overflow-y-auto">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-[320px] overflow-y-auto">
           {items.map((it, i) => (
             <DiagItem
               key={it.id || it.b2Id || it.externalId || i}
@@ -821,26 +821,26 @@ function DiagItem({
       <div className="flex items-center justify-between gap-2">
         <span className={cn(
           'font-bold tabular-nums',
-          it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
+          it.direction === 'IN' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300',
         )}>
           {it.direction === 'IN' ? '+' : '−'}{formatMoney(Number(it.amount || 0)).replace(' UZS', '')}
         </span>
         {it.docNumber && (
-          <span className="text-[10px] text-slate-500 font-mono">#{it.docNumber}</span>
+          <span className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">#{it.docNumber}</span>
         )}
       </div>
-      <div className="text-slate-700">
+      <div className="text-slate-700 dark:text-slate-300">
         <div className="truncate">
-          <span className="text-slate-400">Kim:</span> {it.fromName || it.toName || '—'}
+          <span className="text-slate-400 dark:text-slate-500">Kim:</span> {it.fromName || it.toName || '—'}
         </div>
         {(it.purpose || it.description) && (
-          <div className="text-slate-500 line-clamp-2 mt-0.5">
+          <div className="text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
             {it.purpose || it.description}
           </div>
         )}
         {(it.ddate || it.time) && (
-          <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
-            <span className="inline-block w-1 h-1 rounded-full bg-slate-300" />
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+            <span className="inline-block w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
             <span className="font-mono tabular-nums">
               {it.ddate || ''} {it.time || ''}
             </span>
@@ -848,7 +848,7 @@ function DiagItem({
         )}
       </div>
       {(it.b2Id || it.externalId || it.id) && (
-        <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1.5 flex-wrap">
+        <div className="text-[10px] text-slate-400 dark:text-slate-500 font-mono flex items-center gap-1.5 flex-wrap">
           {it.b2Id && <IdChip label="b2" value={it.b2Id} />}
           {it.externalId && <IdChip label="ext" value={it.externalId} />}
           {it.id && <IdChip label="db" value={it.id} />}
@@ -856,13 +856,13 @@ function DiagItem({
       )}
       {/* Bank ±1 kunda topildi — sana siljish (date shift) */}
       {it.foundOnBankDate && date && it.foundOnBankDate !== date && (
-        <div className="mt-2 rounded-md bg-indigo-50 ring-1 ring-indigo-200 px-2.5 py-1.5 text-[10px] text-indigo-900 flex items-start gap-1.5">
-          <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0 text-indigo-600" />
+        <div className="mt-2 rounded-md bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 px-2.5 py-1.5 text-[10px] text-indigo-900 dark:text-indigo-300 flex items-start gap-1.5">
+          <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
           <div className="flex-1">
             <div className="font-semibold">
               Bankda mavjud, lekin boshqa sanada
             </div>
-            <div className="text-indigo-700 mt-0.5">
+            <div className="text-indigo-700 dark:text-indigo-400 mt-0.5">
               Bank sanasi: <span className="font-mono">{it.foundOnBankDate}</span> · joriy sverka: <span className="font-mono">{date}</span>
             </div>
           </div>
@@ -871,14 +871,14 @@ function DiagItem({
       {/* Agar tx boshqa sana ostida saqlangan bo'lsa — duplikat bo'lmaslik uchun
           qo'shish tugmasini chiqarmaymiz, faqat ogohlantirish */}
       {it.existsOnDate && (
-        <div className="mt-2 rounded-md bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1.5 text-[10px] text-amber-900">
+        <div className="mt-2 rounded-md bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-2.5 py-1.5 text-[10px] text-amber-900 dark:text-amber-300">
           <div className="flex items-start gap-1.5">
             <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="font-semibold">
                 AllTranzactions'da boshqa sana ostida saqlangan
               </div>
-              <div className="text-amber-700 mt-0.5">
+              <div className="text-amber-700 dark:text-amber-400 mt-0.5">
                 Sana: <span className="font-mono">{it.existsOnDate}</span> · joriy: <span className="font-mono">{date}</span>
               </div>
             </div>
@@ -918,7 +918,7 @@ function DiagItem({
         </button>
       )}
       {fixed && (
-        <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 font-semibold">
+        <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
           <CheckCircle2 className="h-3 w-3" /> Qo'shildi
         </div>
       )}
@@ -950,16 +950,16 @@ function IdChip({ label, value }: { label: string; value: string }) {
       }}
       className={cn(
         'inline-flex items-center gap-1 px-1.5 py-0.5 rounded',
-        'bg-slate-100 hover:bg-slate-200 active:bg-slate-300',
-        'text-slate-600 hover:text-slate-900',
+        'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 active:bg-slate-300 dark:active:bg-slate-600',
+        'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100',
         'transition-colors max-w-[180px]',
       )}
       title={`Nusxa olish: ${value}`}
     >
-      <span className="text-[9px] text-slate-400 uppercase">{label}</span>
+      <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase">{label}</span>
       <span className="truncate">{value}</span>
       {copied
-        ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+        ? <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
         : <Copy className="h-3 w-3 shrink-0" />}
     </button>
   );
@@ -975,17 +975,17 @@ function DailyBreakdown({
   const mismatches = rows.filter((r) => r.status === 'mismatch');
 
   return (
-    <div className="rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex items-center gap-2 text-[12px] font-semibold text-slate-700">
-        <Calendar className="h-4 w-4 text-indigo-600" />
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 text-[12px] font-semibold text-slate-700 dark:text-slate-300">
+        <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
         <span>Kunma-kun</span>
-        <span className="ml-auto text-[11px] font-normal text-slate-500">
+        <span className="ml-auto text-[11px] font-normal text-slate-500 dark:text-slate-400">
           {mismatches.length > 0 ? `${mismatches.length} ta kun farqli` : 'Hammasi mos'}
         </span>
       </div>
       <div className="max-h-[320px] overflow-y-auto">
         <table className="w-full text-[12px]">
-          <thead className="bg-slate-50/60 text-[10px] uppercase tracking-wider text-slate-500 font-semibold sticky top-0">
+          <thead className="bg-slate-50/60 dark:bg-slate-800/60 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold sticky top-0">
             <tr>
               <th className="text-left px-4 py-2">Sana</th>
               <th className="text-right px-4 py-2">Bank kirim</th>
@@ -996,7 +996,7 @@ function DailyBreakdown({
               <th className="text-center px-4 py-2"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 tabular-nums">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800 tabular-nums">
             {rows.map((r) => {
               const totalDiff = Math.abs(r.creditDiff) + Math.abs(r.debitDiff);
               return (
@@ -1004,18 +1004,18 @@ function DailyBreakdown({
                   key={r.date}
                   className={cn(
                     'transition-colors',
-                    r.status === 'mismatch' && 'bg-amber-50/60',
-                    r.status === 'failed' && 'bg-rose-50/40 text-rose-700',
+                    r.status === 'mismatch' && 'bg-amber-50/60 dark:bg-amber-950/30',
+                    r.status === 'failed' && 'bg-rose-50/40 dark:bg-rose-950/20 text-rose-700 dark:text-rose-300',
                   )}
                 >
-                  <td className="px-4 py-2 font-mono text-slate-600">{r.date}</td>
-                  <td className="px-4 py-2 text-right text-emerald-700">{m(r.bankCredit)}</td>
-                  <td className="px-4 py-2 text-right text-emerald-700">{m(r.dbInflow)}</td>
-                  <td className="px-4 py-2 text-right text-rose-700">{m(r.bankDebit)}</td>
-                  <td className="px-4 py-2 text-right text-rose-700">{m(r.dbOutflow)}</td>
+                  <td className="px-4 py-2 font-mono text-slate-600 dark:text-slate-300">{r.date}</td>
+                  <td className="px-4 py-2 text-right text-emerald-700 dark:text-emerald-300">{m(r.bankCredit)}</td>
+                  <td className="px-4 py-2 text-right text-emerald-700 dark:text-emerald-300">{m(r.dbInflow)}</td>
+                  <td className="px-4 py-2 text-right text-rose-700 dark:text-rose-300">{m(r.bankDebit)}</td>
+                  <td className="px-4 py-2 text-right text-rose-700 dark:text-rose-300">{m(r.dbOutflow)}</td>
                   <td className={cn(
                     'px-4 py-2 text-right font-bold',
-                    r.status === 'ok' ? 'text-emerald-700' : r.status === 'mismatch' ? 'text-amber-700' : 'text-rose-700',
+                    r.status === 'ok' ? 'text-emerald-700 dark:text-emerald-300' : r.status === 'mismatch' ? 'text-amber-700 dark:text-amber-300' : 'text-rose-700 dark:text-rose-300',
                   )}>
                     {r.failed ? '— xato —' : m(totalDiff)}
                   </td>
@@ -1096,29 +1096,29 @@ function BulkResultModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start gap-3 p-5 bg-gradient-to-r from-emerald-50 via-amber-50 to-rose-50 border-b border-slate-200">
+        <div className="flex items-start gap-3 p-5 bg-gradient-to-r from-emerald-50 via-amber-50 to-rose-50 dark:from-emerald-950/40 dark:via-amber-950/40 dark:to-rose-950/40 border-b border-slate-200 dark:border-slate-700">
           <div className="w-10 h-10 rounded-xl bg-indigo-500 grid place-items-center shrink-0 shadow-md shadow-indigo-500/30">
             <Download className="h-5 w-5 text-white" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[14px] font-bold text-slate-900">
+            <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100">
               Bulk natija
             </div>
-            <div className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-3 flex-wrap">
+            <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-3 flex-wrap">
               <span>Jami: <b>{result.summary.total}</b></span>
-              <span className="text-emerald-700">✓ Qo'shildi: <b>{result.summary.ok}</b></span>
+              <span className="text-emerald-700 dark:text-emerald-300">✓ Qo'shildi: <b>{result.summary.ok}</b></span>
               {result.summary.error > 0 && (
-                <span className="text-rose-700">✗ Xato: <b>{result.summary.error}</b></span>
+                <span className="text-rose-700 dark:text-rose-300">✗ Xato: <b>{result.summary.error}</b></span>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-white/80 hover:text-rose-700 transition"
+            className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800 hover:text-rose-700 dark:hover:text-rose-300 transition"
             aria-label="Yopish"
           >
             <X className="h-4 w-4" />
@@ -1129,10 +1129,10 @@ function BulkResultModal({
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           {/* Muvaffaqiyatli — Copy All tugmasi bilan */}
           {successes.length > 0 && (
-            <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 overflow-hidden">
-              <div className="px-3 py-2.5 border-b border-emerald-100 flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-700" />
-                <span className="text-[12px] font-semibold text-emerald-900">
+            <div className="rounded-xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-900 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+                <span className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-300">
                   Qo'shilgan tranzaksiyalar · {successes.length}
                 </span>
                 <button
@@ -1144,7 +1144,7 @@ function BulkResultModal({
                   {copiedAll ? 'Olindi' : "Hammasini copy"}
                 </button>
               </div>
-              <div className="divide-y divide-emerald-100/60 max-h-[50vh] overflow-y-auto">
+              <div className="divide-y divide-emerald-100/60 dark:divide-emerald-900/60 max-h-[50vh] overflow-y-auto">
                 {successes.map((r, i) => {
                   const idToCopy = r.externalId || r.transactionId || '';
                   const key = idToCopy || `s-${i}`;
@@ -1152,12 +1152,12 @@ function BulkResultModal({
                     <div key={key} className="p-3 text-[11px] space-y-1.5">
                       {r.externalId && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
                             External · composite
                           </div>
                           <div className="flex items-stretch gap-2">
-                            <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
-                                              font-mono text-[11px] text-slate-800 break-all select-all">
+                            <code className="flex-1 px-2 py-1.5 rounded bg-white dark:bg-slate-900 ring-1 ring-emerald-200 dark:ring-emerald-900
+                                              font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all select-all">
                               {r.externalId}
                             </code>
                             <button
@@ -1171,17 +1171,17 @@ function BulkResultModal({
                       )}
                       {r.transactionId && (
                         <div>
-                          <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold mb-1">
+                          <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1">
                             AllTranzactions ID
                           </div>
                           <div className="flex items-stretch gap-2">
-                            <code className="flex-1 px-2 py-1.5 rounded bg-white ring-1 ring-emerald-200
-                                              font-mono text-[11px] text-slate-800 break-all select-all">
+                            <code className="flex-1 px-2 py-1.5 rounded bg-white dark:bg-slate-900 ring-1 ring-emerald-200 dark:ring-emerald-900
+                                              font-mono text-[11px] text-slate-800 dark:text-slate-200 break-all select-all">
                               {r.transactionId}
                             </code>
                             <button
                               onClick={() => copy(r.transactionId!, `${key}-tx`)}
-                              className="px-2 rounded bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-[11px] font-semibold transition shrink-0"
+                              className="px-2 rounded bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 text-emerald-800 dark:text-emerald-300 text-[11px] font-semibold transition shrink-0"
                             >
                               {copiedOne === `${key}-tx` ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                             </button>
@@ -1189,21 +1189,21 @@ function BulkResultModal({
                         </div>
                       )}
                       {!r.externalId && !r.transactionId && (
-                        <div className="text-[11px] text-amber-700">
+                        <div className="text-[11px] text-amber-700 dark:text-amber-300">
                           ⚠ Qo'shildi, lekin ID topilmadi (DB lookup'da yo'q)
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-[10px] flex-wrap">
                         {r.inserted ? (
-                          <span className="text-emerald-700 font-semibold">✓ Yangi qo'shildi</span>
+                          <span className="text-emerald-700 dark:text-emerald-300 font-semibold">✓ Yangi qo'shildi</span>
                         ) : (
-                          <span className="text-amber-700 font-semibold">
+                          <span className="text-amber-700 dark:text-amber-300 font-semibold">
                             ⚠ Avvaldan mavjud edi
                             {r.existingDate && <span className="font-normal"> · sana: {r.existingDate}</span>}
                           </span>
                         )}
                         {(r.b2Id || r.generalId) && (
-                          <span className="text-slate-400 font-mono truncate">
+                          <span className="text-slate-400 dark:text-slate-500 font-mono truncate">
                             · {r.b2Id ? `b2:${r.b2Id}` : `gen:${r.generalId}`}
                           </span>
                         )}
@@ -1217,20 +1217,20 @@ function BulkResultModal({
 
           {/* Xato bo'lganlar — sababi bilan */}
           {failures.length > 0 && (
-            <div className="rounded-xl border border-rose-200 bg-rose-50/40 overflow-hidden">
-              <div className="px-3 py-2.5 border-b border-rose-100 flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-rose-700" />
-                <span className="text-[12px] font-semibold text-rose-900">
+            <div className="rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/40 dark:bg-rose-950/20 overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-rose-100 dark:border-rose-900 flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-300" />
+                <span className="text-[12px] font-semibold text-rose-900 dark:text-rose-300">
                   Qo'shilmadi · {failures.length}
                 </span>
               </div>
-              <div className="divide-y divide-rose-100/60 max-h-[40vh] overflow-y-auto">
+              <div className="divide-y divide-rose-100/60 dark:divide-rose-900/60 max-h-[40vh] overflow-y-auto">
                 {failures.map((r, i) => (
                   <div key={`${r.b2Id || r.generalId || i}`} className="p-3 text-[11px] space-y-1">
-                    <div className="font-mono text-[10px] text-slate-500 truncate">
+                    <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">
                       {r.b2Id ? `b2:${r.b2Id}` : r.generalId ? `gen:${r.generalId}` : '—'}
                     </div>
-                    <div className="text-rose-800">
+                    <div className="text-rose-800 dark:text-rose-300">
                       <span className="font-semibold">Sabab:</span> {r.error || "noma'lum xato"}
                     </div>
                   </div>
@@ -1241,10 +1241,10 @@ function BulkResultModal({
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-3 bg-slate-50/60 border-t border-slate-100 flex justify-end">
+        <div className="px-5 py-3 bg-slate-50/60 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 h-9 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-semibold transition"
+            className="px-4 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[12px] font-semibold transition"
           >
             Yopish
           </button>
@@ -1285,28 +1285,28 @@ function FixDateResultModal({
   const modalContent = (
     <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-lg shadow-emerald-500/20">
             <CheckCircle2 className="h-4 w-4" />
           </div>
           <div className="flex-1">
             <div className="text-[14px] font-bold">Sana tuzatish natijasi</div>
-            <div className="text-[11px] text-slate-500">
-              Jami: <b>{result.summary.total}</b> · ✅ Tuzatildi: <b className="text-emerald-700">{result.summary.updated}</b>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              Jami: <b>{result.summary.total}</b> · ✅ Tuzatildi: <b className="text-emerald-700 dark:text-emerald-300">{result.summary.updated}</b>
               {result.summary.skipped > 0 && <> · ⏭ O'zgarmadi: <b>{result.summary.skipped}</b></>}
-              {result.summary.errors > 0 && <> · ❌ Xato: <b className="text-rose-700">{result.summary.errors}</b></>}
+              {result.summary.errors > 0 && <> · ❌ Xato: <b className="text-rose-700 dark:text-rose-300">{result.summary.errors}</b></>}
             </div>
           </div>
-          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 hover:bg-slate-200">
+          <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">
             <X className="h-4 w-4" />
           </button>
         </div>
 
         {updated.length > 0 && (
-          <div className="px-5 py-2 border-b border-slate-100 flex items-center justify-between bg-emerald-50/50">
-            <div className="text-[12px] font-semibold text-emerald-700 flex items-center gap-1.5">
+          <div className="px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/30">
+            <div className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
               <CheckCircle2 className="h-3.5 w-3.5" /> Tuzatilgan tranzaksiyalar · {updated.length}
             </div>
             <button onClick={copyAll}
@@ -1321,19 +1321,19 @@ function FixDateResultModal({
             const id = r.externalId || r.txId;
             const isCopied = copiedId === id;
             return (
-              <div key={r.txId} className="rounded-lg ring-1 ring-emerald-200 bg-emerald-50/40 p-2.5">
+              <div key={r.txId} className="rounded-lg ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/20 p-2.5">
                 <div className="flex items-center gap-2 text-[11px] mb-1.5">
-                  <span className="font-mono text-emerald-700 font-semibold">{r.oldDate} → {r.newDate}</span>
+                  <span className="font-mono text-emerald-700 dark:text-emerald-300 font-semibold">{r.oldDate} → {r.newDate}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <code className="flex-1 font-mono text-[10px] bg-white px-2 py-1 rounded ring-1 ring-slate-200 break-all">
+                  <code className="flex-1 font-mono text-[10px] bg-white dark:bg-slate-900 px-2 py-1 rounded ring-1 ring-slate-200 dark:ring-slate-700 break-all">
                     {id}
                   </code>
                   <button onClick={() => copyOne(id)}
                     title="ID nusxalash"
                     className={cn(
                       "shrink-0 w-7 h-7 rounded-md grid place-items-center transition-all",
-                      isCopied ? "bg-emerald-600 text-white" : "bg-emerald-100 text-emerald-700 hover:bg-emerald-200",
+                      isCopied ? "bg-emerald-600 text-white" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/50",
                     )}>
                     {isCopied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                   </button>
@@ -1343,21 +1343,21 @@ function FixDateResultModal({
           })}
           {failed.length > 0 && (
             <>
-              <div className="text-[11px] font-semibold text-rose-700 mt-2 mb-1">❌ Xatoliklar ({failed.length})</div>
+              <div className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 mt-2 mb-1">❌ Xatoliklar ({failed.length})</div>
               {failed.map((r, i) => (
-                <div key={i} className="rounded-lg ring-1 ring-rose-200 bg-rose-50 p-2 text-[10.5px] text-rose-800">
-                  <div className="font-mono text-rose-600 truncate">{r.txId}</div>
+                <div key={i} className="rounded-lg ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/40 p-2 text-[10.5px] text-rose-800 dark:text-rose-300">
+                  <div className="font-mono text-rose-600 dark:text-rose-400 truncate">{r.txId}</div>
                   <div>{r.error}</div>
                 </div>
               ))}
             </>
           )}
           {updated.length === 0 && failed.length === 0 && (
-            <div className="text-center text-[12px] text-slate-400 py-8">Hech narsa o'zgarmadi</div>
+            <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8">Hech narsa o'zgarmadi</div>
           )}
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end">
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
           <Button onClick={onClose}>Yopish</Button>
         </div>
       </div>
@@ -1380,36 +1380,36 @@ function FixDateConfirmModal({
   const modalContent = (
     <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onCancel}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}>
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 grid place-items-center text-white shadow-lg shadow-amber-500/20">
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="flex-1">
             <div className="text-[14px] font-bold">Sana tuzatishni tasdiqlang</div>
-            <div className="text-[11px] text-slate-500">Bu amalni qaytarib bo'lmaydi</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">Bu amalni qaytarib bo'lmaydi</div>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
-          <div className="rounded-xl ring-1 ring-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50 p-4">
+          <div className="rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 p-4">
             <div className="text-center">
-              <div className="text-[10px] uppercase tracking-wider text-emerald-700 font-bold mb-1">Tuzatiladi</div>
-              <div className="text-3xl font-bold text-emerald-700 tabular-nums">{count}</div>
-              <div className="text-[11px] text-emerald-600 mt-0.5">ta tranzaksiya</div>
+              <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-bold mb-1">Tuzatiladi</div>
+              <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{count}</div>
+              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">ta tranzaksiya</div>
             </div>
           </div>
 
-          <div className="rounded-lg ring-1 ring-violet-200 bg-violet-50 p-3 flex items-center gap-3">
-            <Calendar className="h-4 w-4 text-violet-600 shrink-0" />
+          <div className="rounded-lg ring-1 ring-violet-200 dark:ring-violet-900 bg-violet-50 dark:bg-violet-950/40 p-3 flex items-center gap-3">
+            <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
             <div className="flex-1 text-[12px]">
-              <div className="text-slate-500">Yangi sana:</div>
-              <div className="font-mono font-bold text-violet-900">{newDate}</div>
+              <div className="text-slate-500 dark:text-slate-400">Yangi sana:</div>
+              <div className="font-mono font-bold text-violet-900 dark:text-violet-300">{newDate}</div>
             </div>
           </div>
 
-          <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50 p-3 flex items-start gap-2 text-[11px] text-amber-800">
+          <div className="rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
               <b>Faqat <code className="font-mono">txnDate</code> o'zgaradi.</b><br/>
@@ -1418,7 +1418,7 @@ function FixDateConfirmModal({
           </div>
         </div>
 
-        <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-end gap-2">
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
           <Button variant="outline" onClick={onCancel}>Bekor qilish</Button>
           <Button onClick={onConfirm} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
             <CheckCircle2 className="h-3.5 w-3.5" /> Ha, tuzatish

@@ -111,7 +111,7 @@ export default function ProfilePage() {
           />
 
           {/* ═══ TAB BAR ═══ */}
-          <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-2xl">
+          <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-2xl">
             <TabButton
               active={tab === 'profile'}
               onClick={() => setTab('profile')}
@@ -369,7 +369,7 @@ function TabButton({ active, onClick, icon, label, gradient }: any) {
         'inline-flex items-center gap-2 px-4 h-11 rounded-xl text-[13px] font-semibold transition-all',
         active
           ? cn('text-white shadow-md bg-gradient-to-br', gradient)
-          : 'text-slate-600 hover:text-slate-900 hover:bg-white',
+          : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white dark:hover:bg-slate-800',
       )}
     >
       {icon}
@@ -410,14 +410,14 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
 
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
-      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 px-6 py-5 border-b border-indigo-100">
+      <div className="bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/40 px-6 py-5 border-b border-indigo-100 dark:border-indigo-900">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md">
             <ImagePlus className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-base font-bold text-slate-900">Profil rasmi</div>
-            <div className="text-xs text-slate-500">PNG, JPG, WebP. Maksimal 2MB.</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Profil rasmi</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">PNG, JPG, WebP. Maksimal 2MB.</div>
           </div>
         </div>
       </div>
@@ -428,18 +428,18 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
           <div className="flex flex-col items-center">
             <div className="relative">
               <div className="absolute -inset-2 bg-gradient-to-br from-indigo-400 via-violet-500 to-fuchsia-500 rounded-3xl opacity-50 blur-xl" />
-              <div className="relative w-48 h-48 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 ring-4 ring-white shadow-xl overflow-hidden grid place-items-center">
+              <div className="relative w-48 h-48 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700 ring-4 ring-white dark:ring-slate-900 shadow-xl overflow-hidden grid place-items-center">
                 {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-slate-400 text-7xl font-black">{initial}</span>
+                  <span className="text-slate-400 dark:text-slate-500 text-7xl font-black">{initial}</span>
                 )}
               </div>
               {avatarUrl && (
                 <button
                   onClick={onRemove}
-                  className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-rose-500 ring-4 ring-white grid place-items-center shadow-lg hover:bg-rose-600 transition-colors"
+                  className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-rose-500 ring-4 ring-white dark:ring-slate-900 grid place-items-center shadow-lg hover:bg-rose-600 transition-colors"
                   title="O'chirish"
                 >
                   <X className="h-4 w-4 text-white" />
@@ -447,8 +447,8 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
               )}
             </div>
             <div className="mt-3 text-center">
-              <div className="text-[12px] font-semibold text-slate-700">{avatarUrl ? 'Joriy rasm' : 'Standart avatar'}</div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Brauzerda saqlangan</div>
+              <div className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{avatarUrl ? 'Joriy rasm' : 'Standart avatar'}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Brauzerda saqlangan</div>
             </div>
           </div>
 
@@ -462,17 +462,17 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
               className={cn(
                 "relative cursor-pointer rounded-2xl border-2 border-dashed transition-all p-8 text-center",
                 dragOver
-                  ? "border-indigo-500 bg-indigo-50/60 scale-[1.02]"
-                  : "border-slate-300 hover:border-indigo-400 hover:bg-slate-50",
+                  ? "border-indigo-500 bg-indigo-50/60 dark:bg-indigo-950/40 scale-[1.02]"
+                  : "border-slate-300 dark:border-slate-700 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800",
               )}
             >
               <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-lg mb-3">
                 <Upload className="h-7 w-7" />
               </div>
-              <div className="text-sm font-bold text-slate-800 mb-1">
-                Rasmni shu yerga tashlang yoki <span className="text-indigo-600 underline underline-offset-2">tanlang</span>
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
+                Rasmni shu yerga tashlang yoki <span className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2">tanlang</span>
               </div>
-              <div className="text-[11px] text-slate-500">
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
                 PNG, JPG, WebP · Maks. 2 MB · 1:1 nisbat tavsiya etiladi
               </div>
 
@@ -490,17 +490,17 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
             </div>
 
             <div className="grid grid-cols-3 gap-2">
-              <div className="p-3 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 text-center">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600 mx-auto mb-1" />
-                <div className="text-[10px] font-semibold text-emerald-700">PNG / JPG</div>
+              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-center">
+                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 mx-auto mb-1" />
+                <div className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">PNG / JPG</div>
               </div>
-              <div className="p-3 rounded-xl bg-amber-50 ring-1 ring-amber-200 text-center">
-                <Sparkles className="h-4 w-4 text-amber-600 mx-auto mb-1" />
-                <div className="text-[10px] font-semibold text-amber-700">2 MB chegara</div>
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-center">
+                <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400 mx-auto mb-1" />
+                <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">2 MB chegara</div>
               </div>
-              <div className="p-3 rounded-xl bg-cyan-50 ring-1 ring-cyan-200 text-center">
-                <Database className="h-4 w-4 text-cyan-600 mx-auto mb-1" />
-                <div className="text-[10px] font-semibold text-cyan-700">Brauzerda</div>
+              <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 text-center">
+                <Database className="h-4 w-4 text-cyan-600 dark:text-cyan-400 mx-auto mb-1" />
+                <div className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">Brauzerda</div>
               </div>
             </div>
           </div>
@@ -534,16 +534,16 @@ function LoginHistorySection({ user }: any) {
 
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 px-6 py-5 border-b border-emerald-100">
+      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 px-6 py-5 border-b border-emerald-100 dark:border-emerald-900">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-md">
             <History className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <div className="text-base font-bold text-slate-900">Kirish tarixi</div>
-            <div className="text-xs text-slate-500">Tizimga kirgan vaqtlar va qurilmalar</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Kirish tarixi</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Tizimga kirgan vaqtlar va qurilmalar</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold ring-1 ring-emerald-200">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
             <Wifi className="h-3.5 w-3.5" />
             {sessions.length} ta sessiya
           </span>
@@ -551,22 +551,22 @@ function LoginHistorySection({ user }: any) {
       </div>
 
       <CardContent className="p-0">
-        <div className="divide-y divide-slate-100">
+        <div className="divide-y divide-slate-100 dark:divide-slate-800">
           {sessions.map((s) => (
-            <div key={s.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50/60 transition-colors">
+            <div key={s.id} className="px-6 py-4 flex items-center gap-4 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
               <div className={cn(
                 "w-12 h-12 rounded-2xl grid place-items-center shrink-0 shadow-md",
                 s.current
                   ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white"
-                  : "bg-slate-100 text-slate-500",
+                  : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
               )}>
                 {s.current ? <Wifi className="h-5 w-5" /> : <LogIn className="h-5 w-5" />}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
+                <div className="text-[14px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                   {s.device}
                   {s.current && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] uppercase tracking-wider font-bold bg-emerald-100 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] uppercase tracking-wider font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                       <span className="relative flex h-1.5 w-1.5">
                         <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
                         <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-500" />
@@ -575,20 +575,20 @@ function LoginHistorySection({ user }: any) {
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-3 flex-wrap">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-3 flex-wrap">
                   <span className="inline-flex items-center gap-1"><Globe className="h-3 w-3" /> {s.ip}</span>
                   <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" /> {s.location}</span>
                   <span className="inline-flex items-center gap-1"><Monitor className="h-3 w-3" /> {s.browser}</span>
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-[12px] font-bold text-slate-700">{formatDateTime(s.time)}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5">{s.current ? 'Hozir faol' : 'Tugagan'}</div>
+                <div className="text-[12px] font-bold text-slate-700 dark:text-slate-300">{formatDateTime(s.time)}</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.current ? 'Hozir faol' : 'Tugagan'}</div>
               </div>
             </div>
           ))}
         </div>
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-center text-[11px] text-slate-500">
+        <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400">
           <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
           To'liq audit tarix backend log'lariga ulangach ko'rinadi
         </div>
@@ -610,11 +610,11 @@ function SecurityTab({ user }: any) {
   ];
 
   const moduleColors: Record<string, string> = {
-    auth: 'bg-indigo-100 text-indigo-700 ring-indigo-200',
-    transactions: 'bg-emerald-100 text-emerald-700 ring-emerald-200',
-    roles: 'bg-fuchsia-100 text-fuchsia-700 ring-fuchsia-200',
-    sync: 'bg-amber-100 text-amber-700 ring-amber-200',
-    users: 'bg-rose-100 text-rose-700 ring-rose-200',
+    auth: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',
+    transactions: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+    roles: 'bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900',
+    sync: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+    users: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
   };
 
   return (
@@ -628,10 +628,10 @@ function SecurityTab({ user }: any) {
               <Shield className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-800">Xavfsizlik holati</div>
-              <div className="text-xs text-slate-500">Hisobingiz himoyalangan</div>
+              <div className="text-base font-bold text-slate-800 dark:text-slate-200">Xavfsizlik holati</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Hisobingiz himoyalangan</div>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold ring-1 ring-emerald-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Xavfsiz
             </span>
@@ -647,16 +647,16 @@ function SecurityTab({ user }: any) {
 
       {/* ACTIONS TABLE */}
       <Card className="border-0 shadow-soft overflow-hidden">
-        <div className="bg-gradient-to-br from-amber-50 to-orange-50 px-6 py-5 border-b border-amber-100">
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 px-6 py-5 border-b border-amber-100 dark:border-amber-900">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shadow-md">
               <Activity className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-900">Qilgan amallar</div>
-              <div className="text-xs text-slate-500">Tizimda bajargan harakatlar tarixi</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Qilgan amallar</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Tizimda bajargan harakatlar tarixi</div>
             </div>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold ring-1 ring-amber-200">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-bold ring-1 ring-amber-200 dark:ring-amber-900">
               {actions.length} ta amal
             </span>
           </div>
@@ -664,7 +664,7 @@ function SecurityTab({ user }: any) {
 
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider">
+            <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="text-left px-6 py-3">Amal</th>
                 <th className="text-left px-3 py-3">Modul</th>
@@ -673,22 +673,22 @@ function SecurityTab({ user }: any) {
                 <th className="text-right px-6 py-3">Holat</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {actions.map((a) => (
-                <tr key={a.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-6 py-3 font-semibold text-slate-800">{a.action}</td>
+                <tr key={a.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
+                  <td className="px-6 py-3 font-semibold text-slate-800 dark:text-slate-200">{a.action}</td>
                   <td className="px-3 py-3">
                     <span className={cn(
                       "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ring-1",
-                      moduleColors[a.module] || 'bg-slate-100 text-slate-700 ring-slate-200',
+                      moduleColors[a.module] || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
                     )}>
                       {a.module}
                     </span>
                   </td>
-                  <td className="px-3 py-3 font-mono text-[11px] text-slate-600">{a.ip}</td>
-                  <td className="px-3 py-3 text-slate-600 text-[12px]">{formatDateTime(a.time)}</td>
+                  <td className="px-3 py-3 font-mono text-[11px] text-slate-600 dark:text-slate-300">{a.ip}</td>
+                  <td className="px-3 py-3 text-slate-600 dark:text-slate-300 text-[12px]">{formatDateTime(a.time)}</td>
                   <td className="px-6 py-3 text-right">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700 text-[10px] font-bold ring-1 ring-emerald-200">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
                       <CheckCircle2 className="h-3 w-3" />
                       Muvaffaqiyatli
                     </span>
@@ -699,7 +699,7 @@ function SecurityTab({ user }: any) {
           </table>
         </div>
 
-        <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 text-center text-[11px] text-slate-500">
+        <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400">
           <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
           To'liq audit log backend qo'shilgach jonli ma'lumotlardan to'ldiriladi
         </div>
@@ -726,9 +726,9 @@ function SecurityTab({ user }: any) {
 
 function SecurityCheck({ icon, label, status }: { icon: React.ReactNode; label: string; status: 'ok' | 'warn' | 'err' }) {
   const cls = {
-    ok:   'bg-emerald-50 ring-emerald-200 text-emerald-700',
-    warn: 'bg-amber-50 ring-amber-200 text-amber-700',
-    err:  'bg-rose-50 ring-rose-200 text-rose-700',
+    ok:   'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300',
+    warn: 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-700 dark:text-amber-300',
+    err:  'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300',
   }[status];
   const dot = {
     ok:   'bg-emerald-500',
@@ -753,8 +753,8 @@ function SecurityTip({ icon, gradient, title, body }: any) {
           {icon}
         </div>
         <div className="min-w-0">
-          <div className="text-sm font-bold tracking-tight text-slate-800">{title}</div>
-          <div className="text-[12px] text-slate-600 mt-1 leading-relaxed">{body}</div>
+          <div className="text-sm font-bold tracking-tight text-slate-800 dark:text-slate-200">{title}</div>
+          <div className="text-[12px] text-slate-600 dark:text-slate-300 mt-1 leading-relaxed">{body}</div>
         </div>
       </CardContent>
     </Card>
@@ -797,40 +797,40 @@ function SettingsTab() {
     <div className="space-y-6">
       {/* THEME */}
       <Card className="border-0 shadow-soft overflow-hidden">
-        <div className="bg-gradient-to-br from-violet-50 to-purple-50 px-6 py-5 border-b border-violet-100">
+        <div className="bg-gradient-to-br from-violet-50 to-purple-50 dark:from-violet-950/40 dark:to-purple-950/40 px-6 py-5 border-b border-violet-100 dark:border-violet-900">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white shadow-md">
               <Palette className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-base font-bold text-slate-900">Ko'rinish</div>
-              <div className="text-xs text-slate-500">Tizim ko'rinishini sozlang</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Ko'rinish</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Tizim ko'rinishini sozlang</div>
             </div>
           </div>
         </div>
 
         <CardContent className="p-6">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-3">Tema</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Tema</div>
           <div className="grid grid-cols-2 gap-3 max-w-md">
             <button
               onClick={() => applyTheme('light')}
               className={cn(
                 "relative p-5 rounded-2xl ring-2 transition-all text-left group",
                 theme === 'light'
-                  ? "ring-indigo-500 bg-gradient-to-br from-amber-50 to-yellow-50 shadow-lg"
-                  : "ring-slate-200 bg-white hover:ring-slate-300",
+                  ? "ring-indigo-500 bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-950/40 dark:to-yellow-950/40 shadow-lg"
+                  : "ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 hover:ring-slate-300 dark:hover:ring-slate-600",
               )}
             >
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "w-12 h-12 rounded-xl grid place-items-center shadow-md transition-all",
-                  theme === 'light' ? "bg-gradient-to-br from-amber-400 to-orange-500 scale-110" : "bg-slate-100",
+                  theme === 'light' ? "bg-gradient-to-br from-amber-400 to-orange-500 scale-110" : "bg-slate-100 dark:bg-slate-800",
                 )}>
-                  <Sun className={cn("h-6 w-6", theme === 'light' ? 'text-white' : 'text-slate-500')} />
+                  <Sun className={cn("h-6 w-6", theme === 'light' ? 'text-white' : 'text-slate-500 dark:text-slate-400')} />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-800">Yorug'</div>
-                  <div className="text-[11px] text-slate-500">Standart rejim</div>
+                  <div className="font-bold text-slate-800 dark:text-slate-200">Yorug'</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Standart rejim</div>
                 </div>
               </div>
               {theme === 'light' && (
@@ -848,15 +848,15 @@ function SettingsTab() {
                 "relative p-5 rounded-2xl ring-2 transition-all text-left group",
                 theme === 'dark'
                   ? "ring-indigo-500 bg-gradient-to-br from-slate-800 to-slate-900 shadow-lg"
-                  : "ring-slate-200 bg-white hover:ring-slate-300",
+                  : "ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 hover:ring-slate-300 dark:hover:ring-slate-600",
               )}
             >
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "w-12 h-12 rounded-xl grid place-items-center shadow-md transition-all",
-                  theme === 'dark' ? "bg-gradient-to-br from-indigo-500 to-violet-700 scale-110" : "bg-slate-100",
+                  theme === 'dark' ? "bg-gradient-to-br from-indigo-500 to-violet-700 scale-110" : "bg-slate-100 dark:bg-slate-800",
                 )}>
-                  <Moon className={cn("h-6 w-6", theme === 'dark' ? 'text-white' : 'text-slate-500')} />
+                  <Moon className={cn("h-6 w-6", theme === 'dark' ? 'text-white' : 'text-slate-500 dark:text-slate-400')} />
                 </div>
                 <div>
                   <div className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-slate-800')}>Tungi</div>
@@ -873,8 +873,8 @@ function SettingsTab() {
             </button>
           </div>
 
-          <div className="mt-4 p-3 rounded-xl bg-cyan-50 ring-1 ring-cyan-200 text-[11px] text-cyan-800 flex items-start gap-2">
-            <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-cyan-600" />
+          <div className="mt-4 p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 text-[11px] text-cyan-800 dark:text-cyan-300 flex items-start gap-2">
+            <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-cyan-600 dark:text-cyan-400" />
             <div>
               <span className="font-bold">Brauzerda saqlanadi:</span> tanlovingiz <code className="font-mono">localStorage</code>'ga yoziladi va keyingi kirganda avtomatik qo'llaniladi.
               {theme === 'dark' && ' Tungi rejim hozirgi sahifada to\'liq ko\'rinmaydi — qolgan sahifalar uchun keyingi yangilanishlarda qo\'shiladi.'}
@@ -892,14 +892,14 @@ function SettingsTab() {
               <Bell className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-900">Bildirishnomalar</div>
-              <div className="text-xs text-slate-500">Push va email bildirishnomalari</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Bildirishnomalar</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Push va email bildirishnomalari</div>
             </div>
             <button
               onClick={toggleNotifications}
               className={cn(
                 "relative w-14 h-8 rounded-full transition-colors",
-                notifications ? "bg-emerald-500" : "bg-slate-300",
+                notifications ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-700",
               )}
             >
               <span className={cn(
@@ -909,7 +909,7 @@ function SettingsTab() {
             </button>
           </div>
 
-          <div className="text-[11px] text-slate-500 pl-13">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 pl-13">
             {notifications
               ? '✓ Sizga muhim hodisalar haqida xabar yuboriladi'
               : '○ Hech qanday bildirishnoma yuborilmaydi'}
@@ -925,10 +925,10 @@ function SettingsTab() {
             <Globe className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <div className="text-base font-bold text-slate-900">Til</div>
-            <div className="text-xs text-slate-500">Tizim tilini topbar'dagi 🌐 tugma orqali o'zgartiring</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Til</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Tizim tilini topbar'dagi 🌐 tugma orqali o'zgartiring</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-100 text-cyan-700 text-xs font-bold ring-1 ring-cyan-200">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 text-xs font-bold ring-1 ring-cyan-200 dark:ring-cyan-900">
             UZ · RU · EN
           </span>
         </CardContent>

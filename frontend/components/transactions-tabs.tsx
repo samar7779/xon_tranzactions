@@ -26,7 +26,7 @@ export function TransactionsTabs() {
   ].filter((tab) => tab.show);
 
   return (
-    <div className="bg-white border-b border-slate-200/70">
+    <div className="bg-white dark:bg-slate-900 border-b border-slate-200/70 dark:border-slate-700">
       <nav className="flex items-center gap-1 px-6 lg:px-8 -mb-px">
         {tabs.map((tab) => {
           const href = `/${locale}${tab.href}`;
@@ -40,11 +40,11 @@ export function TransactionsTabs() {
                 'relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors',
                 'border-b-2 -mb-px',
                 active
-                  ? 'border-indigo-500 text-indigo-700'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
+                  ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
+                  : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700',
               )}
             >
-              <Icon className={cn('h-4 w-4', active ? 'text-indigo-600' : 'text-slate-400')} />
+              <Icon className={cn('h-4 w-4', active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500')} />
               <span>{tab.label || t(tab.key)}</span>
             </Link>
           );

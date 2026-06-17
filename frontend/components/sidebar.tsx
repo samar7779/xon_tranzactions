@@ -74,7 +74,7 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
         href={`/${locale}/dashboard`}
         aria-label={t('home')}
         onClick={onItemClick}
-        className="group relative block px-5 pt-6 pb-5 border-b border-slate-100"
+        className="group relative block px-5 pt-6 pb-5 border-b border-slate-100 dark:border-slate-800"
       >
         <div className="relative flex items-center gap-3">
           <span className="relative w-12 h-12 shrink-0 grid place-items-center">
@@ -87,7 +87,7 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
               priority
               className="relative w-full h-full object-contain drop-shadow-[0_2px_8px_rgba(245,158,11,0.35)]"
             />
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white grid place-items-center">
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900 grid place-items-center">
               <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
             </span>
           </span>
@@ -99,7 +99,7 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
             </div>
             <div className="mt-1 flex items-center gap-1.5">
               <span className="inline-block w-1 h-1 rounded-full bg-amber-500" />
-              <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-slate-500">
+              <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-slate-500 dark:text-slate-400">
                 Transactions
               </span>
             </div>
@@ -114,7 +114,7 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
           if (items.length === 0) return null;
           return (
             <div key={g}>
-              <div className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-400">
+              <div className="px-3 mb-1.5 text-[10px] font-semibold tracking-[0.12em] uppercase text-slate-400 dark:text-slate-500">
                 {GROUP_KEY[g] ? t(GROUP_KEY[g]) : g}
               </div>
               <div className="space-y-0.5">
@@ -130,11 +130,11 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
                       className={cn(
                         'group relative flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all',
                         active
-                          ? 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-700 shadow-sm ring-1 ring-indigo-100'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900',
+                          ? 'bg-gradient-to-r from-indigo-50 to-blue-50 text-indigo-700 shadow-sm ring-1 ring-indigo-100 dark:from-indigo-950/60 dark:to-blue-950/60 dark:text-indigo-300 dark:ring-indigo-900'
+                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100',
                       )}
                     >
-                      <Icon className={cn('h-[18px] w-[18px] shrink-0 transition-colors', active ? 'text-indigo-600' : 'text-slate-400 group-hover:text-slate-600')} />
+                      <Icon className={cn('h-[18px] w-[18px] shrink-0 transition-colors', active ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 group-hover:text-slate-600 dark:text-slate-500 dark:group-hover:text-slate-300')} />
                       <span className="truncate">{t(item.key)}</span>
                       {active && (
                         <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500" />
@@ -176,7 +176,7 @@ export function Sidebar() {
   return (
     <>
       {/* Desktop sidebar — lg dan boshlab */}
-      <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white border-r border-slate-200/80 relative">
+      <aside className="hidden lg:flex w-[260px] shrink-0 flex-col bg-white dark:bg-slate-900 border-r border-slate-200/80 dark:border-slate-800 relative">
         <SidebarContent />
       </aside>
 
@@ -193,7 +193,7 @@ export function Sidebar() {
       {/* Mobil drawer — chap tomondan sirpanib chiqadi */}
       <aside
         className={cn(
-          'lg:hidden fixed top-0 left-0 bottom-0 w-[280px] max-w-[85vw] bg-white shadow-2xl z-50',
+          'lg:hidden fixed top-0 left-0 bottom-0 w-[280px] max-w-[85vw] bg-white dark:bg-slate-900 shadow-2xl z-50',
           'flex flex-col transform transition-transform duration-300 ease-out',
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         )}
@@ -201,7 +201,7 @@ export function Sidebar() {
       >
         <button
           onClick={() => setMobileNavOpen(false)}
-          className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+          className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
           aria-label="Yopish"
         >
           <X className="h-5 w-5" />

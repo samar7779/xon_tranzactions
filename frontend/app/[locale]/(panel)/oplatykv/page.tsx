@@ -75,9 +75,9 @@ const SOURCE_LABEL: Record<string, string> = {
   transaction: 'Tranzaksiya',
 };
 const SOURCE_CLS: Record<string, string> = {
-  manual:      'bg-slate-100 text-slate-700 ring-slate-200',
-  excel:       'bg-violet-50 text-violet-700 ring-violet-200',
-  transaction: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  manual:      'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
+  excel:       'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
+  transaction: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
 };
 
 const CATEGORY_LABEL: Record<Category, string> = {
@@ -87,9 +87,9 @@ const CATEGORY_LABEL: Record<Category, string> = {
 };
 
 const CATEGORY_CLS: Record<Category, string> = {
-  MONTHLY: 'bg-sky-50 text-sky-700 ring-sky-200',
-  FIRST:   'bg-amber-50 text-amber-700 ring-amber-200',
-  GENERAL: 'bg-violet-50 text-violet-700 ring-violet-200',
+  MONTHLY: 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
+  FIRST:   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+  GENERAL: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
 };
 
 // dd.mm.yyyy formatda chiqarish
@@ -120,10 +120,10 @@ function fmtNum(v: string | number | null | undefined): string {
 }
 
 function amountCls(v: string | number | null | undefined): string {
-  if (v === null || v === undefined || v === '') return 'text-slate-400';
+  if (v === null || v === undefined || v === '') return 'text-slate-400 dark:text-slate-500';
   const n = typeof v === 'string' ? Number(v) : v;
-  if (!isFinite(n) || n === 0) return 'text-slate-400';
-  return n > 0 ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold';
+  if (!isFinite(n) || n === 0) return 'text-slate-400 dark:text-slate-500';
+  return n > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-rose-600 dark:text-rose-400 font-semibold';
 }
 
 export default function OplataKvPage() {
@@ -388,7 +388,7 @@ export default function OplataKvPage() {
               {/* Last sync timestamp chip */}
               {lastSyncQuery.data?.lastUpdate && (
                 <div
-                  className="h-10 px-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 shrink-0"
+                  className="h-10 px-3 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 dark:ring-emerald-900 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 shrink-0"
                   title={`So'nggi yangilanish: ${new Date(lastSyncQuery.data.lastUpdate).toLocaleString('ru-RU')}\n${lastSyncQuery.data.txSourceCount} ta tx-manba qator`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -402,9 +402,9 @@ export default function OplataKvPage() {
                 </div>
               )}
               <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 z-10" />
                 <Input
-                  className="pl-9 h-10 rounded-xl bg-slate-50/60"
+                  className="pl-9 h-10 rounded-xl bg-slate-50/60 dark:bg-slate-900"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -414,7 +414,7 @@ export default function OplataKvPage() {
                 />
                 {q && (
                   <button
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:text-white hover:bg-rose-500 z-10"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 dark:text-slate-500 hover:text-white hover:bg-rose-500 z-10"
                     onClick={() => setQ('')}
                   >
                     <X className="h-3 w-3" />
@@ -425,7 +425,7 @@ export default function OplataKvPage() {
               {/* Akt Sverka — shartnoma bo'yicha tarix (kalendardan oldin, neytral stil) */}
               <button
                 onClick={() => setAktSverkaOpen(true)}
-                className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 text-slate-600 hover:bg-slate-100 grid place-items-center transition-colors"
+                className="h-10 w-10 rounded-xl bg-slate-50/60 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center transition-colors"
                 title="Akt Sverka — shartnoma bo'yicha to'lov tarixi"
               >
                 <FileCheck2 className="h-4 w-4" />
@@ -438,8 +438,8 @@ export default function OplataKvPage() {
                     className={cn(
                       'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors',
                       (dateFrom || dateTo)
-                        ? 'bg-indigo-50 ring-indigo-200 text-indigo-700 hover:bg-indigo-100'
-                        : 'bg-slate-50/60 ring-slate-200 text-slate-600 hover:bg-slate-100',
+                        ? 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30'
+                        : 'bg-slate-50/60 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800',
                     )}
                     title={(dateFrom || dateTo)
                       ? `${dateFrom ? fmtDateRu(dateFrom) : '…'} — ${dateTo ? fmtDateRu(dateTo) : '…'}`
@@ -447,14 +447,14 @@ export default function OplataKvPage() {
                   >
                     <Calendar className="h-4 w-4" />
                     {(dateFrom || dateTo) && (
-                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-2 ring-white" />
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-indigo-600 ring-2 ring-white dark:ring-slate-900" />
                     )}
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="p-3 w-[280px] space-y-2">
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500">Sana oralig'i</div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Sana oralig'i</div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600">Boshlanish</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Boshlanish</label>
                     <Input
                       type="date"
                       className="h-9 rounded-lg"
@@ -463,7 +463,7 @@ export default function OplataKvPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600">Tugash</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Tugash</label>
                     <Input
                       type="date"
                       className="h-9 rounded-lg"
@@ -473,7 +473,7 @@ export default function OplataKvPage() {
                   </div>
                   {(dateFrom || dateTo) && (
                     <button
-                      className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 hover:bg-rose-50 transition-colors"
+                      className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                       onClick={() => { setDateFrom(''); setDateTo(''); }}
                     >
                       Tozalash
@@ -495,13 +495,13 @@ export default function OplataKvPage() {
                   'relative h-10 w-10 rounded-xl ring-1 grid place-items-center transition-colors',
                   columnFilterMode
                     ? 'bg-indigo-600 text-white ring-indigo-700 hover:bg-indigo-700 shadow-md shadow-indigo-500/30'
-                    : 'bg-slate-50/60 text-slate-700 ring-slate-200 hover:bg-slate-100',
+                    : 'bg-slate-50/60 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
                 )}
                 title={columnFilterMode ? "Ustun filter rejimini o'chirish" : "Ustun filter rejimini yoqish"}
               >
                 <FilterIcon className="h-4 w-4" />
                 {activeColumnFiltersCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-1 ring-2 ring-white">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center px-1 ring-2 ring-white dark:ring-slate-900">
                     {activeColumnFiltersCount}
                   </span>
                 )}
@@ -512,34 +512,34 @@ export default function OplataKvPage() {
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
-                      className="h-10 w-10 rounded-xl bg-slate-50/60 ring-1 ring-slate-200 hover:bg-slate-100 text-slate-700 grid place-items-center transition-colors"
+                      className="h-10 w-10 rounded-xl bg-slate-50/60 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 grid place-items-center transition-colors"
                       title="Yuklab olish"
                     >
                       {exporting
-                        ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                        ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
                         : <Download className="h-4 w-4" />}
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-[220px]">
                     <DropdownMenuItem onClick={downloadExcel} className="gap-2 cursor-pointer">
-                      <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       <div className="flex-1">
                         <div className="text-[13px] font-semibold">Excel (.xlsx)</div>
-                        <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Filtr bo'yicha barchasi</div>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={downloadJson} className="gap-2 cursor-pointer">
-                      <FileJson className="h-4 w-4 text-amber-600" />
+                      <FileJson className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                       <div className="flex-1">
                         <div className="text-[13px] font-semibold">JSON (.json)</div>
-                        <div className="text-[10.5px] text-slate-500">Filtr bo'yicha barchasi</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Filtr bo'yicha barchasi</div>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={printPdf} className="gap-2 cursor-pointer">
-                      <Printer className="h-4 w-4 text-indigo-600" />
+                      <Printer className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                       <div className="flex-1">
                         <div className="text-[13px] font-semibold">Chop etish / PDF</div>
-                        <div className="text-[10.5px] text-slate-500">Brauzer print dialogi</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Brauzer print dialogi</div>
                       </div>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -563,7 +563,7 @@ export default function OplataKvPage() {
         <Card className="border-0 shadow-soft overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-[10.5px] tracking-wider">
+              <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10.5px] tracking-wider">
                 <tr>
                   <ColumnTh label="Дог №" column="contractNo"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
@@ -599,14 +599,14 @@ export default function OplataKvPage() {
               </thead>
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} className="border-t border-slate-100">
+                  <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
                     {Array.from({ length: 10 }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={10} className="p-12 text-center text-slate-400">
+                  <tr><td colSpan={10} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     Hech qanday qator topilmadi
                   </td></tr>
                 )}
@@ -615,13 +615,13 @@ export default function OplataKvPage() {
                   return (
                   <tr
                     key={it.id}
-                    className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                    className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                     onClick={() => setDetailRow(it)}
                   >
-                    <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800">
+                    <td className="px-3 py-2.5 font-mono text-[12px] font-semibold text-slate-800 dark:text-slate-200">
                       {it.crmXato ? (
                         <span
-                          className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200"
+                          className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"
                           title="CRM da topilmadi — Tranzaksiyada to'g'rilang (Qo'lda yoki Ariza)"
                         >
                           XATO
@@ -630,15 +630,15 @@ export default function OplataKvPage() {
                         <span className="inline-flex items-center gap-1.5">
                           <span
                             className={cn(
-                              it.contractSource === 'ariza'   && 'text-violet-800',
-                              it.contractSource === 'manual'  && 'text-amber-800',
+                              it.contractSource === 'ariza'   && 'text-violet-800 dark:text-violet-300',
+                              it.contractSource === 'manual'  && 'text-amber-800 dark:text-amber-300',
                             )}
                           >
                             {it.contractNo}
                           </span>
                           {it.contractSource === 'ariza' && (
                             <span
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 text-violet-700 ring-1 ring-violet-200"
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-1 ring-violet-200 dark:ring-violet-900"
                               title="Tranzaksiyada Ariza orqali kiritilgan (hujjat biriktirilgan)"
                             >
                               ARIZA
@@ -646,7 +646,7 @@ export default function OplataKvPage() {
                           )}
                           {it.contractSource === 'manual' && (
                             <span
-                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900"
                               title="Tranzaksiyada qo'lda kiritilgan (CRM tekshirilmagan)"
                             >
                               QO'LDA
@@ -668,10 +668,10 @@ export default function OplataKvPage() {
                         <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1', CATEGORY_CLS[it.paymentCategory])}>
                           {CATEGORY_LABEL[it.paymentCategory]}
                         </span>
-                      ) : <span className="text-slate-400">—</span>}
+                      ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                     </td>
-                    <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400">—</span>}</td>
-                    <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400">—</span>}</td>
+                    <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
+                    <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
                         {SOURCE_LABEL[src]}
@@ -684,8 +684,8 @@ export default function OplataKvPage() {
                         className={cn(
                           'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors',
                           copiedId === it.id
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600',
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                            : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400',
                         )}
                       >
                         {copiedId === it.id
@@ -701,8 +701,8 @@ export default function OplataKvPage() {
           </div>
 
           {/* Pagination footer */}
-          <div className="px-4 py-3 border-t border-slate-100 flex items-center justify-between text-[12px] text-slate-500">
-            <div>Jami: <b className="text-slate-700">{total.toLocaleString('ru-RU')}</b> qator</div>
+          <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
+            <div>Jami: <b className="text-slate-700 dark:text-slate-300">{total.toLocaleString('ru-RU')}</b> qator</div>
             <div className="flex items-center gap-2">
               <Select value={String(perPage)} onValueChange={(v) => setPerPage(Number(v))}>
                 <SelectTrigger className="h-8 w-[80px] text-[12px]"><SelectValue /></SelectTrigger>
@@ -711,13 +711,13 @@ export default function OplataKvPage() {
                 </SelectContent>
               </Select>
               <button
-                className="h-8 w-8 grid place-items-center rounded-md hover:bg-slate-100 disabled:opacity-30"
+                className="h-8 w-8 grid place-items-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
               ><ChevronLeft className="h-4 w-4" /></button>
               <span className="tabular-nums">{page} / {pageCount}</span>
               <button
-                className="h-8 w-8 grid place-items-center rounded-md hover:bg-slate-100 disabled:opacity-30"
+                className="h-8 w-8 grid place-items-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30"
                 disabled={page >= pageCount}
                 onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
               ><ChevronRight className="h-4 w-4" /></button>
@@ -828,7 +828,7 @@ function TypewriterPlaceholder({ visible, phrases }: { visible: boolean; phrases
 
   if (!visible) return null;
   return (
-    <div className="absolute left-9 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-slate-400 select-none">
+    <div className="absolute left-9 top-1/2 -translate-y-1/2 pointer-events-none text-[14px] text-slate-400 dark:text-slate-500 select-none">
       {text}
       <span className="inline-block w-[2px] h-[14px] bg-indigo-500 ml-0.5 align-middle animate-tw-cursor" />
       <style jsx>{`
@@ -905,7 +905,7 @@ function ColumnTh({
               'relative inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
               activeCount > 0
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
-                : 'text-slate-400 hover:bg-indigo-100 hover:text-indigo-700',
+                : 'text-slate-400 dark:text-slate-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300',
             )}
             title={activeCount > 0 ? `${activeCount} tanlangan` : 'Filter'}
           >
@@ -1011,15 +1011,15 @@ function ColumnFilterPopover({
   return createPortal(
     <div
       ref={popoverRef}
-      className="z-[9999] bg-white ring-1 ring-slate-200 rounded-xl shadow-2xl p-2.5 text-slate-700 normal-case tracking-normal"
+      className="z-[9999] bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-2xl p-2.5 text-slate-700 dark:text-slate-300 normal-case tracking-normal"
       style={{ position: 'fixed', top, left, width: popoverWidth }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
-        Filter: <span className="text-slate-800">{label}</span>
+      <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
+        Filter: <span className="text-slate-800 dark:text-slate-200">{label}</span>
       </div>
       <div className="relative">
-        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
         <Input
           autoFocus
           className="pl-7 h-8 text-[12px] rounded-lg"
@@ -1030,12 +1030,12 @@ function ColumnFilterPopover({
       </div>
       <div className="mt-2 max-h-64 overflow-y-auto -mx-1 px-1">
         {isLoading ? (
-          <div className="py-6 text-center text-[12px] text-slate-400">
+          <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
             Yuklanmoqda...
           </div>
         ) : values.length === 0 ? (
-          <div className="py-6 text-center text-[12px] text-slate-400">
+          <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
             Qiymat topilmadi
           </div>
         ) : (
@@ -1044,32 +1044,32 @@ function ColumnFilterPopover({
               key={v.id}
               className={cn(
                 'flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors',
-                selected.has(v.id) ? 'bg-indigo-50 hover:bg-indigo-100' : 'hover:bg-slate-50',
+                selected.has(v.id) ? 'bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800',
               )}
             >
               <input
                 type="checkbox"
                 checked={selected.has(v.id)}
                 onChange={() => toggle(v.id)}
-                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                className="rounded border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
               />
-              <span className={cn('text-[12.5px] truncate flex-1', selected.has(v.id) ? 'font-semibold text-indigo-700' : 'text-slate-700')}>
+              <span className={cn('text-[12.5px] truncate flex-1', selected.has(v.id) ? 'font-semibold text-indigo-700 dark:text-indigo-300' : 'text-slate-700 dark:text-slate-300')}>
                 {v.name}
               </span>
             </label>
           ))
         )}
       </div>
-      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 gap-2">
+      <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-100 dark:border-slate-700 gap-2">
         {selected.size > 0 ? (
           <button
             onClick={() => onChange(new Set())}
-            className="text-rose-600 text-[11.5px] font-semibold hover:bg-rose-50 px-2 py-1 rounded-md transition-colors"
+            className="text-rose-600 dark:text-rose-400 text-[11.5px] font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1 rounded-md transition-colors"
           >
             Tozalash ({selected.size})
           </button>
         ) : (
-          <span className="text-[11px] text-slate-400">{values.length} ta variant</span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">{values.length} ta variant</span>
         )}
         <button
           onClick={onClose}
@@ -1238,13 +1238,13 @@ function AktSverkaDialog({
         </div>
 
         {/* SEARCH (autocomplete) — print'da yashirin */}
-        <div className="px-7 py-5 border-b border-slate-100 bg-slate-50/60 shrink-0 print:hidden">
-          <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 mb-2">
+        <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 shrink-0 print:hidden">
+          <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">
             Shartnoma raqami
           </label>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 z-10" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 z-10" />
               <Input
                 autoFocus
                 className="pl-10 h-12 rounded-xl text-[14px] font-mono font-semibold"
@@ -1260,7 +1260,7 @@ function AktSverkaDialog({
               {(selectedContract || search) && (
                 <button
                   onClick={() => { setSearch(''); setSelectedContract(null); setSuggestOpen(false); setCrmMode(false); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-rose-500 hover:text-white transition-colors z-10"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-rose-500 hover:text-white transition-colors z-10"
                   title="Tozalash"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -1269,14 +1269,14 @@ function AktSverkaDialog({
 
               {/* Suggestions dropdown */}
               {suggestOpen && !selectedContract && (
-                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white ring-1 ring-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto">
+                <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-xl max-h-72 overflow-y-auto">
                   {suggestQuery.isLoading ? (
-                    <div className="py-6 text-center text-[12px] text-slate-400">
+                    <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
                       <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
                       Yuklanmoqda...
                     </div>
                   ) : (suggestQuery.data?.values?.length || 0) === 0 ? (
-                    <div className="py-6 text-center text-[12px] text-slate-400">
+                    <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
                       Shartnoma topilmadi
                     </div>
                   ) : (
@@ -1288,7 +1288,7 @@ function AktSverkaDialog({
                           setSearch('');
                           setSuggestOpen(false);
                         }}
-                        className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 transition-colors border-b border-slate-50 last:border-0 font-mono text-[13px] font-semibold text-slate-800"
+                        className="w-full text-left px-4 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors border-b border-slate-50 dark:border-slate-800 last:border-0 font-mono text-[13px] font-semibold text-slate-800 dark:text-slate-200"
                       >
                         {v.name}
                       </button>
@@ -1304,10 +1304,10 @@ function AktSverkaDialog({
               className={cn(
                 'h-12 w-12 rounded-xl ring-1 grid place-items-center transition-all shrink-0',
                 !selectedContract
-                  ? 'bg-slate-50 ring-slate-200 text-slate-300 cursor-not-allowed'
+                  ? 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-300 dark:text-slate-600 cursor-not-allowed'
                   : crmMode
                     ? 'bg-gradient-to-br from-fuchsia-600 to-pink-600 ring-fuchsia-700 text-white shadow-md shadow-fuchsia-500/30 hover:scale-105'
-                    : 'bg-white ring-slate-200 text-fuchsia-600 hover:bg-fuchsia-50 hover:scale-105',
+                    : 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-950/40 hover:scale-105',
               )}
               title="CRM Sverka — Transactions bilan taqqoslash"
             >
@@ -1327,61 +1327,61 @@ function AktSverkaDialog({
             />
           ) : !selectedContract ? (
             <div className="px-7 py-16 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-amber-100 grid place-items-center mx-auto mb-3">
-                <FileCheck2 className="h-8 w-8 text-amber-600" />
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 grid place-items-center mx-auto mb-3">
+                <FileCheck2 className="h-8 w-8 text-amber-600 dark:text-amber-400" />
               </div>
-              <div className="text-[15px] font-bold text-slate-700">Shartnoma tanlang</div>
-              <p className="text-[12.5px] text-slate-500 mt-1 max-w-sm mx-auto">
+              <div className="text-[15px] font-bold text-slate-700 dark:text-slate-300">Shartnoma tanlang</div>
+              <p className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
                 Yuqoridagi maydonga shartnoma raqamini yozing yoki ro'yxatdan tanlang
               </p>
             </div>
           ) : contractQuery.isLoading ? (
-            <div className="px-7 py-16 text-center text-slate-400">
+            <div className="px-7 py-16 text-center text-slate-400 dark:text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
               Yuklanmoqda...
             </div>
           ) : data && data.items.length === 0 ? (
-            <div className="px-7 py-12 text-center text-slate-400">
+            <div className="px-7 py-12 text-center text-slate-400 dark:text-slate-500">
               Bu shartnoma bo'yicha to'lovlar topilmadi
             </div>
           ) : data ? (
             <div className="px-7 py-5 space-y-5">
               {/* Sums + Obyekt — 5 ta kartochka */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
-                <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-200 p-3.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-indigo-600 mb-1">Сумма оплаты</div>
-                  <div className="text-[15px] font-black text-indigo-900 tabular-nums">{formatMoney(data.sums.paymentAmount, '')}</div>
+                <div className="rounded-xl bg-gradient-to-br from-indigo-50 to-violet-50 ring-1 ring-indigo-200 dark:ring-indigo-900 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-indigo-600 dark:text-indigo-400 mb-1">Сумма оплаты</div>
+                  <div className="text-[15px] font-black text-indigo-900 dark:text-indigo-300 tabular-nums">{formatMoney(data.sums.paymentAmount, '')}</div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200 p-3.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-amber-600 mb-1">1 взнос</div>
-                  <div className="text-[15px] font-black text-amber-900 tabular-nums">{formatMoney(data.sums.firstInstallment, '')}</div>
+                <div className="rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-200 dark:ring-amber-900 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400 mb-1">1 взнос</div>
+                  <div className="text-[15px] font-black text-amber-900 dark:text-amber-300 tabular-nums">{formatMoney(data.sums.firstInstallment, '')}</div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-sky-50 to-cyan-50 ring-1 ring-sky-200 p-3.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-sky-600 mb-1">Ежемесячный</div>
-                  <div className="text-[15px] font-black text-sky-900 tabular-nums">{formatMoney(data.sums.monthlyAmount, '')}</div>
+                <div className="rounded-xl bg-gradient-to-br from-sky-50 to-cyan-50 ring-1 ring-sky-200 dark:ring-sky-900 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-sky-600 dark:text-sky-400 mb-1">Ежемесячный</div>
+                  <div className="text-[15px] font-black text-sky-900 dark:text-sky-300 tabular-nums">{formatMoney(data.sums.monthlyAmount, '')}</div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 p-3.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 mb-1">Жами</div>
-                  <div className="text-[15px] font-black text-emerald-900 tabular-nums">{data.count} <span className="text-xs text-emerald-500">ta</span></div>
+                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400 mb-1">Жами</div>
+                  <div className="text-[15px] font-black text-emerald-900 dark:text-emerald-300 tabular-nums">{data.count} <span className="text-xs text-emerald-500 dark:text-emerald-400">ta</span></div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-slate-200 p-3.5 col-span-2 sm:col-span-1">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-600 mb-1">Obyekt</div>
-                  <div className="text-[13px] font-bold text-slate-800 truncate" title={data.meta?.object || '—'}>
+                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5 col-span-2 sm:col-span-1">
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 mb-1">Obyekt</div>
+                  <div className="text-[13px] font-bold text-slate-800 dark:text-slate-200 truncate" title={data.meta?.object || '—'}>
                     {data.meta?.object || '—'}
                   </div>
                 </div>
               </div>
 
               {/* Items list */}
-              <div className="rounded-2xl ring-1 ring-slate-200 overflow-hidden">
-                <div className="bg-slate-50 px-4 py-2.5 flex items-center justify-between border-b border-slate-200">
-                  <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">
-                    To'lovlar tarixi · <span className="text-slate-400 normal-case">{data.count} ta</span>
+              <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+                <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
+                  <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">
+                    To'lovlar tarixi · <span className="text-slate-400 dark:text-slate-500 normal-case">{data.count} ta</span>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
-                    <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase tracking-wider">
+                    <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider">
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Sana</th>
                         <th className="px-3 py-2 text-right font-semibold">Сумма</th>
@@ -1400,7 +1400,7 @@ function AktSverkaDialog({
                       }).map((it) => (
                         <tr
                           key={it.id}
-                          className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                          className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                           onClick={() => onRowClick(it)}
                           title="To'liq ma'lumotni ko'rish"
                         >
@@ -1414,13 +1414,13 @@ function AktSverkaDialog({
                           <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.monthlyAmount))}>
                             {it.monthlyAmount ? formatMoney(Number(it.monthlyAmount), '') : '—'}
                           </td>
-                          <td className="px-3 py-2">{it.txType || <span className="text-slate-400">—</span>}</td>
+                          <td className="px-3 py-2">{it.txType || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
                           <td className="px-3 py-2 text-center print:hidden" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => onCopyId(it.id)}
                               className={cn(
                                 'inline-flex items-center justify-center w-6 h-6 rounded transition-colors',
-                                copiedId === it.id ? 'bg-emerald-100 text-emerald-700' : 'text-slate-400 hover:bg-slate-100 hover:text-indigo-600',
+                                copiedId === it.id ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400',
                               )}
                               title={it.id}
                             >
@@ -1432,11 +1432,11 @@ function AktSverkaDialog({
                     </tbody>
                     {/* Yakuniy yig'indi */}
                     <tfoot>
-                      <tr className="bg-amber-50 border-t-2 border-amber-300 font-bold">
-                        <td className="px-3 py-2.5 text-[11px] uppercase tracking-wider text-amber-700">ИТОГО</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.paymentAmount, '')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.firstInstallment, '')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900">{formatMoney(data.sums.monthlyAmount, '')}</td>
+                      <tr className="bg-amber-50 dark:bg-amber-950/40 border-t-2 border-amber-300 dark:border-amber-900 font-bold">
+                        <td className="px-3 py-2.5 text-[11px] uppercase tracking-wider text-amber-700 dark:text-amber-300">ИТОГО</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900 dark:text-amber-300">{formatMoney(data.sums.paymentAmount, '')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900 dark:text-amber-300">{formatMoney(data.sums.firstInstallment, '')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-amber-900 dark:text-amber-300">{formatMoney(data.sums.monthlyAmount, '')}</td>
                         <td colSpan={2}></td>
                       </tr>
                     </tfoot>
@@ -1448,10 +1448,10 @@ function AktSverkaDialog({
         </div>
 
         {/* FOOTER (print da yashirin) */}
-        <div className="px-7 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2 shrink-0 print:hidden">
-          <div className="text-[11.5px] text-slate-500">
+        <div className="px-7 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 flex items-center justify-between gap-2 shrink-0 print:hidden">
+          <div className="text-[11.5px] text-slate-500 dark:text-slate-400">
             {selectedContract ? (
-              <>Shartnoma: <span className="font-mono font-bold text-slate-800">{selectedContract}</span></>
+              <>Shartnoma: <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedContract}</span></>
             ) : (
               <>Shartnoma tanlanmadi</>
             )}
@@ -1460,7 +1460,7 @@ function AktSverkaDialog({
             <button
               onClick={() => window.print()}
               disabled={!selectedContract || !data || data.items.length === 0}
-              className="h-9 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Printer className="h-3.5 w-3.5" /> Chop etish
             </button>
@@ -1490,7 +1490,7 @@ function CrmSverkaView({
 }) {
   if (isLoading) {
     return (
-      <div className="px-7 py-16 text-center text-slate-400">
+      <div className="px-7 py-16 text-center text-slate-400 dark:text-slate-500">
         <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
         CRM sverka yuklanmoqda...
       </div>
@@ -1498,7 +1498,7 @@ function CrmSverkaView({
   }
   if (!data) {
     return (
-      <div className="px-7 py-12 text-center text-slate-400">
+      <div className="px-7 py-12 text-center text-slate-400 dark:text-slate-500">
         Ma'lumot yo'q
       </div>
     );
@@ -1511,7 +1511,7 @@ function CrmSverkaView({
     <div className="px-7 py-5 space-y-5">
       {/* CRM ulanmaganmi? */}
       {!crm.connected && (
-        <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 p-3 text-[12px] text-rose-700 flex items-center gap-2">
+        <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[12px] text-rose-700 dark:text-rose-300 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <div>CRM bilan aloqa o'rnatib bo'lmadi{crm.error ? `: ${crm.error}` : ''}</div>
         </div>
@@ -1575,18 +1575,18 @@ function CrmSverkaView({
       {/* Side-by-side jadval — OplatyKv (chap) vs CRM histories (o'ng) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* OplatyKv */}
-        <div className="rounded-2xl ring-1 ring-indigo-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-50 to-violet-50 px-4 py-2.5 border-b border-indigo-200 flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-wider font-bold text-indigo-700">
+        <div className="rounded-2xl ring-1 ring-indigo-200 dark:ring-indigo-900 overflow-hidden">
+          <div className="bg-gradient-to-r from-indigo-50 to-violet-50 px-4 py-2.5 border-b border-indigo-200 dark:border-indigo-900 flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-300">
               OplatyKv ({oplata.count})
             </div>
-            <div className="text-[11px] tabular-nums font-bold text-indigo-900">
+            <div className="text-[11px] tabular-nums font-bold text-indigo-900 dark:text-indigo-300">
               {formatMoney(comparison.oplataTotal, '')}
             </div>
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto print:max-h-none">
             <table className="w-full text-[12px]">
-              <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase sticky top-0">
+              <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase sticky top-0">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Sana</th>
                   <th className="px-3 py-2 text-right font-semibold">Сумма</th>
@@ -1596,7 +1596,7 @@ function CrmSverkaView({
               </thead>
               <tbody>
                 {oplata.items.length === 0 ? (
-                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 text-[12px]">To'lov yo'q</td></tr>
+                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">To'lov yo'q</td></tr>
                 ) : [...oplata.items].sort((a: OplataKvItem, b: OplataKvItem) => {
                   const ta = a.date ? new Date(a.date).getTime() : 0;
                   const tb = b.date ? new Date(b.date).getTime() : 0;
@@ -1604,7 +1604,7 @@ function CrmSverkaView({
                 }).map((it: OplataKvItem) => (
                   <tr
                     key={it.id}
-                    className="border-t border-slate-100 hover:bg-indigo-50/40 transition-colors cursor-pointer"
+                    className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                     onClick={() => onRowClick(it)}
                   >
                     <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
@@ -1625,18 +1625,18 @@ function CrmSverkaView({
         </div>
 
         {/* CRM payment_histories */}
-        <div className="rounded-2xl ring-1 ring-sky-200 overflow-hidden">
-          <div className="bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2.5 border-b border-sky-200 flex items-center justify-between">
-            <div className="text-[11px] uppercase tracking-wider font-bold text-sky-700">
+        <div className="rounded-2xl ring-1 ring-sky-200 dark:ring-sky-900 overflow-hidden">
+          <div className="bg-gradient-to-r from-sky-50 to-cyan-50 px-4 py-2.5 border-b border-sky-200 dark:border-sky-900 flex items-center justify-between">
+            <div className="text-[11px] uppercase tracking-wider font-bold text-sky-700 dark:text-sky-300">
               XonSaroy CRM ({crm.count})
             </div>
-            <div className="text-[11px] tabular-nums font-bold text-sky-900">
+            <div className="text-[11px] tabular-nums font-bold text-sky-900 dark:text-sky-300">
               {formatMoney(comparison.crmTotal, '')}
             </div>
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto print:max-h-none">
             <table className="w-full text-[12px]">
-              <thead className="bg-slate-50/60 text-slate-500 text-[10px] uppercase sticky top-0">
+              <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase sticky top-0">
                 <tr>
                   <th className="px-3 py-2 text-left font-semibold">Sana</th>
                   <th className="px-3 py-2 text-left font-semibold">Tip</th>
@@ -1645,13 +1645,13 @@ function CrmSverkaView({
               </thead>
               <tbody>
                 {crm.histories.length === 0 ? (
-                  <tr><td colSpan={3} className="py-6 text-center text-slate-400 text-[12px]">
+                  <tr><td colSpan={3} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">
                     {crm.connected ? "CRM'da to'lov tarixi yo'q" : "CRM ulanmadi"}
                   </td></tr>
                 ) : crm.histories.map((h: any, i: number) => {
                   const isInitial = h.typeKey.toLowerCase().includes('init') || h.typeKey.toLowerCase().includes('boshlang');
                   return (
-                    <tr key={i} className="border-t border-slate-100 hover:bg-sky-50/40 transition-colors">
+                    <tr key={i} className="border-t border-slate-100 dark:border-slate-700 hover:bg-sky-50/40 dark:hover:bg-sky-950/40 transition-colors">
                       <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">
                         {h.datePaid ? fmtDateRu(h.datePaid) : '—'}
                       </td>
@@ -1659,13 +1659,13 @@ function CrmSverkaView({
                         <span className={cn(
                           'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ring-1',
                           isInitial
-                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                            : 'bg-sky-50 text-sky-700 ring-sky-200',
+                            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900'
+                            : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
                         )}>
                           {isInitial ? 'BSH' : 'OYL'}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700">
+                      <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-300">
                         {formatMoney(h.amount, '')}
                       </td>
                     </tr>
@@ -1685,26 +1685,26 @@ function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; opla
   return (
     <div className={cn(
       'rounded-xl ring-1 p-3',
-      matched ? 'bg-emerald-50/50 ring-emerald-200' : 'bg-rose-50/50 ring-rose-200',
+      matched ? 'bg-emerald-50/50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900' : 'bg-rose-50/50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900',
     )}>
       <div className="flex items-center justify-between mb-2">
-        <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600">{title}</div>
+        <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">{title}</div>
         {matched
-          ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          : <AlertTriangle className="h-4 w-4 text-rose-600" />}
+          ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          : <AlertTriangle className="h-4 w-4 text-rose-600 dark:text-rose-400" />}
       </div>
       <div className="grid grid-cols-3 gap-2 text-[11px]">
         <div>
-          <div className="text-[9px] text-indigo-600 uppercase font-semibold">OplatyKv</div>
-          <div className="font-bold text-slate-800 tabular-nums">{formatMoney(oplata, '')}</div>
+          <div className="text-[9px] text-indigo-600 dark:text-indigo-400 uppercase font-semibold">OplatyKv</div>
+          <div className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{formatMoney(oplata, '')}</div>
         </div>
         <div>
-          <div className="text-[9px] text-sky-600 uppercase font-semibold">CRM</div>
-          <div className="font-bold text-slate-800 tabular-nums">{formatMoney(crm, '')}</div>
+          <div className="text-[9px] text-sky-600 dark:text-sky-400 uppercase font-semibold">CRM</div>
+          <div className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{formatMoney(crm, '')}</div>
         </div>
         <div>
-          <div className="text-[9px] uppercase font-semibold text-slate-500">Farq</div>
-          <div className={cn('font-bold tabular-nums', matched ? 'text-emerald-700' : 'text-rose-700')}>
+          <div className="text-[9px] uppercase font-semibold text-slate-500 dark:text-slate-400">Farq</div>
+          <div className={cn('font-bold tabular-nums', matched ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>
             {matched ? '✓' : (diff > 0 ? '+' : '') + formatMoney(diff, '')}
           </div>
         </div>
@@ -1850,32 +1850,32 @@ function OplataKvDetailDialog({
           </div>
 
           {/* Meta */}
-          <div className="pt-3 border-t border-slate-100 grid grid-cols-2 gap-3 text-[11px] text-slate-500">
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 text-[11px] text-slate-500 dark:text-slate-400">
             <div>
               <div className="uppercase tracking-wider font-semibold mb-0.5">Yaratildi</div>
-              <div className="text-slate-700">{fmtDateTime(row.createdAt)}</div>
-              {row.createdByName && <div className="text-slate-500">{row.createdByName}</div>}
+              <div className="text-slate-700 dark:text-slate-300">{fmtDateTime(row.createdAt)}</div>
+              {row.createdByName && <div className="text-slate-500 dark:text-slate-400">{row.createdByName}</div>}
             </div>
             <div>
               <div className="uppercase tracking-wider font-semibold mb-0.5">O'zgartirildi</div>
-              <div className="text-slate-700">{fmtDateTime(row.updatedAt)}</div>
+              <div className="text-slate-700 dark:text-slate-300">{fmtDateTime(row.updatedAt)}</div>
             </div>
           </div>
 
           {/* Full ID with copy */}
-          <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-3 py-2.5 flex items-center gap-2">
-            <Hash className="h-4 w-4 text-slate-400 shrink-0" />
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2.5 flex items-center gap-2">
+            <Hash className="h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">ID</div>
-              <code className="text-[11.5px] text-slate-700 font-mono break-all">{row.id}</code>
+              <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">ID</div>
+              <code className="text-[11.5px] text-slate-700 dark:text-slate-300 font-mono break-all">{row.id}</code>
             </div>
             <button
               onClick={() => onCopyId(row.id)}
               className={cn(
                 'shrink-0 w-8 h-8 rounded-lg grid place-items-center transition-colors',
                 copiedId === row.id
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : 'bg-white hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 ring-1 ring-slate-200',
+                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 ring-1 ring-slate-200 dark:ring-slate-700',
               )}
               title="Nusxalash"
             >
@@ -1885,11 +1885,11 @@ function OplataKvDetailDialog({
         </div>
 
         {/* Footer actions */}
-        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-2">
+        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <button
               onClick={() => onHistory(row)}
-              className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 hover:bg-slate-200/80 transition-colors inline-flex items-center gap-1.5"
+              className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
             >
               <History className="h-4 w-4" /> Tarix
             </button>
@@ -1901,7 +1901,7 @@ function OplataKvDetailDialog({
             {canDelete && (
               <button
                 onClick={() => onDelete(row)}
-                className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 ring-1 ring-rose-200 transition-colors inline-flex items-center gap-1.5"
+                className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900 transition-colors inline-flex items-center gap-1.5"
               >
                 <Trash2 className="h-4 w-4" /> O'chirish
               </button>
@@ -1952,7 +1952,7 @@ function ReSplitButton({ row }: { row: OplataKvItem }) {
         'h-10 px-3 rounded-xl text-[13px] font-semibold transition-all inline-flex items-center gap-1.5 ring-1',
         confirming
           ? 'bg-fuchsia-600 text-white ring-fuchsia-600 shadow-lg shadow-fuchsia-500/30 scale-105'
-          : 'bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200 hover:bg-fuchsia-100',
+          : 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/30',
       )}
       title="Bu shartnoma bo'yicha 1-vznos/oylik qayta hisoblash"
     >
@@ -1967,13 +1967,13 @@ function ReSplitButton({ row }: { row: OplataKvItem }) {
 function DetailRow({ icon, label, value, multiline }: { icon: React.ReactNode; label: string; value: string | null; multiline?: boolean }) {
   return (
     <div className="flex items-start gap-3 py-1.5">
-      <div className="w-8 h-8 rounded-lg bg-slate-100 grid place-items-center text-slate-500 shrink-0">
+      <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 grid place-items-center text-slate-500 dark:text-slate-400 shrink-0">
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{label}</div>
-        <div className={cn('text-[13px] text-slate-800 font-medium', multiline ? 'whitespace-pre-wrap break-words' : 'truncate')}>
-          {value || <span className="text-slate-400 font-normal italic">—</span>}
+        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{label}</div>
+        <div className={cn('text-[13px] text-slate-800 dark:text-slate-200 font-medium', multiline ? 'whitespace-pre-wrap break-words' : 'truncate')}>
+          {value || <span className="text-slate-400 dark:text-slate-500 font-normal italic">—</span>}
         </div>
       </div>
     </div>
@@ -1982,14 +1982,14 @@ function DetailRow({ icon, label, value, multiline }: { icon: React.ReactNode; l
 
 function DetailSum({ label, value, color }: { label: string; value: string | number | null; color: 'indigo' | 'amber' | 'sky' }) {
   const cls = {
-    indigo: 'bg-gradient-to-br from-indigo-50 to-violet-50 ring-indigo-200 text-indigo-900',
-    amber:  'bg-gradient-to-br from-amber-50 to-orange-50 ring-amber-200 text-amber-900',
-    sky:    'bg-gradient-to-br from-sky-50 to-cyan-50 ring-sky-200 text-sky-900',
+    indigo: 'bg-gradient-to-br from-indigo-50 to-violet-50 ring-indigo-200 dark:ring-indigo-900 text-indigo-900 dark:text-indigo-300',
+    amber:  'bg-gradient-to-br from-amber-50 to-orange-50 ring-amber-200 dark:ring-amber-900 text-amber-900 dark:text-amber-300',
+    sky:    'bg-gradient-to-br from-sky-50 to-cyan-50 ring-sky-200 dark:ring-sky-900 text-sky-900 dark:text-sky-300',
   }[color];
   const labelCls = {
-    indigo: 'text-indigo-600',
-    amber:  'text-amber-600',
-    sky:    'text-sky-600',
+    indigo: 'text-indigo-600 dark:text-indigo-400',
+    amber:  'text-amber-600 dark:text-amber-400',
+    sky:    'text-sky-600 dark:text-sky-400',
   }[color];
   return (
     <div className={cn('rounded-xl ring-1 p-3', cls)}>
@@ -2019,8 +2019,8 @@ function SumCard({ label, value, color }: { label: string; value: number; color:
           {icon}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
-          <div className={cn('text-xl font-bold tabular-nums mt-0.5', value < 0 ? 'text-rose-600' : 'text-slate-900')}>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
+          <div className={cn('text-xl font-bold tabular-nums mt-0.5', value < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-slate-100')}>
             {formatMoney(value, '')}
           </div>
         </div>
@@ -2037,9 +2037,9 @@ function CountCard({ label, count }: { label: string; count: number }) {
           <Hash className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{label}</div>
-          <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-900">
-            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400">шт.</span>
+          <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
+          <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-900 dark:text-slate-100">
+            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">шт.</span>
           </div>
         </div>
       </CardContent>
@@ -2295,7 +2295,7 @@ function OplataKvFormDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {isEdit ? <Edit3 className="h-5 w-5 text-indigo-600" /> : <Plus className="h-5 w-5 text-indigo-600" />}
+            {isEdit ? <Edit3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> : <Plus className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
             {isEdit ? 'Qatorni tahrirlash' : 'Yangi qator'}
           </DialogTitle>
           <DialogDescription>
@@ -2305,9 +2305,9 @@ function OplataKvFormDialog({
 
         {/* Tashqi manbadan kelgan qator info banner */}
         {isFromTx && (
-          <div className="mt-1 rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 flex items-start gap-2">
-            <Lock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-            <div className="text-[12px] text-amber-900 leading-relaxed">
+          <div className="mt-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 flex items-start gap-2">
+            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div className="text-[12px] text-amber-900 dark:text-amber-300 leading-relaxed">
               <b>{row?.sourceTxId ? 'Bankdan kelgan qator' : "Excel'dan import qilingan qator"}</b> — Дог №, Дата, Сумма оплаты, Клиент, Назначение
               maydonlari tahrirlab bo'lmaydi. Qolgan maydonlarni o'zgartirishingiz mumkin.
             </div>
@@ -2333,10 +2333,10 @@ function OplataKvFormDialog({
               <div
                 className={cn(
                   'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
-                  crmLookupState.status === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
-                  crmLookupState.status === 'found' && 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-                  crmLookupState.status === 'not-found' && 'bg-amber-50 text-amber-700 ring-amber-200',
-                  crmLookupState.status === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                  crmLookupState.status === 'loading' && 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
+                  crmLookupState.status === 'found' && 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+                  crmLookupState.status === 'not-found' && 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+                  crmLookupState.status === 'error' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
                 )}
               >
                 {crmLookupState.status === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -2377,8 +2377,8 @@ function OplataKvFormDialog({
                 className={cn(
                   'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
                   sumValidation.ok
-                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                    : 'bg-rose-50 text-rose-700 ring-rose-200',
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900'
+                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
                 )}
               >
                 {sumValidation.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
@@ -2459,11 +2459,11 @@ function Field({
 }: { label: string; full?: boolean; locked?: boolean; children: React.ReactNode }) {
   return (
     <div className={cn('space-y-1', full && 'col-span-2')}>
-      <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 inline-flex items-center gap-1">
+      <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
         {label}
         {locked && (
           <Lock
-            className="h-3 w-3 text-amber-500"
+            className="h-3 w-3 text-amber-500 dark:text-amber-400"
             aria-label="Bankdan kelgan — tahrirlab bo'lmaydi"
           />
         )}
@@ -2499,7 +2499,7 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
     <Dialog open={!!row} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-rose-700">
+          <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-300">
             <Trash2 className="h-5 w-5" /> O'chirishni tasdiqlash
           </DialogTitle>
           <DialogDescription>
@@ -2508,13 +2508,13 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
         </DialogHeader>
 
         {row && (
-          <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 p-3 text-[13px] space-y-1">
+          <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[13px] space-y-1">
             <div><b>Дог №:</b> <span className="font-mono">{row.contractNo}</span></div>
             <div><b>Дата:</b> {fmtDateRu(row.date)}</div>
             <div><b>Клиент:</b> {row.client || '—'}</div>
             <div><b>Объект:</b> {row.object || '—'}</div>
             {isPerereboska && (
-              <div className="mt-2 pt-2 border-t border-rose-200 text-[12px] text-rose-800 inline-flex items-start gap-1.5">
+              <div className="mt-2 pt-2 border-t border-rose-200 dark:border-rose-900 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-start gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
                 <span>
                   Bu <b>Переброска</b> guruhiga tegishli qator — butun guruh
@@ -2558,7 +2558,7 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-indigo-600" /> Qator tarixi
+            <History className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Qator tarixi
           </DialogTitle>
           {row && (
             <DialogDescription className="font-mono text-[12px]">
@@ -2572,29 +2572,29 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
           {!historyQuery.isLoading && items.length === 0 && (
-            <div className="text-center text-slate-400 py-8">Tarix bo'sh</div>
+            <div className="text-center text-slate-400 dark:text-slate-500 py-8">Tarix bo'sh</div>
           )}
           {items.map((h) => (
-            <div key={h.id} className="rounded-lg ring-1 ring-slate-200 p-3 bg-white">
+            <div key={h.id} className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 bg-white dark:bg-slate-900">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="flex items-center gap-2">
                   <ActionBadge action={h.action} />
-                  <span className="text-[12px] font-semibold text-slate-700">{h.actorName || 'Tizim'}</span>
+                  <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{h.actorName || 'Tizim'}</span>
                 </div>
-                <span className="text-[11px] text-slate-400 tabular-nums">{fmtDateTime(h.createdAt)}</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{fmtDateTime(h.createdAt)}</span>
               </div>
               {Array.isArray(h.fieldsChanged) && h.fieldsChanged.length > 0 && h.fieldsChanged[0] !== '*' && (
-                <div className="text-[11.5px] text-slate-500 mt-1">
-                  O'zgargan maydonlar: <span className="font-mono text-slate-700">{h.fieldsChanged.join(', ')}</span>
+                <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1">
+                  O'zgargan maydonlar: <span className="font-mono text-slate-700 dark:text-slate-300">{h.fieldsChanged.join(', ')}</span>
                 </div>
               )}
               {h.changes && typeof h.changes === 'object' && (
                 <details className="mt-1.5">
-                  <summary className="text-[11px] text-indigo-600 hover:text-indigo-800 cursor-pointer">Tafsilot</summary>
-                  <pre className="mt-1.5 text-[10.5px] bg-slate-50 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(h.changes, null, 2)}</pre>
+                  <summary className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 cursor-pointer">Tafsilot</summary>
+                  <pre className="mt-1.5 text-[10.5px] bg-slate-50 dark:bg-slate-900 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(h.changes, null, 2)}</pre>
                 </details>
               )}
-              {h.note && <div className="text-[11.5px] text-slate-500 mt-1 italic">{h.note}</div>}
+              {h.note && <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 italic">{h.note}</div>}
             </div>
           ))}
         </div>
@@ -2609,11 +2609,11 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
 
 function ActionBadge({ action }: { action: string }) {
   const cls = {
-    created:  'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    edited:   'bg-amber-50 text-amber-700 ring-amber-200',
-    deleted:  'bg-rose-50 text-rose-700 ring-rose-200',
-    imported: 'bg-violet-50 text-violet-700 ring-violet-200',
-  }[action] || 'bg-slate-50 text-slate-700 ring-slate-200';
+    created:  'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+    edited:   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+    deleted:  'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
+    imported: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
+  }[action] || 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700';
   return (
     <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ring-1', cls)}>
       {action}
@@ -2643,23 +2643,23 @@ function AddChoiceDialog({
             Oddiy to'lov yoki shartnomadan shartnomaga pul o'tkazma (Переброска)
           </div>
         </div>
-        <div className="p-5 grid grid-cols-2 gap-4 bg-slate-50/40">
+        <div className="p-5 grid grid-cols-2 gap-4 bg-slate-50/40 dark:bg-slate-900">
           {/* Variant 1: Oddiy */}
           <button
             onClick={onPickManual}
-            className="group relative rounded-2xl bg-white ring-2 ring-slate-200 hover:ring-indigo-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
+            className="group relative rounded-2xl bg-white dark:bg-slate-900 ring-2 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
           >
             <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 opacity-50 group-hover:opacity-80 transition-opacity" />
             <div className="relative">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md mb-3">
                 <PlusCircle className="h-6 w-6" />
               </div>
-              <div className="font-bold text-slate-900 text-[15px]">Oddiy to'lov</div>
-              <div className="text-[11.5px] text-slate-500 mt-1 leading-relaxed">
+              <div className="font-bold text-slate-900 dark:text-slate-100 text-[15px]">Oddiy to'lov</div>
+              <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                 Bitta shartnoma uchun to'lov ma'lumotini qo'lda kiritish. CRM
                 tekshiruvi avtomatik.
               </div>
-              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 inline-flex items-center gap-1">
+              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1">
                 Boshlash <ChevronRight className="h-3 w-3" />
               </div>
             </div>
@@ -2668,30 +2668,30 @@ function AddChoiceDialog({
           {/* Variant 2: Переброска */}
           <button
             onClick={onPickPerereboska}
-            className="group relative rounded-2xl bg-white ring-2 ring-slate-200 hover:ring-fuchsia-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
+            className="group relative rounded-2xl bg-white dark:bg-slate-900 ring-2 ring-slate-200 dark:ring-slate-700 hover:ring-fuchsia-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
           >
             <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-gradient-to-br from-fuchsia-100 to-amber-100 opacity-50 group-hover:opacity-80 transition-opacity" />
             <div className="relative">
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-600 grid place-items-center text-white shadow-md mb-3">
                 <ArrowRightLeft className="h-6 w-6" />
               </div>
-              <div className="font-bold text-slate-900 text-[15px] inline-flex items-center gap-1.5">
+              <div className="font-bold text-slate-900 dark:text-slate-100 text-[15px] inline-flex items-center gap-1.5">
                 Переброска
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-100 text-fuchsia-700 ring-1 ring-fuchsia-200">
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900">
                   YANGI
                 </span>
               </div>
-              <div className="text-[11.5px] text-slate-500 mt-1 leading-relaxed">
+              <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                 Bir shartnomadan boshqa shartnoma(lar)ga pul o'tkazma.
                 Obyekt nomlari teng bo'lishi shart, hujjat majburiy.
               </div>
-              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-fuchsia-600 inline-flex items-center gap-1">
+              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400 inline-flex items-center gap-1">
                 Boshlash <ChevronRight className="h-3 w-3" />
               </div>
             </div>
           </button>
         </div>
-        <div className="px-5 py-3 border-t border-slate-100 bg-white flex justify-end">
+        <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end">
           <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
         </div>
       </DialogContent>
@@ -2931,10 +2931,10 @@ function PerereboskaDialog({
         </div>
 
         {/* Body — scrollable (flex-1 minh-0 to allow shrink so footer stays visible) */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/30">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/30 dark:bg-slate-900">
           {/* SOURCE block */}
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
               <Upload className="h-4 w-4" /> 1. Manba shartnoma (qaysidan)
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -2954,9 +2954,9 @@ function PerereboskaDialog({
             {fromLookup.status !== 'idle' && fromLookup.status !== 'found' && (
               <div className={cn(
                 'rounded-lg px-3 py-2.5 text-[12.5px] font-medium ring-1 inline-flex items-center gap-2',
-                fromLookup.status === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
-                fromLookup.status === 'not-found' && 'bg-rose-50 text-rose-700 ring-rose-200',
-                fromLookup.status === 'error' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                fromLookup.status === 'loading' && 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
+                fromLookup.status === 'not-found' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
+                fromLookup.status === 'error' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
               )}>
                 {fromLookup.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
                 {fromLookup.status !== 'loading' && <X className="h-4 w-4" />}
@@ -2965,43 +2965,43 @@ function PerereboskaDialog({
             )}
             {fromInfo?.foundInCrm && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/50 ring-1 ring-slate-200 p-3.5">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5">
+                <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/50 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5">
                     <User2 className="h-3 w-3" /> Mijoz
                   </div>
-                  <div className="text-[13px] font-bold text-slate-800 leading-tight" title={fromInfo.customerName || ''}>
+                  <div className="text-[13px] font-bold text-slate-800 dark:text-slate-200 leading-tight" title={fromInfo.customerName || ''}>
                     {fromInfo.customerName || '—'}
                   </div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100/50 ring-1 ring-violet-200 p-3.5">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-700 mb-1.5">
+                <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100/50 ring-1 ring-violet-200 dark:ring-violet-900 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-700 dark:text-violet-300 mb-1.5">
                     <Building2 className="h-3 w-3" /> Obyekt
                   </div>
-                  <div className="text-[15px] font-black text-violet-900 leading-tight">
+                  <div className="text-[15px] font-black text-violet-900 dark:text-violet-300 leading-tight">
                     {fromInfo.objectName || '—'}
                   </div>
                 </div>
-                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-1 ring-emerald-200 p-3.5">
-                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-1.5">
+                <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 mb-1.5">
                     <Wallet className="h-3 w-3" /> Joriy qoldiq
                   </div>
-                  <div className="text-[16px] font-black text-emerald-800 leading-tight tabular-nums">
+                  <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 leading-tight tabular-nums">
                     {formatMoney(fromInfo.totalPaid)}
                   </div>
-                  <div className="text-[10px] text-emerald-600/70 mt-0.5">UZS</div>
+                  <div className="text-[10px] text-emerald-600/70 dark:text-emerald-400 mt-0.5">UZS</div>
                 </div>
               </div>
             )}
           </div>
 
           {/* AMOUNT block */}
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
               <Wallet className="h-4 w-4" /> 2. Otkazma summasi
             </div>
             <Field label="Summa (manfiy) *">
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-600 font-bold pointer-events-none">−</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-600 dark:text-rose-400 font-bold pointer-events-none">−</span>
                 <MoneyInput
                   value={amount}
                   onChange={setAmount}
@@ -3013,34 +3013,34 @@ function PerereboskaDialog({
             </Field>
             {amountNum !== undefined && fromInfo && (
               overBalance ? (
-                <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-                  <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-                  <div className="text-[13px] text-rose-800 leading-relaxed">
+                <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+                  <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                  <div className="text-[13px] text-rose-800 dark:text-rose-300 leading-relaxed">
                     <div className="font-bold mb-0.5">Summa qoldiqdan oshib ketdi</div>
-                    <div className="text-rose-700">
+                    <div className="text-rose-700 dark:text-rose-300">
                       Yozildi: <b className="tabular-nums">{formatMoney(amountNum)}</b>
-                      <span className="mx-1.5 text-rose-400">›</span>
+                      <span className="mx-1.5 text-rose-400 dark:text-rose-500">›</span>
                       Qoldiq: <b className="tabular-nums">{formatMoney(fromInfo.totalPaid)}</b>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 ring-1 ring-rose-200 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-rose-600 mb-1">Olinadi (−)</div>
-                    <div className="text-[16px] font-black text-rose-700 tabular-nums leading-tight">
+                  <div className="rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-1">Olinadi (−)</div>
+                    <div className="text-[16px] font-black text-rose-700 dark:text-rose-300 tabular-nums leading-tight">
                       −{formatMoney(amountNum)}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1">Hozirgi qoldiq</div>
-                    <div className="text-[14.5px] font-bold text-slate-700 tabular-nums leading-tight">
+                  <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">Hozirgi qoldiq</div>
+                    <div className="text-[14.5px] font-bold text-slate-700 dark:text-slate-300 tabular-nums leading-tight">
                       {formatMoney(fromInfo.totalPaid)}
                     </div>
                   </div>
-                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 mb-1">Yangi qoldiq</div>
-                    <div className="text-[16px] font-black text-emerald-800 tabular-nums leading-tight">
+                  <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 mb-1">Yangi qoldiq</div>
+                    <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums leading-tight">
                       {formatMoney(fromInfo.totalPaid - amountNum)}
                     </div>
                   </div>
@@ -3050,21 +3050,21 @@ function PerereboskaDialog({
           </div>
 
           {/* DESTINATIONS block */}
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
+          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+              <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
                 <Building2 className="h-4 w-4" /> 3. Maqsadli shartnoma(lar) ({destinations.length})
               </div>
               <button
                 onClick={addDestination}
                 disabled={submitting}
-                className="h-7 px-2.5 rounded-lg text-[11px] font-semibold text-fuchsia-700 bg-fuchsia-50 hover:bg-fuchsia-100 ring-1 ring-fuchsia-200 transition-colors inline-flex items-center gap-1"
+                className="h-7 px-2.5 rounded-lg text-[11px] font-semibold text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-950/40 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/30 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900 transition-colors inline-flex items-center gap-1"
               >
                 <Plus className="h-3 w-3" /> Yana shartnoma
               </button>
             </div>
             {!fromInfo?.objectName && (
-              <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] text-amber-800 inline-flex items-center gap-1.5">
+              <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 Avval manba shartnoma'ni tanlang (obyekt nomi keladigan joydan)
               </div>
@@ -3082,18 +3082,18 @@ function PerereboskaDialog({
                 <div key={idx} className={cn(
                   'rounded-lg ring-1 p-3 space-y-2.5',
                   isSelfTransfer || isDuplicateOfPrev
-                    ? 'bg-rose-50/60 ring-rose-200'
-                    : 'bg-slate-50/60 ring-slate-200',
+                    ? 'bg-rose-50/60 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900'
+                    : 'bg-slate-50/60 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                 )}>
                   <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       #{idx + 1}
                     </div>
                     {destinations.length > 1 && (
                       <button
                         onClick={() => removeDestination(idx)}
                         disabled={submitting}
-                        className="w-6 h-6 rounded grid place-items-center text-rose-500 hover:bg-rose-50"
+                        className="w-6 h-6 rounded grid place-items-center text-rose-500 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
@@ -3123,11 +3123,11 @@ function PerereboskaDialog({
                   </div>
                   {/* Self-transfer warning — manba va maqsadli bir xil shartnoma bo'lmasligi */}
                   {isSelfTransfer && (
-                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                    <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
                         <div className="font-bold mb-0.5">O'z-o'ziga o'tkazma mumkin emas</div>
-                        <div className="text-rose-700">
+                        <div className="text-rose-700 dark:text-rose-300">
                           <code className="font-mono font-bold">{fromCn.trim()}</code> manba shartnoma
                           bo'lib turibdi — uni maqsadli ro'yxatga qo'sha olmaysiz.
                           Boshqa shartnoma raqamini kiriting.
@@ -3137,11 +3137,11 @@ function PerereboskaDialog({
                   )}
                   {/* Duplicate destination warning */}
                   {isDuplicateOfPrev && (
-                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                    <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
                         <div className="font-bold mb-0.5">Maqsadli shartnoma takrorlanmoqda</div>
-                        <div className="text-rose-700">
+                        <div className="text-rose-700 dark:text-rose-300">
                           <code className="font-mono font-bold">{d.contractNo.trim()}</code> yuqorida
                           allaqachon mavjud — har bir shartnoma faqat bir marta.
                         </div>
@@ -3152,8 +3152,8 @@ function PerereboskaDialog({
                   {!isSelfTransfer && !isDuplicateOfPrev && (d.lookupStatus === 'loading' || d.lookupStatus === 'not-found' || d.lookupStatus === 'error') && (
                     <div className={cn(
                       'rounded-lg px-3 py-2 text-[12px] font-medium ring-1 inline-flex items-center gap-1.5',
-                      d.lookupStatus === 'loading' && 'bg-slate-50 text-slate-600 ring-slate-200',
-                      d.lookupStatus !== 'loading' && 'bg-rose-50 text-rose-700 ring-rose-200',
+                      d.lookupStatus === 'loading' && 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
+                      d.lookupStatus !== 'loading' && 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
                     )}>
                       {d.lookupStatus === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       {d.lookupStatus !== 'loading' && <X className="h-3.5 w-3.5" />}
@@ -3162,15 +3162,15 @@ function PerereboskaDialog({
                   )}
                   {/* Object mismatch warning */}
                   {!isSelfTransfer && !isDuplicateOfPrev && d.lookupStatus === 'found' && !objMatch && (
-                    <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3 flex items-start gap-2.5">
-                      <AlertTriangle className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
-                      <div className="text-[12.5px] text-rose-800 leading-relaxed">
+                    <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
+                      <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
+                      <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
                         <div className="font-bold mb-0.5">Obyekt nomi mos kelmaydi</div>
-                        <div className="text-rose-700">
+                        <div className="text-rose-700 dark:text-rose-300">
                           <b>{d.objectName}</b>
-                          <span className="mx-1.5 text-rose-400">≠</span>
+                          <span className="mx-1.5 text-rose-400 dark:text-rose-500">≠</span>
                           <b>{fromInfo?.objectName}</b>
-                          <span className="ml-1.5 text-rose-500/80">— faqat bir xil obyekt o'rtasida transfer mumkin</span>
+                          <span className="ml-1.5 text-rose-500/80 dark:text-rose-400">— faqat bir xil obyekt o'rtasida transfer mumkin</span>
                         </div>
                       </div>
                     </div>
@@ -3178,33 +3178,33 @@ function PerereboskaDialog({
                   {/* Found OK — cards */}
                   {!isSelfTransfer && !isDuplicateOfPrev && d.lookupStatus === 'found' && objMatch && (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2 sm:col-span-1">
-                        <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">
+                      <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 sm:col-span-1">
+                        <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
                           <User2 className="h-2.5 w-2.5" /> Mijoz
                         </div>
-                        <div className="text-[12px] font-semibold text-slate-800 truncate" title={d.customerName || ''}>
+                        <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={d.customerName || ''}>
                           {d.customerName || '—'}
                         </div>
                       </div>
-                      <div className="rounded-lg bg-slate-50 ring-1 ring-slate-200 px-3 py-2">
-                        <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 mb-0.5">Joriy</div>
-                        <div className="text-[12.5px] font-bold text-slate-700 tabular-nums">
+                      <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
+                        <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">Joriy</div>
+                        <div className="text-[12.5px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
                           {formatMoney(d.totalPaid)}
                         </div>
                       </div>
                       <div className={cn(
                         'rounded-lg px-3 py-2 ring-1',
                         dAmt !== undefined && dAmt > 0
-                          ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200'
-                          : 'bg-slate-50 ring-slate-200',
+                          ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200 dark:ring-emerald-900'
+                          : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                       )}>
                         <div className={cn(
                           'text-[9.5px] uppercase tracking-wider font-bold mb-0.5',
-                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-700' : 'text-slate-500',
+                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400',
                         )}>Kelajak (+ otkazma)</div>
                         <div className={cn(
                           'text-[12.5px] font-black tabular-nums',
-                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-800' : 'text-slate-400',
+                          dAmt !== undefined && dAmt > 0 ? 'text-emerald-800 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500',
                         )}>
                           {dAmt !== undefined && dAmt > 0 ? formatMoney(d.totalPaid + dAmt) : '—'}
                         </div>
@@ -3220,8 +3220,8 @@ function PerereboskaDialog({
               <div className={cn(
                 'rounded-xl p-3.5 ring-1 flex items-center gap-3',
                 destSumOk
-                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200'
-                  : 'bg-gradient-to-br from-rose-50 to-pink-50 ring-rose-200',
+                  ? 'bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200 dark:ring-emerald-900'
+                  : 'bg-gradient-to-br from-rose-50 to-pink-50 ring-rose-200 dark:ring-rose-900',
               )}>
                 <div className={cn(
                   'w-10 h-10 rounded-xl grid place-items-center shrink-0',
@@ -3233,21 +3233,21 @@ function PerereboskaDialog({
                 </div>
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 text-[12px]">
                   <div>
-                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700' : 'text-rose-700')}>Jami maqsadli</div>
-                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900' : 'text-rose-900')}>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>Jami maqsadli</div>
+                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900 dark:text-emerald-300' : 'text-rose-900 dark:text-rose-300')}>
                       {formatMoney(destSumNum)}
                     </div>
                   </div>
                   <div>
-                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700' : 'text-rose-700')}>Manba</div>
-                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900' : 'text-rose-900')}>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>Manba</div>
+                    <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900 dark:text-emerald-300' : 'text-rose-900 dark:text-rose-300')}>
                       {formatMoney(amountNum)}
                     </div>
                   </div>
                   {!destSumOk && (
                     <div>
-                      <div className="text-[9.5px] uppercase tracking-wider font-bold text-rose-700">Farq</div>
-                      <div className="text-[14px] font-black text-rose-900 tabular-nums">
+                      <div className="text-[9.5px] uppercase tracking-wider font-bold text-rose-700 dark:text-rose-300">Farq</div>
+                      <div className="text-[14px] font-black text-rose-900 dark:text-rose-300 tabular-nums">
                         {formatMoney(destSumNum - amountNum)}
                       </div>
                     </div>
@@ -3258,26 +3258,26 @@ function PerereboskaDialog({
           </div>
 
           {/* FILE + NOTE block */}
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700">
+          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
+            <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
               <Paperclip className="h-4 w-4" /> 4. Hujjat va izoh
             </div>
             <Field label="Hujjat (rasm / PDF) *" full>
               <label className={cn(
                 "flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 cursor-pointer transition-colors",
-                file ? 'border-emerald-300 bg-emerald-50/40' : 'border-slate-300 hover:border-fuchsia-400 hover:bg-fuchsia-50/30',
+                file ? 'border-emerald-300 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40' : 'border-slate-300 dark:border-slate-700 hover:border-fuchsia-400 hover:bg-fuchsia-50/30 dark:hover:bg-fuchsia-950/40',
               )}>
-                <Upload className={cn("h-5 w-5", file ? 'text-emerald-600' : 'text-slate-500')} />
+                <Upload className={cn("h-5 w-5", file ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400')} />
                 <div className="flex-1 min-w-0">
                   {file ? (
                     <>
-                      <div className="text-[12.5px] font-bold text-emerald-700 truncate">{file.name}</div>
-                      <div className="text-[10.5px] text-slate-500">{(file.size / 1024).toFixed(1)} KB · {file.type}</div>
+                      <div className="text-[12.5px] font-bold text-emerald-700 dark:text-emerald-300 truncate">{file.name}</div>
+                      <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{(file.size / 1024).toFixed(1)} KB · {file.type}</div>
                     </>
                   ) : (
                     <>
-                      <div className="text-[12.5px] font-semibold text-slate-700">Hujjat tanlash</div>
-                      <div className="text-[10.5px] text-slate-500">Rasm yoki PDF · maksimum 25 MB</div>
+                      <div className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-300">Hujjat tanlash</div>
+                      <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Rasm yoki PDF · maksimum 25 MB</div>
                     </>
                   )}
                 </div>
@@ -3297,8 +3297,8 @@ function PerereboskaDialog({
         </div>
 
         {/* Footer — sticky, shrink-0, doim ko'rinadigan */}
-        <div className="shrink-0 px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-between gap-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.06)]">
-          <div className="text-[11px] text-slate-500 flex-1 min-w-0 truncate">
+        <div className="shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.06)]">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400 flex-1 min-w-0 truncate">
             {!canSave && fromInfo?.foundInCrm && !noSelfTransfer && "⚠ Manba shartnoma maqsadli ro'yxatda — o'z-o'ziga otkazma mumkin emas"}
             {!canSave && fromInfo?.foundInCrm && noSelfTransfer && hasDuplicateDest && '⚠ Maqsadli shartnomalar takrorlanmoqda'}
             {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && !file && '⚠ Hujjat (file) tanlanmagan'}

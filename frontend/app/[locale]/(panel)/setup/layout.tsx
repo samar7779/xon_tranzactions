@@ -26,7 +26,7 @@ export default function SetupLayout({ children }: { children: React.ReactNode })
       <Topbar title={tSetup('title')} subtitle={tSetup('subtitle')} />
 
       {/* Tab bar */}
-      <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200">
+      <div className="sticky top-[80px] z-10 bg-muted/30 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700">
         <div className="px-6 lg:px-8">
           <div className="flex items-center gap-1 -mb-px overflow-x-auto">
             {TABS.map((tab) => {
@@ -39,8 +39,8 @@ export default function SetupLayout({ children }: { children: React.ReactNode })
                   className={cn(
                     'inline-flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors',
                     active
-                      ? 'border-indigo-600 text-indigo-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
+                      ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400'
+                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700',
                   )}
                 >
                   <Icon className="h-4 w-4" />
