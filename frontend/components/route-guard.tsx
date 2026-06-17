@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
@@ -16,6 +17,23 @@ import { PERMS } from '@/lib/permissions';
  *
  * Eslatma: hech qanday hardcode rol yo'q — faqat user.permissions[] tekshiriladi.
  */
+/**
+ * "Ruxsat yo'q" ekranidagi tugma qayerga yo'naltirishini aniqlash uchun —
+ * foydalanuvchi haqiqatan ham kira oladigan birinchi sahifa (sidebar tartibida).
+ * Har birida any-of ruxsat: ro'yxatdagi birortasi bo'lsa yetarli.
+ */
+const LANDING_ROUTES: { path: string; anyOf: string[] }[] = [
+  { path: '/dashboard',    anyOf: [PERMS.DASHBOARD_VIEW] },
+  { path: '/transactions', anyOf: [PERMS.TRANSACTIONS_VIEW] },
+  { path: '/oplatykv',     anyOf: [PERMS.CRM_VIEW, PERMS.OPLATAKV_VIEW] },
+  { path: '/setup/banks',       anyOf: [PERMS.BANKS_VIEW] },
+  { path: '/setup/accounts',    anyOf: [PERMS.ACCOUNTS_VIEW] },
+  { path: '/setup/credentials', anyOf: [PERMS.CREDENTIALS_VIEW] },
+  { path: '/admin/users',     anyOf: [PERMS.USERS_VIEW] },
+  { path: '/admin/roles',     anyOf: [PERMS.ROLES_VIEW] },
+  { path: '/admin/sync-logs', anyOf: [PERMS.SYNC_VIEW] },
+];
+
 const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   // Eng aniq (uzun) yo'llar birinchi — find() birinchi mosini oladi
   { prefix: '/setup/banks', permission: PERMS.BANKS_VIEW },
@@ -29,8 +47,8 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/admin', permission: PERMS.USERS_VIEW },
   { prefix: '/dashboard', permission: PERMS.DASHBOARD_VIEW },
   { prefix: '/transactions', permission: PERMS.TRANSACTIONS_VIEW },
-  { prefix: '/statement', permission: PERMS.TRANSACTIONS_VIEW },
-  { prefix: '/check', permission: PERMS.TRANSACTIONS_VIEW },
+  { prefix: '/statement', permission: PERMS.TRANSACTIONS_VIPISKA_VIEW },
+  { prefix: '/check', permission: PERMS.TRANSACTIONS_SVERKA_VIEW },
   { prefix: '/changes', permission: PERMS.CHANGED_TXN_VIEW },
   { prefix: '/customers', permission: PERMS.CUSTOMERS_VIEW },
   { prefix: '/contracts', permission: PERMS.CONTRACTS_VIEW },
@@ -43,6 +61,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
+  const tc = useTranslations('common');
 
   // /uz/admin/roles → /admin/roles (locale segmentini olib tashlaymiz)
   const segments = pathname.split('/').filter(Boolean);
@@ -58,6 +77,13 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const allowed = user?.permissions?.includes(rule.permission) ?? false;
   if (allowed) return <>{children}</>;
 
+  // Foydalanuvchi kira oladigan birinchi sahifa — dashboard'ga ruxsat
+  // bo'lmasa, bor ruxsatli bo'limga yo'naltiramiz (aks holda loop bo'lardi).
+  const landing = LANDING_ROUTES.find((r) =>
+    r.anyOf.some((p) => user?.permissions?.includes(p)),
+  );
+  const backHref = `/${locale}${landing?.path ?? '/dashboard'}`;
+
   return (
     <div className="flex-1 grid place-items-center p-8">
       <div className="text-center max-w-sm">
@@ -65,20 +91,19 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
           <ShieldAlert className="h-8 w-8 text-rose-500" />
         </div>
         <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          Bu sahifaga ruxsatingiz yo'q
+          {tc('accessDenied')}
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
-          Bu bo'limni ko'rish uchun kerakli ruxsat rolingizga berilmagan.
-          Agar bu xato deb hisoblasangiz, tizim administratoriga murojaat qiling.
+          {tc('accessDeniedDesc')}
         </p>
         <Link
-          href={`/${locale}/dashboard`}
+          href={backHref}
           className="inline-flex items-center gap-2 mt-6 px-4 h-10 rounded-xl
                      bg-slate-900 dark:bg-slate-800 text-white text-sm font-medium
                      hover:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Bosh sahifaga qaytish
+          {tc('backToHome')}
         </Link>
       </div>
     </div>
