@@ -1,30 +1,44 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter, usePathname } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
+import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import {
-  Code2, KeyRound, Lock, ShieldCheck, CheckCircle2, ChevronDown, Play,
-  Copy, Check, LogOut, Eye, EyeOff, Loader2, Activity, Globe, Sun, Moon,
-  AlertCircle, Server, Terminal, Sparkles, ArrowRight, Search,
+  Code2, KeyRound, Lock, CheckCircle2, ChevronDown, Play,
+  Copy, Check, LogOut, Eye, EyeOff, Loader2, Globe, Sun, Moon,
+  AlertCircle, Terminal, Sparkles, ArrowRight, Search, Menu, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { locales } from '@/i18n/config';
 import dynamic from 'next/dynamic';
+import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
+import { IconBtn, PrimaryBtn, MethodBadge, Kbd, eyebrow } from '@/components/api-ui';
+import { ApiCommandPalette, type PaletteEndpoint } from '@/components/api-command-palette';
+import { SNIPPET_LANGS, genSnippet, type SnippetLang } from '@/lib/api-snippet-gen';
 
 const Api3dHero = dynamic(
   () => import('@/components/api-3d-hero').then((m) => m.Api3dHero),
   {
     ssr: false,
-    loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-100 to-violet-100 dark:from-indigo-950/40 dark:to-violet-950/40 rounded-2xl animate-pulse" />,
+    loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-slate-900 dark:to-slate-950 rounded-xl animate-pulse" />,
   },
 );
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
 // ════════════════════════════════════════════════════════
-// ENDPOINTS CATALOG (i18n kalitlar bilan)
+// ENDPOINTS CATALOG
 // ════════════════════════════════════════════════════════
+interface EndpointParam {
+  name: string;
+  in: 'query' | 'path';
+  required?: boolean;
+  descKey?: string;
+  example?: string;
+}
+
 interface Endpoint {
   method: 'GET' | 'POST';
   path: string;
@@ -32,7 +46,7 @@ interface Endpoint {
   titleKey: string;
   descKey: string;
   scope?: string;
-  params?: { name: string; in: 'query' | 'path'; required?: boolean; descKey?: string; description?: string; example?: string }[];
+  params?: EndpointParam[];
 }
 
 const ENDPOINTS: Endpoint[] = [
@@ -48,64 +62,64 @@ const ENDPOINTS: Endpoint[] = [
     method: 'GET', path: '/api/v1/transactions', groupKey: 'transactions',
     titleKey: 'txListT', descKey: 'txListD', scope: 'transactions:read',
     params: [
-      { name: 'page', in: 'query', description: 'page (default 1)', example: '1' },
-      { name: 'perPage', in: 'query', description: 'max 200', example: '50' },
-      { name: 'accountId', in: 'query', description: 'account id', example: '' },
-      { name: 'bankId', in: 'query', description: 'bank id', example: '' },
-      { name: 'direction', in: 'query', description: 'IN | OUT', example: 'IN' },
-      { name: 'dateFrom', in: 'query', description: 'YYYY-MM-DD', example: '2026-01-01' },
-      { name: 'dateTo', in: 'query', description: 'YYYY-MM-DD', example: '2026-12-31' },
-      { name: 'q', in: 'query', description: 'free text', example: '' },
+      { name: 'page', in: 'query', descKey: 'page', example: '1' },
+      { name: 'perPage', in: 'query', descKey: 'perPage', example: '50' },
+      { name: 'accountId', in: 'query', descKey: 'accountId', example: '' },
+      { name: 'bankId', in: 'query', descKey: 'bankId', example: '' },
+      { name: 'direction', in: 'query', descKey: 'direction', example: 'IN' },
+      { name: 'dateFrom', in: 'query', descKey: 'dateFrom', example: '2026-01-01' },
+      { name: 'dateTo', in: 'query', descKey: 'dateTo', example: '2026-12-31' },
+      { name: 'q', in: 'query', descKey: 'q', example: '' },
     ],
   },
   {
     method: 'GET', path: '/api/v1/transactions/{id}', groupKey: 'transactions',
     titleKey: 'txOneT', descKey: 'txOneD', scope: 'transactions:read',
-    params: [{ name: 'id', in: 'path', required: true, description: 'transaction id' }],
+    params: [{ name: 'id', in: 'path', required: true, descKey: 'txId' }],
   },
 
   {
     method: 'GET', path: '/api/v1/oplata-kv', groupKey: 'oplatakv',
     titleKey: 'okListT', descKey: 'okListD', scope: 'oplatakv:read',
     params: [
-      { name: 'page', in: 'query', description: '', example: '1' },
-      { name: 'perPage', in: 'query', description: '', example: '50' },
-      { name: 'contractNo', in: 'query', description: '', example: '' },
-      { name: 'dateFrom', in: 'query', description: 'YYYY-MM-DD', example: '' },
-      { name: 'dateTo', in: 'query', description: 'YYYY-MM-DD', example: '' },
-      { name: 'q', in: 'query', description: '', example: '' },
+      { name: 'page', in: 'query', descKey: 'page', example: '1' },
+      { name: 'perPage', in: 'query', descKey: 'perPage', example: '50' },
+      { name: 'contractNo', in: 'query', descKey: 'contractNo', example: '' },
+      { name: 'dateFrom', in: 'query', descKey: 'dateFrom', example: '' },
+      { name: 'dateTo', in: 'query', descKey: 'dateTo', example: '' },
+      { name: 'q', in: 'query', descKey: 'qOplata', example: '' },
     ],
   },
   {
     method: 'GET', path: '/api/v1/oplata-kv/{id}', groupKey: 'oplatakv',
     titleKey: 'okOneT', descKey: 'okOneD', scope: 'oplatakv:read',
-    params: [{ name: 'id', in: 'path', required: true, description: '' }],
+    params: [{ name: 'id', in: 'path', required: true, descKey: 'okId' }],
   },
 
   {
     method: 'GET', path: '/api/v1/accounts', groupKey: 'accounts',
     titleKey: 'acListT', descKey: 'acListD', scope: 'accounts:read',
-    params: [{ name: 'q', in: 'query', description: '', example: '' }],
+    params: [{ name: 'q', in: 'query', descKey: 'qAccount', example: '' }],
   },
   {
     method: 'GET', path: '/api/v1/accounts/{idOrAccountNo}', groupKey: 'accounts',
     titleKey: 'acOneT', descKey: 'acOneD', scope: 'accounts:read',
-    params: [{ name: 'idOrAccountNo', in: 'path', required: true, description: 'id or accountNo', example: '20208000305742909002' }],
+    params: [{ name: 'idOrAccountNo', in: 'path', required: true, descKey: 'idOrAccountNo', example: '20208000305742909002' }],
   },
 
   {
     method: 'GET', path: '/api/v1/counterparties', groupKey: 'counterparties',
     titleKey: 'cpListT', descKey: 'cpListD', scope: 'counterparties:read',
     params: [
-      { name: 'page', in: 'query', description: '', example: '1' },
-      { name: 'perPage', in: 'query', description: '', example: '50' },
-      { name: 'q', in: 'query', description: '', example: '' },
+      { name: 'page', in: 'query', descKey: 'page', example: '1' },
+      { name: 'perPage', in: 'query', descKey: 'perPage', example: '50' },
+      { name: 'q', in: 'query', descKey: 'qCp', example: '' },
     ],
   },
   {
     method: 'GET', path: '/api/v1/counterparties/{inn}', groupKey: 'counterparties',
     titleKey: 'cpOneT', descKey: 'cpOneD', scope: 'counterparties:read',
-    params: [{ name: 'inn', in: 'path', required: true, description: '', example: '305212378' }],
+    params: [{ name: 'inn', in: 'path', required: true, descKey: 'inn', example: '305212378' }],
   },
 ];
 
@@ -117,7 +131,7 @@ const groupOrder: Array<Endpoint['groupKey']> = ['start', 'meta', 'transactions'
 function FlagIcon({ code }: { code: string }) {
   const w = 20, h = 14;
   if (code === 'uz') return (
-    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0">
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0" aria-hidden="true">
       <rect width="22" height="5.33" y="0" fill="#0099B5" />
       <rect width="22" height="0.5" y="5.33" fill="#CE1126" />
       <rect width="22" height="4.83" y="5.83" fill="#fff" />
@@ -128,14 +142,14 @@ function FlagIcon({ code }: { code: string }) {
     </svg>
   );
   if (code === 'ru') return (
-    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0">
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0" aria-hidden="true">
       <rect width="22" height="5.33" y="0" fill="#fff" />
       <rect width="22" height="5.33" y="5.33" fill="#0039A6" />
       <rect width="22" height="5.34" y="10.66" fill="#D52B1E" />
     </svg>
   );
   if (code === 'en') return (
-    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0">
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 dark:ring-slate-700 shrink-0" aria-hidden="true">
       <rect width="22" height="16" fill="#012169" />
       <path d="M0 0 L22 16 M22 0 L0 16" stroke="#fff" strokeWidth="2.4" />
       <path d="M0 0 L22 16 M22 0 L0 16" stroke="#C8102E" strokeWidth="1.2" />
@@ -149,13 +163,18 @@ function FlagIcon({ code }: { code: string }) {
 }
 
 // ════════════════════════════════════════════════════════
-// LANG SWITCHER
+// LANG SWITCHER — keyboard accessible
 // ════════════════════════════════════════════════════════
 function LangSwitcher() {
+  const t = useTranslations('api');
   const router = useRouter();
   const pathname = usePathname();
+  const sp = useSearchParams();
   const { locale } = useParams<{ locale: string }>();
   const [open, setOpen] = useState(false);
+  const [focusIdx, setFocusIdx] = useState(0);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const reduced = usePrefersReducedMotion();
 
   const switchTo = (target: string) => {
     if (target === locale) { setOpen(false); return; }
@@ -165,89 +184,127 @@ function LangSwitcher() {
     } else {
       segs.splice(1, 0, target);
     }
-    router.push(segs.join('/') || '/');
+    const url = (segs.join('/') || '/') + (sp.toString() ? `?${sp.toString()}` : '');
+    router.push(url);
     setOpen(false);
   };
 
+  // Keyboard navigation
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!open) return;
+    if (e.key === 'Escape') { setOpen(false); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setFocusIdx((i) => (i + 1) % locales.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setFocusIdx((i) => (i - 1 + locales.length) % locales.length); }
+    else if (e.key === 'Enter') { e.preventDefault(); switchTo(locales[focusIdx]); }
+  };
+
+  useEffect(() => {
+    if (open) itemRefs.current[focusIdx]?.focus();
+  }, [focusIdx, open]);
+
   return (
-    <div className="relative">
+    <div className="relative" onKeyDown={onKey}>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-[12px] font-semibold text-slate-700 dark:text-slate-300 transition-colors"
+        aria-label={t('header.lang')}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-[12.5px] font-semibold text-slate-700 dark:text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none transition-colors"
       >
         <FlagIcon code={locale} />
         <span className="hidden sm:inline uppercase">{locale}</span>
-        <ChevronDown className="h-3 w-3 text-slate-400" />
+        <ChevronDown className="h-3 w-3 text-slate-400" aria-hidden="true" />
       </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-lg overflow-hidden">
-            {locales.map((l) => {
-              const active = l === locale;
-              return (
-                <button
-                  key={l}
-                  onClick={() => switchTo(l)}
-                  className={cn(
-                    'w-full flex items-center gap-2 px-3 py-2 text-[12.5px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
-                    active && 'bg-indigo-50 dark:bg-indigo-950/40',
-                  )}
-                >
-                  <FlagIcon code={l} />
-                  <span className="flex-1 text-left text-slate-800 dark:text-slate-200">{LOCALE_LABEL[l]}</span>
-                  <span className="uppercase text-[10px] text-slate-400">{l}</span>
-                  {active && <Check className="h-3 w-3 text-indigo-600 dark:text-indigo-400" />}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
+      <AnimatePresence>
+        {open && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+            <motion.div
+              role="listbox"
+              initial={{ opacity: 0, scale: 0.96, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: -4 }}
+              transition={{ duration: reduced ? 0 : 0.15 }}
+              className="absolute right-0 top-full mt-1 z-20 w-44 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 shadow-lg overflow-hidden origin-top-right"
+            >
+              {locales.map((l, i) => {
+                const active = l === locale;
+                return (
+                  <button
+                    key={l}
+                    ref={(el) => { itemRefs.current[i] = el; }}
+                    role="option"
+                    aria-selected={active}
+                    onClick={() => switchTo(l)}
+                    onMouseEnter={() => setFocusIdx(i)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-3 py-2 text-[12.5px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors focus:bg-slate-50 dark:focus:bg-slate-800 outline-none',
+                      active && 'bg-indigo-50 dark:bg-indigo-950/40',
+                    )}
+                  >
+                    <FlagIcon code={l} />
+                    <span className="flex-1 text-left text-slate-800 dark:text-slate-200">{LOCALE_LABEL[l]}</span>
+                    <span className="uppercase text-[10px] text-slate-400">{l}</span>
+                    {active && <Check className="h-3 w-3 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />}
+                  </button>
+                );
+              })}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // ════════════════════════════════════════════════════════
-// THEME TOGGLE
+// THEME
 // ════════════════════════════════════════════════════════
 function useTheme() {
   const [dark, setDark] = useState(false);
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem('theme');
       const isDark = stored === 'dark';
       setDark(isDark);
-      if (isDark) document.documentElement.classList.add('dark');
-      else document.documentElement.classList.remove('dark');
+      document.documentElement.classList.toggle('dark', isDark);
     } catch { /* ignore */ }
   }, []);
-
   const toggle = () => {
     setDark((prev) => {
       const next = !prev;
       try {
         localStorage.setItem('theme', next ? 'dark' : 'light');
-        if (next) document.documentElement.classList.add('dark');
-        else document.documentElement.classList.remove('dark');
+        document.documentElement.classList.toggle('dark', next);
       } catch { /* ignore */ }
       return next;
     });
   };
-
   return { dark, toggle };
 }
 
 function ThemeToggle({ dark, toggle }: { dark: boolean; toggle: () => void }) {
+  const t = useTranslations('api');
+  const reduced = usePrefersReducedMotion();
   return (
-    <button
+    <IconBtn
       onClick={toggle}
-      className="inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors"
-      title={dark ? 'Light' : 'Dark'}
+      aria-label={dark ? t('header.themeLight') : t('header.themeDark')}
+      title={dark ? t('header.themeLight') : t('header.themeDark')}
     >
-      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </button>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={dark ? 'sun' : 'moon'}
+          initial={{ rotate: reduced ? 0 : -90, opacity: 0 }}
+          animate={{ rotate: 0, opacity: 1 }}
+          exit={{ rotate: reduced ? 0 : 90, opacity: 0 }}
+          transition={{ duration: reduced ? 0 : 0.2 }}
+          className="grid place-items-center"
+        >
+          {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </motion.span>
+      </AnimatePresence>
+    </IconBtn>
   );
 }
 
@@ -255,8 +312,18 @@ function ThemeToggle({ dark, toggle }: { dark: boolean; toggle: () => void }) {
 // MAIN PAGE
 // ════════════════════════════════════════════════════════
 export default function DeveloperApiPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-white dark:bg-slate-950" />}>
+      <PageInner />
+    </Suspense>
+  );
+}
+
+function PageInner() {
   const { dark, toggle } = useTheme();
+  const reduced = usePrefersReducedMotion();
   const [authedKey, setAuthedKey] = useState<{ keyId: string; secret: string; whoami: any } | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     try {
@@ -266,6 +333,7 @@ export default function DeveloperApiPage() {
         if (parsed?.keyId && parsed?.secret) setAuthedKey(parsed);
       }
     } catch { /* ignore */ }
+    setHydrated(true);
   }, []);
 
   const doLogout = () => {
@@ -280,21 +348,28 @@ export default function DeveloperApiPage() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased transition-colors">
+      {/* Skip link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-indigo-600 focus:text-white focus:text-sm"
+      >
+        Skip to main content
+      </a>
+
       {/* Top nav */}
       <header className="sticky top-0 z-30 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-950/85 backdrop-blur-md">
-        <div className="w-full px-4 lg:px-6 h-14 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-sm shrink-0">
-              <Code2 className="h-4 w-4 text-white" />
+        <div className="w-full px-3 lg:px-5 h-14 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 grid place-items-center shadow-sm shrink-0">
+              <Code2 className="h-4 w-4 text-white" aria-hidden="true" />
             </div>
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex items-center gap-1.5 min-w-0">
               <span className="font-bold tracking-tight text-[14.5px] truncate">{t('pageTitle')}</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-widest font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 shrink-0">v1</span>
+              <span className={cn(eyebrow, 'px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 shrink-0')}>v1</span>
             </div>
-            {/* User info chip — agar kirgan bo'lsa */}
             {authedKey && whoamiKey && (
-              <div className="hidden md:flex items-center gap-2 ml-3 pl-3 border-l border-slate-200 dark:border-slate-700 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 grid place-items-center text-white shrink-0 ring-2 ring-white dark:ring-slate-950 shadow-sm">
+              <div className="hidden md:flex items-center gap-2 ml-2 pl-2.5 border-l border-slate-200 dark:border-slate-700 min-w-0">
+                <div className="w-7 h-7 rounded-full bg-emerald-500 grid place-items-center text-white shrink-0 ring-2 ring-white dark:ring-slate-950 shadow-sm">
                   <span className="text-[11px] font-black">{(whoamiKey.name || 'A').charAt(0).toUpperCase()}</span>
                 </div>
                 <div className="min-w-0">
@@ -302,13 +377,13 @@ export default function DeveloperApiPage() {
                     {whoamiKey.name}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                    <span className="w-1 h-1 rounded-full bg-emerald-500" aria-hidden="true" />
                     <span className="text-[10px] text-slate-500 dark:text-slate-400">{scopes.length} {t('header.scopes')}</span>
                     {clientIp && (
                       <>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-600">·</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-600" aria-hidden="true">·</span>
                         <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
-                          <Globe className="h-2.5 w-2.5" />
+                          <Globe className="h-2.5 w-2.5" aria-hidden="true" />
                           <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400" title={clientIp}>{clientIp}</span>
                         </span>
                       </>
@@ -319,28 +394,48 @@ export default function DeveloperApiPage() {
             )}
           </div>
 
-          {/* Right */}
-          <div className="flex items-center gap-1 shrink-0">
+          <div className="flex items-center gap-0.5 shrink-0">
             <ThemeToggle dark={dark} toggle={toggle} />
             <LangSwitcher />
             {authedKey && (
-              <button
+              <IconBtn
                 onClick={doLogout}
-                className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
+                tone="rose"
+                aria-label={t('header.logout')}
+                title={t('header.logout')}
               >
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">{t('header.logout')}</span>
-              </button>
+                <LogOut className="h-4 w-4" />
+              </IconBtn>
             )}
           </div>
         </div>
       </header>
 
-      {authedKey ? (
-        <AuthenticatedView authed={authedKey} dark={dark} />
-      ) : (
-        <LandingView onLogin={(auth) => setAuthedKey(auth)} dark={dark} />
-      )}
+      <main id="main-content">
+        <AnimatePresence mode="wait">
+          {hydrated && authedKey ? (
+            <motion.div
+              key="auth"
+              initial={{ opacity: 0, y: reduced ? 0 : 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduced ? 0 : -8 }}
+              transition={{ duration: reduced ? 0 : 0.25 }}
+            >
+              <AuthenticatedView authed={authedKey} dark={dark} />
+            </motion.div>
+          ) : hydrated ? (
+            <motion.div
+              key="land"
+              initial={{ opacity: 0, y: reduced ? 0 : 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: reduced ? 0 : -8 }}
+              transition={{ duration: reduced ? 0 : 0.25 }}
+            >
+              <LandingView onLogin={(auth) => setAuthedKey(auth)} dark={dark} />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      </main>
     </div>
   );
 }
@@ -358,6 +453,15 @@ function LandingView({ onLogin, dark }: {
   const [showSecret, setShowSecret] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<{ key: boolean; secret: boolean }>({ key: false, secret: false });
+
+  const validate = (field: 'key' | 'secret', value: string) => {
+    if (touched[field] && !value.trim()) {
+      setError(t('login.errorRequired'));
+    } else if (error === t('login.errorRequired')) {
+      setError(null);
+    }
+  };
 
   const doLogin = async () => {
     setError(null);
@@ -368,7 +472,13 @@ function LandingView({ onLogin, dark }: {
         headers: { 'X-API-Key': keyId.trim(), 'X-API-Secret': secret.trim() },
       });
       const data = await resp.json();
-      if (!resp.ok) { setError(data?.message || `HTTP ${resp.status}`); return; }
+      if (!resp.ok) {
+        if (resp.status === 401) setError(t('login.errorInvalidKey'));
+        else if (resp.status === 403) setError(t('login.errorForbidden'));
+        else if (resp.status >= 500) setError(t('login.errorServer'));
+        else setError(data?.message || `HTTP ${resp.status}`);
+        return;
+      }
       const auth = { keyId: keyId.trim(), secret: secret.trim(), whoami: data };
       sessionStorage.setItem('xt_dev_api_auth', JSON.stringify(auth));
       onLogin(auth);
@@ -379,56 +489,45 @@ function LandingView({ onLogin, dark }: {
     }
   };
 
+  const fullOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://transactions.xonapps.uz';
+  const canSubmit = keyId.trim() && secret.trim();
+
   return (
     <section className="relative overflow-hidden">
-      {/* Subtle grid — light va dark uchun */}
       <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
-      {/* Decorative gradient blobs */}
-      <div className="absolute top-1/4 -left-32 w-[500px] h-[500px] bg-gradient-to-br from-indigo-300/30 to-violet-300/20 dark:from-indigo-600/15 dark:to-violet-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 -right-32 w-[500px] h-[500px] bg-gradient-to-br from-fuchsia-300/30 to-cyan-300/20 dark:from-fuchsia-600/15 dark:to-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-6 pb-12 grid lg:grid-cols-[1.15fr_1fr] gap-8 lg:gap-12 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
-        {/* Left — 3D constellation */}
-        <div className="relative h-[420px] lg:h-[640px] -mx-4 lg:mx-0">
+        {/* 3D — aria-hidden, decorative */}
+        <div className="relative h-[300px] sm:h-[420px] lg:h-[640px] -mx-4 lg:mx-0">
           <Api3dHero className="absolute inset-0" dark={dark} />
-          {/* Bottom subtle stats strip — terminal style */}
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 hidden lg:flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/40 dark:bg-slate-900/40 backdrop-blur-md ring-1 ring-slate-200/40 dark:ring-slate-700/40">
-            <StatDot color="emerald" label={`${ENDPOINTS.length} endpoints`} />
-            <span className="text-slate-400 dark:text-slate-600">·</span>
-            <StatDot color="indigo" label="v1" />
-            <span className="text-slate-400 dark:text-slate-600">·</span>
-            <StatDot color="violet" label="REST" />
-            <span className="text-slate-400 dark:text-slate-600">·</span>
-            <StatDot color="cyan" label="<100ms" />
-          </div>
         </div>
 
-        {/* Right — Login + code preview */}
+        {/* Right — code preview + login */}
         <div className="w-full max-w-[480px] mx-auto lg:mx-0 space-y-4">
-          {/* Code preview — terminal mock */}
-          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden bg-slate-950 shadow-lg shadow-slate-900/5">
+          {/* Terminal preview — full URL */}
+          <div className="rounded-xl ring-1 ring-slate-800 overflow-hidden bg-slate-950 shadow-sm">
             <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500/70" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500/70" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" aria-hidden="true" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" aria-hidden="true" />
               </div>
               <span className="text-[10px] text-slate-500 font-mono">api · v1</span>
             </div>
             <pre className="px-4 py-3 text-[11.5px] font-mono leading-relaxed overflow-x-auto">
               <span className="text-slate-500"># GET tranzaksiyalar</span>{'\n'}
-              <span className="text-indigo-400">curl</span>{' '}<span className="text-slate-300">/api/v1/transactions \</span>{'\n'}
-              {'  '}<span className="text-slate-500">-H</span>{' '}<span className="text-amber-300">"X-API-Key: xk_live_..."</span>{'\n'}
-              {'  '}<span className="text-slate-500">-H</span>{' '}<span className="text-amber-300">"X-API-Secret: xs_live_..."</span>{'\n'}
-              <span className="text-emerald-300">{'{ "ok": true, "total": 12450, ... }'}</span>
+              <span className="text-indigo-400">curl</span> <span className="text-slate-300">{fullOrigin}/api/v1/transactions</span> <span className="text-slate-500">\</span>{'\n'}
+              {'  '}<span className="text-slate-500">-H</span> <span className="text-emerald-300">"X-API-Key: xk_live_..."</span> <span className="text-slate-500">\</span>{'\n'}
+              {'  '}<span className="text-slate-500">-H</span> <span className="text-emerald-300">"X-API-Secret: xs_live_..."</span>{'\n'}
+              <span className="text-slate-400">{'{ "ok": true, "total": 12450, ... }'}</span>
             </pre>
           </div>
 
           {/* Login card */}
-          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 shadow-2xl shadow-indigo-500/5 dark:shadow-violet-900/10 p-5 lg:p-6">
+          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-5 lg:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-md">
-                <KeyRound className="h-4 w-4 text-white" />
+              <div className="w-10 h-10 rounded-lg bg-indigo-600 grid place-items-center shadow-sm">
+                <KeyRound className="h-4 w-4 text-white" aria-hidden="true" />
               </div>
               <div>
                 <h2 className="text-[14px] font-black text-slate-900 dark:text-slate-100 leading-tight">{t('login.title')}</h2>
@@ -438,46 +537,65 @@ function LandingView({ onLogin, dark }: {
 
             <div className="space-y-2.5">
               <div>
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-1 block">{t('login.keyLabel')}</label>
+                <label htmlFor="api-key" className={cn(eyebrow, 'mb-1 block')}>
+                  {t('login.keyLabel')} <span className="text-slate-400 normal-case tracking-normal font-medium ml-1">{t('login.keyExample')}</span>
+                </label>
                 <input
+                  id="api-key"
                   type="text"
                   value={keyId}
-                  onChange={(e) => setKeyId(e.target.value)}
+                  onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
+                  onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
                   placeholder={t('login.keyPlaceholder')}
-                  className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
+                  aria-required="true"
+                  className="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-                  <span>{t('login.secretLabel')}</span>
-                  <button type="button" onClick={() => setShowSecret(!showSecret)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal">
+                <label htmlFor="api-secret" className={cn(eyebrow, 'mb-1 flex items-center justify-between')}>
+                  <span>{t('login.secretLabel')} <span className="text-slate-400 normal-case tracking-normal font-medium ml-1">{t('login.secretExample')}</span></span>
+                  <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide' : 'Show'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded outline-none">
                     {showSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                   </button>
                 </label>
                 <input
+                  id="api-secret"
                   type={showSecret ? 'text' : 'password'}
                   value={secret}
-                  onChange={(e) => setSecret(e.target.value)}
+                  onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
+                  onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
                   placeholder={t('login.secretPlaceholder')}
                   onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
-                  className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
+                  aria-required="true"
+                  className="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
                 />
               </div>
 
               {error && (
-                <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 flex items-start gap-2">
-                  <AlertCircle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" />
+                <div role="alert" aria-live="polite" className="rounded-md bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 flex items-start gap-2">
+                  <AlertCircle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
                   <div className="text-[11.5px] text-rose-700 dark:text-rose-300 leading-relaxed">{error}</div>
                 </div>
               )}
 
-              <button
-                onClick={doLogin}
-                disabled={loading || !keyId.trim() || !secret.trim()}
-                className="w-full h-11 rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:from-indigo-700 hover:via-violet-700 hover:to-fuchsia-700 disabled:opacity-50 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-500/20"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('login.submit')} <ArrowRight className="h-4 w-4" /></>}
-              </button>
+              <PrimaryBtn onClick={doLogin} disabled={loading || !canSubmit} className="w-full">
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : !canSubmit ? (
+                  <span>{t('login.submitIdle')}</span>
+                ) : (
+                  <>
+                    <span>{t('login.submit')}</span>
+                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                  </>
+                )}
+              </PrimaryBtn>
+
+              {!error && !canSubmit && (
+                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 text-center">
+                  {t('login.idleHint')}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -486,23 +604,8 @@ function LandingView({ onLogin, dark }: {
   );
 }
 
-function StatDot({ color, label }: { color: 'emerald' | 'indigo' | 'violet' | 'cyan'; label: string }) {
-  const cls: Record<string, string> = {
-    emerald: 'bg-emerald-500 shadow-emerald-500/50',
-    indigo: 'bg-indigo-500 shadow-indigo-500/50',
-    violet: 'bg-violet-500 shadow-violet-500/50',
-    cyan: 'bg-cyan-500 shadow-cyan-500/50',
-  };
-  return (
-    <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-slate-700 dark:text-slate-300">
-      <span className={cn('w-1.5 h-1.5 rounded-full shadow-md', cls[color])} />
-      {label}
-    </span>
-  );
-}
-
 // ════════════════════════════════════════════════════════
-// AUTHENTICATED VIEW
+// AUTHENTICATED VIEW — three-column layout
 // ════════════════════════════════════════════════════════
 function groupEndpoints(endpoints: Endpoint[]) {
   const map = new Map<string, Endpoint[]>();
@@ -513,13 +616,39 @@ function groupEndpoints(endpoints: Endpoint[]) {
   return groupOrder.filter((g) => map.has(g)).map((g) => ({ key: g, endpoints: map.get(g)! }));
 }
 
-function AuthenticatedView({ authed, dark }: {
+function AuthenticatedView({ authed }: {
   authed: { keyId: string; secret: string; whoami: any };
   dark: boolean;
 }) {
   const t = useTranslations('api');
-  const [activeEp, setActiveEp] = useState<string>(ENDPOINTS[0].path);
+  const sp = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // URL persistence for active endpoint
+  const activeEp = sp.get('ep') || ENDPOINTS[0].path;
+  const setActiveEp = (path: string) => {
+    const params = new URLSearchParams(sp.toString());
+    params.set('ep', path);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
   const [search, setSearch] = useState('');
+  const [navOpen, setNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Snippet language — localStorage persist
+  const [snippetLang, setSnippetLang] = useState<SnippetLang>(() => {
+    if (typeof window === 'undefined') return 'curl';
+    try {
+      const saved = localStorage.getItem('xt-api-snippet-lang') as SnippetLang | null;
+      return saved && ['curl', 'node', 'php', 'python'].includes(saved) ? saved : 'curl';
+    } catch { return 'curl'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('xt-api-snippet-lang', snippetLang); } catch { /* ignore */ }
+  }, [snippetLang]);
+
   const whoami = authed.whoami?.key;
   const scopes: string[] = whoami?.scopes || [];
   const accessible = (ep: Endpoint) => !ep.scope || scopes.includes(ep.scope);
@@ -535,113 +664,47 @@ function AuthenticatedView({ authed, dark }: {
   }, [search, t]);
 
   const groups = groupEndpoints(filtered);
-  const current = ENDPOINTS.find((e) => e.path === activeEp);
+  const current = ENDPOINTS.find((e) => e.path === activeEp) || ENDPOINTS[0];
 
-  return (
-    <div className="w-full px-4 lg:px-6 xl:px-8 py-6 grid lg:grid-cols-[300px_1fr] gap-6 max-w-[1900px] mx-auto">
-      <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-110px)] lg:overflow-y-auto -mx-2 px-2">
-        <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('sidebar.searchPlaceholder')}
-            className="w-full h-9 pl-8 pr-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-slate-400 dark:focus:ring-slate-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] text-slate-800 dark:text-slate-200"
-          />
-        </div>
-
-        <nav className="space-y-3">
-          {groups.map((g) => (
-            <div key={g.key}>
-              <div className="px-2 mb-1 text-[10px] uppercase tracking-widest font-bold text-slate-400 dark:text-slate-500">
-                {t(`groups.${g.key}`)}
-              </div>
-              <div className="space-y-0.5">
-                {g.endpoints.map((ep) => {
-                  const active = ep.path === activeEp;
-                  const allowed = accessible(ep);
-                  return (
-                    <button
-                      key={ep.path}
-                      onClick={() => setActiveEp(ep.path)}
-                      disabled={!allowed}
-                      className={cn(
-                        'w-full text-left px-2 py-1.5 rounded-md flex items-center gap-2 transition-colors',
-                        active ? 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
-                        !allowed && 'opacity-40 cursor-not-allowed',
-                      )}
-                    >
-                      <span className={cn(
-                        'px-1 py-px rounded font-mono text-[8.5px] font-bold shrink-0 w-9 text-center',
-                        ep.method === 'GET' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
-                      )}>{ep.method}</span>
-                      <span className="text-[12px] text-slate-700 dark:text-slate-300 truncate flex-1">{t(`eps.${ep.titleKey}`)}</span>
-                      {!allowed && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
-
-      <main>
-        {current && <EndpointDetail endpoint={current} authed={authed} allowed={accessible(current)} />}
-      </main>
-    </div>
-  );
-}
-
-// ════════════════════════════════════════════════════════
-// ENDPOINT DETAIL
-// ════════════════════════════════════════════════════════
-function MethodBadge({ method }: { method: 'GET' | 'POST' }) {
-  return (
-    <span className={cn(
-      'px-1.5 py-0.5 rounded font-mono text-[10px] font-bold',
-      method === 'GET' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
-    )}>{method}</span>
-  );
-}
-
-function EndpointDetail({
-  endpoint, authed, allowed,
-}: { endpoint: Endpoint; authed: { keyId: string; secret: string }; allowed: boolean }) {
-  const t = useTranslations('api');
+  // ─── Endpoint detail state (hoisted) ───
   const [params, setParams] = useState<Record<string, string>>({});
   const [response, setResponse] = useState<{ status: number; data: any; ms: number; ok: boolean } | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
     const initial: Record<string, string> = {};
-    (endpoint.params || []).forEach((p) => { initial[p.name] = p.example || ''; });
+    (current.params || []).forEach((p) => { initial[p.name] = p.example || ''; });
     setParams(initial);
     setResponse(null);
-  }, [endpoint.path]);
+  }, [current.path]);
 
   const builtPath = useMemo(() => {
-    let path = endpoint.path;
-    (endpoint.params || []).filter((p) => p.in === 'path').forEach((p) => {
+    let path = current.path;
+    (current.params || []).filter((p) => p.in === 'path').forEach((p) => {
       const v = params[p.name] || `{${p.name}}`;
       path = path.replace(`{${p.name}}`, encodeURIComponent(v));
     });
     const qs = new URLSearchParams();
-    (endpoint.params || []).filter((p) => p.in === 'query').forEach((p) => {
+    (current.params || []).filter((p) => p.in === 'query').forEach((p) => {
       const v = (params[p.name] || '').trim();
       if (v) qs.set(p.name, v);
     });
     return path + (qs.toString() ? '?' + qs.toString() : '');
-  }, [endpoint, params]);
+  }, [current, params]);
 
-  const execute = async () => {
-    setLoading(true);
+  const execute = async (epPath?: string) => {
+    const ep = epPath ? ENDPOINTS.find((e) => e.path === epPath) || current : current;
+    setExecuting(true);
     setResponse(null);
     const start = Date.now();
     try {
-      const resp = await fetch(`${window.location.origin}${builtPath}`, {
-        method: endpoint.method,
+      // Re-build path if running from palette (different endpoint)
+      let url = ep.path;
+      if (ep === current) {
+        url = builtPath;
+      }
+      const resp = await fetch(`${window.location.origin}${url}`, {
+        method: ep.method,
         headers: { 'X-API-Key': authed.keyId, 'X-API-Secret': authed.secret },
       });
       const ms = Date.now() - start;
@@ -651,30 +714,231 @@ function EndpointDetail({
     } catch (e: any) {
       setResponse({ status: 0, data: { error: e?.message || 'Network error' }, ms: Date.now() - start, ok: false });
     } finally {
-      setLoading(false);
+      setExecuting(false);
     }
   };
 
-  const curlText = useMemo(() => {
-    return `curl ${typeof window !== 'undefined' ? window.location.origin : ''}${builtPath} \\
-  -H "X-API-Key: ${authed.keyId}" \\
-  -H "X-API-Secret: ${authed.secret}"`;
-  }, [builtPath, authed]);
+  const snippetText = useMemo(() => genSnippet(snippetLang, {
+    method: current.method,
+    url: `${typeof window !== 'undefined' ? window.location.origin : ''}${builtPath}`,
+    keyId: authed.keyId,
+    secret: authed.secret,
+  }), [snippetLang, current, builtPath, authed]);
 
-  const copyCurl = async () => {
+  const copyText = async (text: string, msg: string) => {
     try {
-      await navigator.clipboard.writeText(curlText);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch { /* ignore */ }
+      await navigator.clipboard.writeText(text);
+      toast.success(msg);
+    } catch { toast.error('Failed to copy'); }
   };
 
+  // Sidebar/'/' search focus shortcut
+  const searchRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
-    <div className="space-y-5">
-      <div>
-        <div className="text-[10.5px] uppercase tracking-widest text-slate-400 dark:text-slate-500 font-bold mb-1.5">
-          {t(`groups.${endpoint.groupKey}`)}
+    <div className="w-full px-3 lg:px-5 xl:px-6 py-4 max-w-[1800px] mx-auto">
+      <div className="grid lg:grid-cols-[260px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)_440px] gap-5">
+        {/* Sidebar */}
+        <SidebarNav
+          search={search}
+          setSearch={setSearch}
+          searchRef={searchRef}
+          groups={groups}
+          activeEp={activeEp}
+          setActiveEp={(p) => { setActiveEp(p); setNavOpen(false); }}
+          accessible={accessible}
+          openPalette={() => setPaletteOpen(true)}
+          navOpen={navOpen}
+          setNavOpen={setNavOpen}
+        />
+
+        {/* Main — Description */}
+        <EndpointDescription
+          endpoint={current}
+          params={params}
+          setParams={setParams}
+          allowed={accessible(current)}
+          executing={executing}
+          execute={() => execute()}
+          builtPath={builtPath}
+        />
+
+        {/* Right rail — sticky code+response */}
+        <RightRail
+          endpoint={current}
+          response={response}
+          snippetText={snippetText}
+          snippetLang={snippetLang}
+          setSnippetLang={setSnippetLang}
+          copyText={copyText}
+        />
+      </div>
+
+      {/* Cmd+K palette */}
+      <ApiCommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        endpoints={ENDPOINTS.map((ep) => ({
+          method: ep.method,
+          path: ep.path,
+          titleKey: ep.titleKey,
+          descKey: ep.descKey,
+          groupKey: ep.groupKey,
+          scope: ep.scope,
+          accessible: accessible(ep),
+        })) as PaletteEndpoint[]}
+        onSelect={(path) => setActiveEp(path)}
+        onExecute={(path) => execute(path)}
+      />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// SIDEBAR NAV (with mobile drawer)
+// ────────────────────────────────────────────────────────
+function SidebarNav({
+  search, setSearch, searchRef, groups, activeEp, setActiveEp, accessible, openPalette, navOpen, setNavOpen,
+}: {
+  search: string; setSearch: (v: string) => void;
+  searchRef: React.RefObject<HTMLInputElement>;
+  groups: { key: string; endpoints: Endpoint[] }[];
+  activeEp: string;
+  setActiveEp: (p: string) => void;
+  accessible: (ep: Endpoint) => boolean;
+  openPalette: () => void;
+  navOpen: boolean;
+  setNavOpen: (v: boolean) => void;
+}) {
+  const t = useTranslations('api');
+
+  return (
+    <>
+      {/* Mobile hamburger button (floating, above content) */}
+      <div className="lg:hidden flex items-center justify-between mb-2">
+        <button
+          onClick={() => setNavOpen(true)}
+          className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-slate-100 dark:bg-slate-800 text-[13px] font-semibold text-slate-700 dark:text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
+          aria-label={t('sidebar.open')}
+          aria-controls="endpoint-sidebar"
+          aria-expanded={navOpen}
+        >
+          <Menu className="h-4 w-4" />
+          Endpoints
+        </button>
+        <button
+          onClick={openPalette}
+          className="inline-flex items-center gap-2 px-3 h-9 rounded-md bg-slate-100 dark:bg-slate-800 text-[13px] font-semibold text-slate-700 dark:text-slate-300 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none"
+        >
+          <Search className="h-4 w-4" />
+          <Kbd>⌘K</Kbd>
+        </button>
+      </div>
+
+      {/* Mobile backdrop */}
+      {navOpen && (
+        <div
+          className="fixed inset-0 bg-slate-950/60 z-40 lg:hidden"
+          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar — drawer on mobile, sticky on desktop */}
+      <aside
+        id="endpoint-sidebar"
+        className={cn(
+          'fixed inset-y-0 left-0 w-72 z-50 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-200',
+          'lg:relative lg:w-auto lg:translate-x-0 lg:z-auto lg:border-0',
+          'lg:sticky lg:top-[68px] lg:h-[calc(100vh-80px)] overflow-y-auto px-3 py-3',
+          navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
+        <div className="flex items-center justify-between mb-3 lg:hidden">
+          <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300">Endpoints</span>
+          <button onClick={() => setNavOpen(false)} className="p-1.5 rounded hover:bg-slate-100 dark:hover:bg-slate-800" aria-label="Close">
+            <X className="h-4 w-4 text-slate-500" />
+          </button>
         </div>
+
+        {/* Search with ⌘K hint */}
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('sidebar.searchPlaceholder')}
+            className="w-full h-9 pl-8 pr-16 rounded-md bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-[12.5px] text-slate-800 dark:text-slate-200"
+          />
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+            <Kbd>⌘K</Kbd>
+          </div>
+        </div>
+
+        <nav className="space-y-3">
+          {groups.map((g) => (
+            <div key={g.key}>
+              <div className={cn('px-2 mb-1', eyebrow)}>{t(`groups.${g.key}`)}</div>
+              <div className="space-y-0.5">
+                {g.endpoints.map((ep) => {
+                  const active = ep.path === activeEp;
+                  const allowed = accessible(ep);
+                  return (
+                    <button
+                      key={ep.path}
+                      onClick={() => allowed && setActiveEp(ep.path)}
+                      disabled={!allowed}
+                      className={cn(
+                        'w-full text-left px-2 py-1.5 rounded-md flex items-center gap-2 transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none',
+                        active ? 'bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50',
+                        !allowed && 'opacity-40 cursor-not-allowed',
+                      )}
+                    >
+                      <MethodBadge method={ep.method} size="sm" />
+                      <span className="text-[12px] text-slate-700 dark:text-slate-300 truncate flex-1">{t(`eps.${ep.titleKey}`)}</span>
+                      {!allowed && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" aria-label="Locked" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
+      </aside>
+    </>
+  );
+}
+
+// ────────────────────────────────────────────────────────
+// ENDPOINT DESCRIPTION (middle column)
+// ────────────────────────────────────────────────────────
+function EndpointDescription({
+  endpoint, params, setParams, allowed, executing, execute, builtPath,
+}: {
+  endpoint: Endpoint;
+  params: Record<string, string>;
+  setParams: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  allowed: boolean;
+  executing: boolean;
+  execute: () => void;
+  builtPath: string;
+}) {
+  const t = useTranslations('api');
+  return (
+    <section>
+      <div>
+        <div className={cn(eyebrow, 'mb-1.5')}>{t(`groups.${endpoint.groupKey}`)}</div>
         <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900 dark:text-slate-100">
           {t(`eps.${endpoint.titleKey}`)}
         </h1>
@@ -682,46 +946,44 @@ function EndpointDetail({
           {t(`eps.${endpoint.descKey}`)}
         </p>
 
-        <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
+        <div className="flex items-center gap-2 mt-4 flex-wrap">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
             <MethodBadge method={endpoint.method} />
             <code className="text-[12.5px] font-mono font-bold text-slate-800 dark:text-slate-200">{endpoint.path}</code>
           </div>
           {endpoint.scope && (
             <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-              <Lock className="h-3 w-3" />
+              <Lock className="h-3 w-3" aria-hidden="true" />
               <code className="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-mono font-bold">{endpoint.scope}</code>
             </div>
           )}
         </div>
 
         {!allowed && (
-          <div className="mt-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2.5 flex items-start gap-2">
-            <Lock className="h-4 w-4 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" />
-            <div className="text-[12px] text-rose-700 dark:text-rose-300 leading-relaxed">
-              {t('detail.scopeMissing')}
-            </div>
+          <div role="alert" className="mt-3 rounded-md bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2.5 flex items-start gap-2">
+            <Lock className="h-4 w-4 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="text-[12px] text-rose-700 dark:text-rose-300 leading-relaxed">{t('detail.scopeMissing')}</div>
           </div>
         )}
       </div>
 
-      {/* Try-it */}
-      <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
+      {/* Try-it params */}
+      <div className="mt-6 rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+            <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
             <span className="text-[12.5px] font-bold text-slate-800 dark:text-slate-200">{t('detail.tryIt')}</span>
           </div>
-          <code className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[300px]" title={builtPath}>{builtPath}</code>
+          <code className="text-[11px] text-slate-500 dark:text-slate-400 truncate max-w-[260px] xl:max-w-[300px]" title={builtPath}>{builtPath}</code>
         </div>
 
         {endpoint.params && endpoint.params.length > 0 && (
           <div className="px-5 py-4 space-y-3 border-b border-slate-200 dark:border-slate-800">
             {endpoint.params.map((p) => (
-              <div key={p.name} className="grid sm:grid-cols-[160px_1fr] gap-2 sm:gap-4 items-start">
+              <div key={p.name} className="grid grid-cols-[110px_1fr] sm:grid-cols-[140px_1fr] md:grid-cols-[160px_1fr] gap-3 items-start">
                 <div className="pt-1.5">
                   <div className="flex items-center gap-1">
-                    <code className="text-[12px] font-mono font-bold text-slate-800 dark:text-slate-200">{p.name}</code>
+                    <code className="text-[12px] font-mono font-bold text-slate-800 dark:text-slate-200 truncate">{p.name}</code>
                     {p.required && <span className="text-rose-500 text-[10px] font-bold">*</span>}
                   </div>
                   <div className="text-[9.5px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mt-0.5">{p.in}</div>
@@ -731,60 +993,114 @@ function EndpointDetail({
                     value={params[p.name] || ''}
                     onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
                     placeholder={p.example || ''}
-                    className="w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-slate-400 dark:focus:ring-slate-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
+                    aria-label={p.name}
+                    className="w-full h-9 px-3 rounded-md bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
                   />
-                  {p.description && <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{p.description}</div>}
+                  {p.descKey && (
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t(`paramDesc.${p.descKey}`)}</div>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        <div className="px-5 py-3 flex items-center justify-end gap-2">
-          <button
-            onClick={execute}
-            disabled={loading || !allowed}
-            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white disabled:opacity-50 text-white dark:text-slate-900 font-bold text-[12.5px] transition-all"
-          >
-            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
+        <div className="px-5 py-3 flex items-center justify-end">
+          <PrimaryBtn onClick={execute} disabled={executing || !allowed} size="sm">
+            {executing ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />}
             {t('detail.execute')}
-          </button>
+          </PrimaryBtn>
         </div>
       </div>
+    </section>
+  );
+}
 
-      {response && (
-        <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-900 overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className={cn(
-                'px-2 py-0.5 rounded font-mono text-[11px] font-bold',
-                response.ok ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300',
-              )}>
-                {response.status}
-              </span>
-              <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">{response.ms}ms</span>
-              <span className="text-[11px] text-slate-400 dark:text-slate-500">{t('detail.response')}</span>
-            </div>
-          </div>
-          <pre className="px-5 py-4 text-[11.5px] font-mono text-slate-800 dark:text-slate-200 leading-relaxed max-h-[500px] overflow-auto whitespace-pre-wrap break-all">
-            {typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)}
-          </pre>
-        </div>
-      )}
-
+// ────────────────────────────────────────────────────────
+// RIGHT RAIL — sticky code + response
+// ────────────────────────────────────────────────────────
+function RightRail({
+  endpoint, response, snippetText, snippetLang, setSnippetLang, copyText,
+}: {
+  endpoint: Endpoint;
+  response: { status: number; data: any; ms: number; ok: boolean } | null;
+  snippetText: string;
+  snippetLang: SnippetLang;
+  setSnippetLang: (l: SnippetLang) => void;
+  copyText: (text: string, msg: string) => void;
+}) {
+  const t = useTranslations('api');
+  const reduced = usePrefersReducedMotion();
+  return (
+    <aside className="xl:sticky xl:top-[68px] xl:max-h-[calc(100vh-80px)] xl:overflow-y-auto space-y-4 mt-4 xl:mt-0">
+      {/* Code snippet — language tabs */}
       <div className="rounded-xl ring-1 ring-slate-800 bg-slate-950 overflow-hidden">
-        <div className="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Terminal className="h-3.5 w-3.5 text-slate-400" />
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{t('detail.curl')}</span>
+        <div className="border-b border-slate-800 flex items-center justify-between bg-slate-900">
+          <div className="flex items-center">
+            {SNIPPET_LANGS.map((l) => {
+              const active = l.key === snippetLang;
+              return (
+                <button
+                  key={l.key}
+                  onClick={() => setSnippetLang(l.key)}
+                  className={cn(
+                    'px-3 py-2 text-[11px] font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none border-b-2',
+                    active
+                      ? 'border-emerald-400 text-emerald-300'
+                      : 'border-transparent text-slate-500 hover:text-slate-300',
+                  )}
+                >
+                  {l.label}
+                </button>
+              );
+            })}
           </div>
-          <button onClick={copyCurl} className="inline-flex items-center gap-1 text-[10.5px] text-slate-400 hover:text-emerald-400">
-            {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-            {copied ? t('detail.copied') : t('detail.copy')}
+          <button
+            onClick={() => copyText(snippetText, t('detail.copied'))}
+            className="px-3 h-9 inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-emerald-400 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none rounded"
+            aria-label={t('detail.copy')}
+          >
+            <Copy className="h-3 w-3" aria-hidden="true" />
+            {t('detail.copy')}
           </button>
         </div>
-        <pre className="px-4 py-3 text-[11.5px] font-mono text-emerald-300 overflow-x-auto">{curlText}</pre>
+        <pre className="px-4 py-3 text-[11.5px] font-mono text-emerald-300 overflow-x-auto leading-relaxed">{snippetText}</pre>
       </div>
-    </div>
+
+      {/* Response */}
+      <AnimatePresence mode="wait">
+        {response && (
+          <motion.div
+            key={`r-${response.status}`}
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.25 }}
+            className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-900 overflow-hidden"
+          >
+            <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className={cn(
+                  'px-2 py-0.5 rounded font-mono text-[11px] font-bold',
+                  response.ok ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300',
+                )}>{response.status}</span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">{response.ms}ms</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">{t('detail.response')}</span>
+              </div>
+              <button
+                onClick={() => copyText(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2), t('detail.copied'))}
+                className="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none rounded px-1.5 py-0.5"
+                aria-label={t('detail.copyResponse')}
+              >
+                <Copy className="h-3 w-3" aria-hidden="true" />
+                {t('detail.copy')}
+              </button>
+            </div>
+            <pre className="px-4 py-3 text-[11.5px] font-mono text-slate-800 dark:text-slate-200 leading-relaxed max-h-[500px] overflow-auto whitespace-pre-wrap break-all">
+              {typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)}
+            </pre>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </aside>
   );
 }
