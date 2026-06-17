@@ -475,13 +475,13 @@ function LandingView({ onLogin, dark }: {
     setPulseKey((p) => p + 1);
   };
 
-  // ─── Auto-advance: yozish to'xtagandan 250ms keyin, minimum uzunlik 3 ───
+  // ─── Auto-advance: yozish to'xtagandan 120ms keyin (deyarli darhol) ───
   useEffect(() => {
     if (stage !== 'key') return;
     if (!keyId.trim() || keyId.trim().length < 3) return;
     const t = setTimeout(() => {
       advanceFromKey();
-    }, 250);
+    }, 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyId, stage]);
@@ -491,7 +491,7 @@ function LandingView({ onLogin, dark }: {
     if (!secret.trim() || secret.trim().length < 3) return;
     const t = setTimeout(() => {
       advanceFromSecret();
-    }, 250);
+    }, 120);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secret, stage]);
@@ -509,10 +509,9 @@ function LandingView({ onLogin, dark }: {
     if (!keyId.trim() || stage !== 'key') return;
     firePulse('processing');
     setError(null);
-    setTimeout(() => {
-      setStage('secret');
-      setInfraState('idle');
-    }, 400);
+    // Stage darhol ochiladi (illustration pulse alohida ko'rinadi)
+    setStage('secret');
+    setTimeout(() => setInfraState('idle'), 600);
   };
 
   // Secret field — Enter yoki blur to'liq input bilan → progress to ready
@@ -520,10 +519,8 @@ function LandingView({ onLogin, dark }: {
     if (!secret.trim() || stage !== 'secret') return;
     firePulse('processing');
     setError(null);
-    setTimeout(() => {
-      setStage('ready');
-      setInfraState('idle');
-    }, 400);
+    setStage('ready');
+    setTimeout(() => setInfraState('idle'), 600);
   };
 
   const doLogin = async () => {
@@ -575,7 +572,36 @@ function LandingView({ onLogin, dark }: {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <section className="relative overflow-hidden min-h-[calc(100vh-56px)] bg-white dark:bg-slate-950">
+    <motion.section
+      className="relative overflow-hidden min-h-[calc(100vh-56px)] bg-white dark:bg-slate-950"
+      animate={{
+        x: shakeKind === 'error' && !reduced
+          ? [0, -16, 16, -14, 14, -10, 10, -6, 6, -3, 3, 0]
+          : 0,
+        scale: shakeKind === 'success' && !reduced
+          ? [1, 0.995, 1.005, 0.998, 1]
+          : 1,
+      }}
+      transition={shakeKind
+        ? { duration: 0.7, ease: 'easeOut' }
+        : { duration: 0.2 }
+      }
+    >
+      {/* Success/error flash overlay — butun ekran rangi (juda yengil) */}
+      {shakeKind && !reduced && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0, 0.18, 0] }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          className="absolute inset-0 pointer-events-none z-50"
+          style={{
+            background: shakeKind === 'success'
+              ? 'radial-gradient(ellipse at center, rgba(16,185,129,0.35) 0%, transparent 70%)'
+              : 'radial-gradient(ellipse at center, rgba(244,63,94,0.35) 0%, transparent 70%)',
+          }}
+          aria-hidden="true"
+        />
+      )}
       <div className="grid lg:grid-cols-[1.4fr_minmax(380px,460px)] min-h-[calc(100vh-56px)]">
         {/* ─── LEFT — Illustration (no card, edge-to-edge in column) ─── */}
         <div className="relative h-[300px] sm:h-[400px] lg:h-auto order-2 lg:order-1">
@@ -623,23 +649,8 @@ function LandingView({ onLogin, dark }: {
           <motion.form
             onSubmit={(e) => { e.preventDefault(); doLogin(); }}
             initial={{ opacity: 0, y: reduced ? 0 : 10 }}
-            animate={{
-              opacity: 1,
-              y: 0,
-              x: shakeKind === 'error' && !reduced
-                ? [0, -10, 10, -8, 8, -5, 5, -2, 2, 0]
-                : shakeKind === 'success' && !reduced
-                  ? [0, 0, 0, 0]
-                  : 0,
-              scale: shakeKind === 'success' && !reduced
-                ? [1, 1.018, 0.995, 1.008, 1]
-                : 1,
-            }}
-            transition={
-              shakeKind
-                ? { duration: 0.55, ease: 'easeOut' }
-                : { duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }
-            }
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }}
             className="mt-7 space-y-3 relative"
           >
             {/* Glass card wrapper */}
@@ -790,7 +801,7 @@ function LandingView({ onLogin, dark }: {
         </div>
       </div>
       </div>
-    </section>
+    </motion.section>
   );
 }
 
