@@ -479,7 +479,15 @@
     "contractDelete": "Delete contract",
     "kontragent": "Counterparty",
     "contractNumberLabel": "Contract number",
-    "contractNumberPlaceholder": "e.g. 12345VTN26MP"
+    "contractNumberPlaceholder": "e.g. 12345VTN26MP",
+    "detailCategoryLabel": "Category",
+    "detailContractLabel": "Contract",
+    "badgeCancelled": "CANCELLED",
+    "historyLabel": "History",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all"
   },
   "setup": {
     "title": "Banks",
