@@ -8,6 +8,7 @@ import {
   Plus, Pencil, Trash2, UserCog, MoreVertical, Search, X,
   Shield, Users, CheckCircle2, XCircle, KeyRound,
   LayoutGrid, List, Mail, Clock, Sparkles, Crown, Lock, Activity,
+  Eye, EyeOff, Copy,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -599,9 +600,41 @@ function UserDialog({
   const [form, setForm] = useState({
     email: '', password: '', fullName: '', roleId: '', isActive: true,
   });
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Kuchli tasodifiy parol — har turdan kamida bittadan (12 belgi)
+  function generatePassword() {
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // I, O olib tashlangan (chalkashmaslik uchun)
+    const lower = 'abcdefghijkmnpqrstuvwxyz';    // l, o olib tashlangan
+    const digits = '23456789';                   // 0, 1 olib tashlangan
+    const symbols = '!@#$%&*?';
+    const all = upper + lower + digits + symbols;
+    const pick = (set: string) => set[Math.floor(Math.random() * set.length)];
+    const chars = [pick(upper), pick(lower), pick(digits), pick(symbols)];
+    for (let i = chars.length; i < 12; i++) chars.push(pick(all));
+    // Aralashtirish (Fisher–Yates)
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    const pwd = chars.join('');
+    setForm((f) => ({ ...f, password: pwd }));
+    setShowPassword(true);
+  }
+
+  async function copyPassword() {
+    if (!form.password) return;
+    try {
+      await navigator.clipboard.writeText(form.password);
+      toast.success(tc('copied'));
+    } catch {
+      toast.error(tc('copyError'));
+    }
+  }
 
   useEffect(() => {
     if (open) {
+      setShowPassword(false);
       if (editing) {
         setForm({
           email: editing.email,
@@ -665,13 +698,44 @@ function UserDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label>{editing ? "Yangi parol (ixtiyoriy)" : "Parol"}</Label>
-            <Input
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="kamida 8 belgi"
-            />
+            <div className="flex items-center justify-between">
+              <Label>{editing ? "Yangi parol (ixtiyoriy)" : "Parol"}</Label>
+              <button
+                type="button"
+                onClick={generatePassword}
+                className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
+              >
+                <Sparkles className="h-3.5 w-3.5" /> Avto-parol
+              </button>
+            </div>
+            <div className="relative">
+              <Input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                placeholder="kamida 8 belgi"
+                className="pr-[4.5rem] font-mono tracking-wide"
+              />
+              <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  title={showPassword ? 'Yashirish' : "Ko'rsatish"}
+                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={copyPassword}
+                  disabled={!form.password}
+                  title="Nusxalash"
+                  className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </div>
           <div className="space-y-2">
             <Label>To'liq ism</Label>
