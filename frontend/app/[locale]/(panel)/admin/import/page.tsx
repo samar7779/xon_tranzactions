@@ -677,12 +677,22 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                       <span className="text-slate-300 dark:text-slate-600">·</span>
                       <span>{formatSize(b.fileSize)}</span>
                     </div>
-                    <div className="flex items-center gap-3 mt-1.5 text-[10.5px]">
-                      <span className="text-slate-500 dark:text-slate-400">Jami: <b className="text-slate-700 dark:text-slate-300">{b.rowsTotal}</b></span>
-                      <span className="text-emerald-600 dark:text-emerald-400">+{b.rowsAdded}</span>
-                      {b.rowsSkipped > 0 && <span className="text-amber-600 dark:text-amber-400">~{b.rowsSkipped}</span>}
-                      {b.rowsErrors > 0 && <span className="text-rose-600 dark:text-rose-400">×{b.rowsErrors}</span>}
+                    <div className="flex items-center gap-2 mt-1.5 text-[10.5px] flex-wrap">
+                      <span className="text-slate-500 dark:text-slate-400">Jami <b className="text-slate-700 dark:text-slate-300">{b.rowsTotal}</b></span>
+                      <span className="px-1.5 py-0.5 rounded font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">Qo'shildi {b.rowsAdded}</span>
+                      {b.rowsSkipped > 0 && <span className="px-1.5 py-0.5 rounded font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">Dublikat {b.rowsSkipped}</span>}
+                      {b.rowsErrors > 0 && <span className="px-1.5 py-0.5 rounded font-medium bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300">Xato {b.rowsErrors}</span>}
                     </div>
+                    {b.rowsAdded === 0 && (
+                      <div className="mt-1.5 text-[10px] text-amber-700 dark:text-amber-400 flex items-start gap-1">
+                        <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                        <span>
+                          Yangi tranzaksiya qo'shilmagan — {b.rowsSkipped > 0
+                            ? 'qatorlar allaqachon tizimda bor (dublikat)'
+                            : 'faylda yaroqli qator topilmadi'}. Shu sababli eksport/ko'rish bo'sh.
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {b.kind !== 'oplata-kv' && b.rowsAdded > 0 && (
@@ -696,13 +706,15 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                     )}
                     <button
                       onClick={() => handleDownload(b)}
-                      disabled={downloadingId === b.id}
-                      title="Excel yuklab olish"
+                      disabled={downloadingId === b.id || b.rowsAdded === 0}
+                      title={b.rowsAdded === 0 ? "Yangi qo'shilgan tranzaksiya yo'q — eksport bo'sh bo'ladi" : 'Excel yuklab olish'}
                       className={cn(
                         'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
-                        downloadingId === b.id
-                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 cursor-wait'
-                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30',
+                        b.rowsAdded === 0
+                          ? 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                          : downloadingId === b.id
+                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 cursor-wait'
+                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30',
                       )}
                     >
                       {downloadingId === b.id
