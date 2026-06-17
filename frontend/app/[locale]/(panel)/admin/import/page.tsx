@@ -2,12 +2,15 @@
 // rebuild trigger — oplata-kv import kartasi ko'rinishini ta'minlash uchun
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Upload, Loader2, AlertTriangle, FileSpreadsheet, X, Check,
   ChevronDown, ChevronRight, Info, Wallet, Briefcase, Users,
   FileSignature, Lock, Download, Trash2, History, Home, Landmark,
+  CheckCircle2, ArrowRight, Eye,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,6 +28,7 @@ interface ImportResult {
   errorRows: Array<{ row: number; reason: string; id?: string; contractNo?: string }>;
   skippedRows?: Array<{ row: number; id: string; contractNo: string; reason: string }>;
   duration?: number;
+  batchId?: string;
 }
 
 type ImportKind = 'transactions' | 'counterparties' | 'oplata-kv' | 'aloqa-bank' | 'customers' | 'contracts';
@@ -306,11 +310,13 @@ const ALOQA_COLUMNS: Array<{ letter: string; header: string; description: string
 ];
 
 function AloqaBankImportPanel() {
+  const { locale } = useParams<{ locale: string }>();
   const fileRef = useRef<HTMLInputElement>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [errorsOpen, setErrorsOpen] = useState(false);
   const [formatOpen, setFormatOpen] = useState(false);
+  const [resultOpen, setResultOpen] = useState(false); // natija modali
 
   const mut = useMutation({
     mutationFn: async (file: File) => {
@@ -320,6 +326,7 @@ function AloqaBankImportPanel() {
     },
     onSuccess: (r) => {
       setResult(r);
+      setResultOpen(true); // natijani modal oynada ko'rsatamiz
       if (r.errors === 0) {
         toast.success(`${r.added} ta Aloqa Bank tranzaksiyasi qo'shildi`);
       } else {
@@ -474,6 +481,58 @@ function AloqaBankImportPanel() {
       </Card>
 
       <BatchHistorySection refreshKey={mut.isSuccess ? Date.now() : 0} kind="aloqa-bank" />
+
+      {/* ─── NATIJA MODALI — import tugagach chiqadi, qo'shilgan ma'lumotni ko'rish tugmasi bilan ─── */}
+      <Dialog open={resultOpen} onOpenChange={setResultOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {result && result.errors === 0
+                ? <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                : <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
+              Import yakunlandi
+            </DialogTitle>
+            <DialogDescription className="text-[12px]">
+              {fileName ? <span className="font-medium">{fileName}</span> : 'Aloqa Bank'} fayli qayta ishlandi.
+            </DialogDescription>
+          </DialogHeader>
+
+          {result && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Stat label="Jami qator"    value={result.total}   color="slate" />
+                <Stat label="Qo'shildi"     value={result.added}   color="emerald" />
+                <Stat label="Dublikat skip" value={result.skipped} color="amber" />
+                <Stat label="Xato"          value={result.errors}  color="rose" />
+              </div>
+
+              {result.added > 0 ? (
+                <div className="rounded-xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/60 dark:bg-indigo-950/40 px-4 py-3 text-[12px] text-indigo-900 dark:text-indigo-200 flex gap-2 items-start">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                  <div>Qo'shilgan {result.added} ta tranzaksiyani quyidagi tugma orqali ko'rib, tekshirishingiz mumkin.</div>
+                </div>
+              ) : (
+                <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/40 px-4 py-3 text-[12px] text-amber-900 dark:text-amber-300 flex gap-2 items-start">
+                  <Info className="h-4 w-4 mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                  <div>Yangi tranzaksiya qo'shilmadi (barchasi dublikat yoki xato). Faylni tekshiring.</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setResultOpen(false)}>Yopish</Button>
+            {result?.batchId && result.added > 0 && (
+              <Link
+                href={`/${locale}/transactions?batchId=${result.batchId}`}
+                className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition-colors"
+              >
+                Tranzaksiyalarni ko'rish <ArrowRight className="h-4 w-4" />
+              </Link>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -496,6 +555,7 @@ interface ImportBatch {
 }
 
 function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: string }) {
+  const { locale } = useParams<{ locale: string }>();
   const qc = useQueryClient();
   const [confirmDel, setConfirmDel] = useState<ImportBatch | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -625,6 +685,15 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
+                    {b.kind !== 'oplata-kv' && b.rowsAdded > 0 && (
+                      <Link
+                        href={`/${locale}/transactions?batchId=${b.id}`}
+                        title="Import qilingan tranzaksiyalarni ko'rish"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    )}
                     <button
                       onClick={() => handleDownload(b)}
                       disabled={downloadingId === b.id}

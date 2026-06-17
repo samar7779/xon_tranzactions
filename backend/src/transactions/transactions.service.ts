@@ -69,7 +69,7 @@ export class TransactionsService {
     const {
       type, status, direction, bankId, accountId, dateFrom, dateTo, q,
       bankIds, accountIds, categoryIds, subcategoryIds, directions, contractStatuses, contractSources,
-      amountMin, amountMax, hisobNomi,
+      amountMin, amountMax, hisobNomi, batchId,
     } = query;
     const where: any = {};
     if (type) where.type = type;
@@ -77,6 +77,7 @@ export class TransactionsService {
     if (direction) where.direction = direction;
     if (bankId) where.bankId = bankId;
     if (accountId) where.accountId = accountId;
+    if (batchId) where.importBatchId = batchId;
     if (dateFrom || dateTo) {
       where.txnDate = {};
       if (dateFrom) where.txnDate.gte = parseDayStartTashkent(dateFrom);
@@ -998,6 +999,7 @@ export class TransactionsService {
     contractStatuses?: string;
     contractSources?: string;
     hisobNomi?: string;
+    batchId?: string;
   } = {}) {
     // from/to → dateFrom/dateTo aliasi (buildWhere uchun)
     let where: any = this.buildWhere({

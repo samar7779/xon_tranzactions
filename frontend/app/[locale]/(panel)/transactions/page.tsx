@@ -301,6 +301,21 @@ export default function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_searchParams]);
 
+  // URL'da ?batchId=X bo'lsa — faqat shu import yuklamasidagi tranzaksiyalarni ko'rsatamiz
+  // (Import sahifasidagi "ko'rish" tugmasi shu yerga olib keladi)
+  const [batchFilter, setBatchFilter] = useState<string | null>(null);
+  useEffect(() => {
+    const bid = _searchParams.get('batchId');
+    setBatchFilter(bid && bid.trim() ? bid.trim() : null);
+  }, [_searchParams]);
+
+  function clearBatchFilter() {
+    setBatchFilter(null);
+    const p = new URLSearchParams(_searchParams.toString());
+    p.delete('batchId');
+    _router.replace(_pathname + (p.toString() ? '?' + p.toString() : ''));
+  }
+
   // Active filter count
   const activeFilters = useMemo(() => {
     let c = 0;
@@ -332,6 +347,7 @@ export default function TransactionsPage() {
   if (dateFrom) params.set('dateFrom', dateFrom);
   if (dateTo) params.set('dateTo', dateTo);
   if (bankId !== 'all') params.set('bankId', bankId);
+  if (batchFilter) params.set('batchId', batchFilter);
   // Column filterlarni URL'ga qo'shamiz
   for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
     const set = columnFilters[col];
@@ -364,7 +380,7 @@ export default function TransactionsPage() {
 
   const contractSourcesKey = Array.from(contractSources).sort().join(',');
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey],
+    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -375,7 +391,7 @@ export default function TransactionsPage() {
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey],
+    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey, batchFilter],
     queryFn: () => {
       // Foydalanuvchi sana filtri qo'ygan bo'lsa — shu davr; aks holda 30 kun (yoki CLIENT uchun joriy oy)
       let fromStr: string;
@@ -401,6 +417,7 @@ export default function TransactionsPage() {
       if (bankId && bankId !== 'all') p.set('bankId', bankId);
       if (direction && direction !== 'all') p.set('direction', direction);
       if (q) p.set('q', q);
+      if (batchFilter) p.set('batchId', batchFilter);
       // Kolonna (Google Sheets stilidagi) filterlar — KPI ham jadval bilan bir xil bo'lishi uchun
       for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
         const set = columnFilters[col];
@@ -535,6 +552,30 @@ export default function TransactionsPage() {
       <TransactionsTabs />
 
       <div className="flex-1 p-3 sm:p-6 lg:p-8 space-y-5 w-full">
+
+        {/* ═══ IMPORT FILTRI banneri — faqat shu yuklamadagi tranzaksiyalar ═══ */}
+        {batchFilter && (
+          <div className="flex items-center gap-3 rounded-xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/70 dark:bg-indigo-950/40 px-4 py-3">
+            <span className="inline-grid place-items-center h-8 w-8 rounded-lg bg-indigo-600 text-white shrink-0">
+              <FileSpreadsheet className="h-4 w-4" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-semibold text-indigo-900 dark:text-indigo-200">
+                Import filtri yoqilgan
+              </div>
+              <div className="text-[11px] text-indigo-700/80 dark:text-indigo-300/80">
+                Faqat shu yuklamada qo'shilgan tranzaksiyalar ko'rsatilmoqda · {data?.total ?? 0} ta
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={clearBatchFilter}
+              className="inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-[12px] font-medium bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800 hover:bg-indigo-50 dark:hover:bg-slate-700 transition-colors shrink-0"
+            >
+              <X className="h-3.5 w-3.5" /> Filtrni olib tashlash
+            </button>
+          </div>
+        )}
 
         {/* ═══ KPI ROW (toggle: all / CLIENT only) ═══ */}
         <div className="relative">
@@ -2732,6 +2773,7 @@ function ColumnTh({
   activeFilterParams: string;
   tabs?: Array<{ column: string; label: string }>;
 }) {
+  const tt = useTranslations('transactions');
   // Tab bo'lsa — barcha tab'lar bo'yicha aktiv tanlovni jamlaymiz
   const tabColumns = tabs ? tabs.map((t) => t.column) : [column];
   const activeCount = tabColumns.reduce((acc, c) => acc + (columnFilters[c]?.size || 0), 0);
@@ -2752,7 +2794,7 @@ function ColumnTh({
                 ? 'bg-indigo-600 text-white'
                 : 'text-slate-400 dark:text-slate-500 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30',
             )}
-            title={active ? `${activeCount} qiymat tanlangan` : 'Filter'}
+            title={active ? tt('valuesSelected', { n: activeCount }) : tt('filterLabel')}
           >
             <FilterIcon className="h-3 w-3" />
           </button>
@@ -2797,6 +2839,7 @@ function ColumnFilterPopover({
   activeFilterParams: string;
   tabs?: Array<{ column: string; label: string }>;
 }) {
+  const tt = useTranslations('transactions');
   // Tab'lar: agar berilmagan bo'lsa — bitta tab (asosiy column)
   const tabList = tabs && tabs.length > 0 ? tabs : [{ column, label: '' }];
   const [activeTab, setActiveTab] = useState<string>(tabList[0].column);
@@ -2940,13 +2983,13 @@ function ColumnFilterPopover({
             onClick={() => setLocalSelected(new Set(allValues.map((v) => v.id)))}
             className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
           >
-            Hammasini tanlash ({distinctList.length})
+            {tt('selectAllN', { n: distinctList.length })}
           </button>
           <button
             onClick={() => setLocalSelected(new Set())}
             className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium"
           >
-            Tozalash
+            {tt('clearLabel')}
           </button>
         </div>
         <div className="relative">
@@ -2954,17 +2997,17 @@ function ColumnFilterPopover({
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Qidirish..."
+            placeholder={tt('searchEllipsis')}
             className="pl-8 h-8 text-[12px]"
           />
         </div>
         <div className="max-h-[340px] overflow-y-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 divide-y divide-slate-50 dark:divide-slate-800">
           {distinctQuery.isLoading ? (
             <div className="px-3 py-4 text-center text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
+              <Loader2 className="h-3 w-3 animate-spin" /> {tt('loading')}
             </div>
           ) : allValues.length === 0 ? (
-            <div className="px-3 py-4 text-center text-[11px] text-slate-400 dark:text-slate-500 italic">Topilmadi</div>
+            <div className="px-3 py-4 text-center text-[11px] text-slate-400 dark:text-slate-500 italic">{tt('notFound')}</div>
           ) : (
             <>
               <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
@@ -2975,7 +3018,7 @@ function ColumnFilterPopover({
                   className="w-3.5 h-3.5 rounded"
                 />
                 <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
-                  {allSelected ? 'Hammasini olib tashlash' : 'Hammasini belgilash'}
+                  {allSelected ? tt('deselectAll') : tt('selectAll')}
                 </span>
               </label>
               {allValues.map((v) => {
@@ -2994,7 +3037,7 @@ function ColumnFilterPopover({
                     <span className="text-[11px] text-slate-700 dark:text-slate-300 truncate flex-1" title={v.name}>{display}</span>
                     {isXato && (
                       <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded ring-1 ring-rose-200 dark:ring-rose-900 uppercase shrink-0">
-                        xato
+                        {tt('badgeError')}
                       </span>
                     )}
                   </label>
@@ -3006,7 +3049,7 @@ function ColumnFilterPopover({
       </div>
       <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-100 dark:border-slate-800">
         <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-[11px]">
-          Bekor
+          {tt('cancelShort')}
         </Button>
         <Button size="sm" onClick={() => onApply(localByColumn)} className="h-7 text-[11px]">
           OK
@@ -3337,10 +3380,10 @@ function CombinedEditDialog({
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Qo'lda tahrirlash
+            <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> {t('manualEdit')}
           </DialogTitle>
           <DialogDescription>
-            Avval Kontragent, keyin Kategoriya tanlang. Klient bo'lsa Shartnoma ham ko'rinadi.
+            {t('combinedEditDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -3349,23 +3392,23 @@ function CombinedEditDialog({
           <div>
             <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">1</span>
-              Kontragent
+              {t('kontragent')}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
-              {visibleTree.map((t: any) => {
-                const selected = selectedTopId === t.id;
-                const color = t.color || '#64748b';
+              {visibleTree.map((cat: any) => {
+                const selected = selectedTopId === cat.id;
+                const color = cat.color || '#64748b';
                 return (
                   <button
-                    key={t.id}
-                    onClick={() => pickKontragent(t)}
+                    key={cat.id}
+                    onClick={() => pickKontragent(cat)}
                     className={cn(
                       'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
                       selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                     style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                   >
-                    {t.name}
+                    {cat.name}
                     {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
                   </button>
                 );
@@ -3376,14 +3419,14 @@ function CombinedEditDialog({
             <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700">
               <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
                 <Search className="h-3 w-3" />
-                <span>Yoki maxsus kontragentni topish (firma nomi/INN):</span>
+                <span>{t('orFindSpecialCounterparty')}</span>
               </div>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 <Input
                   value={cpSearch}
                   onChange={(e) => setCpSearch(e.target.value)}
-                  placeholder="Misol: GREATCITY, BARAKAT, 305..."
+                  placeholder={t('counterpartySearchExample')}
                   className="pl-8 h-9 text-[12px]"
                 />
                 {cpSearch && (
@@ -3399,11 +3442,11 @@ function CombinedEditDialog({
                 <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900">
                   {cpQuery.isLoading ? (
                     <div className="flex items-center justify-center gap-2 py-4 text-slate-400 dark:text-slate-500 text-[11px]">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Qidirilmoqda...
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('searching')}
                     </div>
                   ) : cpItems.length === 0 ? (
                     <div className="px-3 py-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
-                      "{cpDebounced}" topilmadi
+                      {t('searchNotFound', { q: cpDebounced })}
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -3425,7 +3468,7 @@ function CombinedEditDialog({
                             <div className="flex-1 min-w-0">
                               <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate">{cp.name}</div>
                               {cp.inn && (
-                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">INN: {cp.inn}</div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">{t('detailFieldInn')}: {cp.inn}</div>
                               )}
                             </div>
                             {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />}
@@ -3440,14 +3483,14 @@ function CombinedEditDialog({
                 <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 rounded-md px-2 py-1.5">
                   <CheckCircle2 className="h-3 w-3 shrink-0" />
                   <span className="flex-1 truncate">
-                    Joriy: <b>{row.manualCounterparty.name}</b>
+                    {t('currentLabel')}: <b>{row.manualCounterparty.name}</b>
                   </span>
                   <button
                     onClick={() => onSaveCounterparty(null)}
                     disabled={savingCounterparty}
                     className="text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium shrink-0"
                   >
-                    Olib tashlash
+                    {t('remove')}
                   </button>
                 </div>
               )}
@@ -3459,14 +3502,14 @@ function CombinedEditDialog({
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">2</span>
-                Kategoriya
+                {t('detailCategoryLabel')}
                 <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">
-                  ({selectedTop.name} uchun)
+                  {t('forCategory', { name: selectedTop.name })}
                 </span>
               </label>
               {subs.length === 0 ? (
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700">
-                  {selectedTop.name} uchun subkategoriya yo'q — faqat top kategoriya saqlanadi
+                  {t('noSubcategory', { name: selectedTop.name })}
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
@@ -3477,7 +3520,7 @@ function CombinedEditDialog({
                       !selectedSubId ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-600 dark:text-slate-300',
                     )}
                   >
-                    — yo'q —
+                    {t('noneDash')}
                   </button>
                   {subs.map((s: any) => {
                     const selected = selectedSubId === s.id;
@@ -3509,7 +3552,7 @@ function CombinedEditDialog({
                 disabled={savingCategory}
                 className="text-[11px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium"
               >
-                Tozalash
+                {t('clearLabel')}
               </button>
               <Button
                 size="sm"
@@ -3517,7 +3560,7 @@ function CombinedEditDialog({
                 disabled={savingCategory || !categoryChanged}
                 className="h-8 text-[11px]"
               >
-                {savingCategory ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Kategoriyani saqlash'}
+                {savingCategory ? <Loader2 className="h-3 w-3 animate-spin" /> : t('saveCategory')}
               </Button>
             </div>
           )}
@@ -3527,9 +3570,9 @@ function CombinedEditDialog({
             <div className="pt-4 border-t border-indigo-200 dark:border-indigo-900">
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">3</span>
-                Shartnoma raqami
+                {t('contractNumberLabel')}
                 <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">
-                  (CRM'dan qidirish)
+                  {t('crmSearchHint')}
                 </span>
               </label>
               <div className="relative mb-2">
@@ -3537,7 +3580,7 @@ function CombinedEditDialog({
                 <Input
                   value={contractQuery}
                   onChange={(e) => setContractQuery(e.target.value)}
-                  placeholder="3+ belgi yozsangiz CRM'dan izlanadi"
+                  placeholder={t('crmSearchPlaceholder')}
                   className="pl-9 font-mono"
                 />
                 {searchQuery.isFetching && debouncedQ.length >= 3 && (
@@ -3548,7 +3591,7 @@ function CombinedEditDialog({
                 <div className="max-h-[200px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
                   {crmItems.length === 0 && !searchQuery.isFetching && (
                     <div className="px-4 py-3 text-[11px] text-rose-600 dark:text-rose-400">
-                      CRM'da topilmadi — bu raqam saqlash uchun yaroqsiz
+                      {t('crmNotFoundInvalid')}
                     </div>
                   )}
                   {crmItems.map((it: any) => {
@@ -3572,7 +3615,7 @@ function CombinedEditDialog({
                           <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100" />
                         </div>
                         <div className="text-[11px] text-slate-700 dark:text-slate-300 truncate mt-0.5 font-medium">
-                          {fullName || <span className="text-slate-400 dark:text-slate-500 italic">nomi yo'q</span>}
+                          {fullName || <span className="text-slate-400 dark:text-slate-500 italic">{t('noName')}</span>}
                         </div>
                       </button>
                     );
@@ -3585,7 +3628,7 @@ function CombinedEditDialog({
                   disabled={savingContract || !row?.contractNumber}
                   className="text-[10px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium disabled:opacity-30"
                 >
-                  Shartnomani tozalash
+                  {t('clearContract')}
                 </button>
               </div>
             </div>
@@ -3593,7 +3636,7 @@ function CombinedEditDialog({
 
           <div className="flex items-center justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button variant="outline" size="sm" onClick={onClose}>
-              Yopish
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -3903,6 +3946,7 @@ function AttachmentsDialog({
   onSaveCategory: (categoryId: string | null, subcategoryId: string | null) => void;
   onSaveContractManual: (contract: string | null) => void;
 }) {
+  const t = useTranslations('transactions');
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -3929,7 +3973,7 @@ function AttachmentsDialog({
 
   function handlePickFile(f: File) {
     if (f.size > 25 * 1024 * 1024) {
-      toast.error('Fayl 25 MB dan oshmasligi kerak');
+      toast.error(t('fileTooLarge'));
       return;
     }
     setFile(f);
@@ -3937,7 +3981,7 @@ function AttachmentsDialog({
 
   async function handleSave() {
     if (!file) {
-      toast.error('Fayl biriktirilishi shart');
+      toast.error(t('fileRequired'));
       return;
     }
     setUploading(true);
@@ -3974,14 +4018,14 @@ function AttachmentsDialog({
 
       // Telegram natijasi aniq ko'rsatiladi (yolg'on xabar bermaymiz)
       if (uploadResp.telegram?.ok) {
-        toast.success("Ariza saqlandi · Telegram'ga yuborildi", {
+        toast.success(t('applicationSavedTelegram'), {
           description: `Chat: ${uploadResp.telegram.chat || '?'}`,
         });
       } else {
-        toast.success('Ariza saqlandi', {
+        toast.success(t('applicationSaved'), {
           description: uploadResp.telegram?.error
-            ? `⚠ Telegram xato: ${uploadResp.telegram.error.slice(0, 200)}`
-            : "Telegram'ga yuborilmadi (konfiguratsiya yo'q)",
+            ? `⚠ ${t('telegramError')}: ${uploadResp.telegram.error.slice(0, 200)}`
+            : t('telegramNotSentNoConfig'),
           duration: 8000,
         });
       }
@@ -4001,14 +4045,14 @@ function AttachmentsDialog({
       setFile(null);
       if (fileRef.current) fileRef.current.value = '';
     } catch (e: any) {
-      toast.error(e?.message || 'Saqlash xato');
+      toast.error(e?.message || t('saveError'));
     } finally {
       setUploading(false);
     }
   }
 
   async function handleDelete(attId: string) {
-    if (!confirm("Arizani o'chirishni tasdiqlaysizmi? Bu amal qaytarib bo'lmaydi.")) return;
+    if (!confirm(t('confirmDeleteApplication'))) return;
     setDeletingId(attId);
     try {
       const delResp = await api.delete<{
@@ -4017,12 +4061,12 @@ function AttachmentsDialog({
         telegram?: { ok: boolean; chat?: string; error?: string };
       }>(`/transactions/${txId}/attachments/${attId}`);
       if (delResp.telegram?.ok) {
-        toast.success("Ariza o'chirildi · Telegram'ga yuborildi");
+        toast.success(t('applicationDeletedTelegram'));
       } else {
-        toast.success("Ariza o'chirildi", {
+        toast.success(t('applicationDeleted'), {
           description: delResp.telegram?.error
-            ? `⚠ Telegram xato: ${delResp.telegram.error.slice(0, 200)}`
-            : "Telegram'ga yuborilmadi",
+            ? `⚠ ${t('telegramError')}: ${delResp.telegram.error.slice(0, 200)}`
+            : t('telegramNotSent'),
           duration: 8000,
         });
       }
@@ -4030,7 +4074,7 @@ function AttachmentsDialog({
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.invalidateQueries({ queryKey: ['tx-category-history', txId] });
     } catch (e: any) {
-      toast.error(e?.message || "O'chirish xato");
+      toast.error(e?.message || t('deleteError'));
     } finally {
       setDeletingId(null);
     }
@@ -4040,7 +4084,7 @@ function AttachmentsDialog({
     try {
       await apiDownload(`/transactions/${txId}/attachments/${att.id}/download`, att.filename);
     } catch (e: any) {
-      toast.error(e?.message || 'Yuklab olish xato');
+      toast.error(e?.message || t('downloadError'));
     }
   }
 
@@ -4058,16 +4102,16 @@ function AttachmentsDialog({
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
               <Paperclip className="h-3.5 w-3.5" />
             </div>
-            Ariza orqali to'g'rilash
+            {t('applicationFixTitle')}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            Mijoz ariz bilan biriktirib tranzaksiyani to'g'rilash uchun. Har o'zgartirish Telegram'ga yuboriladi.
+            {t('applicationFixDesc')}
           </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center gap-2 py-8 text-slate-400 dark:text-slate-500 text-[12px]">
-            <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('loading')}
           </div>
         ) : existing ? (
           // ─── MAVJUD ARIZA — ko'rsatish + delete ───
@@ -4092,14 +4136,14 @@ function AttachmentsDialog({
                   </div>
                   {existing.contractNumber && (
                     <div className="text-[10.5px] text-slate-600 dark:text-slate-300 mt-1">
-                      Shartnoma: <code className="font-mono text-indigo-700 dark:text-indigo-300">{existing.contractNumber}</code>
+                      {t('detailContractLabel')}: <code className="font-mono text-indigo-700 dark:text-indigo-300">{existing.contractNumber}</code>
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleDownload(existing)}
-                    title="Yuklab olish"
+                    title={t('download')}
                     className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
                   >
                     <Download className="h-4 w-4" />
@@ -4107,7 +4151,7 @@ function AttachmentsDialog({
                   <button
                     onClick={() => handleDelete(existing.id)}
                     disabled={deletingId === existing.id}
-                    title="O'chirish"
+                    title={t('delete')}
                     className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30"
                   >
                     {deletingId === existing.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -4118,7 +4162,7 @@ function AttachmentsDialog({
             <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300 text-[11px]">
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <div>
-                Yangi ariza qo'shish uchun avval mavjudini o'chirib, qaytadan biriktiring.
+                {t('applicationReplaceHint')}
               </div>
             </div>
           </div>
@@ -4129,8 +4173,8 @@ function AttachmentsDialog({
             <div>
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">1</span>
-                Kategoriya
-                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy — tegmay ketsa o'zgarmaydi)</span>
+                {t('detailCategoryLabel')}
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">{t('optionalUnchanged')}</span>
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -4140,22 +4184,22 @@ function AttachmentsDialog({
                     selectedTopId === null ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-dashed ring-slate-300 dark:ring-slate-700 hover:ring-slate-400 dark:hover:ring-slate-600 text-slate-500 dark:text-slate-400',
                   )}
                 >
-                  — bo'sh qoldirish (kategoriya o'zgarmaydi) —
+                  {t('leaveEmptyCategory')}
                 </button>
-                {visibleTree.map((t: any) => {
-                  const selected = selectedTopId === t.id;
-                  const color = t.color || '#64748b';
+                {visibleTree.map((cat: any) => {
+                  const selected = selectedTopId === cat.id;
+                  const color = cat.color || '#64748b';
                   return (
                     <button
-                      key={t.id}
-                      onClick={() => { setSelectedTopId(t.id); setSelectedSubId(null); }}
+                      key={cat.id}
+                      onClick={() => { setSelectedTopId(cat.id); setSelectedSubId(null); }}
                       className={cn(
                         'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
                         selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                       )}
                       style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                     >
-                      {t.name}
+                      {cat.name}
                       {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
                     </button>
                   );
@@ -4168,8 +4212,8 @@ function AttachmentsDialog({
               <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
                 <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                   <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">2</span>
-                  Sub-kategoriya
-                  <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                  {t('subcategory')}
+                  <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">{t('optional')}</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   <button
@@ -4179,7 +4223,7 @@ function AttachmentsDialog({
                       !selectedSubId ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-600 dark:text-slate-300',
                     )}
                   >
-                    — yo'q —
+                    {t('noneDash')}
                   </button>
                   {subs.map((s: any) => {
                     const selected = selectedSubId === s.id;
@@ -4205,20 +4249,20 @@ function AttachmentsDialog({
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">3</span>
-                Shartnoma raqami
-                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                {t('contractNumberLabel')}
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">{t('optional')}</span>
               </label>
               <div className="relative">
                 <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input
                   value={contract}
                   onChange={(e) => setContract(e.target.value)}
-                  placeholder="Masalan: 12345VTN26MP (CRM tekshirilmasdan saqlanadi)"
+                  placeholder={t('contractPlaceholderNoCrm')}
                   className="pl-9 font-mono text-[11px]"
                 />
               </div>
               <div className="text-[10.5px] text-amber-700 dark:text-amber-300 mt-1">
-                CRM tekshirilmaydi — qo'lda kiritilgan deb belgilanadi
+                {t('crmNotCheckedManual')}
               </div>
             </div>
 
@@ -4226,8 +4270,8 @@ function AttachmentsDialog({
             <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
               <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[9px]">4</span>
-                Ariza fayli
-                <span className="text-rose-600 dark:text-rose-400 font-normal normal-case tracking-normal ml-1 font-bold">*MAJBURIY</span>
+                {t('applicationFile')}
+                <span className="text-rose-600 dark:text-rose-400 font-normal normal-case tracking-normal ml-1 font-bold">{t('requiredMark')}</span>
               </label>
               <input
                 ref={fileRef}
@@ -4250,7 +4294,7 @@ function AttachmentsDialog({
                     onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
                     className="text-[10px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium px-2"
                   >
-                    Bekor
+                    {t('cancelShort')}
                   </button>
                 </div>
               ) : (
@@ -4259,7 +4303,7 @@ function AttachmentsDialog({
                   variant="outline"
                   className="w-full h-10 border-dashed gap-2 text-slate-600 dark:text-slate-300 hover:text-violet-700 dark:hover:text-violet-300 hover:border-violet-300 dark:hover:border-violet-900"
                 >
-                  <UploadIcon className="h-4 w-4" /> Fayl tanlash (PDF/DOCX/JPG/PNG · max 25 MB)
+                  <UploadIcon className="h-4 w-4" /> {t('selectFile')}
                 </Button>
               )}
             </div>
@@ -4267,7 +4311,7 @@ function AttachmentsDialog({
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={onClose} disabled={uploading}>Yopish</Button>
+          <Button variant="outline" onClick={onClose} disabled={uploading}>{t('close')}</Button>
           {!existing && (
             <Button
               onClick={handleSave}
@@ -4275,8 +4319,8 @@ function AttachmentsDialog({
               className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
             >
               {uploading
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Saqlanmoqda...</>
-                : <><Check className="h-4 w-4" /> Saqlash va biriktirish</>}
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> {t('saving')}</>
+                : <><Check className="h-4 w-4" /> {t('saveAndAttach')}</>}
             </Button>
           )}
         </DialogFooter>
@@ -4286,6 +4330,7 @@ function AttachmentsDialog({
 }
 
 function CategoryHistoryItem({ h }: { h: any }) {
+  const t = useTranslations('transactions');
   const actorLabel = h.actorName || h.action;
   const actionColor: Record<string, string> = {
     manual:       'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
@@ -4298,9 +4343,9 @@ function CategoryHistoryItem({ h }: { h: any }) {
     attachment:   'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
   };
   const actionLabelMap: Record<string, string> = {
-    counterparty: 'KONTRAGENT',
-    contract:     'SHARTNOMA',
-    attachment:   'ARIZA',
+    counterparty: t('histKontragent'),
+    contract:     t('histContract'),
+    attachment:   t('histApplication'),
   };
   const cls = actionColor[h.action] || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
   const isCp = h.action === 'counterparty';
@@ -4313,9 +4358,9 @@ function CategoryHistoryItem({ h }: { h: any }) {
   const hasNew = !!(h.newCategoryName || h.newSubcategoryName);
   let actionLabel = '';
   let actionLabelCls = '';
-  if (!hadOld && hasNew) { actionLabel = "qo'shildi";       actionLabelCls = 'text-emerald-700 dark:text-emerald-300'; }
-  else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700 dark:text-indigo-300'; }
-  else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700 dark:text-rose-300'; }
+  if (!hadOld && hasNew) { actionLabel = t('histAdded');       actionLabelCls = 'text-emerald-700 dark:text-emerald-300'; }
+  else if (hadOld && hasNew) { actionLabel = t('histChanged'); actionLabelCls = 'text-indigo-700 dark:text-indigo-300'; }
+  else if (hadOld && !hasNew) { actionLabel = t('histDeleted');   actionLabelCls = 'text-rose-700 dark:text-rose-300'; }
 
   // Maxsus chip render: kontragent / shartnoma / ariza uchun (kategoriya emas)
   const renderSpecial = (name: string | null) => {
@@ -4327,12 +4372,12 @@ function CategoryHistoryItem({ h }: { h: any }) {
     return (
       <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded ring-1 font-semibold', cfg.bg, cfg.ring, cfg.text, isContract && 'font-mono')}>
         {cfg.icon}
-        {name || 'bo\'sh'}
+        {name || t('empty')}
       </span>
     );
   };
   const renderCat = (name: string | null, sub: string | null) => {
-    if (!name && !sub) return <span className="text-slate-400 dark:text-slate-500 italic">bo'sh</span>;
+    if (!name && !sub) return <span className="text-slate-400 dark:text-slate-500 italic">{t('empty')}</span>;
     return (
       <span className="font-semibold">
         {name || '—'}{sub && <span className="text-slate-500 dark:text-slate-400 font-normal"> / {sub}</span>}
@@ -4420,6 +4465,7 @@ function InfoRow({
   showClear?: boolean;
   onClear?: () => void;
 }) {
+  const t = useTranslations('transactions');
   const hasValue = !!(value || chip || customValue);
   return (
     <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
@@ -4464,7 +4510,7 @@ function InfoRow({
         {showClear && (
           <button
             onClick={onClear}
-            title="Tozalash"
+            title={t('clearLabel')}
             className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
@@ -4503,17 +4549,18 @@ function CompositeIdSection({ value, label }: { value: string; label: string }) 
 
 // ═══ COPY ID — kichik icon tugma, bosilganda ID'ni clipboard'ga nusxalaydi
 function CopyIdButton({ value }: { value: string }) {
+  const t = useTranslations('transactions');
   const [copied, setCopied] = useState(false);
   function copy() {
     navigator.clipboard.writeText(value);
     setCopied(true);
-    toast.success('ID nusxalandi');
+    toast.success(t('idCopied'));
     setTimeout(() => setCopied(false), 1500);
   }
   return (
     <button
       onClick={copy}
-      title={`Tranzaksiya ID nusxalash: ${value}`}
+      title={t('copyTxId', { value })}
       className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
@@ -4530,13 +4577,14 @@ function KontragentChip({
   onClick: (e: React.MouseEvent) => void;
   canEdit: boolean;
 }) {
+  const t = useTranslations('transactions');
   if (!display) {
     return canEdit ? (
       <button
         onClick={onClick}
         className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 ring-1 ring-dashed ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 dark:hover:ring-indigo-900 transition-colors"
       >
-        + tanlash
+        {t('selectChip')}
       </button>
     ) : (
       <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
@@ -4557,7 +4605,7 @@ function KontragentChip({
         canEdit && 'hover:ring-2 cursor-pointer',
       )}
       style={style}
-      title={canEdit ? "O'zgartirish uchun bosing" : display}
+      title={canEdit ? t('clickToChange') : display}
     >
       <span className="truncate max-w-[150px] leading-tight">{display}</span>
     </button>
@@ -4574,6 +4622,7 @@ function CategoryChip({
   canEdit: boolean;
   placeholder?: string;
 }) {
+  const t = useTranslations('transactions');
   if (!category) {
     if (!placeholder) return <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>;
     return canEdit ? (
@@ -4602,7 +4651,7 @@ function CategoryChip({
         canEdit && 'hover:ring-2 cursor-pointer',
       )}
       style={style}
-      title={canEdit ? "O'zgartirish uchun bosing" : category.name}
+      title={canEdit ? t('clickToChange') : category.name}
     >
       <span className="truncate max-w-[150px] leading-tight">{category.name}</span>
     </button>
@@ -4619,6 +4668,8 @@ function CategoryEditDialog({
   onSave: (categoryId: string | null, subcategoryId: string | null) => void;
   saving: boolean;
 }) {
+  const t = useTranslations('transactions');
+  const tc = useTranslations('common');
   // Daraxt ko'rinishida: bitta marta bosish — TOP yoki SUB tanlanadi
   // Parent <-> child bog'lanishi avtomatik (sub tanlansa, top auto)
   const [selectedTopId, setSelectedTopId] = useState<string | null>(null);
@@ -4665,10 +4716,10 @@ function CategoryEditDialog({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Kategoriya tanlash
+            <Wand2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> {t('selectCategory')}
           </DialogTitle>
           <DialogDescription>
-            Bevosita subkategoriyani tanlasangiz, ota-kategoriya avtomatik belgilanadi
+            {t('selectCategoryDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -4679,7 +4730,7 @@ function CategoryEditDialog({
             <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="Qidirish... (masalan: vznosy, ndfl, salary)"
+              placeholder={t('categorySearchPlaceholder')}
               className="pl-9 h-9"
             />
           </div>
@@ -4688,18 +4739,18 @@ function CategoryEditDialog({
           <div className="max-h-[400px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
             {visible.length === 0 && (
               <div className="px-4 py-6 text-center text-[11px] text-slate-400 dark:text-slate-500 italic">
-                Hech narsa topilmadi
+                {t('nothingFound')}
               </div>
             )}
-            {visible.map((t: any) => {
-              const topSelected = selectedTopId === t.id && !selectedSubId;
-              const color = t.color || '#64748b';
-              const hasChildren = (t.children || []).length > 0;
+            {visible.map((cat: any) => {
+              const topSelected = selectedTopId === cat.id && !selectedSubId;
+              const color = cat.color || '#64748b';
+              const hasChildren = (cat.children || []).length > 0;
               return (
-                <div key={t.id}>
+                <div key={cat.id}>
                   {/* Top kategoriya */}
                   <button
-                    onClick={() => pickTop(t)}
+                    onClick={() => pickTop(cat)}
                     className={cn(
                       'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
                       topSelected && 'bg-indigo-50 dark:bg-indigo-950/40',
@@ -4707,20 +4758,20 @@ function CategoryEditDialog({
                     style={topSelected ? { backgroundColor: `${color}12` } : {}}
                   >
                     <span className="font-semibold text-[12px]" style={{ color: topSelected ? color : undefined }}>
-                      {t.name}
+                      {cat.name}
                     </span>
                     {topSelected && <CheckCircle2 className="h-3.5 w-3.5" style={{ color }} />}
                     {!hasChildren && !topSelected && (
-                      <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">tanlash</span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">{t('selectChipShort')}</span>
                     )}
                   </button>
                   {/* Subkategoriyalar */}
-                  {hasChildren && (t.children || []).map((s: any) => {
+                  {hasChildren && (cat.children || []).map((s: any) => {
                     const subSelected = selectedSubId === s.id;
                     return (
                       <button
                         key={s.id}
-                        onClick={() => pickSub(t, s)}
+                        onClick={() => pickSub(cat, s)}
                         className={cn(
                           'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
                           subSelected && 'bg-indigo-50 dark:bg-indigo-950/40',
@@ -4746,7 +4797,7 @@ function CategoryEditDialog({
             const color = top?.color || '#64748b';
             return (
               <div className="rounded-lg p-2 ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/40 text-[11px]">
-                <span className="text-slate-500 dark:text-slate-400">Tanlangan: </span>
+                <span className="text-slate-500 dark:text-slate-400">{t('selectedLabel')}: </span>
                 <span className="font-semibold" style={{ color }}>{top?.name}</span>
                 {sub && (
                   <>
@@ -4764,18 +4815,18 @@ function CategoryEditDialog({
               disabled={saving}
               className="text-[12px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium"
             >
-              Tozalash
+              {tc('clear')}
             </button>
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={onClose} disabled={saving}>
-                Bekor qilish
+                {tc('cancel')}
               </Button>
               <Button
                 size="sm"
                 onClick={() => onSave(selectedTopId, selectedSubId)}
                 disabled={saving || !selectedTopId}
               >
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Saqlash'}
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : tc('save')}
               </Button>
             </div>
           </div>
@@ -4790,6 +4841,7 @@ function CategoryEditDialog({
 //  AI Sparkles dropdown ichida ko'rsatiladi (gradient karta)
 // ════════════════════════════════════════════════════
 function TodayStatsInline() {
+  const t = useTranslations('transactions');
   const today = new Date();
   // Tashkent vaqti
   const tashkentToday = new Date(today.getTime() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -4842,7 +4894,7 @@ function TodayStatsInline() {
         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/25 backdrop-blur-sm ring-1 ring-white/30">
           <Activity className="h-2.5 w-2.5" />
           <span className="text-[10px] font-bold tabular-nums">
-            {fmt(activeTab === 'debetorka' ? debTotal : total)} tx
+            {fmt(activeTab === 'debetorka' ? debTotal : total)} {t('txShort')}
           </span>
         </div>
       </div>
@@ -4858,7 +4910,7 @@ function TodayStatsInline() {
               : 'text-white/80 hover:text-white hover:bg-white/10',
           )}
         >
-          Umumiy
+          {t('tabGeneral')}
         </button>
         <button
           onClick={() => setActiveTab('debetorka')}
@@ -4870,7 +4922,7 @@ function TodayStatsInline() {
           )}
         >
           <Briefcase className="h-2.5 w-2.5" />
-          Debetorka
+          {t('tabDebtors')}
         </button>
       </div>
 
@@ -4884,17 +4936,17 @@ function TodayStatsInline() {
           <div className="grid grid-cols-2 gap-1.5">
             <div className="rounded-xl bg-gradient-to-br from-emerald-500/35 to-teal-600/25 backdrop-blur-sm ring-1 ring-emerald-300/40 p-2.5 shadow-sm">
               <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
-                <ArrowDownLeft className="h-3 w-3" /> Kirim
+                <ArrowDownLeft className="h-3 w-3" /> {t('dirIn')}
               </div>
               <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(inSum)}</div>
-              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(inCount)} ta</div>
+              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{t('countSuffix', { n: fmt(inCount) })}</div>
             </div>
             <div className="rounded-xl bg-gradient-to-br from-rose-500/35 to-pink-600/25 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 shadow-sm">
               <div className="flex items-center gap-1 text-[9px] uppercase tracking-wider font-bold text-white/95">
-                <ArrowUpRight className="h-3 w-3" /> Chiqim
+                <ArrowUpRight className="h-3 w-3" /> {t('dirOut')}
               </div>
               <div className="text-[15px] font-bold tabular-nums leading-tight mt-1">{fmt(outSum)}</div>
-              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{fmt(outCount)} ta</div>
+              <div className="text-[9.5px] text-white/80 mt-0.5 font-mono">{t('countSuffix', { n: fmt(outCount) })}</div>
             </div>
           </div>
         )
@@ -4916,14 +4968,14 @@ function TodayStatsInline() {
                   <Briefcase className="h-3.5 w-3.5" />
                 </div>
                 <div className="text-[9.5px] uppercase tracking-wider font-bold text-white/95">
-                  Uy uchun to'lov · CLIENT
+                  {t('homePaymentClient')}
                 </div>
               </div>
               <div className="flex items-baseline gap-2">
                 <span className="text-[18px] font-bold tabular-nums leading-tight">{fmt(debInSum)}</span>
                 <span className="text-[10px] text-white/80 font-mono">UZS</span>
               </div>
-              <div className="text-[10px] text-white/75 mt-0.5">{fmt(debInCount)} ta tranzaksiya</div>
+              <div className="text-[10px] text-white/75 mt-0.5">{t('txCountSuffix', { n: fmt(debInCount) })}</div>
             </div>
 
             {/* Pastda: chiqim (qaytarish) ham bo'lsa ko'rsatish */}
@@ -4931,10 +4983,10 @@ function TodayStatsInline() {
               <div className="rounded-xl bg-gradient-to-br from-rose-500/30 to-pink-600/20 backdrop-blur-sm ring-1 ring-rose-300/40 p-2.5 flex items-center gap-2">
                 <ArrowUpRight className="h-3.5 w-3.5 text-white/90 shrink-0" />
                 <div className="flex-1 text-[10px]">
-                  <div className="text-white/85 uppercase tracking-wider font-bold text-[9px]">Qaytarish</div>
+                  <div className="text-white/85 uppercase tracking-wider font-bold text-[9px]">{t('refund')}</div>
                   <div className="flex items-baseline gap-1.5 mt-0.5">
                     <span className="text-[13px] font-bold tabular-nums">{fmt(debOutSum)}</span>
-                    <span className="text-white/70 font-mono">· {fmt(debOutCount)} ta</span>
+                    <span className="text-white/70 font-mono">· {t('countSuffix', { n: fmt(debOutCount) })}</span>
                   </div>
                 </div>
               </div>
@@ -4943,7 +4995,10 @@ function TodayStatsInline() {
             {/* Foiz — debetorka umumiy kirimning qancha qismi */}
             {inSum > 0 && (
               <div className="text-[9.5px] text-white/75 text-center pt-0.5">
-                Bugungi kirimning <b className="text-white/95">{Math.round((debInSum / inSum) * 100)}%</b> uy to'lovi
+                {t.rich('todayIncomePercent', {
+                  pct: Math.round((debInSum / inSum) * 100),
+                  b: (chunks) => <b className="text-white/95">{chunks}</b>,
+                })}
               </div>
             )}
           </div>
