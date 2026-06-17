@@ -26,11 +26,6 @@ const ApiHeroInfra = dynamic(
   },
 );
 
-// Mini iridescent orb — login dekoratsiyasi
-const ApiLogin3dOrb = dynamic(
-  () => import('@/components/api-login-3d-orb').then((m) => m.ApiLogin3dOrb),
-  { ssr: false, loading: () => null },
-);
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
@@ -461,10 +456,6 @@ function LandingView({ onLogin, dark }: {
   const [error, setError] = useState<string | null>(null);
 
   // ─── Progressive disclosure state machine ───
-  // 'key'        — faqat key input ko'rinadi
-  // 'secret'     — secret input ham ochiladi
-  // 'ready'      — submit tugmasi ham ochiladi
-  // 'submitting' — server bilan tekshirilmoqda
   type Stage = 'key' | 'secret' | 'ready' | 'submitting';
   const [stage, setStage] = useState<Stage>('key');
 
@@ -476,6 +467,27 @@ function LandingView({ onLogin, dark }: {
     setInfraState(state);
     setPulseKey((p) => p + 1);
   };
+
+  // ─── Auto-advance: yozish to'xtagandan 700ms keyin, minimum uzunlik ───
+  useEffect(() => {
+    if (stage !== 'key') return;
+    if (!keyId.trim() || keyId.trim().length < 8) return;
+    const t = setTimeout(() => {
+      advanceFromKey();
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keyId, stage]);
+
+  useEffect(() => {
+    if (stage !== 'secret') return;
+    if (!secret.trim() || secret.trim().length < 8) return;
+    const t = setTimeout(() => {
+      advanceFromSecret();
+    }, 700);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [secret, stage]);
 
   const validate = (value: string) => {
     if (!value.trim()) {
@@ -556,7 +568,19 @@ function LandingView({ onLogin, dark }: {
       <div className="grid lg:grid-cols-[1.4fr_minmax(380px,460px)] min-h-[calc(100vh-56px)]">
         {/* ─── LEFT — Illustration (no card, edge-to-edge in column) ─── */}
         <div className="relative h-[300px] sm:h-[400px] lg:h-auto order-2 lg:order-1">
-          <ApiHeroInfra dark={dark} className="absolute inset-0 w-full h-full" fullBleed pulseKey={pulseKey} state={infraState} />
+          <ApiHeroInfra
+            dark={dark}
+            className="absolute inset-0 w-full h-full"
+            fullBleed
+            pulseKey={pulseKey}
+            state={infraState}
+            statusText={
+              stage === 'key' ? 'Enter API key'
+              : stage === 'secret' ? 'Enter API secret'
+              : stage === 'ready' ? 'Ready to authenticate'
+              : undefined
+            }
+          />
           {/* Right edge fade — soft transition into login area */}
           <div
             className="hidden lg:block absolute top-0 right-0 bottom-0 w-32 pointer-events-none"
@@ -572,34 +596,6 @@ function LandingView({ onLogin, dark }: {
         {/* ─── RIGHT — Login (own column, clean background) ─── */}
         <div className="relative px-6 lg:px-10 py-10 lg:py-12 flex items-center order-1 lg:order-2">
           <div className="w-full max-w-[440px] mx-auto lg:mx-0 relative">
-          {/* Header row — badge + mini 3D orb */}
-          <div className="flex items-start justify-between gap-4 mb-5">
-            <motion.div
-              initial={{ opacity: 0, y: reduced ? 0 : 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: reduced ? 0 : 0.3 }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-emerald-200 dark:ring-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest shadow-sm"
-            >
-              <span className="relative flex h-1.5 w-1.5">
-                <span className={cn('absolute inline-flex h-full w-full rounded-full bg-emerald-400', !reduced && 'animate-ping opacity-75')} />
-                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-              </span>
-              Production · v1
-            </motion.div>
-
-            {/* Mini 3D orb — login dekoratsiyasi */}
-            <motion.div
-              initial={{ opacity: 0, scale: reduced ? 1 : 0.5 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: reduced ? 0 : 0.6, delay: reduced ? 0 : 0.1 }}
-              className="relative w-20 h-20 sm:w-24 sm:h-24 -mt-2 shrink-0"
-            >
-              {/* Glow behind */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500/40 to-fuchsia-500/40 blur-2xl scale-90" aria-hidden="true" />
-              <ApiLogin3dOrb className="absolute inset-0" />
-            </motion.div>
-          </div>
-
           {/* Gradient title — compact */}
           <motion.h1
             initial={{ opacity: 0, y: reduced ? 0 : 10 }}
@@ -753,23 +749,6 @@ function LandingView({ onLogin, dark }: {
               )}
             </AnimatePresence>
 
-            {/* Trust strip */}
-            <div className="pt-3 flex items-center justify-center gap-4 text-[11.5px] text-slate-500 dark:text-slate-400">
-              <span className="inline-flex items-center gap-1.5">
-                <Lock className="h-3 w-3 text-emerald-500" />
-                <span className="font-medium">SHA-256</span>
-              </span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">/</span>
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
-                <span className="font-medium">Scope-based</span>
-              </span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">/</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Sparkles className="h-3 w-3 text-violet-500" />
-                <span className="font-medium">Audit log</span>
-              </span>
-            </div>
           </motion.form>
         </div>
       </div>
