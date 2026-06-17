@@ -17,6 +17,7 @@ export const PERMISSIONS = {
   TRANSACTIONS_MANUAL_CONTRACT: 'transactions:manual_contract', // Qo'lda shartnoma
   TRANSACTIONS_APPLICATION: 'transactions:application',         // Ariza
   TRANSACTIONS_AUTO_CATEGORIZE: 'transactions:auto_categorize', // Avto-kategoriyalash
+  TRANSACTIONS_EXPORT: 'transactions:export',                   // Excel / CSV / PDF eksport tugmasi
 
   // Tranzaksiyalar — Vipiska tab
   TRANSACTIONS_VIPISKA_VIEW: 'transactions:vipiska_view',
@@ -135,6 +136,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.TRANSACTIONS_MANUAL_CONTRACT, label: 'Qo\'lda shartnoma tugmasi' },
           { value: PERMISSIONS.TRANSACTIONS_APPLICATION, label: 'Ariza tugmasi' },
           { value: PERMISSIONS.TRANSACTIONS_AUTO_CATEGORIZE, label: 'Avto-kategoriyalash' },
+          { value: PERMISSIONS.TRANSACTIONS_EXPORT, label: 'Eksport tugmasi (Excel / CSV / PDF)' },
           { value: PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW, label: 'Vipiska sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_VIEW, label: 'Sverka sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_FIX, label: 'Sverka\'da sana/yozuv tuzatish' },
@@ -322,6 +324,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.TRANSACTIONS_MANUAL_CONTRACT,
       PERMISSIONS.TRANSACTIONS_APPLICATION,
       PERMISSIONS.TRANSACTIONS_AUTO_CATEGORIZE,
+      PERMISSIONS.TRANSACTIONS_EXPORT,
       PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_FIX,
@@ -360,6 +363,7 @@ export const SYSTEM_ROLES = [
       PERMISSIONS.TRANSACTIONS_MANUAL_CONTRACT,
       PERMISSIONS.TRANSACTIONS_APPLICATION,
       PERMISSIONS.TRANSACTIONS_AUTO_CATEGORIZE,
+      PERMISSIONS.TRANSACTIONS_EXPORT,
       PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW,
       PERMISSIONS.TRANSACTIONS_SVERKA_VIEW,
       PERMISSIONS.CHANGED_TXN_VIEW,

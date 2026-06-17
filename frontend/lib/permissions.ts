@@ -9,6 +9,7 @@ export const PERMS = {
   TRANSACTIONS_MANUAL_CONTRACT: 'transactions:manual_contract',
   TRANSACTIONS_APPLICATION: 'transactions:application',
   TRANSACTIONS_AUTO_CATEGORIZE: 'transactions:auto_categorize',
+  TRANSACTIONS_EXPORT: 'transactions:export',
   TRANSACTIONS_VIPISKA_VIEW: 'transactions:vipiska_view',
   TRANSACTIONS_SVERKA_VIEW: 'transactions:sverka_view',
   TRANSACTIONS_SVERKA_FIX: 'transactions:sverka_fix',

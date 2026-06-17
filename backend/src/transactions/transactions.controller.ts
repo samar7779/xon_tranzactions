@@ -192,7 +192,7 @@ export class TransactionsController {
   }
 
   @Get('export')
-  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_EXPORT)
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(
     @Res() res: Response,
