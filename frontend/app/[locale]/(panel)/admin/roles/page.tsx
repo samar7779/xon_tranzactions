@@ -81,7 +81,7 @@ export default function RolesPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">Rollar</div>
-            <div className="text-xs text-slate-500">Rollarni boshqaring va har biriga ruxsatlar bering</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Rollarni boshqaring va har biriga ruxsatlar bering</div>
           </div>
           {canManage && (
             <Button size="sm" onClick={openCreate} className="rounded-full font-semibold">
@@ -265,11 +265,11 @@ function RoleDialog({
           <div className="space-y-2">
             <Label className="flex items-center justify-between">
               <span>Ruxsatlar (modul · sahifa · action)</span>
-              <span className="text-xs text-slate-500 font-normal tabular-nums">
-                <span className="font-bold text-indigo-700">{permissions.size}</span> ta belgilangan
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-normal tabular-nums">
+                <span className="font-bold text-indigo-700 dark:text-indigo-300">{permissions.size}</span> ta belgilangan
               </span>
             </Label>
-            <div className="border rounded-xl divide-y divide-slate-100 max-h-[72vh] min-h-[400px] overflow-y-auto bg-slate-50/40">
+            <div className="border rounded-xl divide-y divide-slate-100 dark:divide-slate-700 max-h-[72vh] min-h-[400px] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/40">
               {tree.map((mod) => {
                 const allItems = mod.pages.flatMap((p) => p.items);
                 const modCount = allItems.filter((i) => permissions.has(i.value)).length;
@@ -277,12 +277,12 @@ function RoleDialog({
                 const modSome = modCount > 0 && !modAll;
                 const isModOpen = openModules.has(mod.module);
                 return (
-                  <div key={mod.module} className="bg-white/60">
+                  <div key={mod.module} className="bg-white/60 dark:bg-slate-900/60">
                     {/* MODUL header — bosish bilan ochiladi/yopiladi */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-indigo-50/40 transition-colors">
+                    <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors">
                       <button type="button"
                         onClick={() => toggleModuleExpand(mod.module)}
-                        className="text-slate-500 hover:text-indigo-700 transition-colors">
+                        className="text-slate-500 dark:text-slate-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                         {isModOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </button>
                       <button type="button"
@@ -295,18 +295,18 @@ function RoleDialog({
                           {modAll && <Check className="h-3 w-3" />}
                           {modSome && <span className="h-0.5 w-2 bg-white rounded" />}
                         </div>
-                        <span className="font-bold text-sm text-slate-800">{mod.module}</span>
-                        <span className="text-xs text-slate-400">· {mod.pages.length} ta sahifa</span>
+                        <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{mod.module}</span>
+                        <span className="text-xs text-slate-400 dark:text-slate-500">· {mod.pages.length} ta sahifa</span>
                       </button>
                       <span className={cn(
                         "text-xs px-2 py-0.5 rounded-full tabular-nums font-semibold",
-                        modAll ? "bg-emerald-100 text-emerald-700" : modSome ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500",
+                        modAll ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : modSome ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
                       )}>{modCount}/{allItems.length}</span>
                     </div>
 
                     {/* PAGES — modul ochiq bo'lsa ko'rinadi */}
                     {isModOpen && (
-                      <div className="border-t border-slate-100 bg-slate-50/30">
+                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30">
                         {mod.pages.map((p) => {
                           const pageKey = `${mod.module}::${p.name}`;
                           const pageCount = p.items.filter((i) => permissions.has(i.value)).length;
@@ -314,12 +314,12 @@ function RoleDialog({
                           const pageSome = pageCount > 0 && !pageAll;
                           const isPageOpen = openPages.has(pageKey);
                           return (
-                            <div key={pageKey} className="border-b border-slate-100 last:border-b-0">
+                            <div key={pageKey} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
                               {/* PAGE header */}
-                              <div className="flex items-center gap-2 pl-9 pr-3 py-2 hover:bg-indigo-50/30 transition-colors">
+                              <div className="flex items-center gap-2 pl-9 pr-3 py-2 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 transition-colors">
                                 <button type="button"
                                   onClick={() => togglePageExpand(pageKey)}
-                                  className="text-slate-400 hover:text-indigo-700 transition-colors">
+                                  className="text-slate-400 dark:text-slate-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
                                   {isPageOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                 </button>
                                 <button type="button"
@@ -332,12 +332,12 @@ function RoleDialog({
                                     {pageAll && <Check className="h-2.5 w-2.5" />}
                                     {pageSome && <span className="h-0.5 w-1.5 bg-white rounded" />}
                                   </div>
-                                  <span className="text-[13px] font-semibold text-slate-700">{p.name}</span>
-                                  {p.description && <span className="text-[10px] text-slate-400 truncate">· {p.description}</span>}
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">{p.name}</span>
+                                  {p.description && <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate">· {p.description}</span>}
                                 </button>
                                 <span className={cn(
                                   "text-[11px] px-1.5 py-0.5 rounded-full tabular-nums",
-                                  pageAll ? "bg-emerald-100 text-emerald-700" : pageSome ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500",
+                                  pageAll ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : pageSome ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
                                 )}>{pageCount}/{p.items.length}</span>
                               </div>
 
@@ -347,8 +347,8 @@ function RoleDialog({
                                   {p.items.map((i) => (
                                     <label key={i.value}
                                       className={cn(
-                                        "flex items-start gap-2 px-2 py-1.5 rounded-lg text-sm cursor-pointer hover:bg-white transition-colors",
-                                        permissions.has(i.value) && "bg-indigo-50/80 ring-1 ring-indigo-100",
+                                        "flex items-start gap-2 px-2 py-1.5 rounded-lg text-sm cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-colors",
+                                        permissions.has(i.value) && "bg-indigo-50/80 dark:bg-indigo-950/40 ring-1 ring-indigo-100 dark:ring-indigo-900",
                                       )}
                                     >
                                       <input
@@ -358,8 +358,8 @@ function RoleDialog({
                                         className="mt-0.5 accent-indigo-600 h-3.5 w-3.5 rounded"
                                       />
                                       <span className="flex-1 min-w-0">
-                                        <div className="text-[12px] font-medium text-slate-700">{i.label}</div>
-                                        <div className="text-[10px] font-mono text-slate-400 truncate">{i.value}</div>
+                                        <div className="text-[12px] font-medium text-slate-700 dark:text-slate-300">{i.label}</div>
+                                        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">{i.value}</div>
                                       </span>
                                     </label>
                                   ))}
@@ -429,9 +429,9 @@ function ProRoleCard({
         grad,
       )} />
 
-      <div className="relative bg-white rounded-2xl ring-1 ring-slate-200/80
+      <div className="relative bg-white dark:bg-slate-900 rounded-2xl ring-1 ring-slate-200/80 dark:ring-slate-700/80
                       shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.18)]
-                      hover:-translate-y-1 hover:ring-slate-300
+                      hover:-translate-y-1 hover:ring-slate-300 dark:hover:ring-slate-700
                       transition-all duration-300 overflow-hidden">
         {/* Top accent bar */}
         <div className={cn("h-1 bg-gradient-to-r", grad)} />
@@ -462,24 +462,24 @@ function ProRoleCard({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[16px] font-bold tracking-tight text-slate-900 truncate">{r.label}</span>
+                <span className="text-[16px] font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">{r.label}</span>
                 {isSuper && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900 px-1.5 py-0.5 rounded-full">
                     <Sparkles className="h-2.5 w-2.5" /> Super
                   </span>
                 )}
                 {r.isSystem && !isSuper && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-600 bg-slate-100 ring-1 ring-slate-200 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-1.5 py-0.5 rounded-full">
                     <Lock className="h-2.5 w-2.5" /> System
                   </span>
                 )}
                 {!r.isSystem && (
-                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 px-1.5 py-0.5 rounded-full">
+                  <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-1.5 py-0.5 rounded-full">
                     <Activity className="h-2.5 w-2.5" /> Custom
                   </span>
                 )}
               </div>
-              <div className="mt-1 text-[10.5px] font-mono text-slate-500 truncate">{r.name}</div>
+              <div className="mt-1 text-[10.5px] font-mono text-slate-500 dark:text-slate-400 truncate">{r.name}</div>
             </div>
 
             {/* Actions — hover'da ko'rinadi */}
@@ -488,7 +488,7 @@ function ProRoleCard({
                 <button
                   onClick={onEdit}
                   title="Tahrirlash"
-                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -496,7 +496,7 @@ function ProRoleCard({
                   <button
                     onClick={onDelete}
                     title="O'chirish"
-                    className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                    className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
@@ -507,13 +507,13 @@ function ProRoleCard({
 
           {/* Description */}
           {r.description ? (
-            <p className="text-[12px] text-slate-600 line-clamp-2 leading-relaxed mb-4 min-h-[32px]">{r.description}</p>
+            <p className="text-[12px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mb-4 min-h-[32px]">{r.description}</p>
           ) : (
-            <p className="text-[12px] text-slate-400 italic mb-4 min-h-[32px]">Tavsif yo'q</p>
+            <p className="text-[12px] text-slate-400 dark:text-slate-500 italic mb-4 min-h-[32px]">Tavsif yo'q</p>
           )}
 
           {/* Metrics grid: coverage ring + stats */}
-          <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/60 ring-1 ring-slate-100">
+          <div className="grid grid-cols-3 gap-3 mb-4 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/60 ring-1 ring-slate-100 dark:ring-slate-800">
             {/* Coverage ring (SVG) */}
             <div className="col-span-1 flex items-center justify-center">
               <div className="relative">
@@ -538,8 +538,8 @@ function ProRoleCard({
                 </svg>
                 <div className="absolute inset-0 grid place-items-center">
                   <div className="text-center">
-                    <div className="text-[15px] font-bold text-slate-800 tabular-nums leading-none">{coverage}%</div>
-                    <div className="text-[8px] uppercase tracking-wider text-slate-500 mt-0.5">qamrov</div>
+                    <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200 tabular-nums leading-none">{coverage}%</div>
+                    <div className="text-[8px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">qamrov</div>
                   </div>
                 </div>
               </div>
@@ -548,29 +548,29 @@ function ProRoleCard({
             {/* Stats */}
             <div className="col-span-2 flex flex-col justify-center gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
-                  <Zap className="h-3 w-3 text-indigo-500" />
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  <Zap className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
                   Ruxsatlar
                 </span>
-                <span className="font-bold tabular-nums text-[13px] text-slate-900">
-                  {r.permissions.length}<span className="text-[10px] text-slate-400 font-normal">/{totalPerms}</span>
+                <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
+                  {r.permissions.length}<span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">/{totalPerms}</span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
-                  <Users className="h-3 w-3 text-emerald-500" />
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  <Users className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
                   Foydalanuvchi
                 </span>
-                <span className="font-bold tabular-nums text-[13px] text-slate-900">
+                <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
                   {r._count?.users ?? 0}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600">
-                  <Eye className="h-3 w-3 text-cyan-500" />
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
+                  <Eye className="h-3 w-3 text-cyan-500 dark:text-cyan-400" />
                   Modul
                 </span>
-                <span className="font-bold tabular-nums text-[13px] text-slate-900">
+                <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
                   {Object.keys(byModule).length}
                 </span>
               </div>
@@ -583,15 +583,15 @@ function ProRoleCard({
               <span
                 key={mod}
                 className="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-md
-                           bg-slate-50 ring-1 ring-slate-200 text-slate-700"
+                           bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300"
               >
                 <span className="font-semibold">{mod}</span>
-                <span className="text-slate-400">·</span>
-                <span className="text-indigo-600 font-bold">{count}</span>
+                <span className="text-slate-400 dark:text-slate-500">·</span>
+                <span className="text-indigo-600 dark:text-indigo-400 font-bold">{count}</span>
               </span>
             ))}
             {Object.keys(byModule).length > 6 && (
-              <span className="text-[10px] text-slate-500 font-medium px-1.5 py-1">
+              <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium px-1.5 py-1">
                 +{Object.keys(byModule).length - 6}
               </span>
             )}

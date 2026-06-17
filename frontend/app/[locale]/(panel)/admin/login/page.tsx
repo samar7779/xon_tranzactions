@@ -68,8 +68,8 @@ export default function AdminLoginIssuesPage() {
             <KeyRound className="h-5 w-5" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-[16px] sm:text-[18px] font-bold text-slate-900 truncate">{t('title')}</h2>
-            <p className="text-[11px] sm:text-[12px] text-slate-500 truncate">{t('subtitle')}</p>
+            <h2 className="text-[16px] sm:text-[18px] font-bold text-slate-900 dark:text-slate-100 truncate">{t('title')}</h2>
+            <p className="text-[11px] sm:text-[12px] text-slate-500 dark:text-slate-400 truncate">{t('subtitle')}</p>
           </div>
         </div>
         <Button
@@ -86,26 +86,26 @@ export default function AdminLoginIssuesPage() {
 
       {/* Body */}
       {isLoading ? (
-        <div className="grid place-items-center py-20 text-slate-400 text-[12px]">
+        <div className="grid place-items-center py-20 text-slate-400 dark:text-slate-500 text-[12px]">
           <Loader2 className="h-6 w-6 animate-spin mb-2" />
           {tc('loading')}
         </div>
       ) : items.length === 0 ? (
-        <div className="bg-white border border-emerald-200 rounded-xl p-10 text-center shadow-sm">
-          <div className="w-14 h-14 rounded-full bg-emerald-50 grid place-items-center mx-auto mb-3">
-            <CheckCircle2 className="h-7 w-7 text-emerald-600" />
+        <div className="bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-900 rounded-xl p-10 text-center shadow-sm">
+          <div className="w-14 h-14 rounded-full bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center mx-auto mb-3">
+            <CheckCircle2 className="h-7 w-7 text-emerald-600 dark:text-emerald-400" />
           </div>
-          <div className="text-[15px] font-bold text-slate-900">{t('allGoodTitle')}</div>
-          <div className="text-[12px] text-slate-500 mt-1.5 max-w-md mx-auto">{t('allGoodBody')}</div>
+          <div className="text-[15px] font-bold text-slate-900 dark:text-slate-100">{t('allGoodTitle')}</div>
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 mt-1.5 max-w-md mx-auto">{t('allGoodBody')}</div>
         </div>
       ) : (
         <div className="space-y-3">
           {/* Summary banner */}
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-3">
-            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-[12px] text-amber-900 leading-relaxed">
+          <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 rounded-xl px-4 py-3 flex items-start gap-3">
+            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-[12px] text-amber-900 dark:text-amber-300 leading-relaxed">
               <span className="font-semibold">{t('summaryTitle', { count: items.length })}</span>
-              <span className="mx-1.5 text-amber-700">·</span>
+              <span className="mx-1.5 text-amber-700 dark:text-amber-300">·</span>
               <span>{t('summaryHint')}</span>
             </div>
           </div>
@@ -145,7 +145,7 @@ function IssueCard({ issue, onUpdate }: { issue: AuthIssue; onUpdate: () => void
   const fullLogin = (issue.loginPrefix || '') + issue.loginName;
 
   return (
-    <div className="bg-white border border-rose-200 rounded-xl overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-slate-900 border border-rose-200 dark:border-rose-900 rounded-xl overflow-hidden shadow-sm">
       {/* Top stripe — red accent */}
       <div className="h-1 bg-gradient-to-r from-rose-500 via-amber-500 to-rose-500" />
 
@@ -158,36 +158,36 @@ function IssueCard({ issue, onUpdate }: { issue: AuthIssue; onUpdate: () => void
           {/* Main info */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap mb-1">
-              <h3 className="text-[14px] font-bold text-slate-900">{issue.bankName}</h3>
+              <h3 className="text-[14px] font-bold text-slate-900 dark:text-slate-100">{issue.bankName}</h3>
               {issue.label && (
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                   {issue.label}
                 </span>
               )}
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-rose-700 bg-rose-50 ring-1 ring-rose-200 px-1.5 py-0.5 rounded">
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-1.5 py-0.5 rounded">
                 {t('authError')}
               </span>
             </div>
 
             {/* Login + accounts count */}
-            <div className="flex items-center gap-3 flex-wrap text-[11.5px] text-slate-600">
+            <div className="flex items-center gap-3 flex-wrap text-[11.5px] text-slate-600 dark:text-slate-300">
               <span className="flex items-center gap-1">
-                <Lock className="h-3 w-3 text-slate-400" />
+                <Lock className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                 <span className="font-mono">{fullLogin}</span>
               </span>
               <span className="flex items-center gap-1">
-                <Hash className="h-3 w-3 text-slate-400" />
+                <Hash className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                 {t('failingAccounts', { count: issue.totalFailingAccounts })}
               </span>
               <span className="flex items-center gap-1">
-                <Shield className="h-3 w-3 text-slate-400" />
+                <Shield className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                 {issue.authMode}
               </span>
             </div>
 
             {/* Latest error time */}
-            <div className="mt-1 text-[10.5px] text-slate-500">
-              {t('latestError')}: <span className="tabular-nums font-medium text-rose-700">{formatDateTime(issue.latestErrorAt)}</span>
+            <div className="mt-1 text-[10.5px] text-slate-500 dark:text-slate-400">
+              {t('latestError')}: <span className="tabular-nums font-medium text-rose-700 dark:text-rose-300">{formatDateTime(issue.latestErrorAt)}</span>
             </div>
           </div>
 
@@ -204,27 +204,27 @@ function IssueCard({ issue, onUpdate }: { issue: AuthIssue; onUpdate: () => void
 
         {/* Failing accounts list */}
         <div className="mt-4 space-y-1.5">
-          <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1">
+          <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1">
             {t('failingAccountsLabel')}
           </div>
           {issue.accounts.slice(0, 5).map((acc) => (
-            <div key={acc.accountId} className="bg-slate-50 rounded-lg px-3 py-2 text-[11.5px]">
+            <div key={acc.accountId} className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 text-[11.5px]">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="font-mono font-semibold text-slate-800">
+                <div className="font-mono font-semibold text-slate-800 dark:text-slate-200">
                   {acc.accountNo}
-                  {acc.ownerName && <span className="text-slate-500 font-normal ml-1.5">· {acc.ownerName}</span>}
+                  {acc.ownerName && <span className="text-slate-500 dark:text-slate-400 font-normal ml-1.5">· {acc.ownerName}</span>}
                 </div>
-                <div className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(acc.lastFailedAt)}</div>
+                <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(acc.lastFailedAt)}</div>
               </div>
               {acc.errorMessage && (
-                <div className="text-[10.5px] text-rose-700 mt-1 leading-relaxed line-clamp-2">
+                <div className="text-[10.5px] text-rose-700 dark:text-rose-300 mt-1 leading-relaxed line-clamp-2">
                   {acc.errorMessage}
                 </div>
               )}
             </div>
           ))}
           {issue.accounts.length > 5 && (
-            <div className="text-[10.5px] text-slate-500 px-3 italic">
+            <div className="text-[10.5px] text-slate-500 dark:text-slate-400 px-3 italic">
               {t('andMore', { count: issue.accounts.length - 5 })}
             </div>
           )}
@@ -291,24 +291,24 @@ function UpdatePasswordDialog({
 
         <div className="space-y-3 pt-2">
           {/* Bank info */}
-          <div className="bg-slate-50 rounded-lg px-3 py-2 text-[11px] space-y-0.5">
+          <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-3 py-2 text-[11px] space-y-0.5">
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">{t('bankLabel')}:</span>
-              <span className="font-semibold text-slate-800">{issue.bankName}</span>
+              <span className="text-slate-500 dark:text-slate-400">{t('bankLabel')}:</span>
+              <span className="font-semibold text-slate-800 dark:text-slate-200">{issue.bankName}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">{t('loginLabel')}:</span>
-              <span className="font-mono font-semibold text-slate-800">{fullLogin}</span>
+              <span className="text-slate-500 dark:text-slate-400">{t('loginLabel')}:</span>
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{fullLogin}</span>
             </div>
             <div className="flex justify-between gap-2">
-              <span className="text-slate-500">{t('failingAccountsLabel')}:</span>
-              <span className="font-semibold text-rose-700">{issue.totalFailingAccounts}</span>
+              <span className="text-slate-500 dark:text-slate-400">{t('failingAccountsLabel')}:</span>
+              <span className="font-semibold text-rose-700 dark:text-rose-300">{issue.totalFailingAccounts}</span>
             </div>
           </div>
 
           {/* New password */}
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               {t('newPasswordLabel')}
             </label>
             <div className="relative">
@@ -323,7 +323,7 @@ function UpdatePasswordDialog({
               <button
                 type="button"
                 onClick={() => setShowPwd((s) => !s)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                 tabIndex={-1}
               >
                 {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -333,7 +333,7 @@ function UpdatePasswordDialog({
 
           {/* Confirm password */}
           <div className="space-y-1.5">
-            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+            <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
               {t('confirmPasswordLabel')}
             </label>
             <Input
@@ -344,7 +344,7 @@ function UpdatePasswordDialog({
               className="font-mono"
             />
             {confirmPassword.length > 0 && confirmPassword !== password && (
-              <div className="text-[10.5px] text-rose-600 flex items-center gap-1">
+              <div className="text-[10.5px] text-rose-600 dark:text-rose-400 flex items-center gap-1">
                 <AlertCircle className="h-3 w-3" />
                 {t('passwordMismatch')}
               </div>
@@ -352,7 +352,7 @@ function UpdatePasswordDialog({
           </div>
 
           {/* Hint */}
-          <div className="text-[10.5px] text-amber-700 bg-amber-50 px-2 py-1.5 rounded-md ring-1 ring-amber-200 flex items-start gap-1.5">
+          <div className="text-[10.5px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5 rounded-md ring-1 ring-amber-200 dark:ring-amber-900 flex items-start gap-1.5">
             <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
             <span>{t('updateHint')}</span>
           </div>

@@ -43,14 +43,14 @@ interface AdminItem {
 interface RoleItem { id: string; name: string; label: string }
 
 const ROLE_COLORS: Record<string, { grad: string; bg: string; text: string }> = {
-  SUPERADMIN: { grad: 'from-rose-500 to-red-600', bg: 'bg-rose-50', text: 'text-rose-700' },
-  ADMIN: { grad: 'from-indigo-500 to-blue-600', bg: 'bg-indigo-50', text: 'text-indigo-700' },
-  ACCOUNTANT: { grad: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  VIEWER: { grad: 'from-slate-400 to-slate-500', bg: 'bg-slate-50', text: 'text-slate-700' },
+  SUPERADMIN: { grad: 'from-rose-500 to-red-600', bg: 'bg-rose-50 dark:bg-rose-950/40', text: 'text-rose-700 dark:text-rose-300' },
+  ADMIN: { grad: 'from-indigo-500 to-blue-600', bg: 'bg-indigo-50 dark:bg-indigo-950/40', text: 'text-indigo-700 dark:text-indigo-300' },
+  ACCOUNTANT: { grad: 'from-emerald-500 to-teal-600', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300' },
+  VIEWER: { grad: 'from-slate-400 to-slate-500', bg: 'bg-slate-50 dark:bg-slate-900', text: 'text-slate-700 dark:text-slate-300' },
 };
 
 function getRoleColor(role: string) {
-  return ROLE_COLORS[role] || { grad: 'from-purple-500 to-violet-600', bg: 'bg-purple-50', text: 'text-purple-700' };
+  return ROLE_COLORS[role] || { grad: 'from-purple-500 to-violet-600', bg: 'bg-purple-50 dark:bg-purple-950/40', text: 'text-purple-700 dark:text-purple-300' };
 }
 
 function getInitials(name?: string | null, email?: string) {
@@ -143,15 +143,15 @@ export default function AdminUsersPage() {
           )}
 
           <div className="relative flex-1 min-w-[240px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
-              className="pl-9 h-10 rounded-xl bg-white border-slate-200 focus-visible:bg-white"
+              className="pl-9 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus-visible:bg-white dark:focus-visible:bg-slate-900"
               placeholder="Email yoki ism..."
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
             {q && (
-              <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
+              <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" onClick={() => setQ('')}>
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
@@ -161,8 +161,8 @@ export default function AdminUsersPage() {
             <SelectTrigger className={cn(
               "h-10 rounded-xl text-sm font-medium w-auto min-w-[160px] border-0",
               roleFilter !== 'all'
-                ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                : "bg-white ring-1 ring-slate-200 text-slate-700",
+                ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900"
+                : "bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300",
             )}>
               <SelectValue placeholder="Hamma rollar" />
             </SelectTrigger>
@@ -175,12 +175,12 @@ export default function AdminUsersPage() {
           </Select>
 
           {/* View toggle — Card / Table */}
-          <div className="inline-flex items-center gap-0.5 bg-slate-100 p-0.5 rounded-xl h-10">
+          <div className="inline-flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl h-10">
             <button
               onClick={() => setViewMode('card')}
               className={cn(
                 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-                viewMode === 'card' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                viewMode === 'card' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
               )}
               title="Kartochka ko'rinish"
             >
@@ -191,7 +191,7 @@ export default function AdminUsersPage() {
               onClick={() => setViewMode('table')}
               className={cn(
                 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-                viewMode === 'table' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                viewMode === 'table' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
               )}
               title="Jadval ko'rinish"
             >
@@ -263,7 +263,7 @@ function KpiTile({
       <div className={cn("absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-30 bg-gradient-to-br", m.grad)} />
       <CardContent className="p-5 relative">
         <div className="flex items-start justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 dark:text-slate-400">{label}</div>
           <div className={cn("w-9 h-9 rounded-xl grid place-items-center bg-gradient-to-br text-white shadow-sm", m.grad)}>
             <Icon className="h-4 w-4" />
           </div>
@@ -307,12 +307,12 @@ function ProAdminCard({
       )} />
 
       <div className={cn(
-        "relative bg-white rounded-2xl ring-1 overflow-hidden transition-all duration-300",
+        "relative bg-white dark:bg-slate-900 rounded-2xl ring-1 overflow-hidden transition-all duration-300",
         "shadow-[0_1px_3px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_50px_-15px_rgba(0,0,0,0.18)]",
         "hover:-translate-y-1",
         isActive
-          ? "ring-slate-200/80 hover:ring-slate-300"
-          : "ring-rose-200 grayscale-[60%] opacity-80 hover:opacity-100 hover:grayscale-0",
+          ? "ring-slate-200/80 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-600"
+          : "ring-rose-200 dark:ring-rose-900 grayscale-[60%] opacity-80 hover:opacity-100 hover:grayscale-0",
       )}>
         {/* Top accent bar */}
         <div className={cn("h-1 bg-gradient-to-r", c.grad)} />
@@ -320,7 +320,7 @@ function ProAdminCard({
         {/* Bloklangan watermark */}
         {!isActive && (
           <div className="absolute top-3 right-12 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md
-                          bg-rose-100 ring-1 ring-rose-300 text-rose-700 text-[10px] font-bold uppercase tracking-wider
+                          bg-rose-100 dark:bg-rose-950/40 ring-1 ring-rose-300 dark:ring-rose-900 text-rose-700 dark:text-rose-300 text-[10px] font-bold uppercase tracking-wider
                           animate-pulse">
             <Lock className="h-2.5 w-2.5" /> Bloklangan
           </div>
@@ -329,7 +329,7 @@ function ProAdminCard({
         {/* Online pulse */}
         {isActive && isOnline && (
           <div className="absolute top-3 right-12 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md
-                          bg-emerald-50 ring-1 ring-emerald-300 text-emerald-700 text-[10px] font-bold uppercase tracking-wider">
+                          bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-300 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
               <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
@@ -349,14 +349,14 @@ function ProAdminCard({
               )} />
               <div className={cn(
                 "relative w-14 h-14 rounded-2xl bg-gradient-to-br grid place-items-center text-white font-bold text-base",
-                "ring-2 ring-white shadow-md",
+                "ring-2 ring-white dark:ring-slate-900 shadow-md",
                 c.grad,
               )}>
                 {getInitials(u.fullName, u.email)}
               </div>
               {/* Status dot */}
               <span className={cn(
-                "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-white grid place-items-center",
+                "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full ring-2 ring-white dark:ring-slate-900 grid place-items-center",
                 isActive ? 'bg-emerald-500' : 'bg-rose-500',
               )}>
                 {isActive
@@ -367,12 +367,12 @@ function ProAdminCard({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-[15px] font-bold tracking-tight text-slate-900 truncate">
+                <span className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">
                   {u.fullName || '—'}
                 </span>
                 {isSuper && <Crown className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
               </div>
-              <div className="flex items-center gap-1 mt-0.5 text-[11.5px] text-slate-500 min-w-0">
+              <div className="flex items-center gap-1 mt-0.5 text-[11.5px] text-slate-500 dark:text-slate-400 min-w-0">
                 <Mail className="h-3 w-3 shrink-0" />
                 <span className="truncate">{u.email}</span>
               </div>
@@ -384,7 +384,7 @@ function ProAdminCard({
                 <button
                   onClick={onEdit}
                   title="Tahrirlash"
-                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
@@ -394,8 +394,8 @@ function ProAdminCard({
                   className={cn(
                     "w-8 h-8 rounded-lg grid place-items-center transition-colors",
                     isActive
-                      ? "bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white"
-                      : "bg-slate-100 hover:bg-emerald-600 text-slate-600 hover:text-white",
+                      ? "bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white"
+                      : "bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 text-slate-600 dark:text-slate-300 hover:text-white",
                   )}
                 >
                   {isActive ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -403,7 +403,7 @@ function ProAdminCard({
                 <button
                   onClick={onDelete}
                   title="O'chirish"
-                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                  className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -422,36 +422,36 @@ function ProAdminCard({
             </span>
             {isRecent && isActive && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
-                               bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 text-[10px] font-semibold">
+                               bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
                 <Sparkles className="h-2.5 w-2.5" /> Faol foydalanuvchi
               </span>
             )}
           </div>
 
           {/* Info grid */}
-          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/60 ring-1 ring-slate-100">
+          <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-gradient-to-br from-slate-50 dark:from-slate-800 to-slate-100/60 dark:to-slate-800/60 ring-1 ring-slate-100 dark:ring-slate-700">
             <div className="space-y-0.5">
-              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-1">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
                 <Clock className="h-2.5 w-2.5" />
                 Oxirgi kirish
               </div>
-              <div className="text-[11.5px] font-semibold text-slate-700">
+              <div className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
                 {u.lastLoginAt
                   ? lastLoginAgo === 0
-                    ? <span className="text-emerald-700">Bugun</span>
+                    ? <span className="text-emerald-700 dark:text-emerald-300">Bugun</span>
                     : lastLoginAgo === 1
-                      ? <span className="text-emerald-600">Kecha</span>
+                      ? <span className="text-emerald-600 dark:text-emerald-400">Kecha</span>
                       : lastLoginAgo && lastLoginAgo <= 7
-                        ? <span className="text-amber-600">{lastLoginAgo} kun oldin</span>
-                        : <span className="text-slate-500">{lastLoginAgo} kun oldin</span>
-                  : <span className="text-slate-400 italic">Hech qachon</span>}
+                        ? <span className="text-amber-600 dark:text-amber-400">{lastLoginAgo} kun oldin</span>
+                        : <span className="text-slate-500 dark:text-slate-400">{lastLoginAgo} kun oldin</span>
+                  : <span className="text-slate-400 dark:text-slate-500 italic">Hech qachon</span>}
               </div>
             </div>
             <div className="space-y-0.5 text-right">
-              <div className="text-[9px] uppercase tracking-wider text-slate-500 font-semibold">
+              <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                 Yaratilgan
               </div>
-              <div className="text-[11.5px] font-semibold text-slate-700">
+              <div className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
                 {formatDateTime(u.createdAt)}
               </div>
             </div>
@@ -478,7 +478,7 @@ function AdminTable({
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
-          <thead className="bg-slate-50 text-slate-500 uppercase text-[10.5px] tracking-wider">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10.5px] tracking-wider">
             <tr>
               <th className="text-left px-4 py-3">Foydalanuvchi</th>
               <th className="text-left px-3 py-3">Rol</th>
@@ -488,7 +488,7 @@ function AdminTable({
               <th className="text-right px-4 py-3">Amallar</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
             {items.map((u) => {
               const role = u.roleRef?.label || '—';
               const roleKey = u.roleRef?.name || '';
@@ -496,8 +496,8 @@ function AdminTable({
               const isSuper = roleKey === 'SUPERADMIN';
               return (
                 <tr key={u.id} className={cn(
-                  "hover:bg-slate-50/60 transition-colors",
-                  !u.isActive && "opacity-50 bg-rose-50/30",
+                  "hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors",
+                  !u.isActive && "opacity-50 bg-rose-50/30 dark:bg-rose-950/20",
                 )}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -508,11 +508,11 @@ function AdminTable({
                         {getInitials(u.fullName, u.email)}
                       </div>
                       <div className="min-w-0">
-                        <div className="font-semibold text-slate-900 flex items-center gap-1">
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1">
                           {u.fullName || '—'}
                           {isSuper && <Crown className="h-3 w-3 text-amber-500" />}
                         </div>
-                        <div className="text-[11px] text-slate-500 truncate">{u.email}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{u.email}</div>
                       </div>
                     </div>
                   </td>
@@ -523,7 +523,7 @@ function AdminTable({
                   </td>
                   <td className="px-3 py-3">
                     {u.isActive ? (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-700 text-[12px] font-semibold">
+                      <span className="inline-flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 text-[12px] font-semibold">
                         <span className="relative flex h-2 w-2">
                           <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
                           <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
@@ -531,16 +531,16 @@ function AdminTable({
                         Faol
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 text-rose-600 text-[12px] font-semibold">
+                      <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400 text-[12px] font-semibold">
                         <Lock className="h-3 w-3" />
                         Bloklangan
                       </span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-slate-700 text-[12px]">
-                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : <span className="text-slate-400 italic">Hech qachon</span>}
+                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300 text-[12px]">
+                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : <span className="text-slate-400 dark:text-slate-500 italic">Hech qachon</span>}
                   </td>
-                  <td className="px-3 py-3 text-slate-700 text-[12px]">
+                  <td className="px-3 py-3 text-slate-700 dark:text-slate-300 text-[12px]">
                     {formatDateTime(u.createdAt)}
                   </td>
                   <td className="px-4 py-3 text-right">
@@ -549,7 +549,7 @@ function AdminTable({
                         <button
                           onClick={() => onEdit(u)}
                           title="Tahrirlash"
-                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-indigo-600 text-slate-600 hover:text-white transition-colors"
+                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -559,8 +559,8 @@ function AdminTable({
                           className={cn(
                             "w-8 h-8 rounded-lg grid place-items-center transition-colors",
                             u.isActive
-                              ? "bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white"
-                              : "bg-slate-100 hover:bg-emerald-600 text-slate-600 hover:text-white",
+                              ? "bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white"
+                              : "bg-slate-100 dark:bg-slate-800 hover:bg-emerald-600 text-slate-600 dark:text-slate-300 hover:text-white",
                           )}
                         >
                           {u.isActive ? <XCircle className="h-3.5 w-3.5" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -568,7 +568,7 @@ function AdminTable({
                         <button
                           onClick={() => onDelete(u)}
                           title="O'chirish"
-                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 hover:bg-rose-600 text-slate-600 hover:text-white transition-colors"
+                          className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>

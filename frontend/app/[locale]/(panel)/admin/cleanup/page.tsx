@@ -85,11 +85,11 @@ export default function CleanupPage() {
           <Card className="border-0 shadow-soft overflow-hidden">
             <div className="h-1.5 bg-gradient-to-r from-rose-500 to-red-600" />
             <CardContent className="p-6 flex items-start gap-3">
-              <ShieldAlert className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+              <ShieldAlert className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div>
                 <div className="text-base font-bold tracking-tight">{t('deniedTitle')}</div>
                 <div
-                  className="text-xs text-slate-500 mt-1"
+                  className="text-xs text-slate-500 dark:text-slate-400 mt-1"
                   dangerouslySetInnerHTML={{
                     __html: t('deniedBody', { role: me?.role || '—' })
                       .replace('SUPERADMIN', '<b>SUPERADMIN</b>')
@@ -132,12 +132,12 @@ export default function CleanupPage() {
               <div className="h-1 bg-gradient-to-r from-amber-400 to-orange-500" />
               <CardContent className="p-5">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-50 ring-1 ring-amber-200 grid place-items-center shrink-0">
-                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 grid place-items-center shrink-0">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-sm font-bold tracking-tight text-amber-900">{t('warningTitle')}</div>
-                    <div className="text-[12px] text-amber-800 mt-1 leading-relaxed">{t('warningBody')}</div>
+                    <div className="text-sm font-bold tracking-tight text-amber-900 dark:text-amber-300">{t('warningTitle')}</div>
+                    <div className="text-[12px] text-amber-800 dark:text-amber-300 mt-1 leading-relaxed">{t('warningBody')}</div>
                   </div>
                 </div>
               </CardContent>
@@ -146,11 +146,11 @@ export default function CleanupPage() {
             <Card className="border-0 shadow-soft overflow-hidden">
               <div className="h-1 bg-gradient-to-r from-slate-400 to-slate-600" />
               <CardContent className="p-5">
-                <div className="flex items-center gap-2 mb-3 text-slate-500">
+                <div className="flex items-center gap-2 mb-3 text-slate-500 dark:text-slate-400">
                   <ListChecks className="h-3.5 w-3.5" />
                   <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('whatDeleted')}</span>
                 </div>
-                <ul className="space-y-2 text-[12px] text-slate-700">
+                <ul className="space-y-2 text-[12px] text-slate-700 dark:text-slate-300">
                   <li className="flex items-start gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1.5 shrink-0" />
                     <span>{t('item1')}</span>
@@ -170,11 +170,11 @@ export default function CleanupPage() {
             <Card className="border-0 shadow-soft overflow-hidden">
               <div className="h-1 bg-gradient-to-r from-indigo-400 to-blue-500" />
               <CardContent className="p-5 flex items-start gap-3">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 ring-1 ring-indigo-200 grid place-items-center shrink-0">
-                  <Info className="h-4 w-4 text-indigo-600" />
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 grid place-items-center shrink-0">
+                  <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                 </div>
                 <div
-                  className="text-[12px] text-slate-600 leading-relaxed"
+                  className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed"
                   dangerouslySetInnerHTML={{ __html: t.raw('safetyTip') as string }}
                 />
               </CardContent>
@@ -187,7 +187,7 @@ export default function CleanupPage() {
               <div className="h-1 bg-gradient-to-r from-rose-500 to-red-600" />
               <CardContent className="p-6 space-y-5">
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
                     {t('accountLabel')} <span className="text-rose-500">*</span>
                   </Label>
                   <Input
@@ -199,8 +199,8 @@ export default function CleanupPage() {
                     className="font-mono h-12 text-base tracking-wider"
                   />
                   <div className="flex items-center justify-between">
-                    <div className="text-[10px] text-slate-500">{t('accountCount', { n: accountNo.length })}</div>
-                    <div className="h-1 w-32 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('accountCount', { n: accountNo.length })}</div>
+                    <div className="h-1 w-32 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
@@ -213,7 +213,7 @@ export default function CleanupPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
                     {t('confirmLabel')} <span className="text-rose-500">*</span>
                   </Label>
                   <Input
@@ -229,7 +229,7 @@ export default function CleanupPage() {
                     )}
                   />
                   {confirm && confirm !== accountNo && (
-                    <div className="text-[10px] text-rose-600">{t('confirmMismatch')}</div>
+                    <div className="text-[10px] text-rose-600 dark:text-rose-400">{t('confirmMismatch')}</div>
                   )}
                 </div>
 
@@ -248,12 +248,12 @@ export default function CleanupPage() {
                 </Button>
 
                 {lastResult && lastResult.ok && (
-                  <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-5 py-4">
-                    <div className="flex items-center gap-2 text-[12px] font-bold text-emerald-900 uppercase tracking-wider">
-                      <Database className="h-4 w-4 text-emerald-600" />
+                  <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-5 py-4">
+                    <div className="flex items-center gap-2 text-[12px] font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                      <Database className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       {t('resultTitle')}
                     </div>
-                    <div className="text-[12px] text-emerald-800 mt-2 space-y-1">
+                    <div className="text-[12px] text-emerald-800 dark:text-emerald-300 mt-2 space-y-1">
                       <div>• {t('resultAccount')}: <span className="font-mono">{lastResult.account?.accountNo}</span> — {lastResult.account?.ownerName || '—'}</div>
                       <div>• {t('resultDeleted')}: <b className="text-base">{lastResult.deleted}</b></div>
                     </div>
@@ -293,27 +293,27 @@ export default function CleanupPage() {
           </div>
 
           {/* Body */}
-          <div className="px-6 py-5 space-y-4 bg-white">
+          <div className="px-6 py-5 space-y-4 bg-white dark:bg-slate-900">
             {/* Account card */}
             {countInfo?.account && (
-              <div className="rounded-xl ring-1 ring-slate-200 px-4 py-3 bg-slate-50/60 space-y-2">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500">
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3 bg-slate-50/60 dark:bg-slate-900/60 space-y-2">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400">
                   <Building2 className="h-3 w-3" />
                   {countInfo.account.bank?.name || '—'}
                   {countInfo.account.branch && (
-                    <span className="ml-auto font-mono text-[10px] text-slate-400">MFO {countInfo.account.branch}</span>
+                    <span className="ml-auto font-mono text-[10px] text-slate-400 dark:text-slate-500">MFO {countInfo.account.branch}</span>
                   )}
                 </div>
-                <div className="font-mono text-sm font-bold tracking-wider text-slate-900">{countInfo.account.accountNo}</div>
+                <div className="font-mono text-sm font-bold tracking-wider text-slate-900 dark:text-slate-100">{countInfo.account.accountNo}</div>
                 {countInfo.account.ownerName && (
-                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600">
-                    <User className="h-3 w-3 text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600 dark:text-slate-300">
+                    <User className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                     {countInfo.account.ownerName}
                   </div>
                 )}
                 {countInfo.account.balance != null && (
-                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600 pt-1 border-t border-slate-100">
-                    <Wallet className="h-3 w-3 text-slate-400" />
+                  <div className="flex items-center gap-1.5 text-[12px] text-slate-600 dark:text-slate-300 pt-1 border-t border-slate-100 dark:border-slate-800">
+                    <Wallet className="h-3 w-3 text-slate-400 dark:text-slate-500" />
                     <span className="font-semibold tabular-nums">
                       {formatMoney(Number(countInfo.account.balance), countInfo.account.currency || 'UZS')}
                     </span>
@@ -355,14 +355,14 @@ export default function CleanupPage() {
 
             {/* Empty hint or warning */}
             {countInfo && (countInfo.count ?? 0) === 0 ? (
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 flex items-start gap-2.5">
-                <Info className="h-4 w-4 text-slate-500 shrink-0 mt-0.5" />
-                <div className="text-[12px] text-slate-600">{t('nothingToDelete')}</div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3 flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-slate-500 dark:text-slate-400 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-slate-600 dark:text-slate-300">{t('nothingToDelete')}</div>
               </div>
             ) : (
-              <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-4 py-3 flex items-start gap-2.5">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <div className="text-[12px] text-amber-900 leading-relaxed">
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-3 flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-amber-900 dark:text-amber-300 leading-relaxed">
                   <b>{t('warningTitle')}</b> {t('warningBody')}
                 </div>
               </div>
@@ -410,18 +410,18 @@ function StatBox({
   return (
     <div className={cn(
       'rounded-xl ring-1 px-3 py-2.5 transition-colors',
-      emphasize ? 'bg-rose-50 ring-rose-200' : 'bg-white ring-slate-200',
+      emphasize ? 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900' : 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
     )}>
       <div className="flex items-center gap-2 mb-1">
         <div className={cn('w-6 h-6 rounded-lg bg-gradient-to-br grid place-items-center text-white shrink-0', gradient)}>
           {icon}
         </div>
-        <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-500 truncate">{label}</div>
+        <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-slate-500 dark:text-slate-400 truncate">{label}</div>
       </div>
       <div className={cn(
         'font-black tabular-nums tracking-tight truncate',
         small ? 'text-sm' : 'text-2xl',
-        emphasize ? 'text-rose-700' : 'text-slate-800',
+        emphasize ? 'text-rose-700 dark:text-rose-300' : 'text-slate-800 dark:text-slate-200',
       )}>
         {value}
       </div>

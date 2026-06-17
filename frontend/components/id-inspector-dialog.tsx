@@ -240,12 +240,12 @@ export function IdInspectorDialog({
         </DialogHeader>
 
         {/* Mode tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg mt-2">
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg mt-2">
           <button
             onClick={() => setMode('single')}
             className={cn(
               'flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors',
-              mode === 'single' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              mode === 'single' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
             )}
           >
             <Hash className="h-3.5 w-3.5" />
@@ -255,7 +255,7 @@ export function IdInspectorDialog({
             onClick={() => setMode('bulk')}
             className={cn(
               'flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-[11px] font-semibold transition-colors',
-              mode === 'bulk' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+              mode === 'bulk' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
             )}
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
@@ -279,7 +279,7 @@ export function IdInspectorDialog({
                   <button
                     type="button"
                     onClick={clear}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -299,7 +299,7 @@ export function IdInspectorDialog({
             </form>
 
             {error && (
-              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px] mt-3">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 text-rose-800 dark:text-rose-300 text-[12px] mt-3">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div className="break-all">{error}</div>
               </div>
@@ -333,9 +333,9 @@ export function IdInspectorDialog({
               </Button>
               {rows.length > 0 && (
                 <>
-                  <div className="text-[12px] text-slate-600 ml-1">
-                    <b className="text-slate-800">{rows.length}</b> ta ID
-                    {bulkRunning && <span className="ml-1.5 text-indigo-600 font-semibold">· {bulkProgress}/{rows.length}</span>}
+                  <div className="text-[12px] text-slate-600 dark:text-slate-300 ml-1">
+                    <b className="text-slate-800 dark:text-slate-200">{rows.length}</b> ta ID
+                    {bulkRunning && <span className="ml-1.5 text-indigo-600 dark:text-indigo-400 font-semibold">· {bulkProgress}/{rows.length}</span>}
                   </div>
                   <Button
                     onClick={runBulk}
@@ -352,7 +352,7 @@ export function IdInspectorDialog({
                     onClick={downloadResults}
                     disabled={downloading || bulkRunning || counts.pending === rows.length}
                     title="Excel'ga yuklab olish"
-                    className="h-10 w-10 rounded-xl p-0 bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    className="h-10 w-10 rounded-xl p-0 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
                   >
                     {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                   </Button>
@@ -375,14 +375,14 @@ export function IdInspectorDialog({
             )}
 
             {error && (
-              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+              <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 text-rose-800 dark:text-rose-300 text-[12px]">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <div className="break-all">{error}</div>
               </div>
             )}
 
             {!rows.length && !uploading && !error && (
-              <div className="text-center text-[12px] text-slate-400 py-8 rounded-xl ring-1 ring-dashed ring-slate-200">
+              <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8 rounded-xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700">
                 Excel faylda <b>A ustun</b>da ID'lar bo'lsin (har bir qator alohida ID).<br />
                 Birinchi qator header bo'lishi mumkin — avtomatik aniqlanadi.
               </div>
@@ -390,9 +390,9 @@ export function IdInspectorDialog({
 
             {rows.length > 0 && (
               <>
-                <div className="rounded-xl ring-1 ring-slate-200 divide-y divide-slate-100 overflow-hidden">
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
                   {pagedRows.length === 0 ? (
-                    <div className="px-3 py-8 text-center text-[12px] text-slate-400">
+                    <div className="px-3 py-8 text-center text-[12px] text-slate-400 dark:text-slate-500">
                       Bu status bo'yicha qator topilmadi
                     </div>
                   ) : (
@@ -432,20 +432,20 @@ function BulkRowItem({ row, index }: { row: BulkRow; index: number }) {
         onClick={() => setOpen((o) => !o)}
         disabled={!isDone && row.status !== 'error'}
         className={cn(
-          'w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-slate-50',
+          'w-full flex items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800',
           (!isDone && row.status !== 'error') && 'cursor-default',
         )}
       >
-        <span className="text-slate-400 font-mono w-7 shrink-0">{index + 1}.</span>
-        <span className="font-mono truncate flex-1 text-slate-700">{row.id}</span>
+        <span className="text-slate-400 dark:text-slate-500 font-mono w-7 shrink-0">{index + 1}.</span>
+        <span className="font-mono truncate flex-1 text-slate-700 dark:text-slate-300">{row.id}</span>
         {row.status === 'pending' && (
-          <span className="text-[10px] text-slate-400 shrink-0">kutilmoqda</span>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">kutilmoqda</span>
         )}
         {row.status === 'loading' && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500 shrink-0" />
         )}
         {row.status === 'error' && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 font-semibold shrink-0">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold shrink-0">
             xato
           </span>
         )}
@@ -456,17 +456,17 @@ function BulkRowItem({ row, index }: { row: BulkRow; index: number }) {
         )}
         {(isDone || row.status === 'error') && (
           open
-            ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-            : <ChevronRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+            ? <ChevronDown className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
         )}
       </button>
       {open && isDone && (
-        <div className="px-3 py-3 bg-slate-50/60 border-t border-slate-100">
+        <div className="px-3 py-3 bg-slate-50/60 dark:bg-slate-900/60 border-t border-slate-100 dark:border-slate-800">
           <SingleResult data={row.result} />
         </div>
       )}
       {open && row.status === 'error' && (
-        <div className="px-3 py-2 bg-rose-50/60 border-t border-rose-100 text-[11px] text-rose-700 break-all">
+        <div className="px-3 py-2 bg-rose-50/60 dark:bg-rose-950/30 border-t border-rose-100 dark:border-rose-900 text-[11px] text-rose-700 dark:text-rose-300 break-all">
           {row.error}
         </div>
       )}
@@ -505,14 +505,14 @@ function StatusChip({
         isActive
           ? cn(c.bg, c.text, 'shadow-sm')
           : disabled
-            ? 'bg-slate-50 text-slate-300 cursor-not-allowed'
-            : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
+            ? 'bg-slate-50 dark:bg-slate-900 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
       )}
     >
       <span>{label}</span>
       <span className={cn(
         'inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[9px] font-bold',
-        isActive ? 'bg-white/25 text-white' : 'bg-white text-slate-700',
+        isActive ? 'bg-white/25 text-white' : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300',
       )}>{count}</span>
     </button>
   );
@@ -527,9 +527,9 @@ function Pager({ page, total, onChange }: { page: number; total: number; onChang
       disabled={disabled}
       className={cn(
         'inline-flex items-center justify-center h-7 min-w-[28px] px-1.5 rounded-md text-[11px] font-semibold transition-colors',
-        disabled && 'text-slate-300 cursor-not-allowed',
+        disabled && 'text-slate-300 dark:text-slate-600 cursor-not-allowed',
         !disabled && p === page && 'bg-indigo-600 text-white',
-        !disabled && p !== page && 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+        !disabled && p !== page && 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
       )}
     >
       {label ?? p}
@@ -542,9 +542,9 @@ function Pager({ page, total, onChange }: { page: number; total: number; onChang
     <>
       {btn(1, <ChevronsLeft className="h-3.5 w-3.5" />, page === 1)}
       {btn(page - 1, <ChevronLeft className="h-3.5 w-3.5" />, page === 1)}
-      {pages[0] > 1 && <span className="text-slate-400 text-[10px]">…</span>}
+      {pages[0] > 1 && <span className="text-slate-400 dark:text-slate-500 text-[10px]">…</span>}
       {pages.map((p) => btn(p))}
-      {pages[pages.length - 1] < total && <span className="text-slate-400 text-[10px]">…</span>}
+      {pages[pages.length - 1] < total && <span className="text-slate-400 dark:text-slate-500 text-[10px]">…</span>}
       {btn(page + 1, <ChevronRight className="h-3.5 w-3.5" />, page === total)}
       {btn(total, <ChevronsRight className="h-3.5 w-3.5" />, page === total)}
     </>
@@ -553,11 +553,11 @@ function Pager({ page, total, onChange }: { page: number; total: number; onChang
 
 function verdictStyle(verdict: string): { bg: string; ring: string; text: string; title: string; short: string } {
   const map: Record<string, { bg: string; ring: string; text: string; title: string; short: string }> = {
-    found:     { bg: 'bg-emerald-50', ring: 'ring-emerald-200', text: 'text-emerald-900', title: '✅ Bankda mavjud',          short: '✅ Mavjud' },
-    shifted:   { bg: 'bg-amber-50',   ring: 'ring-amber-200',   text: 'text-amber-900',   title: "⚠️ Boshqa kunga ko'chirilgan", short: '⚠️ Kun siljigan' },
-    cancelled: { bg: 'bg-rose-50',    ring: 'ring-rose-200',    text: 'text-rose-900',    title: "🔴 Bekor qilingan to'lov",   short: '🔴 Bekor' },
-    no_data:   { bg: 'bg-slate-50',   ring: 'ring-slate-200',   text: 'text-slate-700',   title: "ℹ️ Ma'lumot olinmadi",        short: 'ℹ️ Yo\'q' },
-    partial:   { bg: 'bg-amber-50',   ring: 'ring-amber-200',   text: 'text-amber-900',   title: "⚠️ To'liq emas",               short: '⚠️ Qisman' },
+    found:     { bg: 'bg-emerald-50 dark:bg-emerald-950/40', ring: 'ring-emerald-200 dark:ring-emerald-900', text: 'text-emerald-900 dark:text-emerald-300', title: '✅ Bankda mavjud',          short: '✅ Mavjud' },
+    shifted:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: "⚠️ Boshqa kunga ko'chirilgan", short: '⚠️ Kun siljigan' },
+    cancelled: { bg: 'bg-rose-50 dark:bg-rose-950/40',    ring: 'ring-rose-200 dark:ring-rose-900',    text: 'text-rose-900 dark:text-rose-300',    title: "🔴 Bekor qilingan to'lov",   short: '🔴 Bekor' },
+    no_data:   { bg: 'bg-slate-50 dark:bg-slate-900',   ring: 'ring-slate-200 dark:ring-slate-700',   text: 'text-slate-700 dark:text-slate-300',   title: "ℹ️ Ma'lumot olinmadi",        short: 'ℹ️ Yo\'q' },
+    partial:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: "⚠️ To'liq emas",               short: '⚠️ Qisman' },
   };
   return map[verdict] || map.no_data;
 }
@@ -593,9 +593,9 @@ function SingleResult({ data }: { data: any }) {
 
 function InfoBox({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50/40 p-3">
-      <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1.5">{title}</div>
-      <div className="divide-y divide-slate-100">{children}</div>
+    <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50/40 dark:bg-slate-900/40 p-3">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mb-1.5">{title}</div>
+      <div className="divide-y divide-slate-100 dark:divide-slate-700">{children}</div>
     </div>
   );
 }
@@ -603,10 +603,10 @@ function InfoBox({ title, children }: { title: string; children: React.ReactNode
 function KV({ k, v, mono, small }: { k: string; v: any; mono?: boolean; small?: boolean }) {
   return (
     <div className="flex items-baseline gap-2 py-1">
-      <span className="text-[11px] text-slate-500 shrink-0 min-w-[110px]">{k}</span>
+      <span className="text-[11px] text-slate-500 dark:text-slate-400 shrink-0 min-w-[110px]">{k}</span>
       <span
         className={cn(
-          'flex-1 break-all text-slate-800',
+          'flex-1 break-all text-slate-800 dark:text-slate-200',
           mono && 'font-mono',
           small ? 'text-[10.5px]' : 'text-[12px]',
         )}

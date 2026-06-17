@@ -186,9 +186,9 @@ export default function ApiExplorerPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">API Explorer</div>
-            <div className="text-xs text-slate-500">Bank API'dan keladigan barcha ma'lumotlarni tekshirish</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Bank API'dan keladigan barcha ma'lumotlarni tekshirish</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 ring-1 ring-amber-200 text-[11px] font-semibold text-amber-700">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
             <Zap className="h-3 w-3" /> DEV / DEBUG
           </span>
         </div>
@@ -196,9 +196,9 @@ export default function ApiExplorerPage() {
         {/* ═══ STEPS PROGRESS ═══ */}
         <div className="flex items-center gap-2">
           <StepChip num={1} label="Bank ulanishi" active={step === 'login'} done={loginMut.data?.ok} onClick={() => setStep('login')} />
-          <ChevronRight className="h-4 w-4 text-slate-300" />
+          <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
           <StepChip num={2} label="Tranzaksiyalar" active={step === 'transactions'} done={txnsMut.data?.ok} onClick={() => setStep('transactions')} disabled={!loginMut.data?.ok} />
-          <ChevronRight className="h-4 w-4 text-slate-300" />
+          <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
           <StepChip num={3} label="Hisob saldo" active={step === 'account'} done={accMut.data?.ok} onClick={() => setStep('account')} disabled={!loginMut.data?.ok} />
         </div>
 
@@ -207,7 +207,7 @@ export default function ApiExplorerPage() {
           <CardContent className="p-6 space-y-4">
             {/* Bank presets */}
             <div className="space-y-2.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank tanlash</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank tanlash</Label>
 
               {/* Aktiv banklar — rangli, effektli */}
               <div className="flex flex-wrap gap-2">
@@ -221,7 +221,7 @@ export default function ApiExplorerPage() {
                         "group inline-flex items-center gap-2.5 pl-2 pr-4 py-2 rounded-xl text-sm font-semibold transition-all",
                         selected
                           ? "bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-lg shadow-indigo-500/30 ring-2 ring-indigo-300 scale-105"
-                          : "bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-700 ring-1 ring-emerald-200 hover:ring-emerald-300 hover:shadow-md hover:-translate-y-0.5",
+                          : "bg-gradient-to-br from-emerald-50 to-teal-50 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 hover:ring-emerald-300 dark:hover:ring-emerald-700 hover:shadow-md hover:-translate-y-0.5",
                       )}
                     >
                       <BankLogo code={b.code} name={b.name} size={28} rounded="rounded-lg" />
@@ -235,7 +235,7 @@ export default function ApiExplorerPage() {
               {/* Noaktiv banklar — kulrang, yopiq */}
               {inactiveBanks.length > 0 && (
                 <div>
-                  <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mt-3 mb-1.5">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mt-3 mb-1.5">
                     Kelajakda — integratsiya yo'q
                   </div>
                   <div className="flex flex-wrap gap-1.5">
@@ -243,7 +243,7 @@ export default function ApiExplorerPage() {
                       <span
                         key={b.id}
                         title="Bu bank uchun API integratsiyasi hali yo'q"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 text-slate-400 ring-1 ring-slate-150 cursor-not-allowed"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 ring-1 ring-slate-150 dark:ring-slate-700 cursor-not-allowed"
                       >
                         <Building2 className="h-3 w-3" />
                         {b.name}
@@ -258,8 +258,8 @@ export default function ApiExplorerPage() {
             <div className={cn(
               "rounded-2xl p-4 transition-all flex items-center gap-4 ring-1",
               useProxy
-                ? "bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200"
-                : "bg-slate-50 ring-slate-200",
+                ? "bg-gradient-to-br from-emerald-50 to-teal-50 ring-emerald-200 dark:ring-emerald-900"
+                : "bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700",
             )}>
               <button
                 type="button"
@@ -268,40 +268,40 @@ export default function ApiExplorerPage() {
                   "relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full ring-1 ring-inset transition-colors",
                   useProxy
                     ? "bg-emerald-500 ring-emerald-600"
-                    : "bg-slate-300 ring-slate-400",
+                    : "bg-slate-300 dark:bg-slate-600 ring-slate-400 dark:ring-slate-500",
                 )}
               >
                 <span className={cn(
-                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-1 ring-black/5 transition-transform mt-1",
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white dark:bg-slate-200 shadow-md ring-1 ring-black/5 transition-transform mt-1",
                   useProxy ? "translate-x-6" : "translate-x-1",
                 )} />
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[13px] font-bold text-slate-900">ahost orqali yuborish</span>
+                  <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">ahost orqali yuborish</span>
                   {useProxy ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
                       YOQILGAN
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 text-slate-600">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                       OFF
                     </span>
                   )}
                 </div>
-                <div className="text-[11px] text-slate-600 leading-relaxed">
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
                   {useProxy
-                    ? <>So'rovlar <code className="font-mono bg-white px-1 py-0.5 rounded text-emerald-700">ahost (37.153.159.11)</code> orqali yuboriladi — bank whitelist'da bo'lgan IP</>
-                    : <>So'rovlar to'g'ridan-to'g'ri bizning serverdan (<code className="font-mono bg-white px-1 py-0.5 rounded">185.228.88.247</code>) yuboriladi</>}
+                    ? <>So'rovlar <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded text-emerald-700 dark:text-emerald-300">ahost (37.153.159.11)</code> orqali yuboriladi — bank whitelist'da bo'lgan IP</>
+                    : <>So'rovlar to'g'ridan-to'g'ri bizning serverdan (<code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded">185.228.88.247</code>) yuboriladi</>}
                 </div>
               </div>
-              <Zap className={cn("h-5 w-5 shrink-0 transition-colors", useProxy ? "text-emerald-600" : "text-slate-400")} />
+              <Zap className={cn("h-5 w-5 shrink-0 transition-colors", useProxy ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500")} />
             </div>
 
             {/* Form fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">API Endpoint</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">API Endpoint</Label>
                 <Input
                   value={form.baseUrl}
                   onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
@@ -311,7 +311,7 @@ export default function ApiExplorerPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Login prefix</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Login prefix</Label>
                 <Input
                   value={form.loginPrefix}
                   onChange={(e) => setForm({ ...form, loginPrefix: e.target.value })}
@@ -320,7 +320,7 @@ export default function ApiExplorerPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Login nomi</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Login nomi</Label>
                 <Input
                   value={form.login}
                   onChange={(e) => setForm({ ...form, login: e.target.value })}
@@ -330,7 +330,7 @@ export default function ApiExplorerPage() {
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Parol</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Parol</Label>
                 <div className="relative">
                   <Input
                     type={showPwd ? 'text' : 'password'}
@@ -342,7 +342,7 @@ export default function ApiExplorerPage() {
                   <button
                     type="button"
                     onClick={() => setShowPwd((s) => !s)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                   >
                     {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -352,10 +352,10 @@ export default function ApiExplorerPage() {
               {step !== 'login' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 flex items-center justify-between">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
                       <span>Branch (MFO)</span>
                       {form.branch && form.branch !== branchPadded && (
-                        <span className="text-[10px] text-amber-700 font-medium normal-case tracking-normal">→ {branchPadded} (5 xonalik)</span>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium normal-case tracking-normal">→ {branchPadded} (5 xonalik)</span>
                       )}
                     </Label>
                     <Input
@@ -365,10 +365,10 @@ export default function ApiExplorerPage() {
                       placeholder="00974"
                       maxLength={5}
                     />
-                    <div className="text-[10px] text-slate-500">5 xonalik MFO kod (74 / 974 → 00074 / 00974)</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod (74 / 974 → 00074 / 00974)</div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob raqami</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Hisob raqami</Label>
                     <Input
                       value={form.account}
                       onChange={(e) => setForm({ ...form, account: e.target.value.replace(/\D/g, '').slice(0, 20) })}
@@ -376,7 +376,7 @@ export default function ApiExplorerPage() {
                       placeholder="20208000..."
                       maxLength={20}
                     />
-                    <div className="text-[10px] text-slate-500">20 xonalik hisob raqami</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">20 xonalik hisob raqami</div>
                   </div>
                 </>
               )}
@@ -384,7 +384,7 @@ export default function ApiExplorerPage() {
               {step === 'transactions' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Boshlanish sanasi</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Boshlanish sanasi</Label>
                     <Input
                       type="date"
                       value={form.dateFrom}
@@ -393,14 +393,14 @@ export default function ApiExplorerPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Tugash sanasi</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Tugash sanasi</Label>
                     <Input
                       type="date"
                       value={form.dateTo}
                       onChange={(e) => setForm({ ...form, dateTo: e.target.value })}
                       className="text-sm h-10 rounded-xl"
                     />
-                    <div className="text-[10px] text-slate-500">Maksimal 31 kun oralig'i</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Maksimal 31 kun oralig'i</div>
                   </div>
                 </>
               )}
@@ -469,17 +469,17 @@ function StepChip({
       disabled={disabled}
       className={cn(
         "inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-colors",
-        active && "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
-        !active && done && "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
-        !active && !done && !disabled && "bg-slate-50 text-slate-700 ring-1 ring-slate-200 hover:bg-slate-100",
-        disabled && "bg-slate-50 text-slate-400 ring-1 ring-slate-100 cursor-not-allowed",
+        active && "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900",
+        !active && done && "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900",
+        !active && !done && !disabled && "bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800",
+        disabled && "bg-slate-50 dark:bg-slate-900 text-slate-400 dark:text-slate-500 ring-1 ring-slate-100 dark:ring-slate-800 cursor-not-allowed",
       )}
     >
       <span className={cn(
         "w-5 h-5 rounded-full grid place-items-center text-[10px] font-bold",
         active && "bg-indigo-600 text-white",
         !active && done && "bg-emerald-500 text-white",
-        !active && !done && "bg-slate-200 text-slate-700",
+        !active && !done && "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300",
       )}>{done ? <Check className="h-3 w-3" /> : num}</span>
       {label}
     </button>
@@ -578,23 +578,23 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
       {/* Accounts — valyuta + tur bo'yicha guruhlangan */}
       <Card className="border-0 shadow-soft overflow-hidden">
         <CardContent className="p-0">
-          <div className="px-6 py-4 border-b border-slate-100">
+          <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
             <div className="text-base font-semibold tracking-tight">
-              Mavjud hisoblar <span className="text-slate-400 font-normal">({allAccs.length})</span>
+              Mavjud hisoblar <span className="text-slate-400 dark:text-slate-500 font-normal">({allAccs.length})</span>
             </div>
-            <div className="text-xs text-slate-500 mt-0.5">
-              Valyuta va hisob turi bo'yicha guruhlangan · qatorni bosing → tranzaksiyalar · <span className="text-emerald-600 font-medium">+ Qo'shish</span> → bazaga
+            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Valyuta va hisob turi bo'yicha guruhlangan · qatorni bosing → tranzaksiyalar · <span className="text-emerald-600 dark:text-emerald-400 font-medium">+ Qo'shish</span> → bazaga
             </div>
           </div>
 
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {grouped.map((g) => (
               <details key={g.cur} className="group">
-                <summary className="px-6 py-2.5 cursor-pointer bg-slate-50/70 hover:bg-slate-100/70 flex items-center gap-2 select-none">
-                  <ChevronRight className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-90" />
-                  <Wallet className="h-3.5 w-3.5 text-indigo-500" />
-                  <span className="text-[13px] font-bold text-slate-800">{g.cur}</span>
-                  <span className="text-[11px] text-slate-500">· {g.count} ta hisob</span>
+                <summary className="px-6 py-2.5 cursor-pointer bg-slate-50/70 dark:bg-slate-900/70 hover:bg-slate-100/70 dark:hover:bg-slate-800/70 flex items-center gap-2 select-none">
+                  <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-90" />
+                  <Wallet className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
+                  <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">{g.cur}</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">· {g.count} ta hisob</span>
                 </summary>
 
                 {g.types.map((t) => {
@@ -604,24 +604,24 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                   return (
                   <div key={t.type}>
                     <div className={cn(
-                      "px-6 py-1.5 flex items-center gap-1.5 border-t border-slate-50",
-                      isSalary ? "bg-amber-50/70" : "bg-white",
+                      "px-6 py-1.5 flex items-center gap-1.5 border-t border-slate-50 dark:border-slate-800",
+                      isSalary ? "bg-amber-50/70 dark:bg-amber-950/40" : "bg-white dark:bg-slate-900",
                     )}>
-                      <Layers className={cn("h-3 w-3", isSalary ? "text-amber-500" : "text-slate-300")} />
+                      <Layers className={cn("h-3 w-3", isSalary ? "text-amber-500" : "text-slate-300 dark:text-slate-600")} />
                       <span className={cn(
                         "text-[10px] uppercase tracking-wider font-semibold",
-                        isSalary ? "text-amber-700" : "text-slate-400",
+                        isSalary ? "text-amber-700 dark:text-amber-300" : "text-slate-400 dark:text-slate-500",
                       )}>
                         {t.type}
                       </span>
-                      <span className={cn("text-[10px]", isSalary ? "text-amber-400" : "text-slate-300")}>· {t.accs.length}</span>
+                      <span className={cn("text-[10px]", isSalary ? "text-amber-400 dark:text-amber-500" : "text-slate-300 dark:text-slate-600")}>· {t.accs.length}</span>
                       {isSalary && (
-                        <span className="text-[10px] text-amber-600/80 ml-1">— faqat oylik chiqariladi, vipiska uchun emas</span>
+                        <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 ml-1">— faqat oylik chiqariladi, vipiska uchun emas</span>
                       )}
                       {addable.length > 0 && (
                         <button
                           onClick={() => setAddTargets(addable)}
-                          className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100 transition-colors"
+                          className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
                         >
                           <Plus className="h-3 w-3" /> {addable.length} ta yangini qo'shish
                         </button>
@@ -632,7 +632,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                       return (
                         <div
                           key={a.account + i}
-                          className="pl-10 pr-6 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 transition-colors"
+                          className="pl-10 pr-6 py-2.5 flex items-center gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/60 transition-colors"
                         >
                           <button
                             onClick={() => onPickAccount(a.branch, a.account)}
@@ -643,14 +643,14 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                             </div>
                             <div className="min-w-0">
                               <div className="font-mono text-[12px] font-semibold truncate">{a.account}</div>
-                              <div className="text-[11px] text-slate-500 truncate">MFO {a.branch} · {a.name || a.clientName}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">MFO {a.branch} · {a.name || a.clientName}</div>
                             </div>
                           </button>
 
                           {isSalary ? (
-                            <span className="text-[10px] text-amber-600/70 italic shrink-0">vipiska uchun emas</span>
+                            <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 italic shrink-0">vipiska uchun emas</span>
                           ) : inDb ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 shrink-0">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 shrink-0">
                               <CheckCircle2 className="h-3 w-3" /> Bazada
                             </span>
                           ) : (
@@ -661,7 +661,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                               <Plus className="h-3 w-3" /> Qo'shish
                             </button>
                           )}
-                          <ChevronRight className="h-4 w-4 text-slate-300 shrink-0" />
+                          <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0" />
                         </div>
                       );
                     })}
@@ -677,8 +677,8 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
       <AddBankAccountDialog accounts={addTargets} creds={creds?.items || []} onClose={() => setAddTargets(null)} />
 
       {/* Raw JSON — yopiq holatda, bosilganda ochiladi */}
-      <details className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+      <details className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
           <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
         </summary>
         <JsonViewer title="" json={result} />
@@ -737,7 +737,7 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Plus className="h-4 w-4 text-indigo-600" />
+            <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
             {isBulk ? `${list.length} ta hisobni bazaga qo'shish` : "Hisobni bazaga qo'shish"}
           </DialogTitle>
           <DialogDescription>Hisob(lar)ni qaysi bank ulanishiga biriktiramiz?</DialogDescription>
@@ -746,21 +746,21 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
         <div className="space-y-4">
           {/* Tanlangan hisob(lar) */}
           {isBulk ? (
-            <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
-              <div className="text-[12px] font-semibold text-slate-900 mb-1.5">{list.length} ta hisob qo'shiladi</div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
+              <div className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">{list.length} ta hisob qo'shiladi</div>
               <div className="max-h-32 overflow-y-auto space-y-0.5">
                 {list.slice(0, 30).map((a, i) => (
-                  <div key={i} className="font-mono text-[10px] text-slate-500 truncate">{a.account}</div>
+                  <div key={i} className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{a.account}</div>
                 ))}
                 {list.length > 30 && (
-                  <div className="text-[10px] text-slate-400">… va yana {list.length - 30} ta</div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500">… va yana {list.length - 30} ta</div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 space-y-1">
-              <div className="font-mono text-[13px] font-semibold text-slate-900">{list[0].account}</div>
-              <div className="text-[11px] text-slate-500">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3 space-y-1">
+              <div className="font-mono text-[13px] font-semibold text-slate-900 dark:text-slate-100">{list[0].account}</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
                 MFO {list[0].branch} · {normCurrency(list[0].val)} · {list[0].name || list[0].clientName || '—'}
               </div>
             </div>
@@ -768,16 +768,16 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
 
           {/* Credential tanlash */}
           <div className="space-y-1.5">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
-              Bank ulanishi <span className="text-rose-500">*</span>
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
+              Bank ulanishi <span className="text-rose-500 dark:text-rose-400">*</span>
             </Label>
             <Select value={credentialId} onValueChange={setCredentialId}>
-              <SelectTrigger className={cn(!credentialId && 'ring-1 ring-rose-200')}>
+              <SelectTrigger className={cn(!credentialId && 'ring-1 ring-rose-200 dark:ring-rose-900')}>
                 <SelectValue placeholder="Ulanishni tanlang" />
               </SelectTrigger>
               <SelectContent>
                 {creds.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-500">Saqlangan bank ulanishi yo'q</div>
+                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">Saqlangan bank ulanishi yo'q</div>
                 ) : (
                   creds.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
@@ -786,7 +786,7 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
               </SelectContent>
             </Select>
             {creds.length === 0 && (
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
                 Avval Sozlash → Bank ulanishlari bo'limidan ulanish qo'shing
               </div>
             )}
@@ -839,13 +839,13 @@ function TransactionsResult({ data }: { data: any }) {
       {/* Step 1: Per-day list (clickable) */}
       <Card className="border-0 shadow-soft overflow-hidden">
         <CardContent className="p-0">
-          <div className="px-4 py-2.5 border-b border-slate-200 bg-slate-50/60 flex items-center justify-between">
-            <div className="text-[12px] font-bold text-slate-900">Kunma-kun taqsimot</div>
-            <div className="text-[10px] text-slate-500">Sanani bosing → o'sha kun tranzaksiyalari ko'rinadi</div>
+          <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between">
+            <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">Kunma-kun taqsimot</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">Sanani bosing → o'sha kun tranzaksiyalari ko'rinadi</div>
           </div>
           <table className="w-full text-[12px]">
             <thead>
-              <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+              <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                 <th className="text-left px-3 py-2">Sana</th>
                 <th className="text-right px-3 py-2">Operatsiyalar</th>
                 <th className="text-right px-3 py-2">Kirim (UZS)</th>
@@ -854,7 +854,7 @@ function TransactionsResult({ data }: { data: any }) {
                 <th className="w-8"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {perDay.map((d: any) => {
                 const isSelected = selectedDate === d.date;
                 const hasItems = d.count > 0;
@@ -865,19 +865,19 @@ function TransactionsResult({ data }: { data: any }) {
                     className={cn(
                       "transition-colors",
                       hasItems && "cursor-pointer",
-                      isSelected ? "bg-indigo-50/50" : "hover:bg-slate-50",
-                      d.error && "bg-rose-50/30",
+                      isSelected ? "bg-indigo-50/50 dark:bg-indigo-950/40" : "hover:bg-slate-50 dark:hover:bg-slate-800",
+                      d.error && "bg-rose-50/30 dark:bg-rose-950/40",
                     )}
                   >
-                    <td className="px-3 py-2 font-mono text-slate-900 font-semibold">{d.date}</td>
+                    <td className="px-3 py-2 font-mono text-slate-900 dark:text-slate-100 font-semibold">{d.date}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-semibold">{d.count}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{fmt(d.credit)}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-rose-700">{fmt(d.debit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-300">{fmt(d.credit)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-rose-700 dark:text-rose-300">{fmt(d.debit)}</td>
                     <td className="px-3 py-2">
                       {d.error ? (
-                        <span className="text-[10px] text-rose-700 truncate max-w-[200px] inline-block" title={d.error}>{d.error}</span>
+                        <span className="text-[10px] text-rose-700 dark:text-rose-300 truncate max-w-[200px] inline-block" title={d.error}>{d.error}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-emerald-50 text-emerald-700 border-emerald-200">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
                           OK
                         </span>
                       )}
@@ -885,8 +885,8 @@ function TransactionsResult({ data }: { data: any }) {
                     <td className="px-3 py-2 text-right">
                       {hasItems && (
                         <ChevronRight className={cn(
-                          "h-3.5 w-3.5 text-slate-400 transition-transform",
-                          isSelected && "rotate-90 text-indigo-600",
+                          "h-3.5 w-3.5 text-slate-400 dark:text-slate-500 transition-transform",
+                          isSelected && "rotate-90 text-indigo-600 dark:text-indigo-400",
                         )} />
                       )}
                     </td>
@@ -902,16 +902,16 @@ function TransactionsResult({ data }: { data: any }) {
       {selectedDate && itemsForSelected.length > 0 && (
         <Card className="border-0 shadow-soft overflow-hidden">
           <CardContent className="p-0">
-            <div className="px-4 py-2.5 border-b border-slate-200 bg-indigo-50/40 flex items-center justify-between">
+            <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-indigo-50/40 dark:bg-indigo-950/40 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Calendar className="h-3.5 w-3.5 text-indigo-700" />
-                <div className="text-[12px] font-bold text-slate-900">{selectedDate} — {itemsForSelected.length} ta tranzaksiya</div>
+                <Calendar className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300" />
+                <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">{selectedDate} — {itemsForSelected.length} ta tranzaksiya</div>
               </div>
-              <div className="text-[10px] text-slate-500">Tranzaksiyani bosing → barcha 29 ta field modal'da ochiladi</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">Tranzaksiyani bosing → barcha 29 ta field modal'da ochiladi</div>
             </div>
             <table className="w-full text-[12px]">
               <thead>
-                <tr className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500 font-semibold border-b border-slate-200">
+                <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
                   <th className="text-left px-3 py-2 w-20">Vaqt</th>
                   <th className="text-left px-3 py-2 w-20">Yo'nalish</th>
                   <th className="text-left px-3 py-2">Kontragent</th>
@@ -921,7 +921,7 @@ function TransactionsResult({ data }: { data: any }) {
                   <th className="w-8"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {itemsForSelected.map((it: any, i: number) => {
                   const counterparty = it.dir === 2 ? it.name_dt : it.name_ct;
                   const cpInn = it.dir === 2 ? it.inn_dt : it.inn_ct;
@@ -929,30 +929,30 @@ function TransactionsResult({ data }: { data: any }) {
                     <tr
                       key={i}
                       onClick={() => setSelectedTxn(it)}
-                      className="hover:bg-slate-50 cursor-pointer transition-colors"
+                      className="hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
                     >
-                      <td className="px-3 py-2 font-mono text-slate-700">{it.time || it.stime || '—'}</td>
+                      <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300">{it.time || it.stime || '—'}</td>
                       <td className="px-3 py-2">
                         <span className={cn(
                           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
-                          it.dir === 2 ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-rose-50 text-rose-700 border-rose-200",
+                          it.dir === 2 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900" : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900",
                         )}>
                           {it.dir === 2 ? 'KIRIM' : 'CHIQIM'}
                         </span>
                       </td>
                       <td className="px-3 py-2 max-w-[280px]">
-                        <div className="truncate font-medium text-slate-900">{counterparty || '—'}</div>
-                        <div className="font-mono text-[10px] text-slate-500 truncate">{cpInn || ''}</div>
+                        <div className="truncate font-medium text-slate-900 dark:text-slate-100">{counterparty || '—'}</div>
+                        <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{cpInn || ''}</div>
                       </td>
-                      <td className="px-3 py-2 max-w-[200px] truncate text-slate-600">{(it.purpose || '').trim() || '—'}</td>
+                      <td className="px-3 py-2 max-w-[200px] truncate text-slate-600 dark:text-slate-300">{(it.purpose || '').trim() || '—'}</td>
                       <td className={cn(
                         "px-3 py-2 text-right tabular-nums font-semibold whitespace-nowrap",
-                        it.dir === 2 ? "text-emerald-700" : "text-rose-700",
+                        it.dir === 2 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
                       )}>
                         {it.dir === 2 ? '+' : '−'}{fmt(it.amount)}
                       </td>
-                      <td className="px-3 py-2 font-mono text-[10px] text-slate-600">{it.num || '—'}</td>
-                      <td className="px-3 py-2"><ChevronRight className="h-3.5 w-3.5 text-slate-400" /></td>
+                      <td className="px-3 py-2 font-mono text-[10px] text-slate-600 dark:text-slate-300">{it.num || '—'}</td>
+                      <td className="px-3 py-2"><ChevronRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" /></td>
                     </tr>
                   );
                 })}
@@ -970,35 +970,35 @@ function TransactionsResult({ data }: { data: any }) {
         <Card className="border-0 shadow-soft overflow-hidden">
           <CardContent className="p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Sparkles className="h-4 w-4 text-amber-500" />
+              <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-400" />
               <div className="text-base font-semibold tracking-tight">Tranzaksiya field tahlili</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-emerald-700 font-semibold mb-2 flex items-center gap-1.5">
+                <div className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-semibold mb-2 flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Saqlanyapti ({summary.fieldsSaved.length})
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {summary.fieldsSaved.filter((f: string) => summary.fieldsInFirstItem.includes(f)).map((f: string) => (
-                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">{f}</span>
+                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">{f}</span>
                   ))}
                 </div>
               </div>
 
               <div>
-                <div className="text-[11px] uppercase tracking-wider text-rose-700 font-semibold mb-2 flex items-center gap-1.5">
+                <div className="text-[11px] uppercase tracking-wider text-rose-700 dark:text-rose-300 font-semibold mb-2 flex items-center gap-1.5">
                   <AlertCircle className="h-3.5 w-3.5" />
                   Saqlanmaydi ({summary.fieldsNotSaved.length})
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {summary.fieldsNotSaved.map((f: string) => (
-                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 ring-1 ring-rose-200">{f}</span>
+                    <span key={f} className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900">{f}</span>
                   ))}
                 </div>
                 {summary.fieldsNotSaved.length > 0 && (
-                  <div className="text-[10px] text-slate-500 mt-2">
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">
                     Bu fieldlar bizning DB'da saqlanmaydi. Agar kerak bo'lsa schema'ga qo'shamiz.
                   </div>
                 )}
@@ -1009,8 +1009,8 @@ function TransactionsResult({ data }: { data: any }) {
       )}
 
       {/* Raw JSON (collapsed by default) */}
-      <details className="bg-white border border-slate-200 rounded-lg overflow-hidden">
-        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+      <details className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
           <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
         </summary>
         <JsonViewer title="" json={result} />
@@ -1027,10 +1027,10 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
   const isIn = txn.dir === 2;
   const state = STATE_LABELS[txn.state] || { label: `#${txn.state}`, tone: 'slate' as const };
   const stateClass = {
-    emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-    amber:   'bg-amber-50 text-amber-700 ring-amber-200',
-    rose:    'bg-rose-50 text-rose-700 ring-rose-200',
-    slate:   'bg-slate-50 text-slate-700 ring-slate-200',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+    amber:   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+    rose:    'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
+    slate:   'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
   }[state.tone];
   const dtypeLabel = DTYPE_LABELS[txn.dtype] || `${txn.dtype} (Boshqa)`;
 
@@ -1073,7 +1073,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
         </div>
 
         {/* ─── Body ─── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white dark:bg-slate-900">
 
           {/* Status & document */}
           <div className="grid grid-cols-2 gap-3">
@@ -1084,8 +1084,8 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
               </span>
             </DetailField>
             <DetailField label="Hujjat turi">
-              <div className="text-[13px] font-semibold text-slate-900">{dtypeLabel}</div>
-              {txn.num && <div className="font-mono text-[11px] text-slate-500 mt-0.5">#{txn.num}</div>}
+              <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">{dtypeLabel}</div>
+              {txn.num && <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">#{txn.num}</div>}
             </DetailField>
           </div>
 
@@ -1114,13 +1114,13 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
           {/* Purpose */}
           {txn.purpose && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">To'lov maqsadi</div>
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3">
-                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap">{txn.purpose.trim()}</div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5">To'lov maqsadi</div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
+                <div className="text-[13px] text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{txn.purpose.trim()}</div>
                 {txn.purp_code && (
-                  <div className="mt-2 pt-2 border-t border-slate-200 flex items-center gap-2 text-[11px]">
-                    <span className="text-slate-500">Maqsad kodi:</span>
-                    <span className="font-mono font-semibold text-slate-700">{txn.purp_code}</span>
+                  <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-[11px]">
+                    <span className="text-slate-500 dark:text-slate-400">Maqsad kodi:</span>
+                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{txn.purp_code}</span>
                   </div>
                 )}
               </div>
@@ -1130,26 +1130,26 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
           {/* Value date if differs */}
           {txn.vdate && txn.vdate !== txn.ddate && (
             <DetailField label="Value date (mablag' mavjud bo'lish sanasi)">
-              <div className="text-[13px] font-semibold text-slate-900 tabular-nums">{txn.vdate}</div>
+              <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{txn.vdate}</div>
             </DetailField>
           )}
 
           {/* Error if any */}
           {(txn.err && txn.err !== '0' && txn.err !== 0) || txn.err_msg ? (
-            <div className="rounded-xl bg-rose-50 ring-1 ring-rose-200 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-rose-700 mb-1">Bank xatosi</div>
-              <div className="text-[12px] text-rose-900">
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3">
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-rose-700 dark:text-rose-300 mb-1">Bank xatosi</div>
+              <div className="text-[12px] text-rose-900 dark:text-rose-300">
                 {txn.err_msg || `Kod: ${txn.err}`}
               </div>
             </div>
           ) : null}
 
           {/* Technical details (collapsed by default) */}
-          <details className="rounded-xl border border-slate-200 overflow-hidden">
-            <summary className="px-4 py-2.5 cursor-pointer text-[11px] font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2 uppercase tracking-wider">
+          <details className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <summary className="px-4 py-2.5 cursor-pointer text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 uppercase tracking-wider">
               <FileText className="h-3.5 w-3.5" /> Texnik tafsilot (ID, vaqt, raw)
             </summary>
-            <div className="px-4 py-3 bg-slate-50/60 space-y-2 text-[11px]">
+            <div className="px-4 py-3 bg-slate-50/60 dark:bg-slate-800/60 space-y-2 text-[11px]">
               <TechRow label="B2 ID" value={txn.b2_id} mono />
               <TechRow label="Global ID (NCI)" value={txn.general_id} mono />
               <TechRow label="Unique ID" value={txn.uniq} mono />
@@ -1162,8 +1162,8 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
               <TechRow label="Settlement vaqti (stime)" value={txn.stime} />
               <TechRow label="Anor 24/7" value={txn.anor === 1 ? 'Ha' : "Yo'q"} />
               <details className="pt-2">
-                <summary className="cursor-pointer text-[10px] text-slate-500 hover:text-slate-700">Raw JSON</summary>
-                <pre className="mt-2 p-2 bg-white border border-slate-200 rounded text-[10px] font-mono overflow-x-auto max-h-60 overflow-y-auto">{JSON.stringify(txn, null, 2)}</pre>
+                <summary className="cursor-pointer text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Raw JSON</summary>
+                <pre className="mt-2 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-mono overflow-x-auto max-h-60 overflow-y-auto">{JSON.stringify(txn, null, 2)}</pre>
               </details>
             </div>
           </details>
@@ -1177,7 +1177,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5">{label}</div>
+      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5">{label}</div>
       {children}
     </div>
   );
@@ -1195,30 +1195,30 @@ function Party({
   mfo?: string;
 }) {
   const c = {
-    rose:    { bg: 'bg-rose-50/60',    ring: 'ring-rose-200', dot: 'bg-rose-500', label: 'text-rose-700' },
-    emerald: { bg: 'bg-emerald-50/60', ring: 'ring-emerald-200', dot: 'bg-emerald-500', label: 'text-emerald-700' },
+    rose:    { bg: 'bg-rose-50/60 dark:bg-rose-950/40',    ring: 'ring-rose-200 dark:ring-rose-900', dot: 'bg-rose-500', label: 'text-rose-700 dark:text-rose-300' },
+    emerald: { bg: 'bg-emerald-50/60 dark:bg-emerald-950/40', ring: 'ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500', label: 'text-emerald-700 dark:text-emerald-300' },
   }[color];
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 mb-1.5 flex items-center gap-1.5">
+      <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
         <span className={cn("w-1.5 h-1.5 rounded-full", c.dot)} />
         {title}
         {highlighted && <span className={cn("text-[9px] font-bold uppercase", c.label)}>· siz</span>}
       </div>
-      <div className={cn("rounded-xl ring-1 px-4 py-3 space-y-1.5", highlighted ? `${c.bg} ${c.ring}` : 'bg-slate-50 ring-slate-200')}>
-        <div className="text-[14px] font-bold text-slate-900 truncate">{name || '—'}</div>
+      <div className={cn("rounded-xl ring-1 px-4 py-3 space-y-1.5", highlighted ? `${c.bg} ${c.ring}` : 'bg-slate-50 dark:bg-slate-800 ring-slate-200 dark:ring-slate-700')}>
+        <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100 truncate">{name || '—'}</div>
         <div className="grid grid-cols-2 gap-3 text-[11px]">
           <div>
-            <div className="text-slate-500 mb-0.5">STIR</div>
-            <div className="font-mono text-slate-900">{inn || '—'}</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5">STIR</div>
+            <div className="font-mono text-slate-900 dark:text-slate-100">{inn || '—'}</div>
           </div>
           <div>
-            <div className="text-slate-500 mb-0.5">Bank MFO</div>
-            <div className="font-mono text-slate-900">{mfo || '—'}</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5">Bank MFO</div>
+            <div className="font-mono text-slate-900 dark:text-slate-100">{mfo || '—'}</div>
           </div>
           <div className="col-span-2">
-            <div className="text-slate-500 mb-0.5">Hisob raqami</div>
-            <div className="font-mono text-slate-900 truncate">{account || '—'}</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5">Hisob raqami</div>
+            <div className="font-mono text-slate-900 dark:text-slate-100 truncate">{account || '—'}</div>
           </div>
         </div>
       </div>
@@ -1230,8 +1230,8 @@ function TechRow({ label, value, mono }: { label: string; value: any; mono?: boo
   const isEmpty = value === null || value === undefined || value === '' || value === 'null';
   return (
     <div className="flex items-baseline justify-between gap-3">
-      <div className="text-slate-500 shrink-0">{label}</div>
-      <div className={cn("text-slate-900 text-right truncate", mono && "font-mono", isEmpty && "text-slate-400 italic")}>
+      <div className="text-slate-500 dark:text-slate-400 shrink-0">{label}</div>
+      <div className={cn("text-slate-900 dark:text-slate-100 text-right truncate", mono && "font-mono", isEmpty && "text-slate-400 dark:text-slate-500 italic")}>
         {isEmpty ? "bo'sh" : String(value)}
       </div>
     </div>
@@ -1274,19 +1274,19 @@ function SuccessCard({
             </div>
             <div>
               <div className="text-base font-bold tracking-tight">{title}</div>
-              <div className="text-xs text-slate-500">{duration} ms da bajarildi</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{duration} ms da bajarildi</div>
             </div>
           </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {summary.map((s, i) => (
-            <div key={i} className="rounded-xl bg-slate-50/60 ring-1 ring-slate-100 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold mb-0.5">{s.label}</div>
+            <div key={i} className="rounded-xl bg-slate-50/60 dark:bg-slate-800/60 ring-1 ring-slate-100 dark:ring-slate-700 px-3 py-2">
+              <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-0.5">{s.label}</div>
               <div className={cn(
                 "text-sm font-bold tracking-tight truncate",
                 s.mono && "font-mono text-[12px]",
-                s.accent === 'emerald' && "text-emerald-700",
-                s.accent === 'rose' && "text-rose-700",
+                s.accent === 'emerald' && "text-emerald-700 dark:text-emerald-300",
+                s.accent === 'rose' && "text-rose-700 dark:text-rose-300",
               )}>{s.value}</div>
             </div>
           ))}
@@ -1307,8 +1307,8 @@ function ErrorCard({ error, duration }: { error: string; duration: number }) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-base font-bold tracking-tight">Xato</div>
-            <div className="text-xs text-slate-500 mb-2">{duration} ms</div>
-            <div className="text-sm text-rose-700 bg-rose-50 ring-1 ring-rose-200 rounded-lg px-3 py-2 font-mono break-words">
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">{duration} ms</div>
+            <div className="text-sm text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 rounded-lg px-3 py-2 font-mono break-words">
               {error}
             </div>
           </div>
@@ -1331,20 +1331,20 @@ function JsonViewer({ title, json }: { title: string; json: any }) {
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <CardContent className="p-0">
-        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-slate-600" />
+            <FileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />
             <div className="text-base font-semibold tracking-tight">{title}</div>
-            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
               {str.length.toLocaleString()} bayt
             </span>
           </div>
           <Button size="sm" variant="outline" onClick={copy} className="h-8 gap-1.5 rounded-full text-xs">
-            {copied ? <><Check className="h-3.5 w-3.5 text-emerald-600" /> Nusxalandi</> : <><Copy className="h-3.5 w-3.5" /> Nusxalash</>}
+            {copied ? <><Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Nusxalandi</> : <><Copy className="h-3.5 w-3.5" /> Nusxalash</>}
           </Button>
         </div>
-        <pre className="px-6 py-4 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto bg-slate-50/40">
-          <code className="text-slate-700">{str}</code>
+        <pre className="px-6 py-4 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/40">
+          <code className="text-slate-700 dark:text-slate-300">{str}</code>
         </pre>
       </CardContent>
     </Card>

@@ -138,11 +138,11 @@ export default function ChangesPage() {
         </div>
 
         {/* ═══ FILTERS BAR (inline, no card wrapper) ═══ */}
-        <div className="bg-white rounded-2xl shadow-soft px-3 py-3 lg:px-4 lg:py-3 space-y-3">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-soft px-3 py-3 lg:px-4 lg:py-3 space-y-3">
           <div className="grid grid-cols-12 gap-2.5">
             {/* Search — keng */}
             <div className="col-span-12 lg:col-span-4 relative">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" />
               <Input
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setPage(1); }}
@@ -152,9 +152,9 @@ export default function ChangesPage() {
               {q && (
                 <button
                   onClick={() => { setQ(''); setPage(1); }}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                  <X className="h-3.5 w-3.5 text-slate-400" />
+                  <X className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 </button>
               )}
             </div>
@@ -198,20 +198,20 @@ export default function ChangesPage() {
           </div>
 
           {/* Bottom action row */}
-          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
-            <div className="flex items-center gap-3 text-[11.5px] text-slate-500">
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3 text-[11.5px] text-slate-500 dark:text-slate-400">
               {hasActiveFilters ? (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 font-medium">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-900 font-medium">
                   <Filter className="h-3 w-3" /> filterlar aktiv
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 text-slate-400">
+                <span className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
                   <Filter className="h-3 w-3" /> filtrlar yo'q
                 </span>
               )}
-              <span className="hidden lg:inline-flex items-center gap-1.5 text-slate-500">
+              <span className="hidden lg:inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <Database className="h-3 w-3" />
-                Sahifada: <b className="text-slate-700 tabular-nums">{items.length}</b> / {total.toLocaleString('ru-RU')}
+                Sahifada: <b className="text-slate-700 dark:text-slate-300 tabular-nums">{items.length}</b> / {total.toLocaleString('ru-RU')}
               </span>
             </div>
 
@@ -220,7 +220,7 @@ export default function ChangesPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-9 gap-1.5 text-slate-600"
+                  className="h-9 gap-1.5 text-slate-600 dark:text-slate-300"
                   onClick={() => {
                     setQ(''); setDateFrom(''); setDateTo('');
                     setAccountId('all'); setChangeType('all'); setPage(1);
@@ -255,11 +255,11 @@ export default function ChangesPage() {
         </div>
 
         {/* ═══ TABLE ═══ */}
-        <div className="bg-white rounded-2xl shadow-soft overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-soft overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
-              <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 text-[10px] uppercase tracking-wider text-slate-600 font-bold">
-                <tr className="border-b border-slate-200">
+              <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 dark:from-slate-800 dark:to-slate-800/40 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold">
+                <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="px-3 py-3 text-left w-12">#</th>
                   <th className="px-3 py-3 text-left w-32">Turi</th>
                   <th className="px-3 py-3 text-left whitespace-nowrap">Aniqlangan</th>
@@ -274,7 +274,7 @@ export default function ChangesPage() {
               </thead>
               <tbody>
                 {listQ.isLoading && (
-                  <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-400">
+                  <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-400 dark:text-slate-500">
                     <Loader2 className="h-6 w-6 animate-spin inline mr-2" />
                     <span className="font-medium">Yuklanmoqda...</span>
                   </td></tr>
@@ -282,11 +282,11 @@ export default function ChangesPage() {
                 {!listQ.isLoading && items.length === 0 && (
                   <tr><td colSpan={10} className="px-4 py-20 text-center">
                     <div className="inline-flex flex-col items-center max-w-md">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 grid place-items-center mb-3 ring-1 ring-slate-200">
-                        <AlertOctagon className="h-7 w-7 text-slate-400" />
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 grid place-items-center mb-3 ring-1 ring-slate-200 dark:ring-slate-700">
+                        <AlertOctagon className="h-7 w-7 text-slate-400 dark:text-slate-500" />
                       </div>
-                      <div className="text-[15px] font-bold text-slate-800">Yozuvlar topilmadi</div>
-                      <div className="text-[12.5px] text-slate-500 mt-1.5 leading-relaxed">
+                      <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200">Yozuvlar topilmadi</div>
+                      <div className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
                         {hasActiveFilters
                           ? "Filterlar ostida hech narsa topilmadi. Filterni o'zgartiring yoki tozalang."
                           : "Sync har safar ishlaganda avtomatik tekshiriladi. Hozircha bank tomonida o'zgargan to'lovlar yo'q."}
@@ -311,84 +311,84 @@ export default function ChangesPage() {
                       key={it.id}
                       onClick={() => setDetail(it)}
                       className={cn(
-                        'border-b border-slate-100 hover:bg-indigo-50/30 transition-colors cursor-pointer group',
-                        isDel && 'bg-rose-50/20',
+                        'border-b border-slate-100 dark:border-slate-800 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer group',
+                        isDel && 'bg-rose-50/20 dark:bg-rose-950/20',
                       )}
                     >
-                      <td className="px-3 py-3 text-[11px] text-slate-400 tabular-nums">{rowNum}</td>
+                      <td className="px-3 py-3 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{rowNum}</td>
                       <td className="px-3 py-3">
                         <span className={cn(
                           'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold ring-1 whitespace-nowrap',
                           isDel
-                            ? 'bg-rose-50 text-rose-700 ring-rose-200'
-                            : 'bg-amber-50 text-amber-700 ring-amber-200',
+                            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900'
+                            : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
                         )}>
                           {isDel ? <Trash2 className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
                           {isDel ? "O'CHIRILGAN" : 'TAHRIRLANGAN'}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-slate-700 tabular-nums whitespace-nowrap text-[12px]">
+                      <td className="px-3 py-3 text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap text-[12px]">
                         {formatDateTime(it.detectedAt)}
                       </td>
-                      <td className="px-3 py-3 text-slate-600 tabular-nums whitespace-nowrap text-[12px]">
+                      <td className="px-3 py-3 text-slate-600 dark:text-slate-300 tabular-nums whitespace-nowrap text-[12px]">
                         {it.txnDate ? new Date(it.txnDate).toLocaleDateString('ru-RU') : '—'}
                       </td>
                       <td className="px-3 py-3">
-                        <div className="font-semibold text-slate-800 text-[12.5px] leading-tight">
+                        <div className="font-semibold text-slate-800 dark:text-slate-200 text-[12.5px] leading-tight">
                           {it.bankNameSnap || it.account?.bank?.name || '—'}
                         </div>
-                        <div className="text-[10.5px] text-slate-500 font-mono mt-0.5">
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">
                           {it.accountNoSnap || it.account?.accountNo || '—'}
                         </div>
                       </td>
-                      <td className="px-3 py-3 font-mono text-[10.5px] text-slate-600 max-w-[200px] truncate" title={it.externalId}>
+                      <td className="px-3 py-3 font-mono text-[10.5px] text-slate-600 dark:text-slate-300 max-w-[200px] truncate" title={it.externalId}>
                         {it.externalId}
                       </td>
                       <td className="px-3 py-3">
                         {it.contractNumber ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100 font-mono text-[11.5px] font-semibold">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-900 font-mono text-[11.5px] font-semibold">
                             {it.contractNumber}
                           </span>
                         ) : (
-                          <span className="text-slate-400 text-[11px]">—</span>
+                          <span className="text-slate-400 dark:text-slate-500 text-[11px]">—</span>
                         )}
                       </td>
                       <td className="px-3 py-3 text-right whitespace-nowrap">
                         {it.amount ? (
                           <span className={cn(
                             'tabular-nums font-bold text-[13px]',
-                            it.direction === 'IN' ? 'text-emerald-700' : 'text-rose-700',
+                            it.direction === 'IN' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300',
                           )}>
                             {it.direction === 'IN' ? '+' : '−'}{formatMoney(Math.abs(Number(it.amount)), 'UZS').replace(' UZS', '')}
-                            <span className="text-[10px] text-slate-400 ml-1 font-medium">UZS</span>
+                            <span className="text-[10px] text-slate-400 dark:text-slate-500 ml-1 font-medium">UZS</span>
                           </span>
-                        ) : <span className="text-slate-400">—</span>}
+                        ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
                       </td>
                       <td className="px-3 py-3">
                         {isDel ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 text-[10px] font-bold ring-1 ring-rose-100">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[10px] font-bold ring-1 ring-rose-100 dark:ring-rose-900">
                             <Trash2 className="h-2.5 w-2.5" /> butun yozuv
                           </span>
                         ) : it.fieldsChanged && it.fieldsChanged.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {it.fieldsChanged.slice(0, 4).map((f) => (
-                              <span key={f} className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 text-[10px] font-bold ring-1 ring-amber-100 font-mono">
+                              <span key={f} className="px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-[10px] font-bold ring-1 ring-amber-100 dark:ring-amber-900 font-mono">
                                 {f}
                               </span>
                             ))}
                             {it.fieldsChanged.length > 4 && (
-                              <span className="text-[10px] text-slate-500 px-1 py-0.5">+{it.fieldsChanged.length - 4}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 px-1 py-0.5">+{it.fieldsChanged.length - 4}</span>
                             )}
                           </div>
                         ) : (
-                          <span className="text-[10px] text-slate-400">—</span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500">—</span>
                         )}
                       </td>
-                      <td className="px-3 py-3 text-[10.5px] text-slate-500 max-w-[120px] truncate" title={it.detectedBy || ''}>
+                      <td className="px-3 py-3 text-[10.5px] text-slate-500 dark:text-slate-400 max-w-[120px] truncate" title={it.detectedBy || ''}>
                         {it.detectedBy ? (
                           it.detectedBy.startsWith('manual:')
-                            ? <span className="text-indigo-700 font-medium">{it.detectedBy.replace('manual:', '')}</span>
-                            : <span className="text-slate-500">{it.detectedBy}</span>
+                            ? <span className="text-indigo-700 dark:text-indigo-300 font-medium">{it.detectedBy.replace('manual:', '')}</span>
+                            : <span className="text-slate-500 dark:text-slate-400">{it.detectedBy}</span>
                         ) : '—'}
                       </td>
                     </tr>
@@ -400,18 +400,18 @@ export default function ChangesPage() {
 
           {/* Pagination footer */}
           {total > 0 && (
-            <div className="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px] text-slate-600">
+            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px] text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-3">
                 <span>
-                  Jami: <b className="tabular-nums text-slate-800">{total.toLocaleString('ru-RU')}</b>
+                  Jami: <b className="tabular-nums text-slate-800 dark:text-slate-200">{total.toLocaleString('ru-RU')}</b>
                 </span>
-                <span className="text-slate-300">·</span>
+                <span className="text-slate-300 dark:text-slate-600">·</span>
                 <span>
-                  Sahifa <b className="tabular-nums text-slate-800">{page}</b>/<b className="tabular-nums">{totalPages}</b>
+                  Sahifa <b className="tabular-nums text-slate-800 dark:text-slate-200">{page}</b>/<b className="tabular-nums">{totalPages}</b>
                 </span>
-                <span className="text-slate-300 hidden sm:inline">·</span>
+                <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">·</span>
                 <div className="hidden sm:flex items-center gap-1.5">
-                  <Label className="text-[11px] text-slate-500 m-0">Sahifada:</Label>
+                  <Label className="text-[11px] text-slate-500 dark:text-slate-400 m-0">Sahifada:</Label>
                   <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
                     <SelectTrigger className="h-7 w-16 text-[11px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -428,7 +428,7 @@ export default function ChangesPage() {
                 <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="h-8 px-2">
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <span className="px-2 text-[12px] font-semibold text-slate-700 tabular-nums">{page}</span>
+                <span className="px-2 text-[12px] font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{page}</span>
                 <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} className="h-8 px-2">
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -465,11 +465,11 @@ function KpiCard({
   tone: 'indigo' | 'rose' | 'amber' | 'slate' | 'emerald';
 }) {
   const tones: Record<string, { bg: string; ring: string; iconBg: string; iconText: string; valText: string }> = {
-    indigo: { bg: 'from-indigo-50/80 to-white', ring: 'ring-indigo-100', iconBg: 'bg-indigo-100 text-indigo-700', iconText: 'text-indigo-700', valText: 'text-slate-900' },
-    rose:   { bg: 'from-rose-50/80 to-white',   ring: 'ring-rose-100',   iconBg: 'bg-rose-100 text-rose-700',     iconText: 'text-rose-700',   valText: 'text-rose-700' },
-    amber:  { bg: 'from-amber-50/80 to-white',  ring: 'ring-amber-100',  iconBg: 'bg-amber-100 text-amber-700',   iconText: 'text-amber-700',  valText: 'text-amber-700' },
-    slate:  { bg: 'from-slate-50/80 to-white',  ring: 'ring-slate-200',  iconBg: 'bg-slate-100 text-slate-700',   iconText: 'text-slate-700',  valText: 'text-slate-900' },
-    emerald:{ bg: 'from-emerald-50/80 to-white',ring: 'ring-emerald-100',iconBg: 'bg-emerald-100 text-emerald-700',iconText: 'text-emerald-700',valText: 'text-emerald-700' },
+    indigo: { bg: 'from-indigo-50/80 to-white dark:from-indigo-950/40 dark:to-slate-900', ring: 'ring-indigo-100 dark:ring-indigo-900', iconBg: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300', iconText: 'text-indigo-700 dark:text-indigo-300', valText: 'text-slate-900 dark:text-slate-100' },
+    rose:   { bg: 'from-rose-50/80 to-white dark:from-rose-950/40 dark:to-slate-900',   ring: 'ring-rose-100 dark:ring-rose-900',   iconBg: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',     iconText: 'text-rose-700 dark:text-rose-300',   valText: 'text-rose-700 dark:text-rose-300' },
+    amber:  { bg: 'from-amber-50/80 to-white dark:from-amber-950/40 dark:to-slate-900',  ring: 'ring-amber-100 dark:ring-amber-900',  iconBg: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',   iconText: 'text-amber-700 dark:text-amber-300',  valText: 'text-amber-700 dark:text-amber-300' },
+    slate:  { bg: 'from-slate-50/80 to-white dark:from-slate-900 dark:to-slate-900',  ring: 'ring-slate-200 dark:ring-slate-700',  iconBg: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',   iconText: 'text-slate-700 dark:text-slate-300',  valText: 'text-slate-900 dark:text-slate-100' },
+    emerald:{ bg: 'from-emerald-50/80 to-white dark:from-emerald-950/40 dark:to-slate-900',ring: 'ring-emerald-100 dark:ring-emerald-900',iconBg: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',iconText: 'text-emerald-700 dark:text-emerald-300',valText: 'text-emerald-700 dark:text-emerald-300' },
   };
   const t = tones[tone];
   return (
@@ -486,9 +486,9 @@ function KpiCard({
             <div className={cn('text-2xl lg:text-3xl font-black tabular-nums leading-none', t.valText)}>
               {value}
             </div>
-            {suffix && <span className="text-[10px] text-slate-400 font-bold uppercase">{suffix}</span>}
+            {suffix && <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">{suffix}</span>}
           </div>
-          {sub && <div className="text-[10.5px] text-slate-500 font-medium mt-1.5">{sub}</div>}
+          {sub && <div className="text-[10.5px] text-slate-500 dark:text-slate-400 font-medium mt-1.5">{sub}</div>}
         </div>
         <div className={cn('w-10 h-10 lg:w-11 lg:h-11 rounded-xl grid place-items-center shrink-0 ring-1 ring-white/40', t.iconBg)}>
           <Icon className="h-5 w-5" />
@@ -533,7 +533,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/40">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/40 dark:bg-slate-900">
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 text-[12px]">
             <InfoRow label="Aniqlangan" value={formatDateTime(item.detectedAt)} icon={Calendar} />
             <InfoRow label="Aniqlovchi" value={item.detectedBy || '—'} icon={Activity} />
@@ -544,30 +544,30 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           </div>
 
           {item.note && (
-            <div className="rounded-xl bg-white ring-1 ring-slate-200 px-3.5 py-2.5 text-[12px] text-slate-700 flex items-start gap-2">
-              <FileText className="h-3.5 w-3.5 text-slate-400 mt-0.5 shrink-0" />
+            <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3.5 py-2.5 text-[12px] text-slate-700 dark:text-slate-300 flex items-start gap-2">
+              <FileText className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 mt-0.5 shrink-0" />
               <span>{item.note}</span>
             </div>
           )}
 
           {!isDel && item.fieldsChanged?.length > 0 && (
-            <div className="rounded-2xl ring-1 ring-amber-200 bg-white overflow-hidden shadow-soft">
-              <div className="px-4 py-2.5 bg-gradient-to-r from-amber-100/80 to-amber-50 text-[11px] uppercase tracking-wider font-bold text-amber-800 flex items-center gap-2">
+            <div className="rounded-2xl ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 overflow-hidden shadow-soft">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-amber-100/80 to-amber-50 dark:from-amber-950/40 dark:to-amber-950/30 text-[11px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
                 <Edit3 className="h-3.5 w-3.5" /> O'zgargan maydonlar ({item.fieldsChanged.length})
               </div>
-              <div className="divide-y divide-amber-100">
+              <div className="divide-y divide-amber-100 dark:divide-amber-900">
                 {item.fieldsChanged.map((f) => {
                   const oldV = item.oldData?.[f]?.old ?? null;
                   const newV = item.oldData?.[f]?.new ?? null;
                   return (
-                    <div key={f} className="px-4 py-3 text-[12px] flex items-center gap-3 hover:bg-amber-50/30 transition-colors">
-                      <div className="font-mono font-bold text-amber-900 w-32 shrink-0 text-[11.5px]">{f}</div>
+                    <div key={f} className="px-4 py-3 text-[12px] flex items-center gap-3 hover:bg-amber-50/30 dark:hover:bg-amber-950/20 transition-colors">
+                      <div className="font-mono font-bold text-amber-900 dark:text-amber-300 w-32 shrink-0 text-[11.5px]">{f}</div>
                       <div className="flex-1 flex items-center gap-2 min-w-0 flex-wrap">
-                        <code className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 break-all font-mono text-[11.5px] font-semibold">
+                        <code className="px-2 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300 break-all font-mono text-[11.5px] font-semibold">
                           {String(oldV ?? '—')}
                         </code>
-                        <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                        <code className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 break-all font-mono text-[11.5px] font-semibold">
+                        <ArrowRight className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 shrink-0" />
+                        <code className="px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300 break-all font-mono text-[11.5px] font-semibold">
                           {String(newV ?? '—')}
                         </code>
                       </div>
@@ -579,18 +579,18 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           )}
 
           {isDel && item.oldData && (
-            <div className="rounded-2xl ring-1 ring-rose-200 bg-white overflow-hidden shadow-soft">
-              <div className="px-4 py-2.5 bg-gradient-to-r from-rose-100/80 to-rose-50 text-[11px] uppercase tracking-wider font-bold text-rose-800 flex items-center gap-2">
+            <div className="rounded-2xl ring-1 ring-rose-200 dark:ring-rose-900 bg-white dark:bg-slate-900 overflow-hidden shadow-soft">
+              <div className="px-4 py-2.5 bg-gradient-to-r from-rose-100/80 to-rose-50 dark:from-rose-950/40 dark:to-rose-950/30 text-[11px] uppercase tracking-wider font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2">
                 <Trash2 className="h-3.5 w-3.5" /> O'chirilgan yozuv snapshot
               </div>
-              <pre className="px-4 py-3 text-[10.5px] font-mono text-slate-700 overflow-x-auto max-h-[320px] bg-slate-50/60">
+              <pre className="px-4 py-3 text-[10.5px] font-mono text-slate-700 dark:text-slate-300 overflow-x-auto max-h-[320px] bg-slate-50/60 dark:bg-slate-800/60">
                 {JSON.stringify(item.oldData, null, 2)}
               </pre>
             </div>
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 bg-white">
+        <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
           <Button variant="ghost" onClick={onClose}>Yopish</Button>
         </DialogFooter>
       </DialogContent>
@@ -600,12 +600,12 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
 
 function InfoRow({ label, value, mono, icon: Icon }: { label: string; value: string; mono?: boolean; icon?: any }) {
   return (
-    <div className="rounded-xl bg-white ring-1 ring-slate-200 px-3 py-2 shadow-soft/50">
-      <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 flex items-center gap-1">
+    <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 shadow-soft/50">
+      <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
         {Icon && <Icon className="h-3 w-3" />}
         {label}
       </div>
-      <div className={cn('text-[12.5px] font-bold text-slate-800 truncate mt-0.5', mono && 'font-mono')}>{value}</div>
+      <div className={cn('text-[12.5px] font-bold text-slate-800 dark:text-slate-200 truncate mt-0.5', mono && 'font-mono')}>{value}</div>
     </div>
   );
 }
@@ -693,7 +693,7 @@ function ManualCheckDialog({
 
         <div className="p-5 space-y-4">
           {minDate && (
-            <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800">
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800 dark:text-amber-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
               Sync chegarasi: <b className="tabular-nums">{minDate}</b> — bundan oldinga chiqib bo'lmaydi
             </div>
@@ -702,7 +702,7 @@ function ManualCheckDialog({
           {!result && (
             <>
               <div>
-                <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Hisob</Label>
+                <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Hisob</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -717,7 +717,7 @@ function ManualCheckDialog({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Sanadan</Label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -728,7 +728,7 @@ function ManualCheckDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 mb-1.5 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Sanagacha</Label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -740,13 +740,13 @@ function ManualCheckDialog({
                 </div>
               </div>
               {fromTooEarly && (
-                <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 text-[12px] text-rose-800 inline-flex items-center gap-2">
+                <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-center gap-2">
                   <X className="h-3.5 w-3.5" /> Sanadan {minDate} dan oldin bo'lmasligi kerak
                 </div>
               )}
               {!fromTooEarly && dayDiff > 0 && (
-                <div className="rounded-lg bg-slate-50 px-3 py-2 text-[12px] text-slate-700 inline-flex items-center gap-2">
-                  <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-3 py-2 text-[12px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-2">
+                  <Calendar className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
                   <b className="tabular-nums">{dayDiff}</b> ta kun ·{' '}
                   <b>{accountId === 'all' ? 'barcha sync hisoblar' : '1 ta hisob'}</b>
                 </div>
@@ -756,9 +756,9 @@ function ManualCheckDialog({
 
           {result?.ok && (
             <div className="space-y-3">
-              <div className="rounded-2xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 flex items-start gap-2.5">
-                <CheckCircle2 className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
-                <div className="text-[12.5px] text-emerald-900">
+              <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-4 py-3 flex items-start gap-2.5">
+                <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
+                <div className="text-[12.5px] text-emerald-900 dark:text-emerald-300">
                   <div className="font-bold mb-1">Tekshirish yakunlandi</div>
                   <div className="grid grid-cols-3 gap-2 mt-2">
                     <ResultBadge label="Tekshirildi" value={result.checked} color="indigo" />
@@ -768,7 +768,7 @@ function ManualCheckDialog({
                 </div>
               </div>
               {result.skippedAccounts?.length > 0 && (
-                <div className="rounded-lg bg-amber-50 ring-1 ring-amber-200 px-3 py-2 text-[11.5px] text-amber-800">
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[11.5px] text-amber-800 dark:text-amber-300">
                   <b>O'tkazib yuborilgan ({result.skippedAccounts.length}):</b>{' '}
                   {result.skippedAccounts.slice(0, 5).join(', ')}
                   {result.skippedAccounts.length > 5 && '...'}
@@ -778,7 +778,7 @@ function ManualCheckDialog({
           )}
         </div>
 
-        <DialogFooter className="px-5 py-3 border-t border-slate-100 bg-slate-50/40">
+        <DialogFooter className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900">
           {result?.ok ? (
             <Button onClick={onClose}>Yopish</Button>
           ) : (
@@ -802,9 +802,9 @@ function ManualCheckDialog({
 
 function ResultBadge({ label, value, color }: { label: string; value: number; color: 'indigo' | 'rose' | 'amber' }) {
   const styles: Record<string, string> = {
-    indigo: 'bg-indigo-100 text-indigo-800 ring-indigo-200',
-    rose: 'bg-rose-100 text-rose-800 ring-rose-200',
-    amber: 'bg-amber-100 text-amber-800 ring-amber-200',
+    indigo: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900',
+    rose: 'bg-rose-100 dark:bg-rose-900/30 text-rose-800 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
+    amber: 'bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
   };
   return (
     <div className={cn('rounded-lg px-2.5 py-1.5 ring-1 text-center', styles[color])}>

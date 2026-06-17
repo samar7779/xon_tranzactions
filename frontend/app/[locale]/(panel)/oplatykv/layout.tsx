@@ -27,7 +27,7 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
         title="ОплатыКв"
         subtitle="Kvartira to'lovlari · CRM va Bank sverkasi"
       />
-      <div className="px-6 lg:px-8 pt-3 bg-white border-b border-slate-200/80 sticky top-0 z-30">
+      <div className="px-6 lg:px-8 pt-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-700 sticky top-0 z-30">
         <nav className="flex items-center gap-1" role="tablist">
           {TABS.map((t) => {
             const href = `/${locale}${t.href}`;
@@ -41,13 +41,13 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
                 className={cn(
                   'group inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-all -mb-px',
                   active
-                    ? 'border-indigo-600 text-indigo-700'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300',
+                    ? 'border-indigo-600 text-indigo-700 dark:text-indigo-400'
+                    : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700',
                 )}
               >
                 <span className={cn(
                   'relative w-5 h-5 rounded-md overflow-hidden ring-1 transition-all shrink-0',
-                  active ? 'ring-indigo-200 shadow-sm' : 'ring-slate-200 group-hover:ring-slate-300',
+                  active ? 'ring-indigo-200 dark:ring-indigo-900 shadow-sm' : 'ring-slate-200 dark:ring-slate-700 group-hover:ring-slate-300 dark:group-hover:ring-slate-600',
                 )}>
                   <Image src={t.img} alt={t.label} fill sizes="20px" className="object-contain" />
                 </span>

@@ -42,11 +42,11 @@ import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
 
 const MATCH_CLS: Record<string, string> = {
-  AUTO:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  MANUAL:    'bg-blue-50 text-blue-700 ring-blue-200',
-  PARTIAL:   'bg-amber-50 text-amber-700 ring-amber-200',
-  IGNORED:   'bg-slate-50 text-slate-500 ring-slate-200',
-  UNMATCHED: 'bg-rose-50 text-rose-700 ring-rose-200',
+  AUTO:      'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900',
+  MANUAL:    'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900',
+  PARTIAL:   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
+  IGNORED:   'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700',
+  UNMATCHED: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
 };
 const MATCH_KEYS: Record<string, string> = {
   AUTO:      'matchStatusAUTO',
@@ -582,7 +582,7 @@ export default function TransactionsPage() {
           <button
             onClick={() => setKpiMode((m) => (m === 'all' ? 'CLIENT' : 'all'))}
             title={kpiMode === 'all' ? 'Klient (debitorka) statistikasi' : "Umumiy statistikaga qaytish"}
-            className="absolute -right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white shadow-lg ring-1 ring-slate-200 hover:bg-indigo-50 hover:ring-indigo-300 hover:text-indigo-700 transition-all hover:scale-110"
+            className="absolute -right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-slate-900 shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:ring-indigo-300 dark:hover:ring-indigo-900 hover:text-indigo-700 dark:hover:text-indigo-300 transition-all hover:scale-110"
           >
             {kpiMode === 'all'
               ? <ChevronRight className="h-4 w-4" />
@@ -614,7 +614,7 @@ export default function TransactionsPage() {
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setExtraToolsOpen((v) => !v); }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 text-[11px] uppercase tracking-wider font-semibold text-slate-500 transition-colors"
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 transition-colors"
                 >
                   <span className="flex-1 text-left">Qoshimcha amallar</span>
                   <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', extraToolsOpen && 'rotate-180')} />
@@ -625,7 +625,7 @@ export default function TransactionsPage() {
                       onSelect={(e) => { e.preventDefault(); setBackfillOpen(true); }}
                       className="cursor-pointer"
                     >
-                      <History className="h-4 w-4 mr-2 text-indigo-600" />
+                      <History className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
                       <span className="flex-1">{t('toolBackfill') || 'Tarixni yuklash'}</span>
                     </DropdownMenuItem>
                     {canManageCategories && (
@@ -635,8 +635,8 @@ export default function TransactionsPage() {
                         className="cursor-pointer"
                       >
                         {recategorizeAllMut.isPending
-                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
-                          : <Wand2 className="h-4 w-4 mr-2 text-amber-600" />}
+                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600 dark:text-amber-400" />
+                          : <Wand2 className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />}
                         <span className="flex-1">Kategoriyalash</span>
                       </DropdownMenuItem>
                     )}
@@ -665,16 +665,16 @@ export default function TransactionsPage() {
                 />
                 <Search className={cn(
                   'absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors duration-300 z-10',
-                  q ? 'text-indigo-500' : 'text-slate-400 group-focus-within/search:text-indigo-500',
+                  q ? 'text-indigo-500 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 group-focus-within/search:text-indigo-500',
                 )} />
                 <Input
                   className={cn(
-                    'relative pl-9 h-10 rounded-xl bg-slate-50/60 border-slate-200',
+                    'relative pl-9 h-10 rounded-xl bg-slate-50/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700',
                     'transition-all duration-300',
-                    'focus-visible:bg-white focus-visible:ring-0 focus-visible:ring-offset-0',
+                    'focus-visible:bg-white dark:focus-visible:bg-slate-900 focus-visible:ring-0 focus-visible:ring-offset-0',
                     'focus-visible:shadow-[0_0_0_3px_rgba(99,102,241,0.12),0_8px_24px_-8px_rgba(99,102,241,0.35)]',
                     'focus-visible:border-indigo-300',
-                    'hover:border-slate-300',
+                    'hover:border-slate-300 dark:hover:border-slate-700',
                   )}
                   placeholder={t('searchPlaceholder')}
                   value={q}
@@ -682,7 +682,7 @@ export default function TransactionsPage() {
                 />
                 {q && (
                   <button
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:text-white hover:bg-rose-500 transition-colors z-10"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 dark:text-slate-500 hover:text-white hover:bg-rose-500 transition-colors z-10"
                     onClick={() => setQ('')}
                     aria-label={tc('reset')}
                   >
@@ -720,15 +720,15 @@ export default function TransactionsPage() {
                 <DropdownMenuContent align="end" className="w-60">
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Tools</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
-                    <Hash className="h-4 w-4 mr-2 text-fuchsia-600" />
+                    <Hash className="h-4 w-4 mr-2 text-fuchsia-600 dark:text-fuchsia-400" />
                     <span className="flex-1">{t('toolIdSearch') || 'ID orqali qidirish'}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setIdInspectorTrigger(Date.now())} className="cursor-pointer">
-                    <ScanLine className="h-4 w-4 mr-2 text-indigo-600" />
+                    <ScanLine className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
                     <span className="flex-1">Bank ID inspector</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setVipiskaDebugOpen(true)} className="cursor-pointer">
-                    <Search className="h-4 w-4 mr-2 text-cyan-600" />
+                    <Search className="h-4 w-4 mr-2 text-cyan-600 dark:text-cyan-400" />
                     <span className="flex-1">Vipiska tekshiruvi</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -737,9 +737,9 @@ export default function TransactionsPage() {
                     onClick={() => setColumnFilterMode((v) => !v)}
                     className="cursor-pointer"
                   >
-                    <FilterIcon className={cn('h-4 w-4 mr-2', columnFilterMode ? 'text-indigo-600' : 'text-slate-500')} />
+                    <FilterIcon className={cn('h-4 w-4 mr-2', columnFilterMode ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400')} />
                     <span className="flex-1">{columnFilterMode ? "Ustun filter: yoqilgan" : "Ustun filter rejimi"}</span>
-                    {columnFilterMode && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600" />}
+                    {columnFilterMode && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -762,7 +762,7 @@ export default function TransactionsPage() {
                 <DropdownMenuTrigger asChild>
                   <button
                     title="Export — Excel / CSV / Chop etish"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200 shrink-0"
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
                   >
                     <Download className="h-4 w-4" />
                   </button>
@@ -770,15 +770,15 @@ export default function TransactionsPage() {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Export</DropdownMenuLabel>
                   <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
                     <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500" />
+                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500 dark:text-slate-400" />
                     <span className="flex-1">CSV (joriy sahifa)</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
-                    <Printer className="h-4 w-4 mr-2 text-slate-600" />
+                    <Printer className="h-4 w-4 mr-2 text-slate-600 dark:text-slate-300" />
                     <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -793,7 +793,7 @@ export default function TransactionsPage() {
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
                       contractSources.size > 0
                         ? 'bg-violet-600 text-white shadow-md shadow-violet-500/30'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+                        : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700',
                     )}
                   >
                     <Paperclip className="h-4 w-4" />
@@ -805,7 +805,7 @@ export default function TransactionsPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="p-2 w-64">
-                  <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 px-2 py-1.5">
+                  <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 px-2 py-1.5">
                     Shartnoma manbasi
                   </div>
                   <button
@@ -820,18 +820,18 @@ export default function TransactionsPage() {
                     className={cn(
                       'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all',
                       contractSources.has('manual')
-                        ? 'bg-amber-50 text-amber-800 ring-1 ring-amber-200'
-                        : 'hover:bg-slate-50 text-slate-700',
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
                     )}
                   >
                     <span className={cn(
                       'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
-                      contractSources.has('manual') ? 'bg-amber-500 border-amber-500' : 'border-slate-300',
+                      contractSources.has('manual') ? 'bg-amber-500 border-amber-500' : 'border-slate-300 dark:border-slate-700',
                     )}>
                       {contractSources.has('manual') && <CheckCircle2 className="h-3 w-3 text-white" />}
                     </span>
                     <span className="flex-1 text-left">Qo'lda kiritilgan</span>
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-amber-700 bg-amber-100">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30">
                       qo'lda
                     </span>
                   </button>
@@ -847,26 +847,26 @@ export default function TransactionsPage() {
                     className={cn(
                       'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all mt-0.5',
                       contractSources.has('ariza')
-                        ? 'bg-violet-50 text-violet-800 ring-1 ring-violet-200'
-                        : 'hover:bg-slate-50 text-slate-700',
+                        ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-800 dark:text-violet-300 ring-1 ring-violet-200 dark:ring-violet-900'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
                     )}
                   >
                     <span className={cn(
                       'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
-                      contractSources.has('ariza') ? 'bg-violet-600 border-violet-600' : 'border-slate-300',
+                      contractSources.has('ariza') ? 'bg-violet-600 border-violet-600' : 'border-slate-300 dark:border-slate-700',
                     )}>
                       {contractSources.has('ariza') && <CheckCircle2 className="h-3 w-3 text-white" />}
                     </span>
                     <span className="flex-1 text-left">Ariza orqali</span>
-                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-violet-700 bg-violet-100">
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30">
                       <Paperclip className="h-2.5 w-2.5 mr-0.5" /> ariza
                     </span>
                   </button>
                   {contractSources.size > 0 && (
-                    <div className="border-t border-slate-100 mt-1 pt-1">
+                    <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                       <button
                         onClick={() => { setContractSources(new Set()); setPage(1); }}
-                        className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 hover:bg-slate-50 rounded-md"
+                        className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
                       >
                         Tozalash
                       </button>
@@ -880,8 +880,8 @@ export default function TransactionsPage() {
                   <button className={cn(
                     "inline-flex items-center gap-2 h-10 px-3.5 rounded-xl text-sm font-medium transition-colors",
                     (dateFrom || dateTo)
-                      ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200"
-                      : "bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200",
+                      ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900"
+                      : "bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700",
                   )}>
                     <Calendar className="h-4 w-4" />
                     {dateFrom || dateTo ? `${dateFrom || '...'} → ${dateTo || '...'}` : t('dateRange')}
@@ -890,11 +890,11 @@ export default function TransactionsPage() {
                 <DropdownMenuContent align="end" className="p-3 w-72">
                   <div className="space-y-2">
                     <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{tc('from')}</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{tc('from')}</div>
                       <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9" />
                     </div>
                     <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 font-semibold">{tc('to')}</div>
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{tc('to')}</div>
                       <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-9" />
                     </div>
                     <div className="flex gap-2 pt-1">
@@ -908,7 +908,7 @@ export default function TransactionsPage() {
               {(activeFilters > 0 || q) && (
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 text-amber-900 hover:bg-rose-100 hover:text-rose-700 ring-1 ring-amber-300 hover:ring-rose-300 text-[12px] font-semibold transition-colors animate-pulse-once"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-300 ring-1 ring-amber-300 dark:ring-amber-900 hover:ring-rose-300 dark:hover:ring-rose-900 text-[12px] font-semibold transition-colors animate-pulse-once"
                   title="Faol filtrlarni tozalash"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -930,7 +930,7 @@ export default function TransactionsPage() {
               <div className="overflow-x-auto overflow-y-visible" style={{ overflowY: 'visible' }}>
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-50/80 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                    <tr className="bg-slate-50/80 dark:bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
                       <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} tabs={[{ column: 'bank', label: 'Bank' }, { column: 'accountIds', label: 'Hisob raqami' }]} />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
                       <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
@@ -942,13 +942,13 @@ export default function TransactionsPage() {
                       <th className="w-12"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {(filtered?.length ?? 0) === 0 ? (
                       <tr>
                         <td colSpan={9} className="px-6 py-12 text-center">
-                          <div className="flex flex-col items-center gap-2 text-slate-400">
+                          <div className="flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500">
                             <Wallet className="h-8 w-8" />
-                            <div className="text-[13px] font-semibold text-slate-600">{t('notFoundTitle')}</div>
+                            <div className="text-[13px] font-semibold text-slate-600 dark:text-slate-300">{t('notFoundTitle')}</div>
                             <div className="text-[11px]">{q || activeFilters > 0 ? t('noDataChangeFilters') : t('noDataYet')}</div>
                           </div>
                         </td>
@@ -961,7 +961,7 @@ export default function TransactionsPage() {
 
                       return (
                         <tr key={it.id}
-                          className="group hover:bg-slate-50/60 transition-colors cursor-pointer"
+                          className="group hover:bg-slate-50/60 dark:hover:bg-slate-800/60 transition-colors cursor-pointer"
                           onClick={() => setDetailRow(it)}
                         >
                           {/* 1) Bank · Hisob — import bo'lsa importBankNameText va from/toAccount fallback */}
@@ -980,19 +980,19 @@ export default function TransactionsPage() {
                                     <div className="text-[12px] font-medium truncate flex items-center gap-1">
                                       <span className="truncate">{bankName || '—'}</span>
                                       {isImport && (
-                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 text-fuchsia-700">IMP</span>
+                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300">IMP</span>
                                       )}
                                       {isAloqa && (
-                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 text-amber-700 inline-flex items-center gap-0.5" title="Aloqa Bank — read-only">
+                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5" title="Aloqa Bank — read-only">
                                           <Lock className="h-2 w-2" />
                                           ALB
                                         </span>
                                       )}
                                     </div>
                                     {it.account?.ownerName && (
-                                      <div className="text-[10px] text-slate-600 truncate">{it.account.ownerName}</div>
+                                      <div className="text-[10px] text-slate-600 dark:text-slate-300 truncate">{it.account.ownerName}</div>
                                     )}
-                                    <div className="font-mono text-[10px] text-slate-400 truncate">{accountNo || ''}</div>
+                                    <div className="font-mono text-[10px] text-slate-400 dark:text-slate-500 truncate">{accountNo || ''}</div>
                                   </div>
                                 </div>
                               );
@@ -1001,7 +1001,7 @@ export default function TransactionsPage() {
                           {/* 2) Sana / Vaqt */}
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-[13px] font-medium tabular-nums">{formatDate(it.txnDate)}</div>
-                            <div className="text-[10px] text-slate-500 tabular-nums">
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
                               {it.operationTime
                                 ? it.operationTime.slice(0, 5)
                                 : (it.inputAt
@@ -1023,7 +1023,7 @@ export default function TransactionsPage() {
                               <div className="min-w-0">
                                 <div className="text-[13px] font-medium truncate">{counterparty.name}</div>
                                 {counterparty.meta && (
-                                  <div className="font-mono text-[10px] text-slate-500 truncate">{counterparty.meta}</div>
+                                  <div className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{counterparty.meta}</div>
                                 )}
                               </div>
                             </div>
@@ -1033,8 +1033,8 @@ export default function TransactionsPage() {
                             <span className={cn(
                               "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold ring-1 ring-inset",
                               it.direction === 'IN'
-                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                                : "bg-rose-50 text-rose-700 ring-rose-200",
+                                ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900"
+                                : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900",
                             )}>
                               {it.direction === 'IN'
                                 ? <><ArrowDownLeft className="h-3 w-3" /> {t('dirIn')}</>
@@ -1074,11 +1074,11 @@ export default function TransactionsPage() {
                                 placeholder={it.category ? '—' : ''}
                               />
                             ) : it.source === 'IMPORT' && it.importCategoryText ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-200 max-w-full">
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold ring-1 ring-inset bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900 max-w-full">
                                 <span className="truncate max-w-[140px]" title={it.importCategoryText}>{it.importCategoryText}</span>
                               </span>
                             ) : (
-                              <span className="text-[10px] text-slate-300">—</span>
+                              <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                           {/* Shartnoma */}
@@ -1088,19 +1088,19 @@ export default function TransactionsPage() {
                                 // QO'LDA yoki ARIZA — ariza bo'lsa violet, aks holda amber
                                 it.hasAttachment ? (
                                   <div className="flex items-center gap-1.5">
-                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-violet-800 bg-violet-50 ring-violet-200">
+                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-violet-800 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-violet-200 dark:ring-violet-900">
                                       {it.contractNumber}
                                     </code>
-                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 ring-1 ring-violet-200">
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 ring-1 ring-violet-200 dark:ring-violet-900">
                                       <Paperclip className="h-2.5 w-2.5" /> ariza
                                     </span>
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-1.5">
-                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-amber-800 bg-amber-50 ring-amber-200">
+                                    <code className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900">
                                       {it.contractNumber}
                                     </code>
-                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                                    <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900">
                                       qo'lda
                                     </span>
                                   </div>
@@ -1108,7 +1108,7 @@ export default function TransactionsPage() {
                               ) : it.contractStatus === 'unverified' ? (
                                 // XATO holati — faqat badge + lookup icon, raqamni yashiramiz
                                 <div className="flex items-center gap-1.5">
-                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
+                                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
                                     <AlertCircle className="h-3 w-3" /> xato
                                   </span>
                                   <button
@@ -1123,25 +1123,25 @@ export default function TransactionsPage() {
                                 // Verified — shartnoma raqami ko'rinadi (+ BEKOR badge agar cancelled)
                                 <div className="flex items-center gap-1">
                                   <code
-                                    className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 bg-indigo-50 ring-indigo-200"
+                                    className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900"
                                     title={it.contractCustomer || ''}
                                   >
                                     {it.contractNumber}
                                   </code>
                                   {it.contractCrmStatus && /cancel|отмен|бекор/i.test(it.contractCrmStatus) && (
-                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 ring-1 ring-orange-200" title={`CRM: ${it.contractCrmStatus}`}>
+                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM: ${it.contractCrmStatus}`}>
                                       ⊘ bekor
                                     </span>
                                   )}
                                 </div>
                               )
                             ) : (
-                              <span className="text-[10px] text-slate-300">—</span>
+                              <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
                             )}
                           </td>
                           <td className={cn(
                             "px-4 py-3 text-right tabular-nums font-bold whitespace-nowrap",
-                            it.direction === 'IN' ? 'text-emerald-600' : 'text-rose-600',
+                            it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400',
                           )}>
                             {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                           </td>
@@ -1163,8 +1163,8 @@ export default function TransactionsPage() {
         {/* ═══ PAGINATION ═══ */}
         {data && data.total > 0 && (
           <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="text-xs text-slate-500">
-              <span className="font-semibold text-slate-700 tabular-nums">{((page - 1) * perPage) + 1}–{Math.min(page * perPage, data.total)}</span> / {t('ofTotal', { n: data.total })}
+            <div className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-300 tabular-nums">{((page - 1) * perPage) + 1}–{Math.min(page * perPage, data.total)}</span> / {t('ofTotal', { n: data.total })}
             </div>
             <div className="flex items-center gap-3">
               <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
@@ -1240,7 +1240,7 @@ export default function TransactionsPage() {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Hash className="h-4 w-4 text-indigo-600" /> {t('idDialogTitle')}
+              <Hash className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> {t('idDialogTitle')}
             </DialogTitle>
             <DialogDescription>
               {t('idDialogDesc')}
@@ -1402,7 +1402,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
       <DialogContent className={progress ? 'max-w-2xl' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-4 w-4 text-indigo-600" /> Eski tarixni yuklash
+            <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Eski tarixni yuklash
           </DialogTitle>
           <DialogDescription>
             {stalled
@@ -1419,45 +1419,45 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             {/* Progress bar */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[12px] font-semibold text-slate-700">
+                <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">
                   {doneCount} / {progress.total} hisob bajarildi
                 </span>
-                <span className="text-[12px] font-bold tabular-nums text-indigo-600">{pct}%</span>
+                <span className="text-[12px] font-bold tabular-nums text-indigo-600 dark:text-indigo-400">{pct}%</span>
               </div>
-              <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+              <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <div
                   className={cn('h-full rounded-full transition-all duration-500', allDone ? 'bg-emerald-500' : 'bg-indigo-500')}
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <div className="text-[10px] text-slate-400 mt-1">{progress.days} kun · {scope === 'all' ? 'barcha hisob' : scope === 'bank' ? 'bank bo\'yicha' : 'bitta hisob'}</div>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{progress.days} kun · {scope === 'all' ? 'barcha hisob' : scope === 'bank' ? 'bank bo\'yicha' : 'bitta hisob'}</div>
             </div>
 
             {/* ─── Sana oralig'i ko'rsatuvi (so'ralgan vs haqiqiy) ─── */}
-            <div className="rounded-xl ring-1 ring-slate-200 bg-slate-50/60 px-3 py-2.5 space-y-1.5">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50/60 dark:bg-slate-900/60 px-3 py-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-slate-500 font-semibold">So'raldi:</span>
-                <span className="font-mono text-slate-700 tabular-nums">
+                <span className="text-slate-500 dark:text-slate-400 font-semibold">So'raldi:</span>
+                <span className="font-mono text-slate-700 dark:text-slate-300 tabular-nums">
                   {progress.requestedFrom} → {progress.requestedTo}
                 </span>
               </div>
               {progress.actualFrom && progress.actualTo && (
                 <div className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="text-slate-500 font-semibold">Olinmoqda:</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold">Olinmoqda:</span>
                   <span className={cn(
                     'font-mono tabular-nums font-semibold',
-                    (progress.clampedDays || 0) > 0 ? 'text-amber-700' : 'text-emerald-700',
+                    (progress.clampedDays || 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300',
                   )}>
                     {progress.actualFrom} → {progress.actualTo}
                   </span>
                 </div>
               )}
               {(progress.clampedDays || 0) > 0 && progress.syncMinDate && (
-                <div className="flex items-start gap-2 px-2 py-2 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-[10.5px] text-amber-900 mt-1">
-                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
+                <div className="flex items-start gap-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-[10.5px] text-amber-900 dark:text-amber-300 mt-1">
+                  <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                   <div>
                     <b>Sync chegarasi ({progress.syncMinDate}) tufayli {progress.clampedDays} ta kun o'tkazib yuborildi.</b>
-                    <div className="text-amber-700 mt-0.5">
+                    <div className="text-amber-700 dark:text-amber-300 mt-0.5">
                       Sozlamalardan chegarani o'zgartirib qayta urinib ko'ring.
                     </div>
                   </div>
@@ -1467,29 +1467,29 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
             {/* 3 ta jami */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-100 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Olindi</div>
-                <div className="text-lg font-bold tabular-nums text-slate-800">{totalFetched}</div>
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Olindi</div>
+                <div className="text-lg font-bold tabular-nums text-slate-800 dark:text-slate-200">{totalFetched}</div>
               </div>
-              <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-100 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-emerald-600 font-bold">Yangi qo'shildi</div>
-                <div className="text-lg font-bold tabular-nums text-emerald-700">{totalSaved}</div>
+              <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-100 dark:ring-emerald-900 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">Yangi qo'shildi</div>
+                <div className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{totalSaved}</div>
               </div>
-              <div className="rounded-xl bg-rose-50 ring-1 ring-rose-100 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-rose-600 font-bold">Xato</div>
-                <div className="text-lg font-bold tabular-nums text-rose-700">{totalErrors}</div>
+              <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-100 dark:ring-rose-900 px-3 py-2">
+                <div className="text-[9px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold">Xato</div>
+                <div className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-300">{totalErrors}</div>
               </div>
             </div>
 
             {/* Hisoblar ro'yxati */}
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-              <div className="px-3 py-1.5 bg-slate-50 text-[10px] uppercase tracking-wider font-semibold text-slate-500 flex items-center justify-between">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+              <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
                 <span>Hisoblar bo'yicha</span>
                 <span>{logs.length} ta yozuv</span>
               </div>
-              <div className="max-h-56 overflow-y-auto divide-y divide-slate-50">
+              <div className="max-h-56 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
                 {logs.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-[11px] text-slate-400 flex items-center justify-center gap-2">
+                  <div className="px-3 py-6 text-center text-[11px] text-slate-400 dark:text-slate-500 flex items-center justify-center gap-2">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Boshlanmoqda...
                   </div>
                 ) : (
@@ -1503,31 +1503,31 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                     return (
                       <div key={l.id} className="px-3 py-2 flex items-start gap-2">
                         {running ? (
-                          <Loader2 className="h-3.5 w-3.5 text-indigo-500 animate-spin shrink-0 mt-0.5" />
+                          <Loader2 className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400 animate-spin shrink-0 mt-0.5" />
                         ) : failed ? (
                           <span className="w-3.5 h-3.5 rounded-full bg-rose-500 shrink-0 grid place-items-center text-white text-[8px] mt-0.5">✕</span>
                         ) : (
-                          <Check className="h-3.5 w-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                          <Check className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400 shrink-0 mt-0.5" />
                         )}
                         <div className="flex-1 min-w-0">
                           {/* 1-qator: hisob raqami + statistika (o'ngda) */}
                           <div className="flex items-baseline justify-between gap-2">
-                            <span className="font-mono text-[11px] font-bold text-slate-800 truncate" title={accountNo}>
+                            <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 truncate" title={accountNo}>
                               {accountNo}
                             </span>
                             {l.errorMessage ? (
-                              <span className="text-[10px] text-rose-600 truncate max-w-[180px] shrink-0" title={l.errorMessage}>
+                              <span className="text-[10px] text-rose-600 dark:text-rose-400 truncate max-w-[180px] shrink-0" title={l.errorMessage}>
                                 {l.errorMessage}
                               </span>
                             ) : (
-                              <span className="text-[10px] text-slate-500 tabular-nums shrink-0">
-                                {l.fetched ?? 0} olindi · <span className="text-emerald-600 font-semibold">{l.saved ?? 0} yangi</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
+                                {l.fetched ?? 0} olindi · <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{l.saved ?? 0} yangi</span>
                               </span>
                             )}
                           </div>
                           {/* 2-qator: hisob egasi (mavjud bo'lsa) */}
                           {ownerName && (
-                            <div className="text-[10px] text-slate-500 truncate mt-0.5" title={ownerName}>
+                            <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate mt-0.5" title={ownerName}>
                               {ownerName}
                             </div>
                           )}
@@ -1540,17 +1540,17 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             </div>
 
             {allDone && (
-              <div className="text-[11px] text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-lg px-3 py-2 flex items-center gap-1.5">
+              <div className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 rounded-lg px-3 py-2 flex items-center gap-1.5">
                 <Check className="h-3.5 w-3.5" /> Tugadi — {totalSaved} ta yangi tranzaksiya qo'shildi
               </div>
             )}
 
             {stalled && (
-              <div className="text-[11px] text-amber-800 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2">
+              <div className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-1.5 font-semibold">
                   <AlertCircle className="h-3.5 w-3.5" /> Jarayon to'xtab qolgan
                 </div>
-                <div className="mt-0.5 text-amber-700">
+                <div className="mt-0.5 text-amber-700 dark:text-amber-300">
                   Server qayta ishga tushgan bo'lishi mumkin. {doneCount} / {progress.total} hisob
                   bajarilgan. Qaytadan boshlasangiz — qolganlari yuklanadi (allaqachon yuklangan
                   hisoblar takrorlanmaydi, faqat tekshiriladi).
@@ -1580,8 +1580,8 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             <div className="space-y-4">
               {/* Qamrov */}
               <div className="space-y-1.5">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Qamrov</div>
-                <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium w-full">
+                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Qamrov</div>
+                <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 text-[11px] font-medium w-full">
                   {[
                     { v: 'all', l: 'Barcha hisob' },
                     { v: 'bank', l: "Bank bo'yicha" },
@@ -1592,7 +1592,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                       onClick={() => setScope(o.v as any)}
                       className={cn(
                         'flex-1 px-2 h-8 rounded-lg transition-colors',
-                        scope === o.v ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                        scope === o.v ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                       )}
                     >
                       {o.l}
@@ -1603,7 +1603,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
               {(scope === 'bank' || scope === 'account') && (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Bank</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank</div>
                   <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); }}>
                     <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
                     <SelectContent>
@@ -1617,13 +1617,13 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
               {scope === 'account' && (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Hisob</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Hisob</div>
                   <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
                     <SelectTrigger>
                       <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
                     </SelectTrigger>
                     <SelectContent>
-                      <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white z-10">
+                      <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white dark:bg-slate-900 z-10">
                         <Input
                           value={accSearch}
                           onChange={(e) => setAccSearch(e.target.value)}
@@ -1633,13 +1633,13 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                         />
                       </div>
                       {bankAccounts.length === 0 ? (
-                        <div className="px-3 py-2 text-[11px] text-slate-400">Topilmadi</div>
+                        <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500">Topilmadi</div>
                       ) : (
                         bankAccounts.slice(0, 100).map((a: any) => (
                           <SelectItem key={a.id} value={a.id}>
                             <span className="flex flex-col text-left">
                               <span className="font-mono text-xs">{a.accountNo}</span>
-                              <span className="text-[10px] text-slate-500">{a.ownerName || '—'}</span>
+                              <span className="text-[10px] text-slate-500 dark:text-slate-400">{a.ownerName || '—'}</span>
                             </span>
                           </SelectItem>
                         ))
@@ -1652,16 +1652,16 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
               {/* Sana oralig'i */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Dan</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Dan</div>
                   <Input type="date" value={dateFrom} max={dateTo || today} onChange={(e) => setDateFrom(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">Gacha</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Gacha</div>
                   <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
               </div>
 
-              <div className="text-[10px] text-amber-700 bg-amber-50 ring-1 ring-amber-200 rounded-lg px-3 py-2 leading-relaxed">
+              <div className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-lg px-3 py-2 leading-relaxed">
                 ⚠ Katta oraliq + ko'p hisob uzoq davom etadi. Boshlangach jarayon shu yerda jonli ko'rsatiladi.
               </div>
             </div>
@@ -1691,16 +1691,16 @@ function StatCard({
   spark: number[];
 }) {
   const m = {
-    emerald: { bg: 'bg-emerald-50', text: 'text-emerald-600', ring: 'ring-emerald-100', accent: '#10b981' },
-    rose:    { bg: 'bg-rose-50',    text: 'text-rose-600',    ring: 'ring-rose-100',    accent: '#f43f5e' },
-    indigo:  { bg: 'bg-indigo-50',  text: 'text-indigo-600',  ring: 'ring-indigo-100',  accent: '#6366f1' },
-    amber:   { bg: 'bg-amber-50',   text: 'text-amber-600',   ring: 'ring-amber-100',   accent: '#f59e0b' },
+    emerald: { bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-600 dark:text-emerald-400', ring: 'ring-emerald-100 dark:ring-emerald-900', accent: '#10b981' },
+    rose:    { bg: 'bg-rose-50 dark:bg-rose-950/40',    text: 'text-rose-600 dark:text-rose-400',    ring: 'ring-rose-100 dark:ring-rose-900',    accent: '#f43f5e' },
+    indigo:  { bg: 'bg-indigo-50 dark:bg-indigo-950/40',  text: 'text-indigo-600 dark:text-indigo-400',  ring: 'ring-indigo-100 dark:ring-indigo-900',  accent: '#6366f1' },
+    amber:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   text: 'text-amber-600 dark:text-amber-400',   ring: 'ring-amber-100 dark:ring-amber-900',   accent: '#f59e0b' },
   }[color];
   return (
     <Card className="border-0 shadow-soft card-hover overflow-hidden">
       <CardContent className="p-5">
         <div className="flex items-start justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 dark:text-slate-400">{label}</div>
           <div className={cn("w-9 h-9 rounded-xl grid place-items-center ring-1", m.bg, m.text, m.ring)}>
             <Icon className="h-4 w-4" />
           </div>
@@ -1728,8 +1728,8 @@ function FilterChip({
       <SelectTrigger className={cn(
         "h-10 rounded-xl text-sm font-medium w-auto min-w-[140px] transition-colors",
         active
-          ? "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200 border-0"
-          : "bg-slate-50 hover:bg-slate-100 text-slate-700 ring-1 ring-slate-200 border-0",
+          ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900 border-0"
+          : "bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 border-0",
       )}>
         <SelectValue placeholder={label} />
       </SelectTrigger>
@@ -1807,15 +1807,15 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
           {progress && (
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[12px] font-semibold text-slate-700 tabular-nums">
+                <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300 tabular-nums">
                   {done.toLocaleString('uz-UZ')} / {total.toLocaleString('uz-UZ')}
                 </span>
                 <span className={cn(
                   'text-[14px] font-bold tabular-nums',
-                  finished ? 'text-emerald-600' : 'text-indigo-600',
+                  finished ? 'text-emerald-600 dark:text-emerald-400' : 'text-indigo-600 dark:text-indigo-400',
                 )}>{pct}%</span>
               </div>
-              <div className="h-3 rounded-full bg-slate-100 overflow-hidden relative">
+              <div className="h-3 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden relative">
                 <div
                   className={cn(
                     'h-full rounded-full transition-all duration-500 relative overflow-hidden',
@@ -1860,11 +1860,11 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Tugagan banner */}
           {finished && (
-            <div className="px-3 py-2.5 rounded-xl bg-emerald-50 ring-1 ring-emerald-200 text-emerald-900 text-[12px] flex items-start gap-2">
+            <div className="px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-300 text-[12px] flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
                 <div className="font-semibold">Tugadi!</div>
-                <div className="text-emerald-700 text-[11px] mt-0.5">
+                <div className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5">
                   {matched} ta tranzaksiya kategoriyalandi ({done - matched} ta o'zgartirilmadi, qoidaga mos kelmadi)
                 </div>
               </div>
@@ -1873,17 +1873,17 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Boshlanmagan/kutmoqda */}
           {!progress && (
-            <div className="flex items-center gap-2 text-slate-500 text-[12px] py-4 justify-center">
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[12px] py-4 justify-center">
               <Loader2 className="h-4 w-4 animate-spin" /> Jarayon boshlanmoqda...
             </div>
           )}
 
           {/* Xato logi (collapsible) */}
           {recentErrors.length > 0 && (
-            <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+            <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/40 dark:bg-rose-950/40 overflow-hidden">
               <button
                 onClick={() => setErrorsOpen((o) => !o)}
-                className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-900/30"
               >
                 <span className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
@@ -1892,14 +1892,14 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
                 {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
               {errorsOpen && (
-                <div className="max-h-64 overflow-y-auto divide-y divide-rose-100">
+                <div className="max-h-64 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900">
                   {recentErrors.map((e: any, i: number) => (
                     <div key={i} className="px-4 py-2 text-[10.5px] space-y-0.5">
                       <div className="flex items-baseline gap-2">
-                        <code className="font-mono text-rose-700 text-[10px]">{e.txId.slice(0, 12)}...</code>
-                        <span className="text-slate-400 text-[9.5px] ml-auto">{formatDateTime(e.at)}</span>
+                        <code className="font-mono text-rose-700 dark:text-rose-300 text-[10px]">{e.txId.slice(0, 12)}...</code>
+                        <span className="text-slate-400 dark:text-slate-500 text-[9.5px] ml-auto">{formatDateTime(e.at)}</span>
                       </div>
-                      <div className="text-slate-700 break-words">{e.reason}</div>
+                      <div className="text-slate-700 dark:text-slate-300 break-words">{e.reason}</div>
                     </div>
                   ))}
                 </div>
@@ -1909,7 +1909,7 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
 
           {/* Fatal error */}
           {lastError && !running && errors === 0 && (
-            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 ring-1 ring-rose-200 text-rose-800 text-[12px]">
+            <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 text-rose-800 dark:text-rose-300 text-[12px]">
               <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
               <div className="break-all">{lastError}</div>
             </div>
@@ -1940,9 +1940,9 @@ function StatBox({
   animate?: boolean;
 }) {
   const colorMap = {
-    indigo:  'bg-indigo-50 ring-indigo-200 text-indigo-700',
-    emerald: 'bg-emerald-50 ring-emerald-200 text-emerald-700',
-    rose:    'bg-rose-50 ring-rose-200 text-rose-700',
+    indigo:  'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900 text-indigo-700 dark:text-indigo-300',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300',
+    rose:    'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300',
   };
   return (
     <div className={cn('rounded-xl ring-1 px-3 py-2.5 transition-all', colorMap[color], animate && 'animate-pulse')}>
@@ -2177,10 +2177,10 @@ function TransactionDetailDialog({
         </div>
 
         {/* ─── Body — scrollable ─── */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white">
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-4 bg-white dark:bg-slate-900">
 
           {/* ═══ KONTRAGENT + KATEGORIYA + SHARTNOMA — asosiy info ═══ */}
-          <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
             {/* ─── Asosiy info — har bir maydon alohida qator + tozalash tugmasi ─── */}
             {/* Kontragent qatori */}
             <InfoRow
@@ -2244,19 +2244,19 @@ function TransactionDetailDialog({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {liveRow.hasAttachment ? (
                         <>
-                          <code className="inline-block font-mono text-[12px] font-bold text-violet-800 bg-violet-50 px-2 py-0.5 rounded ring-1 ring-violet-200">
+                          <code className="inline-block font-mono text-[12px] font-bold text-violet-800 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 px-2 py-0.5 rounded ring-1 ring-violet-200 dark:ring-violet-900">
                             {liveRow.contractNumber}
                           </code>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-violet-700 bg-violet-100 ring-1 ring-violet-200">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 ring-1 ring-violet-200 dark:ring-violet-900">
                             <Paperclip className="h-3 w-3" /> ARIZA
                           </span>
                         </>
                       ) : (
                         <>
-                          <code className="inline-block font-mono text-[12px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded ring-1 ring-amber-200">
+                          <code className="inline-block font-mono text-[12px] font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded ring-1 ring-amber-200 dark:ring-amber-900">
                             {liveRow.contractNumber}
                           </code>
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-100 ring-1 ring-amber-200">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900">
                             QO'LDA · CRM tekshirilmagan
                           </span>
                         </>
@@ -2264,7 +2264,7 @@ function TransactionDetailDialog({
                     </div>
                   ) : liveRow.contractStatus === 'unverified' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 ring-1 ring-rose-200">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
                         <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
                       </span>
                       <button
@@ -2277,16 +2277,16 @@ function TransactionDetailDialog({
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded ring-1 ring-indigo-200">
+                      <code className="inline-block font-mono text-[12px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded ring-1 ring-indigo-200 dark:ring-indigo-900">
                         {liveRow.contractNumber}
                       </code>
                       {liveRow.contractCustomer && (
-                        <span className="text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 truncate max-w-[220px]" title={liveRow.contractCustomer}>
+                        <span className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 dark:ring-emerald-900 truncate max-w-[220px]" title={liveRow.contractCustomer}>
                           ✓ {liveRow.contractCustomer}
                         </span>
                       )}
                       {liveRow.contractCrmStatus && /cancel|отмен|бекор/i.test(liveRow.contractCrmStatus) && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-orange-700 bg-orange-50 ring-1 ring-orange-200" title={`CRM status: ${liveRow.contractCrmStatus}`}>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM status: ${liveRow.contractCrmStatus}`}>
                           ⊘ BEKOR
                         </span>
                       )}
@@ -2301,9 +2301,9 @@ function TransactionDetailDialog({
 
             {/* Aloqa Bank read-only banner */}
             {isAloqaBank && (
-              <div className="mx-4 mb-3 rounded-lg ring-1 ring-amber-200 bg-amber-50/60 px-3 py-2 flex items-start gap-2">
-                <Lock className="h-3.5 w-3.5 text-amber-700 mt-0.5 shrink-0" />
-                <div className="text-[11.5px] text-amber-900 leading-relaxed">
+              <div className="mx-4 mb-3 rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 flex items-start gap-2">
+                <Lock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
+                <div className="text-[11.5px] text-amber-900 dark:text-amber-300 leading-relaxed">
                   <b>Aloqa Bank Excel</b> manbasidan kelgan tranzaksiya — <b>read-only</b>.
                   Kategoriya, shartnoma, ariza va boshqa tahrirlar bloklangan. Faqat batch tarixidan o'chirish mumkin.
                 </div>
@@ -2312,9 +2312,9 @@ function TransactionDetailDialog({
 
             {/* Avto-kategoriyalash + Qo'lda tahrirlash tugmalari */}
             {(canManage && showActionPanel) && (
-              <div className="px-4 py-3 bg-slate-50/50">
+              <div className="px-4 py-3 bg-slate-50/50 dark:bg-slate-900/50">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="text-[11px] text-slate-600">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300">
                     {liveRow.category
                       ? "Kontragent / Kategoriya / Shartnomani qo'lda o'zgartirish"
                       : "Qoidalar bo'yicha avto-aniqlash yoki qo'lda kiritish"}
@@ -2335,7 +2335,7 @@ function TransactionDetailDialog({
                     {canManualEdit && (
                       <button
                         onClick={() => setManualEditOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-slate-700 text-[11px] font-semibold ring-1 ring-slate-300 hover:bg-slate-50 hover:ring-indigo-400 hover:text-indigo-700 transition-colors"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-[11px] font-semibold ring-1 ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 hover:ring-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                       >
                         <FileText className="h-3 w-3" />
                         Qo'lda tahrirlash
@@ -2376,10 +2376,10 @@ function TransactionDetailDialog({
                   <div className={cn(
                     "mt-3 rounded-lg p-3 text-[11px] ring-1",
                     categorizeLog.categoryCode === 'EXISTING'
-                      ? 'bg-amber-50 ring-amber-200 text-amber-900'
+                      ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-900 dark:text-amber-300'
                       : categorizeLog.categoryCode
-                        ? 'bg-emerald-50 ring-emerald-200 text-emerald-900'
-                        : 'bg-slate-50 ring-slate-200 text-slate-700',
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-300'
+                        : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300',
                   )}>
                     <div className="flex items-start gap-2">
                       {categorizeLog.categoryCode === 'EXISTING' ? (
@@ -2421,7 +2421,7 @@ function TransactionDetailDialog({
             <button
               onClick={toggleAll}
               title={allOpen ? "Hammasini yopish" : "Hammasini ochish"}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 hover:text-indigo-700 hover:bg-indigo-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
             >
               {allOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
               {allOpen ? "Yopish" : "Ochish"}
@@ -2467,10 +2467,10 @@ function TransactionDetailDialog({
                 id="purpose" open={openSections.has('purpose')} onToggle={() => toggleOne('purpose')}
                 title={t('detailPaymentPurpose')} icon={FileText}
               >
-                <div className="text-[13px] text-slate-900 leading-relaxed whitespace-pre-wrap py-2">{row.description.trim()}</div>
+                <div className="text-[13px] text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap py-2">{row.description.trim()}</div>
                 {row.purposeCode && (
-                  <div className="mt-1 pt-2 border-t border-slate-200 text-[11px] text-slate-500">
-                    {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700">{row.purposeCode}</span>
+                  <div className="mt-1 pt-2 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400">
+                    {t('detailPurposeCode')}: <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{row.purposeCode}</span>
                   </div>
                 )}
               </DetailSection>
@@ -2587,12 +2587,12 @@ function RawJsonBlock({ label, data }: { label: string; data: any }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500">{label}</div>
+        <div className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{label}</div>
         <button
           onClick={copy}
-          className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-900"
+          className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100"
         >
-          {copied ? <><Check className="h-3 w-3 text-emerald-600" /> {t('copied')}</> : <><Copy className="h-3 w-3" /> {t('copy')}</>}
+          {copied ? <><Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> {t('copied')}</> : <><Copy className="h-3 w-3" /> {t('copy')}</>}
         </button>
       </div>
       <pre className="p-2.5 bg-slate-900 text-slate-100 rounded-lg text-[10px] font-mono leading-relaxed overflow-x-auto max-h-64 overflow-y-auto">
@@ -2616,27 +2616,27 @@ function DetailSection({
 }) {
   const t = useTranslations('transactions');
   const ring = highlighted
-    ? tone === 'emerald' ? 'ring-emerald-200 bg-emerald-50/50' : 'ring-rose-200 bg-rose-50/50'
-    : 'ring-slate-200 bg-white';
+    ? tone === 'emerald' ? 'ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/40' : 'ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/40'
+    : 'ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900';
   return (
     <div className={cn("rounded-xl ring-1 overflow-hidden", ring)}>
       <button
         onClick={onToggle}
-        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 transition-colors"
       >
-        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
           <Icon className="h-3 w-3" /> {title}
-          {highlighted && <span className="text-[9px] text-indigo-600 font-bold">· {t('detailYou')}</span>}
+          {highlighted && <span className="text-[9px] text-indigo-600 dark:text-indigo-400 font-bold">· {t('detailYou')}</span>}
         </div>
         <ChevronDown
           className={cn(
-            "h-3.5 w-3.5 text-slate-400 transition-transform shrink-0",
+            "h-3.5 w-3.5 text-slate-400 dark:text-slate-500 transition-transform shrink-0",
             open && 'rotate-180',
           )}
         />
       </button>
       {open && (
-        <div className="px-4 pb-2.5 pt-1 divide-y divide-slate-100/80 border-t border-slate-100">
+        <div className="px-4 pb-2.5 pt-1 divide-y divide-slate-100/80 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
           {children}
         </div>
       )}
@@ -2659,22 +2659,22 @@ function CopyRow({ label, value, mono, copyable }: { label: string; value?: stri
 
   return (
     <div className="flex items-center justify-between gap-3 py-1.5 group">
-      <div className="text-[12px] text-slate-500 shrink-0">{label}</div>
+      <div className="text-[12px] text-slate-500 dark:text-slate-400 shrink-0">{label}</div>
       <div className="flex items-center gap-1.5 min-w-0">
         <div className={cn(
-          "text-[13px] text-slate-900 text-right truncate",
+          "text-[13px] text-slate-900 dark:text-slate-100 text-right truncate",
           mono && 'font-mono text-[12px]',
-          isEmpty && 'text-slate-400 italic',
+          isEmpty && 'text-slate-400 dark:text-slate-500 italic',
         )}>
           {isEmpty ? t('empty') : value}
         </div>
         {copyable && !isEmpty && (
           <button
             onClick={copy}
-            className="shrink-0 p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 opacity-0 group-hover:opacity-100 transition-all"
+            className="shrink-0 p-1 rounded text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 opacity-0 group-hover:opacity-100 transition-all"
             title={t('copy')}
           >
-            {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
         )}
       </div>
@@ -2744,7 +2744,7 @@ function ColumnTh({
               'inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
               active
                 ? 'bg-indigo-600 text-white'
-                : 'text-slate-400 hover:text-indigo-700 hover:bg-indigo-100',
+                : 'text-slate-400 dark:text-slate-500 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30',
             )}
             title={active ? `${activeCount} qiymat tanlangan` : 'Filter'}
           >
@@ -2898,13 +2898,13 @@ function ColumnFilterPopover({
   return createPortal(
     <div
       data-col-filter
-      className="fixed z-[100] w-96 rounded-xl bg-white ring-1 ring-slate-200 shadow-2xl normal-case tracking-normal font-normal"
+      className="fixed z-[100] w-96 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl normal-case tracking-normal font-normal"
       style={{ top: pos.top, left: pos.left }}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="p-3 space-y-2">
         {tabList.length > 1 && (
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-lg">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
             {tabList.map((t) => {
               const count = localByColumn[t.column]?.size || 0;
               const isActive = activeTab === t.column;
@@ -2914,14 +2914,14 @@ function ColumnFilterPopover({
                   onClick={() => setActiveTab(t.column)}
                   className={cn(
                     'flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5',
-                    isActive ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                    isActive ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                   )}
                 >
                   <span>{t.label}</span>
                   {count > 0 && (
                     <span className={cn(
                       'inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold',
-                      isActive ? 'bg-indigo-600 text-white' : 'bg-slate-300 text-slate-700',
+                      isActive ? 'bg-indigo-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-slate-700 dark:text-slate-300',
                     )}>{count}</span>
                   )}
                 </button>
@@ -2932,19 +2932,19 @@ function ColumnFilterPopover({
         <div className="flex items-center justify-between">
           <button
             onClick={() => setLocalSelected(new Set(allValues.map((v) => v.id)))}
-            className="text-[11px] text-indigo-600 hover:text-indigo-800 font-medium"
+            className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
           >
             Hammasini tanlash ({distinctList.length})
           </button>
           <button
             onClick={() => setLocalSelected(new Set())}
-            className="text-[11px] text-slate-500 hover:text-rose-600 font-medium"
+            className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium"
           >
             Tozalash
           </button>
         </div>
         <div className="relative">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -2952,23 +2952,23 @@ function ColumnFilterPopover({
             className="pl-8 h-8 text-[12px]"
           />
         </div>
-        <div className="max-h-[340px] overflow-y-auto rounded-lg ring-1 ring-slate-100 divide-y divide-slate-50">
+        <div className="max-h-[340px] overflow-y-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 divide-y divide-slate-50 dark:divide-slate-800">
           {distinctQuery.isLoading ? (
-            <div className="px-3 py-4 text-center text-[11px] text-slate-500 flex items-center justify-center gap-2">
+            <div className="px-3 py-4 text-center text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-center gap-2">
               <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
             </div>
           ) : allValues.length === 0 ? (
-            <div className="px-3 py-4 text-center text-[11px] text-slate-400 italic">Topilmadi</div>
+            <div className="px-3 py-4 text-center text-[11px] text-slate-400 dark:text-slate-500 italic">Topilmadi</div>
           ) : (
             <>
-              <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 cursor-pointer">
+              <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
                   className="w-3.5 h-3.5 rounded"
                 />
-                <span className="text-[11px] font-semibold text-slate-700">
+                <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                   {allSelected ? 'Hammasini olib tashlash' : 'Hammasini belgilash'}
                 </span>
               </label>
@@ -2978,16 +2978,16 @@ function ColumnFilterPopover({
                 const display = xatoMatch ? xatoMatch[1] : v.name;
                 const isXato = !!xatoMatch;
                 return (
-                  <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 cursor-pointer">
+                  <label key={v.id} className="flex items-center gap-2 px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={localSelected.has(v.id)}
                       onChange={() => toggleOne(v.id)}
                       className="w-3.5 h-3.5 rounded"
                     />
-                    <span className="text-[11px] text-slate-700 truncate flex-1" title={v.name}>{display}</span>
+                    <span className="text-[11px] text-slate-700 dark:text-slate-300 truncate flex-1" title={v.name}>{display}</span>
                     {isXato && (
-                      <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1 py-0.5 rounded ring-1 ring-rose-200 uppercase shrink-0">
+                      <span className="text-[9px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1 py-0.5 rounded ring-1 ring-rose-200 dark:ring-rose-900 uppercase shrink-0">
                         xato
                       </span>
                     )}
@@ -2998,7 +2998,7 @@ function ColumnFilterPopover({
           )}
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-100">
+      <div className="flex items-center justify-end gap-2 px-3 py-2 border-t border-slate-100 dark:border-slate-800">
         <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-[11px]">
           Bekor
         </Button>
@@ -3116,7 +3116,7 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-4 w-4 text-fuchsia-600" /> AI shartnoma topish
+            <Wand2 className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-400" /> AI shartnoma topish
           </DialogTitle>
           <DialogDescription>
             CRM'da topilmagan shartnoma uchun AI tomonidan tahlil qilingan variantlar
@@ -3125,50 +3125,50 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
 
         <div className="space-y-3">
           {/* Mijoz bergan shartnoma + topilgan F.I.O. (2 blok, har doim ko'rinadi) */}
-          <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 ring-1 ring-rose-200 space-y-2">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700">
+          <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-950/40 dark:to-orange-950/40 ring-1 ring-rose-200 dark:ring-rose-900 space-y-2">
+            <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 dark:text-rose-300">
               Tolov maqsadida kelgan:
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {/* Shartnoma raqami */}
               <div>
-                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 mb-0.5 flex items-center gap-1">
+                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-0.5 flex items-center gap-1">
                   <FileSignature className="h-2.5 w-2.5" /> Shartnoma raqami
                 </div>
-                <code className="font-mono text-[13px] font-bold text-rose-900 select-all block break-all">
+                <code className="font-mono text-[13px] font-bold text-rose-900 dark:text-rose-300 select-all block break-all">
                   {contractNumber}
                 </code>
               </div>
               {/* F.I.O. — har doim block (topilmasa "AI topa olmadi" yoziladi) */}
               <div>
-                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 mb-0.5 flex items-center gap-1">
+                <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-0.5 flex items-center gap-1">
                   <Wand2 className="h-2.5 w-2.5" /> F.I.O. (AI ajratdi)
                 </div>
                 {extractedName ? (
-                  <div className="text-[12px] font-semibold text-rose-900 select-all break-words">
+                  <div className="text-[12px] font-semibold text-rose-900 dark:text-rose-300 select-all break-words">
                     {extractedName}
                   </div>
                 ) : (
-                  <div className="text-[11px] text-rose-500 italic">
+                  <div className="text-[11px] text-rose-500 dark:text-rose-400 italic">
                     Description'dan F.I.O. topilmadi
                   </div>
                 )}
               </div>
             </div>
-            <div className="text-[10px] text-rose-600 pt-1 border-t border-rose-200/60">
+            <div className="text-[10px] text-rose-600 dark:text-rose-400 pt-1 border-t border-rose-200/60 dark:border-rose-900">
               ⚠ CRM'da topilmadi — quyidagi o'xshashlardan tasdiqlang
             </div>
           </div>
 
           {/* CRM natijalari */}
           <div>
-            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600 mb-1.5 flex items-center justify-between">
-              <span>O'xshash shartnomalar (prefix: <code className="font-mono text-indigo-700">{currentPrefix}</code>)</span>
-              {searchQuery.isFetching && <Loader2 className="h-3 w-3 text-indigo-500 animate-spin" />}
+            <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 mb-1.5 flex items-center justify-between">
+              <span>O'xshash shartnomalar (prefix: <code className="font-mono text-indigo-700 dark:text-indigo-300">{currentPrefix}</code>)</span>
+              {searchQuery.isFetching && <Loader2 className="h-3 w-3 text-indigo-500 dark:text-indigo-400 animate-spin" />}
             </div>
-            <div className="max-h-[320px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+            <div className="max-h-[320px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
               {!searchQuery.isFetching && items.length === 0 && currentPrefixIndex >= tryPrefixes.length - 1 && (
-                <div className="px-4 py-6 text-center text-[11px] text-rose-600">
+                <div className="px-4 py-6 text-center text-[11px] text-rose-600 dark:text-rose-400">
                   Hech qanday o'xshash shartnoma topilmadi
                 </div>
               )}
@@ -3195,52 +3195,52 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
                     key={it.contract || it.id}
                     className={cn(
                       'px-3 py-2 relative',
-                      perfectMatch ? 'bg-emerald-100 ring-2 ring-emerald-400'
-                        : nameMatch ? 'bg-emerald-50 ring-1 ring-emerald-200'
-                        : contractMatch ? 'bg-amber-50 ring-1 ring-amber-200'
-                        : 'hover:bg-slate-50',
+                      perfectMatch ? 'bg-emerald-100 dark:bg-emerald-900/40 ring-2 ring-emerald-400 dark:ring-emerald-900'
+                        : nameMatch ? 'bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900'
+                        : contractMatch ? 'bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900'
+                        : 'hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <code className={cn(
                         'font-mono text-[12px] font-bold',
-                        perfectMatch ? 'text-emerald-800' : nameMatch ? 'text-emerald-700' : contractMatch ? 'text-amber-700' : 'text-indigo-700',
+                        perfectMatch ? 'text-emerald-800 dark:text-emerald-300' : nameMatch ? 'text-emerald-700 dark:text-emerald-300' : contractMatch ? 'text-amber-700 dark:text-amber-300' : 'text-indigo-700 dark:text-indigo-300',
                       )}>
                         {it.contract}
                       </code>
                       <div className="flex items-center gap-1">
                         {perfectMatch && (
-                          <span className="text-[9px] font-black text-emerald-900 uppercase tracking-wider flex items-center gap-1 bg-emerald-200 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1 bg-emerald-200 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded">
                             <CheckCircle2 className="h-2.5 w-2.5" /> aniq mos
                           </span>
                         )}
                         {!perfectMatch && nameMatch && (
-                          <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wider flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1">
                             <Wand2 className="h-2.5 w-2.5" /> nom mos
                           </span>
                         )}
                         {!perfectMatch && !nameMatch && contractMatch && (
-                          <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wider">
+                          <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
                             shartnoma mos
                           </span>
                         )}
                       </div>
                     </div>
-                    <div className="text-[11px] text-slate-700 mt-0.5 font-medium">
-                      {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
+                    <div className="text-[11px] text-slate-700 dark:text-slate-300 mt-0.5 font-medium">
+                      {fullName || <span className="text-slate-400 dark:text-slate-500 italic">nomi yo'q</span>}
                     </div>
                   </div>
                 );
               })}
             </div>
             {sortedItems.length > 0 && (
-              <div className="text-[10px] text-slate-500 mt-2 text-center italic">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center italic">
                 Mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalaning
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-end pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
             <Button variant="outline" size="sm" onClick={onClose}>
               Yopish
             </Button>
@@ -3329,7 +3329,7 @@ function CombinedEditDialog({
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-600" /> Qo'lda tahrirlash
+            <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Qo'lda tahrirlash
           </DialogTitle>
           <DialogDescription>
             Avval Kontragent, keyin Kategoriya tanlang. Klient bo'lsa Shartnoma ham ko'rinadi.
@@ -3339,7 +3339,7 @@ function CombinedEditDialog({
         <div className="space-y-4">
           {/* ═══ STEP 1: KONTRAGENT (top kategoriya) ═══ */}
           <div>
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">1</span>
               Kontragent
             </label>
@@ -3353,7 +3353,7 @@ function CombinedEditDialog({
                     onClick={() => pickKontragent(t)}
                     className={cn(
                       'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
-                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                      selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                     style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                   >
@@ -3365,13 +3365,13 @@ function CombinedEditDialog({
             </div>
 
             {/* ─── Maxsus kontragent qidirish (GREATCITY, BARAKAT...) ─── */}
-            <div className="mt-3 pt-3 border-t border-dashed border-slate-200">
-              <div className="text-[10.5px] text-slate-500 mb-1.5 flex items-center gap-1">
+            <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700">
+              <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
                 <Search className="h-3 w-3" />
                 <span>Yoki maxsus kontragentni topish (firma nomi/INN):</span>
               </div>
               <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                 <Input
                   value={cpSearch}
                   onChange={(e) => setCpSearch(e.target.value)}
@@ -3381,24 +3381,24 @@ function CombinedEditDialog({
                 {cpSearch && (
                   <button
                     onClick={() => setCpSearch('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
               {cpDebounced.length >= 2 && (
-                <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg ring-1 ring-slate-200 bg-white">
+                <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900">
                   {cpQuery.isLoading ? (
-                    <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-[11px]">
+                    <div className="flex items-center justify-center gap-2 py-4 text-slate-400 dark:text-slate-500 text-[11px]">
                       <Loader2 className="h-3.5 w-3.5 animate-spin" /> Qidirilmoqda...
                     </div>
                   ) : cpItems.length === 0 ? (
-                    <div className="px-3 py-3 text-center text-[11px] text-slate-400">
+                    <div className="px-3 py-3 text-center text-[11px] text-slate-400 dark:text-slate-500">
                       "{cpDebounced}" topilmadi
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
                       {cpItems.map((cp: any) => {
                         const selected = row?.manualCounterpartyId === cp.id;
                         return (
@@ -3410,17 +3410,17 @@ function CombinedEditDialog({
                             }}
                             disabled={savingCounterparty}
                             className={cn(
-                              'w-full text-left px-3 py-2 hover:bg-slate-50 transition-colors flex items-start gap-2',
-                              selected && 'bg-emerald-50',
+                              'w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-start gap-2',
+                              selected && 'bg-emerald-50 dark:bg-emerald-950/40',
                             )}
                           >
                             <div className="flex-1 min-w-0">
-                              <div className="text-[12px] font-semibold text-slate-800 truncate">{cp.name}</div>
+                              <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate">{cp.name}</div>
                               {cp.inn && (
-                                <div className="text-[10px] text-slate-500 font-mono">INN: {cp.inn}</div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">INN: {cp.inn}</div>
                               )}
                             </div>
-                            {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" />}
+                            {selected && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />}
                           </button>
                         );
                       })}
@@ -3429,7 +3429,7 @@ function CombinedEditDialog({
                 </div>
               )}
               {row?.manualCounterparty && (
-                <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-md px-2 py-1.5">
+                <div className="mt-1.5 flex items-center gap-1.5 text-[10.5px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 rounded-md px-2 py-1.5">
                   <CheckCircle2 className="h-3 w-3 shrink-0" />
                   <span className="flex-1 truncate">
                     Joriy: <b>{row.manualCounterparty.name}</b>
@@ -3437,7 +3437,7 @@ function CombinedEditDialog({
                   <button
                     onClick={() => onSaveCounterparty(null)}
                     disabled={savingCounterparty}
-                    className="text-rose-600 hover:text-rose-700 font-medium shrink-0"
+                    className="text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium shrink-0"
                   >
                     Olib tashlash
                   </button>
@@ -3448,16 +3448,16 @@ function CombinedEditDialog({
 
           {/* ═══ STEP 2: KATEGORIYA (subkategoriya — faqat top tanlangan bo'lsa) ═══ */}
           {selectedTop && (
-            <div className="pt-3 border-t border-slate-100">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">2</span>
                 Kategoriya
-                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">
                   ({selectedTop.name} uchun)
                 </span>
               </label>
               {subs.length === 0 ? (
-                <div className="text-[11px] text-slate-500 px-3 py-2 rounded-lg bg-slate-50 ring-1 ring-slate-200">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700">
                   {selectedTop.name} uchun subkategoriya yo'q — faqat top kategoriya saqlanadi
                 </div>
               ) : (
@@ -3466,7 +3466,7 @@ function CombinedEditDialog({
                     onClick={() => setSelectedSubId(null)}
                     className={cn(
                       'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                      !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
+                      !selectedSubId ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-600 dark:text-slate-300',
                     )}
                   >
                     — yo'q —
@@ -3479,7 +3479,7 @@ function CombinedEditDialog({
                         onClick={() => setSelectedSubId(s.id)}
                         className={cn(
                           'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                          selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 text-slate-700',
+                          selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-700 dark:text-slate-300',
                         )}
                         style={selected ? { backgroundColor: `${topColor}15`, color: topColor, borderColor: topColor } : {}}
                       >
@@ -3499,7 +3499,7 @@ function CombinedEditDialog({
               <button
                 onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
                 disabled={savingCategory}
-                className="text-[11px] text-rose-600 hover:text-rose-700 font-medium"
+                className="text-[11px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium"
               >
                 Tozalash
               </button>
@@ -3516,16 +3516,16 @@ function CombinedEditDialog({
 
           {/* ═══ STEP 3: SHARTNOMA — faqat CLIENT yoki TRANSFER uchun, va kontragent qo'lda tanlanmagan bo'lsa ═══ */}
           {!row.manualCounterparty && selectedTop && (selectedTop.code === 'CLIENT' || selectedTop.code === 'TRANSFER') && (
-            <div className="pt-4 border-t border-indigo-200">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <div className="pt-4 border-t border-indigo-200 dark:border-indigo-900">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">3</span>
                 Shartnoma raqami
-                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">
                   (CRM'dan qidirish)
                 </span>
               </label>
               <div className="relative mb-2">
-                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input
                   value={contractQuery}
                   onChange={(e) => setContractQuery(e.target.value)}
@@ -3533,13 +3533,13 @@ function CombinedEditDialog({
                   className="pl-9 font-mono"
                 />
                 {searchQuery.isFetching && debouncedQ.length >= 3 && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 animate-spin" />
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 dark:text-indigo-400 animate-spin" />
                 )}
               </div>
               {debouncedQ.length >= 3 && (
-                <div className="max-h-[200px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+                <div className="max-h-[200px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
                   {crmItems.length === 0 && !searchQuery.isFetching && (
-                    <div className="px-4 py-3 text-[11px] text-rose-600">
+                    <div className="px-4 py-3 text-[11px] text-rose-600 dark:text-rose-400">
                       CRM'da topilmadi — bu raqam saqlash uchun yaroqsiz
                     </div>
                   )}
@@ -3555,16 +3555,16 @@ function CombinedEditDialog({
                         key={it.contract || it.id}
                         onClick={() => onSaveContract(String(it.contract || '').trim())}
                         disabled={savingContract}
-                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 transition-colors disabled:opacity-50 group"
+                        className="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors disabled:opacity-50 group"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
+                          <code className="font-mono text-[12px] font-bold text-indigo-700 dark:text-indigo-300 group-hover:text-indigo-900 dark:group-hover:text-indigo-200">
                             {it.contract}
                           </code>
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 opacity-0 group-hover:opacity-100" />
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 opacity-0 group-hover:opacity-100" />
                         </div>
-                        <div className="text-[11px] text-slate-700 truncate mt-0.5 font-medium">
-                          {fullName || <span className="text-slate-400 italic">nomi yo'q</span>}
+                        <div className="text-[11px] text-slate-700 dark:text-slate-300 truncate mt-0.5 font-medium">
+                          {fullName || <span className="text-slate-400 dark:text-slate-500 italic">nomi yo'q</span>}
                         </div>
                       </button>
                     );
@@ -3575,7 +3575,7 @@ function CombinedEditDialog({
                 <button
                   onClick={() => onSaveContract(null)}
                   disabled={savingContract || !row?.contractNumber}
-                  className="text-[10px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
+                  className="text-[10px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium disabled:opacity-30"
                 >
                   Shartnomani tozalash
                 </button>
@@ -3583,7 +3583,7 @@ function CombinedEditDialog({
             </div>
           )}
 
-          <div className="flex items-center justify-end pt-3 border-t border-slate-100">
+          <div className="flex items-center justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
             <Button variant="outline" size="sm" onClick={onClose}>
               Yopish
             </Button>
@@ -3626,7 +3626,7 @@ function ContractEditDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileSignature className="h-4 w-4 text-indigo-600" /> Shartnoma raqami
+            <FileSignature className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Shartnoma raqami
           </DialogTitle>
           <DialogDescription>
             CRM'dan qidirish uchun shartnoma raqamini yozing (3+ belgi)
@@ -3635,7 +3635,7 @@ function ContractEditDialog({
 
         <div className="space-y-3">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
               autoFocus
               value={query}
@@ -3644,36 +3644,36 @@ function ContractEditDialog({
               className="pl-9 font-mono"
             />
             {searchQuery.isFetching && debouncedQ.length >= 3 && (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 animate-spin" />
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-indigo-500 dark:text-indigo-400 animate-spin" />
             )}
           </div>
 
           {debouncedQ.length < 3 ? (
-            <div className="text-[11px] text-slate-400 italic px-2">
+            <div className="text-[11px] text-slate-400 dark:text-slate-500 italic px-2">
               Kamida 3 belgi kiriting…
             </div>
           ) : items.length === 0 && !searchQuery.isFetching ? (
-            <div className="text-[11px] text-rose-600 px-2">
+            <div className="text-[11px] text-rose-600 dark:text-rose-400 px-2">
               CRM'da topilmadi — baribir saqlash mumkin (xato badge bilan)
             </div>
           ) : (
-            <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+            <div className="max-h-64 overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
               {items.map((it: any) => (
                 <button
                   key={it.contract || it.id}
                   onClick={() => onSave(String(it.contract || '').trim())}
                   disabled={saving}
-                  className="w-full text-left px-3 py-2 hover:bg-indigo-50 transition-colors disabled:opacity-50 group"
+                  className="w-full text-left px-3 py-2 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors disabled:opacity-50 group"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <code className="font-mono text-[12px] font-bold text-indigo-700 group-hover:text-indigo-900">
+                    <code className="font-mono text-[12px] font-bold text-indigo-700 dark:text-indigo-300 group-hover:text-indigo-900 dark:group-hover:text-indigo-200">
                       {it.contract}
                     </code>
                     {it.status && (
-                      <span className="text-[9px] text-slate-500 uppercase tracking-wider">{it.status}</span>
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{it.status}</span>
                     )}
                   </div>
-                  <div className="text-[11px] text-slate-600 truncate mt-0.5">
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 truncate mt-0.5">
                     {it.client?.full_name_kirill || it.client?.full_name_lotin || it.client?.name || it.object_name || '—'}
                   </div>
                 </button>
@@ -3681,11 +3681,11 @@ function ContractEditDialog({
             </div>
           )}
 
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={() => onSave(null)}
               disabled={saving || !currentContract}
-              className="text-[12px] text-rose-600 hover:text-rose-700 font-medium disabled:opacity-30"
+              className="text-[12px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium disabled:opacity-30"
             >
               Tozalash
             </button>
@@ -3720,29 +3720,29 @@ function CategoryHistorySection({ txId }: { txId: string }) {
   const items = q.data?.items || [];
 
   return (
-    <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+    <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 transition-colors"
       >
-        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
           <History className="h-3 w-3" /> Tarix
           {open && items.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[9px] font-bold normal-case tracking-normal">
+            <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-bold normal-case tracking-normal">
               {items.length}
             </span>
           )}
         </div>
-        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 transition-transform shrink-0', open && 'rotate-180')} />
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="px-4 pb-3 pt-1 border-t border-slate-100">
+        <div className="px-4 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800">
           {q.isLoading ? (
-            <div className="py-3 text-[11px] text-slate-500 flex items-center gap-2">
+            <div className="py-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
               <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
             </div>
           ) : items.length === 0 ? (
-            <div className="py-3 text-[11px] text-slate-400 italic">Tarix yo'q — hali hech kim kategoriyalamagan</div>
+            <div className="py-3 text-[11px] text-slate-400 dark:text-slate-500 italic">Tarix yo'q — hali hech kim kategoriyalamagan</div>
           ) : (
             <div className="space-y-2 py-2">
               {items.map((h: any) => (
@@ -3807,7 +3807,7 @@ function ManualContractDialog({
         <div className="space-y-4 pt-2">
           {/* ═══ KONTRAGENT (top kategoriya) ═══ */}
           <div>
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">1</span>
               {t('kontragent')}
             </label>
@@ -3822,7 +3822,7 @@ function ManualContractDialog({
                     disabled={saving}
                     className={cn(
                       'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
-                      selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                      selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                     )}
                     style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                   >
@@ -3835,8 +3835,8 @@ function ManualContractDialog({
           </div>
 
           {/* ═══ SHARTNOMA RAQAMI ═══ */}
-          <div className="space-y-1.5 pt-3 border-t border-slate-100">
-            <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1 block flex items-center gap-1">
+          <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">2</span>
               {t('contractNumberLabel')}
             </label>
@@ -3847,7 +3847,7 @@ function ManualContractDialog({
               className="font-mono"
               autoFocus
             />
-            <div className="text-[10.5px] text-amber-700 bg-amber-50 px-2 py-1.5 rounded-md ring-1 ring-amber-200 flex items-start gap-1.5">
+            <div className="text-[10.5px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-1.5 rounded-md ring-1 ring-amber-200 dark:ring-amber-900 flex items-start gap-1.5">
               <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
               <span>{t('manualContractWarning')}</span>
             </div>
@@ -3860,7 +3860,7 @@ function ManualContractDialog({
               variant="outline"
               onClick={() => onSaveContract(null)}
               disabled={saving}
-              className="text-rose-700 border-rose-200 hover:bg-rose-50"
+              className="text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40"
             >
               <Trash2 className="h-3.5 w-3.5 mr-1.5" />
               {t('contractDelete')}
@@ -4057,33 +4057,33 @@ function AttachmentsDialog({
         </DialogHeader>
 
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-8 text-slate-400 text-[12px]">
+          <div className="flex items-center justify-center gap-2 py-8 text-slate-400 dark:text-slate-500 text-[12px]">
             <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
           </div>
         ) : existing ? (
           // ─── MAVJUD ARIZA — ko'rsatish + delete ───
           <div className="space-y-3 pt-2">
-            <div className="rounded-xl ring-1 ring-violet-200 bg-violet-50/40 p-4">
+            <div className="rounded-xl ring-1 ring-violet-200 dark:ring-violet-900 bg-violet-50/40 dark:bg-violet-950/40 p-4">
               <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-xl bg-violet-100 grid place-items-center shrink-0">
-                  <FileIcon className="h-5 w-5 text-violet-700" />
+                <div className="w-12 h-12 rounded-xl bg-violet-100 dark:bg-violet-900/30 grid place-items-center shrink-0">
+                  <FileIcon className="h-5 w-5 text-violet-700 dark:text-violet-300" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-bold text-violet-900 truncate" title={existing.filename}>
+                  <div className="text-[13px] font-bold text-violet-900 dark:text-violet-300 truncate" title={existing.filename}>
                     {existing.filename}
                   </div>
-                  <div className="text-[11px] text-violet-700 flex items-center gap-2 flex-wrap mt-0.5">
+                  <div className="text-[11px] text-violet-700 dark:text-violet-300 flex items-center gap-2 flex-wrap mt-0.5">
                     <span>{formatSize(existing.fileSize)}</span>
-                    <span className="text-violet-400">·</span>
+                    <span className="text-violet-400 dark:text-violet-500">·</span>
                     <span>{formatDateTime(existing.uploadedAt)}</span>
                     {existing.uploadedBy && (<>
-                      <span className="text-violet-400">·</span>
+                      <span className="text-violet-400 dark:text-violet-500">·</span>
                       <span>{existing.uploadedBy}</span>
                     </>)}
                   </div>
                   {existing.contractNumber && (
-                    <div className="text-[10.5px] text-slate-600 mt-1">
-                      Shartnoma: <code className="font-mono text-indigo-700">{existing.contractNumber}</code>
+                    <div className="text-[10.5px] text-slate-600 dark:text-slate-300 mt-1">
+                      Shartnoma: <code className="font-mono text-indigo-700 dark:text-indigo-300">{existing.contractNumber}</code>
                     </div>
                   )}
                 </div>
@@ -4091,7 +4091,7 @@ function AttachmentsDialog({
                   <button
                     onClick={() => handleDownload(existing)}
                     title="Yuklab olish"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/30"
                   >
                     <Download className="h-4 w-4" />
                   </button>
@@ -4099,14 +4099,14 @@ function AttachmentsDialog({
                     onClick={() => handleDelete(existing.id)}
                     disabled={deletingId === existing.id}
                     title="O'chirish"
-                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-rose-700 bg-rose-50 hover:bg-rose-100"
+                    className="inline-flex items-center justify-center w-9 h-9 rounded-lg text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30"
                   >
                     {deletingId === existing.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
             </div>
-            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 ring-1 ring-amber-200 text-amber-800 text-[11px]">
+            <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300 text-[11px]">
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <div>
                 Yangi ariza qo'shish uchun avval mavjudini o'chirib, qaytadan biriktiring.
@@ -4118,17 +4118,17 @@ function AttachmentsDialog({
           <div className="space-y-4 pt-2">
             {/* 1. Kategoriya (top + sub bitta qadamda) — to'liq ixtiyoriy */}
             <div>
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">1</span>
                 Kategoriya
-                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy — tegmay ketsa o'zgarmaydi)</span>
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy — tegmay ketsa o'zgarmaydi)</span>
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   onClick={() => { setSelectedTopId(null); setSelectedSubId(null); }}
                   className={cn(
                     'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all col-span-2',
-                    selectedTopId === null ? 'bg-slate-900 text-white ring-slate-900' : 'ring-dashed ring-slate-300 hover:ring-slate-400 text-slate-500',
+                    selectedTopId === null ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-dashed ring-slate-300 dark:ring-slate-700 hover:ring-slate-400 dark:hover:ring-slate-600 text-slate-500 dark:text-slate-400',
                   )}
                 >
                   — bo'sh qoldirish (kategoriya o'zgarmaydi) —
@@ -4142,7 +4142,7 @@ function AttachmentsDialog({
                       onClick={() => { setSelectedTopId(t.id); setSelectedSubId(null); }}
                       className={cn(
                         'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
-                        selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 hover:bg-slate-50',
+                        selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800',
                       )}
                       style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                     >
@@ -4156,18 +4156,18 @@ function AttachmentsDialog({
 
             {/* 2. Sub-kategoriya — agar top tanlangan va subs bor bo'lsa */}
             {selectedTop && subs.length > 0 && (
-              <div className="pt-3 border-t border-slate-100">
-                <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                   <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">2</span>
                   Sub-kategoriya
-                  <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     onClick={() => setSelectedSubId(null)}
                     className={cn(
                       'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                      !selectedSubId ? 'bg-slate-900 text-white ring-slate-900' : 'ring-slate-200 hover:ring-slate-300 text-slate-600',
+                      !selectedSubId ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-600 dark:text-slate-300',
                     )}
                   >
                     — yo'q —
@@ -4180,7 +4180,7 @@ function AttachmentsDialog({
                         onClick={() => setSelectedSubId(s.id)}
                         className={cn(
                           'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
-                          selected ? 'ring-2' : 'ring-slate-200 hover:ring-slate-300 text-slate-700',
+                          selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-700 dark:text-slate-300',
                         )}
                         style={selected ? { backgroundColor: `${topColor}15`, color: topColor, borderColor: topColor } : {}}
                       >
@@ -4193,14 +4193,14 @@ function AttachmentsDialog({
             )}
 
             {/* 3. Shartnoma raqami */}
-            <div className="pt-3 border-t border-slate-100">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">3</span>
                 Shartnoma raqami
-                <span className="text-slate-400 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">(ixtiyoriy)</span>
               </label>
               <div className="relative">
-                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <FileSignature className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input
                   value={contract}
                   onChange={(e) => setContract(e.target.value)}
@@ -4208,17 +4208,17 @@ function AttachmentsDialog({
                   className="pl-9 font-mono text-[11px]"
                 />
               </div>
-              <div className="text-[10.5px] text-amber-700 mt-1">
+              <div className="text-[10.5px] text-amber-700 dark:text-amber-300 mt-1">
                 CRM tekshirilmaydi — qo'lda kiritilgan deb belgilanadi
               </div>
             </div>
 
             {/* 4. Fayl */}
-            <div className="pt-3 border-t border-slate-100">
-              <label className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-rose-600 text-white text-[9px]">4</span>
                 Ariza fayli
-                <span className="text-rose-600 font-normal normal-case tracking-normal ml-1 font-bold">*MAJBURIY</span>
+                <span className="text-rose-600 dark:text-rose-400 font-normal normal-case tracking-normal ml-1 font-bold">*MAJBURIY</span>
               </label>
               <input
                 ref={fileRef}
@@ -4231,15 +4231,15 @@ function AttachmentsDialog({
                 className="hidden"
               />
               {file ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 ring-1 ring-violet-200">
-                  <FileIcon className="h-4 w-4 text-violet-700 shrink-0" />
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900">
+                  <FileIcon className="h-4 w-4 text-violet-700 dark:text-violet-300 shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-[12px] font-semibold text-violet-900 truncate">{file.name}</div>
-                    <div className="text-[10.5px] text-violet-700">{formatSize(file.size)}</div>
+                    <div className="text-[12px] font-semibold text-violet-900 dark:text-violet-300 truncate">{file.name}</div>
+                    <div className="text-[10.5px] text-violet-700 dark:text-violet-300">{formatSize(file.size)}</div>
                   </div>
                   <button
                     onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}
-                    className="text-[10px] text-rose-600 hover:text-rose-700 font-medium px-2"
+                    className="text-[10px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium px-2"
                   >
                     Bekor
                   </button>
@@ -4248,7 +4248,7 @@ function AttachmentsDialog({
                 <Button
                   onClick={() => fileRef.current?.click()}
                   variant="outline"
-                  className="w-full h-10 border-dashed gap-2 text-slate-600 hover:text-violet-700 hover:border-violet-300"
+                  className="w-full h-10 border-dashed gap-2 text-slate-600 dark:text-slate-300 hover:text-violet-700 dark:hover:text-violet-300 hover:border-violet-300 dark:hover:border-violet-900"
                 >
                   <UploadIcon className="h-4 w-4" /> Fayl tanlash (PDF/DOCX/JPG/PNG · max 25 MB)
                 </Button>
@@ -4279,21 +4279,21 @@ function AttachmentsDialog({
 function CategoryHistoryItem({ h }: { h: any }) {
   const actorLabel = h.actorName || h.action;
   const actionColor: Record<string, string> = {
-    manual:       'bg-indigo-100 text-indigo-700',
-    sync:         'bg-emerald-100 text-emerald-700',
-    auto:         'bg-violet-100 text-violet-700',
-    cron:         'bg-amber-100 text-amber-700',
-    import:       'bg-fuchsia-100 text-fuchsia-700',
-    counterparty: 'bg-teal-100 text-teal-700',
-    contract:     'bg-amber-100 text-amber-700',
-    attachment:   'bg-violet-100 text-violet-700',
+    manual:       'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',
+    sync:         'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+    auto:         'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
+    cron:         'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+    import:       'bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300',
+    counterparty: 'bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300',
+    contract:     'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+    attachment:   'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',
   };
   const actionLabelMap: Record<string, string> = {
     counterparty: 'KONTRAGENT',
     contract:     'SHARTNOMA',
     attachment:   'ARIZA',
   };
-  const cls = actionColor[h.action] || 'bg-slate-100 text-slate-700';
+  const cls = actionColor[h.action] || 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
   const isCp = h.action === 'counterparty';
   const isContract = h.action === 'contract';
   const isAttach = h.action === 'attachment';
@@ -4304,17 +4304,17 @@ function CategoryHistoryItem({ h }: { h: any }) {
   const hasNew = !!(h.newCategoryName || h.newSubcategoryName);
   let actionLabel = '';
   let actionLabelCls = '';
-  if (!hadOld && hasNew) { actionLabel = "qo'shildi";       actionLabelCls = 'text-emerald-700'; }
-  else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700'; }
-  else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700'; }
+  if (!hadOld && hasNew) { actionLabel = "qo'shildi";       actionLabelCls = 'text-emerald-700 dark:text-emerald-300'; }
+  else if (hadOld && hasNew) { actionLabel = "o'zgartirildi"; actionLabelCls = 'text-indigo-700 dark:text-indigo-300'; }
+  else if (hadOld && !hasNew) { actionLabel = "o'chirildi";   actionLabelCls = 'text-rose-700 dark:text-rose-300'; }
 
   // Maxsus chip render: kontragent / shartnoma / ariza uchun (kategoriya emas)
   const renderSpecial = (name: string | null) => {
     const cfg = isCp
-      ? { bg: 'bg-teal-50', ring: 'ring-teal-200', text: 'text-teal-800', icon: <Briefcase className="h-3 w-3" /> }
+      ? { bg: 'bg-teal-50 dark:bg-teal-950/40', ring: 'ring-teal-200 dark:ring-teal-900', text: 'text-teal-800 dark:text-teal-300', icon: <Briefcase className="h-3 w-3" /> }
       : isContract
-        ? { bg: 'bg-amber-50', ring: 'ring-amber-200', text: 'text-amber-800', icon: <FileSignature className="h-3 w-3" /> }
-        : { bg: 'bg-violet-50', ring: 'ring-violet-200', text: 'text-violet-800', icon: <Paperclip className="h-3 w-3" /> };
+        ? { bg: 'bg-amber-50 dark:bg-amber-950/40', ring: 'ring-amber-200 dark:ring-amber-900', text: 'text-amber-800 dark:text-amber-300', icon: <FileSignature className="h-3 w-3" /> }
+        : { bg: 'bg-violet-50 dark:bg-violet-950/40', ring: 'ring-violet-200 dark:ring-violet-900', text: 'text-violet-800 dark:text-violet-300', icon: <Paperclip className="h-3 w-3" /> };
     return (
       <span className={cn('inline-flex items-center gap-1 px-1.5 py-0.5 rounded ring-1 font-semibold', cfg.bg, cfg.ring, cfg.text, isContract && 'font-mono')}>
         {cfg.icon}
@@ -4323,18 +4323,18 @@ function CategoryHistoryItem({ h }: { h: any }) {
     );
   };
   const renderCat = (name: string | null, sub: string | null) => {
-    if (!name && !sub) return <span className="text-slate-400 italic">bo'sh</span>;
+    if (!name && !sub) return <span className="text-slate-400 dark:text-slate-500 italic">bo'sh</span>;
     return (
       <span className="font-semibold">
-        {name || '—'}{sub && <span className="text-slate-500 font-normal"> / {sub}</span>}
+        {name || '—'}{sub && <span className="text-slate-500 dark:text-slate-400 font-normal"> / {sub}</span>}
       </span>
     );
   };
 
-  const specialBgRing = isCp ? 'ring-teal-200 bg-teal-50/40'
-    : isContract ? 'ring-amber-200 bg-amber-50/40'
-    : isAttach ? 'ring-violet-200 bg-violet-50/40'
-    : 'ring-slate-100 bg-slate-50/50';
+  const specialBgRing = isCp ? 'ring-teal-200 dark:ring-teal-900 bg-teal-50/40 dark:bg-teal-950/40'
+    : isContract ? 'ring-amber-200 dark:ring-amber-900 bg-amber-50/40 dark:bg-amber-950/40'
+    : isAttach ? 'ring-violet-200 dark:ring-violet-900 bg-violet-50/40 dark:bg-violet-950/40'
+    : 'ring-slate-100 dark:ring-slate-800 bg-slate-50/50 dark:bg-slate-900/50';
 
   return (
     <div className={cn('rounded-lg ring-1 px-3 py-2 text-[11px] space-y-1', specialBgRing)}>
@@ -4343,21 +4343,21 @@ function CategoryHistoryItem({ h }: { h: any }) {
           <span className={cn('px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider', cls)}>
             {actionLabelMap[h.action] || h.action}
           </span>
-          <span className="font-medium text-slate-700">{actorLabel}</span>
+          <span className="font-medium text-slate-700 dark:text-slate-300">{actorLabel}</span>
           {actionLabel && (
             <span className={cn('text-[10px] font-bold lowercase', actionLabelCls)}>
               {actionLabel}
             </span>
           )}
         </div>
-        <span className="text-[10px] text-slate-500 tabular-nums">{formatDateTime(h.createdAt)}</span>
+        <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(h.createdAt)}</span>
       </div>
       {/* Diff — kontragent/shartnoma/ariza yoki kategoriya */}
       {isSpecial ? (
         hadOld && hasNew ? (
           <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
             <span className="line-through opacity-70">{renderSpecial(h.oldCategoryName)}</span>
-            <span className="text-slate-400">→</span>
+            <span className="text-slate-400 dark:text-slate-500">→</span>
             {renderSpecial(h.newCategoryName)}
           </div>
         ) : hasNew ? (
@@ -4368,29 +4368,29 @@ function CategoryHistoryItem({ h }: { h: any }) {
       ) : (
         hadOld && hasNew ? (
           <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
-            <span className="line-through text-rose-600/80">
+            <span className="line-through text-rose-600/80 dark:text-rose-400/80">
               {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
             </span>
-            <span className="text-slate-400">→</span>
-            <span className="text-emerald-700">
+            <span className="text-slate-400 dark:text-slate-500">→</span>
+            <span className="text-emerald-700 dark:text-emerald-300">
               {renderCat(h.newCategoryName, h.newSubcategoryName)}
             </span>
           </div>
         ) : hasNew ? (
-          <div className="text-[11px] text-emerald-700">
+          <div className="text-[11px] text-emerald-700 dark:text-emerald-300">
             {renderCat(h.newCategoryName, h.newSubcategoryName)}
           </div>
         ) : (
-          <div className="text-[11px] text-rose-700 line-through">
+          <div className="text-[11px] text-rose-700 dark:text-rose-300 line-through">
             {renderCat(h.oldCategoryName, h.oldSubcategoryName)}
           </div>
         )
       )}
       {h.reason && (
-        <div className="text-[10px] text-slate-500 italic">{h.reason}</div>
+        <div className="text-[10px] text-slate-500 dark:text-slate-400 italic">{h.reason}</div>
       )}
       {h.contractNumber && (
-        <div className="text-[10px] font-mono text-indigo-600">{h.contractNumber}</div>
+        <div className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400">{h.contractNumber}</div>
       )}
     </div>
   );
@@ -4413,17 +4413,17 @@ function InfoRow({
 }) {
   const hasValue = !!(value || chip || customValue);
   return (
-    <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 last:border-b-0">
+    <div className="flex items-start gap-3 px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-b-0">
       {/* Label (chap tomonda, sobit eni) */}
       <div className="w-28 shrink-0 pt-0.5">
-        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 flex items-center gap-1">
+        <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
           {icon} {label}
         </div>
       </div>
       {/* Qiymat */}
       <div className="flex-1 min-w-0">
         {!hasValue && (
-          <div className="text-[12px] text-slate-400 italic">{emptyText || '—'}</div>
+          <div className="text-[12px] text-slate-400 dark:text-slate-500 italic">{emptyText || '—'}</div>
         )}
         {chip && (
           <div
@@ -4439,16 +4439,16 @@ function InfoRow({
         )}
         {customValue}
         {value && !chip && !customValue && (
-          <div className="text-[13px] font-semibold text-slate-900 break-words">{value}</div>
+          <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 break-words">{value}</div>
         )}
         {subValue && (
-          <div className="text-[10px] text-slate-500 mt-0.5 break-words">{subValue}</div>
+          <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 break-words">{subValue}</div>
         )}
       </div>
       {/* O'ng tomon: docNumber + clear */}
       <div className="flex items-center gap-1 shrink-0">
         {docNumber && (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 text-slate-600 ring-1 ring-slate-200">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700">
             <Receipt className="h-3 w-3" /> #{docNumber}
           </span>
         )}
@@ -4456,7 +4456,7 @@ function InfoRow({
           <button
             onClick={onClear}
             title="Tozalash"
-            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 hover:text-rose-700 hover:bg-rose-50 transition-colors"
+            className="inline-flex items-center justify-center w-6 h-6 rounded-md text-slate-400 dark:text-slate-500 hover:text-rose-700 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -4470,19 +4470,19 @@ function InfoRow({
 function CompositeIdSection({ value, label }: { value: string; label: string }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+    <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 transition-colors"
+        className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 transition-colors"
       >
-        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 flex items-center gap-1.5">
+        <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
           <Hash className="h-3 w-3" /> {label}
         </div>
-        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 transition-transform shrink-0', open && 'rotate-180')} />
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="px-4 pb-3 pt-1 border-t border-slate-100 flex items-center gap-2">
-          <code className="flex-1 min-w-0 font-mono text-[11px] text-slate-700 bg-slate-50 px-2 py-1 rounded ring-1 ring-slate-200 break-all select-all">
+        <div className="px-4 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+          <code className="flex-1 min-w-0 font-mono text-[11px] text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded ring-1 ring-slate-200 dark:ring-slate-700 break-all select-all">
             {value}
           </code>
           <CopyIdButton value={value} />
@@ -4505,9 +4505,9 @@ function CopyIdButton({ value }: { value: string }) {
     <button
       onClick={copy}
       title={`Tranzaksiya ID nusxalash: ${value}`}
-      className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-700 transition-colors"
+      className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
     >
-      {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
   );
 }
@@ -4525,12 +4525,12 @@ function KontragentChip({
     return canEdit ? (
       <button
         onClick={onClick}
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 ring-1 ring-dashed ring-slate-200 hover:ring-indigo-300 transition-colors"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 ring-1 ring-dashed ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 dark:hover:ring-indigo-900 transition-colors"
       >
         + tanlash
       </button>
     ) : (
-      <span className="text-[10px] text-slate-300">—</span>
+      <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>
     );
   }
   const color = category?.color || '#64748b';
@@ -4566,16 +4566,16 @@ function CategoryChip({
   placeholder?: string;
 }) {
   if (!category) {
-    if (!placeholder) return <span className="text-[10px] text-slate-300">—</span>;
+    if (!placeholder) return <span className="text-[10px] text-slate-300 dark:text-slate-600">—</span>;
     return canEdit ? (
       <button
         onClick={onClick}
-        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 ring-1 ring-dashed ring-slate-200 hover:ring-indigo-300 transition-colors"
+        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 ring-1 ring-dashed ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 dark:hover:ring-indigo-900 transition-colors"
       >
         {placeholder}
       </button>
     ) : (
-      <span className="text-[10px] text-slate-400">{placeholder}</span>
+      <span className="text-[10px] text-slate-400 dark:text-slate-500">{placeholder}</span>
     );
   }
   const color = category.color || parentColor || '#64748b';
@@ -4656,7 +4656,7 @@ function CategoryEditDialog({
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-4 w-4 text-indigo-600" /> Kategoriya tanlash
+            <Wand2 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Kategoriya tanlash
           </DialogTitle>
           <DialogDescription>
             Bevosita subkategoriyani tanlasangiz, ota-kategoriya avtomatik belgilanadi
@@ -4666,7 +4666,7 @@ function CategoryEditDialog({
         <div className="space-y-3">
           {/* Search */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -4676,9 +4676,9 @@ function CategoryEditDialog({
           </div>
 
           {/* Tree */}
-          <div className="max-h-[400px] overflow-y-auto rounded-lg ring-1 ring-slate-200 divide-y divide-slate-100">
+          <div className="max-h-[400px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
             {visible.length === 0 && (
-              <div className="px-4 py-6 text-center text-[11px] text-slate-400 italic">
+              <div className="px-4 py-6 text-center text-[11px] text-slate-400 dark:text-slate-500 italic">
                 Hech narsa topilmadi
               </div>
             )}
@@ -4692,8 +4692,8 @@ function CategoryEditDialog({
                   <button
                     onClick={() => pickTop(t)}
                     className={cn(
-                      'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 transition-colors',
-                      topSelected && 'bg-indigo-50',
+                      'w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
+                      topSelected && 'bg-indigo-50 dark:bg-indigo-950/40',
                     )}
                     style={topSelected ? { backgroundColor: `${color}12` } : {}}
                   >
@@ -4702,7 +4702,7 @@ function CategoryEditDialog({
                     </span>
                     {topSelected && <CheckCircle2 className="h-3.5 w-3.5" style={{ color }} />}
                     {!hasChildren && !topSelected && (
-                      <span className="text-[9px] text-slate-400 uppercase tracking-wider">tanlash</span>
+                      <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">tanlash</span>
                     )}
                   </button>
                   {/* Subkategoriyalar */}
@@ -4713,12 +4713,12 @@ function CategoryEditDialog({
                         key={s.id}
                         onClick={() => pickSub(t, s)}
                         className={cn(
-                          'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 transition-colors',
-                          subSelected && 'bg-indigo-50',
+                          'w-full text-left pl-8 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors',
+                          subSelected && 'bg-indigo-50 dark:bg-indigo-950/40',
                         )}
                         style={subSelected ? { backgroundColor: `${color}12` } : {}}
                       >
-                        <span className="text-slate-700" style={subSelected ? { color, fontWeight: 600 } : {}}>
+                        <span className="text-slate-700 dark:text-slate-300" style={subSelected ? { color, fontWeight: 600 } : {}}>
                           ↳ {s.name}
                         </span>
                         {subSelected && <CheckCircle2 className="h-3 w-3" style={{ color }} />}
@@ -4736,12 +4736,12 @@ function CategoryEditDialog({
             const sub = top?.children?.find((s: any) => s.id === selectedSubId);
             const color = top?.color || '#64748b';
             return (
-              <div className="rounded-lg p-2 ring-1 ring-indigo-200 bg-indigo-50/50 text-[11px]">
-                <span className="text-slate-500">Tanlangan: </span>
+              <div className="rounded-lg p-2 ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/40 text-[11px]">
+                <span className="text-slate-500 dark:text-slate-400">Tanlangan: </span>
                 <span className="font-semibold" style={{ color }}>{top?.name}</span>
                 {sub && (
                   <>
-                    <span className="text-slate-400 mx-1">/</span>
+                    <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
                     <span className="font-semibold" style={{ color }}>{sub.name}</span>
                   </>
                 )}
@@ -4749,11 +4749,11 @@ function CategoryEditDialog({
             );
           })()}
 
-          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
             <button
               onClick={() => onSave(null, null)}
               disabled={saving}
-              className="text-[12px] text-rose-600 hover:text-rose-700 font-medium"
+              className="text-[12px] text-rose-600 dark:text-rose-400 hover:text-rose-700 dark:hover:text-rose-300 font-medium"
             >
               Tozalash
             </button>

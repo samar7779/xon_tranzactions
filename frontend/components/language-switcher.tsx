@@ -18,7 +18,7 @@ function FlagIcon({ code }: { code: string }) {
   if (code === 'uz') {
     // O'zbekiston bayrog'i — moviy, oq, yashil 3 chiziq (hilol+yulduzlar soddalashtirilgan)
     return (
-      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200">
+      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200 dark:ring-slate-700">
         <rect width="22" height="5.33" y="0" fill="#0099B5" />
         <rect width="22" height="0.5" y="5.33" fill="#CE1126" />
         <rect width="22" height="4.83" y="5.83" fill="#fff" />
@@ -32,7 +32,7 @@ function FlagIcon({ code }: { code: string }) {
   if (code === 'ru') {
     // Rossiya bayrog'i — oq, moviy, qizil
     return (
-      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200">
+      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200 dark:ring-slate-700">
         <rect width="22" height="5.33" y="0" fill="#fff" />
         <rect width="22" height="5.33" y="5.33" fill="#0039A6" />
         <rect width="22" height="5.34" y="10.66" fill="#D52B1E" />
@@ -42,7 +42,7 @@ function FlagIcon({ code }: { code: string }) {
   if (code === 'en') {
     // Buyuk Britaniya — Union Jack (soddalashtirilgan)
     return (
-      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200">
+      <svg width={size.w} height={size.h} viewBox="0 0 22 16" className="rounded-sm shadow-sm ring-1 ring-slate-200 dark:ring-slate-700">
         <rect width="22" height="16" fill="#012169" />
         {/* Diagonal qizil + oq xochlar */}
         <path d="M0 0 L22 16 M22 0 L0 16" stroke="#fff" strokeWidth="2.4" />
@@ -102,12 +102,12 @@ export function LanguageSwitcher({ compact = false }: Props) {
             <DropdownMenuItem
               key={l}
               onClick={() => switchTo(l)}
-              className={cn('cursor-pointer gap-2', active && 'bg-indigo-50 text-indigo-700')}
+              className={cn('cursor-pointer gap-2', active && 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300')}
             >
               <FlagIcon code={l} />
               <span className="flex-1">{LABEL[l]}</span>
               <span className="uppercase text-[10px] text-muted-foreground mr-1">{l}</span>
-              {active && <Check className="h-3.5 w-3.5 text-indigo-600" />}
+              {active && <Check className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
             </DropdownMenuItem>
           );
         })}

@@ -25,10 +25,10 @@ import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 
 const STATUS_CONFIG: Record<string, { icon: any; label: string; cls: string; dot: string }> = {
-  SUCCESS: { icon: CheckCircle2, label: 'Muvaffaqiyatli', cls: 'bg-emerald-50 text-emerald-700 ring-emerald-200', dot: 'bg-emerald-500' },
-  FAILED:  { icon: XCircle, label: 'Xato', cls: 'bg-rose-50 text-rose-700 ring-rose-200', dot: 'bg-rose-500' },
-  RUNNING: { icon: Loader2, label: 'Bajarilmoqda', cls: 'bg-blue-50 text-blue-700 ring-blue-200', dot: 'bg-blue-500' },
-  PARTIAL: { icon: AlertTriangle, label: 'Qisman', cls: 'bg-amber-50 text-amber-700 ring-amber-200', dot: 'bg-amber-500' },
+  SUCCESS: { icon: CheckCircle2, label: 'Muvaffaqiyatli', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500' },
+  FAILED:  { icon: XCircle, label: 'Xato', cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900', dot: 'bg-rose-500' },
+  RUNNING: { icon: Loader2, label: 'Bajarilmoqda', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', dot: 'bg-blue-500' },
+  PARTIAL: { icon: AlertTriangle, label: 'Qisman', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', dot: 'bg-amber-500' },
 };
 
 const STATUS_FILTERS = [
@@ -104,13 +104,13 @@ export default function SyncLogsPage() {
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         {/* Sub-tab bar — Tarix / Sozlamalar (faqat ruxsat berilganlar) */}
         {(canHistory || canSettings) && (
-          <div className="inline-flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
+          <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl">
             {canHistory && (
               <button
                 onClick={() => setSubTab('history')}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-                  subTab === 'history' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                  subTab === 'history' ? 'bg-white dark:bg-slate-900 text-indigo-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                 )}
               >
                 <History className="h-3.5 w-3.5" /> Tarix
@@ -121,7 +121,7 @@ export default function SyncLogsPage() {
                 onClick={() => setSubTab('settings')}
                 className={cn(
                   'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
-                  subTab === 'settings' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700',
+                  subTab === 'settings' ? 'bg-white dark:bg-slate-900 text-indigo-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                 )}
               >
                 <Settings className="h-3.5 w-3.5" /> Sozlamalar
@@ -136,9 +136,9 @@ export default function SyncLogsPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-bold tracking-tight">Sync tarixi</div>
-            <div className="text-xs text-slate-500">Banklardan ma'lumot olish jurnali</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">Banklardan ma'lumot olish jurnali</div>
           </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-[11px] font-medium text-emerald-700">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -158,20 +158,20 @@ export default function SyncLogsPage() {
         {/* ═══ TIMELINE ═══ */}
         <Card className="border-0 shadow-soft overflow-hidden">
           <CardContent className="p-0">
-            <div className="px-6 py-4 border-b border-slate-100 space-y-3">
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 space-y-3">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <div className="text-base font-semibold tracking-tight flex items-center gap-2">
                     <Activity className="h-4 w-4 text-indigo-600" />
                     Sync tarixi
                   </div>
-                  <div className="text-xs text-slate-500 mt-0.5">Oxirgi 100 ta operatsiya · har 10 soniyada yangilanadi</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Oxirgi 100 ta operatsiya · har 10 soniyada yangilanadi</div>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px]">
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 font-medium">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> {stats.success}
                   </span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 ring-1 ring-rose-200 text-rose-700 font-medium">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300 font-medium">
                     <span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> {stats.failed}
                   </span>
                 </div>
@@ -179,14 +179,14 @@ export default function SyncLogsPage() {
 
               {/* Filtr — status + qidiruv */}
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-[11px] font-medium">
+                <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 text-[11px] font-medium">
                   {STATUS_FILTERS.map((f) => (
                     <button
                       key={f.value}
                       onClick={() => setStatusFilter(f.value)}
                       className={cn(
                         'px-2.5 h-8 rounded-lg transition-colors',
-                        statusFilter === f.value ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700',
+                        statusFilter === f.value ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                       )}
                     >
                       {f.label}
@@ -194,20 +194,20 @@ export default function SyncLogsPage() {
                   ))}
                 </div>
                 <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                   <Input
-                    className="pl-8 h-9 rounded-xl bg-slate-50/60 text-sm"
+                    className="pl-8 h-9 rounded-xl bg-slate-50/60 dark:bg-slate-900/60 text-sm"
                     placeholder="Hisob raqami, egasi yoki xato matni..."
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
                   {q && (
-                    <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700" onClick={() => setQ('')}>
+                    <button className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300" onClick={() => setQ('')}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   )}
                 </div>
-                <span className="text-[11px] text-slate-400 tabular-nums">
+                <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
                   {filtered.length} / {data?.items?.length ?? 0}
                 </span>
               </div>
@@ -227,7 +227,7 @@ export default function SyncLogsPage() {
               />
             ) : (
               <>
-                <div className="divide-y divide-slate-100">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {(() => {
                     const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
                     const safePage = Math.min(page, totalPages);
@@ -237,7 +237,7 @@ export default function SyncLogsPage() {
                       const cfg = STATUS_CONFIG[l.status] || STATUS_CONFIG.SUCCESS;
                       const Icon = cfg.icon;
                       return (
-                        <div key={l.id} className="px-6 py-3.5 hover:bg-slate-50/60 transition-colors">
+                        <div key={l.id} className="px-6 py-3.5 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
                           <div className="flex items-start gap-4">
                             <div className="shrink-0 mt-0.5">
                               <div className={cn(
@@ -259,15 +259,15 @@ export default function SyncLogsPage() {
                                       {cfg.label}
                                     </span>
                                     {isBackfillLog(l) && (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200">
+                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-1 ring-inset ring-violet-200 dark:ring-violet-900">
                                         Tarix yuklash
                                       </span>
                                     )}
-                                    <span className="font-mono text-[11px] text-slate-600 bg-slate-50 px-1.5 py-0.5 rounded">{l.source}</span>
-                                    <span className="text-[11px] text-slate-500 tabular-nums">{formatDateTime(l.startedAt)}</span>
+                                    <span className="font-mono text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">{l.source}</span>
+                                    <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">{formatDateTime(l.startedAt)}</span>
                                   </div>
                                   {l.errorMessage && (
-                                    <div className="mt-1.5 text-[11px] text-rose-600 line-clamp-2 leading-relaxed">
+                                    <div className="mt-1.5 text-[11px] text-rose-600 dark:text-rose-400 line-clamp-2 leading-relaxed">
                                       <AlertTriangle className="h-3 w-3 inline mr-1" /> {l.errorMessage}
                                     </div>
                                   )}
@@ -278,7 +278,7 @@ export default function SyncLogsPage() {
                                   <Stat icon={CheckCircle2} value={l.saved ?? 0} label="saqlandi" tone={l.saved > 0 ? 'emerald' : 'slate'} />
                                   {(l.errors ?? 0) > 0 && <Stat icon={XCircle} value={l.errors} label="xato" tone="rose" />}
                                   {l.durationMs && (
-                                    <span className="inline-flex items-center gap-1 text-slate-500">
+                                    <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                                       <Clock className="h-3 w-3" />
                                       <span className="font-medium tabular-nums">{l.durationMs} ms</span>
                                     </span>
@@ -584,22 +584,22 @@ function SyncSettingsPanel() {
         <button
           type="button"
           onClick={() => setOpenSync((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 grid place-items-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-900/30 grid place-items-center shrink-0">
             <ShieldAlert className="h-5 w-5 text-indigo-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-slate-800">Sync chegarasi (minimal sana)</div>
-            <div className="text-[11.5px] text-slate-500 mt-0.5 truncate">
+            <div className="text-base font-bold text-slate-800 dark:text-slate-200">Sync chegarasi (minimal sana)</div>
+            <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               {data?.syncMinDate ? `Aktiv: ${data.syncMinDate}` : "Chegara yo'q — barcha tarix sync bo'ladi"}
             </div>
           </div>
-          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openSync && 'rotate-180')} />
+          <ChevronDown className={cn('h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', openSync && 'rotate-180')} />
         </button>
         {openSync && (
-        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100">
-          <div className="text-[12px] text-slate-500 max-w-2xl">
+        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 max-w-2xl">
             Sync bu sanadan oldingi tranzaksiyalarni <b>HECH QACHON olmaydi</b>.
             Qo'lda import qilingan tarixiy ma'lumotlarni himoya qilish uchun ishlatiladi.
           </div>
@@ -607,7 +607,7 @@ function SyncSettingsPanel() {
             <Skeleton className="h-10 w-64" />
           ) : (
             <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
                 Sync minimal sana
               </Label>
               <div className="flex items-center gap-2">
@@ -623,7 +623,7 @@ function SyncSettingsPanel() {
                       type="button"
                       onClick={() => { setSyncMinDate(''); setDirty1(true); }}
                       title="Tozalash"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -638,7 +638,7 @@ function SyncSettingsPanel() {
                   Saqlash
                 </Button>
               </div>
-              <div className="text-[10.5px] text-slate-400">
+              <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
                 Misol: 31.12.2025 qo'ysangiz, sync 01.01.2026 dan boshlab boshlanadi.
               </div>
             </div>
@@ -653,22 +653,22 @@ function SyncSettingsPanel() {
         <button
           type="button"
           onClick={() => setOpenOplata((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <div className="w-9 h-9 rounded-xl bg-amber-50 grid place-items-center shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 grid place-items-center shrink-0">
             <ShieldAlert className="h-5 w-5 text-amber-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-slate-800">ОплатыКв — Tranzaksiyalardan auto-import</div>
-            <div className="text-[11.5px] text-slate-500 mt-0.5 truncate">
+            <div className="text-base font-bold text-slate-800 dark:text-slate-200">ОплатыКв — Tranzaksiyalardan auto-import</div>
+            <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
               {data?.oplatykvTxMinDate ? `Aktiv: ${data.oplatykvTxMinDate}` : "Sozlanmagan — auto-import o'chirilgan"}
             </div>
           </div>
-          <ChevronDown className={cn('h-5 w-5 text-slate-400 transition-transform shrink-0', openOplata && 'rotate-180')} />
+          <ChevronDown className={cn('h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', openOplata && 'rotate-180')} />
         </button>
         {openOplata && (
-        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100">
-          <div className="text-[12px] text-slate-500 max-w-2xl">
+        <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100 dark:border-slate-800">
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 max-w-2xl">
             Tranzaksiyalardan ОплатыКв jadvaliga avto-import minimal sanasi.
             Faqat <b>CLIENT</b> (Клиент / Физ.Л / Юр.Л) kategoriyasidagi <b>KIRIM</b>
             tranzaksiyalar, shartnoma raqami bor va sanasi <b>shu sanadan keyin</b>
@@ -682,25 +682,25 @@ function SyncSettingsPanel() {
             className={cn(
               'w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg ring-1 transition-colors text-left',
               showOplataSettings
-                ? 'bg-amber-50 ring-amber-200 text-amber-900'
-                : 'bg-slate-50 ring-slate-200 hover:bg-slate-100 text-slate-700',
+                ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-900 dark:text-amber-300'
+                : 'bg-slate-50 dark:bg-slate-800 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
             )}
           >
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               <span className="text-[12.5px] font-semibold">Sozlamalar va vositalar</span>
-              <span className="text-[10.5px] text-slate-500">
+              <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
                 · Auto-import sana · Cron · Vaqt oraliqlari · Tx cleanup · Object mapping
               </span>
             </div>
-            <ChevronDown className={cn('h-4 w-4 text-slate-400 transition-transform', showOplataSettings && 'rotate-180')} />
+            <ChevronDown className={cn('h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform', showOplataSettings && 'rotate-180')} />
           </button>
 
           {showOplataSettings && isLoading ? (
             <Skeleton className="h-10 w-64" />
           ) : showOplataSettings && (
             <div className="space-y-2">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500">
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
                 ОплатыКв TX minimal sana
               </Label>
               <div className="flex items-center gap-2 flex-wrap">
@@ -716,7 +716,7 @@ function SyncSettingsPanel() {
                       type="button"
                       onClick={() => { setOplatykvTxMinDate(''); setDirty2(true); }}
                       title="Tozalash"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -743,31 +743,31 @@ function SyncSettingsPanel() {
                   onClick={() => debugXatoMut.mutate()}
                   disabled={debugXatoMut.isPending}
                   variant="outline"
-                  className="h-10 px-4 gap-2 border-slate-300 text-slate-700 hover:bg-slate-100"
+                  className="h-10 px-4 gap-2 border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   title="DEBUG: F12 → Console'ga XATO split holatini to'kadi (tahlil uchun)"
                 >
                   {debugXatoMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   🔍 Debug XATO
                 </Button>
               </div>
-              <div className="text-[10.5px] text-slate-400">
+              <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
                 Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
                 <br />
                 <b>Sync ichida AVTOMATIK:</b> obyekt + client + 1 взнос/oylik ajratish CRM'dan orqada to'ldiriladi.
               </div>
 
               {/* AUTO-SYNC INTERVAL */}
-              <div className="mt-5 pt-5 border-t border-slate-100">
+              <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600 flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
                   Avtomatik sync (cron)
                 </Label>
-                <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
                   Backend har belgilangan daqiqada avtomatik sync'ni ishga tushiradi. <b>0</b> qo'ysangiz — o'chirilgan.
                 </div>
                 <div className="flex items-end gap-2 flex-wrap">
                   <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                       Har necha daqiqada
                     </Label>
                     <Input
@@ -788,37 +788,37 @@ function SyncSettingsPanel() {
                     {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                     Saqlash
                   </Button>
-                  <div className="text-[11px] text-slate-500 self-center">
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 self-center">
                     {Number(oplatykvAutoSyncMinutes) > 0
                       ? <>✓ Faol: har <b>{oplatykvAutoSyncMinutes} daqiqada</b> bir marta</>
                       : <>○ O'chirilgan</>}
                   </div>
                 </div>
-                <div className="text-[10.5px] text-slate-400 mt-2">
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-2">
                   Misol: <b>15</b> qo'ysangiz — backend har 15 daqiqada avtomatik tx-dan sync qiladi.
                 </div>
 
                 {/* DAY/NIGHT TIME WINDOWS */}
-                <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
-                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-600 flex items-center gap-1.5">
+                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
+                  <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
                     <Clock className="h-3.5 w-3.5" /> Vaqt oraliqlari (Tashkent)
                   </Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* DAY mode */}
-                    <div className="rounded-xl bg-amber-50/50 ring-1 ring-amber-200 p-3 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700">☀ KUNDUZ ({oplatykvAutoSyncMinutes}min, limit 1000)</div>
+                    <div className="rounded-xl bg-amber-50/50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-300">☀ KUNDUZ ({oplatykvAutoSyncMinutes}min, limit 1000)</div>
                       <div className="flex items-center gap-2">
                         <Input type="time" value={dayStart} onChange={(e) => { setDayStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400 dark:text-slate-500">—</span>
                         <Input type="time" value={dayEnd} onChange={(e) => { setDayEnd(e.target.value); setDirty4(true); }} className="h-9 w-28" />
                       </div>
                     </div>
                     {/* NIGHT batch */}
-                    <div className="rounded-xl bg-indigo-50/50 ring-1 ring-indigo-200 p-3 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700">🌙 TUN (kuniga 1, FULL batch)</div>
+                    <div className="rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 p-3 space-y-2">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-300">🌙 TUN (kuniga 1, FULL batch)</div>
                       <div className="flex items-center gap-2">
                         <Input type="time" value={nightStart} onChange={(e) => { setNightStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
-                        <span className="text-slate-400">—</span>
+                        <span className="text-slate-400 dark:text-slate-500">—</span>
                         <Input type="time" value={nightEnd} onChange={(e) => { setNightEnd(e.target.value); setDirty4(true); }} className="h-9 w-28" />
                       </div>
                     </div>
@@ -836,14 +836,14 @@ function SyncSettingsPanel() {
               </div>
 
               {/* CLEANUP SECTION — sana oralig'i (boshlanish + tugash) */}
-              <div className="mt-5 pt-5 border-t border-slate-100">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 flex items-center gap-1.5">
+              <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
                   <X className="h-3.5 w-3.5" />
                   Tranzaksiya manbasini tozalash
                 </Label>
                 <div className="flex items-end gap-2 flex-wrap mt-2">
                   <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                       Boshlanish
                     </Label>
                     <div className="relative">
@@ -858,16 +858,16 @@ function SyncSettingsPanel() {
                           type="button"
                           onClick={() => setCleanupDateFrom('')}
                           title="Tozalash"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       )}
                     </div>
                   </div>
-                  <div className="text-slate-400 text-lg pb-2">—</div>
+                  <div className="text-slate-400 dark:text-slate-500 text-lg pb-2">—</div>
                   <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                       Tugash
                     </Label>
                     <div className="relative">
@@ -882,7 +882,7 @@ function SyncSettingsPanel() {
                           type="button"
                           onClick={() => setCleanupDateTo('')}
                           title="Tozalash"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-600"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <X className="h-3.5 w-3.5" />
                         </button>
@@ -901,7 +901,7 @@ function SyncSettingsPanel() {
                     Tozalash
                   </Button>
                 </div>
-                <div className="text-[10.5px] text-slate-400 mt-2">
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-2">
                   <b>Sana oralig'i</b> — qatorlarning <code>date</code> maydoni bo'yicha filtr:
                   <br />
                   • Faqat <b>boshlanish</b> → shu sanadan keyingi (shu kun bilan)
@@ -917,24 +917,24 @@ function SyncSettingsPanel() {
               </div>
 
               {/* ── OBJECT MAPPING — sub-bo'lim ichida (OplatyKv kartochkasi ichida) ── */}
-              <div className="mt-5 pt-5 border-t border-slate-100">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-fuchsia-600 flex items-center gap-1.5">
+              <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-fuchsia-600 dark:text-fuchsia-400 flex items-center gap-1.5">
                   <Building2 className="h-3.5 w-3.5" />
                   Obyekt nomi mapping (CRM → OplatyKv)
                 </Label>
-                <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
                   CRM <b>"XON SAROY AFSONASI"</b> bersa, OplatyKv'ga <b>"АФСОНА"</b> deb yozish uchun.
                   Mapping bo'lmasa — CRM nomi qanday bo'lsa shunday yoziladi.
                 </div>
 
                 {/* Yangi mapping qo'shish */}
-                <div className="rounded-xl bg-fuchsia-50/40 ring-1 ring-fuchsia-200 p-3 space-y-2">
-                  <div className="text-[10px] uppercase tracking-wider font-semibold text-fuchsia-700 flex items-center gap-1.5">
+                <div className="rounded-xl bg-fuchsia-50/40 dark:bg-fuchsia-950/40 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900 p-3 space-y-2">
+                  <div className="text-[10px] uppercase tracking-wider font-semibold text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1.5">
                     <Plus className="h-3 w-3" /> Yangi mapping
                   </div>
                   <div className="flex items-end gap-2 flex-wrap">
                     <div className="flex-1 min-w-[160px]">
-                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                         CRM nomi
                       </Label>
                       <Input
@@ -945,9 +945,9 @@ function SyncSettingsPanel() {
                         className="h-9 text-[12.5px]"
                       />
                     </div>
-                    <ArrowRight className="h-4 w-4 text-slate-400 pb-2.5 shrink-0" />
+                    <ArrowRight className="h-4 w-4 text-slate-400 dark:text-slate-500 pb-2.5 shrink-0" />
                     <div className="flex-1 min-w-[160px]">
-                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 mb-1 block">
+                      <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
                         OplatyKv nomi
                       </Label>
                       <Input
@@ -970,34 +970,34 @@ function SyncSettingsPanel() {
                 </div>
 
                 {/* Mavjud mappinglar */}
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden mt-3">
-                  <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 text-[10px] uppercase tracking-wider font-bold text-slate-600">
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden mt-3">
+                  <div className="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">
                     Mavjud mappinglar
                     {(mappingsQuery.data?.items?.length || 0) > 0 && (
-                      <span className="text-slate-400 font-medium ml-1 normal-case">
+                      <span className="text-slate-400 dark:text-slate-500 font-medium ml-1 normal-case">
                         · {mappingsQuery.data!.items.length}
                       </span>
                     )}
                   </div>
                   {mappingsQuery.isLoading ? (
-                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400">
+                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 dark:text-slate-500">
                       <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto mb-1" />
                       Yuklanmoqda...
                     </div>
                   ) : (mappingsQuery.data?.items?.length || 0) === 0 ? (
-                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 italic">
+                    <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 dark:text-slate-500 italic">
                       Mapping mavjud emas
                     </div>
                   ) : (
-                    <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
                       {mappingsQuery.data!.items.map((m) => (
-                        <div key={m.id} className="px-3 py-2 flex items-center gap-2 hover:bg-slate-50/60">
+                        <div key={m.id} className="px-3 py-2 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800">
                           <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-[12px] font-semibold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded truncate">
+                            <span className="font-mono text-[12px] font-semibold text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-700 px-1.5 py-0.5 rounded truncate">
                               {m.crmName}
                             </span>
-                            <ArrowRight className="h-3 w-3 text-slate-400 shrink-0" />
-                            <span className="font-mono text-[12px] font-bold text-fuchsia-700 bg-fuchsia-50 px-1.5 py-0.5 rounded truncate">
+                            <ArrowRight className="h-3 w-3 text-slate-400 dark:text-slate-500 shrink-0" />
+                            <span className="font-mono text-[12px] font-bold text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-950/40 px-1.5 py-0.5 rounded truncate">
                               {m.oplataName}
                             </span>
                           </div>
@@ -1008,7 +1008,7 @@ function SyncSettingsPanel() {
                               }
                             }}
                             disabled={deleteMappingMut.isPending}
-                            className="w-7 h-7 rounded grid place-items-center text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                            className="w-7 h-7 rounded grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                             title="O'chirish"
                           >
                             <Trash2 className="h-3 w-3" />
@@ -1019,7 +1019,7 @@ function SyncSettingsPanel() {
                   )}
                 </div>
 
-                <div className="text-[10px] text-slate-400 mt-2">
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
                   Eslatma: mapping faqat <b>keyingi sync'larga</b> ta'sir qiladi.
                 </div>
               </div>
@@ -1027,12 +1027,12 @@ function SyncSettingsPanel() {
           )}
 
           {/* ── EXPORT ZIP — Arizalar + Переброска ── */}
-          <div className="mt-5 pt-5 border-t border-slate-100">
-            <Label className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600 flex items-center gap-1.5">
+          <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
+            <Label className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
               <Download className="h-3.5 w-3.5" />
               Hujjatlarni ZIP qilib yuklab olish
             </Label>
-            <div className="text-[11px] text-slate-500 mt-1 mb-3 max-w-2xl">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
               Tizimdagi barcha biriktirilgan hujjatlarni bir arxivda yuklab olish.
               Har bir hujjat shartnoma raqami bo'yicha papkalarga taqsimlanadi.
             </div>
@@ -1074,8 +1074,8 @@ function SyncSettingsPanel() {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-bold text-slate-900">Arizalarni yuklash</div>
-                    <div className="text-[11px] text-slate-600">Barcha ariza fayllari (PDF, rasmlar) — ZIP</div>
+                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">Arizalarni yuklash</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300">Barcha ariza fayllari (PDF, rasmlar) — ZIP</div>
                   </div>
                   <Download className="h-4 w-4 text-amber-600 group-hover:translate-y-0.5 transition-transform" />
                 </div>
@@ -1114,8 +1114,8 @@ function SyncSettingsPanel() {
                     <ArrowRightLeft className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-bold text-slate-900">Перереброскаlarni yuklash</div>
-                    <div className="text-[11px] text-slate-600">Barcha o'tkazma fayllari — ZIP</div>
+                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">Перереброскаlarni yuklash</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300">Barcha o'tkazma fayllari — ZIP</div>
                   </div>
                   <Download className="h-4 w-4 text-fuchsia-600 group-hover:translate-y-0.5 transition-transform" />
                 </div>
@@ -1150,13 +1150,13 @@ function KpiCard({
       <div className={cn("absolute -top-12 -right-12 w-32 h-32 rounded-full blur-2xl opacity-25 bg-gradient-to-br", m.grad)} />
       <CardContent className="p-5 relative">
         <div className="flex items-start justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500">{label}</div>
+          <div className="text-[10px] uppercase tracking-[0.15em] font-semibold text-slate-500 dark:text-slate-400">{label}</div>
           <div className={cn("w-9 h-9 rounded-xl grid place-items-center bg-gradient-to-br text-white shadow-sm", m.grad)}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
         <div className="text-2xl lg:text-3xl font-bold tracking-tight tabular-nums">{value}</div>
-        <div className="text-[11px] text-slate-500 mt-1 truncate">{sub}</div>
+        <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 truncate">{sub}</div>
         {spark && spark.length > 0 && (
           <div className="mt-1 -mx-1">
             <Sparkline data={spark} width={200} height={28} stroke={m.accent} fill={m.accent} />
@@ -1170,12 +1170,12 @@ function KpiCard({
 function Stat({ icon: Icon, value, label, tone = 'slate' }: { icon: any; value: number; label: string; tone?: 'slate' | 'emerald' | 'rose' }) {
   const cls = tone === 'emerald' ? 'text-emerald-600'
     : tone === 'rose' ? 'text-rose-600'
-    : 'text-slate-500';
+    : 'text-slate-500 dark:text-slate-400';
   return (
     <span className={cn("inline-flex items-center gap-1 tabular-nums", cls)}>
       <Icon className="h-3 w-3" />
       <span className="font-semibold">{value}</span>
-      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-400 dark:text-slate-500">{label}</span>
     </span>
   );
 }
@@ -1191,9 +1191,9 @@ function PaginationBar({ page, totalPages, onChange }: { page: number; totalPage
       disabled={disabled}
       className={cn(
         'inline-flex items-center justify-center h-8 min-w-[32px] px-2 rounded-md text-[12px] font-semibold transition-colors',
-        disabled && 'text-slate-300 cursor-not-allowed',
+        disabled && 'text-slate-300 dark:text-slate-600 cursor-not-allowed',
         !disabled && p === safePage && 'bg-indigo-600 text-white',
-        !disabled && p !== safePage && 'bg-slate-100 text-slate-700 hover:bg-slate-200',
+        !disabled && p !== safePage && 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700',
       )}
     >
       {label}
@@ -1202,15 +1202,15 @@ function PaginationBar({ page, totalPages, onChange }: { page: number; totalPage
   const pages: number[] = [];
   for (let i = Math.max(1, safePage - 2); i <= Math.min(totalPages, safePage + 2); i++) pages.push(i);
   return (
-    <div className="flex items-center justify-center gap-1 px-6 py-3 border-t border-slate-100">
+    <div className="flex items-center justify-center gap-1 px-6 py-3 border-t border-slate-100 dark:border-slate-800">
       {btn(1, <ChevronsLeft className="h-4 w-4" />, safePage === 1)}
       {btn(safePage - 1, <ChevronLeft className="h-4 w-4" />, safePage === 1)}
-      {pages[0] > 1 && <span className="text-slate-400 text-[11px] px-1">…</span>}
+      {pages[0] > 1 && <span className="text-slate-400 dark:text-slate-500 text-[11px] px-1">…</span>}
       {pages.map((p) => btn(p, String(p)))}
-      {pages[pages.length - 1] < totalPages && <span className="text-slate-400 text-[11px] px-1">…</span>}
+      {pages[pages.length - 1] < totalPages && <span className="text-slate-400 dark:text-slate-500 text-[11px] px-1">…</span>}
       {btn(safePage + 1, <ChevronRight className="h-4 w-4" />, safePage === totalPages)}
       {btn(totalPages, <ChevronsRight className="h-4 w-4" />, safePage === totalPages)}
-      <span className="ml-3 text-[10.5px] text-slate-400 tabular-nums">
+      <span className="ml-3 text-[10.5px] text-slate-400 dark:text-slate-500 tabular-nums">
         {safePage} / {totalPages}
       </span>
     </div>
@@ -1345,10 +1345,10 @@ function SyncProgressDialog({
   ];
 
   const colorMap: Record<string, { ring: string; bg: string; text: string; iconBg: string }> = {
-    emerald: { ring: 'ring-emerald-200', bg: 'bg-emerald-50', text: 'text-emerald-700', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600' },
-    rose:    { ring: 'ring-rose-200',    bg: 'bg-rose-50',    text: 'text-rose-700',    iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600' },
-    indigo:  { ring: 'ring-indigo-200',  bg: 'bg-indigo-50',  text: 'text-indigo-700',  iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600' },
-    violet:  { ring: 'ring-violet-200',  bg: 'bg-violet-50',  text: 'text-violet-700',  iconBg: 'bg-gradient-to-br from-violet-500 to-fuchsia-600' },
+    emerald: { ring: 'ring-emerald-200 dark:ring-emerald-900', bg: 'bg-emerald-50 dark:bg-emerald-950/40', text: 'text-emerald-700 dark:text-emerald-300', iconBg: 'bg-gradient-to-br from-emerald-500 to-teal-600' },
+    rose:    { ring: 'ring-rose-200 dark:ring-rose-900',       bg: 'bg-rose-50 dark:bg-rose-950/40',       text: 'text-rose-700 dark:text-rose-300',       iconBg: 'bg-gradient-to-br from-rose-500 to-pink-600' },
+    indigo:  { ring: 'ring-indigo-200 dark:ring-indigo-900',   bg: 'bg-indigo-50 dark:bg-indigo-950/40',   text: 'text-indigo-700 dark:text-indigo-300',   iconBg: 'bg-gradient-to-br from-indigo-500 to-blue-600' },
+    violet:  { ring: 'ring-violet-200 dark:ring-violet-900',   bg: 'bg-violet-50 dark:bg-violet-950/40',   text: 'text-violet-700 dark:text-violet-300',   iconBg: 'bg-gradient-to-br from-violet-500 to-fuchsia-600' },
   };
 
   const totalSec = result?.duration || elapsed;
@@ -1398,7 +1398,7 @@ function SyncProgressDialog({
         </div>
 
         {/* Body — steps */}
-        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto bg-slate-50/40">
+        <div className="p-6 space-y-3 max-h-[60vh] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/60">
           {steps.map((step, idx) => {
             const isActive = step.active;
             const isDone = step.done;
@@ -1411,8 +1411,8 @@ function SyncProgressDialog({
                 className={cn(
                   'rounded-2xl p-4 ring-1 transition-all',
                   isDone ? cn(cmap.bg, cmap.ring)
-                  : isActive ? 'bg-white ring-indigo-300 shadow-md shadow-indigo-500/20'
-                  : 'bg-white ring-slate-200',
+                  : isActive ? 'bg-white dark:bg-slate-800 ring-indigo-300 dark:ring-indigo-700 shadow-md shadow-indigo-500/20'
+                  : 'bg-white dark:bg-slate-800 ring-slate-200 dark:ring-slate-700',
                 )}
               >
                 <div className="flex items-start gap-3">
@@ -1420,24 +1420,24 @@ function SyncProgressDialog({
                     'w-10 h-10 rounded-xl grid place-items-center shrink-0 text-white shadow-md transition-all',
                     isDone ? cmap.iconBg
                     : isActive ? 'bg-gradient-to-br from-indigo-500 to-violet-600 animate-pulse'
-                    : 'bg-slate-200 shadow-none',
+                    : 'bg-slate-200 dark:bg-slate-700 shadow-none',
                   )}>
                     {isDone ? (
                       <CheckCircle2 className="h-5 w-5" />
                     ) : isActive ? (
                       <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
-                      <Icon className={cn('h-5 w-5', isActive || isDone ? 'text-white' : 'text-slate-400')} />
+                      <Icon className={cn('h-5 w-5', isActive || isDone ? 'text-white' : 'text-slate-400 dark:text-slate-500')} />
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className={cn(
                       'text-[13px] font-bold leading-snug',
-                      isDone ? cmap.text : isActive ? 'text-indigo-700' : 'text-slate-500',
+                      isDone ? cmap.text : isActive ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400',
                     )}>
                       {idx + 1}. {step.title}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">
                       {step.desc}
                     </div>
                     {isDone && step.result && (
@@ -1446,7 +1446,7 @@ function SyncProgressDialog({
                       </div>
                     )}
                     {isActive && (
-                      <div className="mt-2 text-[11px] text-indigo-600 font-semibold flex items-center gap-1.5">
+                      <div className="mt-2 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1.5">
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
                         Bajarilmoqda...
                       </div>
@@ -1458,18 +1458,18 @@ function SyncProgressDialog({
           })}
 
           {errored && (
-            <div className="rounded-2xl p-4 bg-rose-50 ring-1 ring-rose-200">
+            <div className="rounded-2xl p-4 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
-                <div className="text-[12px] text-rose-700 font-semibold">{error}</div>
+                <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <div className="text-[12px] text-rose-700 dark:text-rose-300 font-semibold">{error}</div>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-white border-t border-slate-100 flex items-center justify-between gap-3">
-          <div className="text-[11px] text-slate-500">
+        <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
+          <div className="text-[11px] text-slate-500 dark:text-slate-400">
             {isPending ? 'Jarayon davom etmoqda — 5-10 daqiqa olishi mumkin'
               : done ? 'Tayyor — OplatyKv sahifasini yangilang'
               : ''}

@@ -64,28 +64,28 @@ export default function ImportPage() {
                 active
                   ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25'
                   : k.available
-                    ? 'bg-white ring-1 ring-slate-200 hover:ring-indigo-300 hover:shadow-md cursor-pointer'
-                    : 'bg-slate-50 ring-1 ring-slate-100 cursor-not-allowed opacity-60',
+                    ? 'bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 hover:shadow-md cursor-pointer'
+                    : 'bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800 cursor-not-allowed opacity-60',
               )}
             >
               <div className="flex items-center justify-between mb-2">
                 <div className={cn(
                   'w-9 h-9 rounded-xl grid place-items-center',
-                  active ? 'bg-white/20' : 'bg-indigo-50',
+                  active ? 'bg-white/20' : 'bg-indigo-50 dark:bg-indigo-950/40',
                 )}>
-                  <Icon className={cn('h-4 w-4', active ? 'text-white' : 'text-indigo-600')} />
+                  <Icon className={cn('h-4 w-4', active ? 'text-white' : 'text-indigo-600 dark:text-indigo-400')} />
                 </div>
                 {!k.available && (
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-700 ring-1 ring-amber-200">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900">
                     <Lock className="h-2.5 w-2.5" />
                     Tez orada
                   </span>
                 )}
               </div>
-              <div className={cn('text-[13px] font-bold', active ? 'text-white' : 'text-slate-800')}>
+              <div className={cn('text-[13px] font-bold', active ? 'text-white' : 'text-slate-800 dark:text-slate-200')}>
                 {k.label}
               </div>
-              <div className={cn('text-[10.5px] mt-0.5', active ? 'text-white/85' : 'text-slate-500')}>
+              <div className={cn('text-[10.5px] mt-0.5', active ? 'text-white/85' : 'text-slate-500 dark:text-slate-400')}>
                 {k.description}
               </div>
             </button>
@@ -163,8 +163,8 @@ function TransactionsImportPanel() {
       <Card className="border-0 shadow-soft">
         <CardContent className="p-6 space-y-5">
           <div className="flex items-center gap-2 pb-1">
-            <Wallet className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">Tranzaksiyalarni Excel'dan import qilish</div>
+            <Wallet className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Tranzaksiyalarni Excel'dan import qilish</div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -187,8 +187,8 @@ function TransactionsImportPanel() {
               )}
             </Button>
             {fileName && !mut.isPending && (
-              <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> {fileName}
               </div>
             )}
           </div>
@@ -202,10 +202,10 @@ function TransactionsImportPanel() {
                 <Stat label="Xato"            value={result.errors}  color="rose" />
               </div>
               {result.errors > 0 && (
-                <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/40 dark:bg-rose-950/40 overflow-hidden">
                   <button
                     onClick={() => setErrorsOpen((o) => !o)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
@@ -214,11 +214,11 @@ function TransactionsImportPanel() {
                     {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {errorsOpen && (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900">
                       {result.errorRows.map((e, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
-                          <span className="font-mono text-rose-700 shrink-0">Qator {e.row}:</span>
-                          <span className="text-slate-700">{e.reason}</span>
+                          <span className="font-mono text-rose-700 dark:text-rose-300 shrink-0">Qator {e.row}:</span>
+                          <span className="text-slate-700 dark:text-slate-300">{e.reason}</span>
                         </div>
                       ))}
                     </div>
@@ -235,11 +235,11 @@ function TransactionsImportPanel() {
         <button
           type="button"
           onClick={() => setFormatOpen((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-          <div className="text-sm font-semibold text-slate-800">Excel format</div>
-          <span className="ml-auto text-slate-400">
+          <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Excel format</div>
+          <span className="ml-auto text-slate-400 dark:text-slate-500">
             {formatOpen
               ? <ChevronDown className="h-4 w-4" />
               : <ChevronRight className="h-4 w-4" />}
@@ -247,30 +247,30 @@ function TransactionsImportPanel() {
         </button>
         {formatOpen && (
           <CardContent className="px-6 pb-6 pt-0">
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
               <table className="w-full text-[11px]">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Izoh</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {TXN_COLUMNS.map((c) => (
-                    <tr key={c.letter} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">
+                    <tr key={c.letter} className="hover:bg-slate-50/50 dark:hover:bg-slate-800">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-300">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800 dark:text-slate-200">
                         {c.header}
-                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                        {c.required && <span className="text-rose-600 dark:text-rose-400 ml-1" title="Majburiy">*</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{c.description}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+            <div className="mt-3 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
               <div>• <b>Summa formati:</b> 596616522,10 (vergul decimal) yoki oddiy raqam</div>
               <div>• <b>Yo'nalish:</b> ОборотДебет &gt; 0 → CHIQIM, ОборотКредит &gt; 0 → KIRIM</div>
               <div>• <b>Dublikat skip:</b> ID ustun bo'yicha — agar shu ID DB'da bor bo'lsa, skip</div>
@@ -346,14 +346,14 @@ function AloqaBankImportPanel() {
       <Card className="border-0 shadow-soft">
         <CardContent className="p-6 space-y-5">
           <div className="flex items-center gap-2 pb-1">
-            <Landmark className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">Aloqa Bank Excel import</div>
-            <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ring-1 ring-amber-200 bg-amber-50 text-amber-700">
+            <Landmark className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Aloqa Bank Excel import</div>
+            <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
               <Lock className="h-2.5 w-2.5" /> READ-ONLY
             </span>
           </div>
-          <div className="rounded-lg ring-1 ring-amber-200 bg-amber-50/50 p-3 text-[11.5px] text-amber-900 flex gap-2 items-start">
-            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-700" />
+          <div className="rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/50 dark:bg-amber-950/40 p-3 text-[11.5px] text-amber-900 dark:text-amber-300 flex gap-2 items-start">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0 text-amber-700 dark:text-amber-300" />
             <div>
               Bu manbadan import qilingan tranzaksiyalar <b>read-only</b>: edit, ariza biriktirish,
               shartnoma qo'yish va kategoriya o'zgartirish bloklangan. Faqat batch tarixidan jamoaviy o'chirish mumkin.
@@ -379,8 +379,8 @@ function AloqaBankImportPanel() {
               )}
             </Button>
             {fileName && !mut.isPending && (
-              <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> {fileName}
               </div>
             )}
           </div>
@@ -394,10 +394,10 @@ function AloqaBankImportPanel() {
                 <Stat label="Xato"            value={result.errors}  color="rose" />
               </div>
               {result.errors > 0 && (
-                <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/40 dark:bg-rose-950/40 overflow-hidden">
                   <button
                     onClick={() => setErrorsOpen((o) => !o)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
@@ -406,11 +406,11 @@ function AloqaBankImportPanel() {
                     {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {errorsOpen && (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900">
                       {result.errorRows.map((e, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
-                          <span className="font-mono text-rose-700 shrink-0">Qator {e.row}:</span>
-                          <span className="text-slate-700">{e.reason}</span>
+                          <span className="font-mono text-rose-700 dark:text-rose-300 shrink-0">Qator {e.row}:</span>
+                          <span className="text-slate-700 dark:text-slate-300">{e.reason}</span>
                         </div>
                       ))}
                     </div>
@@ -427,11 +427,11 @@ function AloqaBankImportPanel() {
         <button
           type="button"
           onClick={() => setFormatOpen((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-          <div className="text-sm font-semibold text-slate-800">Excel format (11 ustun)</div>
-          <span className="ml-auto text-slate-400">
+          <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Excel format (11 ustun)</div>
+          <span className="ml-auto text-slate-400 dark:text-slate-500">
             {formatOpen
               ? <ChevronDown className="h-4 w-4" />
               : <ChevronRight className="h-4 w-4" />}
@@ -439,30 +439,30 @@ function AloqaBankImportPanel() {
         </button>
         {formatOpen && (
           <CardContent className="px-6 pb-6 pt-0">
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
               <table className="w-full text-[11px]">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Izoh</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {ALOQA_COLUMNS.map((c) => (
-                    <tr key={c.letter} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">
+                    <tr key={c.letter} className="hover:bg-slate-50/50 dark:hover:bg-slate-800">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-300">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800 dark:text-slate-200">
                         {c.header}
-                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                        {c.required && <span className="text-rose-600 dark:text-rose-400 ml-1" title="Majburiy">*</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{c.description}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+            <div className="mt-3 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
               <div>• <b>Eng asosiy:</b> Р/С (A ustun) — hisob raqami</div>
               <div>• <b>ID:</b> 'ALB_' prefiksi avto qo'shiladi (boshqa import'lar bilan kollision bo'lmasin)</div>
               <div>• <b>Yo'nalish:</b> ОборотДебет &gt; 0 → CHIQIM, ОборотКредит &gt; 0 → KIRIM</div>
@@ -560,17 +560,17 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+        className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left"
       >
-        <History className="h-4 w-4 text-indigo-600 shrink-0" />
-        <div className="text-sm font-semibold text-slate-800">Import tarixi</div>
+        <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+        <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Import tarixi</div>
         {expanded && (
-          <span className="text-[11px] text-slate-400">
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">
             {batches.length} ta yozuv
-            {otherKindsCount > 0 && <span className="ml-1 text-amber-600">(+{otherKindsCount} ta boshqa turdagi yashirilgan)</span>}
+            {otherKindsCount > 0 && <span className="ml-1 text-amber-600 dark:text-amber-400">(+{otherKindsCount} ta boshqa turdagi yashirilgan)</span>}
           </span>
         )}
-        <span className="ml-auto text-slate-400">
+        <span className="ml-auto text-slate-400 dark:text-slate-500">
           {expanded
             ? <ChevronDown className="h-4 w-4" />
             : <ChevronRight className="h-4 w-4" />}
@@ -580,48 +580,48 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
       {expanded && (
       <CardContent className="px-6 pb-6 pt-0">
         {isLoading ? (
-          <div className="flex items-center gap-2 py-6 text-slate-400 justify-center text-[12px]">
+          <div className="flex items-center gap-2 py-6 text-slate-400 dark:text-slate-500 justify-center text-[12px]">
             <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...
           </div>
         ) : batches.length === 0 ? (
-          <div className="text-center text-[12px] text-slate-400 py-8 rounded-xl ring-1 ring-dashed ring-slate-200">
+          <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8 rounded-xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700">
             Hozircha import qilinmagan
           </div>
         ) : (
-          <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden divide-y divide-slate-100">
+          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-700">
             {batches.map((b) => (
-              <div key={b.id} className="px-4 py-3 hover:bg-slate-50/60 transition-colors">
+              <div key={b.id} className="px-4 py-3 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-fuchsia-50 grid place-items-center shrink-0 mt-0.5">
-                    <FileSpreadsheet className="h-4 w-4 text-fuchsia-600" />
+                  <div className="w-9 h-9 rounded-xl bg-fuchsia-50 dark:bg-fuchsia-950/40 grid place-items-center shrink-0 mt-0.5">
+                    <FileSpreadsheet className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[12px] font-semibold text-slate-800 truncate" title={b.fileName || ''}>
+                      <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={b.fileName || ''}>
                         {b.fileName || '(nomsiz)'}
                       </span>
                       <span className={cn(
                         'text-[9px] font-bold px-1.5 py-0.5 rounded-full ring-1',
                         b.kind === 'oplata-kv'
-                          ? 'bg-violet-50 text-violet-700 ring-violet-200'
-                          : 'bg-sky-50 text-sky-700 ring-sky-200',
+                          ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900'
+                          : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
                       )}>{b.kind}</span>
                       {b.notes && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">LEGACY</span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300">LEGACY</span>
                       )}
                     </div>
-                    <div className="text-[10.5px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                    <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
                       <span>{formatDateTime(b.importedAt)}</span>
-                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
                       <span>{b.importedBy || '—'}</span>
-                      <span className="text-slate-300">·</span>
+                      <span className="text-slate-300 dark:text-slate-600">·</span>
                       <span>{formatSize(b.fileSize)}</span>
                     </div>
                     <div className="flex items-center gap-3 mt-1.5 text-[10.5px]">
-                      <span className="text-slate-500">Jami: <b className="text-slate-700">{b.rowsTotal}</b></span>
-                      <span className="text-emerald-600">+{b.rowsAdded}</span>
-                      {b.rowsSkipped > 0 && <span className="text-amber-600">~{b.rowsSkipped}</span>}
-                      {b.rowsErrors > 0 && <span className="text-rose-600">×{b.rowsErrors}</span>}
+                      <span className="text-slate-500 dark:text-slate-400">Jami: <b className="text-slate-700 dark:text-slate-300">{b.rowsTotal}</b></span>
+                      <span className="text-emerald-600 dark:text-emerald-400">+{b.rowsAdded}</span>
+                      {b.rowsSkipped > 0 && <span className="text-amber-600 dark:text-amber-400">~{b.rowsSkipped}</span>}
+                      {b.rowsErrors > 0 && <span className="text-rose-600 dark:text-rose-400">×{b.rowsErrors}</span>}
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -632,8 +632,8 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                       className={cn(
                         'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
                         downloadingId === b.id
-                          ? 'bg-emerald-100 text-emerald-700 cursor-wait'
-                          : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 cursor-wait'
+                          : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/30',
                       )}
                     >
                       {downloadingId === b.id
@@ -647,8 +647,8 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
                       className={cn(
                         'inline-flex items-center justify-center w-8 h-8 rounded-lg transition-colors',
                         delMut.isPending
-                          ? 'bg-rose-100 text-rose-700 cursor-wait'
-                          : 'bg-rose-50 text-rose-700 hover:bg-rose-100',
+                          ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 cursor-wait'
+                          : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30',
                       )}
                     >
                       {delMut.isPending && confirmDel?.id === b.id
@@ -668,16 +668,16 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
       <Dialog open={!!confirmDel} onOpenChange={(o) => !o && !delMut.isPending && setConfirmDel(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-rose-700">
+            <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-300">
               <AlertTriangle className="h-5 w-5" />
               Importni o'chirishni tasdiqlash
             </DialogTitle>
             <DialogDescription className="text-[12px] pt-2">
               <b>{confirmDel?.fileName || '(nomsiz)'}</b> import bilan birga
-              {' '}<b className="text-rose-700">{confirmDel?.rowsAdded || 0} ta {itemLabel}</b> o'chiriladi.
+              {' '}<b className="text-rose-700 dark:text-rose-300">{confirmDel?.rowsAdded || 0} ta {itemLabel}</b> o'chiriladi.
               Bu amal qaytarib bo'lmaydi.
               {confirmDel?.notes && (
-                <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 text-amber-800 text-[11px]">
+                <div className="mt-2 px-2 py-1.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 text-[11px]">
                   <b>Eslatma:</b> {confirmDel.notes}
                 </div>
               )}
@@ -704,11 +704,11 @@ function BatchHistorySection({ refreshKey, kind }: { refreshKey: number; kind?: 
 
 function Stat({ label, value, color }: { label: string; value: number; color: 'slate' | 'emerald' | 'amber' | 'rose' | 'indigo' }) {
   const colorMap = {
-    slate:   'bg-slate-50 ring-slate-100 text-slate-700',
-    emerald: 'bg-emerald-50 ring-emerald-100 text-emerald-700',
-    amber:   'bg-amber-50 ring-amber-100 text-amber-700',
-    rose:    'bg-rose-50 ring-rose-100 text-rose-700',
-    indigo:  'bg-indigo-50 ring-indigo-100 text-indigo-700',
+    slate:   'bg-slate-50 dark:bg-slate-900 ring-slate-100 dark:ring-slate-800 text-slate-700 dark:text-slate-300',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-100 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300',
+    amber:   'bg-amber-50 dark:bg-amber-950/40 ring-amber-100 dark:ring-amber-900 text-amber-700 dark:text-amber-300',
+    rose:    'bg-rose-50 dark:bg-rose-950/40 ring-rose-100 dark:ring-rose-900 text-rose-700 dark:text-rose-300',
+    indigo:  'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-100 dark:ring-indigo-900 text-indigo-700 dark:text-indigo-300',
   };
   return (
     <div className={cn('rounded-xl ring-1 px-4 py-3', colorMap[color])}>
@@ -781,8 +781,8 @@ function CounterpartiesImportPanel() {
       <Card className="border-0 shadow-soft">
         <CardContent className="p-6 space-y-5">
           <div className="flex items-center gap-2 pb-1">
-            <Briefcase className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">Kontragentlarni Excel'dan import qilish</div>
+            <Briefcase className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Kontragentlarni Excel'dan import qilish</div>
           </div>
 
           <div className="flex items-center gap-3">
@@ -805,8 +805,8 @@ function CounterpartiesImportPanel() {
               )}
             </Button>
             {fileName && !mut.isPending && (
-              <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> {fileName}
               </div>
             )}
           </div>
@@ -821,10 +821,10 @@ function CounterpartiesImportPanel() {
                 <Stat label="Xato"        value={result.failed}  color="rose" />
               </div>
               {result.failed > 0 && (
-                <div className="rounded-xl ring-1 ring-rose-200 bg-rose-50/40 overflow-hidden">
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/40 dark:bg-rose-950/40 overflow-hidden">
                   <button
                     onClick={() => setFailedOpen((o) => !o)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
@@ -833,11 +833,11 @@ function CounterpartiesImportPanel() {
                     {failedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {failedOpen && (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100">
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900">
                       {failedRows.map((r, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] flex items-baseline gap-3">
-                          <span className="font-mono text-rose-700 shrink-0">INN {r.inn}:</span>
-                          <span className="text-slate-700">{r.reason || '—'}</span>
+                          <span className="font-mono text-rose-700 dark:text-rose-300 shrink-0">INN {r.inn}:</span>
+                          <span className="text-slate-700 dark:text-slate-300">{r.reason || '—'}</span>
                         </div>
                       ))}
                     </div>
@@ -854,11 +854,11 @@ function CounterpartiesImportPanel() {
         <button
           type="button"
           onClick={() => setFormatOpen((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-          <div className="text-sm font-semibold text-slate-800">Excel format</div>
-          <span className="ml-auto text-slate-400">
+          <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Excel format</div>
+          <span className="ml-auto text-slate-400 dark:text-slate-500">
             {formatOpen
               ? <ChevronDown className="h-4 w-4" />
               : <ChevronRight className="h-4 w-4" />}
@@ -866,30 +866,30 @@ function CounterpartiesImportPanel() {
         </button>
         {formatOpen && (
           <CardContent className="px-6 pb-6 pt-0">
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
               <table className="w-full text-[11px]">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Izoh</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {CP_COLUMNS.map((c) => (
-                    <tr key={c.letter} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">
+                    <tr key={c.letter} className="hover:bg-slate-50/50 dark:hover:bg-slate-800">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-300">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800 dark:text-slate-200">
                         {c.header}
-                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                        {c.required && <span className="text-rose-600 dark:text-rose-400 ml-1" title="Majburiy">*</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{c.description}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+            <div className="mt-3 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
               <div>• <b>Birinchi qator (header)</b> avtomatik o'tkazib yuboriladi</div>
               <div>• <b>INN majburiy</b> — bo'sh qatorlar o'tkazib yuboriladi</div>
               <div>• <b>Dublikat:</b> INN allaqachon DB'da bo'lsa, nomi yangilanadi (skip emas)</div>
@@ -1016,8 +1016,8 @@ function OplataKvImportPanel() {
       <Card className="border-0 shadow-soft">
         <CardContent className="p-6 space-y-5">
           <div className="flex items-center gap-2 pb-1">
-            <Home className="h-4 w-4 text-indigo-600" />
-            <div className="text-sm font-semibold text-slate-800">ОплатыКв qatorlarini Excel'dan import qilish</div>
+            <Home className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">ОплатыКв qatorlarini Excel'dan import qilish</div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
@@ -1042,21 +1042,21 @@ function OplataKvImportPanel() {
               )}
             </Button>
             {fileName && !busy && (
-              <div className="text-[12px] text-slate-600 flex items-center gap-1.5">
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600" /> {fileName}
+              <div className="text-[12px] text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> {fileName}
               </div>
             )}
           </div>
 
           {/* 1-bosqich: PREVIEW natijasi ko'rsatiladi (tasdiqlanmaganlar) */}
           {preview && !result && (
-            <div className="space-y-3 rounded-2xl ring-1 ring-indigo-200 bg-indigo-50/40 p-4">
+            <div className="space-y-3 rounded-2xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/40 p-4">
               <div className="flex items-center gap-2 pb-1">
-                <Info className="h-4 w-4 text-indigo-600" />
-                <div className="text-[13px] font-semibold text-indigo-900">
+                <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                <div className="text-[13px] font-semibold text-indigo-900 dark:text-indigo-300">
                   Tekshirish natijasi (bazaga hali qo'shilmadi)
                 </div>
-                <span className="ml-auto text-[10px] text-indigo-700/70 tabular-nums">
+                <span className="ml-auto text-[10px] text-indigo-700/70 dark:text-indigo-400 tabular-nums">
                   ⏱ {preview.duration}s
                 </span>
               </div>
@@ -1071,16 +1071,16 @@ function OplataKvImportPanel() {
 
               {/* Xatolar ro'yxati — to'liq ko'rsatamiz, foydalanuvchi qarorga kelishi uchun */}
               {preview.errors > 0 && (
-                <div className="rounded-xl ring-1 ring-rose-200 bg-white overflow-hidden">
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-white dark:bg-slate-900 overflow-hidden">
                   <button
                     onClick={() => setErrorsOpen((o) => !o)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 hover:bg-rose-50"
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-rose-900 dark:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-950/40"
                   >
                     <span className="flex items-center gap-2">
                       <AlertTriangle className="h-4 w-4" />
                       {preview.errors} ta xato qator
                       {preview.errors > preview.errorRows.length && (
-                        <span className="text-[10px] font-normal text-rose-700">
+                        <span className="text-[10px] font-normal text-rose-700 dark:text-rose-300">
                           (birinchi {preview.errorRows.length} tasi ko'rsatilgan)
                         </span>
                       )}
@@ -1088,17 +1088,17 @@ function OplataKvImportPanel() {
                     {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {errorsOpen && (
-                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 border-t border-rose-200">
+                    <div className="max-h-80 overflow-y-auto divide-y divide-rose-100 dark:divide-rose-900 border-t border-rose-200 dark:border-rose-900">
                       {preview.errorRows.map((e, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
-                          <span className="font-mono text-rose-700 shrink-0">Qator {e.row}</span>
+                          <span className="font-mono text-rose-700 dark:text-rose-300 shrink-0">Qator {e.row}</span>
                           <div className="space-y-0.5">
-                            <div className="text-slate-700">{e.reason}</div>
+                            <div className="text-slate-700 dark:text-slate-300">{e.reason}</div>
                             {(e.id || e.contractNo) && (
-                              <div className="text-[10px] text-slate-500 font-mono">
-                                {e.contractNo && <>Дог №: <b className="text-slate-700">{e.contractNo}</b></>}
+                              <div className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
+                                {e.contractNo && <>Дог №: <b className="text-slate-700 dark:text-slate-300">{e.contractNo}</b></>}
                                 {e.contractNo && e.id && <span className="mx-2">·</span>}
-                                {e.id && <>ID: <b className="text-slate-700">{e.id}</b></>}
+                                {e.id && <>ID: <b className="text-slate-700 dark:text-slate-300">{e.id}</b></>}
                               </div>
                             )}
                           </div>
@@ -1111,10 +1111,10 @@ function OplataKvImportPanel() {
 
               {/* Dublikatlar ro'yxati */}
               {preview.skippedRows && preview.skippedRows.length > 0 && (
-                <div className="rounded-xl ring-1 ring-amber-200 bg-white overflow-hidden">
+                <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 overflow-hidden">
                   <button
                     onClick={() => setSkippedOpen((o) => !o)}
-                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-amber-900 hover:bg-amber-50"
+                    className="w-full px-4 py-2.5 flex items-center justify-between text-left text-[12px] font-semibold text-amber-900 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                   >
                     <span className="flex items-center gap-2">
                       <Info className="h-4 w-4" />
@@ -1124,16 +1124,16 @@ function OplataKvImportPanel() {
                     {skippedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                   </button>
                   {skippedOpen && (
-                    <div className="max-h-72 overflow-y-auto divide-y divide-amber-100 border-t border-amber-200">
+                    <div className="max-h-72 overflow-y-auto divide-y divide-amber-100 dark:divide-amber-900 border-t border-amber-200 dark:border-amber-900">
                       {preview.skippedRows.map((s, i) => (
                         <div key={i} className="px-4 py-2 text-[11px] grid grid-cols-[60px_1fr] gap-x-3 items-baseline">
-                          <span className="font-mono text-amber-700 shrink-0">Qator {s.row}</span>
-                          <div className="font-mono text-[10px] text-slate-600">
-                            Дог №: <b className="text-slate-800">{s.contractNo}</b>
+                          <span className="font-mono text-amber-700 dark:text-amber-300 shrink-0">Qator {s.row}</span>
+                          <div className="font-mono text-[10px] text-slate-600 dark:text-slate-300">
+                            Дог №: <b className="text-slate-800 dark:text-slate-200">{s.contractNo}</b>
                             <span className="mx-2">·</span>
-                            ID: <b className="text-slate-800">{s.id}</b>
-                            <span className="mx-2 text-amber-600">·</span>
-                            <span className="text-amber-800">{s.reason}</span>
+                            ID: <b className="text-slate-800 dark:text-slate-200">{s.id}</b>
+                            <span className="mx-2 text-amber-600 dark:text-amber-400">·</span>
+                            <span className="text-amber-800 dark:text-amber-300">{s.reason}</span>
                           </div>
                         </div>
                       ))}
@@ -1143,7 +1143,7 @@ function OplataKvImportPanel() {
               )}
 
               {/* Tasdiqlash / bekor */}
-              <div className="flex items-center gap-2 pt-2 border-t border-indigo-200">
+              <div className="flex items-center gap-2 pt-2 border-t border-indigo-200 dark:border-indigo-900">
                 <Button
                   variant="outline"
                   onClick={() => cancelMut.mutate(preview.previewId)}
@@ -1165,7 +1165,7 @@ function OplataKvImportPanel() {
                   )}
                 </Button>
               </div>
-              <div className="text-[10px] text-indigo-700/70">
+              <div className="text-[10px] text-indigo-700/70 dark:text-indigo-400">
                 💡 Tasdiqlamasangiz hech narsa o'zgarmaydi. Preview 30 daqiqa amal qiladi.
               </div>
             </div>
@@ -1173,10 +1173,10 @@ function OplataKvImportPanel() {
 
           {/* 2-bosqich natijasi: commit'dan keyin */}
           {result && (
-            <div className="space-y-3 rounded-2xl ring-1 ring-emerald-200 bg-emerald-50/40 p-4">
+            <div className="space-y-3 rounded-2xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40 p-4">
               <div className="flex items-center gap-2 pb-1">
-                <Check className="h-4 w-4 text-emerald-600" />
-                <div className="text-[13px] font-semibold text-emerald-900">Import tugadi</div>
+                <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                <div className="text-[13px] font-semibold text-emerald-900 dark:text-emerald-300">Import tugadi</div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <Stat label="Jami qator"      value={result.total}   color="slate" />
@@ -1185,7 +1185,7 @@ function OplataKvImportPanel() {
                 <Stat label="Xato"            value={result.errors}  color="rose" />
               </div>
               {typeof result.duration === 'number' && (
-                <div className="text-[11px] text-slate-500">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
                   ⏱ Tugadi: {result.duration} sekund · ~{result.total > 0 ? Math.round(result.total / Math.max(1, result.duration)) : 0} qator/sek
                 </div>
               )}
@@ -1199,40 +1199,40 @@ function OplataKvImportPanel() {
         <button
           type="button"
           onClick={() => setFormatOpen((v) => !v)}
-          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 transition-colors text-left"
+          className="w-full px-6 py-4 flex items-center gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors text-left"
         >
-          <Info className="h-4 w-4 text-indigo-600 shrink-0" />
-          <div className="text-sm font-semibold text-slate-800">Excel format</div>
-          <span className="ml-auto text-slate-400">
+          <Info className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+          <div className="text-sm font-semibold text-slate-800 dark:text-slate-200">Excel format</div>
+          <span className="ml-auto text-slate-400 dark:text-slate-500">
             {formatOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
         </button>
         {formatOpen && (
           <CardContent className="px-6 pb-6 pt-0">
-            <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
               <table className="w-full text-[11px]">
-                <thead className="bg-slate-50">
+                <thead className="bg-slate-50 dark:bg-slate-900">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500 w-10">#</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Sarlavha</th>
-                    <th className="px-3 py-2 text-left font-semibold text-slate-500">Izoh</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400 w-10">#</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Sarlavha</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-500 dark:text-slate-400">Izoh</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {OPLATA_KV_COLUMNS.map((c) => (
-                    <tr key={c.letter} className="hover:bg-slate-50/50">
-                      <td className="px-3 py-2 font-mono font-bold text-indigo-700">{c.letter}</td>
-                      <td className="px-3 py-2 font-mono text-slate-800">
+                    <tr key={c.letter} className="hover:bg-slate-50/50 dark:hover:bg-slate-800">
+                      <td className="px-3 py-2 font-mono font-bold text-indigo-700 dark:text-indigo-300">{c.letter}</td>
+                      <td className="px-3 py-2 font-mono text-slate-800 dark:text-slate-200">
                         {c.header}
-                        {c.required && <span className="text-rose-600 ml-1" title="Majburiy">*</span>}
+                        {c.required && <span className="text-rose-600 dark:text-rose-400 ml-1" title="Majburiy">*</span>}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">{c.description}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{c.description}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="mt-3 text-[10.5px] text-slate-500 space-y-1">
+            <div className="mt-3 text-[10.5px] text-slate-500 dark:text-slate-400 space-y-1">
               <div>• <b>Дата formati:</b> 01.05.2026 yoki Excel date hujayrasi</div>
               <div>• <b>Summa:</b> manfiy (-) va musbat (+) qabul qilinadi</div>
               <div>• <b>Оплата:</b> "ежемесячный" | "1 взнос" | "Общий" — boshqa qiymatlar bo'sh deb hisoblanadi</div>
