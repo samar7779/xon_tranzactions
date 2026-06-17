@@ -115,13 +115,30 @@ export class PublicApiController {
 
   @Get('transactions/:id')
   @RequireApiScopes(API_SCOPES.TRANSACTIONS_READ)
-  @ApiOperation({ summary: 'Tranzaksiya tafsiloti' })
+  @ApiOperation({
+    summary: 'Tranzaksiya tafsiloti',
+    description: 'ID sifatida qabul qilinadi: cuid (Transaction.id) YOKI externalId (bank tomonidan berilgan global_id/b2_id) YOKI reference (bank ref code) YOKI docNumber. Birinchi mosi qaytariladi.',
+  })
   async getTransaction(@Param('id') id: string) {
-    const tx = await this.prisma.transaction.findUnique({
-      where: { id },
+    const idTrimmed = (id || '').trim();
+    if (!idTrimmed) throw new NotFoundException('Tranzaksiya ID berilmagan');
+
+    // Bir nechta noyob maydon bilan qidiramiz — foydalanuvchi qaysi ID
+    // formatini bilmasligi mumkin. Birinchi mos kelgani qaytariladi.
+    const tx = await this.prisma.transaction.findFirst({
+      where: {
+        OR: [
+          { id: idTrimmed },
+          { externalId: idTrimmed },
+          { reference: idTrimmed },
+          { docNumber: idTrimmed },
+        ],
+      },
       select: this.txSelect(),
     });
-    if (!tx) throw new NotFoundException('Tranzaksiya topilmadi');
+    if (!tx) throw new NotFoundException(
+      `Tranzaksiya topilmadi. Qidirilgan maydonlar: id (cuid), externalId, reference, docNumber. Berilgan: "${idTrimmed.slice(0, 64)}"`,
+    );
     return { ok: true, transaction: this.txShape(tx) };
   }
 
@@ -176,10 +193,25 @@ export class PublicApiController {
 
   @Get('oplata-kv/:id')
   @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
-  @ApiOperation({ summary: 'ОплатыКв qatorining tafsiloti' })
+  @ApiOperation({
+    summary: 'ОплатыКв qatorining tafsiloti',
+    description: 'ID sifatida qabul qilinadi: cuid (OplataKv.id) YOKI sourceTxId (bog\'langan Transaction.externalId). Birinchi mosi qaytariladi.',
+  })
   async getOplataKv(@Param('id') id: string) {
-    const row = await this.prisma.oplataKv.findUnique({ where: { id } });
-    if (!row) throw new NotFoundException('ОплатыКв qatori topilmadi');
+    const idTrimmed = (id || '').trim();
+    if (!idTrimmed) throw new NotFoundException('ОплатыКв ID berilmagan');
+
+    const row = await this.prisma.oplataKv.findFirst({
+      where: {
+        OR: [
+          { id: idTrimmed },
+          { sourceTxId: idTrimmed },
+        ],
+      },
+    });
+    if (!row) throw new NotFoundException(
+      `ОплатыКв qatori topilmadi. Qidirilgan maydonlar: id (cuid), sourceTxId. Berilgan: "${idTrimmed.slice(0, 64)}"`,
+    );
     return { ok: true, item: this.oplataKvShape(row) };
   }
 
@@ -235,24 +267,28 @@ export class PublicApiController {
     description: 'ID (cuid) yoki hisob raqami (20 raqam) qabul qiladi. Ikkalasi ham qidiriladi.',
   })
   async getAccount(@Param('idOrAccountNo') idOrAccountNo: string) {
+    const v = (idOrAccountNo || '').trim();
+    if (!v) throw new NotFoundException('ID yoki accountNo berilmagan');
+
     const select = {
       id: true, branch: true, accountNo: true, ownerName: true,
       currency: true, balance: true, syncEnabled: true, lastSyncedAt: true,
       createdAt: true,
       bank: { select: { id: true, code: true, name: true } },
     };
-    // Avval ID (cuid) bo'yicha, keyin accountNo bo'yicha qidiramiz
-    let a = await this.prisma.bankAccount.findUnique({
-      where: { id: idOrAccountNo },
+    // Bir nechta maydon bilan qidiramiz — bitta query'da OR orqali tez
+    const a = await this.prisma.bankAccount.findFirst({
+      where: {
+        OR: [
+          { id: v },
+          { accountNo: v },
+        ],
+      },
       select,
     });
-    if (!a) {
-      a = await this.prisma.bankAccount.findFirst({
-        where: { accountNo: idOrAccountNo },
-        select,
-      });
-    }
-    if (!a) throw new NotFoundException('Hisob topilmadi (id yoki accountNo bo\'yicha)');
+    if (!a) throw new NotFoundException(
+      `Hisob topilmadi. Qidirilgan maydonlar: id (cuid), accountNo. Berilgan: "${v.slice(0, 64)}"`,
+    );
     return {
       ok: true,
       account: {
@@ -309,12 +345,23 @@ export class PublicApiController {
     return { ok: true, total, page: pageN, perPage: perPageN, items };
   }
 
-  @Get('counterparties/:inn')
+  @Get('counterparties/:innOrId')
   @RequireApiScopes(API_SCOPES.COUNTERPARTIES_READ)
-  @ApiOperation({ summary: 'INN bo\'yicha kontragent tafsiloti' })
-  async getCounterparty(@Param('inn') inn: string) {
-    const cp = await this.prisma.counterparty.findUnique({
-      where: { inn },
+  @ApiOperation({
+    summary: 'INN yoki ID bo\'yicha kontragent tafsiloti',
+    description: 'INN (9 raqam) yoki cuid (Counterparty.id) qabul qiladi.',
+  })
+  async getCounterparty(@Param('innOrId') innOrId: string) {
+    const v = (innOrId || '').trim();
+    if (!v) throw new NotFoundException('INN yoki ID berilmagan');
+
+    const cp = await this.prisma.counterparty.findFirst({
+      where: {
+        OR: [
+          { inn: v },
+          { id: v },
+        ],
+      },
       select: {
         id: true, inn: true, name: true, fullName: true, director: true,
         directorPinfl: true, accountant: true, phone: true, email: true, address: true,
@@ -324,7 +371,9 @@ export class PublicApiController {
         createdAt: true, updatedAt: true,
       },
     });
-    if (!cp) throw new NotFoundException('Kontragent topilmadi');
+    if (!cp) throw new NotFoundException(
+      `Kontragent topilmadi. Qidirilgan maydonlar: inn, id (cuid). Berilgan: "${v.slice(0, 64)}"`,
+    );
     return { ok: true, counterparty: cp };
   }
 
