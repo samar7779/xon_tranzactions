@@ -137,6 +137,7 @@ export default function TransactionsPage() {
   const canManualContract = !!user?.permissions?.includes(PERMS.TRANSACTIONS_MANUAL_CONTRACT);
   const canApplication = !!user?.permissions?.includes(PERMS.TRANSACTIONS_APPLICATION);
   const canAutoCategorize = !!user?.permissions?.includes(PERMS.TRANSACTIONS_AUTO_CATEGORIZE);
+  const canExport = !!user?.permissions?.includes(PERMS.TRANSACTIONS_EXPORT);
 
   // Filter state'lar (oddiy useState — hech qanday persistance yo'q)
   const [page, setPage] = useState(1);
@@ -246,11 +247,11 @@ export default function TransactionsPage() {
         subcategoryId: body.subcategoryId,
       }),
     onSuccess: () => {
-      toast.success('Kategoriya saqlandi');
+      toast.success(t('categorySaved'));
       setCategoryEditRow(null);
       qc.invalidateQueries({ queryKey: ['transactions'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   // Recategorize progress modal — live polling bilan ko'rsatadi
@@ -539,13 +540,13 @@ export default function TransactionsPage() {
         <div className="relative">
           {kpiMode === 'CLIENT' && (
             <div className="absolute -top-2 left-3 px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider z-10 shadow">
-              Klient / Debitorka
+              {t('kpiClientBadge')}
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               label={
-                kpiMode === 'CLIENT' ? 'Klient kirim · shu oy'
+                kpiMode === 'CLIENT' ? t('kpiClientIn')
                 : (dateFrom || dateTo) ? t('kpiIn') : t('kpiIn30')
               }
               value={formatMoney(inSum)}
@@ -555,7 +556,7 @@ export default function TransactionsPage() {
             />
             <StatCard
               label={
-                kpiMode === 'CLIENT' ? 'Klient chiqim · shu oy'
+                kpiMode === 'CLIENT' ? t('kpiClientOut')
                 : (dateFrom || dateTo) ? t('kpiOut') : t('kpiOut30')
               }
               value={formatMoney(outSum)}
@@ -581,7 +582,7 @@ export default function TransactionsPage() {
           {/* Toggle strelka — KPI'larni Klient/all rejimda almashtirish */}
           <button
             onClick={() => setKpiMode((m) => (m === 'all' ? 'CLIENT' : 'all'))}
-            title={kpiMode === 'all' ? 'Klient (debitorka) statistikasi' : "Umumiy statistikaga qaytish"}
+            title={kpiMode === 'all' ? t('kpiToggleToClient') : t('kpiToggleToAll')}
             className="absolute -right-2 top-1/2 -translate-y-1/2 z-10 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white dark:bg-slate-900 shadow-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 hover:ring-indigo-300 dark:hover:ring-indigo-900 hover:text-indigo-700 dark:hover:text-indigo-300 transition-all hover:scale-110"
           >
             {kpiMode === 'all'
@@ -593,7 +594,7 @@ export default function TransactionsPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                title="AI yordamchi — bugungi statistika va amallar"
+                title={t('aiAssistantTitle')}
                 className="absolute -bottom-4 -right-3 z-10 inline-flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 text-white shadow-lg ring-2 ring-white hover:scale-110 hover:shadow-xl hover:shadow-fuchsia-500/40 transition-all"
               >
                 {recategorizeAllMut.isPending
@@ -605,7 +606,7 @@ export default function TransactionsPage() {
               {/* Today stats panel — gradient header */}
               <div className="rounded-t-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 p-3 text-white">
                 <div className="flex items-center gap-1.5 mb-2 text-[11px] font-semibold uppercase tracking-wider opacity-90">
-                  <Sparkles className="h-3.5 w-3.5" /> Bugungi statistika
+                  <Sparkles className="h-3.5 w-3.5" /> {t('todayStats')}
                 </div>
                 <TodayStatsInline />
               </div>
@@ -616,7 +617,7 @@ export default function TransactionsPage() {
                   onClick={(e) => { e.stopPropagation(); setExtraToolsOpen((v) => !v); }}
                   className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 transition-colors"
                 >
-                  <span className="flex-1 text-left">Qoshimcha amallar</span>
+                  <span className="flex-1 text-left">{t('extraTools')}</span>
                   <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', extraToolsOpen && 'rotate-180')} />
                 </button>
                 {extraToolsOpen && (
@@ -626,7 +627,7 @@ export default function TransactionsPage() {
                       className="cursor-pointer"
                     >
                       <History className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
-                      <span className="flex-1">{t('toolBackfill') || 'Tarixni yuklash'}</span>
+                      <span className="flex-1">{t('toolBackfill')}</span>
                     </DropdownMenuItem>
                     {canManageCategories && (
                       <DropdownMenuItem
@@ -637,7 +638,7 @@ export default function TransactionsPage() {
                         {recategorizeAllMut.isPending
                           ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600 dark:text-amber-400" />
                           : <Wand2 className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />}
-                        <span className="flex-1">Kategoriyalash</span>
+                        <span className="flex-1">{t('categorize')}</span>
                       </DropdownMenuItem>
                     )}
                   </div>
@@ -705,7 +706,7 @@ export default function TransactionsPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title="Sozlamalar va tools"
+                    title={t('settingsAndTools')}
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl shrink-0',
                       'bg-gradient-to-br from-slate-700 to-slate-900 text-white',
@@ -718,27 +719,27 @@ export default function TransactionsPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-60">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Tools</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('toolsLabel')}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => setIdSearchOpen(true)} className="cursor-pointer">
                     <Hash className="h-4 w-4 mr-2 text-fuchsia-600 dark:text-fuchsia-400" />
-                    <span className="flex-1">{t('toolIdSearch') || 'ID orqali qidirish'}</span>
+                    <span className="flex-1">{t('toolIdSearch')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setIdInspectorTrigger(Date.now())} className="cursor-pointer">
                     <ScanLine className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" />
-                    <span className="flex-1">Bank ID inspector</span>
+                    <span className="flex-1">{t('toolBankIdInspector')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setVipiskaDebugOpen(true)} className="cursor-pointer">
                     <Search className="h-4 w-4 mr-2 text-cyan-600 dark:text-cyan-400" />
-                    <span className="flex-1">Vipiska tekshiruvi</span>
+                    <span className="flex-1">{t('toolVipiskaCheck')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Filterlar</DropdownMenuLabel>
+                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('filtersLabel')}</DropdownMenuLabel>
                   <DropdownMenuItem
                     onClick={() => setColumnFilterMode((v) => !v)}
                     className="cursor-pointer"
                   >
                     <FilterIcon className={cn('h-4 w-4 mr-2', columnFilterMode ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400')} />
-                    <span className="flex-1">{columnFilterMode ? "Ustun filter: yoqilgan" : "Ustun filter rejimi"}</span>
+                    <span className="flex-1">{columnFilterMode ? t('columnFilterOn') : t('columnFilterMode')}</span>
                     {columnFilterMode && <CheckCircle2 className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -757,38 +758,40 @@ export default function TransactionsPage() {
                 onClose={() => setVipiskaDebugOpen(false)}
               />
 
-              {/* EXPORT — paperclip stilida, settingsdan keyin */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    title="Export — Excel / CSV / Chop etish"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
-                  >
-                    <Download className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">Export</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
-                    <span className="flex-1">{t('exportExcelAll') || 'Excel (hammasi)'}</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
-                    <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500 dark:text-slate-400" />
-                    <span className="flex-1">CSV (joriy sahifa)</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
-                    <Printer className="h-4 w-4 mr-2 text-slate-600 dark:text-slate-300" />
-                    <span className="flex-1">{t('exportPrint') || 'Chop etish'}</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              {/* EXPORT — paperclip stilida (faqat canExport bo‘lsa) */}
+              {canExport && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      title={t('exportMenuTitle')}
+                      className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700 shrink-0"
+                    >
+                      <Download className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('exportLabel')}</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={exportExcel} className="cursor-pointer">
+                      <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
+                      <span className="flex-1">{t('exportExcelAll')}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportCsv} className="cursor-pointer">
+                      <FileSpreadsheet className="h-4 w-4 mr-2 text-slate-500 dark:text-slate-400" />
+                      <span className="flex-1">{t('exportCsvPage')}</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={exportPrint} className="cursor-pointer">
+                      <Printer className="h-4 w-4 mr-2 text-slate-600 dark:text-slate-300" />
+                      <span className="flex-1">{t('exportPrint')}</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
 
               {/* Shartnoma manbasi filtri — qo'lda / ariza (multi-select) */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title="Qo'lda yoki ariza orqali kiritilganlarni filtr qilish"
+                    title={t('contractSourceFilterTitle')}
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
                       contractSources.size > 0
@@ -806,7 +809,7 @@ export default function TransactionsPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="p-2 w-64">
                   <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 px-2 py-1.5">
-                    Shartnoma manbasi
+                    {t('contractSource')}
                   </div>
                   <button
                     onClick={() => {
@@ -830,9 +833,9 @@ export default function TransactionsPage() {
                     )}>
                       {contractSources.has('manual') && <CheckCircle2 className="h-3 w-3 text-white" />}
                     </span>
-                    <span className="flex-1 text-left">Qo'lda kiritilgan</span>
+                    <span className="flex-1 text-left">{t('manualEntered')}</span>
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30">
-                      qo'lda
+                      {t('badgeManual')}
                     </span>
                   </button>
                   <button
@@ -857,9 +860,9 @@ export default function TransactionsPage() {
                     )}>
                       {contractSources.has('ariza') && <CheckCircle2 className="h-3 w-3 text-white" />}
                     </span>
-                    <span className="flex-1 text-left">Ariza orqali</span>
+                    <span className="flex-1 text-left">{t('viaApplication')}</span>
                     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30">
-                      <Paperclip className="h-2.5 w-2.5 mr-0.5" /> ariza
+                      <Paperclip className="h-2.5 w-2.5 mr-0.5" /> {t('badgeApplication')}
                     </span>
                   </button>
                   {contractSources.size > 0 && (
@@ -868,7 +871,7 @@ export default function TransactionsPage() {
                         onClick={() => { setContractSources(new Set()); setPage(1); }}
                         className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
                       >
-                        Tozalash
+                        {tc('clear')}
                       </button>
                     </div>
                   )}
@@ -909,7 +912,7 @@ export default function TransactionsPage() {
                 <button
                   onClick={clearFilters}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-300 ring-1 ring-amber-300 dark:ring-amber-900 hover:ring-rose-300 dark:hover:ring-rose-900 text-[12px] font-semibold transition-colors animate-pulse-once"
-                  title="Faol filtrlarni tozalash"
+                  title={t('clearActiveFilters')}
                 >
                   <X className="h-3.5 w-3.5" />
                   {t('clearN')} ({activeFilters + (q ? 1 : 0)})
@@ -931,13 +934,13 @@ export default function TransactionsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 dark:bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} tabs={[{ column: 'bank', label: 'Bank' }, { column: 'accountIds', label: 'Hisob raqami' }]} />
+                      <ColumnTh label={t('bankAccountHeader')} column="bank" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} tabs={[{ column: 'bank', label: t('bank') }, { column: 'accountIds', label: t('accountNoHeader') }]} />
                       <th className="text-left px-4 py-3 w-40">{t('dateTimeHeader')}</th>
-                      <ColumnTh label="Hisob nomi" column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
+                      <ColumnTh label={t('accountNameHeader')} column="hisobNomi" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
                       <ColumnTh label={t('directionHeader')} column="direction" widthClass="w-24" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} />
-                      <ColumnTh label="Kontragent" column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
-                      <ColumnTh label="Kategoriya" column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
-                      <ColumnTh label="Shartnoma" column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
+                      <ColumnTh label={t('counterpartyHeader')} column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
+                      <ColumnTh label={t('categoryHeader')} column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
+                      <ColumnTh label={t('contractHeader')} column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
                       <th className="text-right px-4 py-3">{t('amountHeader')}</th>
                       <th className="w-12"></th>
                     </tr>
@@ -1092,7 +1095,7 @@ export default function TransactionsPage() {
                                       {it.contractNumber}
                                     </code>
                                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 ring-1 ring-violet-200 dark:ring-violet-900">
-                                      <Paperclip className="h-2.5 w-2.5" /> ariza
+                                      <Paperclip className="h-2.5 w-2.5" /> {t('badgeApplication')}
                                     </span>
                                   </div>
                                 ) : (
@@ -1101,7 +1104,7 @@ export default function TransactionsPage() {
                                       {it.contractNumber}
                                     </code>
                                     <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900">
-                                      qo'lda
+                                      {t('badgeManual')}
                                     </span>
                                   </div>
                                 )
@@ -1109,11 +1112,11 @@ export default function TransactionsPage() {
                                 // XATO holati — faqat badge + lookup icon, raqamni yashiramiz
                                 <div className="flex items-center gap-1.5">
                                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
-                                    <AlertCircle className="h-3 w-3" /> xato
+                                    <AlertCircle className="h-3 w-3" /> {t('badgeError')}
                                   </span>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setLookupContract({ contract: it.contractNumber, description: it.description }); }}
-                                    title="AI yordamida o'xshash shartnomalarni topish"
+                                    title={t('aiLookupTitle')}
                                     className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                                   >
                                     <Wand2 className="h-3 w-3" />
@@ -1130,7 +1133,7 @@ export default function TransactionsPage() {
                                   </code>
                                   {it.contractCrmStatus && /cancel|отмен|бекор/i.test(it.contractCrmStatus) && (
                                     <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM: ${it.contractCrmStatus}`}>
-                                      ⊘ bekor
+                                      ⊘ {t('badgeCancelled')}
                                     </span>
                                   )}
                                 </div>
@@ -1269,6 +1272,8 @@ export default function TransactionsPage() {
 
 // Eski tarixni yuklash — sana oralig'i bo'yicha bankdan olib bazaga yozadi
 function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenChange: (o: boolean) => void; banks: any[] }) {
+  const t = useTranslations('transactions');
+  const tc = useTranslations('common');
   const [scope, setScope] = useState<'all' | 'bank' | 'account'>('all');
   const [bankId, setBankId] = useState('');
   const [accountId, setAccountId] = useState('');
@@ -1346,14 +1351,14 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
         setLastAdvanceAt(Date.now());
       } else if (r?.clampedAll && r?.syncMinDate) {
         toast.error(
-          `Tanlangan oraliq sync chegarasidan (${r.syncMinDate}) butunlay oldin — Sync sozlamalaridan chegarani o'zgartiring`,
+          t('backfillClampedAll', { date: r.syncMinDate }),
           { duration: 10000 },
         );
       } else {
-        toast.error(r?.error || 'Xato');
+        toast.error(r?.error || tc('error'));
       }
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   // Jarayon holatini kuzatish — har 2 soniyada
@@ -1402,14 +1407,14 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
       <DialogContent className={progress ? 'max-w-2xl' : 'max-w-md'}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Eski tarixni yuklash
+            <History className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> {t('backfillTitle')}
           </DialogTitle>
           <DialogDescription>
             {stalled
-              ? 'Jarayon to\'xtab qolgan ko\'rinadi'
+              ? t('backfillStalledDesc')
               : progress
-                ? 'Jarayon davom etmoqda — oynani yopsangiz ham fonda ishlayveradi'
-                : "Tanlangan sana oralig'idagi tranzaksiyalar bankdan olinib bazaga yoziladi"}
+                ? t('backfillRunningDesc')
+                : t('backfillFormDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -1420,7 +1425,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">
-                  {doneCount} / {progress.total} hisob bajarildi
+                  {t('backfillAccountsDone', { done: doneCount, total: progress.total })}
                 </span>
                 <span className="text-[12px] font-bold tabular-nums text-indigo-600 dark:text-indigo-400">{pct}%</span>
               </div>
@@ -1430,20 +1435,20 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                   style={{ width: `${pct}%` }}
                 />
               </div>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{progress.days} kun · {scope === 'all' ? 'barcha hisob' : scope === 'bank' ? 'bank bo\'yicha' : 'bitta hisob'}</div>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{t('backfillDaysLabel', { days: progress.days })} · {scope === 'all' ? t('scopeAll') : scope === 'bank' ? t('scopeBank') : t('scopeAccount')}</div>
             </div>
 
             {/* ─── Sana oralig'i ko'rsatuvi (so'ralgan vs haqiqiy) ─── */}
             <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50/60 dark:bg-slate-900/60 px-3 py-2.5 space-y-1.5">
               <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-slate-500 dark:text-slate-400 font-semibold">So'raldi:</span>
+                <span className="text-slate-500 dark:text-slate-400 font-semibold">{t('backfillRequested')}</span>
                 <span className="font-mono text-slate-700 dark:text-slate-300 tabular-nums">
                   {progress.requestedFrom} → {progress.requestedTo}
                 </span>
               </div>
               {progress.actualFrom && progress.actualTo && (
                 <div className="flex items-center justify-between gap-2 text-[11px]">
-                  <span className="text-slate-500 dark:text-slate-400 font-semibold">Olinmoqda:</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-semibold">{t('backfillFetching')}</span>
                   <span className={cn(
                     'font-mono tabular-nums font-semibold',
                     (progress.clampedDays || 0) > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300',
@@ -1456,9 +1461,9 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                 <div className="flex items-start gap-2 px-2 py-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-[10.5px] text-amber-900 dark:text-amber-300 mt-1">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
                   <div>
-                    <b>Sync chegarasi ({progress.syncMinDate}) tufayli {progress.clampedDays} ta kun o'tkazib yuborildi.</b>
+                    <b>{t('backfillClampedWarning', { date: progress.syncMinDate, days: progress.clampedDays })}</b>
                     <div className="text-amber-700 dark:text-amber-300 mt-0.5">
-                      Sozlamalardan chegarani o'zgartirib qayta urinib ko'ring.
+                      {t('backfillClampedHint')}
                     </div>
                   </div>
                 </div>
@@ -1468,15 +1473,15 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             {/* 3 ta jami */}
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">Olindi</div>
+                <div className="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-bold">{t('backfillFetched')}</div>
                 <div className="text-lg font-bold tabular-nums text-slate-800 dark:text-slate-200">{totalFetched}</div>
               </div>
               <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-100 dark:ring-emerald-900 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">Yangi qo'shildi</div>
+                <div className="text-[9px] uppercase tracking-wider text-emerald-600 dark:text-emerald-400 font-bold">{t('backfillNewAdded')}</div>
                 <div className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{totalSaved}</div>
               </div>
               <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-100 dark:ring-rose-900 px-3 py-2">
-                <div className="text-[9px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold">Xato</div>
+                <div className="text-[9px] uppercase tracking-wider text-rose-600 dark:text-rose-400 font-bold">{t('errorLabel')}</div>
                 <div className="text-lg font-bold tabular-nums text-rose-700 dark:text-rose-300">{totalErrors}</div>
               </div>
             </div>
@@ -1484,13 +1489,13 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             {/* Hisoblar ro'yxati */}
             <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
               <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-900 text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                <span>Hisoblar bo'yicha</span>
-                <span>{logs.length} ta yozuv</span>
+                <span>{t('backfillByAccounts')}</span>
+                <span>{t('backfillRecordsCount', { n: logs.length })}</span>
               </div>
               <div className="max-h-56 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
                 {logs.length === 0 ? (
                   <div className="px-3 py-6 text-center text-[11px] text-slate-400 dark:text-slate-500 flex items-center justify-center gap-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Boshlanmoqda...
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('starting')}
                   </div>
                 ) : (
                   logs.map((l: any) => {
@@ -1521,7 +1526,7 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                               </span>
                             ) : (
                               <span className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums shrink-0">
-                                {l.fetched ?? 0} olindi · <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{l.saved ?? 0} yangi</span>
+                                {t('backfillFetchedShort', { n: l.fetched ?? 0 })} · <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{t('backfillNewShort', { n: l.saved ?? 0 })}</span>
                               </span>
                             )}
                           </div>
@@ -1541,36 +1546,34 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
             {allDone && (
               <div className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 rounded-lg px-3 py-2 flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5" /> Tugadi — {totalSaved} ta yangi tranzaksiya qo'shildi
+                <Check className="h-3.5 w-3.5" /> {t('backfillDoneAdded', { n: totalSaved })}
               </div>
             )}
 
             {stalled && (
               <div className="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-lg px-3 py-2">
                 <div className="flex items-center gap-1.5 font-semibold">
-                  <AlertCircle className="h-3.5 w-3.5" /> Jarayon to'xtab qolgan
+                  <AlertCircle className="h-3.5 w-3.5" /> {t('backfillStalledTitle')}
                 </div>
                 <div className="mt-0.5 text-amber-700 dark:text-amber-300">
-                  Server qayta ishga tushgan bo'lishi mumkin. {doneCount} / {progress.total} hisob
-                  bajarilgan. Qaytadan boshlasangiz — qolganlari yuklanadi (allaqachon yuklangan
-                  hisoblar takrorlanmaydi, faqat tekshiriladi).
+                  {t('backfillStalledBody', { done: doneCount, total: progress.total })}
                 </div>
               </div>
             )}
 
             <div className="flex justify-end gap-2 pt-1">
               {allDone ? (
-                <Button onClick={() => { setProgress(null); onOpenChange(false); }}>Yopish</Button>
+                <Button onClick={() => { setProgress(null); onOpenChange(false); }}>{tc('close')}</Button>
               ) : stalled ? (
                 <>
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>Yopish</Button>
+                  <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('close')}</Button>
                   <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
                     {mut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <History className="h-4 w-4 mr-1.5" />}
-                    Qaytadan boshlash
+                    {t('backfillRestart')}
                   </Button>
                 </>
               ) : (
-                <Button variant="outline" onClick={() => onOpenChange(false)}>Fonda davom etsin · yopish</Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)}>{t('continueInBackground')}</Button>
               )}
             </div>
           </div>
@@ -1580,12 +1583,12 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             <div className="space-y-4">
               {/* Qamrov */}
               <div className="space-y-1.5">
-                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Qamrov</div>
+                <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('scopeLabel')}</div>
                 <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5 text-[11px] font-medium w-full">
                   {[
-                    { v: 'all', l: 'Barcha hisob' },
-                    { v: 'bank', l: "Bank bo'yicha" },
-                    { v: 'account', l: 'Bitta hisob' },
+                    { v: 'all', l: t('scopeAll') },
+                    { v: 'bank', l: t('scopeBank') },
+                    { v: 'account', l: t('scopeAccount') },
                   ].map((o) => (
                     <button
                       key={o.v}
@@ -1603,9 +1606,9 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
               {(scope === 'bank' || scope === 'account') && (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('bank')}</div>
                   <Select value={bankId} onValueChange={(v) => { setBankId(v); setAccountId(''); }}>
-                    <SelectTrigger><SelectValue placeholder="Bankni tanlang" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('selectBank')} /></SelectTrigger>
                     <SelectContent>
                       {banks.filter((b: any) => b.isActive).map((b: any) => (
                         <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
@@ -1617,10 +1620,10 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 
               {scope === 'account' && (
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Hisob</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('account')}</div>
                   <Select value={accountId} onValueChange={setAccountId} disabled={!bankId}>
                     <SelectTrigger>
-                      <SelectValue placeholder={bankId ? 'Hisobni tanlang' : 'Avval bankni tanlang'} />
+                      <SelectValue placeholder={bankId ? t('selectAccount') : t('selectBankFirst')} />
                     </SelectTrigger>
                     <SelectContent>
                       <div className="px-1.5 pt-1.5 pb-1 sticky top-0 bg-white dark:bg-slate-900 z-10">
@@ -1628,12 +1631,12 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
                           value={accSearch}
                           onChange={(e) => setAccSearch(e.target.value)}
                           onKeyDown={(e) => e.stopPropagation()}
-                          placeholder="Hisob raqami yoki egasi..."
+                          placeholder={t('accountSearchPlaceholder')}
                           className="h-8 text-[11px]"
                         />
                       </div>
                       {bankAccounts.length === 0 ? (
-                        <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500">Topilmadi</div>
+                        <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500">{t('notFound')}</div>
                       ) : (
                         bankAccounts.slice(0, 100).map((a: any) => (
                           <SelectItem key={a.id} value={a.id}>
@@ -1652,26 +1655,26 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
               {/* Sana oralig'i */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Dan</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{tc('from')}</div>
                   <Input type="date" value={dateFrom} max={dateTo || today} onChange={(e) => setDateFrom(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Gacha</div>
+                  <div className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{tc('to')}</div>
                   <Input type="date" value={dateTo} min={dateFrom} max={today} onChange={(e) => setDateTo(e.target.value)} />
                 </div>
               </div>
 
               <div className="text-[10px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-lg px-3 py-2 leading-relaxed">
-                ⚠ Katta oraliq + ko'p hisob uzoq davom etadi. Boshlangach jarayon shu yerda jonli ko'rsatiladi.
+                ⚠ {t('backfillBigRangeHint')}
               </div>
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => onOpenChange(false)}>Bekor qilish</Button>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
               <Button onClick={() => mut.mutate()} disabled={!valid || mut.isPending}>
                 {mut.isPending
-                  ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Boshlanmoqda...</>
-                  : 'Yuklashni boshlash'}
+                  ? <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> {t('starting')}</>
+                  : t('backfillStartBtn')}
               </Button>
             </div>
           </>
@@ -1746,6 +1749,7 @@ function FilterChip({
 // RECATEGORIZE PROGRESS — kategoriyalash jarayoni live modal
 // ═══════════════════════════════════════════════════════════════════════
 function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const t = useTranslations('transactions');
   const qc = useQueryClient();
   const [errorsOpen, setErrorsOpen] = useState(false);
 
@@ -1791,14 +1795,14 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
             )}>
               <Sparkles className="h-4 w-4" />
             </div>
-            {running ? 'Kategoriyalash jarayonda...' : finished ? '✅ Kategoriyalash tugadi' : 'Kategoriyalash'}
+            {running ? t('recatRunningTitle') : finished ? '✅ ' + t('recatDoneTitle') : t('categorize')}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
             {running
-              ? 'Tranzaksiyalar avtomatik kategoriyalanmoqda. Oynani yopsangiz ham jarayon fonda davom etadi.'
+              ? t('recatRunningDesc')
               : finished
-                ? `${matched} ta tranzaksiya muvaffaqiyatli kategoriyalandi.`
-                : 'Jarayon haqida ma\'lumot...'}
+                ? t('recatDoneDesc', { n: matched })
+                : t('recatLoadingDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -1836,21 +1840,21 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
           {/* 3 ta stat — animated */}
           <div className="grid grid-cols-3 gap-2">
             <StatBox
-              label="Ko'rib chiqildi"
+              label={t('recatReviewed')}
               value={done}
               color="indigo"
               icon={<Activity className="h-3.5 w-3.5" />}
               animate={running}
             />
             <StatBox
-              label="Kategoriyalandi"
+              label={t('recatCategorized')}
               value={matched}
               color="emerald"
               icon={<CheckCircle2 className="h-3.5 w-3.5" />}
               animate={running}
             />
             <StatBox
-              label="Xato"
+              label={t('errorLabel')}
               value={errors}
               color="rose"
               icon={<AlertCircle className="h-3.5 w-3.5" />}
@@ -1863,9 +1867,9 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
             <div className="px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-300 text-[12px] flex items-start gap-2">
               <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
               <div>
-                <div className="font-semibold">Tugadi!</div>
+                <div className="font-semibold">{t('recatFinishedTitle')}</div>
                 <div className="text-emerald-700 dark:text-emerald-300 text-[11px] mt-0.5">
-                  {matched} ta tranzaksiya kategoriyalandi ({done - matched} ta o'zgartirilmadi, qoidaga mos kelmadi)
+                  {t('recatFinishedBody', { matched, skipped: done - matched })}
                 </div>
               </div>
             </div>
@@ -1874,7 +1878,7 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
           {/* Boshlanmagan/kutmoqda */}
           {!progress && (
             <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-[12px] py-4 justify-center">
-              <Loader2 className="h-4 w-4 animate-spin" /> Jarayon boshlanmoqda...
+              <Loader2 className="h-4 w-4 animate-spin" /> {t('processStarting')}
             </div>
           )}
 
@@ -1887,7 +1891,7 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
               >
                 <span className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
-                  Oxirgi {recentErrors.length} ta xato
+                  {t('recatRecentErrors', { n: recentErrors.length })}
                 </span>
                 {errorsOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
               </button>
@@ -1922,7 +1926,7 @@ function RecategorizeProgressDialog({ open, onOpenChange }: { open: boolean; onO
             onClick={() => onOpenChange(false)}
             className={finished ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
           >
-            {running ? "Fonda davom etsin · yopish" : 'Yopish'}
+            {running ? t('continueInBackground') : t('close')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1973,6 +1977,7 @@ function TransactionDetailDialog({
   // Hech bo'lmaganda bitta action mavjud bo'lsa "panel" ko'rinadi (read-only bo'lmasa)
   const showActionPanel = !isAloqaBank && (canManualEdit || canManualContract || canApplication || canAutoCategorize);
   const t = useTranslations('transactions');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const [categorizeLog, setCategorizeLog] = useState<any>(null);
@@ -2003,7 +2008,7 @@ function TransactionDetailDialog({
     mutationFn: (body: { categoryId: string | null; subcategoryId: string | null }) =>
       api.post(`/categorization/transactions/${row.id}/set`, body),
     onSuccess: () => {
-      toast.success('Kategoriya saqlandi');
+      toast.success(t('categorySaved'));
       setManualEditOpen(false);
       // Jadval va detail darrov yangilanishi uchun — invalidate + force refetch
       qc.invalidateQueries({ queryKey: ['transactions'] });
@@ -2012,12 +2017,12 @@ function TransactionDetailDialog({
       qc.invalidateQueries({ queryKey: ['tx-distinct'] });
       liveQuery.refetch();
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   const setContractMut = useMutation({
     mutationFn: (contractNumber: string | null) => {
-      const loadingId = toast.loading('Shartnoma saqlanmoqda...');
+      const loadingId = toast.loading(t('contractSaving'));
       return api.post<{
         ok: boolean;
         verified: boolean;
@@ -2027,7 +2032,7 @@ function TransactionDetailDialog({
         .finally(() => toast.dismiss(loadingId));
     },
     onSuccess: (r) => {
-      toast.success(`Shartnoma saqlandi — ${r.customerName || 'CRM tasdiqladi'}`);
+      toast.success(t('contractSavedCrm', { name: r.customerName || t('crmConfirmed') }));
       // OplataKv'da ham yangilangan bo'lsa alohida xabar
       showOplataKvSyncToast(r.oplataKvSync);
       // Jadval va detail darrov yangilanishi uchun — invalidate + force refetch
@@ -2038,7 +2043,7 @@ function TransactionDetailDialog({
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       liveQuery.refetch();
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
 
@@ -2049,19 +2054,19 @@ function TransactionDetailDialog({
         { counterpartyId },
       ),
     onSuccess: (r) => {
-      toast.success(r.counterparty ? `Kontragent: ${r.counterparty.name}` : 'Kontragent o\'chirildi');
+      toast.success(r.counterparty ? t('counterpartySet', { name: r.counterparty.name }) : t('counterpartyRemoved'));
       qc.invalidateQueries({ queryKey: ['transactions'] });
       qc.refetchQueries({ queryKey: ['transactions'], type: 'active' });
       qc.invalidateQueries({ queryKey: ['tx-category-history', row.id] });
       liveQuery.refetch();
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   // Qo'lda shartnoma kiritish (CRM tekshirmaydi)
   const setContractManualMut = useMutation({
     mutationFn: (contractNumber: string | null) => {
-      const loadingId = toast.loading('Shartnoma saqlanmoqda...');
+      const loadingId = toast.loading(t('contractSaving'));
       return api.post<{
         ok: boolean;
         contractNumber: string | null;
@@ -2072,7 +2077,7 @@ function TransactionDetailDialog({
       ).finally(() => toast.dismiss(loadingId));
     },
     onSuccess: (r) => {
-      toast.success(r.contractNumber ? `Shartnoma saqlandi: ${r.contractNumber}` : 'Shartnoma o\'chirildi');
+      toast.success(r.contractNumber ? t('contractSavedManual', { contract: r.contractNumber }) : t('contractRemoved'));
       // OplataKv'da ham yangilangan bo'lsa alohida xabar
       showOplataKvSyncToast(r.oplataKvSync);
       setManualContractOpen(false);
@@ -2081,7 +2086,7 @@ function TransactionDetailDialog({
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       liveQuery.refetch();
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   const SECTION_KEYS = ['sender', 'receiver', 'purpose', 'time', 'system', 'raw'];
@@ -2121,7 +2126,7 @@ function TransactionDetailDialog({
         setTimeout(() => setPurposeHighlight(false), 2500);
       }
     },
-    onError: (e: any) => setCategorizeLog({ ok: false, error: e?.message || 'Xato' }),
+    onError: (e: any) => setCategorizeLog({ ok: false, error: e?.message || tc('error') }),
   });
 
   if (!row) return null;
@@ -2157,7 +2162,7 @@ function TransactionDetailDialog({
                 {row.source === 'IMPORT' && (
                   <span
                     className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-300/25 text-fuchsia-100 ring-1 ring-fuchsia-200/40"
-                    title={`Qo'lda Excel'dan import qilingan${row.importedBy ? ' · ' + row.importedBy : ''}${row.importedAt ? ' · ' + formatDateTime(row.importedAt) : ''}`}
+                    title={`${t('importedTitle')}${row.importedBy ? ' · ' + row.importedBy : ''}${row.importedAt ? ' · ' + formatDateTime(row.importedAt) : ''}`}
                   >
                     📥 IMPORT
                   </span>
@@ -2185,7 +2190,7 @@ function TransactionDetailDialog({
             {/* Kontragent qatori */}
             <InfoRow
               icon={<Briefcase className="h-3.5 w-3.5" />}
-              label="Kontragent"
+              label={t('kontragent')}
               // Priority:
               //   1) manualCounterparty.name (qo'lda tanlagan)
               //   2) importCounterpartyText (IMPORT'da Excel "Контрагент" ustuni)
@@ -2199,11 +2204,11 @@ function TransactionDetailDialog({
               }
               subValue={
                 liveRow.manualCounterparty?.inn
-                  ? `STIR ${liveRow.manualCounterparty.inn}`
+                  ? `${t('detailFieldInn')} ${liveRow.manualCounterparty.inn}`
                   : null
               }
               docNumber={row.docNumber}
-              emptyText="Tayinlanmagan"
+              emptyText={t('notAssigned')}
               showClear={canManage && (!!liveRow.category || !!liveRow.manualCounterparty)}
               onClear={() => {
                 if (liveRow.manualCounterparty) {
@@ -2217,7 +2222,7 @@ function TransactionDetailDialog({
             {/* Kategoriya qatori */}
             <InfoRow
               icon={<Tag className="h-3.5 w-3.5" />}
-              label="Kategoriya"
+              label={t('detailCategoryLabel')}
               chip={
                 liveRow.category ? {
                   text: liveRow.subcategory?.name || liveRow.category.name,
@@ -2226,10 +2231,10 @@ function TransactionDetailDialog({
               }
               subValue={
                 liveRow.category && liveRow.subcategory
-                  ? `${liveRow.category.name}${liveRow.categorizedBy ? ` · ${liveRow.categorizedBy === 'manual' ? "qo'lda" : liveRow.categorizedBy} ${liveRow.categorizedAt ? '· ' + formatDateTime(liveRow.categorizedAt) : ''}` : ''}`
-                  : liveRow.categorizedBy ? `${liveRow.categorizedBy === 'manual' ? "qo'lda" : liveRow.categorizedBy}${liveRow.categorizedAt ? ' · ' + formatDateTime(liveRow.categorizedAt) : ''}` : null
+                  ? `${liveRow.category.name}${liveRow.categorizedBy ? ` · ${liveRow.categorizedBy === 'manual' ? t('badgeManual') : liveRow.categorizedBy} ${liveRow.categorizedAt ? '· ' + formatDateTime(liveRow.categorizedAt) : ''}` : ''}`
+                  : liveRow.categorizedBy ? `${liveRow.categorizedBy === 'manual' ? t('badgeManual') : liveRow.categorizedBy}${liveRow.categorizedAt ? ' · ' + formatDateTime(liveRow.categorizedAt) : ''}` : null
               }
-              emptyText="Tayinlanmagan"
+              emptyText={t('notAssigned')}
               showClear={canManage && !!liveRow.subcategory}
               onClear={() => setCategoryMut.mutate({ categoryId: liveRow.categoryId, subcategoryId: null })}
             />
@@ -2237,7 +2242,7 @@ function TransactionDetailDialog({
             {/* Shartnoma qatori */}
             <InfoRow
               icon={<FileSignature className="h-3.5 w-3.5" />}
-              label="Shartnoma"
+              label={t('detailContractLabel')}
               customValue={
                 liveRow.contractNumber ? (
                   liveRow.contractStatus === 'manual' ? (
@@ -2248,7 +2253,7 @@ function TransactionDetailDialog({
                             {liveRow.contractNumber}
                           </code>
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-violet-700 dark:text-violet-300 bg-violet-100 dark:bg-violet-900/30 ring-1 ring-violet-200 dark:ring-violet-900">
-                            <Paperclip className="h-3 w-3" /> ARIZA
+                            <Paperclip className="h-3 w-3" /> {t('badgeApplication')}
                           </span>
                         </>
                       ) : (
@@ -2257,7 +2262,7 @@ function TransactionDetailDialog({
                             {liveRow.contractNumber}
                           </code>
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900">
-                            QO'LDA · CRM tekshirilmagan
+                            {t('badgeManualCrmUnverified')}
                           </span>
                         </>
                       )}
@@ -2265,11 +2270,11 @@ function TransactionDetailDialog({
                   ) : liveRow.contractStatus === 'unverified' ? (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
-                        <AlertCircle className="h-3 w-3" /> xato — CRM'da topilmadi
+                        <AlertCircle className="h-3 w-3" /> {t('badgeErrorCrmNotFound')}
                       </span>
                       <button
                         onClick={() => setLookupContractDetail({ contract: liveRow.contractNumber, description: liveRow.description })}
-                        title="AI yordamida o'xshash shartnomalarni topish"
+                        title={t('aiLookupTitle')}
                         className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-violet-500 via-fuchsia-500 to-rose-500 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                       >
                         <Wand2 className="h-3 w-3" />
@@ -2287,14 +2292,14 @@ function TransactionDetailDialog({
                       )}
                       {liveRow.contractCrmStatus && /cancel|отмен|бекор/i.test(liveRow.contractCrmStatus) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM status: ${liveRow.contractCrmStatus}`}>
-                          ⊘ BEKOR
+                          ⊘ {t('badgeCancelled')}
                         </span>
                       )}
                     </div>
                   )
                 ) : null
               }
-              emptyText="Topilmadi"
+              emptyText={t('notFound')}
               showClear={canManage && !!liveRow.contractNumber}
               onClear={() => setContractMut.mutate(null)}
             />
@@ -2304,8 +2309,9 @@ function TransactionDetailDialog({
               <div className="mx-4 mb-3 rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/40 px-3 py-2 flex items-start gap-2">
                 <Lock className="h-3.5 w-3.5 text-amber-700 dark:text-amber-300 mt-0.5 shrink-0" />
                 <div className="text-[11.5px] text-amber-900 dark:text-amber-300 leading-relaxed">
-                  <b>Aloqa Bank Excel</b> manbasidan kelgan tranzaksiya — <b>read-only</b>.
-                  Kategoriya, shartnoma, ariza va boshqa tahrirlar bloklangan. Faqat batch tarixidan o'chirish mumkin.
+                  {t.rich('aloqaBankReadOnly', {
+                    b: (chunks) => <b>{chunks}</b>,
+                  })}
                 </div>
               </div>
             )}
@@ -2316,8 +2322,8 @@ function TransactionDetailDialog({
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="text-[11px] text-slate-600 dark:text-slate-300">
                     {liveRow.category
-                      ? "Kontragent / Kategoriya / Shartnomani qo'lda o'zgartirish"
-                      : "Qoidalar bo'yicha avto-aniqlash yoki qo'lda kiritish"}
+                      ? t('editPanelHintHasCategory')
+                      : t('editPanelHintNoCategory')}
                   </div>
                   <div className="flex items-center gap-2">
                     {canAutoCategorize && !liveRow.category && (
@@ -2329,7 +2335,7 @@ function TransactionDetailDialog({
                         {categorizeMut.isPending
                           ? <Loader2 className="h-3 w-3 animate-spin" />
                           : <Wand2 className="h-3 w-3" />}
-                        Avto-kategoriyalash
+                        {t('autoCategorize')}
                       </button>
                     )}
                     {canManualEdit && (
@@ -2338,29 +2344,29 @@ function TransactionDetailDialog({
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-[11px] font-semibold ring-1 ring-slate-300 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 hover:ring-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
                       >
                         <FileText className="h-3 w-3" />
-                        Qo'lda tahrirlash
+                        {t('manualEdit')}
                       </button>
                     )}
                     {/* Shartnomani qo'lda (CRM tekshirmasdan) */}
                     {canManualContract && (
                       <button
                         onClick={() => setManualContractOpen(true)}
-                        title="Shartnoma raqamini qo'lda kiritish (CRM tekshirmaydi)"
+                        title={t('manualContractBtnTitle')}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-amber-500/40 transition-all"
                       >
                         <FileSignature className="h-3 w-3" />
-                        Qo'lda shartnoma
+                        {t('manualContractBtn')}
                       </button>
                     )}
                     {/* Ariza biriktirish */}
                     {canApplication && (
                       <button
                         onClick={() => setAttachmentsOpen(true)}
-                        title="Ariza biriktirish (PDF/DOCX/Image) — Telegram'ga xabar"
+                        title={t('attachApplicationTitle')}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 text-white text-[11px] font-semibold hover:shadow-md hover:shadow-violet-500/40 transition-all relative"
                       >
                         <Paperclip className="h-3 w-3" />
-                        Ariza
+                        {t('application')}
                         {(liveRow._attachmentCount || 0) > 0 && (
                           <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-bold rounded-full min-w-[14px] h-3.5 px-1 grid place-items-center">
                             {liveRow._attachmentCount}
@@ -2391,7 +2397,7 @@ function TransactionDetailDialog({
                       )}
                       <div className="flex-1 space-y-0.5">
                         {categorizeLog.categoryCode === 'EXISTING' && (
-                          <div className="font-semibold">Skip: allaqachon kategoriyalangan</div>
+                          <div className="font-semibold">{t('catLogAlreadyCategorized')}</div>
                         )}
                         {categorizeLog.categoryCode && categorizeLog.categoryCode !== 'EXISTING' && (
                           <div className="font-semibold">
@@ -2400,13 +2406,13 @@ function TransactionDetailDialog({
                           </div>
                         )}
                         {!categorizeLog.categoryCode && (
-                          <div className="font-semibold">Qoida topilmadi — qo'lda tayinlang</div>
+                          <div className="font-semibold">{t('catLogNoRule')}</div>
                         )}
                         {categorizeLog.reason && (
-                          <div className="text-[10px] opacity-80">Sabab: {categorizeLog.reason}</div>
+                          <div className="text-[10px] opacity-80">{t('catLogReason')}: {categorizeLog.reason}</div>
                         )}
                         {categorizeLog.contractNumber && (
-                          <div className="text-[10px] opacity-80 font-mono">Shartnoma: {categorizeLog.contractNumber}</div>
+                          <div className="text-[10px] opacity-80 font-mono">{t('detailContractLabel')}: {categorizeLog.contractNumber}</div>
                         )}
                       </div>
                     </div>
@@ -2420,11 +2426,11 @@ function TransactionDetailDialog({
           <div className="flex items-center justify-end">
             <button
               onClick={toggleAll}
-              title={allOpen ? "Hammasini yopish" : "Hammasini ochish"}
+              title={allOpen ? t('collapseAll') : t('expandAll')}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
             >
               {allOpen ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {allOpen ? "Yopish" : "Ochish"}
+              {allOpen ? t('collapse') : t('expand')}
             </button>
           </div>
 
@@ -3018,6 +3024,7 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
   description: string | null;
   onClose: () => void;
 }) {
+  const t = useTranslations('transactions');
   // Description'dan mijoz F.I.O. ajratish — kengaytirilgan pattern'lar
   const extractedName = useMemo(() => {
     if (!description) return null;
@@ -3116,10 +3123,10 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-400" /> AI shartnoma topish
+            <Wand2 className="h-4 w-4 text-fuchsia-600 dark:text-fuchsia-400" /> {t('aiContractFind')}
           </DialogTitle>
           <DialogDescription>
-            CRM'da topilmagan shartnoma uchun AI tomonidan tahlil qilingan variantlar
+            {t('aiContractFindDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -3127,13 +3134,13 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
           {/* Mijoz bergan shartnoma + topilgan F.I.O. (2 blok, har doim ko'rinadi) */}
           <div className="rounded-lg p-3 bg-gradient-to-br from-rose-50 to-orange-50 dark:from-rose-950/40 dark:to-orange-950/40 ring-1 ring-rose-200 dark:ring-rose-900 space-y-2">
             <div className="text-[10px] uppercase tracking-wider font-bold text-rose-700 dark:text-rose-300">
-              Tolov maqsadida kelgan:
+              {t('aiPaymentPurposeCame')}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {/* Shartnoma raqami */}
               <div>
                 <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-0.5 flex items-center gap-1">
-                  <FileSignature className="h-2.5 w-2.5" /> Shartnoma raqami
+                  <FileSignature className="h-2.5 w-2.5" /> {t('contractNumberLabel')}
                 </div>
                 <code className="font-mono text-[13px] font-bold text-rose-900 dark:text-rose-300 select-all block break-all">
                   {contractNumber}
@@ -3142,7 +3149,7 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
               {/* F.I.O. — har doim block (topilmasa "AI topa olmadi" yoziladi) */}
               <div>
                 <div className="text-[9px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-0.5 flex items-center gap-1">
-                  <Wand2 className="h-2.5 w-2.5" /> F.I.O. (AI ajratdi)
+                  <Wand2 className="h-2.5 w-2.5" /> {t('aiFioExtracted')}
                 </div>
                 {extractedName ? (
                   <div className="text-[12px] font-semibold text-rose-900 dark:text-rose-300 select-all break-words">
@@ -3150,26 +3157,26 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
                   </div>
                 ) : (
                   <div className="text-[11px] text-rose-500 dark:text-rose-400 italic">
-                    Description'dan F.I.O. topilmadi
+                    {t('aiFioNotFound')}
                   </div>
                 )}
               </div>
             </div>
             <div className="text-[10px] text-rose-600 dark:text-rose-400 pt-1 border-t border-rose-200/60 dark:border-rose-900">
-              ⚠ CRM'da topilmadi — quyidagi o'xshashlardan tasdiqlang
+              ⚠ {t('aiCrmNotFoundConfirm')}
             </div>
           </div>
 
           {/* CRM natijalari */}
           <div>
             <div className="text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 mb-1.5 flex items-center justify-between">
-              <span>O'xshash shartnomalar (prefix: <code className="font-mono text-indigo-700 dark:text-indigo-300">{currentPrefix}</code>)</span>
+              <span>{t('aiSimilarContracts')} (prefix: <code className="font-mono text-indigo-700 dark:text-indigo-300">{currentPrefix}</code>)</span>
               {searchQuery.isFetching && <Loader2 className="h-3 w-3 text-indigo-500 dark:text-indigo-400 animate-spin" />}
             </div>
             <div className="max-h-[320px] overflow-y-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
               {!searchQuery.isFetching && items.length === 0 && currentPrefixIndex >= tryPrefixes.length - 1 && (
                 <div className="px-4 py-6 text-center text-[11px] text-rose-600 dark:text-rose-400">
-                  Hech qanday o'xshash shartnoma topilmadi
+                  {t('aiNoSimilarFound')}
                 </div>
               )}
               {sortedItems.map((it: any) => {
@@ -3211,23 +3218,23 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
                       <div className="flex items-center gap-1">
                         {perfectMatch && (
                           <span className="text-[9px] font-black text-emerald-900 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1 bg-emerald-200 dark:bg-emerald-900/40 px-1.5 py-0.5 rounded">
-                            <CheckCircle2 className="h-2.5 w-2.5" /> aniq mos
+                            <CheckCircle2 className="h-2.5 w-2.5" /> {t('aiMatchExact')}
                           </span>
                         )}
                         {!perfectMatch && nameMatch && (
                           <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider flex items-center gap-1">
-                            <Wand2 className="h-2.5 w-2.5" /> nom mos
+                            <Wand2 className="h-2.5 w-2.5" /> {t('aiMatchName')}
                           </span>
                         )}
                         {!perfectMatch && !nameMatch && contractMatch && (
                           <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
-                            shartnoma mos
+                            {t('aiMatchContract')}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="text-[11px] text-slate-700 dark:text-slate-300 mt-0.5 font-medium">
-                      {fullName || <span className="text-slate-400 dark:text-slate-500 italic">nomi yo'q</span>}
+                      {fullName || <span className="text-slate-400 dark:text-slate-500 italic">{t('noName')}</span>}
                     </div>
                   </div>
                 );
@@ -3235,14 +3242,14 @@ function ContractLookupDialog({ contractNumber, description, onClose }: {
             </div>
             {sortedItems.length > 0 && (
               <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 text-center italic">
-                Mijoz bilan tasdiqlash uchun ushbu ro'yxatdan foydalaning
+                {t('aiConfirmWithClient')}
               </div>
             )}
           </div>
 
           <div className="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
             <Button variant="outline" size="sm" onClick={onClose}>
-              Yopish
+              {t('close')}
             </Button>
           </div>
         </div>
@@ -3267,6 +3274,7 @@ function CombinedEditDialog({
   savingContract: boolean;
   savingCounterparty: boolean;
 }) {
+  const t = useTranslations('transactions');
   // Counterparty picker state
   const [cpSearch, setCpSearch] = useState('');
   const [cpDebounced, setCpDebounced] = useState('');
@@ -3710,6 +3718,7 @@ function ContractEditDialog({
 
 // ═══ TARIX — kategoriya o'zgarish tarixi (kim qachon nima qildi)
 function CategoryHistorySection({ txId }: { txId: string }) {
+  const t = useTranslations('transactions');
   const [open, setOpen] = useState(false);
   const q = useQuery({
     queryKey: ['tx-category-history', txId],
@@ -3726,7 +3735,7 @@ function CategoryHistorySection({ txId }: { txId: string }) {
         className="w-full px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-slate-50/80 dark:hover:bg-slate-800/80 transition-colors"
       >
         <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-          <History className="h-3 w-3" /> Tarix
+          <History className="h-3 w-3" /> {t('historyLabel')}
           {open && items.length > 0 && (
             <span className="ml-1 px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[9px] font-bold normal-case tracking-normal">
               {items.length}
@@ -3739,10 +3748,10 @@ function CategoryHistorySection({ txId }: { txId: string }) {
         <div className="px-4 pb-3 pt-1 border-t border-slate-100 dark:border-slate-800">
           {q.isLoading ? (
             <div className="py-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-              <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda...
+              <Loader2 className="h-3 w-3 animate-spin" /> {t('loading')}
             </div>
           ) : items.length === 0 ? (
-            <div className="py-3 text-[11px] text-slate-400 dark:text-slate-500 italic">Tarix yo'q — hali hech kim kategoriyalamagan</div>
+            <div className="py-3 text-[11px] text-slate-400 dark:text-slate-500 italic">{t('historyEmpty')}</div>
           ) : (
             <div className="space-y-2 py-2">
               {items.map((h: any) => (
