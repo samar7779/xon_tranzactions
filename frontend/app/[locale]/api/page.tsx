@@ -552,26 +552,26 @@ function LandingView({ onLogin, dark }: {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <section className="relative overflow-hidden min-h-[calc(100vh-56px)]">
-      {/* ─── FULL-BLEED BACKGROUND — Infrastructure illustration (reactive) ─── */}
-      <div className="absolute inset-0 z-0" aria-hidden="true">
-        <ApiHeroInfra dark={dark} className="w-full h-full" fullBleed pulseKey={pulseKey} state={infraState} />
-      </div>
+    <section className="relative overflow-hidden min-h-[calc(100vh-56px)] bg-white dark:bg-slate-950">
+      <div className="grid lg:grid-cols-[1.4fr_minmax(380px,460px)] min-h-[calc(100vh-56px)]">
+        {/* ─── LEFT — Illustration (no card, edge-to-edge in column) ─── */}
+        <div className="relative h-[300px] sm:h-[400px] lg:h-auto order-2 lg:order-1">
+          <ApiHeroInfra dark={dark} className="absolute inset-0 w-full h-full" fullBleed pulseKey={pulseKey} state={infraState} />
+          {/* Right edge fade — soft transition into login area */}
+          <div
+            className="hidden lg:block absolute top-0 right-0 bottom-0 w-32 pointer-events-none"
+            aria-hidden="true"
+            style={{
+              background: dark
+                ? 'linear-gradient(to right, transparent, rgba(2,6,23,1))'
+                : 'linear-gradient(to right, transparent, rgba(255,255,255,1))',
+            }}
+          />
+        </div>
 
-      {/* Gradient overlay — login tarafga oqib o'tadi (login o'qilishi yengilroq) */}
-      <div
-        className="absolute inset-0 z-[1] pointer-events-none"
-        aria-hidden="true"
-        style={{
-          background: dark
-            ? 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(2,6,23,0.7) 80%, rgba(2,6,23,0.92) 100%)'
-            : 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(255,255,255,0.85) 80%, rgba(255,255,255,0.97) 100%)',
-        }}
-      />
-
-      {/* ─── LOGIN — primary overlay, right-aligned ─── */}
-      <div className="relative z-10 w-full px-4 lg:px-8 xl:px-12 py-10 min-h-[calc(100vh-56px)] flex items-center justify-center lg:justify-end max-w-[1700px] mx-auto">
-        <div className="w-full max-w-[460px] relative">
+        {/* ─── RIGHT — Login (own column, clean background) ─── */}
+        <div className="relative px-6 lg:px-10 py-10 lg:py-12 flex items-center order-1 lg:order-2">
+          <div className="w-full max-w-[440px] mx-auto lg:mx-0 relative">
           {/* Header row — badge + mini 3D orb */}
           <div className="flex items-start justify-between gap-4 mb-5">
             <motion.div
@@ -772,6 +772,7 @@ function LandingView({ onLogin, dark }: {
             </div>
           </motion.form>
         </div>
+      </div>
       </div>
     </section>
   );
