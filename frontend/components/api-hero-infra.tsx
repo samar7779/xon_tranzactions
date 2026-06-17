@@ -251,179 +251,250 @@ export function ApiHeroInfra({
             `}</style>
           </defs>
 
-          {/* ─── LEFT — Refined isometric laptop with code editor ─── */}
-          <g transform="translate(150, 290)" filter="url(#softShadow)">
-            {/* Floor reflection (subtle) */}
-            <ellipse cx="80" cy="34" rx="105" ry="6" fill={dark ? '#020617' : '#94a3b8'} opacity="0.22" />
+          {/* ─── LEFT — Premium MacBook with API console ─── */}
+          <g transform="translate(105, 265)" filter="url(#softShadow)">
+            {/* Soft floor reflection — bigger glow */}
+            <ellipse cx="120" cy="48" rx="160" ry="9" fill={dark ? '#020617' : '#94a3b8'} opacity="0.28" />
+            {/* Accent under-glow that responds to state */}
+            <ellipse cx="120" cy="44" rx="120" ry="5" fill={
+              state === 'success' ? '#10b981'
+              : state === 'error' ? '#f43f5e'
+              : state === 'processing' ? '#818cf8'
+              : dark ? '#475569' : '#64748b'
+            } opacity={state === 'idle' ? 0.18 : 0.4}>
+              {state !== 'idle' && !reduced && (
+                <animate attributeName="opacity" values="0.4;0.7;0.4" dur="1.5s" repeatCount="indefinite" />
+              )}
+            </ellipse>
 
-            {/* Laptop base — isometric */}
-            <path d="M -10,18 L 170,18 L 195,30 L -35,30 Z" fill="url(#lpBase)" />
-            <path d="M 0,0 L 160,0 L 170,18 L -10,18 Z" fill="url(#lpTop)" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
+            {/* Laptop base — premium isometric (wider/thinner) */}
+            <path d="M -18,32 L 258,32 L 290,46 L -50,46 Z" fill="url(#lpBase)" />
+            <path d="M -2,2 L 242,2 L 258,32 L -18,32 Z" fill="url(#lpTop)" stroke={dark ? '#475569' : '#94a3b8'} strokeWidth="0.5" />
 
-            {/* Base highlight (top edge) */}
-            <line x1="2" y1="0" x2="158" y2="0" stroke={dark ? '#94a3b8' : '#e2e8f0'} strokeWidth="0.5" opacity="0.7" />
+            {/* Hinge groove — subtle dark line */}
+            <line x1="2" y1="2" x2="240" y2="2" stroke={dark ? '#0f172a' : '#475569'} strokeWidth="1" opacity="0.6" />
+            <line x1="3" y1="0.5" x2="240" y2="0.5" stroke={dark ? '#94a3b8' : '#e2e8f0'} strokeWidth="0.5" opacity="0.5" />
 
-            {/* Trackpad */}
-            <rect x="55" y="3.5" width="50" height="10" rx="2.5" fill={dark ? '#0f172a' : '#94a3b8'} opacity="0.8" />
-            <rect x="55" y="3.5" width="50" height="10" rx="2.5" fill="none" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.3" />
+            {/* Trackpad — bigger, with subtle inner shadow */}
+            <rect x="78" y="8" width="86" height="16" rx="3" fill={dark ? '#0f172a' : '#94a3b8'} opacity="0.85" />
+            <rect x="78" y="8" width="86" height="16" rx="3" fill="none" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+            <rect x="79" y="9" width="84" height="1" fill={dark ? '#1e293b' : '#cbd5e1'} opacity="0.5" />
 
-            {/* Laptop screen */}
-            <path d="M 5,0 L 155,0 L 170,-115 L -10,-115 Z" fill="url(#lpScreen)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+            {/* Front edge LED bar (Touch Bar / MacBook glow) */}
+            <rect x="-8" y="29" width="252" height="0.8" fill={
+              state === 'success' ? '#10b981'
+              : state === 'error' ? '#f43f5e'
+              : state === 'processing' ? '#a78bfa'
+              : dark ? '#334155' : '#94a3b8'
+            } opacity="0.7" />
 
-            {/* Screen bezel (inner border) */}
-            <path d="M 8,-2 L 152,-2 L 167,-110 L -7,-110 Z" fill={dark ? '#020617' : '#0f172a'} opacity="0.4" />
+            {/* ─── LAPTOP SCREEN (bigger, premium aluminum bezel) ─── */}
+            {/* Outer aluminum frame — perspective trapezoid */}
+            <path d="M 3,2 L 237,2 L 252,-145 L -12,-145 Z" fill="url(#lpScreen)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.5" />
 
-            {/* Actual display (clipped) */}
-            <rect x="0" y="-108" width="160" height="103" fill="url(#lpDisplay)" rx="2.5" />
+            {/* Inner bezel (dark) */}
+            <path d="M 7,-1 L 233,-1 L 247,-140 L -7,-140 Z" fill={dark ? '#000' : '#0a0e1a'} />
 
-            {/* Window title bar */}
-            <rect x="0" y="-108" width="160" height="13" fill={dark ? '#1e293b' : '#334155'} opacity="0.6" rx="2.5" />
-            <rect x="0" y="-101" width="160" height="6" fill={dark ? '#1e293b' : '#334155'} opacity="0.6" />
+            {/* ─── ACTIVE DISPLAY AREA ─── */}
+            <rect x="0" y="-138" width="240" height="134" fill="url(#lpDisplay)" rx="3" />
 
-            {/* Mac controls */}
-            <circle cx="7" cy="-101.5" r="1.4" fill="#ef4444" />
-            <circle cx="13" cy="-101.5" r="1.4" fill="#f59e0b" />
-            <circle cx="19" cy="-101.5" r="1.4" fill="#10b981" />
+            {/* Subtle screen glare — diagonal highlight */}
+            <path d="M 0,-138 L 240,-138 L 130,-4 L 0,-4 Z" fill="white" opacity="0.025" />
 
-            {/* File tabs */}
-            <rect x="30" y="-105" width="40" height="9" rx="1" fill={dark ? '#334155' : '#475569'} opacity="0.6" />
-            <text x="36" y="-99" fontSize="4" fill={dark ? '#94a3b8' : '#cbd5e1'} fontFamily="monospace">auth.ts</text>
+            {/* macOS-style title bar — taller, refined */}
+            <rect x="0" y="-138" width="240" height="14" fill={dark ? '#1a2438' : '#2a3447'} opacity="0.95" rx="3" />
+            <rect x="0" y="-128" width="240" height="4" fill={dark ? '#1a2438' : '#2a3447'} opacity="0.95" />
 
-            {/* Code editor content — colored syntax */}
-            <g transform="translate(0, -90)">
-              {/* Line numbers gutter */}
-              <rect x="0" y="0" width="14" height="88" fill={dark ? '#020617' : '#0f172a'} opacity="0.6" />
-              {[0, 8, 16, 24, 32, 40, 48, 56, 64, 72].map((y, i) => (
-                <text key={i} x="11" y={y + 6} fontSize="3.5" fill={dark ? '#475569' : '#64748b'} fontFamily="monospace" textAnchor="end">{i + 1}</text>
+            {/* Traffic light controls — bigger and clearer */}
+            <circle cx="9" cy="-131" r="1.8" fill="#ff5f57" />
+            <circle cx="16" cy="-131" r="1.8" fill="#febc2e" />
+            <circle cx="23" cy="-131" r="1.8" fill="#28c840" />
+
+            {/* Active file tab */}
+            <rect x="40" y="-138" width="62" height="14" fill={dark ? '#0c1322' : '#020617'} opacity="0.85" rx="2" />
+            <text x="48" y="-128.5" fontSize="4.2" fill={dark ? '#cbd5e1' : '#cbd5e1'} fontFamily="monospace" fontWeight="500">auth.ts</text>
+            <circle cx="44" cy="-130.5" r="1.1" fill="#fbbf24" />
+            {/* Tab close x */}
+            <text x="95" y="-128.8" fontSize="4" fill={dark ? '#64748b' : '#475569'} fontFamily="monospace">×</text>
+
+            {/* Inactive tabs */}
+            <text x="108" y="-128.8" fontSize="4" fill={dark ? '#64748b' : '#64748b'} fontFamily="monospace" opacity="0.7">index.ts</text>
+            <text x="138" y="-128.8" fontSize="4" fill={dark ? '#64748b' : '#64748b'} fontFamily="monospace" opacity="0.7">config.json</text>
+
+            {/* Status indicator in top-right of title bar */}
+            <g transform="translate(220, -131)">
+              <circle r="2.5" fill={
+                state === 'success' ? '#10b981'
+                : state === 'error' ? '#f43f5e'
+                : state === 'processing' ? '#a78bfa'
+                : '#475569'
+              }>
+                {state === 'processing' && !reduced && (
+                  <animate attributeName="opacity" values="1;0.3;1" dur="0.9s" repeatCount="indefinite" />
+                )}
+              </circle>
+              <text x="5" y="1.5" fontSize="3.2" fontFamily="monospace" fontWeight="600" fill={
+                state === 'success' ? '#34d399'
+                : state === 'error' ? '#fb7185'
+                : state === 'processing' ? '#c4b5fd'
+                : '#64748b'
+              }>
+                {state === 'success' ? 'LIVE' : state === 'error' ? 'FAIL' : state === 'processing' ? 'SYNC' : 'IDLE'}
+              </text>
+            </g>
+
+            {/* ─── CODE EDITOR — cleaner, bigger ─── */}
+            <g transform="translate(0, -122)">
+              {/* Line numbers gutter — refined */}
+              <rect x="0" y="0" width="18" height="118" fill={dark ? '#0a0e1a' : '#0a0e1a'} opacity="0.65" />
+              <line x1="18" y1="0" x2="18" y2="118" stroke={dark ? '#1e293b' : '#1e293b'} strokeWidth="0.3" />
+              {[0, 11, 22, 33, 44, 55, 66, 77, 88, 99].map((y, i) => (
+                <text key={i} x="14" y={y + 7.5} fontSize="4" fill={dark ? '#334155' : '#475569'} fontFamily="monospace" textAnchor="end" fontWeight="500">{i + 1}</text>
               ))}
 
-              {/* Code lines with syntax colors */}
-              <g transform="translate(18, 4)">
-                {/* import { ... } */}
-                <text x="0" y="2" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill="#c084fc">const</tspan>
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}> response = </tspan>
-                  <tspan fill="#c084fc">await</tspan>
+              {/* Highlighted current line — soft accent */}
+              <rect x="20" y="35" width="220" height="11" fill={
+                state === 'success' ? '#10b981'
+                : state === 'error' ? '#f43f5e'
+                : state === 'processing' ? '#a78bfa'
+                : '#a78bfa'
+              } opacity={state === 'idle' ? 0 : 0.1} />
+
+              {/* Code lines — bigger fonts, cleaner */}
+              <g transform="translate(24, 4)">
+                <text x="0" y="2.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill="#c084fc" fontWeight="600">const</tspan>
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}> response </tspan>
+                  <tspan fill="#94a3b8">=</tspan>
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}> </tspan>
+                  <tspan fill="#c084fc" fontWeight="600">await</tspan>
                 </text>
-                <text x="0" y="10" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>  fetch(</tspan>
-                  <tspan fill="#34d399">'/api/v1/auth'</tspan>
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>, {'{'}</tspan>
+                <text x="0" y="13.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>  fetch</tspan>
+                  <tspan fill="#94a3b8">(</tspan>
+                  <tspan fill="#86efac">'/api/v1/auth'</tspan>
+                  <tspan fill="#94a3b8">, </tspan>
+                  <tspan fill="#fbbf24">{'{'}</tspan>
                 </text>
-                <text x="0" y="18" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    method: </tspan>
-                  <tspan fill="#34d399">'POST'</tspan>
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>,</tspan>
+                <text x="0" y="24.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>    method</tspan>
+                  <tspan fill="#94a3b8">: </tspan>
+                  <tspan fill="#86efac">'POST'</tspan>
+                  <tspan fill="#94a3b8">,</tspan>
                 </text>
-                <text x="0" y="26" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    headers: {'{'}</tspan>
+                <text x="0" y="35.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>    headers</tspan>
+                  <tspan fill="#94a3b8">: </tspan>
+                  <tspan fill="#fbbf24">{'{'}</tspan>
                 </text>
-                <text x="0" y="34" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>      </tspan>
-                  <tspan fill="#34d399">'X-API-Key'</tspan>
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>: </tspan>
-                  <tspan fill="#fbbf24">key</tspan>
+                <text x="0" y="46.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>      </tspan>
+                  <tspan fill="#86efac">'X-API-Key'</tspan>
+                  <tspan fill="#94a3b8">: </tspan>
+                  <tspan fill="#7dd3fc" fontWeight="600">apiKey</tspan>
+                  <tspan fill="#94a3b8">,</tspan>
                 </text>
-                <text x="0" y="42" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>      </tspan>
-                  <tspan fill="#34d399">'X-API-Secret'</tspan>
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>: </tspan>
-                  <tspan fill="#fbbf24">sec</tspan>
+                <text x="0" y="57.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>      </tspan>
+                  <tspan fill="#86efac">'X-API-Secret'</tspan>
+                  <tspan fill="#94a3b8">: </tspan>
+                  <tspan fill="#7dd3fc" fontWeight="600">secret</tspan>
                 </text>
-                <text x="0" y="50" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    {'}'}</tspan>
+                <text x="0" y="68.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>    </tspan>
+                  <tspan fill="#fbbf24">{'}'}</tspan>
                 </text>
-                <text x="0" y="58" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>  {'}'});</tspan>
+                <text x="0" y="79.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#e2e8f0' : '#e2e8f0'}>  </tspan>
+                  <tspan fill="#94a3b8">{'});'}</tspan>
                 </text>
-                <text x="0" y="68" fontSize="3.5" fontFamily="monospace">
-                  <tspan fill="#64748b">// </tspan>
-                  <tspan fill="#64748b" fillOpacity="0.7">{'{ ok: true, total: 12,450 }'}</tspan>
+                <text x="0" y="93.5" fontSize="4.5" fontFamily="monospace">
+                  <tspan fill="#64748b" opacity="0.8">// </tspan>
+                  <tspan fill={
+                    state === 'success' ? '#86efac'
+                    : state === 'error' ? '#fda4af'
+                    : '#64748b'
+                  } opacity={state === 'idle' ? 0.6 : 0.95}>
+                    {state === 'success'
+                      ? '→ { ok: true, scope: ["read","write"] }'
+                      : state === 'error'
+                      ? '→ { error: "unauthorized" }'
+                      : state === 'processing'
+                      ? '→ pending...'
+                      : '→ awaiting auth...'}
+                  </tspan>
                 </text>
+
+                {/* Blinking cursor on last line */}
                 {!reduced && (
-                  <rect x="32" y="64" width="1.2" height="4.5" fill="#34d399">
-                    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" />
+                  <rect x="3" y="100" width="1.6" height="5.5" fill="#34d399">
+                    <animate attributeName="opacity" values="1;0;1" dur="0.9s" repeatCount="indefinite" />
                   </rect>
                 )}
               </g>
             </g>
 
-            {/* State badge — kichik corner badge, kod ustini yopmaydi */}
-            {state === 'processing' && (
-              <g transform="translate(148, -103)">
-                <circle r="3.5" fill="#0f172a" opacity="0.7" />
-                <circle r="2" fill="#818cf8">
-                  <animate attributeName="opacity" values="1;0.35;1" dur="0.9s" repeatCount="indefinite" />
-                </circle>
-              </g>
-            )}
-            {state === 'success' && (
-              <g transform="translate(148, -103)">
-                <circle r="4.5" fill="#10b981" opacity="0.25">
-                  <animate attributeName="r" values="4.5;7;4.5" dur="1.4s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.25;0;0.25" dur="1.4s" repeatCount="indefinite" />
-                </circle>
-                <circle r="3.5" fill="#10b981" />
-                <path d="M -1.6,0 L -0.4,1.3 L 1.8,-1.3" stroke="white" strokeWidth="0.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-              </g>
-            )}
-            {state === 'error' && (
-              <g transform="translate(148, -103)">
-                <circle r="3.5" fill="#f43f5e" />
-                <line x1="-1.5" y1="-1.5" x2="1.5" y2="1.5" stroke="white" strokeWidth="0.7" strokeLinecap="round" />
-                <line x1="1.5" y1="-1.5" x2="-1.5" y2="1.5" stroke="white" strokeWidth="0.7" strokeLinecap="round" />
-              </g>
-            )}
+            {/* ─── BOTTOM CONSOLE BAR — premium IDE status line ─── */}
+            <g transform="translate(0, -8)">
+              <rect x="0" y="0" width="240" height="6" fill={dark ? '#1a2438' : '#1a2438'} opacity="0.95" />
+              <rect x="0" y="0" width="240" height="6" fill={
+                state === 'success' ? '#10b981'
+                : state === 'error' ? '#f43f5e'
+                : state === 'processing' ? '#a78bfa'
+                : '#475569'
+              } opacity={state === 'idle' ? 0.15 : 0.25} />
 
-            {/* Bottom status strip — terminal log overlay (only when active) */}
-            {state !== 'idle' && (
-              <g transform="translate(0, -14)">
-                <rect x="0" y="0" width="160" height="9" fill={dark ? '#1e293b' : '#0f172a'} opacity="0.92" />
-                <rect x="0" y="0" width="160" height="9" fill={
-                  state === 'success' ? '#10b981' : state === 'error' ? '#f43f5e' : '#818cf8'
-                } opacity="0.12" />
-                <circle cx="5" cy="4.5" r="1.3" fill={
-                  state === 'success' ? '#34d399' : state === 'error' ? '#fb7185' : '#a78bfa'
-                }>
-                  {state === 'processing' && (
-                    <animate attributeName="opacity" values="1;0.3;1" dur="0.8s" repeatCount="indefinite" />
-                  )}
-                </circle>
-                <text x="10" y="6" fontSize="3.5" fontFamily="monospace" fill={
-                  state === 'success' ? '#a7f3d0' : state === 'error' ? '#fecaca' : '#c7d2fe'
-                }>
-                  {state === 'processing' && '→ POST /api/v1/auth'}
-                  {state === 'success' && '✓ 200 OK · authenticated'}
-                  {state === 'error' && '✗ 401 unauthorized'}
-                </text>
-              </g>
-            )}
+              {/* Status dot */}
+              <circle cx="5" cy="3" r="1.5" fill={
+                state === 'success' ? '#34d399'
+                : state === 'error' ? '#fb7185'
+                : state === 'processing' ? '#a78bfa'
+                : '#64748b'
+              }>
+                {state === 'processing' && !reduced && (
+                  <animate attributeName="opacity" values="1;0.3;1" dur="0.8s" repeatCount="indefinite" />
+                )}
+              </circle>
+
+              {/* Status text */}
+              <text x="10" y="4.2" fontSize="3.5" fontFamily="monospace" fontWeight="600" fill={
+                state === 'success' ? '#a7f3d0'
+                : state === 'error' ? '#fecaca'
+                : state === 'processing' ? '#c4b5fd'
+                : '#94a3b8'
+              }>
+                {state === 'processing' && 'POST /api/v1/auth · authenticating...'}
+                {state === 'success' && '200 OK · session established · 47ms'}
+                {state === 'error' && '401 unauthorized · invalid credentials'}
+                {state === 'idle' && 'TypeScript · UTF-8 · LF · Ln 12, Col 4'}
+              </text>
+            </g>
           </g>
 
           {/* ─── CONNECTION LINES with flowing dashes ─── */}
-          <line x1="335" y1="305" x2="420" y2="280" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" />
-          <line x1="490" y1="280" x2="620" y2="220" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.15s' }} />
-          <line x1="490" y1="280" x2="620" y2="275" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.3s' }} />
-          <line x1="490" y1="280" x2="620" y2="330" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.45s' }} />
-          <line x1="490" y1="280" x2="620" y2="385" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.6s' }} />
+          <line x1="400" y1="280" x2="500" y2="280" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" />
+          <line x1="500" y1="280" x2="620" y2="220" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.15s' }} />
+          <line x1="500" y1="280" x2="620" y2="275" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.3s' }} />
+          <line x1="500" y1="280" x2="620" y2="330" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.45s' }} />
+          <line x1="500" y1="280" x2="620" y2="385" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.6s' }} />
 
           {/* Constant subtle ambient packets (always flowing) */}
           {!reduced && (
             <>
               <circle r="2.2" fill="url(#pkIdle)" opacity="0.6">
-                <animateMotion dur="3s" repeatCount="indefinite" path="M 335,305 L 420,280" />
+                <animateMotion dur="3s" repeatCount="indefinite" path="M 400,280 L 500,280" />
               </circle>
               <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
-                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,220" begin="0.4s" />
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 500,280 L 620,220" begin="0.4s" />
               </circle>
               <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
-                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,275" begin="0.9s" />
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 500,280 L 620,275" begin="0.9s" />
               </circle>
               <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
-                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,330" begin="1.4s" />
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 500,280 L 620,330" begin="1.4s" />
               </circle>
               <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
-                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,385" begin="1.9s" />
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 500,280 L 620,385" begin="1.9s" />
               </circle>
             </>
           )}
@@ -442,11 +513,11 @@ export function ApiHeroInfra({
           </g>
 
           {/* Labels */}
-          <text x="180" y="475" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>CLIENT</text>
+          <text x="195" y="475" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>CLIENT</text>
           <text x="675" y="170" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>API GATEWAY</text>
 
           {/* Subtle technical metadata labels */}
-          <text x="180" y="488" fontSize="6.5" fill={dark ? '#475569' : '#94a3b8'} fontFamily="monospace" opacity="0.75">192.168.1.42</text>
+          <text x="195" y="488" fontSize="6.5" fill={dark ? '#475569' : '#94a3b8'} fontFamily="monospace" opacity="0.75">192.168.1.42</text>
           <text x="675" y="182" fontSize="6.5" fill={dark ? '#475569' : '#94a3b8'} fontFamily="monospace" opacity="0.75">cluster-prod-01</text>
         </svg>
       </motion.div>
@@ -524,11 +595,11 @@ function PacketWave({ state }: { state: InfraState }) {
               : 'pkIdle';
   return (
     <>
-      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 335, cy: 305, opacity: 0 }} animate={{ cx: [335, 420], cy: [305, 280], opacity: [0, 1, 0.6] }} transition={{ duration: 0.55, ease: 'easeOut' }} />
-      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 220], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.35 }} />
-      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 275], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.45 }} />
-      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 330], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.55 }} />
-      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 385], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.65 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 400, cy: 280, opacity: 0 }} animate={{ cx: [400, 500], cy: [280, 280], opacity: [0, 1, 0.6] }} transition={{ duration: 0.55, ease: 'easeOut' }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 500, cy: 280, opacity: 0 }} animate={{ cx: [500, 620], cy: [280, 220], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.35 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 500, cy: 280, opacity: 0 }} animate={{ cx: [500, 620], cy: [280, 275], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.45 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 500, cy: 280, opacity: 0 }} animate={{ cx: [500, 620], cy: [280, 330], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.55 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 500, cy: 280, opacity: 0 }} animate={{ cx: [500, 620], cy: [280, 385], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.65 }} />
     </>
   );
 }
