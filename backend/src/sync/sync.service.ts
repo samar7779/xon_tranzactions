@@ -717,6 +717,31 @@ export class SyncService implements OnModuleInit {
             `sana ${existing.txnDate.toISOString().slice(0, 10)} → ${txnDate.toISOString().slice(0, 10)}, ` +
             `composite ID yangi`,
           );
+          // Sana o'zgarishi — "O'zgargan to'lovlar"ga (BANK O'ZGARTIRGAN) yozamiz
+          if (dateChanged) {
+            try {
+              await this.prisma.transactionChangeLog.create({
+                data: {
+                  txId: existing.id,
+                  externalId,
+                  accountId: existing.accountId,
+                  changeType: 'EDITED',
+                  fieldsChanged: ['txnDate'],
+                  oldData: { txnDate: { old: existing.txnDate.toISOString().slice(0, 10), new: txnDate.toISOString().slice(0, 10) } } as any,
+                  newData: { txnDate: txnDate.toISOString().slice(0, 10) } as any,
+                  txnDate,
+                  amount: existing.amount,
+                  direction: existing.direction,
+                  contractNumber: existing.contractNumber,
+                  bankNameSnap: existing.importBankNameText,
+                  accountNoSnap: accountNo,
+                  detectedBy: 'sync',
+                },
+              });
+            } catch (e: any) {
+              this.logger.warn(`Date-shift change-log yozishda xato (${existing.id}): ${e?.message}`);
+            }
+          }
         } catch (e: any) {
           this.logger.warn(`Date-shift update xato (${existing.id}): ${e?.message}`);
         }

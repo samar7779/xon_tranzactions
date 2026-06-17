@@ -179,8 +179,11 @@ export class TransactionsController {
     summary: "Bitta tx'ning sanasini tuzatish (foydalanuvchi tasdiqi bilan)",
     description: "Sverka diagnose'da 'boshqa sanada bor' deb topilgan tx uchun ishlatiladi. Faqat txnDate tegadi, boshqa hech narsa o'zgarmaydi.",
   })
-  fixTxDate(@Body() body: { txId: string; newDate: string }) {
-    return this.reconcileSvc.fixTxDate(body?.txId, body?.newDate);
+  fixTxDate(
+    @Body() body: { txId: string; newDate: string },
+    @CurrentUser('email') email?: string,
+  ) {
+    return this.reconcileSvc.fixTxDate(body?.txId, body?.newDate, email ? `manual:${email}` : 'manual');
   }
 
   @Post('reconcile/fix-all-tx-date')
@@ -189,8 +192,11 @@ export class TransactionsController {
     summary: "Bir nechta tx'ning sanalarini birdaniga tuzatish (bulk)",
     description: "Faqat txnDate UPDATE, boshqa fieldlar tegmaydi. Har biri uchun natija (updated/skipped/error) qaytadi.",
   })
-  fixAllTxDate(@Body() body: { items: Array<{ txId: string; newDate: string }> }) {
-    return this.reconcileSvc.fixAllTxDate(body?.items || []);
+  fixAllTxDate(
+    @Body() body: { items: Array<{ txId: string; newDate: string }> },
+    @CurrentUser('email') email?: string,
+  ) {
+    return this.reconcileSvc.fixAllTxDate(body?.items || [], email ? `manual:${email}` : 'manual');
   }
 
   @Get('export')
