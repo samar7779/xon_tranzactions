@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, ShieldCheck, Pencil, Trash2, Lock, MoreVertical,
   Users, Shield, Check, ChevronDown, ChevronRight,
-  Sparkles, Activity, Crown, Zap, Eye,
+  Sparkles, Activity, Crown, Zap, Eye, Search, X, CheckCheck, FolderOpen,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,16 @@ const ROLE_GRADIENTS: Record<string, string> = {
 function getRoleGrad(name: string) {
   return ROLE_GRADIENTS[name] || 'from-purple-500 to-violet-600';
 }
+
+// Modul kartochkalari uchun rang palitrasi — index bo'yicha aylanadi
+const MODULE_GRADIENTS = [
+  'from-indigo-500 to-blue-600',
+  'from-violet-500 to-purple-600',
+  'from-emerald-500 to-teal-600',
+  'from-amber-500 to-orange-600',
+  'from-rose-500 to-pink-600',
+  'from-cyan-500 to-sky-600',
+];
 
 export default function RolesPage() {
   const tc = useTranslations('common');
@@ -143,6 +153,7 @@ function RoleDialog({
   // Collapsible state — default'da barcha modullar ochiq (sahifa ochiq emas)
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [openPages, setOpenPages] = useState<Set<string>>(new Set());
+  const [permQuery, setPermQuery] = useState('');
 
   // Modal birinchi ochilganda barcha modullarni avtomatik ochish
   useEffect(() => {
@@ -153,6 +164,7 @@ function RoleDialog({
 
   useEffect(() => {
     if (open) {
+      setPermQuery('');
       if (editing) {
         setName(editing.name);
         setLabel(editing.label);
@@ -223,6 +235,37 @@ function RoleDialog({
     ? permTree
     : [{ module: 'Hamma ruxsatlar', pages: permGroups.map((g) => ({ name: g.group, items: g.items })) }];
 
+  // Qidiruv bo'yicha filtrlash — modul/sahifa/action label yoki value mos kelsa qoldiriladi
+  const q = permQuery.trim().toLowerCase();
+  const filteredTree: PermModule[] = !q
+    ? tree
+    : tree
+        .map((mod) => {
+          const modMatch = mod.module.toLowerCase().includes(q);
+          const pages = mod.pages
+            .map((p) => {
+              const pageMatch = p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q);
+              const items = modMatch || pageMatch
+                ? p.items
+                : p.items.filter((i) => i.label.toLowerCase().includes(q) || i.value.toLowerCase().includes(q));
+              return { ...p, items };
+            })
+            .filter((p) => p.items.length > 0);
+          return { ...mod, pages };
+        })
+        .filter((m) => m.pages.length > 0);
+
+  // Ko'rinib turgan (filtrlangan) ruxsatlarni belgilash / tozalash
+  function bulkVisible(select: boolean) {
+    setPermissions((prev) => {
+      const next = new Set(prev);
+      filteredTree.forEach((m) => m.pages.forEach((p) => p.items.forEach((i) => {
+        if (select) next.add(i.value); else next.delete(i.value);
+      })));
+      return next;
+    });
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -262,107 +305,183 @@ function RoleDialog({
             <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ixtiyoriy" />
           </div>
 
-          <div className="space-y-2">
-            <Label className="flex items-center justify-between">
-              <span>Ruxsatlar (modul · sahifa · action)</span>
+          <div className="space-y-3">
+            <Label className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <span className="inline-grid place-items-center h-6 w-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-sm shadow-indigo-500/30">
+                  <Lock className="h-3.5 w-3.5" />
+                </span>
+                <span>Ruxsatlar</span>
+                <span className="hidden sm:inline text-[11px] font-normal text-slate-400 dark:text-slate-500">modul · sahifa · action</span>
+              </span>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-normal tabular-nums">
                 <span className="font-bold text-indigo-700 dark:text-indigo-300">{permissions.size}</span> ta belgilangan
               </span>
             </Label>
-            <div className="border rounded-xl divide-y divide-slate-100 dark:divide-slate-700 max-h-[72vh] min-h-[400px] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/40">
-              {tree.map((mod) => {
+
+            {/* Toolbar — qidiruv + ommaviy belgilash/tozalash */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <Input
+                  value={permQuery}
+                  onChange={(e) => setPermQuery(e.target.value)}
+                  placeholder="Ruxsat qidirish — modul, sahifa yoki kalit..."
+                  className="pl-9 pr-9 h-9"
+                />
+                {permQuery && (
+                  <button type="button" onClick={() => setPermQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 shrink-0"
+                onClick={() => bulkVisible(true)}>
+                <CheckCheck className="h-4 w-4" /> Hammasi
+              </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-9 gap-1.5 shrink-0 text-slate-500"
+                onClick={() => bulkVisible(false)}>
+                <X className="h-4 w-4" /> Tozalash
+              </Button>
+            </div>
+
+            <div className="space-y-2.5 max-h-[64vh] min-h-[360px] overflow-y-auto pr-1 -mr-1">
+              {filteredTree.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400 dark:text-slate-500">
+                  <Search className="h-8 w-8 opacity-40" />
+                  <span className="text-sm">«{permQuery}» bo'yicha ruxsat topilmadi</span>
+                </div>
+              )}
+              {filteredTree.map((mod, mi) => {
                 const allItems = mod.pages.flatMap((p) => p.items);
                 const modCount = allItems.filter((i) => permissions.has(i.value)).length;
-                const modAll = modCount === allItems.length;
+                const modAll = allItems.length > 0 && modCount === allItems.length;
                 const modSome = modCount > 0 && !modAll;
-                const isModOpen = openModules.has(mod.module);
+                const modPct = allItems.length ? Math.round((modCount / allItems.length) * 100) : 0;
+                const isModOpen = !!q || openModules.has(mod.module);
+                const grad = MODULE_GRADIENTS[mi % MODULE_GRADIENTS.length];
                 return (
-                  <div key={mod.module} className="bg-white/60 dark:bg-slate-900/60">
+                  <div key={mod.module} className={cn(
+                    "rounded-2xl border bg-white dark:bg-slate-900/50 overflow-hidden transition-all",
+                    modCount > 0
+                      ? "border-indigo-200/70 dark:border-indigo-900/50 shadow-sm shadow-indigo-500/5"
+                      : "border-slate-200/80 dark:border-slate-700/50",
+                  )}>
                     {/* MODUL header — bosish bilan ochiladi/yopiladi */}
-                    <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors">
+                    <div className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
                       <button type="button"
                         onClick={() => toggleModuleExpand(mod.module)}
-                        className="text-slate-500 dark:text-slate-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+                        className="text-slate-400 dark:text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors shrink-0">
                         {isModOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                       </button>
+                      <span className={cn(
+                        "inline-grid place-items-center h-8 w-8 rounded-xl text-white font-bold text-sm shrink-0 bg-gradient-to-br shadow-sm",
+                        grad,
+                      )}>
+                        {mod.module.charAt(0).toUpperCase()}
+                      </span>
                       <button type="button"
                         onClick={() => toggleModule(mod)}
-                        className="flex items-center gap-2 flex-1 text-left">
-                        <div className={cn(
-                          "w-4 h-4 rounded grid place-items-center text-white text-[10px] transition-colors shrink-0",
-                          modAll ? "bg-indigo-600" : modSome ? "bg-amber-500" : "bg-slate-200",
-                        )}>
-                          {modAll && <Check className="h-3 w-3" />}
-                          {modSome && <span className="h-0.5 w-2 bg-white rounded" />}
-                        </div>
-                        <span className="font-bold text-sm text-slate-800 dark:text-slate-200">{mod.module}</span>
-                        <span className="text-xs text-slate-400 dark:text-slate-500">· {mod.pages.length} ta sahifa</span>
+                        className="flex flex-col items-start flex-1 min-w-0 text-left">
+                        <span className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate w-full">{mod.module}</span>
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
+                          <FolderOpen className="h-3 w-3" /> {mod.pages.length} ta sahifa
+                        </span>
                       </button>
                       <span className={cn(
-                        "text-xs px-2 py-0.5 rounded-full tabular-nums font-semibold",
+                        "text-xs px-2.5 py-1 rounded-full tabular-nums font-semibold shrink-0",
                         modAll ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : modSome ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
                       )}>{modCount}/{allItems.length}</span>
+                      <button type="button"
+                        onClick={() => toggleModule(mod)}
+                        className={cn(
+                          "w-5 h-5 rounded-md grid place-items-center text-white shrink-0 transition-colors",
+                          modAll ? "bg-indigo-600" : modSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600",
+                        )}>
+                        {modAll && <Check className="h-3.5 w-3.5" />}
+                        {modSome && <span className="h-0.5 w-2.5 bg-white rounded" />}
+                      </button>
+                    </div>
+
+                    {/* Progress chizig'i */}
+                    <div className="h-1 bg-slate-100 dark:bg-slate-800">
+                      <div className={cn("h-full bg-gradient-to-r transition-all duration-300", grad)} style={{ width: `${modPct}%` }} />
                     </div>
 
                     {/* PAGES — modul ochiq bo'lsa ko'rinadi */}
                     {isModOpen && (
-                      <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/30">
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
                         {mod.pages.map((p) => {
                           const pageKey = `${mod.module}::${p.name}`;
                           const pageCount = p.items.filter((i) => permissions.has(i.value)).length;
                           const pageAll = pageCount === p.items.length;
                           const pageSome = pageCount > 0 && !pageAll;
-                          const isPageOpen = openPages.has(pageKey);
+                          const isPageOpen = !!q || openPages.has(pageKey);
                           return (
-                            <div key={pageKey} className="border-b border-slate-100 dark:border-slate-800 last:border-b-0">
+                            <div key={pageKey}>
                               {/* PAGE header */}
-                              <div className="flex items-center gap-2 pl-9 pr-3 py-2 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/30 transition-colors">
+                              <div className="flex items-center gap-2 pl-4 pr-3 py-2 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/20 transition-colors">
                                 <button type="button"
                                   onClick={() => togglePageExpand(pageKey)}
-                                  className="text-slate-400 dark:text-slate-500 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors">
+                                  className="text-slate-300 dark:text-slate-600 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors shrink-0">
                                   {isPageOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                                 </button>
                                 <button type="button"
                                   onClick={() => toggleGroup(p.items)}
-                                  className="flex items-center gap-2 flex-1 text-left">
+                                  className="flex items-center gap-2 flex-1 min-w-0 text-left">
                                   <div className={cn(
-                                    "w-3.5 h-3.5 rounded grid place-items-center text-white text-[9px] transition-colors shrink-0",
-                                    pageAll ? "bg-indigo-600" : pageSome ? "bg-amber-500" : "bg-slate-200",
+                                    "w-4 h-4 rounded grid place-items-center text-white text-[9px] transition-colors shrink-0",
+                                    pageAll ? "bg-indigo-600" : pageSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700",
                                   )}>
                                     {pageAll && <Check className="h-2.5 w-2.5" />}
                                     {pageSome && <span className="h-0.5 w-1.5 bg-white rounded" />}
                                   </div>
-                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300">{p.name}</span>
-                                  {p.description && <span className="text-[10px] text-slate-400 dark:text-slate-500 truncate">· {p.description}</span>}
+                                  <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 truncate">{p.name}</span>
+                                  {p.description && <span className="hidden sm:inline text-[10px] text-slate-400 dark:text-slate-500 truncate">· {p.description}</span>}
                                 </button>
                                 <span className={cn(
-                                  "text-[11px] px-1.5 py-0.5 rounded-full tabular-nums",
-                                  pageAll ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : pageSome ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400",
+                                  "text-[11px] px-2 py-0.5 rounded-full tabular-nums font-medium shrink-0",
+                                  pageAll ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300" : pageSome ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500",
                                 )}>{pageCount}/{p.items.length}</span>
                               </div>
 
                               {/* ACTIONS — page ochiq bo'lsa */}
                               {isPageOpen && (
-                                <div className="pl-12 pr-3 pb-2.5 grid sm:grid-cols-2 gap-1">
-                                  {p.items.map((i) => (
-                                    <label key={i.value}
-                                      className={cn(
-                                        "flex items-start gap-2 px-2 py-1.5 rounded-lg text-sm cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-colors",
-                                        permissions.has(i.value) && "bg-indigo-50/80 dark:bg-indigo-950/40 ring-1 ring-indigo-100 dark:ring-indigo-900",
-                                      )}
-                                    >
-                                      <input
-                                        type="checkbox"
-                                        checked={permissions.has(i.value)}
-                                        onChange={() => togglePerm(i.value)}
-                                        className="mt-0.5 accent-indigo-600 h-3.5 w-3.5 rounded"
-                                      />
-                                      <span className="flex-1 min-w-0">
-                                        <div className="text-[12px] font-medium text-slate-700 dark:text-slate-300">{i.label}</div>
-                                        <div className="text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">{i.value}</div>
-                                      </span>
-                                    </label>
-                                  ))}
+                                <div className="pl-10 pr-3 pb-3 pt-0.5 grid sm:grid-cols-2 gap-1.5">
+                                  {p.items.map((i) => {
+                                    const checked = permissions.has(i.value);
+                                    return (
+                                      <label key={i.value}
+                                        className={cn(
+                                          "group flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm cursor-pointer border transition-all",
+                                          checked
+                                            ? "bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 ring-1 ring-indigo-200/60 dark:ring-indigo-800/60"
+                                            : "bg-slate-50/60 dark:bg-slate-800/30 border-transparent hover:border-slate-200 dark:hover:border-slate-700 hover:bg-white dark:hover:bg-slate-800",
+                                        )}
+                                      >
+                                        <span className={cn(
+                                          "grid place-items-center h-4 w-4 rounded-[5px] border-2 shrink-0 transition-colors",
+                                          checked ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 dark:border-slate-600 group-hover:border-indigo-400",
+                                        )}>
+                                          {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+                                        </span>
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => togglePerm(i.value)}
+                                          className="sr-only"
+                                        />
+                                        <span className="flex-1 min-w-0">
+                                          <span className={cn(
+                                            "block text-[12px] font-medium truncate",
+                                            checked ? "text-indigo-900 dark:text-indigo-200" : "text-slate-700 dark:text-slate-300",
+                                          )}>{i.label}</span>
+                                          <span className="block text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">{i.value}</span>
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
