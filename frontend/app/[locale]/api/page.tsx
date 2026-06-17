@@ -17,7 +17,7 @@ import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { IconBtn, PrimaryBtn, MethodBadge, Kbd, eyebrow } from '@/components/api-ui';
 import { ApiCommandPalette, type PaletteEndpoint } from '@/components/api-command-palette';
 import { SNIPPET_LANGS, genSnippet, type SnippetLang } from '@/lib/api-snippet-gen';
-import { ApiCodeShowcase } from '@/components/api-code-showcase';
+import { ApiHero3d } from '@/components/api-hero-3d';
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
@@ -486,125 +486,154 @@ function LandingView({ onLogin, dark }: {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <section className="relative overflow-hidden">
-      {/* Subtle radial mesh background */}
-      <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.035)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_70%)]" aria-hidden="true" />
-
-      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-10 pb-16 grid lg:grid-cols-[1.25fr_1fr] gap-10 lg:gap-16 items-center max-w-[1400px] mx-auto min-h-[calc(100vh-56px)]">
-        {/* ─── LEFT — Code showcase + flow + response ─── */}
-        <div className="order-2 lg:order-1">
-          <ApiCodeShowcase />
+    <section className="relative overflow-hidden min-h-[calc(100vh-56px)]">
+      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-8 pb-16 grid lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-16 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
+        {/* ─── LEFT — 3D parallax hero ─── */}
+        <div className="order-2 lg:order-1 relative">
+          <ApiHero3d dark={dark} />
         </div>
 
-        {/* ─── RIGHT — focused centered login ─── */}
-        <div className="order-1 lg:order-2 w-full max-w-[440px] mx-auto lg:mx-0">
-          {/* Tiny status badge */}
+        {/* ─── RIGHT — premium login ─── */}
+        <div className="order-1 lg:order-2 w-full max-w-[460px] mx-auto lg:mx-0 relative">
+          {/* Production badge */}
           <motion.div
-            initial={{ opacity: 0, y: reduced ? 0 : 6 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduced ? 0 : 0.3 }}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest mb-5"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-emerald-200 dark:ring-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest mb-6 shadow-sm"
           >
             <span className="relative flex h-1.5 w-1.5">
               <span className={cn('absolute inline-flex h-full w-full rounded-full bg-emerald-400', !reduced && 'animate-ping opacity-75')} />
               <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
             </span>
-            Production
+            Production · v1
           </motion.div>
 
-          {/* Big title */}
+          {/* Gradient title */}
           <motion.h1
-            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.05 }}
-            className="text-3xl sm:text-4xl lg:text-[44px] font-black tracking-tight text-slate-900 dark:text-slate-100 leading-[1.05]"
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.05 }}
+            className="text-4xl sm:text-5xl lg:text-[52px] font-black tracking-tight leading-[1.02]"
           >
-            {t('pageTitle')}
+            <span className="block text-slate-900 dark:text-slate-100">Developer</span>
+            <span className="block bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-400 dark:via-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent">
+              API Platform
+            </span>
           </motion.h1>
+
           <motion.p
             initial={{ opacity: 0, y: reduced ? 0 : 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.1 }}
-            className="text-[14px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed max-w-md"
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.12 }}
+            className="text-[15px] text-slate-600 dark:text-slate-400 mt-4 leading-relaxed max-w-md"
           >
-            {t('pageDesc')}
+            {t('pageDesc')}. Token-based auth, scope-controlled, full audit trail.
           </motion.p>
 
-          {/* Inline login form — no card, just clean inputs */}
+          {/* Login form */}
           <motion.form
             onSubmit={(e) => { e.preventDefault(); doLogin(); }}
-            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            initial={{ opacity: 0, y: reduced ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.15 }}
-            className="mt-7 space-y-3"
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.2 }}
+            className="mt-8 space-y-3 relative"
           >
+            {/* Glass card wrapper */}
+            <div className="absolute -inset-4 rounded-2xl bg-gradient-to-br from-indigo-500/8 via-violet-500/8 to-fuchsia-500/8 dark:from-indigo-500/15 dark:via-violet-500/15 dark:to-fuchsia-500/15 blur-2xl -z-10" aria-hidden="true" />
+
             <div>
-              <label htmlFor="api-key" className={cn(eyebrow, 'mb-1.5 block')}>{t('login.keyLabel')}</label>
-              <input
-                id="api-key"
-                type="text"
-                value={keyId}
-                onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
-                onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
-                placeholder={t('login.keyPlaceholder')}
-                autoComplete="off"
-                aria-required="true"
-                className="w-full h-11 px-3.5 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-300 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0 outline-none text-[13px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-              />
+              <label htmlFor="api-key" className={cn(eyebrow, 'mb-2 block text-slate-600 dark:text-slate-400')}>{t('login.keyLabel')}</label>
+              <div className="relative group">
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-fuchsia-500/0 group-focus-within:from-indigo-500/30 group-focus-within:via-violet-500/30 group-focus-within:to-fuchsia-500/30 blur-md transition-all" aria-hidden="true" />
+                <input
+                  id="api-key"
+                  type="text"
+                  value={keyId}
+                  onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
+                  onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
+                  placeholder={t('login.keyPlaceholder')}
+                  autoComplete="off"
+                  aria-required="true"
+                  className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all"
+                />
+              </div>
             </div>
+
             <div>
-              <label htmlFor="api-secret" className={cn(eyebrow, 'mb-1.5 flex items-center justify-between')}>
+              <label htmlFor="api-secret" className={cn(eyebrow, 'mb-2 flex items-center justify-between text-slate-600 dark:text-slate-400')}>
                 <span>{t('login.secretLabel')}</span>
                 <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide secret' : 'Show secret'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-0.5 outline-none">
                   {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                 </button>
               </label>
-              <input
-                id="api-secret"
-                type={showSecret ? 'text' : 'password'}
-                value={secret}
-                onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
-                onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
-                placeholder={t('login.secretPlaceholder')}
-                autoComplete="off"
-                aria-required="true"
-                className="w-full h-11 px-3.5 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-300 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-[13px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-              />
+              <div className="relative group">
+                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-fuchsia-500/0 group-focus-within:from-indigo-500/30 group-focus-within:via-violet-500/30 group-focus-within:to-fuchsia-500/30 blur-md transition-all" aria-hidden="true" />
+                <input
+                  id="api-secret"
+                  type={showSecret ? 'text' : 'password'}
+                  value={secret}
+                  onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
+                  onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
+                  placeholder={t('login.secretPlaceholder')}
+                  onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
+                  autoComplete="off"
+                  aria-required="true"
+                  className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all"
+                />
+              </div>
             </div>
 
             {error && (
-              <div role="alert" aria-live="polite" className="rounded-md bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 flex items-start gap-2">
-                <AlertCircle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
-                <div className="text-[12px] text-rose-700 dark:text-rose-300 leading-relaxed">{error}</div>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                role="alert"
+                aria-live="polite"
+                className="rounded-xl bg-rose-50/90 dark:bg-rose-950/40 backdrop-blur-sm ring-1 ring-rose-200 dark:ring-rose-900 px-3.5 py-2.5 flex items-start gap-2"
+              >
+                <AlertCircle className="h-4 w-4 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
+                <div className="text-[12.5px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">{error}</div>
+              </motion.div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading || !canSubmit}
-              className="w-full h-12 rounded-lg bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-white dark:text-slate-900 font-bold text-[13.5px] flex items-center justify-center gap-2 transition-all shadow-md outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : !canSubmit ? (
-                <span>{t('login.submitIdle')}</span>
-              ) : (
-                <>
-                  <span>{t('login.submit')}</span>
-                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                </>
-              )}
-            </button>
+            {/* Premium gradient button */}
+            <div className="relative group pt-1">
+              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 opacity-60 group-hover:opacity-100 blur transition-opacity" aria-hidden="true" />
+              <button
+                type="submit"
+                disabled={loading || !canSubmit}
+                className="relative w-full h-13 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:from-indigo-500 hover:via-violet-500 hover:to-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-[14px] flex items-center justify-center gap-2 transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950 shadow-lg shadow-violet-500/25"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : !canSubmit ? (
+                  <span>{t('login.submitIdle')}</span>
+                ) : (
+                  <>
+                    <span>{t('login.submit')}</span>
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                  </>
+                )}
+              </button>
+            </div>
 
-            {/* Subtle hints below button */}
-            <div className="pt-1 flex items-center justify-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
-              <span className="inline-flex items-center gap-1">
-                <Lock className="h-3 w-3" /> SHA-256
+            {/* Trust strip */}
+            <div className="pt-3 flex items-center justify-center gap-4 text-[11.5px] text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                <Lock className="h-3 w-3 text-emerald-500" />
+                <span className="font-medium">SHA-256</span>
               </span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
-              <span>Scope-based</span>
-              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
-              <span>Audit log</span>
+              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">/</span>
+              <span className="inline-flex items-center gap-1.5">
+                <CheckCircle2 className="h-3 w-3 text-indigo-500" />
+                <span className="font-medium">Scope-based</span>
+              </span>
+              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">/</span>
+              <span className="inline-flex items-center gap-1.5">
+                <Sparkles className="h-3 w-3 text-violet-500" />
+                <span className="font-medium">Audit log</span>
+              </span>
             </div>
           </motion.form>
         </div>

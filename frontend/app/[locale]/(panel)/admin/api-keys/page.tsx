@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -51,6 +53,7 @@ interface ScopeMeta {
 
 export default function ApiKeysPage() {
   const qc = useQueryClient();
+  const { locale } = useParams<{ locale: string }>();
   const canManage = useHasPermission(PERMS.API_KEYS_MANAGE);
   const [q, setQ] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
