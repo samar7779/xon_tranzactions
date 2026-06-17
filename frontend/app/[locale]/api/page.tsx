@@ -3,105 +3,121 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
-  Code2, KeyRound, Lock, ShieldCheck, CheckCircle2, Sparkles, ChevronDown, Play,
-  Copy, Check, LogOut, Eye, EyeOff, Loader2, Globe, Activity, Zap, Infinity as InfinityIcon,
-  AlertCircle, Server, ExternalLink, X,
+  Code2, KeyRound, Lock, ShieldCheck, CheckCircle2, ChevronDown, Play,
+  Copy, Check, LogOut, Eye, EyeOff, Loader2, Activity, Zap, Infinity as InfinityIcon,
+  AlertCircle, Server, ExternalLink, Terminal, BookOpen, Sparkles, ChevronRight,
+  ArrowRight, Search,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ────────────────────────────────────────────────────────
-// ENDPOINTS CATALOG (frontend'da hardcoded — backend bilan sinxron)
-// ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// ENDPOINTS CATALOG
+// ════════════════════════════════════════════════════════
 interface Endpoint {
   method: 'GET' | 'POST';
   path: string;
   title: string;
   description: string;
   scope?: string;
+  group: string;
   params?: { name: string; in: 'query' | 'path'; required?: boolean; description: string; example?: string }[];
 }
 
 const ENDPOINTS: Endpoint[] = [
   {
-    method: 'GET',
-    path: '/api/v1/_whoami',
-    title: 'Whoami',
-    description: 'Hozirgi API kalit ma\'lumotini qaytaradi — scope\'lar, nom, muddati.',
+    method: 'GET', path: '/api/v1/_whoami', group: 'Boshlanish',
+    title: 'Whoami', description: 'Hozirgi API kalit ma\'lumotini qaytaradi.',
+  },
+
+  // META
+  {
+    method: 'GET', path: '/api/v1/_meta/all', group: 'Meta (filter qurish uchun)',
+    title: 'Hammasi (banks, accounts, categories, enums)',
+    description: 'Filter UI qurish uchun barcha ma\'lumotlar bitta javobda. Scope kerak emas.',
   },
   {
-    method: 'GET',
-    path: '/api/v1/transactions',
+    method: 'GET', path: '/api/v1/_meta/banks', group: 'Meta (filter qurish uchun)',
+    title: 'Banklar', description: 'Tizimdagi barcha banklar ro\'yxati.',
+  },
+  {
+    method: 'GET', path: '/api/v1/_meta/accounts', group: 'Meta (filter qurish uchun)',
+    title: 'Hisob raqamlar', description: 'Barcha hisob raqamlar (qisqacha — id, accountNo, ownerName, bank).',
+  },
+  {
+    method: 'GET', path: '/api/v1/_meta/categories', group: 'Meta (filter qurish uchun)',
+    title: 'Kategoriya va subkategoriyalar', description: 'Ierarxik — har kategoriya o\'z subkategoriyalari bilan.',
+  },
+  {
+    method: 'GET', path: '/api/v1/_meta/enums', group: 'Meta (filter qurish uchun)',
+    title: 'Enum qiymatlar', description: 'direction, status, type, source, matchStatus va h.k. — labellar bilan.',
+  },
+
+  // TRANSACTIONS
+  {
+    method: 'GET', path: '/api/v1/transactions', group: 'Tranzaksiyalar',
     title: 'Tranzaksiyalar ro\'yxati',
-    description: 'Bank tranzaksiyalarini filter va pagination bilan olish.',
+    description: 'Filter va pagination bilan.',
     scope: 'transactions:read',
     params: [
       { name: 'page', in: 'query', description: 'Sahifa (default 1)', example: '1' },
       { name: 'perPage', in: 'query', description: 'Sahifada (max 200)', example: '50' },
-      { name: 'accountId', in: 'query', description: 'Hisob ID', example: '' },
+      { name: 'accountId', in: 'query', description: 'Hisob ID (yoki _meta/accounts dan)', example: '' },
+      { name: 'bankId', in: 'query', description: 'Bank ID', example: '' },
       { name: 'direction', in: 'query', description: 'IN yoki OUT', example: 'IN' },
-      { name: 'dateFrom', in: 'query', description: 'Sanadan (YYYY-MM-DD)', example: '2026-01-01' },
-      { name: 'dateTo', in: 'query', description: 'Sanagacha (YYYY-MM-DD)', example: '2026-12-31' },
-      { name: 'q', in: 'query', description: 'Erkin qidiruv', example: '' },
+      { name: 'dateFrom', in: 'query', description: 'YYYY-MM-DD', example: '2026-01-01' },
+      { name: 'dateTo', in: 'query', description: 'YYYY-MM-DD', example: '2026-12-31' },
+      { name: 'q', in: 'query', description: 'Erkin qidiruv (nom, STIR, shartnoma, izoh)', example: '' },
     ],
   },
   {
-    method: 'GET',
-    path: '/api/v1/transactions/{id}',
-    title: 'Tranzaksiya tafsiloti',
-    description: 'ID bo\'yicha bitta tranzaksiya.',
+    method: 'GET', path: '/api/v1/transactions/{id}', group: 'Tranzaksiyalar',
+    title: 'Tranzaksiya tafsiloti', description: 'ID bo\'yicha bitta tranzaksiya.',
     scope: 'transactions:read',
-    params: [
-      { name: 'id', in: 'path', required: true, description: 'Tranzaksiya ID', example: '' },
-    ],
+    params: [{ name: 'id', in: 'path', required: true, description: 'Tranzaksiya ID' }],
   },
+
+  // OPLATA-KV
   {
-    method: 'GET',
-    path: '/api/v1/oplata-kv',
-    title: 'ОплатыКв ro\'yxati',
-    description: 'Kvartira to\'lovlari (Дог, sana, summa, mijoz, obyekt).',
+    method: 'GET', path: '/api/v1/oplata-kv', group: 'ОплатыКв',
+    title: 'Kvartira to\'lovlari ro\'yxati',
+    description: 'Дог, sana, summa, mijoz, obyekt.',
     scope: 'oplatakv:read',
     params: [
       { name: 'page', in: 'query', description: 'Sahifa', example: '1' },
       { name: 'perPage', in: 'query', description: 'Sahifada', example: '50' },
       { name: 'contractNo', in: 'query', description: 'Shartnoma raqami', example: '' },
-      { name: 'dateFrom', in: 'query', description: 'Sanadan', example: '' },
-      { name: 'dateTo', in: 'query', description: 'Sanagacha', example: '' },
-      { name: 'q', in: 'query', description: 'Qidirish (mijoz, obyekt, izoh)', example: '' },
+      { name: 'dateFrom', in: 'query', description: 'YYYY-MM-DD', example: '' },
+      { name: 'dateTo', in: 'query', description: 'YYYY-MM-DD', example: '' },
+      { name: 'q', in: 'query', description: 'Mijoz, obyekt yoki izoh', example: '' },
     ],
   },
   {
-    method: 'GET',
-    path: '/api/v1/oplata-kv/{id}',
-    title: 'ОплатыКв qator tafsiloti',
-    description: 'ID bo\'yicha bitta to\'lov qatori.',
+    method: 'GET', path: '/api/v1/oplata-kv/{id}', group: 'ОплатыКв',
+    title: 'Tafsilot', description: 'ID bo\'yicha bitta qator.',
     scope: 'oplatakv:read',
-    params: [
-      { name: 'id', in: 'path', required: true, description: 'OplataKv ID', example: '' },
-    ],
+    params: [{ name: 'id', in: 'path', required: true, description: 'OplataKv ID' }],
   },
+
+  // ACCOUNTS
   {
-    method: 'GET',
-    path: '/api/v1/accounts',
-    title: 'Hisob raqamlar',
-    description: 'Bank hisoblari ro\'yxati. Bank credentials va parollar BERILMAYDI.',
+    method: 'GET', path: '/api/v1/accounts', group: 'Hisob raqamlar',
+    title: 'Hisoblar ro\'yxati',
+    description: 'Bank credentials va parollar BERILMAYDI.',
     scope: 'accounts:read',
-    params: [
-      { name: 'q', in: 'query', description: 'Qidirish', example: '' },
-    ],
+    params: [{ name: 'q', in: 'query', description: 'Hisob raqam yoki egasi', example: '' }],
   },
   {
-    method: 'GET',
-    path: '/api/v1/accounts/{id}',
-    title: 'Hisob tafsiloti',
-    description: 'ID bo\'yicha bitta hisob.',
+    method: 'GET', path: '/api/v1/accounts/{idOrAccountNo}', group: 'Hisob raqamlar',
+    title: 'Hisob tafsiloti', description: 'ID (cuid) yoki hisob raqami (20 raqam) qabul qiladi.',
     scope: 'accounts:read',
-    params: [{ name: 'id', in: 'path', required: true, description: 'Account ID', example: '' }],
+    params: [{ name: 'idOrAccountNo', in: 'path', required: true, description: 'Account ID yoki hisob raqami', example: '20208000305742909002' }],
   },
+
+  // COUNTERPARTIES
   {
-    method: 'GET',
-    path: '/api/v1/counterparties',
-    title: 'Kontragentlar',
-    description: 'Kontragentlar ro\'yxati (INN, nomi, reyting).',
+    method: 'GET', path: '/api/v1/counterparties', group: 'Kontragentlar',
+    title: 'Kontragentlar ro\'yxati',
+    description: 'INN, nomi, reyting, manba.',
     scope: 'counterparties:read',
     params: [
       { name: 'page', in: 'query', description: 'Sahifa', example: '1' },
@@ -110,67 +126,39 @@ const ENDPOINTS: Endpoint[] = [
     ],
   },
   {
-    method: 'GET',
-    path: '/api/v1/counterparties/{inn}',
-    title: 'Kontragent tafsiloti (INN)',
-    description: 'INN bo\'yicha kontragent.',
+    method: 'GET', path: '/api/v1/counterparties/{inn}', group: 'Kontragentlar',
+    title: 'Tafsilot (INN)', description: 'INN bo\'yicha kontragent.',
     scope: 'counterparties:read',
     params: [{ name: 'inn', in: 'path', required: true, description: 'INN (9/14 raqam)', example: '305212378' }],
   },
 ];
 
-// ────────────────────────────────────────────────────────
+// Group endpoints
+function groupEndpoints(endpoints: Endpoint[]) {
+  const groups = new Map<string, Endpoint[]>();
+  endpoints.forEach((ep) => {
+    if (!groups.has(ep.group)) groups.set(ep.group, []);
+    groups.get(ep.group)!.push(ep);
+  });
+  return Array.from(groups.entries()).map(([name, eps]) => ({ name, endpoints: eps }));
+}
+
+// ════════════════════════════════════════════════════════
 // MAIN PAGE
-// ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
 export default function DeveloperApiPage() {
   const { locale } = useParams<{ locale: string }>();
-  const [keyId, setKeyId] = useState('');
-  const [secret, setSecret] = useState('');
-  const [showSecret, setShowSecret] = useState(false);
   const [authedKey, setAuthedKey] = useState<{ keyId: string; secret: string; whoami: any } | null>(null);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
 
-  // Reload from sessionStorage (login persistsa, lekin tab yopilsa o'chadi)
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem('xt_dev_api_auth');
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed?.keyId && parsed?.secret) {
-          setAuthedKey(parsed);
-        }
+        if (parsed?.keyId && parsed?.secret) setAuthedKey(parsed);
       }
     } catch { /* ignore */ }
   }, []);
-
-  const doLogin = async () => {
-    setLoginError(null);
-    if (!keyId.trim() || !secret.trim()) {
-      setLoginError('Key va Secret majburiy');
-      return;
-    }
-    setLoginLoading(true);
-    try {
-      const resp = await fetch(`${window.location.origin}/api/v1/_whoami`, {
-        headers: { 'X-API-Key': keyId.trim(), 'X-API-Secret': secret.trim() },
-      });
-      const data = await resp.json();
-      if (!resp.ok) {
-        setLoginError(data?.message || data?.error?.message || `Xato (HTTP ${resp.status})`);
-        return;
-      }
-      const auth = { keyId: keyId.trim(), secret: secret.trim(), whoami: data };
-      setAuthedKey(auth);
-      sessionStorage.setItem('xt_dev_api_auth', JSON.stringify(auth));
-      setKeyId('');
-      setSecret('');
-    } catch (e: any) {
-      setLoginError(e?.message || 'Tarmoq xatosi');
-    } finally {
-      setLoginLoading(false);
-    }
-  };
 
   const doLogout = () => {
     setAuthedKey(null);
@@ -178,352 +166,369 @@ export default function DeveloperApiPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 relative overflow-x-hidden">
-      {/* Background gradient blobs */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 -left-20 w-96 h-96 bg-amber-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-20 w-96 h-96 bg-orange-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-rose-500/10 rounded-full blur-3xl" />
-        {/* Floating endpoint pills */}
-        <FloatingPills />
-      </div>
-
-      {/* Header */}
-      <header className="relative z-10 border-b border-slate-800/60 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+    <div className="min-h-screen bg-white text-slate-900 antialiased">
+      {/* Top nav */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-md">
+        <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 grid place-items-center shadow-lg shadow-amber-500/30">
-              <Code2 className="h-5 w-5 text-white" />
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-sm">
+              <Code2 className="h-4 w-4 text-white" />
             </div>
-            <div>
-              <div className="font-black tracking-tight text-white text-[15px] leading-none">Xon Tranzaksiyalar</div>
-              <div className="text-[10px] uppercase tracking-widest text-amber-400 font-bold mt-0.5">Developer API · v1</div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold tracking-tight text-[14.5px]">Xon Tranzaksiyalar</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-widest font-bold bg-slate-100 text-slate-600">API · v1</span>
             </div>
           </div>
-          {authedKey && (
-            <button
-              onClick={doLogout}
-              className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-[12px] font-semibold text-slate-300 transition-colors"
+          <div className="flex items-center gap-2">
+            {authedKey && (
+              <>
+                <div className="hidden sm:flex items-center gap-1.5 text-[11.5px] text-slate-500 font-mono px-2.5 py-1 rounded-md bg-slate-100">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  {authedKey.keyId.slice(0, 18)}...
+                </div>
+                <button
+                  onClick={doLogout}
+                  className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md hover:bg-slate-100 text-[12px] font-semibold text-slate-600 transition-colors"
+                >
+                  <LogOut className="h-3.5 w-3.5" /> Chiqish
+                </button>
+              </>
+            )}
+            <a
+              href={`/${locale}/dashboard`}
+              className="hidden sm:inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2.5 h-8 rounded-md hover:bg-slate-100"
             >
-              <LogOut className="h-3.5 w-3.5" /> Chiqish
-            </button>
-          )}
+              Panelga <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         </div>
       </header>
 
-      <main className="relative z-10 max-w-7xl mx-auto px-6 py-12">
-        {!authedKey ? (
-          <LandingView
-            keyId={keyId}
-            setKeyId={setKeyId}
-            secret={secret}
-            setSecret={setSecret}
-            showSecret={showSecret}
-            setShowSecret={setShowSecret}
-            onLogin={doLogin}
-            loginLoading={loginLoading}
-            loginError={loginError}
-          />
-        ) : (
-          <AuthenticatedView authed={authedKey} />
-        )}
-      </main>
+      {authedKey ? (
+        <AuthenticatedView authed={authedKey} />
+      ) : (
+        <LandingView onLogin={(auth) => setAuthedKey(auth)} />
+      )}
 
-      <footer className="relative z-10 border-t border-slate-800/60 mt-20">
-        <div className="max-w-7xl mx-auto px-6 py-6 text-center text-[11px] text-slate-500">
-          <span>© Xon Saroy · Tranzaksiyalar tizimi · Developer API</span>
-          <span className="mx-2 text-slate-700">·</span>
-          <a href={`/${locale}/dashboard`} className="text-slate-400 hover:text-amber-400 inline-flex items-center gap-1">
-            Asosiy panelga qaytish <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
+      <footer className="border-t border-slate-200 mt-20 py-6 text-center text-[11.5px] text-slate-500">
+        © Xon Saroy · Tranzaksiyalar tizimi · Developer API v1
       </footer>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────
-// FLOATING PILLS (decorative background)
-// ────────────────────────────────────────────────────────
-function FloatingPills() {
-  const pills = [
-    { method: 'GET', path: '/api/v1/transactions', top: '15%', left: '8%' },
-    { method: 'GET', path: '/api/v1/oplata-kv', top: '32%', right: '10%' },
-    { method: 'GET', path: '/api/v1/accounts', top: '55%', left: '5%' },
-    { method: 'GET', path: '/api/v1/counterparties', top: '70%', right: '6%' },
-    { method: 'GET', path: '/api/v1/_whoami', top: '85%', left: '20%' },
-  ];
+// ════════════════════════════════════════════════════════
+// LANDING VIEW (login)
+// ════════════════════════════════════════════════════════
+function LandingView({ onLogin }: { onLogin: (auth: { keyId: string; secret: string; whoami: any }) => void }) {
+  const [keyId, setKeyId] = useState('');
+  const [secret, setSecret] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const doLogin = async () => {
+    setError(null);
+    if (!keyId.trim() || !secret.trim()) { setError('Key va Secret majburiy'); return; }
+    setLoading(true);
+    try {
+      const resp = await fetch(`${window.location.origin}/api/v1/_whoami`, {
+        headers: { 'X-API-Key': keyId.trim(), 'X-API-Secret': secret.trim() },
+      });
+      const data = await resp.json();
+      if (!resp.ok) { setError(data?.message || `Xato (HTTP ${resp.status})`); return; }
+      const auth = { keyId: keyId.trim(), secret: secret.trim(), whoami: data };
+      sessionStorage.setItem('xt_dev_api_auth', JSON.stringify(auth));
+      onLogin(auth);
+    } catch (e: any) {
+      setError(e?.message || 'Tarmoq xatosi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
-      {pills.map((p, i) => (
-        <div
-          key={i}
-          className="absolute hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800/40 ring-1 ring-slate-700/60 backdrop-blur-sm text-[10px] font-mono opacity-50"
-          style={{ top: p.top, left: p.left, right: p.right }}
-        >
-          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">{p.method}</span>
-          <span className="text-slate-400">{p.path}</span>
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-slate-200">
+        {/* subtle grid bg */}
+        <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
+        <div className="absolute -top-20 -right-20 w-[500px] h-[500px] bg-gradient-to-br from-indigo-200/40 to-violet-200/40 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="relative max-w-[1280px] mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center">
+          {/* Left */}
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 text-[11px] font-bold uppercase tracking-widest mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Production ready · v1
+            </div>
+            <h1 className="text-4xl lg:text-5xl xl:text-[56px] font-black tracking-tight text-slate-900 leading-[1.05]">
+              Xon Tranzaksiyalar uchun{' '}
+              <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
+                Developer API
+              </span>
+            </h1>
+            <p className="text-[15px] lg:text-[16px] text-slate-600 mt-5 leading-relaxed max-w-xl">
+              Tashqi tizim integratsiyasi uchun REST API. Token bilan himoyalangan,
+              scope orqali nazorat ostida, JSON javoblar — istalgan HTTP klient bilan ishlaydi.
+            </p>
+
+            {/* Features */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-6 max-w-xl">
+              <Pill icon={ShieldCheck} text="SHA-256 hash" />
+              <Pill icon={Lock} text="Scope nazorati" />
+              <Pill icon={Activity} text="Audit log" />
+              <Pill icon={Zap} text="<100ms" />
+            </div>
+
+            {/* curl example — terminal */}
+            <div className="mt-8 rounded-xl ring-1 ring-slate-200 overflow-hidden bg-slate-950 max-w-xl shadow-xl shadow-slate-900/10">
+              <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center gap-2">
+                <div className="flex gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+                </div>
+                <Terminal className="h-3 w-3 ml-2 text-slate-500" />
+                <span className="text-[10px] text-slate-500 font-mono">~ curl misol</span>
+              </div>
+              <pre className="px-4 py-3.5 text-[12px] font-mono text-slate-300 leading-relaxed overflow-x-auto">
+                <span className="text-indigo-400">$</span> <span className="text-emerald-400">curl</span> <span className="text-slate-400">{`${typeof window !== 'undefined' ? window.location.origin : 'https://transactions.xonapps.uz'}/api/v1/transactions`}</span> \{'\n'}
+                {'    '}<span className="text-slate-500">-H</span> <span className="text-amber-300">"X-API-Key: xk_live_..."</span> \{'\n'}
+                {'    '}<span className="text-slate-500">-H</span> <span className="text-amber-300">"X-API-Secret: xs_live_..."</span>
+              </pre>
+            </div>
+          </div>
+
+          {/* Right — Login card */}
+          <div className="lg:max-w-md w-full mx-auto lg:ml-auto">
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-2xl shadow-indigo-500/5 p-6 lg:p-7">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-md">
+                  <KeyRound className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-[15px] font-black text-slate-900 leading-tight">API kalitini kiriting</h2>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5 leading-relaxed">
+                    Administrator beradigan key + secret
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1 block">X-API-Key</label>
+                  <input
+                    type="text"
+                    value={keyId}
+                    onChange={(e) => setKeyId(e.target.value)}
+                    placeholder="xk_live_..."
+                    className="w-full h-11 px-3 rounded-lg bg-slate-50 ring-1 ring-slate-200 focus:ring-indigo-500 focus:bg-white outline-none text-[13px] font-mono text-slate-800 placeholder:text-slate-400 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest font-bold text-slate-500 mb-1 flex items-center justify-between">
+                    <span>X-API-Secret</span>
+                    <button type="button" onClick={() => setShowSecret(!showSecret)} className="text-slate-400 hover:text-slate-700 normal-case font-normal">
+                      {showSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                    </button>
+                  </label>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    value={secret}
+                    onChange={(e) => setSecret(e.target.value)}
+                    placeholder="xs_live_..."
+                    onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
+                    className="w-full h-11 px-3 rounded-lg bg-slate-50 ring-1 ring-slate-200 focus:ring-indigo-500 focus:bg-white outline-none text-[13px] font-mono text-slate-800 placeholder:text-slate-400 transition-colors"
+                  />
+                </div>
+
+                {error && (
+                  <div className="rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2 flex items-start gap-2">
+                    <AlertCircle className="h-3.5 w-3.5 text-rose-500 mt-0.5 shrink-0" />
+                    <div className="text-[11.5px] text-rose-700 leading-relaxed">{error}</div>
+                  </div>
+                )}
+
+                <button
+                  onClick={doLogin}
+                  disabled={loading || !keyId.trim() || !secret.trim()}
+                  className="w-full h-11 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-all"
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Kirish <ArrowRight className="h-4 w-4" /></>}
+                </button>
+              </div>
+
+              <div className="text-[11px] text-slate-500 text-center mt-5 leading-relaxed">
+                Tokeningiz yo'qmi? Admin bilan bog'laning yoki{' '}
+                <a href="https://t.me/Tm_SaMaR" target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-medium">@Tm_SaMaR</a> ga yozing.
+              </div>
+            </div>
+          </div>
         </div>
-      ))}
+      </section>
+
+      {/* Endpoints showcase */}
+      <section className="max-w-[1280px] mx-auto px-6 py-16">
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-slate-500 font-bold mb-2">
+            <BookOpen className="h-3.5 w-3.5" /> Endpoint'lar
+          </div>
+          <h2 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
+            Hammasi {ENDPOINTS.length} ta endpoint
+          </h2>
+          <p className="text-slate-500 mt-2 text-[14px]">Kalit bilan kirgandan keyin har birini test qilish mumkin.</p>
+        </div>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {ENDPOINTS.slice(0, 9).map((ep) => (
+            <div key={ep.path} className="rounded-xl ring-1 ring-slate-200 bg-white p-4 hover:ring-slate-300 transition-all">
+              <div className="flex items-center gap-2 mb-2">
+                <MethodBadge method={ep.method} />
+                <code className="text-[11px] font-mono text-slate-700 truncate">{ep.path}</code>
+              </div>
+              <div className="font-bold text-slate-800 text-[13.5px]">{ep.title}</div>
+              <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">{ep.description}</p>
+              {ep.scope && (
+                <div className="mt-2 inline-flex items-center gap-1 text-[10.5px]">
+                  <Lock className="h-2.5 w-2.5 text-slate-400" />
+                  <code className="font-mono text-indigo-700 font-bold">{ep.scope}</code>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
     </>
   );
 }
 
-// ────────────────────────────────────────────────────────
-// LANDING VIEW (not authenticated)
-// ────────────────────────────────────────────────────────
-function LandingView({
-  keyId, setKeyId, secret, setSecret, showSecret, setShowSecret,
-  onLogin, loginLoading, loginError,
-}: {
-  keyId: string; setKeyId: (v: string) => void;
-  secret: string; setSecret: (v: string) => void;
-  showSecret: boolean; setShowSecret: (v: boolean) => void;
-  onLogin: () => void;
-  loginLoading: boolean;
-  loginError: string | null;
-}) {
+function Pill({ icon: Icon, text }: { icon: any; text: string }) {
   return (
-    <div className="grid lg:grid-cols-[1.3fr_1fr] gap-10 lg:gap-16 items-center">
-      {/* Left — hero */}
-      <div>
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 ring-1 ring-amber-500/30 text-amber-300 text-[11px] font-bold uppercase tracking-widest mb-6">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          v1 · Production Ready
-        </div>
-        <h1 className="text-4xl lg:text-6xl font-black tracking-tight text-white leading-[1.05]">
-          Xon Tranzaksiyalar uchun<br />
-          <span className="bg-gradient-to-r from-amber-400 via-orange-400 to-rose-400 bg-clip-text text-transparent">
-            Developer API
-          </span>
-        </h1>
-        <p className="text-[15px] lg:text-[16px] text-slate-400 mt-5 leading-relaxed max-w-xl">
-          Tashqi tizim integratsiyasi uchun zamonaviy REST API. Token bilan himoyalangan,
-          scope orqali nazorat ostida, JSON javoblar — Postman, Python, JS yoki istalgan
-          HTTP klient bilan.
-        </p>
-
-        {/* Curl example */}
-        <div className="mt-8 rounded-2xl bg-slate-900/80 ring-1 ring-slate-800 overflow-hidden shadow-2xl shadow-amber-500/5">
-          <div className="px-4 py-2.5 bg-slate-800/60 border-b border-slate-800 flex items-center gap-2">
-            <div className="flex gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-rose-500/80" />
-              <span className="w-3 h-3 rounded-full bg-amber-500/80" />
-              <span className="w-3 h-3 rounded-full bg-emerald-500/80" />
-            </div>
-            <span className="ml-3 text-[11px] text-slate-500 font-mono">~ / xon-tranzaksiyalar-api · v1</span>
-          </div>
-          <pre className="px-4 py-4 text-[12px] font-mono text-slate-300 leading-relaxed overflow-x-auto">
-            <span className="text-amber-400">$</span> <span className="text-emerald-400">curl</span> https://transactions.xonapps.uz/api/v1/transactions \{'\n'}
-            {'  '}-H <span className="text-orange-300">"X-API-Key: xk_live_xxxxxxx"</span> \{'\n'}
-            {'  '}-H <span className="text-orange-300">"X-API-Secret: xs_live_xxxxxxx"</span>{'\n'}
-            <span className="text-slate-500">{'{ "ok": true, "total": 1234, "items": [...] }'}</span>
-          </pre>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-3 mt-8">
-          <StatPill icon={Activity} label="UPTIME" value="99.9%" />
-          <StatPill icon={Server} label="ENDPOINT'LAR" value={`${ENDPOINTS.length}+`} />
-          <StatPill icon={Zap} label="LATENCY" value="<100ms" />
-          <StatPill icon={InfinityIcon} label="TOKENLAR" value="∞" />
-        </div>
-      </div>
-
-      {/* Right — login card */}
-      <div className="lg:max-w-[420px] w-full mx-auto">
-        <div className="rounded-3xl bg-slate-900/80 ring-1 ring-slate-800 backdrop-blur-sm shadow-2xl shadow-amber-500/10 p-6 lg:p-7">
-          <div className="text-center mb-6">
-            <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 items-center justify-center shadow-lg shadow-amber-500/40 mb-4">
-              <Lock className="h-7 w-7 text-white" />
-            </div>
-            <h2 className="text-xl font-black text-white tracking-tight">API kalitini kiriting</h2>
-            <p className="text-[12px] text-slate-400 mt-1.5 leading-relaxed">
-              Tashqi tizim integratsiyasi uchun administrator beradigan API tokeningizni kiriting.
-            </p>
-          </div>
-
-          <div className="space-y-3">
-            <div className="relative">
-              <KeyRound className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400/60" />
-              <input
-                type="text"
-                value={keyId}
-                onChange={(e) => setKeyId(e.target.value)}
-                placeholder="xk_live_..."
-                className="w-full h-12 pl-10 pr-3 rounded-xl bg-slate-800/60 ring-1 ring-slate-700 focus:ring-amber-500 outline-none text-[13px] font-mono text-slate-200 placeholder:text-slate-600"
-              />
-            </div>
-            <div className="relative">
-              <Lock className="h-4 w-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-amber-400/60" />
-              <input
-                type={showSecret ? 'text' : 'password'}
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                placeholder="xs_live_..."
-                onKeyDown={(e) => { if (e.key === 'Enter') onLogin(); }}
-                className="w-full h-12 pl-10 pr-10 rounded-xl bg-slate-800/60 ring-1 ring-slate-700 focus:ring-amber-500 outline-none text-[13px] font-mono text-slate-200 placeholder:text-slate-600"
-              />
-              <button
-                type="button"
-                onClick={() => setShowSecret(!showSecret)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-amber-400"
-              >
-                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-
-            {loginError && (
-              <div className="rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30 px-3 py-2 flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 text-rose-400 mt-0.5 shrink-0" />
-                <div className="text-[12px] text-rose-300 leading-relaxed">{loginError}</div>
-              </div>
-            )}
-
-            <button
-              onClick={onLogin}
-              disabled={loginLoading || !keyId.trim() || !secret.trim()}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-white font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50"
-            >
-              {loginLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Kirish <ChevronDown className="h-4 w-4 -rotate-90" /></>}
-            </button>
-          </div>
-
-          <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-            <Feature icon={ShieldCheck} text="SHA-256 hash" />
-            <Feature icon={CheckCircle2} text="Scope nazorati" />
-            <Feature icon={Sparkles} text="Audit log" />
-          </div>
-
-          <div className="text-[11px] text-slate-500 text-center mt-5 leading-relaxed">
-            Tokeningiz yo'qmi? Administrator bilan bog'laning yoki{' '}
-            <a href="https://t.me/Tm_SaMaR" target="_blank" rel="noreferrer" className="text-amber-400 hover:underline">@Tm_SaMaR</a> ga yozing.
-          </div>
-        </div>
-      </div>
+    <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-slate-100 ring-1 ring-slate-200 text-[11px] font-medium text-slate-700">
+      <Icon className="h-3 w-3 text-indigo-600" />
+      {text}
     </div>
   );
 }
 
-function StatPill({ icon: Icon, label, value }: { icon: any; label: string; value: string }) {
+function MethodBadge({ method }: { method: 'GET' | 'POST' }) {
   return (
-    <div className="rounded-xl bg-slate-900/60 ring-1 ring-slate-800 px-3 py-2.5">
-      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-widest text-amber-400/80 font-bold">
-        <Icon className="h-3 w-3" /> {label}
-      </div>
-      <div className="text-xl lg:text-2xl font-black text-white mt-1 tabular-nums">{value}</div>
-    </div>
+    <span className={cn(
+      'px-1.5 py-0.5 rounded font-mono text-[10px] font-bold',
+      method === 'GET' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700',
+    )}>{method}</span>
   );
 }
 
-function Feature({ icon: Icon, text }: { icon: any; text: string }) {
-  return (
-    <div className="inline-flex items-center gap-1 text-[10px] text-slate-400 justify-center">
-      <Icon className="h-3 w-3 text-emerald-400" />
-      <span>{text}</span>
-    </div>
-  );
-}
-
-// ────────────────────────────────────────────────────────
-// AUTHENTICATED VIEW
-// ────────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// AUTHENTICATED VIEW — sidebar + main panel
+// ════════════════════════════════════════════════════════
 function AuthenticatedView({ authed }: { authed: { keyId: string; secret: string; whoami: any } }) {
-  const [expanded, setExpanded] = useState<string | null>(ENDPOINTS[0].path);
+  const [activeEp, setActiveEp] = useState<string>(ENDPOINTS[0].path);
+  const [search, setSearch] = useState('');
   const whoami = authed.whoami?.key;
   const scopes: string[] = whoami?.scopes || [];
-
   const accessible = (ep: Endpoint) => !ep.scope || scopes.includes(ep.scope);
 
+  const filtered = useMemo(() => {
+    if (!search.trim()) return ENDPOINTS;
+    const t = search.toLowerCase();
+    return ENDPOINTS.filter((ep) =>
+      ep.title.toLowerCase().includes(t) ||
+      ep.path.toLowerCase().includes(t) ||
+      ep.description.toLowerCase().includes(t),
+    );
+  }, [search]);
+
+  const groups = groupEndpoints(filtered);
+  const current = ENDPOINTS.find((e) => e.path === activeEp);
+
   return (
-    <div className="grid lg:grid-cols-[1fr_2fr] gap-8">
-      {/* Sidebar — whoami + endpoints */}
-      <aside className="space-y-5">
-        {/* Whoami card */}
-        <div className="rounded-2xl bg-slate-900/80 ring-1 ring-slate-800 p-5">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-emerald-400 font-bold mb-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            Tizimga ulangan
+    <div className="max-w-[1280px] mx-auto px-6 py-8 grid lg:grid-cols-[280px_1fr] gap-8">
+      {/* SIDEBAR */}
+      <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-120px)] lg:overflow-y-auto -mx-2 px-2">
+        {/* Whoami */}
+        <div className="rounded-xl ring-1 ring-slate-200 bg-gradient-to-br from-indigo-50 to-violet-50 p-3.5 mb-4">
+          <div className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-widest text-indigo-700 font-bold mb-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Ulangan
           </div>
-          <div className="text-white font-black text-lg tracking-tight truncate">{whoami?.name || 'API kalit'}</div>
-          {whoami?.description && (
-            <div className="text-[11.5px] text-slate-400 mt-1 leading-relaxed">{whoami.description}</div>
-          )}
-          <div className="mt-3 px-2.5 py-1.5 rounded-lg bg-slate-800/60 font-mono text-[10.5px] text-amber-300 break-all">
-            {authed.keyId}
-          </div>
+          <div className="font-black text-slate-900 text-[14px] truncate">{whoami?.name || 'API kalit'}</div>
           {whoami?.expiresAt && (
-            <div className="text-[10.5px] text-slate-500 mt-2">
-              Muddati: <b className="text-slate-300 tabular-nums">{new Date(whoami.expiresAt).toLocaleString('ru-RU')}</b>
+            <div className="text-[10.5px] text-slate-500 mt-0.5">
+              Muddati: {new Date(whoami.expiresAt).toLocaleDateString('ru-RU')}
             </div>
           )}
-          <div className="mt-3 flex flex-wrap gap-1">
+          <div className="mt-2 flex flex-wrap gap-1">
             {scopes.map((s: string) => (
-              <span key={s} className="px-1.5 py-0.5 rounded font-mono text-[10px] font-bold bg-indigo-500/15 ring-1 ring-indigo-500/30 text-indigo-300">
+              <span key={s} className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-white ring-1 ring-indigo-200 text-indigo-700">
                 {s}
               </span>
             ))}
           </div>
         </div>
 
-        {/* Endpoint list */}
-        <div className="rounded-2xl bg-slate-900/80 ring-1 ring-slate-800 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-800 text-[10px] uppercase tracking-widest text-slate-400 font-bold">
-            Endpoint'lar
-          </div>
-          <div className="divide-y divide-slate-800/60">
-            {ENDPOINTS.map((ep) => {
-              const allowed = accessible(ep);
-              const active = expanded === ep.path;
-              return (
-                <button
-                  key={ep.path}
-                  onClick={() => setExpanded(ep.path)}
-                  disabled={!allowed}
-                  className={cn(
-                    'w-full text-left px-4 py-3 flex items-center gap-2 transition-colors',
-                    active ? 'bg-amber-500/10' : 'hover:bg-slate-800/40',
-                    !allowed && 'opacity-40 cursor-not-allowed',
-                  )}
-                >
-                  <span className={cn(
-                    'px-1.5 py-0.5 rounded font-mono text-[9px] font-bold',
-                    ep.method === 'GET' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400',
-                  )}>{ep.method}</span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[12px] font-bold text-slate-200 truncate">{ep.title}</div>
-                    <code className="text-[10px] font-mono text-slate-500 truncate block">{ep.path}</code>
-                  </div>
-                  {!allowed && <Lock className="h-3 w-3 text-slate-600" />}
-                </button>
-              );
-            })}
-          </div>
+        {/* Search */}
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Endpoint qidirish..."
+            className="w-full h-9 pl-8 pr-3 rounded-lg bg-slate-50 ring-1 ring-slate-200 focus:ring-slate-400 focus:bg-white outline-none text-[12.5px]"
+          />
         </div>
+
+        {/* Endpoint groups */}
+        <nav className="space-y-3">
+          {groups.map((g) => (
+            <div key={g.name}>
+              <div className="px-2 mb-1 text-[10px] uppercase tracking-widest font-bold text-slate-400">
+                {g.name}
+              </div>
+              <div className="space-y-0.5">
+                {g.endpoints.map((ep) => {
+                  const active = ep.path === activeEp;
+                  const allowed = accessible(ep);
+                  return (
+                    <button
+                      key={ep.path}
+                      onClick={() => setActiveEp(ep.path)}
+                      disabled={!allowed}
+                      className={cn(
+                        'w-full text-left px-2 py-1.5 rounded-md flex items-center gap-2 transition-colors',
+                        active ? 'bg-slate-100 ring-1 ring-slate-200' : 'hover:bg-slate-50',
+                        !allowed && 'opacity-40 cursor-not-allowed',
+                      )}
+                    >
+                      <span className={cn(
+                        'px-1 py-px rounded font-mono text-[8.5px] font-bold shrink-0 w-9 text-center',
+                        ep.method === 'GET' ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700',
+                      )}>{ep.method}</span>
+                      <span className="text-[12px] text-slate-700 truncate flex-1">{ep.title}</span>
+                      {!allowed && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </nav>
       </aside>
 
-      {/* Right — endpoint detail + try-it */}
-      <section>
-        {expanded ? (
-          <TryItPanel
-            endpoint={ENDPOINTS.find((e) => e.path === expanded)!}
-            authed={authed}
-            allowed={accessible(ENDPOINTS.find((e) => e.path === expanded)!)}
-          />
-        ) : (
-          <div className="rounded-2xl bg-slate-900/40 ring-1 ring-slate-800 p-12 text-center text-slate-500">
-            Chap tomondan endpoint tanlang
-          </div>
-        )}
-      </section>
+      {/* MAIN PANEL */}
+      <main>
+        {current && <EndpointDetail endpoint={current} authed={authed} allowed={accessible(current)} />}
+      </main>
     </div>
   );
 }
 
-// ────────────────────────────────────────────────────────
-// TRY-IT PANEL
-// ────────────────────────────────────────────────────────
-function TryItPanel({
+// ════════════════════════════════════════════════════════
+// ENDPOINT DETAIL — info + try-it + response + curl
+// ════════════════════════════════════════════════════════
+function EndpointDetail({
   endpoint, authed, allowed,
 }: { endpoint: Endpoint; authed: { keyId: string; secret: string }; allowed: boolean }) {
   const [params, setParams] = useState<Record<string, string>>({});
@@ -532,28 +537,24 @@ function TryItPanel({
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // Reset params on endpoint change
     const initial: Record<string, string> = {};
     (endpoint.params || []).forEach((p) => { initial[p.name] = p.example || ''; });
     setParams(initial);
     setResponse(null);
   }, [endpoint.path]);
 
-  const buildUrl = useMemo(() => {
+  const builtPath = useMemo(() => {
     let path = endpoint.path;
-    // Path params
     (endpoint.params || []).filter((p) => p.in === 'path').forEach((p) => {
       const v = params[p.name] || `{${p.name}}`;
       path = path.replace(`{${p.name}}`, encodeURIComponent(v));
     });
-    // Query params
     const qs = new URLSearchParams();
     (endpoint.params || []).filter((p) => p.in === 'query').forEach((p) => {
       const v = (params[p.name] || '').trim();
       if (v) qs.set(p.name, v);
     });
-    const qsStr = qs.toString();
-    return path + (qsStr ? '?' + qsStr : '');
+    return path + (qs.toString() ? '?' + qs.toString() : '');
   }, [endpoint, params]);
 
   const execute = async () => {
@@ -561,17 +562,13 @@ function TryItPanel({
     setResponse(null);
     const start = Date.now();
     try {
-      const resp = await fetch(`${window.location.origin}${buildUrl}`, {
+      const resp = await fetch(`${window.location.origin}${builtPath}`, {
         method: endpoint.method,
-        headers: {
-          'X-API-Key': authed.keyId,
-          'X-API-Secret': authed.secret,
-        },
+        headers: { 'X-API-Key': authed.keyId, 'X-API-Secret': authed.secret },
       });
       const ms = Date.now() - start;
       const text = await resp.text();
-      let data: any;
-      try { data = JSON.parse(text); } catch { data = text; }
+      let data: any; try { data = JSON.parse(text); } catch { data = text; }
       setResponse({ status: resp.status, data, ms, ok: resp.ok });
     } catch (e: any) {
       setResponse({ status: 0, data: { error: e?.message || 'Network error' }, ms: Date.now() - start, ok: false });
@@ -580,127 +577,132 @@ function TryItPanel({
     }
   };
 
-  const curlExample = useMemo(() => {
-    return `curl ${window.location.origin}${buildUrl} \\
+  const curlText = useMemo(() => {
+    return `curl ${typeof window !== 'undefined' ? window.location.origin : ''}${builtPath} \\
   -H "X-API-Key: ${authed.keyId}" \\
   -H "X-API-Secret: ${authed.secret}"`;
-  }, [buildUrl, authed]);
+  }, [builtPath, authed]);
 
   const copyCurl = async () => {
     try {
-      await navigator.clipboard.writeText(curlExample);
+      await navigator.clipboard.writeText(curlText);
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { /* ignore */ }
   };
 
   return (
-    <div className="rounded-2xl bg-slate-900/80 ring-1 ring-slate-800 overflow-hidden">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="px-6 py-5 border-b border-slate-800 bg-gradient-to-br from-slate-900 to-slate-800/40">
-        <div className="flex items-center gap-3">
-          <span className={cn(
-            'px-2 py-1 rounded font-mono text-[11px] font-bold',
-            endpoint.method === 'GET' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400',
-          )}>{endpoint.method}</span>
-          <code className="font-mono text-[13px] text-white font-bold">{endpoint.path}</code>
+      <div>
+        <div className="text-[10.5px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">{endpoint.group}</div>
+        <h1 className="text-2xl lg:text-3xl font-black tracking-tight text-slate-900">{endpoint.title}</h1>
+        <p className="text-[14px] text-slate-600 mt-2 leading-relaxed">{endpoint.description}</p>
+
+        <div className="flex items-center gap-3 mt-4">
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 ring-1 ring-slate-200">
+            <MethodBadge method={endpoint.method} />
+            <code className="text-[12.5px] font-mono font-bold text-slate-800">{endpoint.path}</code>
+          </div>
+          {endpoint.scope && (
+            <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
+              <Lock className="h-3 w-3" />
+              <code className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-mono font-bold">{endpoint.scope}</code>
+            </div>
+          )}
         </div>
-        <h2 className="text-xl font-black text-white mt-3">{endpoint.title}</h2>
-        <p className="text-[12.5px] text-slate-400 mt-1 leading-relaxed">{endpoint.description}</p>
-        {endpoint.scope && (
-          <div className="mt-3 inline-flex items-center gap-1.5 text-[10.5px] text-slate-400">
-            <Lock className="h-3 w-3" />
-            Scope kerak: <code className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-mono font-bold">{endpoint.scope}</code>
+
+        {!allowed && (
+          <div className="mt-3 rounded-lg bg-rose-50 ring-1 ring-rose-200 px-3 py-2.5 flex items-start gap-2">
+            <Lock className="h-4 w-4 text-rose-500 mt-0.5 shrink-0" />
+            <div className="text-[12px] text-rose-700 leading-relaxed">
+              Kalitingizda <code className="font-mono font-bold">{endpoint.scope}</code> scope yo'q. Administrator bilan bog'laning.
+            </div>
           </div>
         )}
       </div>
 
-      {!allowed && (
-        <div className="px-6 py-4 bg-rose-500/10 border-b border-rose-500/30">
-          <div className="flex items-start gap-2">
-            <Lock className="h-4 w-4 text-rose-400 mt-0.5 shrink-0" />
-            <div className="text-[12.5px] text-rose-300">
-              Sizning kalitingizda <code className="font-mono font-bold">{endpoint.scope}</code> scope yo'q.
-              Administrator bilan bog'laning.
-            </div>
+      {/* Try-it */}
+      <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-3.5 w-3.5 text-indigo-600" />
+            <span className="text-[12.5px] font-bold text-slate-800">Try it</span>
           </div>
+          <code className="text-[11px] text-slate-500 truncate max-w-[300px]" title={builtPath}>{builtPath}</code>
         </div>
-      )}
 
-      {/* Params */}
-      {endpoint.params && endpoint.params.length > 0 && (
-        <div className="px-6 py-4 border-b border-slate-800">
-          <div className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mb-3">Parametrlar</div>
-          <div className="space-y-2">
+        {endpoint.params && endpoint.params.length > 0 && (
+          <div className="px-5 py-4 space-y-3 border-b border-slate-200">
             {endpoint.params.map((p) => (
-              <div key={p.name} className="grid grid-cols-[120px_1fr] gap-3 items-start">
-                <div className="pt-2">
-                  <code className="font-mono text-[11.5px] font-bold text-amber-300">{p.name}</code>
-                  {p.required && <span className="text-rose-400 ml-1">*</span>}
-                  <div className="text-[9.5px] uppercase tracking-wider text-slate-500 mt-0.5">{p.in}</div>
+              <div key={p.name} className="grid sm:grid-cols-[160px_1fr] gap-2 sm:gap-4 items-start">
+                <div className="pt-1.5">
+                  <div className="flex items-center gap-1">
+                    <code className="text-[12px] font-mono font-bold text-slate-800">{p.name}</code>
+                    {p.required && <span className="text-rose-500 text-[10px] font-bold">*</span>}
+                  </div>
+                  <div className="text-[9.5px] uppercase tracking-wider text-slate-400 mt-0.5">{p.in}</div>
                 </div>
                 <div>
                   <input
                     value={params[p.name] || ''}
                     onChange={(e) => setParams((prev) => ({ ...prev, [p.name]: e.target.value }))}
-                    placeholder={p.example || p.description}
-                    className="w-full h-9 px-3 rounded-lg bg-slate-800/60 ring-1 ring-slate-700 focus:ring-amber-500 outline-none text-[12px] font-mono text-slate-200 placeholder:text-slate-600"
+                    placeholder={p.example || ''}
+                    className="w-full h-9 px-3 rounded-lg bg-slate-50 ring-1 ring-slate-200 focus:ring-slate-400 focus:bg-white outline-none text-[12.5px] font-mono text-slate-800 placeholder:text-slate-400 transition-colors"
                   />
-                  <div className="text-[10.5px] text-slate-500 mt-1">{p.description}</div>
+                  <div className="text-[11px] text-slate-500 mt-1">{p.description}</div>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Try button */}
-      <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-3">
-        <code className="font-mono text-[11px] text-slate-400 truncate flex-1" title={buildUrl}>
-          {buildUrl}
-        </code>
-        <button
-          onClick={execute}
-          disabled={loading || !allowed}
-          className="inline-flex items-center gap-1.5 px-4 h-10 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 text-white font-bold shadow-lg shadow-amber-500/20 text-[13px] transition-all"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-white" />}
-          Try it
-        </button>
+        <div className="px-5 py-3 flex items-center justify-end gap-2">
+          <button
+            onClick={execute}
+            disabled={loading || !allowed}
+            className="inline-flex items-center gap-1.5 px-4 h-9 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-[12.5px] transition-all"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-white" />}
+            Ishga tushirish
+          </button>
+        </div>
       </div>
 
       {/* Response */}
       {response && (
-        <div className="px-6 py-4 border-b border-slate-800">
-          <div className="flex items-center justify-between mb-3">
+        <div className="rounded-xl ring-1 ring-slate-200 bg-white overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className={cn(
                 'px-2 py-0.5 rounded font-mono text-[11px] font-bold',
-                response.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400',
+                response.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700',
               )}>
                 {response.status}
               </span>
               <span className="text-[11px] text-slate-500 tabular-nums">{response.ms}ms</span>
+              <span className="text-[11px] text-slate-400">Response</span>
             </div>
           </div>
-          <pre className="rounded-lg bg-slate-950 ring-1 ring-slate-800 p-4 text-[11.5px] font-mono text-slate-300 max-h-[400px] overflow-auto whitespace-pre-wrap break-all">
-            {typeof response.data === 'string'
-              ? response.data
-              : JSON.stringify(response.data, null, 2)}
+          <pre className="px-5 py-4 text-[11.5px] font-mono text-slate-800 leading-relaxed max-h-[500px] overflow-auto bg-white whitespace-pre-wrap break-all">
+            {typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2)}
           </pre>
         </div>
       )}
 
-      {/* curl example */}
-      <div className="px-6 py-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-widest font-bold text-slate-400">curl misol</div>
-          <button onClick={copyCurl} className="inline-flex items-center gap-1 text-[10.5px] text-slate-400 hover:text-amber-400">
+      {/* curl */}
+      <div className="rounded-xl ring-1 ring-slate-800 bg-slate-950 overflow-hidden">
+        <div className="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Terminal className="h-3.5 w-3.5 text-slate-400" />
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">curl</span>
+          </div>
+          <button onClick={copyCurl} className="inline-flex items-center gap-1 text-[10.5px] text-slate-400 hover:text-emerald-400">
             {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
             {copied ? 'Nusxalandi' : 'Nusxalash'}
           </button>
         </div>
-        <pre className="rounded-lg bg-slate-950 ring-1 ring-slate-800 p-3 text-[11px] font-mono text-emerald-300 overflow-x-auto">{curlExample}</pre>
+        <pre className="px-4 py-3 text-[11.5px] font-mono text-emerald-300 overflow-x-auto">{curlText}</pre>
       </div>
     </div>
   );

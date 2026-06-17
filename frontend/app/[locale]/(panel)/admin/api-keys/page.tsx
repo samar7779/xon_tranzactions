@@ -573,13 +573,15 @@ function SecretRevealDialog({
 }: { result: { keyId: string; secret: string; name: string } | null; onClose: () => void }) {
   const [copiedKey, setCopiedKey] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [copiedBoth, setCopiedBoth] = useState(false);
   const [secretVisible, setSecretVisible] = useState(true);
 
-  const copy = async (text: string, which: 'key' | 'secret') => {
+  const copy = async (text: string, which: 'key' | 'secret' | 'both') => {
     try {
       await navigator.clipboard.writeText(text);
       if (which === 'key') { setCopiedKey(true); setTimeout(() => setCopiedKey(false), 1500); }
-      else { setCopiedSecret(true); setTimeout(() => setCopiedSecret(false), 1500); }
+      else if (which === 'secret') { setCopiedSecret(true); setTimeout(() => setCopiedSecret(false), 1500); }
+      else { setCopiedBoth(true); setTimeout(() => setCopiedBoth(false), 1500); }
     } catch { /* ignore */ }
   };
 
@@ -603,11 +605,27 @@ function SecretRevealDialog({
         <div className="p-5 space-y-4">
           <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-3 flex items-start gap-2.5">
             <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-            <div className="text-[12.5px] text-amber-900 dark:text-amber-200 leading-relaxed">
+            <div className="text-[12.5px] text-amber-900 dark:text-amber-200 leading-relaxed flex-1">
               <div className="font-bold mb-1">⚠ Secret hozir oxirgi marotaba ko'rsatilmoqda!</div>
-              Dialog yopilgandan keyin secret hech qachon ko'rsatilmaydi. Saqlab oling — masalan parol menejerida.
+              Dialog yopilgandan keyin secret hech qachon ko'rsatilmaydi. Saqlab oling.
             </div>
           </div>
+
+          {/* Ikkalasini birga nusxalash */}
+          <button
+            onClick={() => copy(
+              `X-API-Key: ${result.keyId}\nX-API-Secret: ${result.secret}`,
+              'both',
+            )}
+            className={cn(
+              'w-full h-11 rounded-xl flex items-center justify-center gap-2 font-bold text-[13px] transition-all shadow-md',
+              copiedBoth
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white',
+            )}
+          >
+            {copiedBoth ? <><Check className="h-4 w-4" /> Ikkalasi nusxalandi!</> : <><Copy className="h-4 w-4" /> Ikkalasini birga nusxalash (Key + Secret)</>}
+          </button>
 
           <div>
             <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">
