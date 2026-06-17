@@ -10,6 +10,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { locales } from '@/i18n/config';
+import dynamic from 'next/dynamic';
+
+// 3D hero — dynamic import (server-side render qilinmaydi, browser-only)
+const Api3dHero = dynamic(
+  () => import('@/components/api-3d-hero').then((m) => m.Api3dHero),
+  { ssr: false, loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-100 to-violet-100 rounded-2xl animate-pulse" /> },
+);
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
@@ -374,48 +381,14 @@ function LandingView({ onLogin }: { onLogin: (auth: { keyId: string; secret: str
         <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
         <div className="absolute -top-20 -right-20 w-[500px] h-[500px] bg-gradient-to-br from-indigo-200/40 to-violet-200/40 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-16 pb-20 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center max-w-[1700px] mx-auto">
-          {/* Left */}
-          <div>
-            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 text-[11px] font-bold uppercase tracking-widest mb-5">
+        <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-12 pb-16 grid lg:grid-cols-[1fr_1fr] gap-10 items-center max-w-[1700px] mx-auto">
+          {/* Left — 3D model */}
+          <div className="relative h-[420px] lg:h-[560px]">
+            <Api3dHero className="absolute inset-0" />
+            {/* Bottom centered minimal label */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/70 backdrop-blur-md ring-1 ring-slate-200 text-[11px] font-bold uppercase tracking-widest text-slate-700">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Production ready · v1
-            </div>
-            <h1 className="text-4xl lg:text-5xl xl:text-[56px] font-black tracking-tight text-slate-900 leading-[1.05]">
-              Xon Tranzaksiyalar uchun{' '}
-              <span className="bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 bg-clip-text text-transparent">
-                Developer API
-              </span>
-            </h1>
-            <p className="text-[15px] lg:text-[16px] text-slate-600 mt-5 leading-relaxed max-w-xl">
-              Tashqi tizim integratsiyasi uchun REST API. Token bilan himoyalangan,
-              scope orqali nazorat ostida, JSON javoblar — istalgan HTTP klient bilan ishlaydi.
-            </p>
-
-            {/* Features */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-6 max-w-xl">
-              <Pill icon={ShieldCheck} text="SHA-256 hash" />
-              <Pill icon={Lock} text="Scope nazorati" />
-              <Pill icon={Activity} text="Audit log" />
-              <Pill icon={Zap} text="<100ms" />
-            </div>
-
-            {/* curl example — terminal */}
-            <div className="mt-8 rounded-xl ring-1 ring-slate-200 overflow-hidden bg-slate-950 max-w-xl shadow-xl shadow-slate-900/10">
-              <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center gap-2">
-                <div className="flex gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                </div>
-                <Terminal className="h-3 w-3 ml-2 text-slate-500" />
-                <span className="text-[10px] text-slate-500 font-mono">~ curl misol</span>
-              </div>
-              <pre className="px-4 py-3.5 text-[12px] font-mono text-slate-300 leading-relaxed overflow-x-auto">
-                <span className="text-indigo-400">$</span> <span className="text-emerald-400">curl</span> <span className="text-slate-400">{`${typeof window !== 'undefined' ? window.location.origin : 'https://transactions.xonapps.uz'}/api/v1/transactions`}</span> \{'\n'}
-                {'    '}<span className="text-slate-500">-H</span> <span className="text-amber-300">"X-API-Key: xk_live_..."</span> \{'\n'}
-                {'    '}<span className="text-slate-500">-H</span> <span className="text-amber-300">"X-API-Secret: xs_live_..."</span>
-              </pre>
+              API · v1 · Production ready
             </div>
           </div>
 
@@ -487,37 +460,6 @@ function LandingView({ onLogin }: { onLogin: (auth: { keyId: string; secret: str
         </div>
       </section>
 
-      {/* Endpoints showcase */}
-      <section className="w-full px-4 lg:px-8 xl:px-12 py-16 max-w-[1700px] mx-auto">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-slate-500 font-bold mb-2">
-            <BookOpen className="h-3.5 w-3.5" /> Endpoint'lar
-          </div>
-          <h2 className="text-3xl lg:text-4xl font-black tracking-tight text-slate-900">
-            Hammasi {ENDPOINTS.length} ta endpoint
-          </h2>
-          <p className="text-slate-500 mt-2 text-[14px]">Kalit bilan kirgandan keyin har birini test qilish mumkin.</p>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {ENDPOINTS.slice(0, 9).map((ep) => (
-            <div key={ep.path} className="rounded-xl ring-1 ring-slate-200 bg-white p-4 hover:ring-slate-300 transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <MethodBadge method={ep.method} />
-                <code className="text-[11px] font-mono text-slate-700 truncate">{ep.path}</code>
-              </div>
-              <div className="font-bold text-slate-800 text-[13.5px]">{ep.title}</div>
-              <p className="text-[12px] text-slate-500 mt-1 leading-relaxed line-clamp-2">{ep.description}</p>
-              {ep.scope && (
-                <div className="mt-2 inline-flex items-center gap-1 text-[10.5px]">
-                  <Lock className="h-2.5 w-2.5 text-slate-400" />
-                  <code className="font-mono text-indigo-700 font-bold">{ep.scope}</code>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
     </>
   );
 }
