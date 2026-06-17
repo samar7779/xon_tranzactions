@@ -1946,6 +1946,20 @@ export class OplataKvService {
           monthlyPlan:  Number(detail?.monthly?.total?.amount || 0),
           monthlyPaid:  Number(detail?.monthly?.total?.paid   || 0),
         } : null,
+        // Xonadon va mijoz ma'lumotlari — 3D bino qurish uchun (qavat, blok, xonalar, m²)
+        apartmentInfo: detail?.info ? {
+          number:    detail.info.number    ?? null,
+          rooms:     detail.info.rooms     ?? null,
+          area:      detail.info.area      ?? null,
+          building:  detail.info.building  ?? null,
+          block:     detail.info.block     ?? null,
+          floor:     detail.info.floor     ?? null,
+          object:    detail.info.object    ?? null,
+        } : null,
+        clientInfo: detail?.client ? {
+          fullName: detail.client.full_name || detail.client.fullName || null,
+          phone:    detail.client.phone     || null,
+        } : null,
         histories: histories.map((h) => ({
           amount:    Number(h?.amount || 0),
           datePaid:  h?.date_paid || null,

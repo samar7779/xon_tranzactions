@@ -33,16 +33,30 @@ type ApartmentData = {
   monthlyPaid: number;
   contractDate: string | null;
   status: string | null;
+  // Xonadon ma'lumotlari (CRM dan)
+  aptNumber: string | null;
+  rooms: number | null;
+  area: number | null;
+  building: string | null;
+  block: string | null;
+  floor: number | null;
 };
 
 // ─── 3D BUILDING ─────────────────────────────────────────────
-function Building({ progress, accent }: { progress: number; accent: string }) {
+function Building({
+  progress, accent, totalFloors, targetFloor,
+}: {
+  progress: number;
+  accent: string;
+  totalFloors: number;       // Binodagi qavatlar soni (default 9)
+  targetFloor: number | null; // Mijozning qavati (highlighted)
+}) {
   const groupRef = useRef<THREE.Group>(null);
-  const FLOORS = 8;
+  const FLOORS = Math.max(3, Math.min(20, totalFloors));
 
-  useFrame((state) => {
+  useFrame(() => {
     if (groupRef.current) {
-      // Slow auto-rotation if user not interacting
+      // Sekin avtomatik aylanish
       groupRef.current.rotation.y += 0.002;
     }
   });
@@ -58,75 +72,128 @@ function Building({ progress, accent }: { progress: number; accent: string }) {
       else arr.push((progress - floorStart) / (floorEnd - floorStart));
     }
     return arr;
-  }, [progress]);
+  }, [progress, FLOORS]);
+
+  // Target floor index (0-based) — pastdan boshlanadi
+  const targetIdx = targetFloor ? targetFloor - 1 : -1;
 
   return (
-    <group ref={groupRef} position={[0, -1.2, 0]}>
-      {/* Asos (er) */}
-      <mesh position={[0, -0.3, 0]} receiveShadow>
-        <boxGeometry args={[5, 0.2, 5]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.7} />
+    <group ref={groupRef} position={[0, -1.4, 0]}>
+      {/* Asos (er) — kattalashtirilgan platforma */}
+      <mesh position={[0, -0.35, 0]} receiveShadow>
+        <cylinderGeometry args={[3.2, 3.4, 0.25, 32]} />
+        <meshStandardMaterial color="#0f172a" roughness={0.85} metalness={0.2} />
+      </mesh>
+      <mesh position={[0, -0.21, 0]}>
+        <cylinderGeometry args={[3.1, 3.1, 0.05, 32]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.6} />
       </mesh>
 
       {/* Bino qavatlari */}
       {Array.from({ length: FLOORS }).map((_, i) => {
-        const y = i * 0.7;
+        const y = i * 0.55;
         const fill = floorFills[i];
+        const isTarget = i === targetIdx;
         return (
           <group key={i} position={[0, y, 0]}>
             {/* Qavat tashqi shisha */}
             <mesh castShadow>
-              <boxGeometry args={[2.4, 0.7, 2.4]} />
+              <boxGeometry args={[2.4, 0.55, 2.4]} />
               <meshPhysicalMaterial
-                color={fill > 0 ? accent : '#334155'}
-                emissive={fill > 0 ? accent : '#0f172a'}
-                emissiveIntensity={fill * 0.8}
+                color={isTarget ? accent : fill > 0 ? accent : '#334155'}
+                emissive={isTarget ? accent : fill > 0 ? accent : '#0f172a'}
+                emissiveIntensity={isTarget ? Math.max(0.9, fill * 1.2) : fill * 0.7}
                 metalness={0.3}
                 roughness={0.15}
-                transmission={0.15}
+                transmission={isTarget ? 0.05 : 0.15}
                 thickness={0.3}
                 clearcoat={1}
                 clearcoatRoughness={0}
               />
             </mesh>
 
-            {/* Qavat ramkasi (orqa) */}
-            <mesh>
-              <boxGeometry args={[2.5, 0.05, 2.5]} />
+            {/* Qavat orasidagi metall ramka */}
+            <mesh position={[0, 0.275, 0]}>
+              <boxGeometry args={[2.5, 0.04, 2.5]} />
               <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.3} />
             </mesh>
 
-            {/* Window grid — 4x1 windows per side (faqat front) */}
-            {[0, 1, 2, 3].map((wx) => (
-              <mesh key={wx} position={[-0.75 + wx * 0.5, 0, 1.21]}>
-                <planeGeometry args={[0.32, 0.38]} />
-                <meshBasicMaterial
-                  color={fill > wx / 4 ? '#fef9c3' : '#0f172a'}
-                  transparent
-                  opacity={fill > wx / 4 ? 0.95 : 0.4}
-                />
-              </mesh>
+            {/* Window grid — har tomonda 4 ta deraza */}
+            {[
+              [0, 1.21, 0],     // front
+              [0, -1.21, Math.PI], // back
+            ].map(([offset, z, rot], side) => (
+              <group key={side} position={[0, 0, z as number]} rotation={[0, rot as number, 0]}>
+                {[0, 1, 2, 3].map((wx) => (
+                  <mesh key={wx} position={[-0.75 + wx * 0.5, 0, 0]}>
+                    <planeGeometry args={[0.32, 0.32]} />
+                    <meshBasicMaterial
+                      color={isTarget ? '#fef9c3' : fill > wx / 4 ? '#fef9c3' : '#0f172a'}
+                      transparent
+                      opacity={isTarget ? 1 : fill > wx / 4 ? 0.95 : 0.4}
+                    />
+                  </mesh>
+                ))}
+              </group>
             ))}
+
+            {/* Target qavat uchun ko'rsatkich strelka */}
+            {isTarget && (
+              <>
+                {/* Aylanma halqa */}
+                <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[1.85, 0.04, 8, 48]} />
+                  <meshBasicMaterial color={accent} />
+                </mesh>
+                {/* Pulsatsiya qiluvchi halqa */}
+                <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                  <torusGeometry args={[2.1, 0.02, 8, 48]} />
+                  <meshBasicMaterial color={accent} transparent opacity={0.4} />
+                </mesh>
+                {/* "Sizning xonadoningiz" label */}
+                <Float speed={1.5} rotationIntensity={0} floatIntensity={0.1}>
+                  <Text
+                    position={[1.8, 0, 0]}
+                    fontSize={0.2}
+                    color={accent}
+                    anchorX="left"
+                    anchorY="middle"
+                    outlineWidth={0.01}
+                    outlineColor="#000"
+                  >
+                    ← {targetFloor}-qavat
+                  </Text>
+                </Float>
+              </>
+            )}
           </group>
         );
       })}
 
-      {/* Tom (roof) */}
-      <mesh position={[0, FLOORS * 0.7, 0]}>
+      {/* Tom (roof) — taper bilan */}
+      <mesh position={[0, FLOORS * 0.55, 0]}>
         <boxGeometry args={[2.5, 0.15, 2.5]} />
         <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.4} />
       </mesh>
-
-      {/* Tomda kichik antenna */}
-      <mesh position={[0.8, FLOORS * 0.7 + 0.4, 0.8]}>
-        <cylinderGeometry args={[0.02, 0.02, 0.6]} />
-        <meshStandardMaterial color="#94a3b8" metalness={1} />
+      <mesh position={[0, FLOORS * 0.55 + 0.15, 0]}>
+        <boxGeometry args={[2.0, 0.08, 2.0]} />
+        <meshStandardMaterial color="#0f172a" metalness={0.8} roughness={0.3} />
       </mesh>
 
-      {/* Floating progress label - tepada */}
+      {/* Antenna */}
+      <mesh position={[0.8, FLOORS * 0.55 + 0.55, 0.8]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.7]} />
+        <meshStandardMaterial color="#94a3b8" metalness={1} />
+      </mesh>
+      <mesh position={[0.8, FLOORS * 0.55 + 0.95, 0.8]}>
+        <sphereGeometry args={[0.04]} />
+        <meshBasicMaterial color="#ef4444" />
+      </mesh>
+
+      {/* Floating progress label — tepada */}
       <Float speed={2} rotationIntensity={0} floatIntensity={0.4}>
         <Text
-          position={[0, FLOORS * 0.7 + 1.2, 0]}
+          position={[0, FLOORS * 0.55 + 1.4, 0]}
           fontSize={0.55}
           color={accent}
           anchorX="center"
@@ -139,7 +206,12 @@ function Building({ progress, accent }: { progress: number; accent: string }) {
       </Float>
 
       {/* Light beam pastdan tepaga */}
-      <pointLight position={[0, progress / 100 * FLOORS * 0.7, 0]} intensity={2} color={accent} distance={6} />
+      <pointLight position={[0, progress / 100 * FLOORS * 0.55, 0]} intensity={2} color={accent} distance={6} />
+
+      {/* Target qavat uchun spot light */}
+      {targetIdx >= 0 && (
+        <pointLight position={[2, targetIdx * 0.55, 0]} intensity={3} color={accent} distance={4} />
+      )}
     </group>
   );
 }
@@ -182,7 +254,14 @@ function MoneyParticles({ enabled }: { enabled: boolean }) {
 }
 
 // ─── ASOSIY SCENE ─────────────────────────────────────────
-function Scene({ progress, accent }: { progress: number; accent: string }) {
+function Scene({
+  progress, accent, totalFloors, targetFloor,
+}: {
+  progress: number;
+  accent: string;
+  totalFloors: number;
+  targetFloor: number | null;
+}) {
   return (
     <>
       <Environment preset="city" environmentIntensity={0.6} />
@@ -191,7 +270,7 @@ function Scene({ progress, accent }: { progress: number; accent: string }) {
       <pointLight position={[-5, 4, -3]} intensity={1.5} color="#818cf8" />
       <pointLight position={[5, 2, -3]} intensity={1} color="#f472b6" />
 
-      <Building progress={progress} accent={accent} />
+      <Building progress={progress} accent={accent} totalFloors={totalFloors} targetFloor={targetFloor} />
       <MoneyParticles enabled={progress > 0} />
 
       {/* Kamera nazorati — foydalanuvchi qo'l bilan ham aylantirishi mumkin */}
@@ -219,7 +298,7 @@ export function Apartment3DDialog({
   const t = useTranslations('oplatykv');
   const [animatedProgress, setAnimatedProgress] = useState(0);
 
-  // CRM'dan ma'lumot — narx, to'lovlar, mijoz
+  // CRM'dan ma'lumot — narx, to'lovlar, mijoz, xonadon
   const dataQuery = useQuery({
     queryKey: ['oplata-kv-3d-view', contractNo],
     queryFn: () => api.get<{
@@ -231,13 +310,15 @@ export function Apartment3DDialog({
         connected: boolean;
         error: string | null;
         contractInfo: { price: number; contractDate: string | null; status: string | null; initialPlan: number; initialPaid: number; monthlyPlan: number; monthlyPaid: number } | null;
+        apartmentInfo: { number: string | null; rooms: number | null; area: number | null; building: string | null; block: string | null; floor: number | null; object: string | null } | null;
+        clientInfo: { fullName: string | null; phone: string | null } | null;
         totalPaid: number;
       };
     }>(`/oplata-kv/crm-sverka?contractNo=${encodeURIComponent(contractNo || '')}`),
     enabled: open && !!contractNo,
   });
 
-  // Meta — client, object (alohida endpoint'dan)
+  // Meta — client, object (alohida endpoint'dan, fallback uchun)
   const metaQuery = useQuery({
     queryKey: ['oplata-kv-by-contract', contractNo],
     queryFn: () => api.get<{
@@ -250,12 +331,14 @@ export function Apartment3DDialog({
   const apt: ApartmentData | null = useMemo(() => {
     if (!dataQuery.data?.ok || !contractNo) return null;
     const ci = dataQuery.data.crm.contractInfo;
+    const ai = dataQuery.data.crm.apartmentInfo;
+    const cli = dataQuery.data.crm.clientInfo;
     const meta = metaQuery.data?.meta || null;
     if (!ci) return null;
     return {
       contractNo,
-      object: meta?.object || null,
-      client: meta?.client || null,
+      object: ai?.object || meta?.object || null,
+      client: cli?.fullName || meta?.client || null,
       totalPrice: ci.price || 0,
       totalPaid: (ci.initialPaid || 0) + (ci.monthlyPaid || 0),
       initialPlan: ci.initialPlan || 0,
@@ -264,8 +347,21 @@ export function Apartment3DDialog({
       monthlyPaid: ci.monthlyPaid || 0,
       contractDate: ci.contractDate,
       status: ci.status,
+      aptNumber: ai?.number || null,
+      rooms: ai?.rooms != null ? Number(ai.rooms) : null,
+      area: ai?.area != null ? Number(ai.area) : null,
+      building: ai?.building || null,
+      block: ai?.block || null,
+      floor: ai?.floor != null ? Number(ai.floor) : null,
     };
   }, [dataQuery.data, metaQuery.data, contractNo]);
+
+  // Bino qavatlar soni — agar mijoz qavati ma'lum bo'lsa, undan kamida 2 qavat ko'p qilamiz
+  // Aks holda standart 9 qavat
+  const totalFloors = useMemo(() => {
+    if (!apt?.floor) return 9;
+    return Math.max(9, apt.floor + 2);
+  }, [apt?.floor]);
 
   const targetProgress = useMemo(() => {
     if (!apt || apt.totalPrice <= 0) return 0;
@@ -389,7 +485,12 @@ export function Apartment3DDialog({
                       <color attach="background" args={['#020617']} />
                       <fog attach="fog" args={['#020617', 12, 22]} />
                       <Suspense fallback={null}>
-                        <Scene progress={animatedProgress} accent={accent} />
+                        <Scene
+                          progress={animatedProgress}
+                          accent={accent}
+                          totalFloors={totalFloors}
+                          targetFloor={apt?.floor || null}
+                        />
                       </Suspense>
                     </Canvas>
 
@@ -433,6 +534,36 @@ export function Apartment3DDialog({
                         />
                       </div>
                     </div>
+
+                    {/* Apartment specs — chip'lar to'plami (eng yuqorida, ko'zga tashlanadi) */}
+                    {(apt.aptNumber || apt.rooms != null || apt.area != null || apt.floor != null || apt.block || apt.building) && (
+                      <div className="rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 ring-1 ring-indigo-500/20 p-3.5">
+                        <div className="text-[9.5px] uppercase tracking-widest text-indigo-300 font-bold mb-2.5 flex items-center gap-1.5">
+                          <Home className="h-3 w-3" />
+                          Xonadon ma'lumotlari
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {apt.aptNumber && (
+                            <Chip color="violet">№ {apt.aptNumber}</Chip>
+                          )}
+                          {apt.rooms != null && (
+                            <Chip color="indigo">{apt.rooms} xonalar</Chip>
+                          )}
+                          {apt.area != null && (
+                            <Chip color="cyan">{apt.area} m²</Chip>
+                          )}
+                          {apt.building && (
+                            <Chip color="emerald">{apt.building}</Chip>
+                          )}
+                          {apt.block && (
+                            <Chip color="amber">{apt.block}-blok</Chip>
+                          )}
+                          {apt.floor != null && (
+                            <Chip color="rose">⬆ {apt.floor}-qavat</Chip>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Meta */}
                     {apt.client && (
@@ -529,5 +660,25 @@ function SumRow({ label, value, color, prefix = '' }: { label: string; value: nu
         {prefix}{formatMoney(value)}
       </div>
     </div>
+  );
+}
+
+const CHIP_COLORS: Record<string, string> = {
+  violet:  'bg-violet-500/15 text-violet-300 ring-violet-500/30',
+  indigo:  'bg-indigo-500/15 text-indigo-300 ring-indigo-500/30',
+  cyan:    'bg-cyan-500/15 text-cyan-300 ring-cyan-500/30',
+  emerald: 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30',
+  amber:   'bg-amber-500/15 text-amber-300 ring-amber-500/30',
+  rose:    'bg-rose-500/15 text-rose-300 ring-rose-500/30',
+};
+
+function Chip({ children, color = 'indigo' }: { children: React.ReactNode; color?: string }) {
+  return (
+    <span className={cn(
+      'inline-flex items-center px-2 py-0.5 rounded-md ring-1 text-[11px] font-semibold whitespace-nowrap',
+      CHIP_COLORS[color] || CHIP_COLORS.indigo,
+    )}>
+      {children}
+    </span>
   );
 }
