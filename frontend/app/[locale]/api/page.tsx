@@ -17,9 +17,9 @@ import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { IconBtn, PrimaryBtn, MethodBadge, Kbd, eyebrow } from '@/components/api-ui';
 import { ApiCommandPalette, type PaletteEndpoint } from '@/components/api-command-palette';
 import { SNIPPET_LANGS, genSnippet, type SnippetLang } from '@/lib/api-snippet-gen';
-// Real Three.js 3D hero — lazy load, no SSR (WebGL needs browser)
-const ApiHeroR3F = dynamic(
-  () => import('@/components/api-hero-r3f').then((m) => m.ApiHeroR3F),
+// Real Three.js 3D hero — Holographic crystal (Apple Vision Pro uslubi)
+const ApiHeroCrystal = dynamic(
+  () => import('@/components/api-hero-crystal').then((m) => m.ApiHeroCrystal),
   {
     ssr: false,
     loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-100/40 via-violet-100/40 to-fuchsia-100/40 dark:from-indigo-950/30 dark:via-violet-950/30 dark:to-fuchsia-950/30 rounded-2xl animate-pulse" />,
@@ -510,7 +510,7 @@ function LandingView({ onLogin, dark }: {
             <div className="absolute bottom-1/4 right-1/4 w-[420px] h-[420px] rounded-full blur-3xl opacity-50"
               style={{ background: 'radial-gradient(circle, rgba(216,180,254,0.5) 0%, transparent 70%)' }} />
           </div>
-          <ApiHeroR3F dark={dark} className="absolute inset-0" />
+          <ApiHeroCrystal dark={dark} className="absolute inset-0" />
         </div>
 
         {/* ─── RIGHT — premium login ─── */}
