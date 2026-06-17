@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { usePathname, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
@@ -78,6 +79,22 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const allowed = user?.permissions?.includes(rule.permission) ?? false;
   if (allowed) return <>{children}</>;
 
+  return <AccessDenied locale={locale} tc={tc} />;
+}
+
+/**
+ * "Ruxsat yo'q" ekrani — markazda 404 video (2 tadan tasodifiy bittasi),
+ * matn + tugma esa pastki burchakda ixcham kartochkada. Sidebar/header yopilmaydi.
+ */
+function AccessDenied({ locale, tc }: { locale: string; tc: (k: string) => string }) {
+  const user = useAuth((s) => s.user);
+  // SSR/hydration mos bo'lishi uchun — birinchi video bilan boshlaymiz,
+  // mount'dan keyin client tomonda tasodifiy tanlaymiz
+  const [videoIdx, setVideoIdx] = useState(1);
+  useEffect(() => {
+    setVideoIdx(Math.random() < 0.5 ? 1 : 2);
+  }, []);
+
   // Foydalanuvchi kira oladigan birinchi sahifa — dashboard'ga ruxsat
   // bo'lmasa, bor ruxsatli bo'limga yo'naltiramiz (aks holda loop bo'lardi).
   const landing = LANDING_ROUTES.find((r) =>
@@ -86,27 +103,44 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const backHref = `/${locale}${landing?.path ?? '/dashboard'}`;
 
   return (
-    <div className="flex-1 grid place-items-center p-8">
-      <div className="text-center max-w-sm">
-        <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-950/40 grid place-items-center mx-auto mb-5">
-          <ShieldAlert className="h-8 w-8 text-rose-500" />
+    <div className="flex-1 relative grid place-items-center overflow-hidden p-6">
+      {/* Markazdagi video */}
+      <video
+        key={videoIdx}
+        src={`/404-${videoIdx}.mp4`}
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="w-full max-w-[560px] rounded-2xl"
+      />
+
+      {/* Matn + tugma — pastki chap burchakda ixcham kartochka */}
+      <div className="absolute bottom-5 left-5 sm:bottom-7 sm:left-7 max-w-[300px]
+                      rounded-2xl bg-white/85 dark:bg-slate-900/85 backdrop-blur-md
+                      ring-1 ring-slate-200/80 dark:ring-slate-800 shadow-xl p-4">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="grid place-items-center w-7 h-7 rounded-lg bg-rose-50 dark:bg-rose-950/40 shrink-0">
+            <ShieldAlert className="h-4 w-4 text-rose-500" />
+          </span>
+          <h1 className="text-[15px] font-bold tracking-tight text-slate-900 dark:text-slate-100">
+            {tc('accessDenied')}
+          </h1>
         </div>
-        <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-          {tc('accessDenied')}
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+        <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
           {tc('accessDeniedDesc')}
         </p>
         <Link
           href={backHref}
-          className="inline-flex items-center gap-2 mt-6 px-4 h-10 rounded-xl
-                     bg-slate-900 dark:bg-slate-800 text-white text-sm font-medium
+          className="inline-flex items-center gap-2 mt-3 px-3.5 h-9 rounded-xl
+                     bg-slate-900 dark:bg-slate-800 text-white text-[12.5px] font-medium
                      hover:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
         >
-          <ArrowLeft className="h-4 w-4" />
+          <ArrowLeft className="h-3.5 w-3.5" />
           {tc('backToHome')}
         </Link>
       </div>
     </div>
   );
 }
+
