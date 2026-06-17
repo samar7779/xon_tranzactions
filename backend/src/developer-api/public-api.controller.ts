@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, Query, Req, UseGuards, UseInterceptors, NotFoundException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ApiKeyAuthGuard } from './guards/api-key-auth.guard';
@@ -28,8 +28,11 @@ export class PublicApiController {
   // ─── WHOAMI ──────────────────────────────────────────────────────
 
   @Get('_whoami')
-  @ApiOperation({ summary: 'Hozirgi API kalit ma\'lumotini qaytaradi' })
-  whoami(@CurrentApiKey() key: ValidatedApiKey) {
+  @ApiOperation({ summary: 'Hozirgi API kalit ma\'lumotini va client IP qaytaradi' })
+  whoami(@CurrentApiKey() key: ValidatedApiKey, @Req() req: any) {
+    // Client IP — guard'da extract qilingan (X-Forwarded-For dan yoki socket'dan)
+    const clientIp: string | null = req.apiKeyIp || req.ip || null;
+    const userAgent: string | null = req.headers?.['user-agent'] || null;
     return {
       ok: true,
       key: {
@@ -41,6 +44,11 @@ export class PublicApiController {
         expiresAt: key.expiresAt,
         allowedIps: key.allowedIps,
       },
+      client: {
+        ip: clientIp,
+        userAgent,
+      },
+      serverTime: new Date().toISOString(),
     };
   }
 
