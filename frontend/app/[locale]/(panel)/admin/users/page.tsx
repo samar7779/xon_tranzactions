@@ -62,6 +62,7 @@ function getInitials(name?: string | null, email?: string) {
 }
 
 export default function AdminUsersPage() {
+  const t = useTranslations('adminUsers');
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const me = useAuth((s) => s.user);
@@ -91,7 +92,7 @@ export default function AdminUsersPage() {
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
       api.patch(`/admin-users/${id}`, { isActive }),
     onSuccess: (_d, v) => {
-      toast.success(v.isActive ? 'Foydalanuvchi faollashtirildi' : 'Foydalanuvchi bloklandi');
+      toast.success(v.isActive ? t('userActivated') : t('userBlocked'));
       qc.invalidateQueries({ queryKey: ['admin-users'] });
     },
     onError: (e: any) => toast.error(e?.message),
@@ -127,10 +128,10 @@ export default function AdminUsersPage() {
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         {/* ═══ KPI ═══ (header olib tashlandi) */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiTile label="Jami" value={String(stats.total)} icon={Users} color="indigo" />
-          <KpiTile label="Faol" value={String(stats.active)} icon={CheckCircle2} color="emerald" />
-          <KpiTile label="Bloklangan" value={String(stats.total - stats.active)} icon={XCircle} color="rose" />
-          <KpiTile label="Oxirgi 7 kun" value={String(stats.recent)} icon={Activity} color="cyan" />
+          <KpiTile label={tc('total')} value={String(stats.total)} icon={Users} color="indigo" />
+          <KpiTile label={t('kpiActive')} value={String(stats.active)} icon={CheckCircle2} color="emerald" />
+          <KpiTile label={t('kpiBlocked')} value={String(stats.total - stats.active)} icon={XCircle} color="rose" />
+          <KpiTile label={t('kpiLast7Days')} value={String(stats.recent)} icon={Activity} color="cyan" />
         </div>
 
         {/* ═══ Action bar: Yangi admin (chap) + Search + Filter + View Toggle (o'ng) ═══ */}
@@ -139,7 +140,7 @@ export default function AdminUsersPage() {
             <Button onClick={openCreate} className="rounded-xl font-semibold h-10 shadow-md
                                                     bg-gradient-to-br from-indigo-600 to-violet-600
                                                     hover:from-indigo-700 hover:to-violet-700">
-              <Plus className="h-4 w-4 mr-1.5" /> Yangi admin
+              <Plus className="h-4 w-4 mr-1.5" /> {t('newAdmin')}
             </Button>
           )}
 
@@ -147,7 +148,7 @@ export default function AdminUsersPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
             <Input
               className="pl-9 h-10 rounded-xl bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus-visible:bg-white dark:focus-visible:bg-slate-900"
-              placeholder="Email yoki ism..."
+              placeholder={t('searchPlaceholder')}
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
@@ -165,10 +166,10 @@ export default function AdminUsersPage() {
                 ? "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900"
                 : "bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300",
             )}>
-              <SelectValue placeholder="Hamma rollar" />
+              <SelectValue placeholder={t('allRoles')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Hamma rollar</SelectItem>
+              <SelectItem value="all">{t('allRoles')}</SelectItem>
               {(roles?.items || []).map((r) => (
                 <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>
               ))}
@@ -183,10 +184,10 @@ export default function AdminUsersPage() {
                 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
                 viewMode === 'card' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
               )}
-              title="Kartochka ko'rinish"
+              title={t('cardViewTitle')}
             >
               <LayoutGrid className="h-3.5 w-3.5" />
-              Karta
+              {t('cardView')}
             </button>
             <button
               onClick={() => setViewMode('table')}
@@ -194,10 +195,10 @@ export default function AdminUsersPage() {
                 'inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-[12px] font-semibold transition-colors',
                 viewMode === 'table' ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
               )}
-              title="Jadval ko'rinish"
+              title={t('tableViewTitle')}
             >
               <List className="h-3.5 w-3.5" />
-              Jadval
+              {t('tableView')}
             </button>
           </div>
         </div>
@@ -209,7 +210,7 @@ export default function AdminUsersPage() {
           </div>
         ) : filtered.length === 0 ? (
           <Card><CardContent className="p-0">
-            <EmptyState icon={UserCog} title="Foydalanuvchilar yo'q" description="Birinchi adminni qo'shish uchun yuqoridagi tugmani bosing" />
+            <EmptyState icon={UserCog} title={t('emptyTitle')} description={t('emptyDesc')} />
           </CardContent></Card>
         ) : viewMode === 'card' ? (
           <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
@@ -287,8 +288,9 @@ function ProAdminCard({
   onToggle: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations('adminUsers');
   const tc = useTranslations('common');
-  const role = u.roleRef?.label || '— rol biriktirilmagan';
+  const role = u.roleRef?.label || t('noRoleAssigned');
   const roleKey = u.roleRef?.name || '';
   const c = getRoleColor(roleKey);
   const isSuper = roleKey === 'SUPERADMIN';
@@ -323,7 +325,7 @@ function ProAdminCard({
           <div className="absolute top-3 right-12 z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-md
                           bg-rose-100 dark:bg-rose-950/40 ring-1 ring-rose-300 dark:ring-rose-900 text-rose-700 dark:text-rose-300 text-[10px] font-bold uppercase tracking-wider
                           animate-pulse">
-            <Lock className="h-2.5 w-2.5" /> Bloklangan
+            <Lock className="h-2.5 w-2.5" /> {t('blocked')}
           </div>
         )}
 
@@ -384,14 +386,14 @@ function ProAdminCard({
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={onEdit}
-                  title="Tahrirlash"
+                  title={tc('edit')}
                   className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Pencil className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={onToggle}
-                  title={isActive ? 'Bloklash' : 'Faollashtirish'}
+                  title={isActive ? t('block') : t('activate')}
                   className={cn(
                     "w-8 h-8 rounded-lg grid place-items-center transition-colors",
                     isActive
@@ -403,7 +405,7 @@ function ProAdminCard({
                 </button>
                 <button
                   onClick={onDelete}
-                  title="O'chirish"
+                  title={tc('delete')}
                   className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -424,7 +426,7 @@ function ProAdminCard({
             {isRecent && isActive && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md
                                bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
-                <Sparkles className="h-2.5 w-2.5" /> Faol foydalanuvchi
+                <Sparkles className="h-2.5 w-2.5" /> {t('activeUser')}
               </span>
             )}
           </div>
@@ -434,23 +436,23 @@ function ProAdminCard({
             <div className="space-y-0.5">
               <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold flex items-center gap-1">
                 <Clock className="h-2.5 w-2.5" />
-                Oxirgi kirish
+                {t('lastLogin')}
               </div>
               <div className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
                 {u.lastLoginAt
                   ? lastLoginAgo === 0
-                    ? <span className="text-emerald-700 dark:text-emerald-300">Bugun</span>
+                    ? <span className="text-emerald-700 dark:text-emerald-300">{tc('today')}</span>
                     : lastLoginAgo === 1
-                      ? <span className="text-emerald-600 dark:text-emerald-400">Kecha</span>
+                      ? <span className="text-emerald-600 dark:text-emerald-400">{tc('yesterday')}</span>
                       : lastLoginAgo && lastLoginAgo <= 7
-                        ? <span className="text-amber-600 dark:text-amber-400">{lastLoginAgo} kun oldin</span>
-                        : <span className="text-slate-500 dark:text-slate-400">{lastLoginAgo} kun oldin</span>
-                  : <span className="text-slate-400 dark:text-slate-500 italic">Hech qachon</span>}
+                        ? <span className="text-amber-600 dark:text-amber-400">{t('daysAgo', { n: lastLoginAgo })}</span>
+                        : <span className="text-slate-500 dark:text-slate-400">{t('daysAgo', { n: lastLoginAgo })}</span>
+                  : <span className="text-slate-400 dark:text-slate-500 italic">{t('never')}</span>}
               </div>
             </div>
             <div className="space-y-0.5 text-right">
               <div className="text-[9px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                Yaratilgan
+                {t('created')}
               </div>
               <div className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
                 {formatDateTime(u.createdAt)}
@@ -475,18 +477,20 @@ function AdminTable({
   onToggle: (u: AdminItem) => void;
   onDelete: (u: AdminItem) => void;
 }) {
+  const t = useTranslations('adminUsers');
+  const tc = useTranslations('common');
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-[13px]">
           <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10.5px] tracking-wider">
             <tr>
-              <th className="text-left px-4 py-3">Foydalanuvchi</th>
-              <th className="text-left px-3 py-3">Rol</th>
-              <th className="text-left px-3 py-3">Status</th>
-              <th className="text-left px-3 py-3">Oxirgi kirish</th>
-              <th className="text-left px-3 py-3">Yaratilgan</th>
-              <th className="text-right px-4 py-3">Amallar</th>
+              <th className="text-left px-4 py-3">{t('colUser')}</th>
+              <th className="text-left px-3 py-3">{t('colRole')}</th>
+              <th className="text-left px-3 py-3">{tc('status')}</th>
+              <th className="text-left px-3 py-3">{t('lastLogin')}</th>
+              <th className="text-left px-3 py-3">{t('created')}</th>
+              <th className="text-right px-4 py-3">{tc('actions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -529,17 +533,17 @@ function AdminTable({
                           <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
                           <span className="relative rounded-full h-2 w-2 bg-emerald-500" />
                         </span>
-                        Faol
+                        {t('active')}
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400 text-[12px] font-semibold">
                         <Lock className="h-3 w-3" />
-                        Bloklangan
+                        {t('blocked')}
                       </span>
                     )}
                   </td>
                   <td className="px-3 py-3 text-slate-700 dark:text-slate-300 text-[12px]">
-                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : <span className="text-slate-400 dark:text-slate-500 italic">Hech qachon</span>}
+                    {u.lastLoginAt ? formatDateTime(u.lastLoginAt) : <span className="text-slate-400 dark:text-slate-500 italic">{t('never')}</span>}
                   </td>
                   <td className="px-3 py-3 text-slate-700 dark:text-slate-300 text-[12px]">
                     {formatDateTime(u.createdAt)}
@@ -549,14 +553,14 @@ function AdminTable({
                       <div className="inline-flex items-center gap-1">
                         <button
                           onClick={() => onEdit(u)}
-                          title="Tahrirlash"
+                          title={tc('edit')}
                           className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
                         <button
                           onClick={() => onToggle(u)}
-                          title={u.isActive ? 'Bloklash' : 'Faollashtirish'}
+                          title={u.isActive ? t('block') : t('activate')}
                           className={cn(
                             "w-8 h-8 rounded-lg grid place-items-center transition-colors",
                             u.isActive
@@ -568,7 +572,7 @@ function AdminTable({
                         </button>
                         <button
                           onClick={() => onDelete(u)}
-                          title="O'chirish"
+                          title={tc('delete')}
                           className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -594,6 +598,7 @@ function UserDialog({
   editing: AdminItem | null;
   roles: RoleItem[];
 }) {
+  const t = useTranslations('adminUsers');
   const tc = useTranslations('common');
   const qc = useQueryClient();
 
@@ -678,11 +683,11 @@ function UserDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{editing ? 'Adminni tahrirlash' : 'Yangi admin'}</DialogTitle>
+          <DialogTitle>{editing ? t('editAdmin') : t('newAdmin')}</DialogTitle>
           <DialogDescription>
             {editing
-              ? "Email o'zgartirib bo'lmaydi. Parol bo'sh qoldirsangiz o'zgartirilmaydi."
-              : 'Yangi admin yarating va rol tayinlang'}
+              ? t('editAdminDesc')
+              : t('newAdminDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -699,13 +704,13 @@ function UserDialog({
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>{editing ? "Yangi parol (ixtiyoriy)" : "Parol"}</Label>
+              <Label>{editing ? t('newPasswordOptional') : t('password')}</Label>
               <button
                 type="button"
                 onClick={generatePassword}
                 className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 transition-colors"
               >
-                <Sparkles className="h-3.5 w-3.5" /> Avto-parol
+                <Sparkles className="h-3.5 w-3.5" /> {t('autoPassword')}
               </button>
             </div>
             <div className="relative">
@@ -713,14 +718,14 @@ function UserDialog({
                 type={showPassword ? 'text' : 'password'}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="kamida 8 belgi"
+                placeholder={t('passwordPlaceholder')}
                 className="pr-[4.5rem] font-mono tracking-wide"
               />
               <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
                 <button
                   type="button"
                   onClick={() => setShowPassword((v) => !v)}
-                  title={showPassword ? 'Yashirish' : "Ko'rsatish"}
+                  title={showPassword ? t('hide') : t('show')}
                   className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -729,7 +734,7 @@ function UserDialog({
                   type="button"
                   onClick={copyPassword}
                   disabled={!form.password}
-                  title="Nusxalash"
+                  title={tc('copy')}
                   className="p-1.5 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <Copy className="h-4 w-4" />
@@ -738,13 +743,13 @@ function UserDialog({
             </div>
           </div>
           <div className="space-y-2">
-            <Label>To'liq ism</Label>
+            <Label>{t('fullName')}</Label>
             <Input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
           </div>
           <div className="space-y-2">
-            <Label>Rol</Label>
+            <Label>{t('role')}</Label>
             <Select value={form.roleId} onValueChange={(v) => setForm({ ...form, roleId: v })}>
-              <SelectTrigger><SelectValue placeholder="Rolni tanlang" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('selectRole')} /></SelectTrigger>
               <SelectContent>
                 {roles.map((r) => <SelectItem key={r.id} value={r.id}>{r.label}</SelectItem>)}
               </SelectContent>
@@ -755,7 +760,7 @@ function UserDialog({
               <input type="checkbox" checked={form.isActive}
                 onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
                 className="accent-indigo-600 h-4 w-4 rounded" />
-              <span>Faol foydalanuvchi</span>
+              <span>{t('activeUser')}</span>
             </label>
           )}
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/auth';
 import { ShowcaseStage } from './showcase-stage';
 
@@ -34,6 +35,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 }
 
 function SplashLoader() {
+  const tc = useTranslations('common');
   return (
     <div className="fixed inset-0 z-50 overflow-hidden">
       {/* Showcase animatsiyasi to'liq ekranda */}
@@ -49,7 +51,7 @@ function SplashLoader() {
             <span className="animate-ping absolute inset-0 rounded-full bg-amber-400 opacity-75" />
             <span className="relative rounded-full h-1.5 w-1.5 bg-amber-400" />
           </span>
-          Yangilanmoqda
+          {tc('updating')}
         </div>
       </div>
 

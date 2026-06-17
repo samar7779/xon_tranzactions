@@ -67,7 +67,7 @@ export default function AccountsPage() {
   const syncMut = useMutation({
     mutationFn: (id: string) => api.post(`/sync/account/${id}`),
     onSuccess: (r: any) => {
-      toast.success(`✓ ${r?.fetched || 0} olindi · ${r?.saved || 0} saqlandi`);
+      toast.success(`✓ ${t('syncResult', { fetched: r?.fetched || 0, saved: r?.saved || 0 })}`);
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
     },
     onError: (e: any) => toast.error(e?.message),
@@ -81,7 +81,7 @@ export default function AccountsPage() {
   const syncAllMut = useMutation({
     mutationFn: () => api.post<any>('/sync/run-all'),
     onSuccess: (r: any) => {
-      toast.success(`Sync boshlandi — ${r?.accounts || 0} ta hisob (bir necha daqiqada tugaydi)`);
+      toast.success(t('syncAllStarted', { accounts: r?.accounts || 0 }));
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -90,9 +90,9 @@ export default function AccountsPage() {
     setExporting(true);
     try {
       await apiDownload('/bank-accounts/export', 'hisoblar.xlsx');
-      toast.success('Hisoblar Excel qilib yuklab olindi');
+      toast.success(t('exportDownloaded'));
     } catch (e: any) {
-      toast.error(e?.message || 'Yuklashda xato');
+      toast.error(e?.message || t('exportError'));
     } finally {
       setExporting(false);
     }
@@ -191,7 +191,7 @@ export default function AccountsPage() {
                   variant="outline"
                   onClick={() => syncAllMut.mutate()}
                   disabled={syncAllMut.isPending}
-                  title="Barcha hisoblarni sync qilish (bugungi kun)"
+                  title={t('syncAllTitle')}
                   className="h-10 w-10 p-0 rounded-xl shrink-0"
                 >
                   <RefreshCw className={cn('h-4 w-4', syncAllMut.isPending && 'animate-spin')} />
@@ -202,7 +202,7 @@ export default function AccountsPage() {
                   size="sm"
                   variant="outline"
                   onClick={() => setBulkBackfillOpen(true)}
-                  title="Barcha hisoblar bo'yicha orqa sanaga sync (Sync chegarasi shartlarida)"
+                  title={t('bulkBackfillTitle')}
                   className="h-10 w-10 p-0 rounded-xl shrink-0 border-indigo-200 dark:border-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/30"
                 >
                   <Calendar className="h-4 w-4 text-indigo-700 dark:text-indigo-300" />
@@ -213,7 +213,7 @@ export default function AccountsPage() {
                 variant="outline"
                 onClick={exportAll}
                 disabled={exporting}
-                title="Barcha hisoblarni Excel qilib yuklab olish"
+                title={t('exportTitle')}
                 className="h-10 w-10 p-0 rounded-xl shrink-0"
               >
                 {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -240,7 +240,7 @@ export default function AccountsPage() {
                   ))}
                   {sortedBanks.filter((b: any) => !b.isActive).length > 0 && (
                     <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold border-t border-slate-100 dark:border-slate-800 mt-1">
-                      Aktiv emas
+                      {t('inactive')}
                     </div>
                   )}
                   {sortedBanks.filter((b: any) => !b.isActive).map((b: any) => (
@@ -301,8 +301,8 @@ export default function AccountsPage() {
           <Card><CardContent className="p-0">
             <EmptyState
               icon={Wallet}
-              title={q || bankFilter !== 'all' ? "Hisob topilmadi" : "Hali hisob qo'shilmagan"}
-              description={q ? "Filtrlarni o'zgartirib ko'ring" : "Avval Bank ulanishi qo'shing, keyin hisob raqamlarini kiriting"}
+              title={q || bankFilter !== 'all' ? t('notFound') : t('noData')}
+              description={q ? t('changeFilters') : t('emptyHint')}
             />
           </CardContent></Card>
         ) : view === 'grid' ? (
@@ -327,12 +327,12 @@ export default function AccountsPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-slate-50/80 dark:bg-slate-900/80 text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                      <th className="text-left px-4 py-3">Bank · MFO</th>
-                      <th className="text-left px-4 py-3">Hisob raqami</th>
-                      <th className="text-left px-4 py-3">Egasi</th>
-                      <th className="text-right px-4 py-3">Qoldiq</th>
+                      <th className="text-left px-4 py-3">{t('colBankMfo')}</th>
+                      <th className="text-left px-4 py-3">{t('accountNo')}</th>
+                      <th className="text-left px-4 py-3">{t('owner')}</th>
+                      <th className="text-right px-4 py-3">{t('balance')}</th>
                       <th className="text-left px-4 py-3">Sync</th>
-                      <th className="text-left px-4 py-3">Oxirgi yangilanish</th>
+                      <th className="text-left px-4 py-3">{t('lastUpdate')}</th>
                       <th className="w-12"></th>
                     </tr>
                   </thead>
@@ -378,18 +378,18 @@ export default function AccountsPage() {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => syncMut.mutate(a.id)} disabled={syncMut.isPending}>
-                                    <RefreshCw className={cn("h-4 w-4 mr-2", syncMut.isPending && "animate-spin")} /> Hozir sync
+                                    <RefreshCw className={cn("h-4 w-4 mr-2", syncMut.isPending && "animate-spin")} /> {tc('syncNow')}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => setBackfillAccount(a)}>
-                                    <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Sana orqali sync (backfill)
+                                    <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> {t('backfillMenu')}
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => toggleSyncMut.mutate({ id: a.id, enabled: !a.syncEnabled })}>
                                     {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                                    {a.syncEnabled ? 'Sync o\'chirish' : 'Sync yoqish'}
+                                    {a.syncEnabled ? t('syncOff') : t('syncOn')}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={() => confirm(tc('confirmDelete')) && removeMut.mutate(a.id)}>
-                                    <Trash2 className="h-4 w-4 mr-2" /> O'chirish
+                                    <Trash2 className="h-4 w-4 mr-2" /> {tc('delete')}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -471,6 +471,8 @@ function AccountCard({
   onBackfill: () => void;
   busy: boolean;
 }) {
+  const t = useTranslations('accounts');
+  const tc = useTranslations('common');
   const balance = Number(a.balance || 0);
   const hasBalance = balance > 0;
   return (
@@ -492,18 +494,18 @@ function AccountCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onSync} disabled={busy}>
-                  <RefreshCw className={cn("h-4 w-4 mr-2", busy && "animate-spin")} /> Hozir sync
+                  <RefreshCw className={cn("h-4 w-4 mr-2", busy && "animate-spin")} /> {tc('syncNow')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onBackfill}>
-                  <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> Sana orqali sync (backfill)
+                  <Calendar className="h-4 w-4 mr-2 text-indigo-600 dark:text-indigo-400" /> {t('backfillMenu')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onToggleSync}>
                   {a.syncEnabled ? <PowerOff className="h-4 w-4 mr-2" /> : <Power className="h-4 w-4 mr-2" />}
-                  {a.syncEnabled ? 'Sync o\'chirish' : 'Sync yoqish'}
+                  {a.syncEnabled ? t('syncOff') : t('syncOn')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={onDelete}>
-                  <Trash2 className="h-4 w-4 mr-2" /> O'chirish
+                  <Trash2 className="h-4 w-4 mr-2" /> {tc('delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -521,7 +523,7 @@ function AccountCard({
           "mx-4 mb-3 rounded-xl px-4 py-3",
           hasBalance ? "bg-gradient-to-br from-indigo-50 to-blue-50 ring-1 ring-indigo-100 dark:ring-indigo-900" : "bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-100 dark:ring-slate-800",
         )}>
-          <div className="text-[9px] uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400 font-bold mb-0.5">Qoldiq</div>
+          <div className="text-[9px] uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400 font-bold mb-0.5">{t('balance')}</div>
           <div className={cn(
             "text-xl font-bold tracking-tight tabular-nums",
             hasBalance ? "text-indigo-900 dark:text-indigo-300" : "text-slate-400 dark:text-slate-500",
@@ -543,7 +545,7 @@ function AccountCard({
             {a.syncEnabled ? 'Sync ON' : 'Sync OFF'}
           </span>
           <div className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 tabular-nums">
-            {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : 'Hech sync bo\'lmagan'}
+            {a.lastSyncedAt ? <><RefreshCw className="h-2.5 w-2.5" /> {formatDateTime(a.lastSyncedAt)}</> : t('neverSynced')}
           </div>
         </div>
       </CardContent>
@@ -584,11 +586,11 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{t('add')}</DialogTitle>
-          <DialogDescription>Bank → ulanish → hisob raqami qo'shing</DialogDescription>
+          <DialogDescription>{t('createDesc')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Bank ulanishi</Label>
+            <Label>{t('credential')}</Label>
             <Select value={form.credentialId} onValueChange={(v) => setForm({ ...form, credentialId: v })}>
               <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
               <SelectContent>
@@ -598,12 +600,12 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
               </SelectContent>
             </Select>
             {creds.length === 0 && (
-              <p className="text-xs text-slate-500 dark:text-slate-400">Avval Bank ulanishi qo'shing → Sozlash → Bank ulanishlari</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{t('noCredsHint')}</p>
             )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>MFO <span className="text-rose-500">*</span></Label>
+              <Label>{t('branch')} <span className="text-rose-500">*</span></Label>
               <Input
                 value={form.branch}
                 onChange={(e) => setForm({ ...form, branch: e.target.value.replace(/\D/g, '').slice(0, 5) })}
@@ -611,10 +613,10 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
                 maxLength={5}
                 className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200 dark:ring-rose-900')}
               />
-              <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod — majburiy</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('mfoHint')}</div>
             </div>
             <div className="space-y-2">
-              <Label>Valyuta <span className="text-rose-500">*</span></Label>
+              <Label>{t('currency')} <span className="text-rose-500">*</span></Label>
               <Select value={form.currency} onValueChange={(v) => setForm({ ...form, currency: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -626,12 +628,12 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Hisob raqami</Label>
+            <Label>{t('accountNo')}</Label>
             <Input value={form.accountNo} onChange={(e) => setForm({ ...form, accountNo: e.target.value })} placeholder="20208000012345678001" className="font-mono" />
           </div>
           <div className="space-y-2">
-            <Label>Egasi (ixtiyoriy)</Label>
-            <Input value={form.ownerName} onChange={(e) => setForm({ ...form, ownerName: e.target.value })} placeholder="Asosiy hisob, USD hisobi va h.k." />
+            <Label>{t('ownerOptional')}</Label>
+            <Input value={form.ownerName} onChange={(e) => setForm({ ...form, ownerName: e.target.value })} placeholder={t('ownerPlaceholder')} />
           </div>
         </div>
         <DialogFooter>
@@ -646,6 +648,7 @@ function CreateAccountDialog({ creds }: { creds: any[] }) {
 // ─────────── Bulk import dialog — paste qilib ko'p hisob qo'shish ───────────
 function BulkImportDialog({ creds }: { creds: any[] }) {
   const t = useTranslations('accounts');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [credentialId, setCredentialId] = useState('');
@@ -669,7 +672,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
       // Faqat raqam bo'lsa
       const digits = line.replace(/\D/g, '');
       if (digits.length === 20) return { accountNo: digits };
-      return { accountNo: line, error: '20 belgilik hisob raqami topilmadi' };
+      return { accountNo: line, error: t('bulkNoAccountNo') };
     });
   }, [rawText]);
 
@@ -686,7 +689,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
     onSuccess: (r) => {
       setResult(r);
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
-      toast.success(`✓ ${r.added} qo'shildi · ${r.skipped} skip · ${r.errors?.length || 0} xato`);
+      toast.success(`✓ ${t('bulkResultToast', { added: r.added, skipped: r.skipped, errors: r.errors?.length || 0 })}`);
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -705,9 +708,9 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0 gap-0">
         <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-br from-indigo-500 to-blue-600 text-white">
-          <DialogTitle className="text-white text-base font-bold">Ko'p hisob qo'shish</DialogTitle>
+          <DialogTitle className="text-white text-base font-bold">{t('bulkTitle')}</DialogTitle>
           <DialogDescription className="text-white/85 text-xs mt-1">
-            Excel/Sheets'dan nusxalab paste qiling — formatda: "NOMI &nbsp;&nbsp; HISOB_NO" (har qatorda bittadan)
+            {t('bulkDesc')}
           </DialogDescription>
         </div>
 
@@ -715,9 +718,9 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {/* Settings */}
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-3 space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank ulanishi</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('credential')}</Label>
               <Select value={credentialId} onValueChange={setCredentialId}>
-                <SelectTrigger><SelectValue placeholder="— tanlang —" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder={t('selectPlaceholder')} /></SelectTrigger>
                 <SelectContent>
                   {creds.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
@@ -726,11 +729,11 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">MFO</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('branch')}</Label>
               <Input value={branch} onChange={(e) => setBranch(e.target.value.replace(/\D/g, '').slice(0, 5))} className="font-mono" maxLength={5} />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Valyuta</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('currency')}</Label>
               <Select value={currency} onValueChange={setCurrency}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -741,12 +744,12 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Tahlil</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('bulkAnalysis')}</Label>
               <div className="h-9 rounded-md ring-1 ring-slate-200 dark:ring-slate-700 px-3 flex items-center text-[12px] font-medium">
                 <span className="text-emerald-700 dark:text-emerald-300">{validCount}</span>
                 <span className="text-slate-400 dark:text-slate-500 mx-1">/</span>
                 <span className="text-slate-700 dark:text-slate-300">{parsed.length}</span>
-                {invalidCount > 0 && <span className="text-rose-600 dark:text-rose-400 ml-2">({invalidCount} xato)</span>}
+                {invalidCount > 0 && <span className="text-rose-600 dark:text-rose-400 ml-2">({t('bulkErrorsCount', { n: invalidCount })})</span>}
               </div>
             </div>
           </div>
@@ -754,7 +757,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {/* Paste area */}
           <div className="space-y-1.5">
             <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              Hisoblar ro'yxati (paste)
+              {t('bulkListLabel')}
             </Label>
             <textarea
               value={rawText}
@@ -764,7 +767,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
               placeholder={"APELSIN RESIDENCE\t20208000904501402001\nART-ZAL BARAKA BIZNES\t20208000004793065002\n..."}
             />
             <div className="text-[10px] text-slate-500 dark:text-slate-400">
-              Tab yoki bo'sh joy bilan ajratilgan. Hisob raqami 20 belgilik bo'lishi shart.
+              {t('bulkFormatHint')}
             </div>
           </div>
 
@@ -772,7 +775,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {parsed.length > 0 && (
             <div>
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">
-                Qabul qilinadigan ro'yxat (birinchi 10 ta)
+                {t('bulkPreviewLabel')}
               </Label>
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 max-h-44 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-700 bg-slate-50/40 dark:bg-slate-900/40">
                 {parsed.slice(0, 10).map((p: any, i: number) => (
@@ -785,7 +788,7 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
                   </div>
                 ))}
                 {parsed.length > 10 && (
-                  <div className="px-3 py-1.5 text-[10px] text-slate-500 dark:text-slate-400 text-center">… va yana {parsed.length - 10} ta</div>
+                  <div className="px-3 py-1.5 text-[10px] text-slate-500 dark:text-slate-400 text-center">{t('bulkAndMore', { n: parsed.length - 10 })}</div>
                 )}
               </div>
             </div>
@@ -794,23 +797,23 @@ function BulkImportDialog({ creds }: { creds: any[] }) {
           {/* Result after import */}
           {result && (
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-4 py-3 space-y-1 text-[12px]">
-              <div className="font-bold text-emerald-900 dark:text-emerald-300">Natija:</div>
-              <div>✓ <span className="font-semibold">{result.added}</span> ta yangi qo'shildi</div>
-              <div>↺ <span className="font-semibold">{result.skipped}</span> ta allaqachon mavjud (skip)</div>
+              <div className="font-bold text-emerald-900 dark:text-emerald-300">{t('bulkResultTitle')}</div>
+              <div>✓ <span className="font-semibold">{result.added}</span> {t('bulkResultAdded')}</div>
+              <div>↺ <span className="font-semibold">{result.skipped}</span> {t('bulkResultSkipped')}</div>
               {result.errors?.length > 0 && (
-                <div className="text-rose-700 dark:text-rose-300">✗ <span className="font-semibold">{result.errors.length}</span> ta xato</div>
+                <div className="text-rose-700 dark:text-rose-300">✗ <span className="font-semibold">{result.errors.length}</span> {t('bulkResultErrors')}</div>
               )}
             </div>
           )}
         </div>
 
         <DialogFooter className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60">
-          <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>Bekor qilish</Button>
+          <Button variant="outline" onClick={() => { setOpen(false); reset(); }}>{tc('cancel')}</Button>
           <Button
             onClick={() => mut.mutate()}
             disabled={mut.isPending || !credentialId || !branch || validCount === 0}
           >
-            {mut.isPending ? 'Qo\'shilmoqda...' : `${validCount} ta hisobni qo'shish`}
+            {mut.isPending ? t('bulkAdding') : t('bulkAddN', { n: validCount })}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -826,6 +829,8 @@ function AccountBackfillDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations('accounts');
+  const tc = useTranslations('common');
   const today = new Date().toISOString().slice(0, 10);
   const sevenDaysAgo = (() => {
     const d = new Date();
@@ -859,17 +864,17 @@ function AccountBackfillDialog({
     onSuccess: (r: any) => {
       setResult(r);
       if (r?.ok) {
-        toast.success(`Backfill ishga tushdi · ${r?.days ?? 0} ta sana`);
+        toast.success(t('backfillStarted', { days: r?.days ?? 0 }));
         // startedAt saqlash — polling shu vaqtdan boshlanadi
         if (r?.startedAt) setStartedAt(r.startedAt);
         onSuccess();
       } else {
-        toast.error(r?.error || 'Backfill xato');
+        toast.error(r?.error || t('backfillError'));
       }
     },
     onError: (e: any) => {
-      setResult({ ok: false, error: e?.message || 'Xato' });
-      toast.error(e?.message || 'So\'rov xato');
+      setResult({ ok: false, error: e?.message || tc('error') });
+      toast.error(e?.message || t('requestError'));
     },
   });
 
@@ -942,7 +947,7 @@ function AccountBackfillDialog({
               <Calendar className="h-5 w-5" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Sync orqa sanaga</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('backfillHeader')}</div>
               <div className="text-lg font-black tracking-tight">Backfill</div>
             </div>
           </div>
@@ -958,17 +963,16 @@ function AccountBackfillDialog({
           {!result?.ok && (
             <>
               <div className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed">
-                Tanlangan sana oralig'i uchun bank API'sidan tranzaksiyalarni qayta yuklab
-                DB'ga qo'shadi (dublikatlar avtomatik o'tkazib yuboriladi).
+                {t('backfillDesc')}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{t('dateFrom')}</Label>
                   <Input type="date" value={dateFrom} max={today} onChange={(e) => setDateFrom(e.target.value)} className="h-10" />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{t('dateTo')}</Label>
                   <Input type="date" value={dateTo} max={today} onChange={(e) => setDateTo(e.target.value)} className="h-10" />
                 </div>
               </div>
@@ -979,8 +983,8 @@ function AccountBackfillDialog({
                   dayDiff > 90 ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300',
                 )}>
                   <Calendar className="h-3.5 w-3.5" />
-                  <span><b>{dayDiff}</b> ta kun tanlandi</span>
-                  {dayDiff > 90 && <span className="text-amber-600 dark:text-amber-400">· uzoq sana, bir necha daqiqa ketishi mumkin</span>}
+                  <span><b>{dayDiff}</b> {t('daysSelected')}</span>
+                  {dayDiff > 90 && <span className="text-amber-600 dark:text-amber-400">{t('longRangeHint')}</span>}
                 </div>
               )}
             </>
@@ -990,8 +994,8 @@ function AccountBackfillDialog({
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
               <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
               <div className="text-[12.5px] text-rose-800 dark:text-rose-300">
-                <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
+                <div className="font-bold mb-0.5">{tc('error')}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || t('unknownError')}</div>
               </div>
             </div>
           )}
@@ -1020,13 +1024,13 @@ function AccountBackfillDialog({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-bold">
-                    {runningCount > 0 && `Sync qilinmoqda... (${runningCount}/${myLogs.length || result.days || 1})`}
-                    {isAllDone && failedCount === 0 && 'Backfill muvaffaqiyatli yakunlandi'}
-                    {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
-                    {myLogs.length === 0 && '⏳ Boshlanmoqda...'}
+                    {runningCount > 0 && t('syncingProgress', { done: runningCount, total: myLogs.length || result.days || 1 })}
+                    {isAllDone && failedCount === 0 && t('backfillDone')}
+                    {isAllDone && failedCount > 0 && t('datesFailed', { n: failedCount })}
+                    {myLogs.length === 0 && `⏳ ${t('starting')}`}
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                    {result.actualFrom} → {result.actualTo} · {result.days ?? 1} ta sana
+                    {result.actualFrom} → {result.actualTo} · {t('datesCount', { n: result.days ?? 1 })}
                   </div>
                 </div>
               </div>
@@ -1034,17 +1038,17 @@ function AccountBackfillDialog({
               {/* Statistika kartalari */}
               <div className="grid grid-cols-4 gap-2">
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Bajarildi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{t('statDone')}</div>
                   <div className="text-[18px] font-black text-slate-800 dark:text-slate-200 tabular-nums">
                     {finishedCount + failedCount}<span className="text-[12px] text-slate-400 dark:text-slate-500 font-normal">/{result.days ?? 1}</span>
                   </div>
                 </div>
                 <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">Bankdan olindi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">{t('statFetched')}</div>
                   <div className="text-[18px] font-black text-cyan-800 dark:text-cyan-300 tabular-nums">{totalFetched}</div>
                 </div>
                 <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">DB ga saqlandi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">{t('statSaved')}</div>
                   <div className="text-[18px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums">{totalSaved}</div>
                 </div>
                 <div className={cn(
@@ -1052,7 +1056,7 @@ function AccountBackfillDialog({
                   totalErrors > 0 ? 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                 )}>
                   <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', totalErrors > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400')}>
-                    Xato
+                    {tc('error')}
                   </div>
                   <div className={cn('text-[18px] font-black tabular-nums', totalErrors > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 dark:text-slate-500')}>
                     {totalErrors}
@@ -1064,9 +1068,9 @@ function AccountBackfillDialog({
               {myLogs.length > 0 && (
                 <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
                   <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                    <span>Sana bo'yicha jarayon</span>
+                    <span>{t('progressByDate')}</span>
                     <span className="font-normal text-[9.5px] normal-case tracking-normal">
-                      {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
+                      {runningCount > 0 ? t('liveUpdating') : t('finished')}
                     </span>
                   </div>
                   <div className="max-h-64 overflow-y-auto">
@@ -1093,19 +1097,19 @@ function AccountBackfillDialog({
                           )}
                         </div>
                         <div className="flex items-center gap-2 text-[11px] tabular-nums shrink-0">
-                          <span className="text-cyan-700 dark:text-cyan-300" title="Bank API javobi">
+                          <span className="text-cyan-700 dark:text-cyan-300" title={t('tipBankResponse')}>
                             <b>{log.fetched ?? 0}</b><span className="text-slate-400 dark:text-slate-500">fetch</span>
                           </span>
-                          <span className="text-emerald-700 dark:text-emerald-300" title="DB ga saqlangan">
+                          <span className="text-emerald-700 dark:text-emerald-300" title={t('tipSavedToDb')}>
                             <b>{log.saved ?? 0}</b><span className="text-slate-400 dark:text-slate-500">saved</span>
                           </span>
                           {log.errors > 0 && (
-                            <span className="text-rose-700 dark:text-rose-300" title="Xato">
+                            <span className="text-rose-700 dark:text-rose-300" title={tc('error')}>
                               <b>{log.errors}</b><span className="text-slate-400 dark:text-slate-500">err</span>
                             </span>
                           )}
                           {log.durationMs && (
-                            <span className="text-slate-500 dark:text-slate-400" title="Vaqt">
+                            <span className="text-slate-500 dark:text-slate-400" title={tc('time')}>
                               {(log.durationMs / 1000).toFixed(1)}s
                             </span>
                           )}
@@ -1123,7 +1127,7 @@ function AccountBackfillDialog({
           {result?.ok ? (
             <>
               <Button variant="ghost" onClick={onClose}>
-                {runningCount > 0 ? "Fonda davom ettirib yopish" : "Yopish"}
+                {runningCount > 0 ? t('closeInBackground') : tc('close')}
               </Button>
               {isAllDone && (
                 <Button
@@ -1131,13 +1135,13 @@ function AccountBackfillDialog({
                   variant="outline"
                   className="border-indigo-300 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300"
                 >
-                  <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
+                  <RefreshCw className="h-4 w-4 mr-1.5" /> {t('newBackfill')}
                 </Button>
               )}
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+              <Button variant="ghost" onClick={onClose}>{tc('cancel')}</Button>
               <Button
                 onClick={() => backfillMut.mutate()}
                 disabled={!dateFrom || !dateTo || dayDiff <= 0 || backfillMut.isPending}
@@ -1146,7 +1150,7 @@ function AccountBackfillDialog({
                 {backfillMut.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                   : <RefreshCw className="h-4 w-4 mr-1.5" />}
-                {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Backfill ishga tushirish'}
+                {backfillMut.isPending ? t('starting') : t('backfillStart')}
               </Button>
             </>
           )}
@@ -1164,6 +1168,8 @@ function BulkBackfillDialog({
   onClose: () => void;
   onSuccess: () => void;
 }) {
+  const t = useTranslations('accounts');
+  const tc = useTranslations('common');
   const today = new Date().toISOString().slice(0, 10);
 
   // Sync chegarasi (minimal sana)
@@ -1214,12 +1220,12 @@ function BulkBackfillDialog({
       api.patch<any>('/sync/bulk-schedule', vals),
     onSuccess: (r) => {
       toast.success(r?.enabled
-        ? `Reja saqlandi · har ${r.intervalDays} kunda ${r.timeOfDay} · ${r.daysBack} kunlik sync`
-        : "Reja o'chirildi");
+        ? t('scheduleSaved', { interval: r.intervalDays, time: r.timeOfDay, daysBack: r.daysBack })
+        : t('scheduleDisabled'));
       setSchedDirty(false);
       scheduleQ.refetch();
     },
-    onError: (e: any) => toast.error(e?.message || "Reja saqlanmadi"),
+    onError: (e: any) => toast.error(e?.message || t('scheduleSaveError')),
   });
 
   // Yangidan ochilganda reset
@@ -1244,16 +1250,16 @@ function BulkBackfillDialog({
     onSuccess: (r: any) => {
       setResult(r);
       if (r?.ok) {
-        toast.success(`Backfill boshlandi · ${r.accounts ?? 0} hisob · ${r.days ?? 0} sana`);
+        toast.success(t('bulkBackfillStarted', { accounts: r.accounts ?? 0, days: r.days ?? 0 }));
         if (r?.startedAt) setStartedAt(r.startedAt);
         onSuccess();
       } else {
-        toast.error(r?.error || 'Backfill xato');
+        toast.error(r?.error || t('backfillError'));
       }
     },
     onError: (e: any) => {
-      setResult({ ok: false, error: e?.message || 'Xato' });
-      toast.error(e?.message || "So'rov xato");
+      setResult({ ok: false, error: e?.message || tc('error') });
+      toast.error(e?.message || t('requestError'));
     },
   });
 
@@ -1311,13 +1317,11 @@ function BulkBackfillDialog({
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Bulk sync</div>
-              <div className="text-lg font-black tracking-tight">Barcha hisoblar — orqa sanaga sync</div>
+              <div className="text-lg font-black tracking-tight">{t('bulkBackfillHeader')}</div>
             </div>
           </div>
           <div className="text-[11.5px] text-white/85 mt-2 leading-relaxed">
-            Tanlangan sana oralig'ida barcha sync yoqilgan hisoblar uchun bank API'sidan
-            tranzaksiyalarni qayta yuklab oladi. Sync chegarasidan oldingi sanalarga chiqib
-            ketmaydi.
+            {t('bulkBackfillDesc')}
           </div>
         </div>
 
@@ -1325,7 +1329,7 @@ function BulkBackfillDialog({
           {syncMinDate && (
             <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800 dark:text-amber-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Sync chegarasi (minimal sana): <b className="tabular-nums">{syncMinDate}</b> — bundan oldinga chiqib bo'lmaydi
+              {t('syncLimitLabel')} <b className="tabular-nums">{syncMinDate}</b> {t('syncLimitSuffix')}
             </div>
           )}
 
@@ -1333,7 +1337,7 @@ function BulkBackfillDialog({
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{t('dateFrom')}</Label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -1344,7 +1348,7 @@ function BulkBackfillDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">{t('dateTo')}</Label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -1359,7 +1363,7 @@ function BulkBackfillDialog({
               {fromTooEarly && (
                 <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-center gap-2">
                   <X className="h-3.5 w-3.5" />
-                  Sanadan {syncMinDate} dan oldin bo'lmasligi kerak
+                  {t('fromTooEarly', { date: syncMinDate })}
                 </div>
               )}
 
@@ -1369,8 +1373,8 @@ function BulkBackfillDialog({
                   dayDiff > 60 ? 'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-800 dark:text-amber-300' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-300',
                 )}>
                   <Calendar className="h-3.5 w-3.5" />
-                  <b>{dayDiff}</b> ta kun · barcha sync yoqilgan hisoblar uchun
-                  {dayDiff > 60 && <span className="text-amber-600 dark:text-amber-400">· uzoq vaqt ketishi mumkin</span>}
+                  <b>{dayDiff}</b> {t('bulkDaysSuffix')}
+                  {dayDiff > 60 && <span className="text-amber-600 dark:text-amber-400">{t('longTimeHint')}</span>}
                 </div>
               )}
 
@@ -1398,17 +1402,17 @@ function BulkBackfillDialog({
                     </div>
                     <div className="min-w-0">
                       <div className="text-[11.5px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                        Avtomatik reja
+                        {t('autoSchedule')}
                         {schedEnabled && (
                           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
-                            yoqilgan
+                            {t('enabled')}
                           </span>
                         )}
                       </div>
                       <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
                         {schedEnabled
-                          ? <>Har <b className="text-indigo-700 dark:text-indigo-300">{schedInterval}</b> kunda · <b className="text-indigo-700 dark:text-indigo-300">{schedTime}</b> Tashkent</>
-                          : "O'chirilgan — sozlash uchun bosing"}
+                          ? <>{t('everyNDaysPrefix')} <b className="text-indigo-700 dark:text-indigo-300">{schedInterval}</b> {t('daysWord')} · <b className="text-indigo-700 dark:text-indigo-300">{schedTime}</b> {t('tashkent')}</>
+                          : t('scheduleDisabledHint')}
                       </div>
                     </div>
                   </div>
@@ -1424,7 +1428,7 @@ function BulkBackfillDialog({
                     {/* Toggle row */}
                     <label className="px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-white/30 dark:hover:bg-slate-900/30">
                       <span className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
-                        Avtomatik sync yoqilgan
+                        {t('autoSyncEnabled')}
                       </span>
                       {/* Native checkbox visually styled as toggle */}
                       <span className="relative inline-block">
@@ -1443,7 +1447,7 @@ function BulkBackfillDialog({
                     <div className={cn('px-4 pb-3 grid grid-cols-3 gap-3 transition-opacity', !schedEnabled && 'opacity-50 pointer-events-none')}>
                       <div>
                         <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                          Har necha kunda
+                          {t('everyNDays')}
                         </Label>
                         <div className="relative">
                           <Input
@@ -1455,13 +1459,13 @@ function BulkBackfillDialog({
                             className="h-10 pr-12"
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 dark:text-slate-500 pointer-events-none font-medium">
-                            kun
+                            {t('daysWord')}
                           </span>
                         </div>
                       </div>
                       <div>
                         <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                          Vaqt (Tashkent)
+                          {t('timeTashkent')}
                         </Label>
                         <Input
                           type="time"
@@ -1471,8 +1475,8 @@ function BulkBackfillDialog({
                         />
                       </div>
                       <div>
-                        <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block" title="Har safar ishlaganda necha kun orqaga qaytib sync qiladi">
-                          Necha kunlik
+                        <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block" title={t('daysBackTitle')}>
+                          {t('daysBackLabel')}
                         </Label>
                         <div className="relative">
                           <Input
@@ -1482,10 +1486,10 @@ function BulkBackfillDialog({
                             value={schedDaysBack}
                             onChange={(e) => { setSchedDaysBack(Math.max(1, Number(e.target.value) || 1)); setSchedDirty(true); }}
                             className="h-10 pr-12"
-                            title="Har safar ishlaganda necha kun orqaga qaytib sync qiladi"
+                            title={t('daysBackTitle')}
                           />
                           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 dark:text-slate-500 pointer-events-none font-medium">
-                            kun
+                            {t('daysWord')}
                           </span>
                         </div>
                       </div>
@@ -1496,11 +1500,10 @@ function BulkBackfillDialog({
                       'mx-4 mb-3 rounded-lg bg-white/60 dark:bg-slate-900/40 ring-1 ring-indigo-200/60 dark:ring-indigo-900/40 px-3 py-2 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 transition-opacity',
                       !schedEnabled && 'opacity-50',
                     )}>
-                      <span className="text-indigo-700 dark:text-indigo-300 font-bold">Qanday ishlaydi:</span>{' '}
-                      Har <b>{schedInterval}</b> kunda soat <b>{schedTime}</b> da boshlanadi va
-                      shu paytdagi sanadan <b>{schedDaysBack}</b> kun orqaga qaytib barcha sync yoqilgan hisoblarni qayta yuklaydi.
+                      <span className="text-indigo-700 dark:text-indigo-300 font-bold">{t('howItWorks')}</span>{' '}
+                      {t('howItWorksBodyPart1')} <b>{schedInterval}</b> {t('howItWorksBodyPart2')} <b>{schedTime}</b> {t('howItWorksBodyPart3')} <b>{schedDaysBack}</b> {t('howItWorksBodyPart4')}
                       <span className="block text-slate-500 dark:text-slate-400 mt-1">
-                        Misol: bugun {schedTime} da ishlasa — {Math.max(0, schedDaysBack - 1)} kun oldindan to bugungacha sync qiladi.
+                        {t('howItWorksExamplePart1', { time: schedTime })} {Math.max(0, schedDaysBack - 1)} {t('howItWorksExamplePart2')}
                       </span>
                     </div>
 
@@ -1509,10 +1512,10 @@ function BulkBackfillDialog({
                       <div className="text-[11px] text-slate-600 dark:text-slate-400 min-w-0">
                         {scheduleQ.data?.lastRunAt ? (
                           <span className="text-slate-500 dark:text-slate-400">
-                            Oxirgi: <b className="text-slate-700 dark:text-slate-300">{new Date(scheduleQ.data.lastRunAt).toLocaleString('ru-RU')}</b>
+                            {t('lastRun')} <b className="text-slate-700 dark:text-slate-300">{new Date(scheduleQ.data.lastRunAt).toLocaleString('ru-RU')}</b>
                           </span>
                         ) : (
-                          <span className="text-slate-400 dark:text-slate-500">Hali ishlamagan</span>
+                          <span className="text-slate-400 dark:text-slate-500">{t('neverRun')}</span>
                         )}
                       </div>
                       <Button
@@ -1523,7 +1526,7 @@ function BulkBackfillDialog({
                         className={cn('h-8 gap-1.5 shrink-0', schedDirty && 'bg-indigo-600 hover:bg-indigo-700 text-white')}
                       >
                         {scheduleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        Saqlash
+                        {tc('save')}
                       </Button>
                     </div>
                   </div>
@@ -1536,8 +1539,8 @@ function BulkBackfillDialog({
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
               <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
               <div className="text-[12.5px] text-rose-800 dark:text-rose-300">
-                <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
+                <div className="font-bold mb-0.5">{tc('error')}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || t('unknownError')}</div>
               </div>
             </div>
           )}
@@ -1564,30 +1567,30 @@ function BulkBackfillDialog({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-bold">
-                    {runningCount > 0 && `Sync qilinmoqda... (${finishedCount + failedCount}/${result.accounts ?? 0})`}
-                    {isAllDone && failedCount === 0 && `Backfill yakunlandi — ${result.accounts ?? 0} hisob`}
-                    {isAllDone && failedCount > 0 && `${failedCount} ta sana xato bilan tugadi`}
-                    {logs.length === 0 && '⏳ Boshlanmoqda...'}
+                    {runningCount > 0 && t('syncingProgress', { done: finishedCount + failedCount, total: result.accounts ?? 0 })}
+                    {isAllDone && failedCount === 0 && t('bulkBackfillDone', { accounts: result.accounts ?? 0 })}
+                    {isAllDone && failedCount > 0 && t('datesFailed', { n: failedCount })}
+                    {logs.length === 0 && `⏳ ${t('starting')}`}
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
-                    {result.actualFrom} → {result.actualTo} · {result.accounts ?? 0} hisob · {result.days ?? 0} sana
+                    {result.actualFrom} → {result.actualTo} · {t('accountsCount', { count: result.accounts ?? 0 })} · {t('datesCount', { n: result.days ?? 0 })}
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-4 gap-2">
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Bajarildi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{t('statDone')}</div>
                   <div className="text-[16px] font-black text-slate-800 dark:text-slate-200 tabular-nums">
                     {finishedCount + failedCount}<span className="text-[11px] text-slate-400 dark:text-slate-500 font-normal">/{result.accounts ?? 0}</span>
                   </div>
                 </div>
                 <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">Olindi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-cyan-700 dark:text-cyan-300">{t('statFetchedShort')}</div>
                   <div className="text-[16px] font-black text-cyan-800 dark:text-cyan-300 tabular-nums">{totalFetched}</div>
                 </div>
                 <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-3 py-2.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">Saqlandi</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300">{t('statSavedShort')}</div>
                   <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums">{totalSaved}</div>
                 </div>
                 <div className={cn(
@@ -1595,7 +1598,7 @@ function BulkBackfillDialog({
                   failedCount > 0 ? 'bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700',
                 )}>
                   <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', failedCount > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-500 dark:text-slate-400')}>
-                    Xato
+                    {tc('error')}
                   </div>
                   <div className={cn('text-[16px] font-black tabular-nums', failedCount > 0 ? 'text-rose-700 dark:text-rose-300' : 'text-slate-400 dark:text-slate-500')}>
                     {failedCount}
@@ -1606,9 +1609,9 @@ function BulkBackfillDialog({
               {logs.length > 0 && (
                 <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
                   <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 flex items-center justify-between">
-                    <span>Hisob bo'yicha jarayon ({logs.length})</span>
+                    <span>{t('progressByAccount', { n: logs.length })}</span>
                     <span className="font-normal text-[9.5px] normal-case tracking-normal">
-                      {runningCount > 0 ? 'jonli yangilanmoqda...' : 'tugadi'}
+                      {runningCount > 0 ? t('liveUpdating') : t('finished')}
                     </span>
                   </div>
                   <div className="max-h-60 overflow-y-auto">
@@ -1652,7 +1655,7 @@ function BulkBackfillDialog({
           {result?.ok ? (
             <>
               <Button variant="ghost" onClick={onClose}>
-                {runningCount > 0 ? 'Fonda davom ettirib yopish' : 'Yopish'}
+                {runningCount > 0 ? t('closeInBackground') : tc('close')}
               </Button>
               {isAllDone && (
                 <Button
@@ -1660,13 +1663,13 @@ function BulkBackfillDialog({
                   variant="outline"
                   className="border-indigo-300 dark:border-indigo-900 text-indigo-700 dark:text-indigo-300"
                 >
-                  <RefreshCw className="h-4 w-4 mr-1.5" /> Yangi backfill
+                  <RefreshCw className="h-4 w-4 mr-1.5" /> {t('newBackfill')}
                 </Button>
               )}
             </>
           ) : (
             <>
-              <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+              <Button variant="ghost" onClick={onClose}>{tc('cancel')}</Button>
               <Button
                 onClick={() => backfillMut.mutate()}
                 disabled={!dateFrom || !dateTo || dayDiff <= 0 || fromTooEarly || backfillMut.isPending}
@@ -1675,7 +1678,7 @@ function BulkBackfillDialog({
                 {backfillMut.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                   : <Calendar className="h-4 w-4 mr-1.5" />}
-                {backfillMut.isPending ? 'Ishga tushirilmoqda...' : 'Hammasini sync qilish'}
+                {backfillMut.isPending ? t('starting') : t('syncAll')}
               </Button>
             </>
           )}

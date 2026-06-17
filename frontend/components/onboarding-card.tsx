@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Building2, KeyRound, Wallet, ArrowRight, Check, Sparkles } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 import { cn } from '@/lib/utils';
@@ -23,12 +24,14 @@ export function OnboardingCard({
   banksCount, credentialsCount, accountsCount,
 }: { banksCount: number; credentialsCount: number; accountsCount: number }) {
   const { locale } = useParams<{ locale: string }>();
+  const t = useTranslations('onboarding');
+  const tc = useTranslations('common');
 
   const steps: Step[] = [
     {
       num: 1,
-      title: 'Bank ulanishi qo\'shing',
-      description: 'KapitalBank yoki Ipak Yo\'li uchun login va parolni kiriting',
+      title: t('step1Title'),
+      description: t('step1Desc'),
       href: `/${locale}/setup/credentials`,
       icon: KeyRound,
       done: credentialsCount > 0,
@@ -36,8 +39,8 @@ export function OnboardingCard({
     },
     {
       num: 2,
-      title: 'Hisoblarni qo\'shing',
-      description: 'Bank bergan 20-belgili hisob raqamlarini kiriting',
+      title: t('step2Title'),
+      description: t('step2Desc'),
       href: `/${locale}/setup/accounts`,
       icon: Wallet,
       done: accountsCount > 0,
@@ -45,8 +48,8 @@ export function OnboardingCard({
     },
     {
       num: 3,
-      title: 'Avto-sync ishga tushadi',
-      description: 'Tranzaksiyalar har 5 daqiqada avtomatik yuklanadi',
+      title: t('step3Title'),
+      description: t('step3Desc'),
       href: `/${locale}/admin/sync-logs`,
       icon: Sparkles,
       done: false,
@@ -64,12 +67,12 @@ export function OnboardingCard({
           <div>
             <div className="text-base lg:text-lg font-bold tracking-tight flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-              Boshlash uchun yo'l-yo'riq
+              {t('title')}
             </div>
-            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{completed} / {steps.length} ta qadam bajarildi</div>
+            <div className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{t('progress', { completed, total: steps.length })}</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">Bajarildi</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">{t('done')}</div>
             <div className="flex gap-1.5">
               {steps.map((s, i) => (
                 <div
@@ -122,7 +125,7 @@ export function OnboardingCard({
                   <div className="font-semibold text-sm tracking-tight mb-1">{s.title}</div>
                   <div className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">{s.description}</div>
                   <div className="flex items-center gap-1 mt-3 text-xs font-medium text-indigo-600 dark:text-indigo-400 group-hover:gap-2 transition-all">
-                    O'tish <ArrowRight className="h-3 w-3" />
+                    {tc('proceed')} <ArrowRight className="h-3 w-3" />
                   </div>
                 </div>
               </Link>

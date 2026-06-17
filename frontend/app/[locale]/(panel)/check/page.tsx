@@ -48,6 +48,7 @@ const AUTO_REFETCH_MS = 20 * 60 * 1000;
 
 export default function CheckPage() {
   const t = useTranslations('check');
+  const tc = useTranslations('common');
   const [q, setQ] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
@@ -68,7 +69,7 @@ export default function CheckPage() {
 
   // Manual refresh — barcha hisoblarni qaytadan tekshirib, FARQLILARNI sync qiladi
   async function refreshAll() {
-    toast.message('Sverka yangilanmoqda + farqli hisoblar uchun sync...');
+    toast.message(t('toastRefreshing'));
     try {
       // 2-pass: avval sverka, keyin faqat farqlilar uchun sync+qayta sverka
       const data = await api.get<TodayResponse>('/transactions/reconcile/today?syncMismatched=true', { timeout: 120_000 });
@@ -76,9 +77,9 @@ export default function CheckPage() {
       qc.setQueryData(['reconcile-today'], data);
       const m = data.summary.mismatch;
       const ok = data.summary.ok;
-      toast.success(`Yangilandi · ${ok} mos, ${m} farqli`);
+      toast.success(t('toastRefreshed', { ok, mismatch: m }));
     } catch (e: any) {
-      toast.error(e?.message || 'Xato');
+      toast.error(e?.message || tc('error'));
     }
   }
   const qc = useQueryClient();
@@ -100,7 +101,7 @@ export default function CheckPage() {
         ...r,
         [accountId]: {
           status: 'error', accountId, accountNo: '', ownerName: null, bankName: null,
-          error: e?.message || 'Xato',
+          error: e?.message || tc('error'),
         },
       }));
     } finally {
@@ -159,10 +160,10 @@ export default function CheckPage() {
               <Scale className="h-5 w-5" strokeWidth={2.2} />
             </span>
             <div>
-              <h1 className="text-[20px] font-bold tracking-tight">Sverka</h1>
+              <h1 className="text-[20px] font-bold tracking-tight">{t('title')}</h1>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                 <Wifi className="h-3 w-3 text-emerald-500" />
-                Avto-yangilanish · 20 daq {isRefreshing && '· hozir...'}
+                {t('autoRefresh')} {isRefreshing && `· ${t('refreshingNow')}`}
                 {todayQuery.data?.date && <> · <span className="font-mono">{todayQuery.data.date}</span></>}
               </div>
             </div>
@@ -173,9 +174,9 @@ export default function CheckPage() {
             className="h-10 rounded-xl font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 gap-1.5 shadow-md shadow-violet-500/20"
           >
             {isRefreshing ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Yangilanmoqda...</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {t('refreshing')}</>
             ) : (
-              <><RefreshCw className="h-4 w-4" /> Hammasini yangilash</>
+              <><RefreshCw className="h-4 w-4" /> {t('refreshAll')}</>
             )}
           </Button>
         </div>
@@ -183,14 +184,14 @@ export default function CheckPage() {
         {/* ═══ KPI KARTALAR ═══ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <SverkaKpi
-            label="Jami hisoblar"
+            label={t('kpiTotal')}
             value={summary.total}
             color="violet"
             icon={<Building2 className="h-4 w-4" />}
             loading={isLoading}
           />
           <SverkaKpi
-            label="Mos"
+            label={t('kpiOk')}
             value={summary.ok}
             color="emerald"
             icon={<CheckCircle2 className="h-4 w-4" />}
@@ -198,14 +199,14 @@ export default function CheckPage() {
             extra={summary.total > 0 ? `${Math.round((summary.ok / summary.total) * 100)}%` : undefined}
           />
           <SverkaKpi
-            label="Farqli"
+            label={t('kpiMismatch')}
             value={summary.mismatch}
             color={summary.mismatch > 0 ? 'amber' : 'slate'}
             icon={<AlertTriangle className="h-4 w-4" />}
             loading={isLoading}
           />
           <SverkaKpi
-            label="Xato"
+            label={t('kpiError')}
             value={summary.error}
             color={summary.error > 0 ? 'rose' : 'slate'}
             icon={<X className="h-4 w-4" />}
@@ -220,7 +221,7 @@ export default function CheckPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
               <Input
                 className="pl-9 h-11 rounded-xl bg-slate-50/60 dark:bg-slate-900"
-                placeholder="Hisob raqami, egasi yoki bank..."
+                placeholder={t('searchPlaceholder')}
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
@@ -245,20 +246,20 @@ export default function CheckPage() {
               <div className="p-8 text-center space-y-2">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300 text-[12px] font-semibold">
                   <X className="h-3.5 w-3.5" />
-                  So'rovda xato yuz berdi
+                  {t('requestError')}
                 </div>
                 <div className="text-[12px] text-slate-600 dark:text-slate-300 max-w-md mx-auto">
-                  {(todayQuery.error as any)?.message || "noma'lum xato"}
+                  {(todayQuery.error as any)?.message || t('unknownError')}
                 </div>
                 <Button variant="outline" size="sm" onClick={refreshAll} className="mt-2 rounded-lg">
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Qayta urinish
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" /> {tc('retry')}
                 </Button>
               </div>
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={Scale}
-                title={q ? "Qidiruv bo'yicha hisob topilmadi" : "Aktiv hisoblar topilmadi"}
-                description={q ? undefined : "Bank yoki hisoblar aktiv emas — Setup → Banklarda tekshiring"}
+                title={q ? t('emptySearchTitle') : t('emptyTitle')}
+                description={q ? undefined : t('emptyDesc')}
               />
             ) : (
               <>
@@ -287,12 +288,12 @@ export default function CheckPage() {
                       </div>
                       <div className="text-left min-w-0 flex-1">
                         <div className="text-[13px] font-semibold text-rose-900 dark:text-rose-300">
-                          {errorRows.length} ta xato hisob
+                          {t('errorAccounts', { n: errorRows.length })}
                         </div>
                         <div className="text-[11px] text-rose-700/80 dark:text-rose-400/80 truncate">
                           {showErrors
-                            ? "Yashirish uchun bosing"
-                            : "Tafsilotini ko'rish uchun bosing — odatda 'bu klientga ruxsat yo'q' xatolari"}
+                            ? t('clickToHide')
+                            : t('clickToShowErrors')}
                         </div>
                       </div>
                       <ChevronRight className={cn(
@@ -441,6 +442,7 @@ function AccountRow({
   onClick: () => void;
   onRefresh: () => void;
 }) {
+  const t = useTranslations('check');
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const totalDiff = Math.abs((item.diff?.credit || 0)) + Math.abs((item.diff?.debit || 0));
 
@@ -491,20 +493,20 @@ function AccountRow({
           </code>
         </div>
         <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-          {item.ownerName || "— egasi ko'rsatilmagan"}
+          {item.ownerName || t('noOwner')}
         </div>
         {item.status === 'mismatch' && item.diff && (
           <div className="mt-1.5 flex items-center gap-3 text-[11px]">
             <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded ring-1 ring-emerald-200 dark:ring-emerald-900">
               <TrendingUp className="h-2.5 w-2.5" />
-              Kirim: <span className="font-bold tabular-nums">{m(item.diff.credit)}</span>
+              {t('inflowLabel')} <span className="font-bold tabular-nums">{m(item.diff.credit)}</span>
             </span>
             <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded ring-1 ring-rose-200 dark:ring-rose-900">
               <TrendingUp className="h-2.5 w-2.5 rotate-180" />
-              Chiqim: <span className="font-bold tabular-nums">{m(item.diff.debit)}</span>
+              {t('outflowLabel')} <span className="font-bold tabular-nums">{m(item.diff.debit)}</span>
             </span>
             {item.partial && (
-              <span className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ {item.failedDays} kun ma'lumotsiz</span>
+              <span className="text-amber-600 dark:text-amber-400 text-[10px]">⚠ {t('daysNoData', { n: item.failedDays ?? 0 })}</span>
             )}
           </div>
         )}
@@ -521,7 +523,7 @@ function AccountRow({
       <button
         disabled={loading}
         onClick={(e) => { e.stopPropagation(); onRefresh(); }}
-        title="Manual yangilash"
+        title={t('manualRefresh')}
         className={cn(
           'inline-flex items-center justify-center w-9 h-9 rounded-xl shrink-0 transition-all',
           loading
@@ -543,10 +545,11 @@ function AccountRow({
 }
 
 function StatusBadge({ item, totalDiff }: { item: TodayItem; totalDiff: number }) {
+  const t = useTranslations('check');
   if (item.status === 'error') {
     return (
       <span className="flex items-center gap-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/40 ring-1 ring-rose-300 dark:ring-rose-900 px-3 py-1.5 rounded-full shrink-0 shadow-sm shadow-rose-200 dark:shadow-rose-950">
-        <X className="h-3 w-3" /> Xato
+        <X className="h-3 w-3" /> {t('statusError')}
       </span>
     );
   }
@@ -554,13 +557,13 @@ function StatusBadge({ item, totalDiff }: { item: TodayItem; totalDiff: number }
     return (
       <span className="flex items-center gap-1 text-[11px] font-bold text-amber-800 dark:text-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40 ring-1 ring-amber-300 dark:ring-amber-900 px-3 py-1.5 rounded-full shrink-0 tabular-nums shadow-sm shadow-amber-200 dark:shadow-amber-950">
         <AlertTriangle className="h-3 w-3" />
-        Farq {formatMoney(totalDiff).replace(' UZS', '')}
+        {t('diff')} {formatMoney(totalDiff).replace(' UZS', '')}
       </span>
     );
   }
   return (
     <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 ring-1 ring-emerald-300 dark:ring-emerald-900 px-3 py-1.5 rounded-full shrink-0 shadow-sm shadow-emerald-200 dark:shadow-emerald-950">
-      <CheckCircle2 className="h-3 w-3" /> Mos
+      <CheckCircle2 className="h-3 w-3" /> {t('statusOk')}
     </span>
   );
 }

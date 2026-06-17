@@ -168,7 +168,7 @@ export function DeployModal() {
                 <button
                   onClick={() => setExpanded(false)}
                   className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center text-white transition-all hover:scale-110"
-                  aria-label="Yopish"
+                  aria-label={t('closeBtn')}
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -196,7 +196,7 @@ export function DeployModal() {
                     </span>
                     <span className="text-indigo-600 dark:text-indigo-400">
                       {data.estimatedRemainingSeconds === null || data.estimatedRemainingSeconds === undefined
-                        ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> Yakunlanmoqda...</span>
+                        ? <span className="inline-flex items-center gap-1.5"><Loader2 className="h-3 w-3 animate-spin" /> {t('finishing')}</span>
                         : <>
                             <span className="text-slate-400 dark:text-slate-500">{t('remaining')}:</span>{' '}
                             <b>~{data.estimatedRemainingSeconds}{t('second')}</b>

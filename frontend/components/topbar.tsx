@@ -30,6 +30,8 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const t = useTranslations('nav');
   const tb = useTranslations('topbar');
   const tn = useTranslations('notifications');
+  const td = useTranslations('deploy');
+  const tc = useTranslations('common');
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
@@ -90,7 +92,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
           <button
             onClick={toggleMobileNav}
             className="lg:hidden w-10 h-10 rounded-full bg-white/15 hover:bg-white/25 backdrop-blur-sm grid place-items-center text-white transition-colors shrink-0"
-            aria-label="Menyu"
+            aria-label={tc('menu')}
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -150,11 +152,11 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                               {hasDeployRunning && (
                                 <>
                                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                                  Tizim yangilanmoqda
+                                  {td('deploying')}
                                 </>
                               )}
-                              {hasNewDeployVersion && 'Yangi versiya tayyor'}
-                              {hasDeployFailed    && 'Deploy muvaffaqiyatsiz'}
+                              {hasNewDeployVersion && td('newVersionTitle')}
+                              {hasDeployFailed    && td('failedTitle')}
                             </div>
                             <div className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed mt-0.5">
                               {hasDeployRunning && (
@@ -171,10 +173,10 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
                                 </span>
                               )}
                               {hasNewDeployVersion && (
-                                <span>Sahifani yangilang — yangi imkoniyatlar tayyor</span>
+                                <span>{td('newVersionHint')}</span>
                               )}
                               {hasDeployFailed && (
-                                <span className="text-rose-600">Batafsil ko'rish uchun bosing</span>
+                                <span className="text-rose-600">{td('failedHint')}</span>
                               )}
                             </div>
                             {/* Mini progress bar */}

@@ -363,6 +363,7 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
+                title={t('downloadPng')}
                 onClick={async () => {
                   if (!kunmaOpen) setKunmaOpen(true);
                   await new Promise((r) => setTimeout(r, 150));
@@ -521,6 +522,7 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-2">
               <DownloadIconBtn
+                title={t('downloadPng')}
                 onClick={async () => {
                   if (!kunmaBarOpen) setKunmaBarOpen(true);
                   await new Promise((r) => setTimeout(r, 150));
@@ -564,6 +566,7 @@ export default function DashboardPage() {
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
+                title={t('downloadPng')}
                 onClick={async () => {
                   if (!clientOpen) setClientOpen(true);
                   await new Promise((r) => setTimeout(r, 150));
@@ -755,11 +758,12 @@ export default function DashboardPage() {
               <div className="w-7 h-7 rounded-md overflow-hidden bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center shrink-0">
                 <img src="/xonpay.jpg" alt="XonPay" className="w-full h-full object-cover" />
               </div>
-              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">Kutilayotgan to'lovlar (XonPay)</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· debitor · {xonpayFrom || '—'} → {xonpayTo || '—'}</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('xonpayPending')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {t('debitor')} · {xonpayFrom || '—'} → {xonpayTo || '—'}</div>
             </button>
             <div className="flex items-center gap-2 flex-wrap">
               <DownloadIconBtn
+                title={t('downloadPng')}
                 onClick={async () => {
                   if (!xonpayOpen) setXonpayOpen(true);
                   await new Promise((r) => setTimeout(r, 150));
@@ -805,8 +809,8 @@ export default function DashboardPage() {
                 <div className="relative overflow-hidden rounded-2xl border border-rose-200 dark:border-rose-900 bg-gradient-to-br from-rose-50 dark:from-rose-950/40 via-rose-50/40 dark:via-rose-950/30 to-white dark:to-slate-900 p-5 sm:p-6">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <div className="text-[11px] sm:text-[12px] font-bold uppercase tracking-[0.15em] text-rose-700 dark:text-rose-300 mb-1">DEBITOR</div>
-                      <div className="text-[11px] sm:text-[12px] text-rose-600/80 dark:text-rose-400/80">XonPay'da bor, Kapital bankka kelmagan</div>
+                      <div className="text-[11px] sm:text-[12px] font-bold uppercase tracking-[0.15em] text-rose-700 dark:text-rose-300 mb-1">{t('debitorUpper')}</div>
+                      <div className="text-[11px] sm:text-[12px] text-rose-600/80 dark:text-rose-400/80">{t('debitorDesc')}</div>
                     </div>
                     <div className="w-11 h-11 rounded-xl bg-rose-100 dark:bg-rose-900/30 grid place-items-center shrink-0">
                       <AlertCircle className="h-5 w-5 text-rose-600 dark:text-rose-400 animate-pulse" />
@@ -817,11 +821,11 @@ export default function DashboardPage() {
                   </div>
                   <div className="text-[12px] text-rose-700/80 dark:text-rose-300/80 mt-3 flex items-center gap-3 flex-wrap">
                     <span>
-                      <span className="font-bold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> ta tranzaksiya kutilmoqda
+                      <span className="font-bold tabular-nums">{xonpayTotals.missingCount.toLocaleString('uz-UZ')}</span> {t('txnAwaiting')}
                     </span>
                     {xonpayTotals.total > 0 && (
                       <span className="font-bold tabular-nums bg-rose-600 text-white px-2.5 py-1 rounded-full text-[10.5px]">
-                        Jamining {Math.round((xonpayTotals.missing / xonpayTotals.total) * 100)}%
+                        {t('percentOfTotal', { n: Math.round((xonpayTotals.missing / xonpayTotals.total) * 100) })}
                       </span>
                     )}
                   </div>
@@ -1156,7 +1160,7 @@ async function downloadChartPng(node: HTMLElement | null, filename: string) {
 }
 
 // Kichkina yumaloq icon tugma — kartochka header'iga PNG yuklab olish uchun
-function DownloadIconBtn({ onClick, title = 'PNG sifatida yuklab olish' }: { onClick: () => void; title?: string }) {
+function DownloadIconBtn({ onClick, title }: { onClick: () => void; title?: string }) {
   return (
     <button
       onClick={onClick}

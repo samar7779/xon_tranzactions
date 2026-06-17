@@ -149,7 +149,7 @@ export default function CounterpartiesPage() {
     mutationFn: (body: { inn: string; name: string }) =>
       api.post<{ ok: boolean; didoxFetched?: boolean }>('/counterparties', body),
     onSuccess: (r) => {
-      toast.success(t('addedOk') + (r?.didoxFetched === false ? ' (DIDOX javob bermadi — keyin cron yangilaydi)' : ''));
+      toast.success(t('addedOk') + (r?.didoxFetched === false ? ` (${t('didoxNoResponse')})` : ''));
       setAddOpen(false); setAddInn(''); setAddName('');
       qc.invalidateQueries({ queryKey: ['counterparties'] });
     },
@@ -180,7 +180,7 @@ export default function CounterpartiesPage() {
   const refreshAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/counterparties/refresh-all'),
     onSuccess: (r: any) => {
-      toast.success(r?.message || 'Yangilash fonda boshlandi');
+      toast.success(r?.message || t('refreshAllStarted'));
       // 30 soniyadan keyin sahifani avto-yangilaymiz
       setTimeout(() => qc.invalidateQueries({ queryKey: ['counterparties'] }), 30_000);
     },
@@ -278,9 +278,9 @@ export default function CounterpartiesPage() {
             shadow="shadow-violet-500/30"
           />
           <KpiTile
-            label="Boyitilgan"
+            label={t('kpiEnriched')}
             value={`${kpis.enrichedPct}%`}
-            sub={`${kpis.enrichedCount} / ${kpis.total} qator`}
+            sub={t('kpiEnrichedSub', { n: kpis.enrichedCount, total: kpis.total })}
             progress={kpis.enrichedPct}
             icon={<CheckCircle2 className="h-5 w-5" strokeWidth={2.4} />}
             gradient="from-emerald-500 via-emerald-500 to-teal-600"
@@ -289,7 +289,7 @@ export default function CounterpartiesPage() {
           <KpiTile
             label={t('kpiAvgRating')}
             value={kpis.avgRating != null ? String(kpis.avgRating) : '—'}
-            sub={kpis.ratedCount ? `${kpis.ratedCount} ta reytingli` : 'reyting yo\'q'}
+            sub={kpis.ratedCount ? t('kpiRatedSub', { n: kpis.ratedCount }) : t('kpiNoRating')}
             icon={<Star className="h-5 w-5 fill-current" strokeWidth={2.4} />}
             gradient="from-amber-400 via-orange-500 to-rose-500"
             shadow="shadow-amber-500/30"
@@ -329,23 +329,24 @@ export default function CounterpartiesPage() {
 
             {/* Reyting filter dropdown */}
             <FilterDropdown
-              label="Reyting"
+              label={t('rating')}
+              allLabel={tc('all')}
               activeLabel={
-                ratingTier === 'high' ? 'Yuqori'
-                : ratingTier === 'mid' ? "O'rta"
-                : ratingTier === 'ok' ? 'Qoniqarli'
-                : ratingTier === 'low' ? 'Quyi'
-                : ratingTier === 'none' ? "Reyting yo'q"
+                ratingTier === 'high' ? t('ratingHigh')
+                : ratingTier === 'mid' ? t('ratingMid')
+                : ratingTier === 'ok' ? t('ratingOk')
+                : ratingTier === 'low' ? t('ratingLow')
+                : ratingTier === 'none' ? t('ratingNone')
                 : null
               }
               icon={<Star className="h-3.5 w-3.5" />}
               options={[
-                { v: '',     label: 'Hammasi',        sub: undefined },
-                { v: 'high', label: 'Yuqori',         sub: '≥86 (AAA/AA/A)',  tone: 'emerald' },
-                { v: 'mid',  label: "O'rta",          sub: '56-85 (BBB/BB/B)', tone: 'blue' },
-                { v: 'ok',   label: 'Qoniqarli',      sub: '26-55 (CCC/CC/C)', tone: 'amber' },
-                { v: 'low',  label: 'Quyi',           sub: '≤25 (D)',          tone: 'rose' },
-                { v: 'none', label: "Reyting yo'q",   sub: 'Hali enrich qilinmagan', tone: 'slate' },
+                { v: '',     label: tc('all'),        sub: undefined },
+                { v: 'high', label: t('ratingHigh'),  sub: '≥86 (AAA/AA/A)',  tone: 'emerald' },
+                { v: 'mid',  label: t('ratingMid'),   sub: '56-85 (BBB/BB/B)', tone: 'blue' },
+                { v: 'ok',   label: t('ratingOk'),    sub: '26-55 (CCC/CC/C)', tone: 'amber' },
+                { v: 'low',  label: t('ratingLow'),   sub: '≤25 (D)',          tone: 'rose' },
+                { v: 'none', label: t('ratingNone'),  sub: t('ratingNoneSub'), tone: 'slate' },
               ]}
               value={ratingTier}
               onChange={(v) => { setRatingTier(v as any); setPage(1); }}
@@ -353,21 +354,22 @@ export default function CounterpartiesPage() {
 
             {/* Holat filter dropdown */}
             <FilterDropdown
-              label="Holat"
+              label={t('statusLabel')}
+              allLabel={tc('all')}
               activeLabel={
-                statusFilter === 'enriched' ? "To'liq ma'lumot"
-                : statusFilter === 'manual' ? "Qo'lda"
-                : statusFilter === 'never' ? 'Yangilanmagan'
-                : statusFilter === 'error' ? 'Xato'
+                statusFilter === 'enriched' ? t('statusEnriched')
+                : statusFilter === 'manual' ? t('statusManualShort')
+                : statusFilter === 'never' ? t('statusNever')
+                : statusFilter === 'error' ? tc('error')
                 : null
               }
               icon={<Tag className="h-3.5 w-3.5" />}
               options={[
-                { v: '',         label: 'Hammasi' },
-                { v: 'enriched', label: "To'liq ma'lumot", sub: 'DIDOX/Chamber javob bergan', tone: 'emerald' },
-                { v: 'manual',   label: "Qo'lda kiritilgan", sub: 'Nostandart INN (kod0088 va h.k.)', tone: 'violet' },
-                { v: 'never',    label: 'Yangilanmagan',    sub: 'Cron hali tegmagan',            tone: 'amber' },
-                { v: 'error',    label: 'Xato',             sub: 'DIDOX/Chamber javob bermagan',  tone: 'rose' },
+                { v: '',         label: tc('all') },
+                { v: 'enriched', label: t('statusEnriched'), sub: t('statusEnrichedSub'), tone: 'emerald' },
+                { v: 'manual',   label: t('statusManual'),   sub: t('statusManualSub'), tone: 'violet' },
+                { v: 'never',    label: t('statusNever'),    sub: t('statusNeverSub'),            tone: 'amber' },
+                { v: 'error',    label: tc('error'),         sub: t('statusErrorSub'),  tone: 'rose' },
               ]}
               value={statusFilter}
               onChange={(v) => { setStatusFilter(v as any); setPage(1); }}
@@ -375,29 +377,30 @@ export default function CounterpartiesPage() {
 
             {/* Saralash dropdown */}
             <FilterDropdown
-              label="Saralash"
+              label={t('sortLabel')}
+              allLabel={tc('all')}
               activeLabel={(() => {
                 const k = `${sortBy}:${sortDir}`;
                 if (k === 'addedAt:desc') return null; // default
-                if (k === 'addedAt:asc')        return 'Eski qo\'shilgan';
-                if (k === 'name:asc')           return 'Nomi A-Z';
-                if (k === 'name:desc')          return 'Nomi Z-A';
-                if (k === 'rating:desc')        return 'Reyting (yuqori)';
-                if (k === 'rating:asc')         return 'Reyting (past)';
-                if (k === 'lastFetchedAt:desc') return 'Yangi yangilangan';
-                if (k === 'lastFetchedAt:asc')  return 'Eski yangilangan';
+                if (k === 'addedAt:asc')        return t('sortAddedOld');
+                if (k === 'name:asc')           return t('sortNameAz');
+                if (k === 'name:desc')          return t('sortNameZa');
+                if (k === 'rating:desc')        return t('sortRatingHigh');
+                if (k === 'rating:asc')         return t('sortRatingLow');
+                if (k === 'lastFetchedAt:desc') return t('sortFetchedNew');
+                if (k === 'lastFetchedAt:asc')  return t('sortFetchedOld');
                 return null;
               })()}
               icon={<RefreshCw className="h-3.5 w-3.5" />}
               options={[
-                { v: 'addedAt:desc',        label: 'Yangi qo\'shilgan',    sub: 'Default' },
-                { v: 'addedAt:asc',         label: 'Eski qo\'shilgan' },
-                { v: 'name:asc',            label: 'Nomi A-Z' },
-                { v: 'name:desc',           label: 'Nomi Z-A' },
-                { v: 'rating:desc',         label: 'Reyting (yuqori)' },
-                { v: 'rating:asc',          label: 'Reyting (past)' },
-                { v: 'lastFetchedAt:desc',  label: 'Yangi yangilangan' },
-                { v: 'lastFetchedAt:asc',   label: 'Eski yangilangan' },
+                { v: 'addedAt:desc',        label: t('sortAddedNew'),    sub: t('sortDefault') },
+                { v: 'addedAt:asc',         label: t('sortAddedOld') },
+                { v: 'name:asc',            label: t('sortNameAz') },
+                { v: 'name:desc',           label: t('sortNameZa') },
+                { v: 'rating:desc',         label: t('sortRatingHigh') },
+                { v: 'rating:asc',          label: t('sortRatingLow') },
+                { v: 'lastFetchedAt:desc',  label: t('sortFetchedNew') },
+                { v: 'lastFetchedAt:asc',   label: t('sortFetchedOld') },
               ]}
               value={`${sortBy}:${sortDir}`}
               onChange={(v) => {
@@ -428,14 +431,14 @@ export default function CounterpartiesPage() {
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    title={t('actions') || 'Amallar'}
-                    aria-label="Amallar"
+                    title={t('actions')}
+                    aria-label={t('actions')}
                     className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 text-white shadow-sm hover:shadow-md hover:shadow-indigo-500/30 transition-all"
                   >
                     {refreshAllMut.isPending
                       ? <Loader2 className="h-4 w-4 animate-spin" />
                       : <Plus className="h-4 w-4" />}
-                    <span className="text-[12px] font-semibold">Amallar</span>
+                    <span className="text-[12px] font-semibold">{t('actions')}</span>
                     <ChevronDown className="h-3.5 w-3.5 opacity-80" />
                   </button>
                 </DropdownMenuTrigger>
@@ -513,9 +516,9 @@ export default function CounterpartiesPage() {
                               {manual && (
                                 <span
                                   className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[9px] font-bold uppercase tracking-wider"
-                                  title="Nostandart INN — qo'lda kiritilgan, avto-yangilanmaydi"
+                                  title={t('manualInnHint')}
                                 >
-                                  Qo'lda
+                                  {t('manualBadge')}
                                 </span>
                               )}
                             </div>
@@ -563,7 +566,7 @@ export default function CounterpartiesPage() {
                               </span>
                             ) : it.lastFetchError ? (
                               <span className="inline-flex items-center gap-1 text-rose-600" title={it.lastFetchError}>
-                                <AlertCircle className="h-3 w-3" /> xato
+                                <AlertCircle className="h-3 w-3" /> {t('errorShort')}
                               </span>
                             ) : it.lastFetchedAt ? (
                               formatDateTime(it.lastFetchedAt)
@@ -747,10 +750,10 @@ export default function CounterpartiesPage() {
               <div className="space-y-3">
                 <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{t('importResult')}</div>
                 <div className="grid grid-cols-4 gap-2">
-                  <ImportStat label="Qo'shildi" value={importResult.added || 0} tone="emerald" />
-                  <ImportStat label="Yangilandi" value={importResult.updated || 0} tone="blue" />
-                  <ImportStat label="O'zgarmagan" value={importResult.skipped || 0} tone="amber" />
-                  <ImportStat label="Xato" value={importResult.failed || 0} tone="rose" />
+                  <ImportStat label={t('added')} value={importResult.added || 0} tone="emerald" />
+                  <ImportStat label={t('updated')} value={importResult.updated || 0} tone="blue" />
+                  <ImportStat label={t('unchanged')} value={importResult.skipped || 0} tone="amber" />
+                  <ImportStat label={t('failed')} value={importResult.failed || 0} tone="rose" />
                 </div>
 
                 {/* O'zgarmaganlar haqida qisqacha izoh */}
@@ -758,8 +761,7 @@ export default function CounterpartiesPage() {
                   <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[11px] text-amber-900 dark:text-amber-300 flex items-start gap-2">
                     <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                     <div>
-                      <b>{importResult.skipped} ta qator o'zgarmagan</b> — INN va nom DB'da xuddi shunday turibdi.
-                      Ro'yxatga qo'shilmadi (UI'ni og'irlashtirmaslik uchun).
+                      <b>{t('importUnchangedNote', { n: importResult.skipped })}</b> {t('importUnchangedDesc')}
                     </div>
                   </div>
                 )}
@@ -768,7 +770,7 @@ export default function CounterpartiesPage() {
                 {(importResult.rows || []).length > 0 ? (
                   <div className="max-h-72 overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-700">
                     <div className="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 sticky top-0">
-                      O'zgargan qatorlar ({(importResult.rows || []).length})
+                      {t('changedRows', { n: (importResult.rows || []).length })}
                     </div>
                     {(importResult.rows || []).map((r: any, i: number) => (
                       <div key={i} className="px-3 py-2 flex items-center gap-2 text-[11px]">
@@ -787,7 +789,7 @@ export default function CounterpartiesPage() {
                 ) : (
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-6 text-center text-[12px] text-slate-500 dark:text-slate-400">
                     <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
-                    Hammasi o'z joyida — DB allaqachon Excel bilan bir xil. Hech narsa o'zgartirilmadi.
+                    {t('importNoChanges')}
                   </div>
                 )}
 
@@ -796,9 +798,7 @@ export default function CounterpartiesPage() {
                   <div className="rounded-lg bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 px-3 py-2 text-[11px] text-indigo-900 dark:text-indigo-300 flex items-start gap-2">
                     <RefreshCw className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
                     <div>
-                      Yangi qatorlar uchun direktor, telefon, reyting va boshqa ma'lumotlar
-                      keyingi soatlik cron'da (08:00–22:00) avtomatik to'ldiriladi.
-                      Yoki <b>"Hammasini yangilash"</b> tugmasini bosing.
+                      {t('importEnrichNote')} <b>"{t('refreshAll')}"</b> {t('importEnrichNote2')}
                     </div>
                   </div>
                 )}
@@ -899,11 +899,12 @@ type FilterOption = {
 };
 
 function FilterDropdown({
-  label, icon, activeLabel, options, value, onChange,
+  label, icon, activeLabel, allLabel, options, value, onChange,
 }: {
   label: string;
   icon: React.ReactNode;
   activeLabel: string | null; // null = default selected (Hammasi)
+  allLabel: string;
   options: FilterOption[];
   value: string;
   onChange: (v: string) => void;
@@ -923,7 +924,7 @@ function FilterDropdown({
         >
           <span className={cn('shrink-0', isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500')}>{icon}</span>
           <span className="text-[10px] uppercase tracking-wider font-bold opacity-70">{label}:</span>
-          <span className="truncate max-w-[140px]">{activeLabel || 'Hammasi'}</span>
+          <span className="truncate max-w-[140px]">{activeLabel || allLabel}</span>
           {isActive && (
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 ml-0.5 shrink-0" />
           )}
@@ -1004,7 +1005,7 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
           <span className="font-mono">{row.inn}</span>
           {manual && (
             <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[9px] font-bold uppercase tracking-wider">
-              Qo'lda kiritilgan
+              {t('manualEntered')}
             </span>
           )}
         </DialogDescription>
@@ -1025,7 +1026,7 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">Daraja</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold opacity-70">{t('level')}</div>
             <div className="text-sm font-bold mt-0.5">{grade.level}</div>
           </div>
         </div>
@@ -1038,13 +1039,13 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
             <Building2 className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-400 mb-0.5">Faoliyat turi (OKED)</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-400 mb-0.5">{t('activityType')}</div>
             {(() => {
               const m = String(row.oked).match(/^(\d+)\s*-\s*(.+)$/);
               return m ? (
                 <>
                   <div className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug">{m[2]}</div>
-                  <div className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono mt-0.5">Kod: {m[1]}</div>
+                  <div className="text-[10px] text-indigo-700 dark:text-indigo-400 font-mono mt-0.5">{t('code')}: {m[1]}</div>
                 </>
               ) : (
                 <div className="text-sm font-bold text-slate-800 dark:text-slate-200">{row.oked}</div>
@@ -1118,9 +1119,9 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
             historyOpen ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500 -rotate-90',
           )} />
           <Clock className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">Tarix</span>
+          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">{t('history')}</span>
           <span className="text-[10px] text-slate-500 dark:text-slate-400 ml-auto">
-            {historyQuery.isLoading ? '…' : history.length ? `${history.length} ta yozuv` : 'bosing'}
+            {historyQuery.isLoading ? '…' : history.length ? t('historyCount', { n: history.length }) : t('clickToExpand')}
           </span>
         </button>
         <div className={cn(
@@ -1131,14 +1132,14 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
             <div className="border-t border-slate-100 dark:border-slate-800">
               {historyQuery.isLoading ? (
                 <div className="px-4 py-4 text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" /> Yuklanmoqda…
+                  <Loader2 className="h-3 w-3 animate-spin" /> {t('loadingDots')}
                 </div>
               ) : history.length === 0 ? (
-                <div className="px-4 py-4 text-[11px] text-slate-400 dark:text-slate-500">Hozircha yozuv yo'q</div>
+                <div className="px-4 py-4 text-[11px] text-slate-400 dark:text-slate-500">{t('noHistoryYet')}</div>
               ) : (
                 <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
                   {history.map((h) => (
-                    <HistoryRow key={h.id} h={h} />
+                    <HistoryRow key={h.id} h={h} t={t} />
                   ))}
                 </div>
               )}
@@ -1150,32 +1151,32 @@ function CounterpartyDetail({ row, t }: { row: Counterparty; t: any }) {
   );
 }
 
-const FIELD_LABEL: Record<string, string> = {
-  name: 'Nomi',
-  fullName: 'To\'liq nom',
-  director: 'Direktor',
-  accountant: 'Bosh hisobchi',
-  phone: 'Telefon',
-  email: 'Email',
-  address: 'Manzil',
-  vatNumber: 'QQS reg kodi',
-  vatStatus: 'QQS holati',
-  oked: 'OKED',
-  rating: 'Reyting',
-  bankAccounts: 'Bank hisoblari',
-  notes: 'Izoh',
-  isActive: 'Faol',
+const FIELD_LABEL_KEY: Record<string, string> = {
+  name: 'fieldName',
+  fullName: 'fullName',
+  director: 'director',
+  accountant: 'accountant',
+  phone: 'phone',
+  email: 'email',
+  address: 'address',
+  vatNumber: 'vatNumber',
+  vatStatus: 'vatStatus',
+  oked: 'oked',
+  rating: 'rating',
+  bankAccounts: 'bankAccounts',
+  notes: 'fieldNotes',
+  isActive: 'fieldActive',
 };
 
-function HistoryRow({ h }: { h: any }) {
+function HistoryRow({ h, t }: { h: any; t: any }) {
   const [open, setOpen] = useState(false);
   const actionMeta: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-    created:      { label: 'Qo\'shildi',         cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', icon: <Plus className="h-3 w-3" /> },
-    imported:     { label: 'Import',             cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',       icon: <Upload className="h-3 w-3" /> },
-    manual_edit:  { label: 'Tahrir',             cls: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',   icon: <FileText className="h-3 w-3" /> },
-    refreshed:    { label: 'Yangilash',          cls: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',   icon: <RefreshCw className="h-3 w-3" /> },
-    cron_refresh: { label: 'Avto-yangilash',     cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',     icon: <Clock className="h-3 w-3" /> },
-    deleted:      { label: 'O\'chirildi',        cls: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',       icon: <Trash2 className="h-3 w-3" /> },
+    created:      { label: t('actionCreated'),     cls: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300', icon: <Plus className="h-3 w-3" /> },
+    imported:     { label: t('actionImported'),    cls: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',       icon: <Upload className="h-3 w-3" /> },
+    manual_edit:  { label: t('actionManualEdit'),  cls: 'bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300',   icon: <FileText className="h-3 w-3" /> },
+    refreshed:    { label: t('actionRefreshed'),   cls: 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300',   icon: <RefreshCw className="h-3 w-3" /> },
+    cron_refresh: { label: t('actionCronRefresh'), cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300',     icon: <Clock className="h-3 w-3" /> },
+    deleted:      { label: t('actionDeleted'),     cls: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',       icon: <Trash2 className="h-3 w-3" /> },
   };
   const m = actionMeta[h.action] || { label: h.action, cls: 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300', icon: null };
   const changes = h.changes && typeof h.changes === 'object' ? h.changes : null;
@@ -1199,7 +1200,7 @@ function HistoryRow({ h }: { h: any }) {
             )}
             {hasChanges && (
               <span className="text-[10px] text-indigo-600 font-semibold inline-flex items-center gap-0.5">
-                {Object.keys(changes).length} o'zgarish
+                {t('changesCount', { n: Object.keys(changes).length })}
                 <ChevronDown className={cn('h-3 w-3 transition-transform', open && 'rotate-180')} />
               </span>
             )}
@@ -1217,7 +1218,7 @@ function HistoryRow({ h }: { h: any }) {
           {Object.entries(changes).map(([field, diff]: [string, any]) => (
             <div key={field} className="text-[11px]">
               <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
-                {FIELD_LABEL[field] || field}
+                {FIELD_LABEL_KEY[field] ? t(FIELD_LABEL_KEY[field]) : field}
               </div>
               <div className="flex items-start gap-1.5 flex-wrap">
                 <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 line-through max-w-[220px] truncate font-mono text-[10px]" title={formatHistoryValue(diff.old)}>

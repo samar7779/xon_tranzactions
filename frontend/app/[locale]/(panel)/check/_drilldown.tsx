@@ -2,6 +2,7 @@
 // build marker: sverka v3 (Portal modal + bulk fix + diagnose stay-open)
 
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { createPortal } from 'react-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -104,6 +105,8 @@ export function AccountDrilldown({
   onClose: () => void;
   onUpdated: (next: any) => void;
 }) {
+  const t = useTranslations('drilldown');
+  const tc = useTranslations('common');
   const [dateFrom, setDateFrom] = useState(todayIso());
   const [dateTo, setDateTo] = useState(todayIso());
   const [data, setData] = useState<ReconcileData>(item);
@@ -133,7 +136,7 @@ export function AccountDrilldown({
         onUpdated(result);
       }
     } catch (e: any) {
-      toast.error(e?.message || 'Tekshirish xatosi');
+      toast.error(e?.message || t('checkError'));
     } finally {
       setLoading(false);
     }
@@ -189,7 +192,7 @@ export function AccountDrilldown({
           <button
             onClick={onClose}
             className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-700 dark:hover:text-rose-300 transition"
-            aria-label="Yopish"
+            aria-label={tc('close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -199,7 +202,7 @@ export function AccountDrilldown({
         <div className="px-6 py-4 bg-slate-50/60 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-end gap-3 flex-wrap">
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Sanadan</label>
+              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">{t('dateFrom')}</label>
               <Input
                 type="date"
                 value={dateFrom}
@@ -208,7 +211,7 @@ export function AccountDrilldown({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">Sanagacha</label>
+              <label className="text-[11px] font-medium text-slate-600 dark:text-slate-300">{t('dateTo')}</label>
               <Input
                 type="date"
                 value={dateTo}
@@ -222,16 +225,16 @@ export function AccountDrilldown({
               className="h-10 rounded-xl font-semibold"
             >
               {loading ? (
-                <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> Tekshirilmoqda...</>
+                <><Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> {t('checking')}</>
               ) : (
-                <><RefreshCw className="h-4 w-4 mr-1.5" /> Davr uchun tekshir</>
+                <><RefreshCw className="h-4 w-4 mr-1.5" /> {t('checkPeriod')}</>
               )}
             </Button>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
               <Calendar className="h-3.5 w-3.5" />
               {isSingleDay
-                ? "Bitta kun — xato bo'lsa sababini aniqlash mumkin"
-                : "Diagnostika faqat bitta kun uchun ishlaydi"}
+                ? t('singleDayHint')
+                : t('multiDayHint')}
             </div>
           </div>
         </div>
@@ -243,8 +246,8 @@ export function AccountDrilldown({
               <div className="flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                 <div>
-                  <div className="text-[13px] font-semibold text-rose-900 dark:text-rose-300">Sverka bajarilmadi</div>
-                  <div className="text-[12px] text-rose-700 dark:text-rose-400 mt-1">{data.error || "noma'lum xato"}</div>
+                  <div className="text-[13px] font-semibold text-rose-900 dark:text-rose-300">{t('reconcileFailed')}</div>
+                  <div className="text-[12px] text-rose-700 dark:text-rose-400 mt-1">{data.error || t('unknownError')}</div>
                 </div>
               </div>
             </div>
@@ -262,12 +265,12 @@ export function AccountDrilldown({
                 )}
                 <div className="text-[13px] font-semibold">
                   {data.status === 'ok'
-                    ? "Mos keldi — bank va AllTranzactions to'liq muvofiq"
-                    : 'Farq aniqlandi — quyidagi jadvalda ko\'rib chiqing'}
+                    ? t('bannerOk')
+                    : t('bannerMismatch')}
                 </div>
                 {data.partial && (
                   <span className="ml-auto text-[11px] text-amber-700 dark:text-amber-300">
-                    ⚠ {data.failedDays} kun bankdan ma'lumotsiz
+                    ⚠ {t('daysNoBankData', { n: data.failedDays ?? 0 })}
                   </span>
                 )}
               </div>
@@ -289,8 +292,8 @@ export function AccountDrilldown({
                   <div className="flex items-center gap-3">
                     <Search className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
                     <div className="flex-1">
-                      <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">Farq sababini topish</div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">Bankdagi har bir tranzaksiyani AllTranzactions bilan solishtiramiz va yetishmayotgan/ortiqcha yozuvlarni topamiz</div>
+                      <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">{t('findDiffReason')}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('findDiffReasonDesc')}</div>
                     </div>
                     <Button
                       size="sm"
@@ -301,7 +304,7 @@ export function AccountDrilldown({
                     >
                       {diagnoseLoading
                         ? <Loader2 className="h-4 w-4 animate-spin" />
-                        : showDiagnose ? 'Qayta tekshir' : 'Diagnostika'}
+                        : showDiagnose ? t('recheck') : t('diagnose')}
                     </Button>
                   </div>
 
@@ -313,7 +316,7 @@ export function AccountDrilldown({
                       onFixed={async () => {
                         // Diagnose panelini ochiq qoldiramiz va parallel fresh ma'lumotlarni olamiz
                         await Promise.all([refetchDiagnose(), runCheck({ keepDiagnose: true })]);
-                        toast.success("Sverka yangilandi");
+                        toast.success(t('reconcileUpdated'));
                       }}
                     />
                   )}
@@ -328,6 +331,8 @@ export function AccountDrilldown({
 }
 
 function ReconcileTable({ data }: { data: ReconcileData }) {
+  const t = useTranslations('drilldown');
+  const tc = useTranslations('common');
   if (!data.bank || !data.db || !data.diff) return null;
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const diffCls = (n: number) =>
@@ -338,43 +343,43 @@ function ReconcileTable({ data }: { data: ReconcileData }) {
       <table className="w-full text-[13px]">
         <thead>
           <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-            <th className="text-left px-4 py-2.5">Ko'rsatkich</th>
-            <th className="text-right px-4 py-2.5">Bank</th>
+            <th className="text-left px-4 py-2.5">{t('metric')}</th>
+            <th className="text-right px-4 py-2.5">{tc('bank')}</th>
             <th className="text-right px-4 py-2.5">AllTranzactions</th>
-            <th className="text-right px-4 py-2.5">Farq</th>
+            <th className="text-right px-4 py-2.5">{t('diff')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 dark:divide-slate-800 tabular-nums">
           <tr>
             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-              <span className="flex items-center gap-2"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Kirim oboroti</span>
+              <span className="flex items-center gap-2"><ArrowDownLeft className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> {t('inflowTurnover')}</span>
             </td>
             <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300">{m(data.bank.credit)}</td>
             <td className="px-4 py-3 text-right font-semibold text-emerald-700 dark:text-emerald-300">
-              {m(data.db.inflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {data.db.inCount} ta</span>
+              {m(data.db.inflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {t('countItems', { n: data.db.inCount })}</span>
             </td>
             <td className={cn('px-4 py-3 text-right font-bold', diffCls(data.diff.credit))}>{m(data.diff.credit)}</td>
           </tr>
           <tr>
             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-              <span className="flex items-center gap-2"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" /> Chiqim oboroti</span>
+              <span className="flex items-center gap-2"><ArrowUpRight className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400" /> {t('outflowTurnover')}</span>
             </td>
             <td className="px-4 py-3 text-right font-semibold text-rose-700 dark:text-rose-300">{m(data.bank.debit)}</td>
             <td className="px-4 py-3 text-right font-semibold text-rose-700 dark:text-rose-300">
-              {m(data.db.outflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {data.db.outCount} ta</span>
+              {m(data.db.outflow)} <span className="text-[10px] text-slate-400 dark:text-slate-500">· {t('countItems', { n: data.db.outCount })}</span>
             </td>
             <td className={cn('px-4 py-3 text-right font-bold', diffCls(data.diff.debit))}>{m(data.diff.debit)}</td>
           </tr>
           <tr className="bg-slate-50/60 dark:bg-slate-800/60">
-            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">Ochilish saldosi</td>
+            <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{t('openingBalance')}</td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.bank.opening)}</td>
             <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500">—</td>
             <td className="px-4 py-3 text-right text-slate-400 dark:text-slate-500">—</td>
           </tr>
           <tr>
             <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
-              Yopilish saldosi
-              <div className="text-[10px] text-slate-400 dark:text-slate-500">ochilish + kirim − chiqim</div>
+              {t('closingBalance')}
+              <div className="text-[10px] text-slate-400 dark:text-slate-500">{t('closingFormula')}</div>
             </td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.bank.closing)}</td>
             <td className="px-4 py-3 text-right font-semibold">{m(data.diff.computedClosing)}</td>
@@ -413,6 +418,7 @@ function DiagnoseResult({
   date: string;
   onFixed: () => void;
 }) {
+  const t = useTranslations('drilldown');
   const mismatch = data.amountMismatch || [];
   return (
     <div className="space-y-3">
@@ -426,11 +432,11 @@ function DiagnoseResult({
         </div>
       )}
       <div className="flex items-center gap-4 text-[12px] text-slate-600 dark:text-slate-300 flex-wrap">
-        <span>Bankda: <b className="text-slate-900 dark:text-slate-100">{data.bankCount}</b></span>
+        <span>{t('inBank')}: <b className="text-slate-900 dark:text-slate-100">{data.bankCount}</b></span>
         <span>AllTranzactions: <b className="text-slate-900 dark:text-slate-100">{data.dbCount}</b></span>
-        <span>Mos: <b className="text-emerald-700 dark:text-emerald-300">{data.matchedCount}</b></span>
+        <span>{t('matched')}: <b className="text-emerald-700 dark:text-emerald-300">{data.matchedCount}</b></span>
         {mismatch.length > 0 && (
-          <span>Summa farqli: <b className="text-orange-700 dark:text-orange-300">{mismatch.length}</b></span>
+          <span>{t('amountMismatchLabel')}: <b className="text-orange-700 dark:text-orange-300">{mismatch.length}</b></span>
         )}
         {data.fallbackUsed && (
           <span className="ml-auto inline-flex items-center gap-1 text-[10px] text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 px-2 py-0.5 rounded-full">
@@ -444,7 +450,7 @@ function DiagnoseResult({
         <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[11px] text-rose-800 dark:text-rose-300 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <div>
-            <div className="font-semibold">GetDocuments fallback urinib ko'rildi, lekin xato:</div>
+            <div className="font-semibold">{t('fallbackError')}</div>
             <div className="mt-0.5 font-mono">{data.fallbackError}</div>
           </div>
         </div>
@@ -455,39 +461,37 @@ function DiagnoseResult({
           <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 text-[12px] text-amber-900 dark:text-amber-300 flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
             <div>
-              <div className="font-semibold">Bank tranzaksiyalar ro'yxati bo'sh</div>
+              <div className="font-semibold">{t('emptyBankList')}</div>
               <div className="mt-0.5 text-amber-800 dark:text-amber-300">
-                Bank shu kun uchun na GetDoc1C, na GetDocuments orqali individual yozuv qaytarmadi.
-                Bu odatda dam olish/non-operatsion kunda bo'ladi. AllTranzactions'da ham hech narsa yo'q.
-                Farq qaerdandir oldingi kunlardan keladi — boshqa kunlarni tekshirib ko'ring.
+                {t('emptyBankListDesc')}
               </div>
             </div>
           </div>
         ) : mismatch.length === 0 ? (
           <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3 text-[12px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4" />
-            Yozuvlar to'liq mos — farq, ehtimol, yaxlitlash xatosi yoki kalit indekslar muammosi
+            {t('recordsFullyMatch')}
           </div>
         ) : null
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <DiagPanel
-            title="Bankda bor — AllTranzactions'da yo'q"
+            title={t('panelBankOnly')}
             icon={<Inbox className="h-4 w-4" />}
             tone="amber"
             items={data.bankOnly}
-            empty="Yo'qolgan yozuvlar yo'q"
+            empty={t('emptyMissing')}
             fixable
             accountId={accountId}
             date={date}
             onFixed={onFixed}
           />
           <DiagPanel
-            title="AllTranzactions'da bor — bankda yo'q"
+            title={t('panelDbOnly')}
             icon={<Database className="h-4 w-4" />}
             tone="rose"
             items={data.dbOnly}
-            empty="Ortiqcha yozuvlar yo'q"
+            empty={t('emptyExtra')}
           />
         </div>
       )}
@@ -503,19 +507,20 @@ function DiagnoseResult({
 }
 
 function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; diffSum: number }) {
+  const t = useTranslations('drilldown');
   return (
     <div className="rounded-lg border border-orange-200 dark:border-orange-900 bg-orange-50/40 dark:bg-orange-950/20 overflow-hidden">
       <div className="px-3 py-2 bg-orange-50 dark:bg-orange-950/40 border-b border-orange-200 dark:border-orange-900 flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 text-[12px] font-semibold text-orange-900 dark:text-orange-300">
           <AlertTriangle className="h-4 w-4" />
-          Summa farqli yozuvlar — ID mos, lekin bank vs AllTranzactions summasi farqli
+          {t('amountMismatchTitle')}
         </div>
         <div className="flex items-center gap-3 text-[11px]">
           <span className="text-orange-700 dark:text-orange-300">
-            {items.length} ta yozuv
+            {t('recordCount', { n: items.length })}
           </span>
           <span className="text-orange-900 dark:text-orange-300 font-bold tabular-nums">
-            Jami farq: {formatMoney(diffSum)} so'm
+            {t('totalDiff')}: {formatMoney(diffSum)}
           </span>
         </div>
       </div>
@@ -524,12 +529,12 @@ function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; 
           <thead className="bg-orange-50/60 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 sticky top-0">
             <tr>
               <th className="text-left px-2 py-1.5 font-medium">№ / b2_id</th>
-              <th className="text-left px-2 py-1.5 font-medium">Yo'nalish</th>
-              <th className="text-right px-2 py-1.5 font-medium">Bank summasi</th>
-              <th className="text-right px-2 py-1.5 font-medium">DB summasi</th>
-              <th className="text-right px-2 py-1.5 font-medium">Farq</th>
-              <th className="text-left px-2 py-1.5 font-medium">Tomonlar</th>
-              <th className="text-left px-2 py-1.5 font-medium">Maqsad</th>
+              <th className="text-left px-2 py-1.5 font-medium">{t('direction')}</th>
+              <th className="text-right px-2 py-1.5 font-medium">{t('bankAmount')}</th>
+              <th className="text-right px-2 py-1.5 font-medium">{t('dbAmount')}</th>
+              <th className="text-right px-2 py-1.5 font-medium">{t('diff')}</th>
+              <th className="text-left px-2 py-1.5 font-medium">{t('parties')}</th>
+              <th className="text-left px-2 py-1.5 font-medium">{t('purpose')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-orange-100 dark:divide-orange-900">
@@ -546,11 +551,11 @@ function AmountMismatchPanel({ items, diffSum }: { items: AmountMismatchItem[]; 
                 <td className="px-2 py-1.5 align-top">
                   {it.direction === 'IN' ? (
                     <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
-                      <ArrowDownLeft className="h-3 w-3" /> Kirim
+                      <ArrowDownLeft className="h-3 w-3" /> {t('inflow')}
                     </span>
                   ) : it.direction === 'OUT' ? (
                     <span className="inline-flex items-center gap-1 text-rose-700 dark:text-rose-300">
-                      <ArrowUpRight className="h-3 w-3" /> Chiqim
+                      <ArrowUpRight className="h-3 w-3" /> {t('outflow')}
                     </span>
                   ) : (
                     <span className="text-slate-400 dark:text-slate-500">—</span>
@@ -603,6 +608,8 @@ function DiagPanel({
   date?: string;
   onFixed?: () => void;
 }) {
+  const t = useTranslations('drilldown');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
@@ -634,7 +641,7 @@ function DiagPanel({
       });
       setFixDateResult(r);
     } catch (e: any) {
-      toast.error(e?.message || "Xato");
+      toast.error(e?.message || tc('error'));
     } finally {
       setFixDateLoading(false);
     }
@@ -663,7 +670,7 @@ function DiagPanel({
       // Refetch'ni modal yopilgandan keyin qilamiz — aks holda DiagPanel
       // unmount bo'lib modal yo'qoladi.
     } catch (e: any) {
-      toast.error(e?.message || "Qo'shilmadi");
+      toast.error(e?.message || t('notAdded'));
     } finally {
       setBulkLoading(false);
     }
@@ -690,7 +697,7 @@ function DiagPanel({
             <button
               onClick={handleFixAllDates}
               disabled={fixDateLoading}
-              title={`${fixableDateItems.length} ta tx'ni ${date} ga tuzatish`}
+              title={t('fixDatesTooltip', { n: fixableDateItems.length, date: date ?? '' })}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md
                          bg-emerald-600 text-white text-[11px] font-semibold
                          hover:bg-emerald-700 disabled:opacity-60 transition"
@@ -700,7 +707,7 @@ function DiagPanel({
               ) : (
                 <CheckCircle2 className="h-3 w-3" />
               )}
-              {fixDateLoading ? `Tuzatilmoqda ${fixableDateItems.length} ta...` : `Sanani tuzatish · ${fixableDateItems.length}`}
+              {fixDateLoading ? t('fixingDates', { n: fixableDateItems.length }) : t('fixDates', { n: fixableDateItems.length })}
             </button>
           )}
           {/* Hammasini qo'shish (yangi tx'lar uchun) */}
@@ -717,7 +724,7 @@ function DiagPanel({
               ) : (
                 <Download className="h-3 w-3" />
               )}
-              {bulkLoading ? `Qo'shilmoqda ${insertableItems.length} ta...` : `Hammasini qo'shish · ${insertableItems.length}`}
+              {bulkLoading ? t('addingItems', { n: insertableItems.length }) : t('addAll', { n: insertableItems.length })}
             </button>
           )}
         </div>
@@ -771,6 +778,7 @@ function DiagItem({
   date?: string;
   onFixed?: () => void;
 }) {
+  const t = useTranslations('drilldown');
   const qc = useQueryClient();
   const [fixing, setFixing] = useState(false);
   const [fixed, setFixed] = useState(false);
@@ -798,7 +806,7 @@ function DiagItem({
           b2Id: it.b2Id, generalId: it.generalId,
           ok: false, inserted: false,
           transactionId: null, externalId: null,
-          error: e?.message || "Tarmoq xato",
+          error: e?.message || t('networkError'),
         }],
       });
     } finally {
@@ -831,7 +839,7 @@ function DiagItem({
       </div>
       <div className="text-slate-700 dark:text-slate-300">
         <div className="truncate">
-          <span className="text-slate-400 dark:text-slate-500">Kim:</span> {it.fromName || it.toName || '—'}
+          <span className="text-slate-400 dark:text-slate-500">{t('who')}:</span> {it.fromName || it.toName || '—'}
         </div>
         {(it.purpose || it.description) && (
           <div className="text-slate-500 dark:text-slate-400 line-clamp-2 mt-0.5">
@@ -860,10 +868,10 @@ function DiagItem({
           <CheckCircle2 className="h-3 w-3 mt-0.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
           <div className="flex-1">
             <div className="font-semibold">
-              Bankda mavjud, lekin boshqa sanada
+              {t('existsOtherBankDate')}
             </div>
             <div className="text-indigo-700 dark:text-indigo-400 mt-0.5">
-              Bank sanasi: <span className="font-mono">{it.foundOnBankDate}</span> · joriy sverka: <span className="font-mono">{date}</span>
+              {t('bankDateLabel')}: <span className="font-mono">{it.foundOnBankDate}</span> · {t('currentReconcileLabel')}: <span className="font-mono">{date}</span>
             </div>
           </div>
         </div>
@@ -876,27 +884,27 @@ function DiagItem({
             <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
             <div className="flex-1">
               <div className="font-semibold">
-                AllTranzactions'da boshqa sana ostida saqlangan
+                {t('savedUnderOtherDate')}
               </div>
               <div className="text-amber-700 dark:text-amber-400 mt-0.5">
-                Sana: <span className="font-mono">{it.existsOnDate}</span> · joriy: <span className="font-mono">{date}</span>
+                {t('dateLabel')}: <span className="font-mono">{it.existsOnDate}</span> · {t('currentLabel')}: <span className="font-mono">{date}</span>
               </div>
             </div>
           </div>
           {it.existingTxId && (
             <button
               onClick={async () => {
-                if (!confirm(`Sanani tuzatishni tasdiqlaysizmi?\n\n${it.existsOnDate} → ${date}\n\nFaqat sana o'zgaradi, boshqa malumotlar (kategoriya, shartnoma) tegmaydi.`)) return;
+                if (!confirm(t('fixDateConfirm', { from: it.existsOnDate ?? '', to: date ?? '' }))) return;
                 try {
                   await api.post('/transactions/reconcile/fix-tx-date', { txId: it.existingTxId, newDate: date });
-                  toast.success(`Sana tuzatildi: ${it.existsOnDate} → ${date}`);
+                  toast.success(t('dateFixed', { from: it.existsOnDate ?? '', to: date ?? '' }));
                   onFixed?.();
-                } catch (e: any) { toast.error(e?.message || 'Xato'); }
+                } catch (e: any) { toast.error(e?.message || t('error')); }
               }}
               className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[10.5px] font-semibold hover:bg-emerald-700 transition"
             >
               <CheckCircle2 className="h-3 w-3" />
-              Sanani {date} ga tuzatish
+              {t('fixDateTo', { date: date ?? '' })}
             </button>
           )}
         </div>
@@ -914,12 +922,12 @@ function DiagItem({
           ) : (
             <Download className="h-3 w-3" />
           )}
-          {fixing ? "Qo'shilmoqda..." : "AllTranzactions'ga qo'shish"}
+          {fixing ? t('adding') : t('addToAllTranzactions')}
         </button>
       )}
       {fixed && (
         <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
-          <CheckCircle2 className="h-3 w-3" /> Qo'shildi
+          <CheckCircle2 className="h-3 w-3" /> {t('added')}
         </div>
       )}
 
@@ -933,6 +941,7 @@ function DiagItem({
 
 /** ID chip + copy tugmasi — sverka tekshirish uchun yozuv ID'larini tez nusxa olish */
 function IdChip({ label, value }: { label: string; value: string }) {
+  const t = useTranslations('drilldown');
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -945,7 +954,7 @@ function IdChip({ label, value }: { label: string; value: string }) {
           setTimeout(() => setCopied(false), 1500);
         } catch {
           // clipboard mavjud emas — sodda fallback
-          toast.error('Nusxa olib bo\'lmadi');
+          toast.error(t('copyFailed'));
         }
       }}
       className={cn(
@@ -954,7 +963,7 @@ function IdChip({ label, value }: { label: string; value: string }) {
         'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100',
         'transition-colors max-w-[180px]',
       )}
-      title={`Nusxa olish: ${value}`}
+      title={t('copyValue', { value })}
     >
       <span className="text-[9px] text-slate-400 dark:text-slate-500 uppercase">{label}</span>
       <span className="truncate">{value}</span>
@@ -971,6 +980,7 @@ function DailyBreakdown({
   rows: NonNullable<ReconcileData['dailyBreakdown']>;
   onPickDay: (date: string) => void;
 }) {
+  const t = useTranslations('drilldown');
   const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
   const mismatches = rows.filter((r) => r.status === 'mismatch');
 
@@ -978,21 +988,21 @@ function DailyBreakdown({
     <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
       <div className="px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center gap-2 text-[12px] font-semibold text-slate-700 dark:text-slate-300">
         <Calendar className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-        <span>Kunma-kun</span>
+        <span>{t('dayByDay')}</span>
         <span className="ml-auto text-[11px] font-normal text-slate-500 dark:text-slate-400">
-          {mismatches.length > 0 ? `${mismatches.length} ta kun farqli` : 'Hammasi mos'}
+          {mismatches.length > 0 ? t('daysMismatch', { n: mismatches.length }) : t('allMatch')}
         </span>
       </div>
       <div className="max-h-[320px] overflow-y-auto">
         <table className="w-full text-[12px]">
           <thead className="bg-slate-50/60 dark:bg-slate-800/60 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold sticky top-0">
             <tr>
-              <th className="text-left px-4 py-2">Sana</th>
-              <th className="text-right px-4 py-2">Bank kirim</th>
-              <th className="text-right px-4 py-2">AllTranzactions kirim</th>
-              <th className="text-right px-4 py-2">Bank chiqim</th>
-              <th className="text-right px-4 py-2">AllTranzactions chiqim</th>
-              <th className="text-right px-4 py-2">Farq</th>
+              <th className="text-left px-4 py-2">{t('dateCol')}</th>
+              <th className="text-right px-4 py-2">{t('bankInflow')}</th>
+              <th className="text-right px-4 py-2">{t('allTxInflow')}</th>
+              <th className="text-right px-4 py-2">{t('bankOutflow')}</th>
+              <th className="text-right px-4 py-2">{t('allTxOutflow')}</th>
+              <th className="text-right px-4 py-2">{t('diff')}</th>
               <th className="text-center px-4 py-2"></th>
             </tr>
           </thead>
@@ -1017,7 +1027,7 @@ function DailyBreakdown({
                     'px-4 py-2 text-right font-bold',
                     r.status === 'ok' ? 'text-emerald-700 dark:text-emerald-300' : r.status === 'mismatch' ? 'text-amber-700 dark:text-amber-300' : 'text-rose-700 dark:text-rose-300',
                   )}>
-                    {r.failed ? '— xato —' : m(totalDiff)}
+                    {r.failed ? t('errorDash') : m(totalDiff)}
                   </td>
                   <td className="px-4 py-2 text-center">
                     {r.status === 'mismatch' && (
@@ -1025,7 +1035,7 @@ function DailyBreakdown({
                         onClick={() => onPickDay(r.date)}
                         className="text-[10px] px-2 py-1 rounded-md bg-indigo-600 text-white font-semibold hover:bg-indigo-700"
                       >
-                        Ochish
+                        {t('openDay')}
                       </button>
                     )}
                   </td>
@@ -1045,6 +1055,7 @@ function BulkResultModal({
   result: BulkResult;
   onClose: () => void;
 }) {
+  const t = useTranslations('drilldown');
   const [copiedAll, setCopiedAll] = useState(false);
   const [copiedOne, setCopiedOne] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -1065,10 +1076,10 @@ function BulkResultModal({
     try {
       await navigator.clipboard.writeText(text);
       setCopiedOne(key);
-      toast.success('Nusxa olindi');
+      toast.success(t('copiedOne'));
       setTimeout(() => setCopiedOne(null), 1500);
     } catch {
-      toast.error('Nusxa olishda xato');
+      toast.error(t('copyError'));
     }
   }
 
@@ -1077,14 +1088,14 @@ function BulkResultModal({
       .map((r) => r.externalId || r.transactionId)
       .filter(Boolean)
       .join('\n');
-    if (!ids) { toast.error("Copy uchun ID topilmadi"); return; }
+    if (!ids) { toast.error(t('noIdToCopy')); return; }
     try {
       await navigator.clipboard.writeText(ids);
       setCopiedAll(true);
-      toast.success(`${successes.length} ta ID nusxa olindi`);
+      toast.success(t('idsCopied', { n: successes.length }));
       setTimeout(() => setCopiedAll(false), 1500);
     } catch {
-      toast.error('Nusxa olishda xato');
+      toast.error(t('copyError'));
     }
   }
 
@@ -1106,20 +1117,20 @@ function BulkResultModal({
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100">
-              Bulk natija
+              {t('bulkResult')}
             </div>
             <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-3 flex-wrap">
-              <span>Jami: <b>{result.summary.total}</b></span>
-              <span className="text-emerald-700 dark:text-emerald-300">✓ Qo'shildi: <b>{result.summary.ok}</b></span>
+              <span>{t('totalLabel')}: <b>{result.summary.total}</b></span>
+              <span className="text-emerald-700 dark:text-emerald-300">✓ {t('addedLabel')}: <b>{result.summary.ok}</b></span>
               {result.summary.error > 0 && (
-                <span className="text-rose-700 dark:text-rose-300">✗ Xato: <b>{result.summary.error}</b></span>
+                <span className="text-rose-700 dark:text-rose-300">✗ {t('errorLabel')}: <b>{result.summary.error}</b></span>
               )}
             </div>
           </div>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 dark:text-slate-400 hover:bg-white/80 dark:hover:bg-slate-800 hover:text-rose-700 dark:hover:text-rose-300 transition"
-            aria-label="Yopish"
+            aria-label={t('close')}
           >
             <X className="h-4 w-4" />
           </button>
@@ -1133,7 +1144,7 @@ function BulkResultModal({
               <div className="px-3 py-2.5 border-b border-emerald-100 dark:border-emerald-900 flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
                 <span className="text-[12px] font-semibold text-emerald-900 dark:text-emerald-300">
-                  Qo'shilgan tranzaksiyalar · {successes.length}
+                  {t('addedTransactions', { n: successes.length })}
                 </span>
                 <button
                   onClick={copyAll}
@@ -1141,7 +1152,7 @@ function BulkResultModal({
                              bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition"
                 >
                   {copiedAll ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                  {copiedAll ? 'Olindi' : "Hammasini copy"}
+                  {copiedAll ? t('copiedShort') : t('copyAll')}
                 </button>
               </div>
               <div className="divide-y divide-emerald-100/60 dark:divide-emerald-900/60 max-h-[50vh] overflow-y-auto">
@@ -1190,16 +1201,16 @@ function BulkResultModal({
                       )}
                       {!r.externalId && !r.transactionId && (
                         <div className="text-[11px] text-amber-700 dark:text-amber-300">
-                          ⚠ Qo'shildi, lekin ID topilmadi (DB lookup'da yo'q)
+                          ⚠ {t('addedNoId')}
                         </div>
                       )}
                       <div className="flex items-center gap-2 text-[10px] flex-wrap">
                         {r.inserted ? (
-                          <span className="text-emerald-700 dark:text-emerald-300 font-semibold">✓ Yangi qo'shildi</span>
+                          <span className="text-emerald-700 dark:text-emerald-300 font-semibold">✓ {t('newlyAdded')}</span>
                         ) : (
                           <span className="text-amber-700 dark:text-amber-300 font-semibold">
-                            ⚠ Avvaldan mavjud edi
-                            {r.existingDate && <span className="font-normal"> · sana: {r.existingDate}</span>}
+                            ⚠ {t('alreadyExisted')}
+                            {r.existingDate && <span className="font-normal"> · {t('dateLabel')}: {r.existingDate}</span>}
                           </span>
                         )}
                         {(r.b2Id || r.generalId) && (
@@ -1221,7 +1232,7 @@ function BulkResultModal({
               <div className="px-3 py-2.5 border-b border-rose-100 dark:border-rose-900 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4 text-rose-700 dark:text-rose-300" />
                 <span className="text-[12px] font-semibold text-rose-900 dark:text-rose-300">
-                  Qo'shilmadi · {failures.length}
+                  {t('notAddedCount', { n: failures.length })}
                 </span>
               </div>
               <div className="divide-y divide-rose-100/60 dark:divide-rose-900/60 max-h-[40vh] overflow-y-auto">
@@ -1231,7 +1242,7 @@ function BulkResultModal({
                       {r.b2Id ? `b2:${r.b2Id}` : r.generalId ? `gen:${r.generalId}` : '—'}
                     </div>
                     <div className="text-rose-800 dark:text-rose-300">
-                      <span className="font-semibold">Sabab:</span> {r.error || "noma'lum xato"}
+                      <span className="font-semibold">{t('reason')}:</span> {r.error || t('unknownError')}
                     </div>
                   </div>
                 ))}
@@ -1246,7 +1257,7 @@ function BulkResultModal({
             onClick={onClose}
             className="px-4 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 text-[12px] font-semibold transition"
           >
-            Yopish
+            {t('close')}
           </button>
         </div>
       </div>
@@ -1267,11 +1278,12 @@ function FixDateResultModal({
   result: { summary: { total: number; updated: number; skipped: number; errors: number }; results: Array<{ txId: string; updated: boolean; oldDate?: string; newDate: string; externalId?: string | null; error?: string }> };
   onClose: () => void;
 }) {
+  const t = useTranslations('drilldown');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   function copyAll() {
     const ids = result.results.filter(r => r.updated).map(r => r.externalId || r.txId).join('\n');
     navigator.clipboard.writeText(ids);
-    toast.success(`${result.summary.updated} ta ID nusxalandi`);
+    toast.success(t('idsCopied', { n: result.summary.updated }));
   }
   function copyOne(id: string) {
     navigator.clipboard.writeText(id);
@@ -1292,11 +1304,11 @@ function FixDateResultModal({
             <CheckCircle2 className="h-4 w-4" />
           </div>
           <div className="flex-1">
-            <div className="text-[14px] font-bold">Sana tuzatish natijasi</div>
+            <div className="text-[14px] font-bold">{t('fixDateResult')}</div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400">
-              Jami: <b>{result.summary.total}</b> · ✅ Tuzatildi: <b className="text-emerald-700 dark:text-emerald-300">{result.summary.updated}</b>
-              {result.summary.skipped > 0 && <> · ⏭ O'zgarmadi: <b>{result.summary.skipped}</b></>}
-              {result.summary.errors > 0 && <> · ❌ Xato: <b className="text-rose-700 dark:text-rose-300">{result.summary.errors}</b></>}
+              {t('totalLabel')}: <b>{result.summary.total}</b> · ✅ {t('fixedLabel')}: <b className="text-emerald-700 dark:text-emerald-300">{result.summary.updated}</b>
+              {result.summary.skipped > 0 && <> · ⏭ {t('unchangedLabel')}: <b>{result.summary.skipped}</b></>}
+              {result.summary.errors > 0 && <> · ❌ {t('errorLabel')}: <b className="text-rose-700 dark:text-rose-300">{result.summary.errors}</b></>}
             </div>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700">
@@ -1307,11 +1319,11 @@ function FixDateResultModal({
         {updated.length > 0 && (
           <div className="px-5 py-2 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-emerald-50/50 dark:bg-emerald-950/30">
             <div className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300 flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Tuzatilgan tranzaksiyalar · {updated.length}
+              <CheckCircle2 className="h-3.5 w-3.5" /> {t('fixedTransactions', { n: updated.length })}
             </div>
             <button onClick={copyAll}
               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-[10.5px] font-semibold hover:bg-emerald-700">
-              <Copy className="h-3 w-3" /> Hammasini copy
+              <Copy className="h-3 w-3" /> {t('copyAll')}
             </button>
           </div>
         )}
@@ -1330,7 +1342,7 @@ function FixDateResultModal({
                     {id}
                   </code>
                   <button onClick={() => copyOne(id)}
-                    title="ID nusxalash"
+                    title={t('copyId')}
                     className={cn(
                       "shrink-0 w-7 h-7 rounded-md grid place-items-center transition-all",
                       isCopied ? "bg-emerald-600 text-white" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-900/50",
@@ -1343,7 +1355,7 @@ function FixDateResultModal({
           })}
           {failed.length > 0 && (
             <>
-              <div className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 mt-2 mb-1">❌ Xatoliklar ({failed.length})</div>
+              <div className="text-[11px] font-semibold text-rose-700 dark:text-rose-300 mt-2 mb-1">❌ {t('errorsCount', { n: failed.length })}</div>
               {failed.map((r, i) => (
                 <div key={i} className="rounded-lg ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/40 p-2 text-[10.5px] text-rose-800 dark:text-rose-300">
                   <div className="font-mono text-rose-600 dark:text-rose-400 truncate">{r.txId}</div>
@@ -1353,12 +1365,12 @@ function FixDateResultModal({
             </>
           )}
           {updated.length === 0 && failed.length === 0 && (
-            <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8">Hech narsa o'zgarmadi</div>
+            <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8">{t('nothingChanged')}</div>
           )}
         </div>
 
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end">
-          <Button onClick={onClose}>Yopish</Button>
+          <Button onClick={onClose}>{t('close')}</Button>
         </div>
       </div>
     </div>
@@ -1377,6 +1389,8 @@ function FixDateConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useTranslations('drilldown');
+  const tc = useTranslations('common');
   const modalContent = (
     <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
       onClick={onCancel}>
@@ -1387,24 +1401,24 @@ function FixDateConfirmModal({
             <AlertTriangle className="h-4 w-4" />
           </div>
           <div className="flex-1">
-            <div className="text-[14px] font-bold">Sana tuzatishni tasdiqlang</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">Bu amalni qaytarib bo'lmaydi</div>
+            <div className="text-[14px] font-bold">{t('confirmFixDateTitle')}</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('irreversible')}</div>
           </div>
         </div>
 
         <div className="p-5 space-y-4">
           <div className="rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40 p-4">
             <div className="text-center">
-              <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-bold mb-1">Tuzatiladi</div>
+              <div className="text-[10px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-bold mb-1">{t('willBeFixed')}</div>
               <div className="text-3xl font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{count}</div>
-              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">ta tranzaksiya</div>
+              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{t('transactionsUnit')}</div>
             </div>
           </div>
 
           <div className="rounded-lg ring-1 ring-violet-200 dark:ring-violet-900 bg-violet-50 dark:bg-violet-950/40 p-3 flex items-center gap-3">
             <Calendar className="h-4 w-4 text-violet-600 dark:text-violet-400 shrink-0" />
             <div className="flex-1 text-[12px]">
-              <div className="text-slate-500 dark:text-slate-400">Yangi sana:</div>
+              <div className="text-slate-500 dark:text-slate-400">{t('newDate')}:</div>
               <div className="font-mono font-bold text-violet-900 dark:text-violet-300">{newDate}</div>
             </div>
           </div>
@@ -1412,16 +1426,16 @@ function FixDateConfirmModal({
           <div className="rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
             <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
-              <b>Faqat <code className="font-mono">txnDate</code> o'zgaradi.</b><br/>
-              Kategoriya, shartnoma, kontragent va boshqa ma'lumotlar tegmaydi.
+              <b>{t('onlyTxnDateChangesPre')}<code className="font-mono">txnDate</code>{t('onlyTxnDateChangesPost')}</b><br/>
+              {t('otherDataUntouched')}
             </div>
           </div>
         </div>
 
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2">
-          <Button variant="outline" onClick={onCancel}>Bekor qilish</Button>
+          <Button variant="outline" onClick={onCancel}>{tc('cancel')}</Button>
           <Button onClick={onConfirm} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700">
-            <CheckCircle2 className="h-3.5 w-3.5" /> Ha, tuzatish
+            <CheckCircle2 className="h-3.5 w-3.5" /> {t('yesFix')}
           </Button>
         </div>
       </div>
