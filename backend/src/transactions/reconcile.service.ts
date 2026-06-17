@@ -963,14 +963,71 @@ export class ReconcileService {
    *
    * Xavfsiz: bitta tx uchun, foydalanuvchi tasdiqi bilan, faqat sana update.
    */
-  async fixTxDate(txId: string, newDate: string): Promise<{ ok: true; updated: boolean; oldDate: string; newDate: string }> {
+  /**
+   * Composite externalId ichidagi sana segmentini (dd.MM.yyyy) yangi sanaga almashtiradi.
+   * Format: [prefix]general_id_num_DDATE_acc_ct_acc_dt_amount_sign — DDATE = dd.MM.yyyy.
+   * Sana segmenti topilmasa — o'zgarishsiz qaytadi (xavfsiz).
+   */
+  private replaceCompositeDate(externalId: string | null, newDate: string): string | null {
+    if (!externalId) return externalId;
+    const [y, m, d] = newDate.split('-');
+    if (!y || !m || !d) return externalId;
+    const newDdate = `${d}.${m}.${y}`;
+    const parts = externalId.split('_');
+    const dateRe = /^\d{2}\.\d{2}\.\d{4}$/;
+    const idx = parts.findIndex((p) => dateRe.test(p));
+    if (idx === -1) return externalId;
+    if (parts[idx] === newDdate) return externalId;
+    parts[idx] = newDdate;
+    return parts.join('_');
+  }
+
+  /** Sana o'zgarishini "O'zgargan to'lovlar"ga (EDITED) yozadi — BANK O'ZGARTIRGAN bo'limida ko'rinadi. */
+  private async logDateChange(
+    tx: {
+      id: string; externalId: string | null; accountId: string | null;
+      amount: any; direction: any; contractNumber: string | null;
+      importBankNameText: string | null; account?: { accountNo: string } | null;
+    },
+    oldDate: string, newDate: string, externalId: string | null, actor: string,
+  ): Promise<void> {
+    try {
+      await this.prisma.transactionChangeLog.create({
+        data: {
+          txId: tx.id,
+          externalId: externalId || tx.externalId || tx.id,
+          accountId: tx.accountId,
+          changeType: 'EDITED',
+          fieldsChanged: ['txnDate'],
+          // Konvensiya: oldData = { field: { old, new } } (frontend shu strukturani o'qiydi)
+          oldData: { txnDate: { old: oldDate, new: newDate } } as any,
+          newData: { txnDate: newDate } as any,
+          txnDate: new Date(`${newDate}T12:00:00Z`),
+          amount: tx.amount,
+          direction: tx.direction,
+          contractNumber: tx.contractNumber,
+          bankNameSnap: tx.importBankNameText,
+          accountNoSnap: tx.account?.accountNo,
+          detectedBy: actor,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`Sana o'zgarishi change-log yozishda xato (${tx.id}): ${e?.message}`);
+    }
+  }
+
+  async fixTxDate(txId: string, newDate: string, actor = 'manual'): Promise<{ ok: true; updated: boolean; oldDate: string; newDate: string }> {
     if (!txId) throw new BadRequestException('txId kerak');
     if (!newDate || !/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
       throw new BadRequestException('newDate YYYY-MM-DD formatda bo\'lishi kerak');
     }
     const tx = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { id: true, txnDate: true, externalId: true },
+      select: {
+        id: true, txnDate: true, externalId: true, accountId: true,
+        amount: true, direction: true, contractNumber: true, importBankNameText: true,
+        account: { select: { accountNo: true } },
+      },
     });
     if (!tx) throw new NotFoundException('Tx topilmadi');
 
@@ -981,13 +1038,30 @@ export class ReconcileService {
 
     // UTC noon — Postgres @db.Date'ga to'g'ri date saqlash uchun (TZ shift bo'lmasin)
     const newDateObj = new Date(`${newDate}T12:00:00Z`);
+    // (a) ID ichidagi sana ham yangilanadi (sync date-shift bilan bir xil)
+    const newExternalId = this.replaceCompositeDate(tx.externalId, newDate);
 
-    await this.prisma.transaction.update({
-      where: { id: txId },
-      data: { txnDate: newDateObj },
-    });
+    let finalExternalId = tx.externalId;
+    try {
+      await this.prisma.transaction.update({
+        where: { id: txId },
+        data: {
+          txnDate: newDateObj,
+          ...(newExternalId && newExternalId !== tx.externalId ? { externalId: newExternalId } : {}),
+        },
+      });
+      if (newExternalId && newExternalId !== tx.externalId) finalExternalId = newExternalId;
+    } catch (e: any) {
+      // externalId @unique — konflikt bo'lsa faqat sanani yangilaymiz (ID o'zgarmaydi)
+      this.log.warn(`fixTxDate externalId konflikt (${txId}): ${e?.message} — faqat sana yangilanadi`);
+      await this.prisma.transaction.update({ where: { id: txId }, data: { txnDate: newDateObj } });
+    }
+
+    // (b) "O'zgargan to'lovlar"ga sana o'zgarishini yozamiz
+    await this.logDateChange(tx, oldDate, newDate, finalExternalId, actor);
+
     this.invalidateTodayCache();
-    this.log.log(`fixTxDate: tx=${txId} ${oldDate} → ${newDate} (externalId=${tx.externalId?.slice(0, 50)})`);
+    this.log.log(`fixTxDate: tx=${txId} ${oldDate} → ${newDate} (externalId yangilandi: ${finalExternalId !== tx.externalId})`);
     return { ok: true, updated: true, oldDate, newDate };
   }
 
@@ -997,7 +1071,7 @@ export class ReconcileService {
    * "Hammasini bir tugma bilan tuzatish" tugmasini bosadi.
    * Har biri uchun faqat txnDate UPDATE, boshqa fieldlar tegmaydi.
    */
-  async fixAllTxDate(items: Array<{ txId: string; newDate: string }>): Promise<{
+  async fixAllTxDate(items: Array<{ txId: string; newDate: string }>, actor = 'manual'): Promise<{
     ok: true;
     summary: { total: number; updated: number; skipped: number; errors: number };
     results: Array<{ txId: string; updated: boolean; oldDate?: string; newDate: string; externalId?: string | null; error?: string }>;
@@ -1016,7 +1090,11 @@ export class ReconcileService {
         }
         const tx = await this.prisma.transaction.findUnique({
           where: { id: it.txId },
-          select: { id: true, txnDate: true, externalId: true },
+          select: {
+            id: true, txnDate: true, externalId: true, accountId: true,
+            amount: true, direction: true, contractNumber: true, importBankNameText: true,
+            account: { select: { accountNo: true } },
+          },
         });
         if (!tx) {
           results.push({ txId: it.txId, updated: false, newDate: it.newDate, error: 'tx topilmadi' });
@@ -1029,11 +1107,25 @@ export class ReconcileService {
           skipped++;
           continue;
         }
-        await this.prisma.transaction.update({
-          where: { id: it.txId },
-          data: { txnDate: new Date(`${it.newDate}T12:00:00Z`) },
-        });
-        results.push({ txId: it.txId, updated: true, oldDate, newDate: it.newDate, externalId: tx.externalId });
+        // (a) ID ichidagi sana ham yangilanadi (konflikt bo'lsa faqat sana)
+        const newExternalId = this.replaceCompositeDate(tx.externalId, it.newDate);
+        let finalExternalId = tx.externalId;
+        try {
+          await this.prisma.transaction.update({
+            where: { id: it.txId },
+            data: {
+              txnDate: new Date(`${it.newDate}T12:00:00Z`),
+              ...(newExternalId && newExternalId !== tx.externalId ? { externalId: newExternalId } : {}),
+            },
+          });
+          if (newExternalId && newExternalId !== tx.externalId) finalExternalId = newExternalId;
+        } catch (e: any) {
+          this.log.warn(`fixAllTxDate externalId konflikt (${it.txId}): ${e?.message} — faqat sana`);
+          await this.prisma.transaction.update({ where: { id: it.txId }, data: { txnDate: new Date(`${it.newDate}T12:00:00Z`) } });
+        }
+        // (b) "O'zgargan to'lovlar"ga yozamiz
+        await this.logDateChange(tx, oldDate, it.newDate, finalExternalId, actor);
+        results.push({ txId: it.txId, updated: true, oldDate, newDate: it.newDate, externalId: finalExternalId });
         updated++;
       } catch (e: any) {
         results.push({ txId: it.txId, updated: false, newDate: it.newDate, error: e?.message || "xato" });
