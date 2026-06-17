@@ -500,21 +500,25 @@ function LandingView({ onLogin, dark }: {
 
   return (
     <section className="relative overflow-hidden min-h-[calc(100vh-56px)]">
-      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-8 pb-16 grid lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-16 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
-        {/* ─── LEFT — Real Three.js 3D hero (iridescent glass mesh) ─── */}
-        <div className="order-2 lg:order-1 relative h-[400px] sm:h-[500px] lg:h-[640px]">
-          {/* Decorative aurora behind canvas */}
-          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl" aria-hidden="true">
-            <div className="absolute top-1/4 left-1/4 w-[480px] h-[480px] rounded-full blur-3xl opacity-50"
-              style={{ background: 'radial-gradient(circle, rgba(165,180,252,0.6) 0%, transparent 70%)' }} />
-            <div className="absolute bottom-1/4 right-1/4 w-[420px] h-[420px] rounded-full blur-3xl opacity-50"
-              style={{ background: 'radial-gradient(circle, rgba(216,180,254,0.5) 0%, transparent 70%)' }} />
-          </div>
-          <ApiHeroInfra dark={dark} className="absolute inset-0" />
-        </div>
+      {/* ─── FULL-BLEED BACKGROUND — Infrastructure illustration ─── */}
+      <div className="absolute inset-0 z-0" aria-hidden="true">
+        <ApiHeroInfra dark={dark} className="w-full h-full" fullBleed />
+      </div>
 
-        {/* ─── RIGHT — premium login ─── */}
-        <div className="order-1 lg:order-2 w-full max-w-[460px] mx-auto lg:mx-0 relative">
+      {/* Gradient overlay — login tarafga oqib o'tadi (login o'qilishi yengilroq) */}
+      <div
+        className="absolute inset-0 z-[1] pointer-events-none"
+        aria-hidden="true"
+        style={{
+          background: dark
+            ? 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(2,6,23,0.7) 80%, rgba(2,6,23,0.92) 100%)'
+            : 'linear-gradient(to right, transparent 0%, transparent 50%, rgba(255,255,255,0.85) 80%, rgba(255,255,255,0.97) 100%)',
+        }}
+      />
+
+      {/* ─── LOGIN — primary overlay, right-aligned ─── */}
+      <div className="relative z-10 w-full px-4 lg:px-8 xl:px-12 py-10 min-h-[calc(100vh-56px)] flex items-center justify-center lg:justify-end max-w-[1700px] mx-auto">
+        <div className="w-full max-w-[460px] relative">
           {/* Header row — badge + mini 3D orb */}
           <div className="flex items-start justify-between gap-4 mb-5">
             <motion.div
