@@ -2,11 +2,10 @@
 
 import { Suspense, useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Environment, OrbitControls, Float, Text } from '@react-three/drei';
+import { OrbitControls, Float, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Home, Banknote, User2, Calendar, Building2, TrendingUp, AlertCircle } from 'lucide-react';
-import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
@@ -264,11 +263,14 @@ function Scene({
 }) {
   return (
     <>
-      <Environment preset="city" environmentIntensity={0.6} />
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
-      <pointLight position={[-5, 4, -3]} intensity={1.5} color="#818cf8" />
-      <pointLight position={[5, 2, -3]} intensity={1} color="#f472b6" />
+      {/* Environment preset olib tashlandi — HDR worker 'window is not defined' beradi.
+          Manual lighting bilan ham yaxshi ko'rinadi. */}
+      <ambientLight intensity={0.6} />
+      <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow />
+      <directionalLight position={[-5, 6, -3]} intensity={0.6} color="#818cf8" />
+      <pointLight position={[-5, 4, -3]} intensity={2} color="#818cf8" />
+      <pointLight position={[5, 2, -3]} intensity={1.5} color="#f472b6" />
+      <pointLight position={[0, 8, 0]} intensity={1} color="#fff" />
 
       <Building progress={progress} accent={accent} totalFloors={totalFloors} targetFloor={targetFloor} />
       <MoneyParticles enabled={progress > 0} />
@@ -295,7 +297,6 @@ export function Apartment3DDialog({
   onClose: () => void;
   contractNo: string | null;
 }) {
-  const t = useTranslations('oplatykv');
   const [animatedProgress, setAnimatedProgress] = useState(0);
 
   // CRM'dan ma'lumot — narx, to'lovlar, mijoz, xonadon
@@ -428,7 +429,7 @@ export function Apartment3DDialog({
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">3D Ko'rinish</div>
                 <div className="text-base font-bold text-white truncate">
-                  {apt?.object || t('apt3dTitle', { default: 'Shartnoma 3D' })}
+                  {apt?.object || 'Shartnoma 3D'}
                   {contractNo && (
                     <span className="ml-2 text-[12px] font-mono font-normal text-slate-400">#{contractNo}</span>
                   )}
