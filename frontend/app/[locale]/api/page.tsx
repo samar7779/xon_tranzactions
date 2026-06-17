@@ -381,25 +381,58 @@ function LandingView({ onLogin, dark }: {
 
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] [background-size:32px_32px]" />
-      <div className="absolute -top-20 -right-20 w-[600px] h-[600px] bg-gradient-to-br from-indigo-200/40 to-violet-200/40 dark:from-indigo-700/15 dark:to-violet-700/15 rounded-full blur-3xl pointer-events-none" />
+      {/* Subtle grid — light va dark uchun */}
+      <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
+      {/* Decorative gradient blobs */}
+      <div className="absolute top-1/4 -left-32 w-[500px] h-[500px] bg-gradient-to-br from-indigo-300/30 to-violet-300/20 dark:from-indigo-600/15 dark:to-violet-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 -right-32 w-[500px] h-[500px] bg-gradient-to-br from-fuchsia-300/30 to-cyan-300/20 dark:from-fuchsia-600/15 dark:to-cyan-600/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-8 pb-16 grid lg:grid-cols-[1fr_1fr] gap-10 items-center max-w-[1700px] mx-auto">
-        {/* Left — 3D model (no labels) */}
-        <div className="relative h-[460px] lg:h-[600px]">
+      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-6 pb-12 grid lg:grid-cols-[1.15fr_1fr] gap-8 lg:gap-12 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
+        {/* Left — 3D constellation */}
+        <div className="relative h-[420px] lg:h-[640px] -mx-4 lg:mx-0">
           <Api3dHero className="absolute inset-0" dark={dark} />
+          {/* Bottom subtle stats strip — terminal style */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 hidden lg:flex items-center gap-3 px-3 py-1.5 rounded-full bg-white/40 dark:bg-slate-900/40 backdrop-blur-md ring-1 ring-slate-200/40 dark:ring-slate-700/40">
+            <StatDot color="emerald" label={`${ENDPOINTS.length} endpoints`} />
+            <span className="text-slate-400 dark:text-slate-600">·</span>
+            <StatDot color="indigo" label="v1" />
+            <span className="text-slate-400 dark:text-slate-600">·</span>
+            <StatDot color="violet" label="REST" />
+            <span className="text-slate-400 dark:text-slate-600">·</span>
+            <StatDot color="cyan" label="<100ms" />
+          </div>
         </div>
 
-        {/* Right — Login card */}
-        <div className="lg:max-w-md w-full mx-auto lg:ml-auto">
-          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 shadow-2xl shadow-indigo-500/5 dark:shadow-violet-900/10 p-6 lg:p-7">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-md">
-                <KeyRound className="h-5 w-5 text-white" />
+        {/* Right — Login + code preview */}
+        <div className="w-full max-w-[480px] mx-auto lg:mx-0 space-y-4">
+          {/* Code preview — terminal mock */}
+          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden bg-slate-950 shadow-lg shadow-slate-900/5">
+            <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" />
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">api · v1</span>
+            </div>
+            <pre className="px-4 py-3 text-[11.5px] font-mono leading-relaxed overflow-x-auto">
+              <span className="text-slate-500"># GET tranzaksiyalar</span>{'\n'}
+              <span className="text-indigo-400">curl</span>{' '}<span className="text-slate-300">/api/v1/transactions \</span>{'\n'}
+              {'  '}<span className="text-slate-500">-H</span>{' '}<span className="text-amber-300">"X-API-Key: xk_live_..."</span>{'\n'}
+              {'  '}<span className="text-slate-500">-H</span>{' '}<span className="text-amber-300">"X-API-Secret: xs_live_..."</span>{'\n'}
+              <span className="text-emerald-300">{'{ "ok": true, "total": 12450, ... }'}</span>
+            </pre>
+          </div>
+
+          {/* Login card */}
+          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 shadow-2xl shadow-indigo-500/5 dark:shadow-violet-900/10 p-5 lg:p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-md">
+                <KeyRound className="h-4 w-4 text-white" />
               </div>
               <div>
-                <h2 className="text-[15px] font-black text-slate-900 dark:text-slate-100 leading-tight">{t('login.title')}</h2>
-                <p className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{t('login.subtitle')}</p>
+                <h2 className="text-[14px] font-black text-slate-900 dark:text-slate-100 leading-tight">{t('login.title')}</h2>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{t('login.subtitle')}</p>
               </div>
             </div>
 
@@ -411,7 +444,7 @@ function LandingView({ onLogin, dark }: {
                   value={keyId}
                   onChange={(e) => setKeyId(e.target.value)}
                   placeholder={t('login.keyPlaceholder')}
-                  className="w-full h-11 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[13px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
                 />
               </div>
               <div>
@@ -427,7 +460,7 @@ function LandingView({ onLogin, dark }: {
                   onChange={(e) => setSecret(e.target.value)}
                   placeholder={t('login.secretPlaceholder')}
                   onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
-                  className="w-full h-11 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[13px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
+                  className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
                 />
               </div>
 
@@ -441,7 +474,7 @@ function LandingView({ onLogin, dark }: {
               <button
                 onClick={doLogin}
                 disabled={loading || !keyId.trim() || !secret.trim()}
-                className="w-full h-11 rounded-lg bg-slate-900 dark:bg-slate-100 hover:bg-slate-800 dark:hover:bg-white disabled:opacity-50 text-white dark:text-slate-900 font-bold text-[13px] flex items-center justify-center gap-2 transition-all"
+                className="w-full h-11 rounded-lg bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:from-indigo-700 hover:via-violet-700 hover:to-fuchsia-700 disabled:opacity-50 text-white font-bold text-[13px] flex items-center justify-center gap-2 transition-all shadow-md shadow-violet-500/20"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <>{t('login.submit')} <ArrowRight className="h-4 w-4" /></>}
               </button>
@@ -450,6 +483,21 @@ function LandingView({ onLogin, dark }: {
         </div>
       </div>
     </section>
+  );
+}
+
+function StatDot({ color, label }: { color: 'emerald' | 'indigo' | 'violet' | 'cyan'; label: string }) {
+  const cls: Record<string, string> = {
+    emerald: 'bg-emerald-500 shadow-emerald-500/50',
+    indigo: 'bg-indigo-500 shadow-indigo-500/50',
+    violet: 'bg-violet-500 shadow-violet-500/50',
+    cyan: 'bg-cyan-500 shadow-cyan-500/50',
+  };
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-slate-700 dark:text-slate-300">
+      <span className={cn('w-1.5 h-1.5 rounded-full shadow-md', cls[color])} />
+      {label}
+    </span>
   );
 }
 
