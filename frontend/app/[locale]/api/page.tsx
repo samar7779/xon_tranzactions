@@ -26,6 +26,12 @@ const ApiHeroR3F = dynamic(
   },
 );
 
+// Mini iridescent orb — login dekoratsiyasi
+const ApiLogin3dOrb = dynamic(
+  () => import('@/components/api-login-3d-orb').then((m) => m.ApiLogin3dOrb),
+  { ssr: false, loading: () => null },
+);
+
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
 // ════════════════════════════════════════════════════════
@@ -509,49 +515,53 @@ function LandingView({ onLogin, dark }: {
 
         {/* ─── RIGHT — premium login ─── */}
         <div className="order-1 lg:order-2 w-full max-w-[460px] mx-auto lg:mx-0 relative">
-          {/* Production badge */}
-          <motion.div
-            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.3 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-emerald-200 dark:ring-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest mb-6 shadow-sm"
-          >
-            <span className="relative flex h-1.5 w-1.5">
-              <span className={cn('absolute inline-flex h-full w-full rounded-full bg-emerald-400', !reduced && 'animate-ping opacity-75')} />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
-            </span>
-            Production · v1
-          </motion.div>
+          {/* Header row — badge + mini 3D orb */}
+          <div className="flex items-start justify-between gap-4 mb-5">
+            <motion.div
+              initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: reduced ? 0 : 0.3 }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/80 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-emerald-200 dark:ring-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest shadow-sm"
+            >
+              <span className="relative flex h-1.5 w-1.5">
+                <span className={cn('absolute inline-flex h-full w-full rounded-full bg-emerald-400', !reduced && 'animate-ping opacity-75')} />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+              </span>
+              Production · v1
+            </motion.div>
 
-          {/* Gradient title */}
+            {/* Mini 3D orb — login dekoratsiyasi */}
+            <motion.div
+              initial={{ opacity: 0, scale: reduced ? 1 : 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: reduced ? 0 : 0.6, delay: reduced ? 0 : 0.1 }}
+              className="relative w-20 h-20 sm:w-24 sm:h-24 -mt-2 shrink-0"
+            >
+              {/* Glow behind */}
+              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-indigo-500/40 to-fuchsia-500/40 blur-2xl scale-90" aria-hidden="true" />
+              <ApiLogin3dOrb className="absolute inset-0" />
+            </motion.div>
+          </div>
+
+          {/* Gradient title — compact */}
           <motion.h1
             initial={{ opacity: 0, y: reduced ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.05 }}
-            className="text-4xl sm:text-5xl lg:text-[52px] font-black tracking-tight leading-[1.02]"
+            className="text-4xl sm:text-5xl lg:text-[56px] font-black tracking-tight leading-[1.0]"
           >
-            <span className="block text-slate-900 dark:text-slate-100">Developer</span>
             <span className="block bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 dark:from-indigo-400 dark:via-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent">
-              API Platform
+              Developer API
             </span>
           </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.12 }}
-            className="text-[15px] text-slate-600 dark:text-slate-400 mt-4 leading-relaxed max-w-md"
-          >
-            {t('pageDesc')}. Token-based auth, scope-controlled, full audit trail.
-          </motion.p>
 
           {/* Login form */}
           <motion.form
             onSubmit={(e) => { e.preventDefault(); doLogin(); }}
             initial={{ opacity: 0, y: reduced ? 0 : 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.2 }}
-            className="mt-8 space-y-3 relative"
+            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }}
+            className="mt-7 space-y-3 relative"
           >
             {/* Glass card wrapper */}
             <div className="absolute -inset-4 rounded-2xl bg-gradient-to-br from-indigo-500/8 via-violet-500/8 to-fuchsia-500/8 dark:from-indigo-500/15 dark:via-violet-500/15 dark:to-fuchsia-500/15 blur-2xl -z-10" aria-hidden="true" />
