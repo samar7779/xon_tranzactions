@@ -17,7 +17,14 @@ import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { IconBtn, PrimaryBtn, MethodBadge, Kbd, eyebrow } from '@/components/api-ui';
 import { ApiCommandPalette, type PaletteEndpoint } from '@/components/api-command-palette';
 import { SNIPPET_LANGS, genSnippet, type SnippetLang } from '@/lib/api-snippet-gen';
-import { ApiHero3d } from '@/components/api-hero-3d';
+// Real Three.js 3D hero — lazy load, no SSR (WebGL needs browser)
+const ApiHeroR3F = dynamic(
+  () => import('@/components/api-hero-r3f').then((m) => m.ApiHeroR3F),
+  {
+    ssr: false,
+    loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-100/40 via-violet-100/40 to-fuchsia-100/40 dark:from-indigo-950/30 dark:via-violet-950/30 dark:to-fuchsia-950/30 rounded-2xl animate-pulse" />,
+  },
+);
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
@@ -488,9 +495,16 @@ function LandingView({ onLogin, dark }: {
   return (
     <section className="relative overflow-hidden min-h-[calc(100vh-56px)]">
       <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-8 pb-16 grid lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-16 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
-        {/* ─── LEFT — 3D parallax hero ─── */}
-        <div className="order-2 lg:order-1 relative">
-          <ApiHero3d dark={dark} />
+        {/* ─── LEFT — Real Three.js 3D hero (iridescent glass mesh) ─── */}
+        <div className="order-2 lg:order-1 relative h-[400px] sm:h-[500px] lg:h-[640px]">
+          {/* Decorative aurora behind canvas */}
+          <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl" aria-hidden="true">
+            <div className="absolute top-1/4 left-1/4 w-[480px] h-[480px] rounded-full blur-3xl opacity-50"
+              style={{ background: 'radial-gradient(circle, rgba(165,180,252,0.6) 0%, transparent 70%)' }} />
+            <div className="absolute bottom-1/4 right-1/4 w-[420px] h-[420px] rounded-full blur-3xl opacity-50"
+              style={{ background: 'radial-gradient(circle, rgba(216,180,254,0.5) 0%, transparent 70%)' }} />
+          </div>
+          <ApiHeroR3F dark={dark} className="absolute inset-0" />
         </div>
 
         {/* ─── RIGHT — premium login ─── */}
