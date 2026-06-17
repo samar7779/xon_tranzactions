@@ -43,6 +43,7 @@ const ROUTE_PERMISSIONS: { prefix: string; permission: string }[] = [
   { prefix: '/admin/users', permission: PERMS.USERS_VIEW },
   { prefix: '/admin/roles', permission: PERMS.ROLES_VIEW },
   { prefix: '/admin/sync-logs', permission: PERMS.SYNC_VIEW },
+  { prefix: '/admin/api-keys', permission: PERMS.API_KEYS_VIEW },
   { prefix: '/admin/api-explorer', permission: PERMS.CREDENTIALS_MANAGE },
   { prefix: '/admin', permission: PERMS.USERS_VIEW },
   { prefix: '/dashboard', permission: PERMS.DASHBOARD_VIEW },

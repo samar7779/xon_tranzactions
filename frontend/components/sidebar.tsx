@@ -31,6 +31,7 @@ const ADMIN_PERMS = [
   PERMS.API_EXPLORER_VIEW,
   PERMS.CLEANUP_VIEW,
   PERMS.IMPORT_VIEW,
+  PERMS.API_KEYS_VIEW,
 ];
 
 const NAV: NavItem[] = [
@@ -155,6 +156,7 @@ export function Sidebar() {
   const mobileNavOpen = useUI((s) => s.mobileNavOpen);
   const setMobileNavOpen = useUI((s) => s.setMobileNavOpen);
   const pathname = usePathname();
+  const tc = useTranslations('common');
 
   // Yo'l o'zgarganda mobil drawer'ni yopish
   useEffect(() => {
@@ -197,12 +199,12 @@ export function Sidebar() {
           'flex flex-col transform transition-transform duration-300 ease-out',
           mobileNavOpen ? 'translate-x-0' : '-translate-x-full',
         )}
-        aria-label="Mobile navigation"
+        aria-label={tc('menu')}
       >
         <button
           onClick={() => setMobileNavOpen(false)}
           className="absolute top-3 right-3 w-9 h-9 grid place-items-center rounded-full text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 transition-colors"
-          aria-label="Yopish"
+          aria-label={tc('close')}
         >
           <X className="h-5 w-5" />
         </button>

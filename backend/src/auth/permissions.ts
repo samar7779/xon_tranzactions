@@ -89,6 +89,10 @@ export const PERMISSIONS = {
   // Tizim — deploy
   SYSTEM_DEPLOY: 'system:deploy',
 
+  // Developer API (tashqi tizim integratsiyasi uchun API kalitlar)
+  API_KEYS_VIEW: 'api_keys:view',                                // Kalitlar ro'yxati + loglar
+  API_KEYS_MANAGE: 'api_keys:manage',                            // Yaratish, tahrirlash, o'chirish
+
   // ─── QO'SHIMCHA ───
   // CRM
   CRM_VIEW: 'crm:view',
@@ -251,6 +255,14 @@ export const PERMISSION_TREE: PermModule[] = [
         name: 'Tizim',
         items: [
           { value: PERMISSIONS.SYSTEM_DEPLOY, label: 'Deploy log ko\'rish' },
+        ],
+      },
+      {
+        name: 'Developer API',
+        description: 'Tashqi tizim integratsiyasi uchun API kalitlar',
+        items: [
+          { value: PERMISSIONS.API_KEYS_VIEW, label: 'API kalitlar va loglarni ko\'rish' },
+          { value: PERMISSIONS.API_KEYS_MANAGE, label: 'API kalit yaratish / tahrirlash / o\'chirish' },
         ],
       },
     ],
