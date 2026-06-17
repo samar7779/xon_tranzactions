@@ -13,8 +13,9 @@ import {
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
-  PlusCircle, Paperclip, Wallet, Building2,
+  PlusCircle, Paperclip, Wallet, Building2, Box,
 } from 'lucide-react';
+import { Apartment3DDialog } from '@/components/apartment-3d-view';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
@@ -1112,6 +1113,7 @@ function AktSverkaDialog({
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [crmMode, setCrmMode] = useState(false);
+  const [view3DOpen, setView3DOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(search.trim()), 250);
@@ -1470,6 +1472,17 @@ function AktSverkaDialog({
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setView3DOpen(true)}
+              disabled={!selectedContract}
+              title="3D ko'rinish — to'lov darajasini vizual ko'rsatish"
+              className="h-9 px-3 rounded-lg text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md
+                         bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600
+                         hover:from-indigo-600 hover:via-violet-700 hover:to-fuchsia-700
+                         hover:shadow-lg hover:shadow-violet-500/30"
+            >
+              <Box className="h-3.5 w-3.5" /> 3D
+            </button>
+            <button
               onClick={() => window.print()}
               disabled={!selectedContract || !data || data.items.length === 0}
               className="h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1485,6 +1498,13 @@ function AktSverkaDialog({
             </button>
           </div>
         </div>
+
+        {/* 3D Apartment view dialog */}
+        <Apartment3DDialog
+          open={view3DOpen}
+          onClose={() => setView3DOpen(false)}
+          contractNo={selectedContract}
+        />
       </DialogContent>
     </Dialog>
   );

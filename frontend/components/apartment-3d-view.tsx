@@ -1,0 +1,533 @@
+'use client';
+
+import { Suspense, useRef, useMemo, useEffect, useState } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { Environment, OrbitControls, Float, Text } from '@react-three/drei';
+import * as THREE from 'three';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Home, Banknote, User2, Calendar, Building2, TrendingUp, AlertCircle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { cn, formatMoney } from '@/lib/utils';
+
+/**
+ * 3D apartment ko'rinishi — shartnoma to'lov holatini vizual ko'rsatadi.
+ *
+ * Bino qavatlari "yoritiladi" to'lov foiziga qarab:
+ *   - 80% to'langan → 4/5 qavat yoritilgan (oltin)
+ *   - Tepa qavat — qisman yoritilgan (40% to'langan = 4/10 yorug')
+ *
+ * Ma'lumotlar manbai: /oplata-kv/crm-sverka — CRM'dagi shartnoma narxi va to'lovlar.
+ */
+
+type ApartmentData = {
+  contractNo: string;
+  object: string | null;
+  client: string | null;
+  totalPrice: number;        // CRM contractInfo.price
+  totalPaid: number;         // initialPaid + monthlyPaid
+  initialPlan: number;
+  initialPaid: number;
+  monthlyPlan: number;
+  monthlyPaid: number;
+  contractDate: string | null;
+  status: string | null;
+};
+
+// ─── 3D BUILDING ─────────────────────────────────────────────
+function Building({ progress, accent }: { progress: number; accent: string }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const FLOORS = 8;
+
+  useFrame((state) => {
+    if (groupRef.current) {
+      // Slow auto-rotation if user not interacting
+      groupRef.current.rotation.y += 0.002;
+    }
+  });
+
+  // Har qavat necha foizda yoritilishini hisoblaymiz
+  const floorFills = useMemo(() => {
+    const arr: number[] = [];
+    for (let i = 0; i < FLOORS; i++) {
+      const floorStart = (i / FLOORS) * 100;
+      const floorEnd = ((i + 1) / FLOORS) * 100;
+      if (progress >= floorEnd) arr.push(1);
+      else if (progress <= floorStart) arr.push(0);
+      else arr.push((progress - floorStart) / (floorEnd - floorStart));
+    }
+    return arr;
+  }, [progress]);
+
+  return (
+    <group ref={groupRef} position={[0, -1.2, 0]}>
+      {/* Asos (er) */}
+      <mesh position={[0, -0.3, 0]} receiveShadow>
+        <boxGeometry args={[5, 0.2, 5]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} />
+      </mesh>
+
+      {/* Bino qavatlari */}
+      {Array.from({ length: FLOORS }).map((_, i) => {
+        const y = i * 0.7;
+        const fill = floorFills[i];
+        return (
+          <group key={i} position={[0, y, 0]}>
+            {/* Qavat tashqi shisha */}
+            <mesh castShadow>
+              <boxGeometry args={[2.4, 0.7, 2.4]} />
+              <meshPhysicalMaterial
+                color={fill > 0 ? accent : '#334155'}
+                emissive={fill > 0 ? accent : '#0f172a'}
+                emissiveIntensity={fill * 0.8}
+                metalness={0.3}
+                roughness={0.15}
+                transmission={0.15}
+                thickness={0.3}
+                clearcoat={1}
+                clearcoatRoughness={0}
+              />
+            </mesh>
+
+            {/* Qavat ramkasi (orqa) */}
+            <mesh>
+              <boxGeometry args={[2.5, 0.05, 2.5]} />
+              <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.3} />
+            </mesh>
+
+            {/* Window grid — 4x1 windows per side (faqat front) */}
+            {[0, 1, 2, 3].map((wx) => (
+              <mesh key={wx} position={[-0.75 + wx * 0.5, 0, 1.21]}>
+                <planeGeometry args={[0.32, 0.38]} />
+                <meshBasicMaterial
+                  color={fill > wx / 4 ? '#fef9c3' : '#0f172a'}
+                  transparent
+                  opacity={fill > wx / 4 ? 0.95 : 0.4}
+                />
+              </mesh>
+            ))}
+          </group>
+        );
+      })}
+
+      {/* Tom (roof) */}
+      <mesh position={[0, FLOORS * 0.7, 0]}>
+        <boxGeometry args={[2.5, 0.15, 2.5]} />
+        <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.4} />
+      </mesh>
+
+      {/* Tomda kichik antenna */}
+      <mesh position={[0.8, FLOORS * 0.7 + 0.4, 0.8]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.6]} />
+        <meshStandardMaterial color="#94a3b8" metalness={1} />
+      </mesh>
+
+      {/* Floating progress label - tepada */}
+      <Float speed={2} rotationIntensity={0} floatIntensity={0.4}>
+        <Text
+          position={[0, FLOORS * 0.7 + 1.2, 0]}
+          fontSize={0.55}
+          color={accent}
+          anchorX="center"
+          anchorY="middle"
+          outlineWidth={0.02}
+          outlineColor="#000"
+        >
+          {Math.round(progress)}%
+        </Text>
+      </Float>
+
+      {/* Light beam pastdan tepaga */}
+      <pointLight position={[0, progress / 100 * FLOORS * 0.7, 0]} intensity={2} color={accent} distance={6} />
+    </group>
+  );
+}
+
+// ─── PARTICLES — pul belgilari uchayotgan effekt ──────────
+function MoneyParticles({ enabled }: { enabled: boolean }) {
+  const ref = useRef<THREE.Points>(null);
+  const count = 80;
+
+  const { positions, velocities } = useMemo(() => {
+    const positions = new Float32Array(count * 3);
+    const velocities = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 8;
+      positions[i * 3 + 1] = Math.random() * 6 - 1;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 8;
+      velocities[i * 3 + 1] = 0.005 + Math.random() * 0.015;
+    }
+    return { positions, velocities };
+  }, []);
+
+  useFrame(() => {
+    if (!enabled || !ref.current) return;
+    const pos = ref.current.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < count; i++) {
+      const y = pos.getY(i) + velocities[i * 3 + 1];
+      pos.setY(i, y > 7 ? -1 : y);
+    }
+    pos.needsUpdate = true;
+  });
+
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={0.06} color="#fbbf24" transparent opacity={0.7} sizeAttenuation />
+    </points>
+  );
+}
+
+// ─── ASOSIY SCENE ─────────────────────────────────────────
+function Scene({ progress, accent }: { progress: number; accent: string }) {
+  return (
+    <>
+      <Environment preset="city" environmentIntensity={0.6} />
+      <ambientLight intensity={0.4} />
+      <directionalLight position={[5, 8, 5]} intensity={1.2} castShadow />
+      <pointLight position={[-5, 4, -3]} intensity={1.5} color="#818cf8" />
+      <pointLight position={[5, 2, -3]} intensity={1} color="#f472b6" />
+
+      <Building progress={progress} accent={accent} />
+      <MoneyParticles enabled={progress > 0} />
+
+      {/* Kamera nazorati — foydalanuvchi qo'l bilan ham aylantirishi mumkin */}
+      <OrbitControls
+        enablePan={false}
+        enableZoom={true}
+        minDistance={6}
+        maxDistance={14}
+        minPolarAngle={Math.PI / 6}
+        maxPolarAngle={Math.PI / 1.8}
+        autoRotate={false}
+      />
+    </>
+  );
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────
+export function Apartment3DDialog({
+  open, onClose, contractNo,
+}: {
+  open: boolean;
+  onClose: () => void;
+  contractNo: string | null;
+}) {
+  const t = useTranslations('oplatykv');
+  const [animatedProgress, setAnimatedProgress] = useState(0);
+
+  // CRM'dan ma'lumot — narx, to'lovlar, mijoz
+  const dataQuery = useQuery({
+    queryKey: ['oplata-kv-3d-view', contractNo],
+    queryFn: () => api.get<{
+      ok: boolean;
+      contractNo: string;
+      crmConnected: boolean;
+      oplata: { items: any[]; count: number; totalPayment: number; initial: number; monthly: number };
+      crm: {
+        connected: boolean;
+        error: string | null;
+        contractInfo: { price: number; contractDate: string | null; status: string | null; initialPlan: number; initialPaid: number; monthlyPlan: number; monthlyPaid: number } | null;
+        totalPaid: number;
+      };
+    }>(`/oplata-kv/crm-sverka?contractNo=${encodeURIComponent(contractNo || '')}`),
+    enabled: open && !!contractNo,
+  });
+
+  // Meta — client, object (alohida endpoint'dan)
+  const metaQuery = useQuery({
+    queryKey: ['oplata-kv-by-contract', contractNo],
+    queryFn: () => api.get<{
+      ok: boolean;
+      meta: { client: string | null; object: string | null; paymentMethod: string | null } | null;
+    }>(`/oplata-kv/by-contract?contractNo=${encodeURIComponent(contractNo || '')}`),
+    enabled: open && !!contractNo,
+  });
+
+  const apt: ApartmentData | null = useMemo(() => {
+    if (!dataQuery.data?.ok || !contractNo) return null;
+    const ci = dataQuery.data.crm.contractInfo;
+    const meta = metaQuery.data?.meta || null;
+    if (!ci) return null;
+    return {
+      contractNo,
+      object: meta?.object || null,
+      client: meta?.client || null,
+      totalPrice: ci.price || 0,
+      totalPaid: (ci.initialPaid || 0) + (ci.monthlyPaid || 0),
+      initialPlan: ci.initialPlan || 0,
+      initialPaid: ci.initialPaid || 0,
+      monthlyPlan: ci.monthlyPlan || 0,
+      monthlyPaid: ci.monthlyPaid || 0,
+      contractDate: ci.contractDate,
+      status: ci.status,
+    };
+  }, [dataQuery.data, metaQuery.data, contractNo]);
+
+  const targetProgress = useMemo(() => {
+    if (!apt || apt.totalPrice <= 0) return 0;
+    return Math.min(100, (apt.totalPaid / apt.totalPrice) * 100);
+  }, [apt]);
+
+  // Smooth animation pastdan tepaga
+  useEffect(() => {
+    if (!open) {
+      setAnimatedProgress(0);
+      return;
+    }
+    setAnimatedProgress(0);
+    const startTime = performance.now();
+    const duration = 2200; // 2.2 sek
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const t = Math.min(1, elapsed / duration);
+      // ease-out cubic
+      const eased = 1 - Math.pow(1 - t, 3);
+      setAnimatedProgress(targetProgress * eased);
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [open, targetProgress]);
+
+  // Accent color progress'ga qarab — qizil (qarz) → sariq → yashil (to'la)
+  const accent = useMemo(() => {
+    if (targetProgress >= 100) return '#10b981'; // emerald
+    if (targetProgress >= 70) return '#f59e0b';  // amber
+    if (targetProgress >= 40) return '#eab308';  // yellow
+    if (targetProgress > 0) return '#f97316';    // orange
+    return '#ef4444';                            // red
+  }, [targetProgress]);
+
+  const remaining = (apt?.totalPrice || 0) - (apt?.totalPaid || 0);
+  const crmNotConnected = dataQuery.data && !dataQuery.data.crmConnected;
+  const noContractInfo = dataQuery.data?.ok && dataQuery.data.crmConnected && !dataQuery.data.crm.contractInfo;
+
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-950/85 backdrop-blur-md p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.94, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.94, y: 20 }}
+            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            className="relative w-full max-w-[1100px] h-[88vh] rounded-2xl overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 ring-1 ring-slate-800 shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="relative px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-950 flex items-center gap-3 shrink-0">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-lg">
+                <Building2 className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">3D Ko'rinish</div>
+                <div className="text-base font-bold text-white truncate">
+                  {apt?.object || t('apt3dTitle', { default: 'Shartnoma 3D' })}
+                  {contractNo && (
+                    <span className="ml-2 text-[12px] font-mono font-normal text-slate-400">#{contractNo}</span>
+                  )}
+                </div>
+              </div>
+              <button
+                onClick={onClose}
+                className="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 grid place-items-center text-slate-300 transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Body: 3D scene + info panel */}
+            <div className="flex-1 grid lg:grid-cols-[1fr_360px] min-h-0">
+              {/* 3D scene */}
+              <div className="relative bg-gradient-to-b from-slate-900 to-black">
+                {dataQuery.isLoading || metaQuery.isLoading ? (
+                  <div className="absolute inset-0 grid place-items-center text-slate-400">
+                    <div className="text-center">
+                      <div className="w-10 h-10 mx-auto mb-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                      <div className="text-[13px]">CRM dan ma'lumot olinmoqda...</div>
+                    </div>
+                  </div>
+                ) : crmNotConnected ? (
+                  <div className="absolute inset-0 grid place-items-center text-center px-8">
+                    <div>
+                      <AlertCircle className="h-12 w-12 text-amber-400 mx-auto mb-3" />
+                      <div className="text-amber-200 font-semibold mb-1">CRM bog'lanmagan</div>
+                      <div className="text-[13px] text-slate-400">
+                        3D ko'rinish uchun CRM'da shartnoma narxi va to'lov rejasi kerak.
+                      </div>
+                    </div>
+                  </div>
+                ) : noContractInfo ? (
+                  <div className="absolute inset-0 grid place-items-center text-center px-8">
+                    <div>
+                      <AlertCircle className="h-12 w-12 text-rose-400 mx-auto mb-3" />
+                      <div className="text-rose-200 font-semibold mb-1">CRM da topilmadi</div>
+                      <div className="text-[13px] text-slate-400">
+                        Bu shartnoma raqami XonSaroy CRM bazasida yo'q yoki noto'g'ri.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <Canvas
+                      shadows
+                      camera={{ position: [8, 4, 8], fov: 45 }}
+                      gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
+                      dpr={[1, 2]}
+                    >
+                      <color attach="background" args={['#020617']} />
+                      <fog attach="fog" args={['#020617', 12, 22]} />
+                      <Suspense fallback={null}>
+                        <Scene progress={animatedProgress} accent={accent} />
+                      </Suspense>
+                    </Canvas>
+
+                    {/* Bottom hint */}
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-slate-900/70 backdrop-blur-sm text-[10px] text-slate-400 font-medium pointer-events-none">
+                      Sichqoncha bilan aylantirish · scroll bilan zoom
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Right info panel */}
+              <div className="bg-slate-900 border-l border-slate-800 overflow-y-auto p-5 space-y-4">
+                {apt ? (
+                  <>
+                    {/* Progress card */}
+                    <div className="rounded-xl bg-gradient-to-br from-slate-800 to-slate-900 ring-1 ring-slate-700/60 p-4">
+                      <div className="text-[9.5px] uppercase tracking-widest text-slate-400 font-bold mb-2">To'lov darajasi</div>
+                      <div className="flex items-baseline gap-2 mb-3">
+                        <div
+                          className="text-3xl font-black tabular-nums"
+                          style={{ color: accent }}
+                        >
+                          {targetProgress.toFixed(1)}%
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          {targetProgress >= 100 ? 'to\'la to\'langan' : targetProgress >= 50 ? 'yarmidan oshgan' : 'jarayonda'}
+                        </div>
+                      </div>
+                      {/* Progress bar */}
+                      <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${targetProgress}%` }}
+                          transition={{ duration: 1.5, ease: 'easeOut' }}
+                          className="h-full rounded-full"
+                          style={{
+                            background: `linear-gradient(90deg, ${accent}, ${accent}cc)`,
+                            boxShadow: `0 0 12px ${accent}80`,
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Meta */}
+                    {apt.client && (
+                      <InfoRow icon={<User2 className="h-3.5 w-3.5" />} label="Mijoz" value={apt.client} />
+                    )}
+                    {apt.object && (
+                      <InfoRow icon={<Home className="h-3.5 w-3.5" />} label="Obyekt" value={apt.object} />
+                    )}
+                    {apt.contractDate && (
+                      <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Shartnoma sanasi" value={new Date(apt.contractDate).toLocaleDateString('ru-RU')} />
+                    )}
+
+                    {/* Sums */}
+                    <div className="pt-3 border-t border-slate-800 space-y-2.5">
+                      <SumRow label="Jami narx" value={apt.totalPrice} color="text-slate-200" />
+                      <SumRow label="To'langan" value={apt.totalPaid} color="text-emerald-400" prefix="+" />
+                      <SumRow
+                        label="Qoldiq"
+                        value={remaining}
+                        color={remaining > 0 ? 'text-rose-400' : 'text-emerald-400'}
+                        prefix={remaining > 0 ? '−' : ''}
+                      />
+                    </div>
+
+                    {/* Breakdown */}
+                    <div className="pt-3 border-t border-slate-800">
+                      <div className="text-[9.5px] uppercase tracking-widest text-slate-400 font-bold mb-2">Reja bo'yicha</div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="rounded-lg bg-slate-800/60 p-2.5">
+                          <div className="text-[9px] uppercase text-slate-500 mb-1">1 vznos</div>
+                          <div className="text-[12px] font-bold tabular-nums text-slate-200">
+                            {formatMoney(apt.initialPaid)}
+                          </div>
+                          <div className="text-[10px] text-slate-500 tabular-nums">
+                            / {formatMoney(apt.initialPlan)}
+                          </div>
+                        </div>
+                        <div className="rounded-lg bg-slate-800/60 p-2.5">
+                          <div className="text-[9px] uppercase text-slate-500 mb-1">Oylik</div>
+                          <div className="text-[12px] font-bold tabular-nums text-slate-200">
+                            {formatMoney(apt.monthlyPaid)}
+                          </div>
+                          <div className="text-[10px] text-slate-500 tabular-nums">
+                            / {formatMoney(apt.monthlyPlan)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status badge */}
+                    {apt.status && (
+                      <div className="pt-3 border-t border-slate-800">
+                        <div className="text-[9.5px] uppercase tracking-widest text-slate-400 font-bold mb-1.5">Status</div>
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-indigo-500/15 ring-1 ring-indigo-500/30 text-[11px] font-semibold text-indigo-300">
+                          <TrendingUp className="h-3 w-3" />
+                          {apt.status}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : !dataQuery.isLoading && (
+                  <div className="text-center py-12 text-slate-500 text-[13px]">
+                    Ma'lumot mavjud emas
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <div className="w-7 h-7 rounded-lg bg-slate-800 grid place-items-center text-slate-400 shrink-0 mt-0.5">
+        {icon}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-[9px] uppercase tracking-wider text-slate-500 font-bold mb-0.5">{label}</div>
+        <div className="text-[12.5px] font-semibold text-slate-200 break-words">{value}</div>
+      </div>
+    </div>
+  );
+}
+
+function SumRow({ label, value, color, prefix = '' }: { label: string; value: number; color: string; prefix?: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <div className="text-[11px] text-slate-400">{label}</div>
+      <div className={cn('text-[13.5px] font-bold tabular-nums', color)}>
+        {prefix}{formatMoney(value)}
+      </div>
+    </div>
+  );
+}
