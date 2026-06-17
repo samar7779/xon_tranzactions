@@ -110,6 +110,18 @@ export default function ApiKeysPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="h-9 gap-1.5 border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-700 hover:from-indigo-100 hover:to-violet-100 dark:from-indigo-950/40 dark:to-violet-950/40 dark:text-indigo-300 dark:border-indigo-800/60"
+          >
+            <Link href={`/${locale}/api`} target="_blank" rel="noopener noreferrer">
+              <Code2 className="h-3.5 w-3.5" />
+              Hujjatlar
+              <ExternalLink className="h-3 w-3 opacity-70" />
+            </Link>
+          </Button>
+          <Button
             variant="outline"
             size="sm"
             onClick={() => listQ.refetch()}
