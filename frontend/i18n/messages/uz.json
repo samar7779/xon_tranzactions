@@ -479,7 +479,15 @@
     "contractDelete": "Shartnomani o'chirish",
     "kontragent": "Kontragent",
     "contractNumberLabel": "Shartnoma raqami",
-    "contractNumberPlaceholder": "Masalan: 12345VTN26MP"
+    "contractNumberPlaceholder": "Masalan: 12345VTN26MP",
+    "detailCategoryLabel": "Kategoriya",
+    "detailContractLabel": "Shartnoma",
+    "badgeCancelled": "BEKOR",
+    "historyLabel": "Tarix",
+    "expand": "Ochish",
+    "collapse": "Yopish",
+    "expandAll": "Hammasini ochish",
+    "collapseAll": "Hammasini yopish"
   },
   "setup": {
     "title": "Banklar",

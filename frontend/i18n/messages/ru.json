@@ -479,7 +479,15 @@
     "contractDelete": "Удалить договор",
     "kontragent": "Контрагент",
     "contractNumberLabel": "Номер договора",
-    "contractNumberPlaceholder": "Например: 12345VTN26MP"
+    "contractNumberPlaceholder": "Например: 12345VTN26MP",
+    "detailCategoryLabel": "Категория",
+    "detailContractLabel": "Договор",
+    "badgeCancelled": "ОТМЕНЕНО",
+    "historyLabel": "История",
+    "expand": "Развернуть",
+    "collapse": "Свернуть",
+    "expandAll": "Развернуть все",
+    "collapseAll": "Свернуть все"
   },
   "setup": {
     "title": "Банки",
