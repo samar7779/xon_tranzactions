@@ -283,6 +283,49 @@ export class ReconcileService {
     return isNaN(dt.getTime()) ? null : dt;
   }
 
+  /**
+   * Standard kalit (b2_id / general_id / composite externalId) mosligi
+   * topilmaganda — bank itemini DBdagi tx'lar bilan amount + direction +
+   * sana yaqinligi bo'yicha solishtiradi. Eski yozuvlarda bankB2Id NULL
+   * bo'lishi mumkin, yoki composite generator o'zgargan bo'lishi mumkin.
+   *
+   * Faqat ANIQ bitta nomzod topilsa qaytariladi — ko'p bo'lsa noaniqlikni
+   * yashirmaslik uchun null.
+   */
+  private findFallbackMatch(opts: {
+    accountId: string;
+    amount: number;          // so'mda
+    direction: 'IN' | 'OUT';
+    ddate: string | undefined; // "dd.MM.yyyy"
+    dbItems: Array<any>;
+    offDateItems: Array<any>;
+    matchedDbIds: Set<string>;
+    tolerance: number;
+  }): any | null {
+    const { amount, direction, ddate, dbItems, offDateItems, matchedDbIds, tolerance } = opts;
+    const all = [...dbItems, ...offDateItems];
+    // Bank ddate (dd.MM.yyyy) → Date
+    let bankDay: Date | null = null;
+    if (ddate && /^\d{2}\.\d{2}\.\d{4}$/.test(ddate)) {
+      const [d, m, y] = ddate.split('.').map(Number);
+      bankDay = new Date(Date.UTC(y, m - 1, d));
+    }
+    const WINDOW_MS = 3 * DAY_MS; // ±3 kun
+    const candidates = all.filter((tx) => {
+      if (matchedDbIds.has(tx.id)) return false;
+      if (tx.direction !== direction) return false;
+      const dbAmt = Number(tx.amount);
+      if (Math.abs(dbAmt - amount) > tolerance) return false;
+      if (bankDay) {
+        const txTime = (tx.valueDate || tx.txnDate)?.getTime?.() ?? 0;
+        if (Math.abs(txTime - bankDay.getTime()) > WINDOW_MS) return false;
+      }
+      return true;
+    });
+    if (candidates.length === 1) return candidates[0];
+    return null;
+  }
+
   /** Tashkent bugungi sanasini YYYY-MM-DD shaklida qaytaradi */
   private todayTashkent(): string {
     const now = new Date(Date.now() + 5 * 60 * 60 * 1000);
@@ -716,6 +759,32 @@ export class ReconcileService {
           });
         }
       } else {
+        // ── FALLBACK MATCH ──
+        // Standard kalitlar (b2_id, general_id, composite externalId) bilan topilmadi.
+        // Eski yozuvlarda bankB2Id NULL bo'lishi mumkin, yoki composite generator
+        // o'zgargan bo'lishi mumkin. Shu sababli amount + direction + sana yaqinligi
+        // bo'yicha so'nggi imkoniyat sifatida qidiramiz.
+        if (!offDateMatch) {
+          const bankAmt = (item.amount ?? 0) / 100;
+          const bankDirection: 'IN' | 'OUT' | null =
+            item.acc_ct === account.accountNo ? 'IN'
+              : item.acc_dt === account.accountNo ? 'OUT'
+              : (item.dir === 2 ? 'IN' : item.dir === 1 ? 'OUT' : null);
+          if (bankDirection) {
+            const fallback = this.findFallbackMatch({
+              accountId,
+              amount: bankAmt,
+              direction: bankDirection,
+              ddate: item.ddate,
+              dbItems,
+              offDateItems,
+              matchedDbIds,
+              tolerance: AMOUNT_EPSILON,
+            });
+            if (fallback) offDateMatch = fallback;
+          }
+        }
+
         bankOnly.push({
           b2Id: item.b2_id,
           generalId: item.general_id,
@@ -739,6 +808,10 @@ export class ReconcileService {
             : undefined,
           existingTxId: offDateMatch?.id,
         });
+        // Fallback orqali topilgan tx'ni matched ro'yxatga qo'shamiz —
+        // dbOnly ro'yxatida ko'rinmasligi uchun (aks holda ham bank-bor-DBda-yo'q,
+        // ham DBda-bor-bank-da-yo'q deb chiqib qolardi).
+        if (offDateMatch) matchedDbIds.add(offDateMatch.id);
       }
     }
 
