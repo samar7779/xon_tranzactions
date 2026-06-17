@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  Database, RefreshCw, Landmark,
+  RefreshCw, Landmark,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -845,15 +845,15 @@ export default function TransactionsPage() {
                     title={t('contractSourceFilterTitle')}
                     className={cn(
                       'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
-                      contractSources.size > 0
+                      (contractSources.size + sources.size) > 0
                         ? 'bg-violet-600 text-white shadow-md shadow-violet-500/30'
                         : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700',
                     )}
                   >
                     <Paperclip className="h-4 w-4" />
-                    {contractSources.size > 0 && (
+                    {(contractSources.size + sources.size) > 0 && (
                       <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">
-                        {contractSources.size}
+                        {contractSources.size + sources.size}
                       </span>
                     )}
                   </button>
@@ -916,83 +916,53 @@ export default function TransactionsPage() {
                       <Paperclip className="h-2.5 w-2.5 mr-0.5" /> {t('badgeApplication')}
                     </span>
                   </button>
-                  {contractSources.size > 0 && (
-                    <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
-                      <button
-                        onClick={() => { setContractSources(new Set()); setPage(1); }}
-                        className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
-                      >
-                        {tc('clear')}
-                      </button>
+                  {/* ─── MANBA bo'limi — bank sync / import / aloqa bank ─── */}
+                  <div className="border-t border-slate-100 dark:border-slate-800 mt-1.5 pt-1.5">
+                    <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 px-2 py-1.5">
+                      Manba
                     </div>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              {/* Manba filtri — bank sync / import / aloqa bank (multi-select) */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    title="Manba bo'yicha filtr (sync / import)"
-                    className={cn(
-                      'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
-                      sources.size > 0
-                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
-                        : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700',
-                    )}
-                  >
-                    <Database className="h-4 w-4" />
-                    {sources.size > 0 && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">
-                        {sources.size}
-                      </span>
-                    )}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="p-2 w-60">
-                  <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 px-2 py-1.5">
-                    Manba
+                    {([
+                      { key: 'SYNC', label: 'Bank sync', icon: RefreshCw },
+                      { key: 'IMPORT', label: 'Import (Excel)', icon: UploadIcon },
+                      { key: 'ALOQA_BANK', label: 'Aloqa Bank import', icon: Landmark },
+                    ] as const).map((opt) => {
+                      const Icon = opt.icon;
+                      const checked = sources.has(opt.key);
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => {
+                            setSources((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(opt.key)) next.delete(opt.key); else next.add(opt.key);
+                              return next;
+                            });
+                            setPage(1);
+                          }}
+                          className={cn(
+                            'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all mt-0.5',
+                            checked
+                              ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900'
+                              : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
+                          )}
+                        >
+                          <span className={cn(
+                            'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
+                            checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700',
+                          )}>
+                            {checked && <CheckCircle2 className="h-3 w-3 text-white" />}
+                          </span>
+                          <Icon className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                          <span className="flex-1 text-left">{opt.label}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  {([
-                    { key: 'SYNC', label: 'Bank sync', icon: RefreshCw, badge: 'SYNC', tone: 'emerald' },
-                    { key: 'IMPORT', label: 'Import (Excel)', icon: UploadIcon, badge: 'IMP', tone: 'fuchsia' },
-                    { key: 'ALOQA_BANK', label: 'Aloqa Bank import', icon: Landmark, badge: 'IMP', tone: 'fuchsia' },
-                  ] as const).map((opt) => {
-                    const Icon = opt.icon;
-                    const checked = sources.has(opt.key);
-                    return (
-                      <button
-                        key={opt.key}
-                        onClick={() => {
-                          setSources((prev) => {
-                            const next = new Set(prev);
-                            if (next.has(opt.key)) next.delete(opt.key); else next.add(opt.key);
-                            return next;
-                          });
-                          setPage(1);
-                        }}
-                        className={cn(
-                          'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all mt-0.5',
-                          checked
-                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900'
-                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
-                        )}
-                      >
-                        <span className={cn(
-                          'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
-                          checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700',
-                        )}>
-                          {checked && <CheckCircle2 className="h-3 w-3 text-white" />}
-                        </span>
-                        <Icon className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
-                        <span className="flex-1 text-left">{opt.label}</span>
-                      </button>
-                    );
-                  })}
-                  {sources.size > 0 && (
+
+                  {(contractSources.size + sources.size) > 0 && (
                     <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
                       <button
-                        onClick={() => { setSources(new Set()); setPage(1); }}
+                        onClick={() => { setContractSources(new Set()); setSources(new Set()); setPage(1); }}
                         className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
                       >
                         {tc('clear')}
