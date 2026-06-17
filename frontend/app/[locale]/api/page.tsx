@@ -463,28 +463,35 @@ function LandingView({ onLogin, dark }: {
   const [pulseKey, setPulseKey] = useState(0);
   const [infraState, setInfraState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
 
+  // ─── Form shake effect (error/success) ───
+  const [shakeKind, setShakeKind] = useState<null | 'success' | 'error'>(null);
+  const triggerShake = (kind: 'success' | 'error') => {
+    setShakeKind(kind);
+    setTimeout(() => setShakeKind(null), 600);
+  };
+
   const firePulse = (state: 'processing' | 'success' | 'error') => {
     setInfraState(state);
     setPulseKey((p) => p + 1);
   };
 
-  // ─── Auto-advance: yozish to'xtagandan 700ms keyin, minimum uzunlik ───
+  // ─── Auto-advance: yozish to'xtagandan 250ms keyin, minimum uzunlik 3 ───
   useEffect(() => {
     if (stage !== 'key') return;
-    if (!keyId.trim() || keyId.trim().length < 8) return;
+    if (!keyId.trim() || keyId.trim().length < 3) return;
     const t = setTimeout(() => {
       advanceFromKey();
-    }, 700);
+    }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyId, stage]);
 
   useEffect(() => {
     if (stage !== 'secret') return;
-    if (!secret.trim() || secret.trim().length < 8) return;
+    if (!secret.trim() || secret.trim().length < 3) return;
     const t = setTimeout(() => {
       advanceFromSecret();
-    }, 700);
+    }, 250);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [secret, stage]);
@@ -505,7 +512,7 @@ function LandingView({ onLogin, dark }: {
     setTimeout(() => {
       setStage('secret');
       setInfraState('idle');
-    }, 1200);
+    }, 400);
   };
 
   // Secret field — Enter yoki blur to'liq input bilan → progress to ready
@@ -516,13 +523,14 @@ function LandingView({ onLogin, dark }: {
     setTimeout(() => {
       setStage('ready');
       setInfraState('idle');
-    }, 1200);
+    }, 400);
   };
 
   const doLogin = async () => {
     setError(null);
     if (!keyId.trim() || !secret.trim()) {
       setError(t('login.errorRequired'));
+      triggerShake('error');
       return;
     }
     setLoading(true);
@@ -540,6 +548,7 @@ function LandingView({ onLogin, dark }: {
         else if (resp.status >= 500) setError(t('login.errorServer'));
         else setError(data?.message || `HTTP ${resp.status}`);
         firePulse('error');
+        triggerShake('error');
         setStage('ready');
         // Reset infra back to idle after 2.5s
         setTimeout(() => setInfraState('idle'), 2500);
@@ -547,12 +556,14 @@ function LandingView({ onLogin, dark }: {
       }
       // Success — fire success animation, then transition
       firePulse('success');
+      triggerShake('success');
       const auth = { keyId: keyId.trim(), secret: secret.trim(), whoami: data };
       sessionStorage.setItem('xt_dev_api_auth', JSON.stringify(auth));
       setTimeout(() => onLogin(auth), 900);
     } catch (e: any) {
       setError(e?.message || t('login.errorNetwork'));
       firePulse('error');
+      triggerShake('error');
       setStage('ready');
       setTimeout(() => setInfraState('idle'), 2500);
     } finally {
@@ -612,8 +623,23 @@ function LandingView({ onLogin, dark }: {
           <motion.form
             onSubmit={(e) => { e.preventDefault(); doLogin(); }}
             initial={{ opacity: 0, y: reduced ? 0 : 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              x: shakeKind === 'error' && !reduced
+                ? [0, -10, 10, -8, 8, -5, 5, -2, 2, 0]
+                : shakeKind === 'success' && !reduced
+                  ? [0, 0, 0, 0]
+                  : 0,
+              scale: shakeKind === 'success' && !reduced
+                ? [1, 1.018, 0.995, 1.008, 1]
+                : 1,
+            }}
+            transition={
+              shakeKind
+                ? { duration: 0.55, ease: 'easeOut' }
+                : { duration: reduced ? 0 : 0.4, delay: reduced ? 0 : 0.15 }
+            }
             className="mt-7 space-y-3 relative"
           >
             {/* Glass card wrapper */}
@@ -663,12 +689,7 @@ function LandingView({ onLogin, dark }: {
                   transition={{ duration: reduced ? 0 : 0.35 }}
                 >
                   <label htmlFor="api-secret" className={cn(eyebrow, 'mb-2 flex items-center justify-between text-slate-600 dark:text-slate-400')}>
-                    <span className="flex items-center gap-2">
-                      {t('login.secretLabel')}
-                      <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide secret' : 'Show secret'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-0.5 outline-none">
-                        {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                      </button>
-                    </span>
+                    <span>{t('login.secretLabel')}</span>
                     <span className="text-[9px] normal-case tracking-normal text-slate-400 font-medium">Step 2 / 3</span>
                   </label>
                   <div className="relative group">
@@ -691,17 +712,33 @@ function LandingView({ onLogin, dark }: {
                       aria-required="true"
                       autoFocus={stage === 'secret'}
                       disabled={stage === 'submitting' || infraState === 'processing'}
-                      className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all disabled:opacity-60"
+                      className={cn(
+                        "relative w-full h-12 pl-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all disabled:opacity-60",
+                        // Right padding adaptive: eye only (40), eye+check (72)
+                        (stage === 'ready' || stage === 'submitting') ? 'pr-[68px]' : 'pr-11',
+                      )}
                     />
-                    {(stage === 'ready' || stage === 'submitting') && (
-                      <motion.div
-                        initial={{ opacity: 0, scale: 0 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 grid place-items-center"
+                    {/* Right-side icons cluster — eye button + optional check pill */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                      {(stage === 'ready' || stage === 'submitting') && (
+                        <motion.div
+                          initial={{ opacity: 0, scale: 0 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="w-5 h-5 rounded-full bg-emerald-500 grid place-items-center shrink-0"
+                          aria-hidden="true"
+                        >
+                          <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                        </motion.div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowSecret(!showSecret)}
+                        aria-label={showSecret ? 'Hide secret' : 'Show secret'}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 focus-visible:ring-2 focus-visible:ring-indigo-500 outline-none transition-colors"
                       >
-                        <Check className="h-3 w-3 text-white" strokeWidth={3} />
-                      </motion.div>
-                    )}
+                        {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </motion.div>
               )}

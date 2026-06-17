@@ -348,22 +348,54 @@ export function ApiHeroInfra({
               </g>
             </g>
 
-            {/* State icon overlay */}
-            {state === 'success' && (
-              <g transform="translate(80, -55)">
-                <circle r="20" fill="#10b981" opacity="0.18">
-                  <animate attributeName="r" values="20;30;20" dur="1.5s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.18;0;0.18" dur="1.5s" repeatCount="indefinite" />
+            {/* State badge — kichik corner badge, kod ustini yopmaydi */}
+            {state === 'processing' && (
+              <g transform="translate(148, -103)">
+                <circle r="3.5" fill="#0f172a" opacity="0.7" />
+                <circle r="2" fill="#818cf8">
+                  <animate attributeName="opacity" values="1;0.35;1" dur="0.9s" repeatCount="indefinite" />
                 </circle>
-                <circle r="14" fill="#10b981" />
-                <path d="M -6,0 L -2,5 L 7,-5" stroke="white" strokeWidth="2.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            )}
+            {state === 'success' && (
+              <g transform="translate(148, -103)">
+                <circle r="4.5" fill="#10b981" opacity="0.25">
+                  <animate attributeName="r" values="4.5;7;4.5" dur="1.4s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.25;0;0.25" dur="1.4s" repeatCount="indefinite" />
+                </circle>
+                <circle r="3.5" fill="#10b981" />
+                <path d="M -1.6,0 L -0.4,1.3 L 1.8,-1.3" stroke="white" strokeWidth="0.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
               </g>
             )}
             {state === 'error' && (
-              <g transform="translate(80, -55)">
-                <circle r="14" fill="#f43f5e" />
-                <line x1="-6" y1="-6" x2="6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
-                <line x1="6" y1="-6" x2="-6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
+              <g transform="translate(148, -103)">
+                <circle r="3.5" fill="#f43f5e" />
+                <line x1="-1.5" y1="-1.5" x2="1.5" y2="1.5" stroke="white" strokeWidth="0.7" strokeLinecap="round" />
+                <line x1="1.5" y1="-1.5" x2="-1.5" y2="1.5" stroke="white" strokeWidth="0.7" strokeLinecap="round" />
+              </g>
+            )}
+
+            {/* Bottom status strip — terminal log overlay (only when active) */}
+            {state !== 'idle' && (
+              <g transform="translate(0, -14)">
+                <rect x="0" y="0" width="160" height="9" fill={dark ? '#1e293b' : '#0f172a'} opacity="0.92" />
+                <rect x="0" y="0" width="160" height="9" fill={
+                  state === 'success' ? '#10b981' : state === 'error' ? '#f43f5e' : '#818cf8'
+                } opacity="0.12" />
+                <circle cx="5" cy="4.5" r="1.3" fill={
+                  state === 'success' ? '#34d399' : state === 'error' ? '#fb7185' : '#a78bfa'
+                }>
+                  {state === 'processing' && (
+                    <animate attributeName="opacity" values="1;0.3;1" dur="0.8s" repeatCount="indefinite" />
+                  )}
+                </circle>
+                <text x="10" y="6" fontSize="3.5" fontFamily="monospace" fill={
+                  state === 'success' ? '#a7f3d0' : state === 'error' ? '#fecaca' : '#c7d2fe'
+                }>
+                  {state === 'processing' && '→ POST /api/v1/auth'}
+                  {state === 'success' && '✓ 200 OK · authenticated'}
+                  {state === 'error' && '✗ 401 unauthorized'}
+                </text>
               </g>
             )}
           </g>
