@@ -56,6 +56,23 @@ export class RolesService implements OnModuleInit {
           this.log.log(`System rol yangilandi: ${sysRole.name} — +${added.length} yangi ruxsat (${added.join(', ') || '—'})`);
         }
       }
+
+      // SYSTEM_ROLES'dan olib tashlangan eski tizim rollarini tozalash.
+      // Faqat foydalanuvchi biriktirilmagan bo'lsa o'chiriladi — aks holda
+      // saqlanadi va ogohlantirish yoziladi (hech kim tizimdan qulflanmasin).
+      const validNames = SYSTEM_ROLES.map((r) => r.name);
+      const orphans = await this.prisma.role.findMany({
+        where: { isSystem: true, name: { notIn: validNames } },
+        include: { _count: { select: { users: true } } },
+      });
+      for (const o of orphans) {
+        if (o._count.users > 0) {
+          this.log.warn(`Eski system rol '${o.name}' o'chirilmadi — ${o._count.users} foydalanuvchi biriktirilgan`);
+          continue;
+        }
+        await this.prisma.role.delete({ where: { id: o.id } });
+        this.log.log(`Eski system rol o'chirildi: ${o.name}`);
+      }
     } catch (e: any) {
       // Bootstrap xatosi app'ni to'xtatmasin (masalan migration hali ishlamagan)
       this.log.warn(`System rollarni sinxronlashda xato: ${e?.message}`);
