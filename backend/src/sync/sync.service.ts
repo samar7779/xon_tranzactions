@@ -301,6 +301,85 @@ export class SyncService implements OnModuleInit {
   }
 
   /**
+   * Avtomatik bulk-sync rejasini har daqiqada tekshiradi. Settings'dagi
+   * bulkSync.enabled/intervalDays/timeOfDay/daysBack qiymatlariga qarab
+   * vaqti kelganda backfill (scope='all') ishga tushiradi.
+   *
+   * Bir kun ichida bir martadan ko'p ishga tushmasligi uchun lastRunAt
+   * sanasi current Tashkent kuniga teng bo'lsa skip qilinadi.
+   */
+  @Cron('* * * * *')
+  async bulkScheduleTick(): Promise<void> {
+    let schedule: Awaited<ReturnType<typeof this.settings.getBulkSyncSchedule>>;
+    try {
+      schedule = await this.settings.getBulkSyncSchedule();
+    } catch {
+      return;
+    }
+    if (!schedule.enabled) return;
+    if (!schedule.timeOfDay) return;
+    const [hStr, mStr] = schedule.timeOfDay.split(':');
+    const targetH = Number(hStr);
+    const targetM = Number(mStr);
+    if (!Number.isFinite(targetH) || !Number.isFinite(targetM)) return;
+
+    // Hozirgi Tashkent vaqti (UTC+5)
+    const nowMs = Date.now();
+    const tash = new Date(nowMs + 5 * 60 * 60 * 1000);
+    const tashH = tash.getUTCHours();
+    const tashM = tash.getUTCMinutes();
+    const tashDay = tash.toISOString().slice(0, 10);    // YYYY-MM-DD (Tashkent)
+    const tashMinutes = tashH * 60 + tashM;
+    const targetMinutes = targetH * 60 + targetM;
+
+    // Vaqt o'tib bo'lganmi (timeOfDay yoki undan keyin)
+    if (tashMinutes < targetMinutes) return;
+
+    // Bugun allaqachon ishga tushganmi
+    const lastRunIso = schedule.lastRunAt;
+    if (lastRunIso) {
+      const lastRunDay = new Date(new Date(lastRunIso).getTime() + 5 * 60 * 60 * 1000)
+        .toISOString().slice(0, 10);
+      if (lastRunDay === tashDay) return;
+      // Interval kunlari yetdimi
+      const daysSince = Math.floor(
+        (Date.parse(tashDay) - Date.parse(lastRunDay)) / 86_400_000,
+      );
+      if (daysSince < schedule.intervalDays) return;
+    }
+
+    // Hisoblar va sanalarni tayyorlaymiz
+    const daysBack = schedule.daysBack ?? Math.max(2, schedule.intervalDays + 1);
+    const todayD = new Date(`${tashDay}T00:00:00Z`);
+    const fromD = new Date(todayD.getTime() - (daysBack - 1) * 86_400_000);
+    const dateFromStr = fromD.toISOString().slice(0, 10);
+    const dateToStr = tashDay;
+
+    try {
+      const { accounts, dates } = await this.resolveBackfillTargets({
+        scope: 'all',
+        dateFrom: dateFromStr,
+        dateTo: dateToStr,
+      });
+      if (accounts.length === 0 || dates.length === 0) {
+        this.logger.warn(`Bulk schedule: nishon yo'q (accounts=${accounts.length}, days=${dates.length})`);
+        return;
+      }
+      await this.settings.setBulkSyncLastRunAt(new Date(nowMs).toISOString());
+      this.logger.log(
+        `Bulk schedule ishga tushdi — ${accounts.length} hisob · ${dates.length} kun ` +
+        `(${dateFromStr} → ${dateToStr}, interval=${schedule.intervalDays}d, vaqt=${schedule.timeOfDay})`,
+      );
+      // Fonda — uzoq davom etadi, blok qilmaymiz
+      this.runBackfill(accounts, dates).catch((e) => {
+        this.logger.error(`Bulk schedule backfill xato: ${e?.message || e}`);
+      });
+    } catch (e: any) {
+      this.logger.error(`Bulk schedule tick xato: ${e?.message || e}`);
+    }
+  }
+
+  /**
    * Backfill uchun maqsadli hisoblar + sanalar ro'yxatini hisoblaydi.
    * scope: 'all' (barcha sync yoqilgan), 'bank' (bitta bank), 'account' (bitta hisob).
    */
