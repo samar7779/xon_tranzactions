@@ -15,6 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
+  Database, RefreshCw, Landmark,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -167,6 +168,8 @@ export default function TransactionsPage() {
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
   // Shartnoma manbasi filtri — manual/ariza (multi-select)
   const [contractSources, setContractSources] = useState<Set<'manual' | 'ariza'>>(new Set());
+  // Manba filtri — bank sync / import / aloqa bank
+  const [sources, setSources] = useState<Set<'SYNC' | 'IMPORT' | 'ALOQA_BANK'>>(new Set());
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
 
   // ─── localStorage persistance — mount paytida o'qish ───
@@ -324,11 +327,12 @@ export default function TransactionsPage() {
     if (dateFrom) c++;
     if (dateTo) c++;
     if (contractSources.size > 0) c++;
+    if (sources.size > 0) c++;
     for (const k of Object.keys(columnFilters)) {
       if (columnFilters[k]?.size > 0) c++;
     }
     return c;
-  }, [direction, bankId, dateFrom, dateTo, columnFilters, contractSources]);
+  }, [direction, bankId, dateFrom, dateTo, columnFilters, contractSources, sources]);
 
   // Column filter -> URL param map (vergul bilan ajratilgan)
   const COLUMN_TO_PARAM: Record<string, string> = {
@@ -355,6 +359,8 @@ export default function TransactionsPage() {
   }
   // Shartnoma manbasi (qo'lda/ariza)
   if (contractSources.size > 0) params.set('contractSources', Array.from(contractSources).join(','));
+  // Manba (sync/import/aloqa)
+  if (sources.size > 0) params.set('sources', Array.from(sources).join(','));
 
   // columnFilters Set object — JSON serialization uchun array'ga aylantiramiz
   const columnFiltersKey = JSON.stringify(
@@ -375,12 +381,14 @@ export default function TransactionsPage() {
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
     if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
+    if (sources.size > 0) p.set('sources', Array.from(sources).join(','));
     return p.toString();
   })();
 
   const contractSourcesKey = Array.from(contractSources).sort().join(',');
+  const sourcesKey = Array.from(sources).sort().join(',');
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter],
+    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -391,7 +399,7 @@ export default function TransactionsPage() {
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey, batchFilter],
+    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey],
     queryFn: () => {
       // Foydalanuvchi sana filtri qo'ygan bo'lsa — shu davr; aks holda 30 kun (yoki CLIENT uchun joriy oy)
       let fromStr: string;
@@ -424,6 +432,7 @@ export default function TransactionsPage() {
         if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
       }
       if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
+      if (sources.size > 0) p.set('sources', Array.from(sources).join(','));
       return api.get<any>(`/transactions/stats?${p.toString()}`);
     },
   });
@@ -543,6 +552,7 @@ export default function TransactionsPage() {
     setDateFrom(''); setDateTo(''); setQ(''); setPage(1);
     setColumnFilters({});
     setContractSources(new Set());
+    setSources(new Set());
     try { localStorage.removeItem('tx-column-filters-v1'); } catch { /* ignore */ }
   }
 
@@ -919,6 +929,79 @@ export default function TransactionsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
+              {/* Manba filtri — bank sync / import / aloqa bank (multi-select) */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    title="Manba bo'yicha filtr (sync / import)"
+                    className={cn(
+                      'inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all relative',
+                      sources.size > 0
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-500/30'
+                        : 'bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-slate-700',
+                    )}
+                  >
+                    <Database className="h-4 w-4" />
+                    {sources.size > 0 && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">
+                        {sources.size}
+                      </span>
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="p-2 w-60">
+                  <div className="text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 px-2 py-1.5">
+                    Manba
+                  </div>
+                  {([
+                    { key: 'SYNC', label: 'Bank sync', icon: RefreshCw, badge: 'SYNC', tone: 'emerald' },
+                    { key: 'IMPORT', label: 'Import (Excel)', icon: UploadIcon, badge: 'IMP', tone: 'fuchsia' },
+                    { key: 'ALOQA_BANK', label: 'Aloqa Bank import', icon: Landmark, badge: 'IMP', tone: 'fuchsia' },
+                  ] as const).map((opt) => {
+                    const Icon = opt.icon;
+                    const checked = sources.has(opt.key);
+                    return (
+                      <button
+                        key={opt.key}
+                        onClick={() => {
+                          setSources((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(opt.key)) next.delete(opt.key); else next.add(opt.key);
+                            return next;
+                          });
+                          setPage(1);
+                        }}
+                        className={cn(
+                          'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium transition-all mt-0.5',
+                          checked
+                            ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900'
+                            : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300',
+                        )}
+                      >
+                        <span className={cn(
+                          'inline-flex items-center justify-center w-4 h-4 rounded border-2 transition-all',
+                          checked ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-700',
+                        )}>
+                          {checked && <CheckCircle2 className="h-3 w-3 text-white" />}
+                        </span>
+                        <Icon className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
+                        <span className="flex-1 text-left">{opt.label}</span>
+                      </button>
+                    );
+                  })}
+                  {sources.size > 0 && (
+                    <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1">
+                      <button
+                        onClick={() => { setSources(new Set()); setPage(1); }}
+                        className="w-full px-2.5 py-1.5 text-[11px] text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-md"
+                      >
+                        {tc('clear')}
+                      </button>
+                    </div>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               <DropdownMenu open={filterOpen} onOpenChange={setFilterOpen}>
                 <DropdownMenuTrigger asChild>
                   <button className={cn(
@@ -1023,13 +1106,13 @@ export default function TransactionsPage() {
                                   <div className="min-w-0">
                                     <div className="text-[12px] font-medium truncate flex items-center gap-1">
                                       <span className="truncate">{bankName || '—'}</span>
-                                      {isImport && (
-                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300">IMP</span>
-                                      )}
-                                      {isAloqa && (
-                                        <span className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 inline-flex items-center gap-0.5" title="Aloqa Bank — read-only">
-                                          <Lock className="h-2 w-2" />
-                                          ALB
+                                      {(isImport || isAloqa) && (
+                                        <span
+                                          className="shrink-0 text-[8px] font-bold px-1 py-0.5 rounded bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 inline-flex items-center gap-0.5"
+                                          title={isAloqa ? 'Aloqa Bank import — read-only' : 'Import'}
+                                        >
+                                          {isAloqa && <Lock className="h-2 w-2" />}
+                                          IMP
                                         </span>
                                       )}
                                     </div>

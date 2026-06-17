@@ -105,11 +105,12 @@ export class TransactionsController {
     @Query('contractSources') contractSources?: string,
     @Query('hisobNomi') hisobNomi?: string,
     @Query('batchId') batchId?: string,
+    @Query('sources') sources?: string,
   ) {
     return this.svc.stats({
       from, to, categoryCode, bankId, accountId, direction, q,
       bankIds, accountIds, categoryIds, subcategoryIds, directions,
-      contractStatuses, contractSources, hisobNomi, batchId,
+      contractStatuses, contractSources, hisobNomi, batchId, sources,
     });
   }
 
