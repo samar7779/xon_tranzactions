@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, RefreshCw, Trash2, Building2, Wallet, MoreVertical,
   Eye, X, Power, PowerOff, ArrowUpRight, FileSpreadsheet, Download, Loader2,
-  Calendar, CheckCircle2, Clock, Save,
+  Calendar, CheckCircle2, Clock, Save, ChevronDown,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1194,22 +1194,27 @@ function BulkBackfillDialog({
   const [schedEnabled, setSchedEnabled] = useState(false);
   const [schedInterval, setSchedInterval] = useState<number>(1);
   const [schedTime, setSchedTime] = useState<string>('18:00');
+  const [schedDaysBack, setSchedDaysBack] = useState<number>(10);
   const [schedDirty, setSchedDirty] = useState(false);
+  const [schedExpanded, setSchedExpanded] = useState(false);
   useMemo(() => {
     if (scheduleQ.data) {
       setSchedEnabled(scheduleQ.data.enabled);
       setSchedInterval(scheduleQ.data.intervalDays || 1);
       setSchedTime(scheduleQ.data.timeOfDay || '18:00');
+      // daysBack null bo'lsa default — max(2, interval+1)
+      const dInterval = scheduleQ.data.intervalDays || 1;
+      setSchedDaysBack(scheduleQ.data.daysBack ?? Math.max(2, dInterval + 1));
       setSchedDirty(false);
     }
   }, [scheduleQ.data]);
 
   const scheduleMut = useMutation({
-    mutationFn: (vals: { enabled: boolean; intervalDays: number; timeOfDay: string }) =>
+    mutationFn: (vals: { enabled: boolean; intervalDays: number; timeOfDay: string; daysBack: number }) =>
       api.patch<any>('/sync/bulk-schedule', vals),
     onSuccess: (r) => {
       toast.success(r?.enabled
-        ? `Reja saqlandi · har ${r.intervalDays} kunda ${r.timeOfDay}`
+        ? `Reja saqlandi · har ${r.intervalDays} kunda ${r.timeOfDay} · ${r.daysBack} kunlik sync`
         : "Reja o'chirildi");
       setSchedDirty(false);
       scheduleQ.refetch();
@@ -1369,92 +1374,160 @@ function BulkBackfillDialog({
                 </div>
               )}
 
-              {/* ── Avtomatik reja ── */}
+              {/* ── Avtomatik reja (collapsible) ── */}
               <div className={cn(
                 'rounded-xl ring-1 overflow-hidden transition-colors',
                 schedEnabled
                   ? 'bg-gradient-to-br from-indigo-50 via-violet-50 to-fuchsia-50 dark:from-indigo-950/30 dark:via-violet-950/30 dark:to-fuchsia-950/30 ring-indigo-200 dark:ring-indigo-900'
                   : 'bg-slate-50 dark:bg-slate-900/40 ring-slate-200 dark:ring-slate-700',
               )}>
-                <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60">
-                  <div className="flex items-center gap-2">
-                    <Clock className={cn('h-4 w-4', schedEnabled ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400 dark:text-slate-500')} />
-                    <div>
-                      <div className="text-[11.5px] font-bold text-slate-800 dark:text-slate-200">Avtomatik reja</div>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                        Belgilangan vaqtda barcha hisoblarda sync ishga tushadi
+                {/* Header — bosilganda ochiladi/yopiladi */}
+                <button
+                  type="button"
+                  onClick={() => setSchedExpanded((v) => !v)}
+                  className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-white/40 dark:hover:bg-slate-900/40 transition-colors text-left"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={cn(
+                      'w-7 h-7 rounded-lg grid place-items-center shrink-0',
+                      schedEnabled
+                        ? 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300'
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
+                    )}>
+                      <Clock className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[11.5px] font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        Avtomatik reja
+                        {schedEnabled && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
+                            yoqilgan
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">
+                        {schedEnabled
+                          ? <>Har <b className="text-indigo-700 dark:text-indigo-300">{schedInterval}</b> kunda · <b className="text-indigo-700 dark:text-indigo-300">{schedTime}</b> Tashkent</>
+                          : "O'chirilgan — sozlash uchun bosing"}
                       </div>
                     </div>
                   </div>
-                  <button
-                    onClick={() => { setSchedEnabled((v) => !v); setSchedDirty(true); }}
-                    className={cn(
-                      'relative w-11 h-6 rounded-full transition-colors',
-                      schedEnabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-700',
-                    )}
-                  >
-                    <span className={cn(
-                      'absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform',
-                      schedEnabled ? 'translate-x-5' : 'translate-x-0.5',
-                    )} />
-                  </button>
-                </div>
-                <div className={cn('px-4 py-3 grid grid-cols-2 gap-3 transition-opacity', !schedEnabled && 'opacity-50 pointer-events-none')}>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                      Har necha kunda
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        type="number"
-                        min={1}
-                        max={365}
-                        value={schedInterval}
-                        onChange={(e) => { setSchedInterval(Math.max(1, Number(e.target.value) || 1)); setSchedDirty(true); }}
-                        className="h-10 pr-12"
-                      />
-                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 dark:text-slate-500 pointer-events-none font-medium">
-                        kun
+                  <ChevronDown className={cn(
+                    'h-4 w-4 text-slate-400 dark:text-slate-500 shrink-0 transition-transform',
+                    schedExpanded && 'rotate-180',
+                  )} />
+                </button>
+
+                {/* Body — faqat ochilganda ko'rinadi */}
+                {schedExpanded && (
+                  <div className="border-t border-slate-200/60 dark:border-slate-700/60">
+                    {/* Toggle row */}
+                    <label className="px-4 py-2.5 flex items-center justify-between cursor-pointer hover:bg-white/30 dark:hover:bg-slate-900/30">
+                      <span className="text-[11.5px] font-semibold text-slate-700 dark:text-slate-300">
+                        Avtomatik sync yoqilgan
+                      </span>
+                      {/* Native checkbox visually styled as toggle */}
+                      <span className="relative inline-block">
+                        <input
+                          type="checkbox"
+                          checked={schedEnabled}
+                          onChange={(e) => { setSchedEnabled(e.target.checked); setSchedDirty(true); }}
+                          className="sr-only peer"
+                        />
+                        <span className="block w-11 h-6 rounded-full bg-slate-300 dark:bg-slate-700 peer-checked:bg-indigo-600 transition-colors" />
+                        <span className="absolute left-0.5 top-0.5 w-5 h-5 rounded-full bg-white shadow ring-1 ring-slate-200 dark:ring-slate-600 transition-transform peer-checked:translate-x-5" />
+                      </span>
+                    </label>
+
+                    {/* Sozlamalar */}
+                    <div className={cn('px-4 pb-3 grid grid-cols-3 gap-3 transition-opacity', !schedEnabled && 'opacity-50 pointer-events-none')}>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
+                          Har necha kunda
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={schedInterval}
+                            onChange={(e) => { setSchedInterval(Math.max(1, Number(e.target.value) || 1)); setSchedDirty(true); }}
+                            className="h-10 pr-12"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 dark:text-slate-500 pointer-events-none font-medium">
+                            kun
+                          </span>
+                        </div>
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
+                          Vaqt (Tashkent)
+                        </Label>
+                        <Input
+                          type="time"
+                          value={schedTime}
+                          onChange={(e) => { setSchedTime(e.target.value); setSchedDirty(true); }}
+                          className="h-10"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block" title="Har safar ishlaganda necha kun orqaga qaytib sync qiladi">
+                          Necha kunlik
+                        </Label>
+                        <div className="relative">
+                          <Input
+                            type="number"
+                            min={1}
+                            max={365}
+                            value={schedDaysBack}
+                            onChange={(e) => { setSchedDaysBack(Math.max(1, Number(e.target.value) || 1)); setSchedDirty(true); }}
+                            className="h-10 pr-12"
+                            title="Har safar ishlaganda necha kun orqaga qaytib sync qiladi"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-slate-400 dark:text-slate-500 pointer-events-none font-medium">
+                            kun
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Tushuntirish — qanday ishlaydi */}
+                    <div className={cn(
+                      'mx-4 mb-3 rounded-lg bg-white/60 dark:bg-slate-900/40 ring-1 ring-indigo-200/60 dark:ring-indigo-900/40 px-3 py-2 text-[11px] leading-relaxed text-slate-700 dark:text-slate-300 transition-opacity',
+                      !schedEnabled && 'opacity-50',
+                    )}>
+                      <span className="text-indigo-700 dark:text-indigo-300 font-bold">Qanday ishlaydi:</span>{' '}
+                      Har <b>{schedInterval}</b> kunda soat <b>{schedTime}</b> da boshlanadi va
+                      shu paytdagi sanadan <b>{schedDaysBack}</b> kun orqaga qaytib barcha sync yoqilgan hisoblarni qayta yuklaydi.
+                      <span className="block text-slate-500 dark:text-slate-400 mt-1">
+                        Misol: bugun {schedTime} da ishlasa — {Math.max(0, schedDaysBack - 1)} kun oldindan to bugungacha sync qiladi.
                       </span>
                     </div>
-                  </div>
-                  <div>
-                    <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                      Vaqt (Tashkent)
-                    </Label>
-                    <Input
-                      type="time"
-                      value={schedTime}
-                      onChange={(e) => { setSchedTime(e.target.value); setSchedDirty(true); }}
-                      className="h-10"
-                    />
-                  </div>
-                </div>
-                <div className="px-4 pb-3 flex items-center justify-between gap-2">
-                  <div className="text-[11px] text-slate-600 dark:text-slate-400">
-                    {schedEnabled ? (
-                      <>
-                        Har <b className="text-indigo-700 dark:text-indigo-300">{schedInterval}</b> kunda
-                        soat <b className="text-indigo-700 dark:text-indigo-300">{schedTime}</b> da ishga tushadi
-                        {scheduleQ.data?.lastRunAt && (
-                          <span className="text-slate-400 dark:text-slate-500"> · oxirgi: {new Date(scheduleQ.data.lastRunAt).toLocaleString('ru-RU')}</span>
+
+                    {/* Status + save */}
+                    <div className="px-4 pb-3 flex items-center justify-between gap-2 border-t border-slate-200/60 dark:border-slate-700/60 pt-3">
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400 min-w-0">
+                        {scheduleQ.data?.lastRunAt ? (
+                          <span className="text-slate-500 dark:text-slate-400">
+                            Oxirgi: <b className="text-slate-700 dark:text-slate-300">{new Date(scheduleQ.data.lastRunAt).toLocaleString('ru-RU')}</b>
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 dark:text-slate-500">Hali ishlamagan</span>
                         )}
-                      </>
-                    ) : (
-                      <span className="text-slate-400 dark:text-slate-500">Avtomatik reja o'chirilgan</span>
-                    )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant={schedDirty ? 'default' : 'outline'}
+                        disabled={!schedDirty || scheduleMut.isPending}
+                        onClick={() => scheduleMut.mutate({ enabled: schedEnabled, intervalDays: schedInterval, timeOfDay: schedTime, daysBack: schedDaysBack })}
+                        className={cn('h-8 gap-1.5 shrink-0', schedDirty && 'bg-indigo-600 hover:bg-indigo-700 text-white')}
+                      >
+                        {scheduleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Saqlash
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant={schedDirty ? 'default' : 'outline'}
-                    disabled={!schedDirty || scheduleMut.isPending}
-                    onClick={() => scheduleMut.mutate({ enabled: schedEnabled, intervalDays: schedInterval, timeOfDay: schedTime })}
-                    className={cn('h-8 gap-1.5', schedDirty && 'bg-indigo-600 hover:bg-indigo-700 text-white')}
-                  >
-                    {scheduleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Saqlash
-                  </Button>
-                </div>
+                )}
               </div>
             </>
           )}
