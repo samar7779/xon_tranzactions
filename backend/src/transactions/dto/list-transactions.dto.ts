@@ -117,4 +117,8 @@ export class ListTransactionsDto {
   // export uchun
   @ApiPropertyOptional() @IsOptional() @IsString()
   matchStatus?: string;
+
+  @ApiPropertyOptional({ description: 'Import batch ID — faqat shu yuklamadagi tranzaksiyalar' })
+  @IsOptional() @IsString()
+  batchId?: string;
 }
