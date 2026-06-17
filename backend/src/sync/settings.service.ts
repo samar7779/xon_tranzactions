@@ -114,4 +114,68 @@ export class SettingsService {
   async setOplatyKvAutoXatoCleanup(value: boolean, updatedBy?: string): Promise<void> {
     await this.set('oplatykv.autoXatoCleanup', value ? '1' : null, updatedBy);
   }
+
+  /**
+   * Bulk sync rejasi — barcha hisoblar bo'yicha orqa sanaga sync'ni avtomatik
+   * ravishda ishga tushirish.
+   *   enabled       — yoqilgan/o'chirilgan
+   *   intervalDays  — har necha kunda (1..365)
+   *   timeOfDay     — Tashkent vaqti "HH:MM" (masalan "18:00")
+   *   daysBack      — har ishga tushganda necha kun orqaga sync qiladi
+   *                  (default: intervalDays + 1, lekin minimum 2)
+   *   lastRunAt     — oxirgi marotaba ishga tushgan vaqt (ISO)
+   */
+  async getBulkSyncSchedule(): Promise<{
+    enabled: boolean;
+    intervalDays: number;
+    timeOfDay: string;
+    daysBack: number | null;
+    lastRunAt: string | null;
+  }> {
+    const [enabled, interval, time, daysBack, lastRun] = await Promise.all([
+      this.get('bulkSync.enabled'),
+      this.get('bulkSync.intervalDays'),
+      this.get('bulkSync.timeOfDay'),
+      this.get('bulkSync.daysBack'),
+      this.get('bulkSync.lastRunAt'),
+    ]);
+    const intervalN = Math.max(1, Math.min(365, Number(interval) || 1));
+    const dbN = daysBack ? Math.max(1, Math.min(365, Number(daysBack))) : null;
+    return {
+      enabled: enabled === '1',
+      intervalDays: intervalN,
+      timeOfDay: time && /^\d{1,2}:\d{2}$/.test(time) ? time : '18:00',
+      daysBack: dbN,
+      lastRunAt: lastRun,
+    };
+  }
+
+  async setBulkSyncSchedule(
+    vals: { enabled?: boolean; intervalDays?: number; timeOfDay?: string; daysBack?: number | null },
+    updatedBy?: string,
+  ): Promise<void> {
+    if (vals.enabled !== undefined) {
+      await this.set('bulkSync.enabled', vals.enabled ? '1' : null, updatedBy);
+    }
+    if (vals.intervalDays !== undefined) {
+      const n = Math.max(1, Math.min(365, Math.floor(vals.intervalDays)));
+      await this.set('bulkSync.intervalDays', String(n), updatedBy);
+    }
+    if (vals.timeOfDay !== undefined) {
+      if (vals.timeOfDay && !/^\d{1,2}:\d{2}$/.test(vals.timeOfDay)) {
+        throw new Error(`Noto'g'ri vaqt format (HH:MM): ${vals.timeOfDay}`);
+      }
+      await this.set('bulkSync.timeOfDay', vals.timeOfDay || null, updatedBy);
+    }
+    if (vals.daysBack !== undefined) {
+      const v = vals.daysBack && vals.daysBack > 0
+        ? String(Math.max(1, Math.min(365, Math.floor(vals.daysBack))))
+        : null;
+      await this.set('bulkSync.daysBack', v, updatedBy);
+    }
+  }
+
+  async setBulkSyncLastRunAt(iso: string): Promise<void> {
+    await this.set('bulkSync.lastRunAt', iso, 'system');
+  }
 }

@@ -73,6 +73,31 @@ export class SyncController {
     return this.getSettings();
   }
 
+  @Get('bulk-schedule')
+  @RequirePermissions(PERMISSIONS.SYNC_VIEW)
+  @ApiOperation({ summary: "Avtomatik bulk sync reja sozlamalari" })
+  async getBulkSchedule() {
+    const s = await this.settings.getBulkSyncSchedule();
+    return { ok: true, ...s };
+  }
+
+  @Patch('bulk-schedule')
+  @RequirePermissions(PERMISSIONS.SYNC_RUN)
+  @ApiOperation({ summary: "Avtomatik bulk sync reja sozlamalarini saqlash" })
+  async setBulkSchedule(
+    @Body() body: {
+      enabled?: boolean;
+      intervalDays?: number;
+      timeOfDay?: string;
+      daysBack?: number | null;
+    },
+    @CurrentUser('email') email?: string,
+  ) {
+    await this.settings.setBulkSyncSchedule(body, email);
+    const s = await this.settings.getBulkSyncSchedule();
+    return { ok: true, ...s };
+  }
+
   @Post('account/:id')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
   @ApiOperation({ summary: 'Bitta hisob bo\'yicha manual sync ishga tushirish' })
