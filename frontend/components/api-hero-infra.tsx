@@ -1,18 +1,15 @@
 'use client';
 
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Loader2, Check, X as XIcon } from 'lucide-react';
+import { useRef, useMemo } from 'react';
 import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { cn } from '@/lib/utils';
 
 /**
  * Premium isometric infrastructure illustration.
- * Laptop (chap) ─── dashed flow lines ─── 4×Server rack (o'ng, 'API GATEWAY')
- * Markazda glassmorphism status pill with dynamic glow.
- *
- *  pulseKey — har o'zgargan vaqtda packet wave ishga tushadi
- *  state    — 'idle'|'processing'|'success'|'error'
- *  statusText — pill ichidagi matn (i18n uchun customizable)
+ * Layered depth, mouse parallax, atmospheric particles, real code editor mockup,
+ * detailed server racks with port LEDs, continuous subtle data flow.
  */
 
 export type InfraState = 'idle' | 'processing' | 'success' | 'error';
@@ -33,14 +30,33 @@ export function ApiHeroInfra({
   statusText?: string;
 }) {
   const reduced = usePrefersReducedMotion();
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // State-based colors
+  // Mouse parallax
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const sx = useSpring(mx, { stiffness: 60, damping: 22 });
+  const sy = useSpring(my, { stiffness: 60, damping: 22 });
+  const parallaxX = useTransform(sx, [-1, 1], [-10, 10]);
+  const parallaxY = useTransform(sy, [-1, 1], [-6, 6]);
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (reduced) return;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = (e.clientX - rect.left - rect.width / 2) / (rect.width / 2);
+    const y = (e.clientY - rect.top - rect.height / 2) / (rect.height / 2);
+    mx.set(Math.max(-1, Math.min(1, x)));
+    my.set(Math.max(-1, Math.min(1, y)));
+  };
+  const onLeave = () => { mx.set(0); my.set(0); };
+
   const accent = state === 'success' ? '#10b981'
               : state === 'error' ? '#f43f5e'
-              : '#818cf8'; // indigo default
-  const accentGlow = state === 'success' ? 'rgba(16,185,129,0.35)'
-                  : state === 'error' ? 'rgba(244,63,94,0.35)'
-                  : 'rgba(129,140,248,0.32)';
+              : '#818cf8';
+  const accentGlow = state === 'success' ? 'rgba(16,185,129,0.4)'
+                  : state === 'error' ? 'rgba(244,63,94,0.4)'
+                  : 'rgba(129,140,248,0.38)';
 
   const defaultStatusText = state === 'success' ? 'Authenticated'
                           : state === 'error' ? 'Authentication failed'
@@ -48,268 +64,387 @@ export function ApiHeroInfra({
                           : 'Waiting for credentials';
   const shownText = statusText || defaultStatusText;
 
+  // Ambient floating particles (fixed positions, animated opacity/scale)
+  const particles = useMemo(() => Array.from({ length: 22 }, (_, i) => ({
+    x: (i * 137.5) % 100,
+    y: (i * 67.3) % 100,
+    size: 1 + (i % 3),
+    delay: (i * 0.3) % 4,
+    duration: 3 + (i % 4),
+  })), []);
+
   return (
-    <div className={cn('relative w-full h-full min-h-[420px] lg:min-h-[600px] overflow-hidden', !fullBleed && 'rounded-2xl', className)} aria-hidden="true">
-      {/* Background — subtle blue-gray gradient */}
+    <div
+      ref={containerRef}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      className={cn('relative w-full h-full min-h-[420px] lg:min-h-[600px] overflow-hidden', !fullBleed && 'rounded-2xl', className)}
+      aria-hidden="true"
+    >
+      {/* ─── BACKGROUND LAYERS ─── */}
       <div
         className="absolute inset-0"
         style={{
           background: dark
-            ? 'radial-gradient(ellipse at center, #0f172a 0%, #020617 75%)'
-            : 'radial-gradient(ellipse at center, #f1f5f9 0%, #e2e8f0 75%)',
+            ? 'radial-gradient(ellipse at 30% 50%, #0f172a 0%, #020617 70%)'
+            : 'radial-gradient(ellipse at 30% 50%, #f1f5f9 0%, #e2e8f0 70%)',
         }}
       />
 
-      {/* Dot-grid pattern (not lines — DOTS) */}
+      {/* Aurora gradient blobs */}
+      <motion.div
+        animate={!reduced ? { x: [0, 40, -20, 0], y: [0, -30, 20, 0] } : {}}
+        transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-1/4 left-[15%] w-[420px] h-[420px] rounded-full blur-3xl pointer-events-none"
+        style={{
+          background: dark
+            ? 'radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(165,180,252,0.32) 0%, transparent 70%)',
+        }}
+      />
+      <motion.div
+        animate={!reduced ? { x: [0, -30, 30, 0], y: [0, 30, -20, 0] } : {}}
+        transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+        className="absolute bottom-[15%] right-[20%] w-[360px] h-[360px] rounded-full blur-3xl pointer-events-none"
+        style={{
+          background: dark
+            ? 'radial-gradient(circle, rgba(34,211,238,0.14) 0%, transparent 70%)'
+            : 'radial-gradient(circle, rgba(165,243,252,0.28) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Dot-grid pattern */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
           backgroundImage: dark
             ? 'radial-gradient(circle, rgba(148,163,184,0.18) 1px, transparent 1px)'
-            : 'radial-gradient(circle, rgba(100,116,139,0.25) 1px, transparent 1px)',
+            : 'radial-gradient(circle, rgba(100,116,139,0.22) 1px, transparent 1px)',
           backgroundSize: '24px 24px',
           maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 85%)',
           WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 85%)',
         }}
       />
 
-      {/* Central radial glow — behind status pill */}
-      <div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[460px] h-[460px] rounded-full blur-3xl pointer-events-none transition-all duration-700"
-        style={{
-          background: `radial-gradient(circle, ${accentGlow} 0%, transparent 65%)`,
-        }}
+      {/* Floating ambient particles */}
+      {!reduced && particles.map((p, i) => (
+        <motion.div
+          key={i}
+          className="absolute rounded-full pointer-events-none"
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            background: dark ? 'rgba(165,180,252,0.5)' : 'rgba(99,102,241,0.45)',
+            boxShadow: dark ? '0 0 6px rgba(165,180,252,0.6)' : '0 0 4px rgba(99,102,241,0.4)',
+          }}
+          animate={{ opacity: [0.2, 0.8, 0.2], scale: [0.8, 1.2, 0.8] }}
+          transition={{ duration: p.duration, repeat: Infinity, delay: p.delay, ease: 'easeInOut' }}
+        />
+      ))}
+
+      {/* Central radial glow — pill behind */}
+      <motion.div
+        animate={{ scale: !reduced ? [1, 1.08, 1] : 1, opacity: !reduced ? [0.7, 1, 0.7] : 0.85 }}
+        transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full blur-3xl pointer-events-none transition-all duration-700"
+        style={{ background: `radial-gradient(circle, ${accentGlow} 0%, transparent 65%)` }}
       />
 
-      {/* SVG infrastructure illustration */}
-      <svg
-        viewBox="0 0 900 540"
-        className="absolute inset-0 w-full h-full"
-        preserveAspectRatio={fullBleed ? 'xMidYMid slice' : 'xMidYMid meet'}
+      {/* ─── MOUSE PARALLAX WRAPPER ─── */}
+      <motion.div
+        className="absolute inset-0"
+        style={{ x: parallaxX, y: parallaxY }}
       >
-        <defs>
-          {/* Isometric gradients — laptop */}
-          <linearGradient id="lpTop" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#334155' : '#cbd5e1'} />
-            <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
-          </linearGradient>
-          <linearGradient id="lpBase" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#475569' : '#e2e8f0'} />
-            <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
-          </linearGradient>
-          <linearGradient id="lpScreenFront" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#1e293b' : '#cbd5e1'} />
-            <stop offset="1" stopColor={dark ? '#0f172a' : '#94a3b8'} />
-          </linearGradient>
-          <linearGradient id="lpScreenInner" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#020617' : '#1e293b'} />
-            <stop offset="1" stopColor={dark ? '#0f172a' : '#334155'} />
-          </linearGradient>
+        {/* SVG infrastructure illustration */}
+        <svg
+          viewBox="0 0 900 540"
+          className="absolute inset-0 w-full h-full"
+          preserveAspectRatio={fullBleed ? 'xMidYMid slice' : 'xMidYMid meet'}
+        >
+          <defs>
+            {/* Laptop gradients */}
+            <linearGradient id="lpTop" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={dark ? '#475569' : '#cbd5e1'} />
+              <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
+            </linearGradient>
+            <linearGradient id="lpBase" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={dark ? '#64748b' : '#e2e8f0'} />
+              <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
+            </linearGradient>
+            <linearGradient id="lpScreen" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={dark ? '#1e293b' : '#cbd5e1'} />
+              <stop offset="1" stopColor={dark ? '#0f172a' : '#94a3b8'} />
+            </linearGradient>
+            <linearGradient id="lpDisplay" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor={dark ? '#0c1322' : '#1e293b'} />
+              <stop offset="1" stopColor={dark ? '#020617' : '#0f172a'} />
+            </linearGradient>
 
-          {/* Server gradients */}
-          <linearGradient id="svTop" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#475569' : '#e2e8f0'} />
-            <stop offset="1" stopColor={dark ? '#334155' : '#cbd5e1'} />
-          </linearGradient>
-          <linearGradient id="svFront" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={dark ? '#334155' : '#cbd5e1'} />
-            <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
-          </linearGradient>
-          <linearGradient id="svSide" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor={dark ? '#1e293b' : '#94a3b8'} />
-            <stop offset="1" stopColor={dark ? '#0f172a' : '#64748b'} />
-          </linearGradient>
+            {/* Server gradients */}
+            <linearGradient id="svTop" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={dark ? '#64748b' : '#e2e8f0'} />
+              <stop offset="1" stopColor={dark ? '#475569' : '#cbd5e1'} />
+            </linearGradient>
+            <linearGradient id="svFront" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={dark ? '#475569' : '#cbd5e1'} />
+              <stop offset="0.5" stopColor={dark ? '#334155' : '#cbd5e1'} />
+              <stop offset="1" stopColor={dark ? '#1e293b' : '#94a3b8'} />
+            </linearGradient>
+            <linearGradient id="svSide" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor={dark ? '#1e293b' : '#94a3b8'} />
+              <stop offset="1" stopColor={dark ? '#0f172a' : '#64748b'} />
+            </linearGradient>
 
-          {/* Line gradient — fading at edges */}
-          <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stopColor="transparent" />
-            <stop offset="0.12" stopColor={dark ? 'rgba(148,163,184,0.55)' : 'rgba(100,116,139,0.6)'} />
-            <stop offset="0.88" stopColor={dark ? 'rgba(148,163,184,0.55)' : 'rgba(100,116,139,0.6)'} />
-            <stop offset="1" stopColor="transparent" />
-          </linearGradient>
+            {/* Line gradient */}
+            <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stopColor="transparent" />
+              <stop offset="0.12" stopColor={dark ? 'rgba(148,163,184,0.6)' : 'rgba(100,116,139,0.7)'} />
+              <stop offset="0.88" stopColor={dark ? 'rgba(148,163,184,0.6)' : 'rgba(100,116,139,0.7)'} />
+              <stop offset="1" stopColor="transparent" />
+            </linearGradient>
 
-          {/* Packet glow gradients (state-based) */}
-          <radialGradient id="pkIdle">
-            <stop offset="0" stopColor="#a5b4fc" stopOpacity="1" />
-            <stop offset="0.5" stopColor="#818cf8" stopOpacity="0.7" />
-            <stop offset="1" stopColor="#818cf8" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="pkSuccess">
-            <stop offset="0" stopColor="#6ee7b7" stopOpacity="1" />
-            <stop offset="0.5" stopColor="#10b981" stopOpacity="0.7" />
-            <stop offset="1" stopColor="#10b981" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="pkError">
-            <stop offset="0" stopColor="#fda4af" stopOpacity="1" />
-            <stop offset="0.5" stopColor="#f43f5e" stopOpacity="0.7" />
-            <stop offset="1" stopColor="#f43f5e" stopOpacity="0" />
-          </radialGradient>
+            {/* Packet glow gradients */}
+            <radialGradient id="pkIdle">
+              <stop offset="0" stopColor="#c7d2fe" stopOpacity="1" />
+              <stop offset="0.4" stopColor="#818cf8" stopOpacity="0.8" />
+              <stop offset="1" stopColor="#818cf8" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="pkSuccess">
+              <stop offset="0" stopColor="#a7f3d0" stopOpacity="1" />
+              <stop offset="0.4" stopColor="#10b981" stopOpacity="0.8" />
+              <stop offset="1" stopColor="#10b981" stopOpacity="0" />
+            </radialGradient>
+            <radialGradient id="pkError">
+              <stop offset="0" stopColor="#fecaca" stopOpacity="1" />
+              <stop offset="0.4" stopColor="#f43f5e" stopOpacity="0.8" />
+              <stop offset="1" stopColor="#f43f5e" stopOpacity="0" />
+            </radialGradient>
 
-          {/* Soft drop shadow */}
-          <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="4" />
-            <feOffset dx="0" dy="6" />
-            <feComponentTransfer><feFuncA type="linear" slope="0.25" /></feComponentTransfer>
-            <feMerge>
-              <feMergeNode />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
+            {/* Shadow filter */}
+            <filter id="softShadow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="5" />
+              <feOffset dx="0" dy="8" />
+              <feComponentTransfer><feFuncA type="linear" slope="0.28" /></feComponentTransfer>
+              <feMerge>
+                <feMergeNode />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
 
-          {/* CSS animation for flowing dashes */}
-          <style>{`
-            @keyframes flowDash { to { stroke-dashoffset: -16; } }
-            .flow-line { animation: ${reduced ? 'none' : 'flowDash 1.2s linear infinite'}; }
-          `}</style>
-        </defs>
+            {/* Glow filter — for status indicators */}
+            <filter id="ledGlow" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="1.2" result="b" />
+              <feMerge>
+                <feMergeNode in="b" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
 
-        {/* ─── LEFT — Laptop (isometric, refined) ─── */}
-        <g transform="translate(150, 290)" filter="url(#softShadow)">
-          {/* Base bottom shadow plane (slight) */}
-          <ellipse cx="80" cy="30" rx="100" ry="6" fill={dark ? '#020617' : '#94a3b8'} opacity="0.18" />
+            {/* Animated dashed lines */}
+            <style>{`
+              @keyframes flowDash { to { stroke-dashoffset: -16; } }
+              .flow-line { animation: ${reduced ? 'none' : 'flowDash 1.4s linear infinite'}; }
+              @keyframes shimmer { 0%,100% { opacity: 0.3; } 50% { opacity: 0.9; } }
+              .shimmer-dot { animation: ${reduced ? 'none' : 'shimmer 1.8s ease-in-out infinite'}; }
+            `}</style>
+          </defs>
 
-          {/* Laptop base — isometric */}
-          <path d="M -10,18 L 170,18 L 195,30 L -35,30 Z" fill="url(#lpBase)" />
-          <path d="M 0,0 L 160,0 L 170,18 L -10,18 Z" fill="url(#lpTop)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+          {/* ─── LEFT — Refined isometric laptop with code editor ─── */}
+          <g transform="translate(150, 290)" filter="url(#softShadow)">
+            {/* Floor reflection (subtle) */}
+            <ellipse cx="80" cy="34" rx="105" ry="6" fill={dark ? '#020617' : '#94a3b8'} opacity="0.22" />
 
-          {/* Trackpad */}
-          <rect x="55" y="3" width="50" height="10" rx="2" fill={dark ? '#0f172a' : '#94a3b8'} opacity="0.7" />
-          <rect x="55" y="3" width="50" height="10" rx="2" fill="none" stroke={dark ? '#334155' : '#64748b'} strokeWidth="0.3" />
+            {/* Laptop base — isometric */}
+            <path d="M -10,18 L 170,18 L 195,30 L -35,30 Z" fill="url(#lpBase)" />
+            <path d="M 0,0 L 160,0 L 170,18 L -10,18 Z" fill="url(#lpTop)" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
 
-          {/* Hinge highlight */}
-          <line x1="5" y1="0" x2="155" y2="0" stroke={dark ? '#64748b' : '#cbd5e1'} strokeWidth="0.4" opacity="0.6" />
+            {/* Base highlight (top edge) */}
+            <line x1="2" y1="0" x2="158" y2="0" stroke={dark ? '#94a3b8' : '#e2e8f0'} strokeWidth="0.5" opacity="0.7" />
 
-          {/* Laptop screen */}
-          <path d="M 5,0 L 155,0 L 170,-110 L -10,-110 Z" fill="url(#lpScreenFront)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+            {/* Trackpad */}
+            <rect x="55" y="3.5" width="50" height="10" rx="2.5" fill={dark ? '#0f172a' : '#94a3b8'} opacity="0.8" />
+            <rect x="55" y="3.5" width="50" height="10" rx="2.5" fill="none" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.3" />
 
-          {/* Screen inner (dark display) */}
-          <rect x="0" y="-105" width="160" height="100" fill="url(#lpScreenInner)" rx="2" />
+            {/* Laptop screen */}
+            <path d="M 5,0 L 155,0 L 170,-115 L -10,-115 Z" fill="url(#lpScreen)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
 
-          {/* Screen content — code-like lines */}
-          <g opacity="0.55">
-            {/* Window controls (mac-style dots) */}
-            <circle cx="10" cy="-97" r="1.2" fill="#fb7185" opacity="0.7" />
-            <circle cx="15" cy="-97" r="1.2" fill="#fbbf24" opacity="0.7" />
-            <circle cx="20" cy="-97" r="1.2" fill="#34d399" opacity="0.7" />
-            {/* Code lines */}
-            <line x1="10" y1="-85" x2="60" y2="-85" stroke={accent} strokeWidth="1.2" opacity="0.6" strokeLinecap="round" />
-            <line x1="14" y1="-77" x2="90" y2="-77" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.5" strokeLinecap="round" />
-            <line x1="14" y1="-69" x2="70" y2="-69" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.5" strokeLinecap="round" />
-            <line x1="20" y1="-61" x2="100" y2="-61" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.4" strokeLinecap="round" />
-            <line x1="20" y1="-53" x2="75" y2="-53" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.4" strokeLinecap="round" />
-            <line x1="14" y1="-45" x2="50" y2="-45" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.3" strokeLinecap="round" />
-            <line x1="14" y1="-37" x2="110" y2="-37" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.4" strokeLinecap="round" />
-            <line x1="20" y1="-29" x2="85" y2="-29" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="1" opacity="0.3" strokeLinecap="round" />
-            <line x1="14" y1="-21" x2="55" y2="-21" stroke={accent} strokeWidth="1.2" opacity="0.55" strokeLinecap="round" />
+            {/* Screen bezel (inner border) */}
+            <path d="M 8,-2 L 152,-2 L 167,-110 L -7,-110 Z" fill={dark ? '#020617' : '#0f172a'} opacity="0.4" />
+
+            {/* Actual display (clipped) */}
+            <rect x="0" y="-108" width="160" height="103" fill="url(#lpDisplay)" rx="2.5" />
+
+            {/* Window title bar */}
+            <rect x="0" y="-108" width="160" height="13" fill={dark ? '#1e293b' : '#334155'} opacity="0.6" rx="2.5" />
+            <rect x="0" y="-101" width="160" height="6" fill={dark ? '#1e293b' : '#334155'} opacity="0.6" />
+
+            {/* Mac controls */}
+            <circle cx="7" cy="-101.5" r="1.4" fill="#ef4444" />
+            <circle cx="13" cy="-101.5" r="1.4" fill="#f59e0b" />
+            <circle cx="19" cy="-101.5" r="1.4" fill="#10b981" />
+
+            {/* File tabs */}
+            <rect x="30" y="-105" width="40" height="9" rx="1" fill={dark ? '#334155' : '#475569'} opacity="0.6" />
+            <text x="36" y="-99" fontSize="4" fill={dark ? '#94a3b8' : '#cbd5e1'} fontFamily="monospace">auth.ts</text>
+
+            {/* Code editor content — colored syntax */}
+            <g transform="translate(0, -90)">
+              {/* Line numbers gutter */}
+              <rect x="0" y="0" width="14" height="88" fill={dark ? '#020617' : '#0f172a'} opacity="0.6" />
+              {[0, 8, 16, 24, 32, 40, 48, 56, 64, 72].map((y, i) => (
+                <text key={i} x="11" y={y + 6} fontSize="3.5" fill={dark ? '#475569' : '#64748b'} fontFamily="monospace" textAnchor="end">{i + 1}</text>
+              ))}
+
+              {/* Code lines with syntax colors */}
+              <g transform="translate(18, 4)">
+                {/* import { ... } */}
+                <text x="0" y="2" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill="#c084fc">const</tspan>
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}> response = </tspan>
+                  <tspan fill="#c084fc">await</tspan>
+                </text>
+                <text x="0" y="10" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>  fetch(</tspan>
+                  <tspan fill="#34d399">'/api/v1/auth'</tspan>
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>, {'{'}</tspan>
+                </text>
+                <text x="0" y="18" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    method: </tspan>
+                  <tspan fill="#34d399">'POST'</tspan>
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>,</tspan>
+                </text>
+                <text x="0" y="26" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    headers: {'{'}</tspan>
+                </text>
+                <text x="0" y="34" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>      </tspan>
+                  <tspan fill="#34d399">'X-API-Key'</tspan>
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>: </tspan>
+                  <tspan fill="#fbbf24">key</tspan>
+                </text>
+                <text x="0" y="42" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>      </tspan>
+                  <tspan fill="#34d399">'X-API-Secret'</tspan>
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>: </tspan>
+                  <tspan fill="#fbbf24">sec</tspan>
+                </text>
+                <text x="0" y="50" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>    {'}'}</tspan>
+                </text>
+                <text x="0" y="58" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill={dark ? '#94a3b8' : '#cbd5e1'}>  {'}'});</tspan>
+                </text>
+                <text x="0" y="68" fontSize="3.5" fontFamily="monospace">
+                  <tspan fill="#64748b">// </tspan>
+                  <tspan fill="#64748b" fillOpacity="0.7">{'{ ok: true, total: 12,450 }'}</tspan>
+                </text>
+                {!reduced && (
+                  <rect x="32" y="64" width="1.2" height="4.5" fill="#34d399">
+                    <animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" />
+                  </rect>
+                )}
+              </g>
+            </g>
+
+            {/* State icon overlay */}
+            {state === 'success' && (
+              <g transform="translate(80, -55)">
+                <circle r="20" fill="#10b981" opacity="0.18">
+                  <animate attributeName="r" values="20;30;20" dur="1.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.18;0;0.18" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+                <circle r="14" fill="#10b981" />
+                <path d="M -6,0 L -2,5 L 7,-5" stroke="white" strokeWidth="2.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              </g>
+            )}
+            {state === 'error' && (
+              <g transform="translate(80, -55)">
+                <circle r="14" fill="#f43f5e" />
+                <line x1="-6" y1="-6" x2="6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
+                <line x1="6" y1="-6" x2="-6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
+              </g>
+            )}
           </g>
 
-          {/* State icon — fills center of screen when success/error */}
-          {state === 'success' && (
-            <g transform="translate(80, -55)">
-              <circle r="18" fill={accent} opacity="0.25">
-                <animate attributeName="r" values="18;26;18" dur="1.4s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.25;0;0.25" dur="1.4s" repeatCount="indefinite" />
+          {/* ─── CONNECTION LINES with flowing dashes ─── */}
+          <line x1="335" y1="305" x2="420" y2="280" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" />
+          <line x1="490" y1="280" x2="620" y2="220" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.15s' }} />
+          <line x1="490" y1="280" x2="620" y2="275" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.3s' }} />
+          <line x1="490" y1="280" x2="620" y2="330" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.45s' }} />
+          <line x1="490" y1="280" x2="620" y2="385" stroke="url(#lineGrad)" strokeWidth="1.5" strokeDasharray="6,6" strokeLinecap="round" className="flow-line" style={{ animationDelay: '0.6s' }} />
+
+          {/* Constant subtle ambient packets (always flowing) */}
+          {!reduced && (
+            <>
+              <circle r="2.2" fill="url(#pkIdle)" opacity="0.6">
+                <animateMotion dur="3s" repeatCount="indefinite" path="M 335,305 L 420,280" />
               </circle>
-              <circle r="14" fill={accent} />
-              <path d="M -6,0 L -2,5 L 7,-5" stroke="white" strokeWidth="2.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-            </g>
+              <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,220" begin="0.4s" />
+              </circle>
+              <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,275" begin="0.9s" />
+              </circle>
+              <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,330" begin="1.4s" />
+              </circle>
+              <circle r="2.2" fill="url(#pkIdle)" opacity="0.5">
+                <animateMotion dur="2.6s" repeatCount="indefinite" path="M 490,280 L 620,385" begin="1.9s" />
+              </circle>
+            </>
           )}
-          {state === 'error' && (
-            <g transform="translate(80, -55)">
-              <circle r="14" fill={accent} />
-              <line x1="-6" y1="-6" x2="6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
-              <line x1="6" y1="-6" x2="-6" y2="6" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
-            </g>
-          )}
-        </g>
 
-        {/* ─── CONNECTION LINES — flowing dash animation ─── */}
-        {/* Laptop → Status pill */}
-        <line
-          x1="335" y1="305" x2="420" y2="280"
-          stroke="url(#lineGrad)" strokeWidth="1.5"
-          strokeDasharray="6,6" strokeLinecap="round"
-          className="flow-line"
-        />
-        {/* Pill → Server 1 (top) */}
-        <line
-          x1="490" y1="280" x2="620" y2="220"
-          stroke="url(#lineGrad)" strokeWidth="1.5"
-          strokeDasharray="6,6" strokeLinecap="round"
-          className="flow-line" style={{ animationDelay: '0.15s' }}
-        />
-        {/* Pill → Server 2 */}
-        <line
-          x1="490" y1="280" x2="620" y2="275"
-          stroke="url(#lineGrad)" strokeWidth="1.5"
-          strokeDasharray="6,6" strokeLinecap="round"
-          className="flow-line" style={{ animationDelay: '0.3s' }}
-        />
-        {/* Pill → Server 3 */}
-        <line
-          x1="490" y1="280" x2="620" y2="330"
-          stroke="url(#lineGrad)" strokeWidth="1.5"
-          strokeDasharray="6,6" strokeLinecap="round"
-          className="flow-line" style={{ animationDelay: '0.45s' }}
-        />
-        {/* Pill → Server 4 (bottom) */}
-        <line
-          x1="490" y1="280" x2="620" y2="385"
-          stroke="url(#lineGrad)" strokeWidth="1.5"
-          strokeDasharray="6,6" strokeLinecap="round"
-          className="flow-line" style={{ animationDelay: '0.6s' }}
-        />
+          {/* Triggered packet wave */}
+          <AnimatePresence mode="wait">
+            {pulseKey > 0 && !reduced && <PacketWave key={pulseKey} state={state} />}
+          </AnimatePresence>
 
-        {/* ─── PACKET WAVE — one-shot on pulseKey change ─── */}
-        <AnimatePresence mode="wait">
-          {pulseKey > 0 && !reduced && (
-            <PacketWave key={pulseKey} state={state} />
-          )}
-        </AnimatePresence>
+          {/* ─── RIGHT — 4 servers with port LEDs ─── */}
+          <g transform="translate(620, 195)" filter="url(#softShadow)">
+            <ServerUnit y={0} dark={dark} active={state !== 'idle'} accent={accent} reduced={reduced} />
+            <ServerUnit y={55} dark={dark} active={state !== 'idle'} accent={accent} reduced={reduced} />
+            <ServerUnit y={110} dark={dark} active={state !== 'idle'} accent={accent} reduced={reduced} />
+            <ServerUnit y={165} dark={dark} active={state !== 'idle'} accent={accent} reduced={reduced} />
+          </g>
 
-        {/* ─── RIGHT — 4 Server racks (refined isometric) ─── */}
-        <g transform="translate(620, 195)" filter="url(#softShadow)">
-          <ServerUnit y={0} dark={dark} active={state !== 'idle'} />
-          <ServerUnit y={55} dark={dark} active={state !== 'idle'} />
-          <ServerUnit y={110} dark={dark} active={state !== 'idle'} />
-          <ServerUnit y={165} dark={dark} active={state !== 'idle'} />
-        </g>
+          {/* Labels */}
+          <text x="180" y="475" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>CLIENT</text>
+          <text x="675" y="170" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>API GATEWAY</text>
 
-        {/* Labels — Client + API Gateway (in SVG, properly aligned) */}
-        <text x="180" y="475" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>
-          CLIENT
-        </text>
-        <text x="680" y="170" fontSize="11" fontWeight="700" letterSpacing="2.5" fill={dark ? '#64748b' : '#475569'}>
-          API GATEWAY
-        </text>
-      </svg>
+          {/* Subtle technical metadata labels */}
+          <text x="180" y="488" fontSize="6.5" fill={dark ? '#475569' : '#94a3b8'} fontFamily="monospace" opacity="0.75">192.168.1.42</text>
+          <text x="675" y="182" fontSize="6.5" fill={dark ? '#475569' : '#94a3b8'} fontFamily="monospace" opacity="0.75">cluster-prod-01</text>
+        </svg>
+      </motion.div>
 
-      {/* ─── CENTER — Floating status pill (HTML overlay for backdrop blur) ─── */}
+      {/* ─── CENTER — Floating status pill ─── */}
       <motion.div
         initial={{ opacity: 0, scale: reduced ? 1 : 0.92, y: reduced ? 0 : 6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: reduced ? 0 : 0.5, delay: reduced ? 0 : 0.15 }}
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
       >
-        {/* Multi-layer glow behind pill */}
-        <div
-          className="absolute inset-0 -m-6 rounded-full blur-2xl transition-all duration-500"
-          style={{ background: accentGlow }}
-          aria-hidden="true"
-        />
-        <div
-          className="absolute inset-0 -m-3 rounded-2xl blur-xl transition-all duration-500"
-          style={{ background: accentGlow }}
-          aria-hidden="true"
-        />
+        {/* Triple glow layers */}
+        <div className="absolute inset-0 -m-8 rounded-full blur-3xl transition-all duration-500" style={{ background: accentGlow }} aria-hidden="true" />
+        <div className="absolute inset-0 -m-4 rounded-full blur-2xl transition-all duration-500" style={{ background: accentGlow }} aria-hidden="true" />
+        <div className="absolute inset-0 -m-1 rounded-full blur-lg transition-all duration-500" style={{ background: accentGlow, opacity: 0.6 }} aria-hidden="true" />
 
-        <div
+        <motion.div
+          animate={!reduced ? { y: [0, -3, 0] } : {}}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
           className={cn(
-            'relative rounded-full px-4 py-2 flex items-center gap-2.5 backdrop-blur-xl transition-colors duration-300 shadow-2xl',
+            'relative rounded-full px-4 py-2 flex items-center gap-2.5 backdrop-blur-xl transition-colors duration-300',
             dark
-              ? 'bg-slate-900/85 ring-1 ring-slate-700/60 text-slate-100'
+              ? 'bg-slate-900/85 ring-1 ring-slate-700/80 text-slate-100'
               : 'bg-white/90 ring-1 ring-slate-200 text-slate-800',
           )}
+          style={{
+            boxShadow: dark
+              ? '0 25px 50px -12px rgba(0,0,0,0.5), 0 0 40px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.05)'
+              : '0 25px 50px -12px rgba(0,0,0,0.15), 0 0 40px rgba(99,102,241,0.1), inset 0 1px 0 rgba(255,255,255,1)',
+          }}
         >
           <AnimatePresence mode="wait">
             {state === 'processing' && (
@@ -340,109 +475,99 @@ export function ApiHeroInfra({
                   <span className={cn('absolute inline-flex h-full w-full rounded-full', dark ? 'bg-indigo-400' : 'bg-indigo-500', !reduced && 'animate-ping opacity-60')} />
                   <span className={cn('relative inline-flex rounded-full h-2 w-2', dark ? 'bg-indigo-400' : 'bg-indigo-500')} />
                 </span>
-                <span className="text-[11.5px] font-semibold tracking-tight opacity-80">{shownText}</span>
+                <span className="text-[11.5px] font-semibold tracking-tight opacity-85">{shownText}</span>
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
+        </motion.div>
       </motion.div>
     </div>
   );
 }
 
-// ─── Packet wave — one-shot triggered animation ────────────
+// ─── Triggered packet wave ─────────────────────────────
 function PacketWave({ state }: { state: InfraState }) {
   const gradId = state === 'success' ? 'pkSuccess'
               : state === 'error' ? 'pkError'
               : 'pkIdle';
-
   return (
     <>
-      {/* Laptop → Pill */}
-      <motion.circle
-        r="6" fill={`url(#${gradId})`}
-        initial={{ cx: 335, cy: 305, opacity: 0 }}
-        animate={{ cx: [335, 420], cy: [305, 280], opacity: [0, 1, 0.6] }}
-        transition={{ duration: 0.55, ease: 'easeOut' }}
-      />
-      {/* Pill → Server 1 */}
-      <motion.circle
-        r="6" fill={`url(#${gradId})`}
-        initial={{ cx: 490, cy: 280, opacity: 0 }}
-        animate={{ cx: [490, 620], cy: [280, 220], opacity: [0, 1, 0] }}
-        transition={{ duration: 0.65, ease: 'easeOut', delay: 0.35 }}
-      />
-      {/* Pill → Server 2 */}
-      <motion.circle
-        r="6" fill={`url(#${gradId})`}
-        initial={{ cx: 490, cy: 280, opacity: 0 }}
-        animate={{ cx: [490, 620], cy: [280, 275], opacity: [0, 1, 0] }}
-        transition={{ duration: 0.65, ease: 'easeOut', delay: 0.45 }}
-      />
-      {/* Pill → Server 3 */}
-      <motion.circle
-        r="6" fill={`url(#${gradId})`}
-        initial={{ cx: 490, cy: 280, opacity: 0 }}
-        animate={{ cx: [490, 620], cy: [280, 330], opacity: [0, 1, 0] }}
-        transition={{ duration: 0.65, ease: 'easeOut', delay: 0.55 }}
-      />
-      {/* Pill → Server 4 */}
-      <motion.circle
-        r="6" fill={`url(#${gradId})`}
-        initial={{ cx: 490, cy: 280, opacity: 0 }}
-        animate={{ cx: [490, 620], cy: [280, 385], opacity: [0, 1, 0] }}
-        transition={{ duration: 0.65, ease: 'easeOut', delay: 0.65 }}
-      />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 335, cy: 305, opacity: 0 }} animate={{ cx: [335, 420], cy: [305, 280], opacity: [0, 1, 0.6] }} transition={{ duration: 0.55, ease: 'easeOut' }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 220], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.35 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 275], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.45 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 330], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.55 }} />
+      <motion.circle r="7" fill={`url(#${gradId})`} initial={{ cx: 490, cy: 280, opacity: 0 }} animate={{ cx: [490, 620], cy: [280, 385], opacity: [0, 1, 0] }} transition={{ duration: 0.65, ease: 'easeOut', delay: 0.65 }} />
     </>
   );
 }
 
-// ─── Server unit — refined isometric ────────────────────
-function ServerUnit({ y, dark, active }: { y: number; dark: boolean; active: boolean }) {
+// ─── Refined server unit with port LEDs ────────────────
+function ServerUnit({ y, dark, active, accent, reduced }: { y: number; dark: boolean; active: boolean; accent: string; reduced: boolean }) {
   return (
     <g transform={`translate(0, ${y})`}>
-      {/* Top face (parallelogram) */}
-      <path d="M 0,0 L 110,0 L 130,-14 L 20,-14 Z" fill="url(#svTop)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+      {/* Top face */}
+      <path d="M 0,0 L 110,0 L 130,-14 L 20,-14 Z" fill="url(#svTop)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.5" />
+      {/* Top highlight */}
+      <line x1="20" y1="-14" x2="130" y2="-14" stroke={dark ? '#94a3b8' : '#e2e8f0'} strokeWidth="0.5" opacity="0.5" />
 
       {/* Front face */}
-      <rect x="0" y="0" width="110" height="40" fill="url(#svFront)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+      <rect x="0" y="0" width="110" height="40" fill="url(#svFront)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.5" />
 
-      {/* Right side face (parallelogram) */}
-      <path d="M 110,0 L 130,-14 L 130,26 L 110,40 Z" fill="url(#svSide)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.4" />
+      {/* Right side face */}
+      <path d="M 110,0 L 130,-14 L 130,26 L 110,40 Z" fill="url(#svSide)" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.5" />
 
-      {/* Front panel — LED indicators */}
-      <g transform="translate(8, 8)">
-        {/* Active LED — emerald (always on) */}
-        <circle cx="0" cy="0" r="1.8" fill="#10b981">
-          {active && <animate attributeName="opacity" values="1;0.3;1" dur="1.4s" repeatCount="indefinite" />}
+      {/* Inset front panel (sunken effect) */}
+      <rect x="3" y="3" width="104" height="34" fill={dark ? '#0f172a' : '#e2e8f0'} opacity="0.5" rx="1" />
+      <rect x="3" y="3" width="104" height="34" fill="none" stroke={dark ? '#0f172a' : '#64748b'} strokeWidth="0.3" rx="1" />
+
+      {/* LED status indicators (left side) */}
+      <g transform="translate(8, 8)" filter="url(#ledGlow)">
+        <circle cx="0" cy="0" r="2" fill="#10b981">
+          {active && !reduced && <animate attributeName="opacity" values="1;0.4;1" dur="1.4s" repeatCount="indefinite" />}
         </circle>
-        {/* Status LED 2 */}
-        <circle cx="0" cy="6" r="1.8" fill={dark ? '#475569' : '#94a3b8'} opacity="0.6" />
-        {/* Status LED 3 */}
-        <circle cx="0" cy="12" r="1.8" fill={dark ? '#475569' : '#94a3b8'} opacity="0.4" />
+        <circle cx="0" cy="7" r="2" fill={accent} opacity={active ? '0.85' : '0.4'}>
+          {active && !reduced && <animate attributeName="opacity" values="0.85;0.3;0.85" dur="1.8s" repeatCount="indefinite" />}
+        </circle>
+        <circle cx="0" cy="14" r="2" fill={dark ? '#475569' : '#94a3b8'} opacity="0.5" />
       </g>
 
-      {/* Rack U-unit lines (subtle horizontal stripes) */}
-      <g transform="translate(20, 4)" opacity="0.55">
-        <line x1="0" y1="0" x2="78" y2="0" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
-        <line x1="0" y1="6" x2="78" y2="6" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
-        <line x1="0" y1="12" x2="78" y2="12" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
-        <line x1="0" y1="18" x2="78" y2="18" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
-        <line x1="0" y1="24" x2="78" y2="24" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
-        <line x1="0" y1="30" x2="78" y2="30" stroke={dark ? '#64748b' : '#94a3b8'} strokeWidth="0.5" />
+      {/* LCD display strip */}
+      <rect x="18" y="6" width="38" height="6" rx="0.8" fill={dark ? '#1e293b' : '#475569'} />
+      <rect x="18" y="6" width="38" height="6" rx="0.8" fill="none" stroke={dark ? '#475569' : '#64748b'} strokeWidth="0.3" />
+      {/* LCD text */}
+      <text x="20" y="11" fontSize="3.5" fill="#34d399" fontFamily="monospace" opacity={active ? '0.85' : '0.5'}>
+        {active ? 'ONLINE' : 'STANDBY'}
+      </text>
+
+      {/* Network port row */}
+      <g transform="translate(18, 18)">
+        {[0, 6, 12, 18, 24].map((x, i) => (
+          <g key={i}>
+            <rect x={x} y="0" width="4" height="5" rx="0.5" fill={dark ? '#0f172a' : '#475569'} />
+            {/* Port activity LED — randomly active */}
+            {active && !reduced && (i % 2 === 0) && (
+              <circle cx={x + 2} cy="2.5" r="0.8" fill="#34d399" className="shimmer-dot" style={{ animationDelay: `${i * 0.15}s` }} />
+            )}
+          </g>
+        ))}
       </g>
 
-      {/* Vent grilles on right */}
+      {/* Hard drive bay LEDs */}
+      <g transform="translate(18, 28)">
+        {[0, 4, 8, 12, 16].map((x, i) => (
+          <circle key={i} cx={x} cy="0" r="0.8" fill={i < 3 ? '#10b981' : dark ? '#475569' : '#94a3b8'} opacity={i < 3 ? (active ? 0.9 : 0.5) : 0.5} />
+        ))}
+      </g>
+
+      {/* Vent grilles (right) */}
       <g transform="translate(72, 7)" opacity="0.7">
-        <rect x="0" y="0" width="24" height="3" rx="0.5" fill={dark ? '#020617' : '#94a3b8'} />
-        <rect x="0" y="6" width="24" height="3" rx="0.5" fill={dark ? '#020617' : '#94a3b8'} />
-        <rect x="0" y="12" width="24" height="3" rx="0.5" fill={dark ? '#020617' : '#94a3b8'} />
-        <rect x="0" y="18" width="24" height="3" rx="0.5" fill={dark ? '#020617' : '#94a3b8'} />
-        <rect x="0" y="24" width="24" height="3" rx="0.5" fill={dark ? '#020617' : '#94a3b8'} />
+        {[0, 5, 10, 15, 20, 25].map((y, i) => (
+          <rect key={i} x="0" y={y} width="28" height="2.5" rx="0.4" fill={dark ? '#020617' : '#94a3b8'} />
+        ))}
       </g>
 
-      {/* Top face highlight (depth) */}
-      <line x1="0" y1="0" x2="110" y2="0" stroke={dark ? '#64748b' : '#cbd5e1'} strokeWidth="0.5" opacity="0.6" />
+      {/* Brand label */}
+      <text x="76" y="36" fontSize="2.5" fill={dark ? '#475569' : '#64748b'} fontFamily="monospace" opacity="0.6">XT-SRV</text>
     </g>
   );
 }
