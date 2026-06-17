@@ -93,6 +93,10 @@ export class ListTransactionsDto {
   @IsOptional() @IsString()
   contractSources?: string;
 
+  @ApiPropertyOptional({ description: "Manba (vergul bilan: SYNC,IMPORT,ALOQA_BANK)" })
+  @IsOptional() @IsString()
+  sources?: string;
+
   @ApiPropertyOptional({ description: 'Summa pastki chegara' })
   @IsOptional() @Type(() => Number)
   amountMin?: number;
