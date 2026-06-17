@@ -32,12 +32,14 @@ export class TransactionsController {
   ) {}
 
   @Post('inspect-id')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: "Composite ID'ni parse qilib, bankdan o'sha tranzaksiyani so'raydi (DB tekshirilmaydi)" })
   inspectId(@Body() body: { id: string }) {
     return this.inspectorSvc.lookupFromBank(body?.id);
   }
 
   @Post('parse-ids-excel')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: "Excel A ustunidan composite ID'larni o'qib chiqaradi (toplam tekshirish uchun)" })
   async parseIdsExcel(@UploadedFile() file: any) {
@@ -47,6 +49,7 @@ export class TransactionsController {
   }
 
   @Post('export-inspect-results')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'ID Inspector bulk natijalarini Excel sifatida yuklab olish' })
   async exportInspectResults(
     @Body() body: { results: Array<{ id: string; result?: any; error?: string }> },
@@ -65,12 +68,14 @@ export class TransactionsController {
   }
 
   @Get()
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: "Tranzaksiyalar ro'yxati (filter + pagination)" })
   list(@Query() q: ListTransactionsDto) {
     return this.svc.list(q);
   }
 
   @Get('distinct')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: "Ustun bo'yicha distinct qiymatlar (Google Sheets filter uchun)" })
   distinct(
     @Query('column') column: string,
@@ -81,6 +86,7 @@ export class TransactionsController {
   }
 
   @Get('stats')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Statistika: jami, IN/OUT, banklar bo\'yicha (sana, bank, direction + Google Sheets stilidagi kolonna filterlari)' })
   stats(
     @Query('from') from?: string,
@@ -107,6 +113,7 @@ export class TransactionsController {
   }
 
   @Get('daily')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob/kategoriya filtri bilan)' })
   daily(
     @Query('from') from?: string,
@@ -119,6 +126,7 @@ export class TransactionsController {
   }
 
   @Post('reconcile')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
   @ApiOperation({ summary: "Hisob sverkasi — bank qoldig'i va oborotini DB bilan solishtiradi (withSync=true bo'lsa avval sync qilinadi)" })
   reconcile(@Body() body: { accountId: string; dateFrom: string; dateTo: string; withSync?: boolean }) {
     return this.reconcileSvc.reconcile(body?.accountId, body?.dateFrom, body?.dateTo, {
@@ -127,6 +135,7 @@ export class TransactionsController {
   }
 
   @Get('reconcile/today')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
   @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka. syncMismatched=true bo'lsa farqli hisoblar uchun avto-sync+qayta sverka qiladi (smart 2-pass)" })
   reconcileToday(
     @Query('date') date?: string,
@@ -138,18 +147,21 @@ export class TransactionsController {
   }
 
   @Post('reconcile/diagnose')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
   @ApiOperation({ summary: 'Farq sababini topish — bankdagi va DB dagi tranzaksiyalarni taqqoslab, yetishmayotgan/ortiqcha yozuvlarni qaytaradi' })
   diagnose(@Body() body: { accountId: string; date: string }) {
     return this.reconcileSvc.diagnoseDay(body?.accountId, body?.date);
   }
 
   @Post('reconcile/fix-missing')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({ summary: "Bankda bor lekin DB da yo'q tranzaksiyani qayta sync qilib DB ga qo'shadi" })
   fixMissing(@Body() body: { accountId: string; b2Id?: string; generalId?: string; date: string }) {
     return this.reconcileSvc.fixMissing(body?.accountId, body?.b2Id, body?.generalId, body?.date);
   }
 
   @Post('reconcile/fix-all-missing')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({ summary: "Bir nechta yo'qolgan tranzaksiyalarni bitta zaprosda DB ga qo'shadi" })
   fixAllMissing(@Body() body: {
     accountId: string;
@@ -160,6 +172,7 @@ export class TransactionsController {
   }
 
   @Post('reconcile/fix-tx-date')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({
     summary: "Bitta tx'ning sanasini tuzatish (foydalanuvchi tasdiqi bilan)",
     description: "Sverka diagnose'da 'boshqa sanada bor' deb topilgan tx uchun ishlatiladi. Faqat txnDate tegadi, boshqa hech narsa o'zgarmaydi.",
@@ -169,6 +182,7 @@ export class TransactionsController {
   }
 
   @Post('reconcile/fix-all-tx-date')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({
     summary: "Bir nechta tx'ning sanalarini birdaniga tuzatish (bulk)",
     description: "Faqat txnDate UPDATE, boshqa fieldlar tegmaydi. Har biri uchun natija (updated/skipped/error) qaytadi.",
@@ -178,6 +192,7 @@ export class TransactionsController {
   }
 
   @Get('export')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: "Tranzaksiyalarni filtr bo'yicha Excel qilib yuklab olish" })
   async export(
     @Res() res: Response,
@@ -203,6 +218,7 @@ export class TransactionsController {
   }
 
   @Get('statement')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW)
   @ApiOperation({ summary: "Bank vipiskasi — Excel (hisob + sana oralig'i)" })
   async statement(
     @Query('accountId') accountId: string,
@@ -307,6 +323,7 @@ export class TransactionsController {
   }
 
   @Get(':id')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Bitta tranzaksiya tafsilot' })
   findOne(@Param('id') id: string) {
     return this.svc.findOne(id);
