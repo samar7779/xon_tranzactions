@@ -150,17 +150,21 @@ function RoleDialog({
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
-  // Collapsible state — default'da barcha modullar ochiq (sahifa ochiq emas)
+  // Collapsible state — default'da barcha modullar yopiq (ustiga bosib ochiladi)
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [openPages, setOpenPages] = useState<Set<string>>(new Set());
   const [permQuery, setPermQuery] = useState('');
+  // "Ko'rinish nomi" va "Tavsif" — yashirin, sarlavhaga bosib ochiladi
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
-  // Modal birinchi ochilganda barcha modullarni avtomatik ochish
+  // Modal har ochilganda modullar yopiq holatda boshlanadi (kerakligini ustiga bosib ochadi)
   useEffect(() => {
-    if (open && permTree.length > 0) {
-      setOpenModules(new Set(permTree.map((m) => m.module)));
+    if (open) {
+      setOpenModules(new Set());
+      setOpenPages(new Set());
+      setDetailsOpen(false);
     }
-  }, [open, permTree]);
+  }, [open]);
 
   useEffect(() => {
     if (open) {
@@ -296,13 +300,31 @@ function RoleDialog({
                 placeholder="ACCOUNTANT" className="font-mono" />
             </div>
           )}
-          <div className="space-y-2">
-            <Label>Ko'rinish nomi</Label>
-            <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Hisobchi" />
-          </div>
-          <div className="space-y-2">
-            <Label>Tavsif</Label>
-            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ixtiyoriy" />
+          {/* Ko'rinish nomi va Tavsif — yashirin, sarlavhaga bosib ochiladi */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setDetailsOpen((v) => !v)}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+            >
+              {detailsOpen ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ko'rinish nomi va tavsif</span>
+              {!detailsOpen && label && (
+                <span className="text-xs text-slate-400 dark:text-slate-500 truncate">· {label}</span>
+              )}
+            </button>
+            {detailsOpen && (
+              <div className="px-3 pb-3 pt-1 space-y-3 border-t border-slate-100 dark:border-slate-800">
+                <div className="space-y-2">
+                  <Label>Ko'rinish nomi</Label>
+                  <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Hisobchi" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tavsif</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ixtiyoriy" />
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -382,7 +404,7 @@ function RoleDialog({
                         {mod.module.charAt(0).toUpperCase()}
                       </span>
                       <button type="button"
-                        onClick={() => toggleModule(mod)}
+                        onClick={() => toggleModuleExpand(mod.module)}
                         className="flex flex-col items-start flex-1 min-w-0 text-left">
                         <span className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate w-full">{mod.module}</span>
                         <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
@@ -395,6 +417,7 @@ function RoleDialog({
                       )}>{modCount}/{allItems.length}</span>
                       <button type="button"
                         onClick={() => toggleModule(mod)}
+                        title="Modul ruxsatlarini belgilash"
                         className={cn(
                           "w-5 h-5 rounded-md grid place-items-center text-white shrink-0 transition-colors",
                           modAll ? "bg-indigo-600" : modSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600",
@@ -429,14 +452,17 @@ function RoleDialog({
                                 </button>
                                 <button type="button"
                                   onClick={() => toggleGroup(p.items)}
-                                  className="flex items-center gap-2 flex-1 min-w-0 text-left">
-                                  <div className={cn(
+                                  title="Sahifani belgilash"
+                                  className={cn(
                                     "w-4 h-4 rounded grid place-items-center text-white text-[9px] transition-colors shrink-0",
-                                    pageAll ? "bg-indigo-600" : pageSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700",
+                                    pageAll ? "bg-indigo-600" : pageSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600",
                                   )}>
-                                    {pageAll && <Check className="h-2.5 w-2.5" />}
-                                    {pageSome && <span className="h-0.5 w-1.5 bg-white rounded" />}
-                                  </div>
+                                  {pageAll && <Check className="h-2.5 w-2.5" />}
+                                  {pageSome && <span className="h-0.5 w-1.5 bg-white rounded" />}
+                                </button>
+                                <button type="button"
+                                  onClick={() => togglePageExpand(pageKey)}
+                                  className="flex items-center gap-2 flex-1 min-w-0 text-left">
                                   <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 truncate">{p.name}</span>
                                   {p.description && <span className="hidden sm:inline text-[10px] text-slate-400 dark:text-slate-500 truncate">· {p.description}</span>}
                                 </button>
