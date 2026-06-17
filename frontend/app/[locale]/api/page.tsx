@@ -17,14 +17,7 @@ import { usePrefersReducedMotion } from '@/lib/use-reduced-motion';
 import { IconBtn, PrimaryBtn, MethodBadge, Kbd, eyebrow } from '@/components/api-ui';
 import { ApiCommandPalette, type PaletteEndpoint } from '@/components/api-command-palette';
 import { SNIPPET_LANGS, genSnippet, type SnippetLang } from '@/lib/api-snippet-gen';
-
-const Api3dHero = dynamic(
-  () => import('@/components/api-3d-hero').then((m) => m.Api3dHero),
-  {
-    ssr: false,
-    loading: () => <div className="w-full h-full bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-slate-900 dark:to-slate-950 rounded-xl animate-pulse" />,
-  },
-);
+import { ApiCodeShowcase } from '@/components/api-code-showcase';
 
 const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
 
@@ -489,115 +482,131 @@ function LandingView({ onLogin, dark }: {
     }
   };
 
-  const fullOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://transactions.xonapps.uz';
   const canSubmit = keyId.trim() && secret.trim();
+  const reduced = usePrefersReducedMotion();
 
   return (
     <section className="relative overflow-hidden">
-      <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:32px_32px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)]" />
+      {/* Subtle radial mesh background */}
+      <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.035)_1px,transparent_1px)] dark:[background-image:linear-gradient(to_right,rgba(255,255,255,0.035)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.035)_1px,transparent_1px)] [background-size:36px_36px] [mask-image:radial-gradient(ellipse_at_center,black_25%,transparent_70%)]" aria-hidden="true" />
 
-      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-6 pb-12 grid lg:grid-cols-[1.15fr_1fr] gap-8 lg:gap-12 items-center max-w-[1500px] mx-auto min-h-[calc(100vh-56px)]">
-        {/* 3D — aria-hidden, decorative */}
-        <div className="relative h-[300px] sm:h-[420px] lg:h-[640px] -mx-4 lg:mx-0">
-          <Api3dHero className="absolute inset-0" dark={dark} />
+      <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-10 pb-16 grid lg:grid-cols-[1.25fr_1fr] gap-10 lg:gap-16 items-center max-w-[1400px] mx-auto min-h-[calc(100vh-56px)]">
+        {/* ─── LEFT — Code showcase + flow + response ─── */}
+        <div className="order-2 lg:order-1">
+          <ApiCodeShowcase />
         </div>
 
-        {/* Right — code preview + login */}
-        <div className="w-full max-w-[480px] mx-auto lg:mx-0 space-y-4">
-          {/* Terminal preview — full URL */}
-          <div className="rounded-xl ring-1 ring-slate-800 overflow-hidden bg-slate-950 shadow-sm">
-            <div className="px-3 py-2 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-rose-500/70" aria-hidden="true" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500/70" aria-hidden="true" />
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/70" aria-hidden="true" />
-              </div>
-              <span className="text-[10px] text-slate-500 font-mono">api · v1</span>
+        {/* ─── RIGHT — focused centered login ─── */}
+        <div className="order-1 lg:order-2 w-full max-w-[440px] mx-auto lg:mx-0">
+          {/* Tiny status badge */}
+          <motion.div
+            initial={{ opacity: 0, y: reduced ? 0 : 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.3 }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 text-[10.5px] font-bold uppercase tracking-widest mb-5"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className={cn('absolute inline-flex h-full w-full rounded-full bg-emerald-400', !reduced && 'animate-ping opacity-75')} />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500" />
+            </span>
+            Production
+          </motion.div>
+
+          {/* Big title */}
+          <motion.h1
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.05 }}
+            className="text-3xl sm:text-4xl lg:text-[44px] font-black tracking-tight text-slate-900 dark:text-slate-100 leading-[1.05]"
+          >
+            {t('pageTitle')}
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.1 }}
+            className="text-[14px] text-slate-500 dark:text-slate-400 mt-3 leading-relaxed max-w-md"
+          >
+            {t('pageDesc')}
+          </motion.p>
+
+          {/* Inline login form — no card, just clean inputs */}
+          <motion.form
+            onSubmit={(e) => { e.preventDefault(); doLogin(); }}
+            initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: reduced ? 0 : 0.35, delay: reduced ? 0 : 0.15 }}
+            className="mt-7 space-y-3"
+          >
+            <div>
+              <label htmlFor="api-key" className={cn(eyebrow, 'mb-1.5 block')}>{t('login.keyLabel')}</label>
+              <input
+                id="api-key"
+                type="text"
+                value={keyId}
+                onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
+                onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
+                placeholder={t('login.keyPlaceholder')}
+                autoComplete="off"
+                aria-required="true"
+                className="w-full h-11 px-3.5 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-300 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-0 outline-none text-[13px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              />
             </div>
-            <pre className="px-4 py-3 text-[11.5px] font-mono leading-relaxed overflow-x-auto">
-              <span className="text-slate-500"># GET tranzaksiyalar</span>{'\n'}
-              <span className="text-indigo-400">curl</span> <span className="text-slate-300">{fullOrigin}/api/v1/transactions</span> <span className="text-slate-500">\</span>{'\n'}
-              {'  '}<span className="text-slate-500">-H</span> <span className="text-emerald-300">"X-API-Key: xk_live_..."</span> <span className="text-slate-500">\</span>{'\n'}
-              {'  '}<span className="text-slate-500">-H</span> <span className="text-emerald-300">"X-API-Secret: xs_live_..."</span>{'\n'}
-              <span className="text-slate-400">{'{ "ok": true, "total": 12450, ... }'}</span>
-            </pre>
-          </div>
-
-          {/* Login card */}
-          <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-5 lg:p-6 shadow-[0_1px_3px_rgba(0,0,0,0.06)]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-lg bg-indigo-600 grid place-items-center shadow-sm">
-                <KeyRound className="h-4 w-4 text-white" aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-[14px] font-black text-slate-900 dark:text-slate-100 leading-tight">{t('login.title')}</h2>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">{t('login.subtitle')}</p>
-              </div>
+            <div>
+              <label htmlFor="api-secret" className={cn(eyebrow, 'mb-1.5 flex items-center justify-between')}>
+                <span>{t('login.secretLabel')}</span>
+                <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide secret' : 'Show secret'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-0.5 outline-none">
+                  {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                </button>
+              </label>
+              <input
+                id="api-secret"
+                type={showSecret ? 'text' : 'password'}
+                value={secret}
+                onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
+                onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
+                placeholder={t('login.secretPlaceholder')}
+                autoComplete="off"
+                aria-required="true"
+                className="w-full h-11 px-3.5 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-300 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none text-[13px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+              />
             </div>
 
-            <div className="space-y-2.5">
-              <div>
-                <label htmlFor="api-key" className={cn(eyebrow, 'mb-1 block')}>
-                  {t('login.keyLabel')} <span className="text-slate-400 normal-case tracking-normal font-medium ml-1">{t('login.keyExample')}</span>
-                </label>
-                <input
-                  id="api-key"
-                  type="text"
-                  value={keyId}
-                  onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
-                  onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
-                  placeholder={t('login.keyPlaceholder')}
-                  aria-required="true"
-                  className="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
-                />
+            {error && (
+              <div role="alert" aria-live="polite" className="rounded-md bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 flex items-start gap-2">
+                <AlertCircle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
+                <div className="text-[12px] text-rose-700 dark:text-rose-300 leading-relaxed">{error}</div>
               </div>
-              <div>
-                <label htmlFor="api-secret" className={cn(eyebrow, 'mb-1 flex items-center justify-between')}>
-                  <span>{t('login.secretLabel')} <span className="text-slate-400 normal-case tracking-normal font-medium ml-1">{t('login.secretExample')}</span></span>
-                  <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide' : 'Show'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded outline-none">
-                    {showSecret ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                  </button>
-                </label>
-                <input
-                  id="api-secret"
-                  type={showSecret ? 'text' : 'password'}
-                  value={secret}
-                  onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
-                  onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
-                  placeholder={t('login.secretPlaceholder')}
-                  onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
-                  aria-required="true"
-                  className="w-full h-10 px-3 rounded-md bg-slate-50 dark:bg-slate-800/80 ring-1 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white dark:focus:bg-slate-800 outline-none text-[12.5px] font-mono text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-all"
-                />
-              </div>
+            )}
 
-              {error && (
-                <div role="alert" aria-live="polite" className="rounded-md bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 flex items-start gap-2">
-                  <AlertCircle className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400 mt-0.5 shrink-0" aria-hidden="true" />
-                  <div className="text-[11.5px] text-rose-700 dark:text-rose-300 leading-relaxed">{error}</div>
-                </div>
+            <button
+              type="submit"
+              disabled={loading || !canSubmit}
+              className="w-full h-12 rounded-lg bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed text-white dark:text-slate-900 font-bold text-[13.5px] flex items-center justify-center gap-2 transition-all shadow-md outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : !canSubmit ? (
+                <span>{t('login.submitIdle')}</span>
+              ) : (
+                <>
+                  <span>{t('login.submit')}</span>
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                </>
               )}
+            </button>
 
-              <PrimaryBtn onClick={doLogin} disabled={loading || !canSubmit} className="w-full">
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : !canSubmit ? (
-                  <span>{t('login.submitIdle')}</span>
-                ) : (
-                  <>
-                    <span>{t('login.submit')}</span>
-                    <ArrowRight className="h-4 w-4" aria-hidden="true" />
-                  </>
-                )}
-              </PrimaryBtn>
-
-              {!error && !canSubmit && (
-                <div className="text-[10.5px] text-slate-500 dark:text-slate-400 text-center">
-                  {t('login.idleHint')}
-                </div>
-              )}
+            {/* Subtle hints below button */}
+            <div className="pt-1 flex items-center justify-center gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+              <span className="inline-flex items-center gap-1">
+                <Lock className="h-3 w-3" /> SHA-256
+              </span>
+              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+              <span>Scope-based</span>
+              <span className="text-slate-300 dark:text-slate-700" aria-hidden="true">·</span>
+              <span>Audit log</span>
             </div>
-          </div>
+          </motion.form>
         </div>
       </div>
     </section>
