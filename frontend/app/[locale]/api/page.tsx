@@ -1,14 +1,109 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter, usePathname } from 'next/navigation';
 import {
   Code2, KeyRound, Lock, ShieldCheck, CheckCircle2, ChevronDown, Play,
   Copy, Check, LogOut, Eye, EyeOff, Loader2, Activity, Zap, Infinity as InfinityIcon,
   AlertCircle, Server, ExternalLink, Terminal, BookOpen, Sparkles, ChevronRight,
-  ArrowRight, Search,
+  ArrowRight, Search, Globe,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { locales } from '@/i18n/config';
+
+const LOCALE_LABEL: Record<string, string> = { uz: "O'zbekcha", ru: 'Русский', en: 'English' };
+
+// SVG flags
+function FlagIcon({ code }: { code: string }) {
+  const w = 20, h = 14;
+  if (code === 'uz') return (
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 shrink-0">
+      <rect width="22" height="5.33" y="0" fill="#0099B5" />
+      <rect width="22" height="0.5" y="5.33" fill="#CE1126" />
+      <rect width="22" height="4.83" y="5.83" fill="#fff" />
+      <rect width="22" height="0.5" y="10.66" fill="#CE1126" />
+      <rect width="22" height="5.34" y="11.16" fill="#1EB53A" />
+      <circle cx="5.2" cy="2.6" r="1.4" fill="#fff" />
+      <circle cx="5.9" cy="2.6" r="1.2" fill="#0099B5" />
+    </svg>
+  );
+  if (code === 'ru') return (
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 shrink-0">
+      <rect width="22" height="5.33" y="0" fill="#fff" />
+      <rect width="22" height="5.33" y="5.33" fill="#0039A6" />
+      <rect width="22" height="5.34" y="10.66" fill="#D52B1E" />
+    </svg>
+  );
+  if (code === 'en') return (
+    <svg width={w} height={h} viewBox="0 0 22 16" className="rounded-sm ring-1 ring-slate-200/60 shrink-0">
+      <rect width="22" height="16" fill="#012169" />
+      <path d="M0 0 L22 16 M22 0 L0 16" stroke="#fff" strokeWidth="2.4" />
+      <path d="M0 0 L22 16 M22 0 L0 16" stroke="#C8102E" strokeWidth="1.2" />
+      <rect x="9.2" y="0" width="3.6" height="16" fill="#fff" />
+      <rect x="0" y="6.2" width="22" height="3.6" fill="#fff" />
+      <rect x="9.8" y="0" width="2.4" height="16" fill="#C8102E" />
+      <rect x="0" y="6.8" width="22" height="2.4" fill="#C8102E" />
+    </svg>
+  );
+  return null;
+}
+
+function LangSwitcher() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { locale } = useParams<{ locale: string }>();
+  const [open, setOpen] = useState(false);
+
+  const switchTo = (target: string) => {
+    if (target === locale) { setOpen(false); return; }
+    const segs = pathname.split('/');
+    if (segs[1] && (locales as readonly string[]).includes(segs[1])) {
+      segs[1] = target;
+    } else {
+      segs.splice(1, 0, target);
+    }
+    router.push(segs.join('/') || '/');
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md hover:bg-slate-100 text-[12px] font-semibold text-slate-700 transition-colors"
+      >
+        <FlagIcon code={locale} />
+        <span className="hidden sm:inline uppercase">{locale}</span>
+        <ChevronDown className="h-3 w-3 text-slate-400" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-lg bg-white ring-1 ring-slate-200 shadow-lg overflow-hidden">
+            {locales.map((l) => {
+              const active = l === locale;
+              return (
+                <button
+                  key={l}
+                  onClick={() => switchTo(l)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-3 py-2 text-[12.5px] hover:bg-slate-50 transition-colors',
+                    active && 'bg-indigo-50',
+                  )}
+                >
+                  <FlagIcon code={l} />
+                  <span className="flex-1 text-left text-slate-800">{LOCALE_LABEL[l]}</span>
+                  <span className="uppercase text-[10px] text-slate-400">{l}</span>
+                  {active && <Check className="h-3 w-3 text-indigo-600" />}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════
 // ENDPOINTS CATALOG
@@ -165,40 +260,64 @@ export default function DeveloperApiPage() {
     sessionStorage.removeItem('xt_dev_api_auth');
   };
 
+  const whoamiKey = authedKey?.whoami?.key;
+  const scopes: string[] = whoamiKey?.scopes || [];
+
   return (
     <div className="min-h-screen bg-white text-slate-900 antialiased">
-      {/* Top nav */}
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/85 backdrop-blur-md">
-        <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-sm">
+      {/* Top nav — butun ekran, user info, til, chiqish */}
+      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur-md">
+        <div className="w-full px-4 lg:px-6 h-14 flex items-center justify-between gap-3">
+          {/* Left — brand + page title */}
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 grid place-items-center shadow-sm shrink-0">
               <Code2 className="h-4 w-4 text-white" />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold tracking-tight text-[14.5px]">Xon Tranzaksiyalar</span>
-              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-widest font-bold bg-slate-100 text-slate-600">API · v1</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-bold tracking-tight text-[14.5px] truncate">Developer API</span>
+              <span className="px-1.5 py-0.5 rounded text-[9px] uppercase tracking-widest font-bold bg-slate-100 text-slate-600 shrink-0">v1</span>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {authedKey && (
-              <>
-                <div className="hidden sm:flex items-center gap-1.5 text-[11.5px] text-slate-500 font-mono px-2.5 py-1 rounded-md bg-slate-100">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  {authedKey.keyId.slice(0, 18)}...
+            {/* User info chip — agar kirgan bo'lsa */}
+            {authedKey && whoamiKey && (
+              <div className="hidden md:flex items-center gap-2 ml-3 pl-3 border-l border-slate-200 min-w-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 grid place-items-center text-white shrink-0 ring-2 ring-white shadow-sm">
+                  <span className="text-[11px] font-black">{(whoamiKey.name || 'A').charAt(0).toUpperCase()}</span>
                 </div>
-                <button
-                  onClick={doLogout}
-                  className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md hover:bg-slate-100 text-[12px] font-semibold text-slate-600 transition-colors"
-                >
-                  <LogOut className="h-3.5 w-3.5" /> Chiqish
-                </button>
-              </>
+                <div className="min-w-0">
+                  <div className="text-[12.5px] font-bold text-slate-800 leading-tight truncate max-w-[180px]" title={whoamiKey.name}>
+                    {whoamiKey.name}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-emerald-500" />
+                    <code className="font-mono text-[10px] text-slate-500 truncate max-w-[160px]" title={authedKey.keyId}>
+                      {authedKey.keyId.slice(0, 18)}…
+                    </code>
+                    <span className="text-[10px] text-slate-400">·</span>
+                    <span className="text-[10px] text-slate-500">{scopes.length} scope</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right — language + actions */}
+          <div className="flex items-center gap-1 shrink-0">
+            <LangSwitcher />
+            {authedKey && (
+              <button
+                onClick={doLogout}
+                className="inline-flex items-center gap-1.5 px-2.5 h-8 rounded-md hover:bg-rose-50 text-[12px] font-semibold text-slate-600 hover:text-rose-700 transition-colors"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Chiqish</span>
+              </button>
             )}
             <a
               href={`/${locale}/dashboard`}
               className="hidden sm:inline-flex items-center gap-1 text-[12px] text-slate-500 hover:text-slate-900 px-2.5 h-8 rounded-md hover:bg-slate-100"
             >
-              Panelga <ExternalLink className="h-3 w-3" />
+              <span className="hidden lg:inline">Panelga</span>
+              <ExternalLink className="h-3 w-3" />
             </a>
           </div>
         </div>
@@ -255,7 +374,7 @@ function LandingView({ onLogin }: { onLogin: (auth: { keyId: string; secret: str
         <div className="absolute inset-0 pointer-events-none [background-image:linear-gradient(to_right,rgba(0,0,0,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(0,0,0,0.04)_1px,transparent_1px)] [background-size:32px_32px]" />
         <div className="absolute -top-20 -right-20 w-[500px] h-[500px] bg-gradient-to-br from-indigo-200/40 to-violet-200/40 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative max-w-[1280px] mx-auto px-6 pt-16 pb-20 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center">
+        <div className="relative w-full px-4 lg:px-8 xl:px-12 pt-16 pb-20 grid lg:grid-cols-[1.2fr_1fr] gap-12 items-center max-w-[1700px] mx-auto">
           {/* Left */}
           <div>
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-emerald-50 ring-1 ring-emerald-200 text-emerald-700 text-[11px] font-bold uppercase tracking-widest mb-5">
@@ -369,7 +488,7 @@ function LandingView({ onLogin }: { onLogin: (auth: { keyId: string; secret: str
       </section>
 
       {/* Endpoints showcase */}
-      <section className="max-w-[1280px] mx-auto px-6 py-16">
+      <section className="w-full px-4 lg:px-8 xl:px-12 py-16 max-w-[1700px] mx-auto">
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-slate-500 font-bold mb-2">
             <BookOpen className="h-3.5 w-3.5" /> Endpoint'lar
@@ -445,30 +564,9 @@ function AuthenticatedView({ authed }: { authed: { keyId: string; secret: string
   const current = ENDPOINTS.find((e) => e.path === activeEp);
 
   return (
-    <div className="max-w-[1280px] mx-auto px-6 py-8 grid lg:grid-cols-[280px_1fr] gap-8">
+    <div className="w-full px-4 lg:px-6 xl:px-8 py-6 grid lg:grid-cols-[320px_1fr] gap-6 max-w-[1900px] mx-auto">
       {/* SIDEBAR */}
-      <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-120px)] lg:overflow-y-auto -mx-2 px-2">
-        {/* Whoami */}
-        <div className="rounded-xl ring-1 ring-slate-200 bg-gradient-to-br from-indigo-50 to-violet-50 p-3.5 mb-4">
-          <div className="flex items-center gap-1.5 text-[9.5px] uppercase tracking-widest text-indigo-700 font-bold mb-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            Ulangan
-          </div>
-          <div className="font-black text-slate-900 text-[14px] truncate">{whoami?.name || 'API kalit'}</div>
-          {whoami?.expiresAt && (
-            <div className="text-[10.5px] text-slate-500 mt-0.5">
-              Muddati: {new Date(whoami.expiresAt).toLocaleDateString('ru-RU')}
-            </div>
-          )}
-          <div className="mt-2 flex flex-wrap gap-1">
-            {scopes.map((s: string) => (
-              <span key={s} className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-white ring-1 ring-indigo-200 text-indigo-700">
-                {s}
-              </span>
-            ))}
-          </div>
-        </div>
-
+      <aside className="lg:sticky lg:top-20 lg:h-[calc(100vh-110px)] lg:overflow-y-auto -mx-2 px-2">
         {/* Search */}
         <div className="relative mb-3">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
