@@ -16,13 +16,16 @@ export function TransactionsTabs() {
   const t = useTranslations('nav');
   const { locale } = useParams<{ locale: string }>();
   const pathname = usePathname();
+  const canSeeTransactions = useHasPermission(PERMS.TRANSACTIONS_VIEW);
+  const canSeeStatement = useHasPermission(PERMS.TRANSACTIONS_VIPISKA_VIEW);
+  const canSeeCheck = useHasPermission(PERMS.TRANSACTIONS_SVERKA_VIEW);
   const canSeeChanges = useHasPermission(PERMS.CHANGED_TXN_VIEW);
 
   const tabs = [
-    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null as string | null, show: true },
-    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null as string | null, show: true },
-    { href: '/check',        key: 'check',        icon: Scale,            label: null as string | null, show: true },
-    { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: "O'zgargan to'lovlar", show: canSeeChanges },
+    { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null as string | null, show: canSeeTransactions },
+    { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null as string | null, show: canSeeStatement },
+    { href: '/check',        key: 'check',        icon: Scale,            label: null as string | null, show: canSeeCheck },
+    { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: null as string | null, show: canSeeChanges },
   ].filter((tab) => tab.show);
 
   return (
