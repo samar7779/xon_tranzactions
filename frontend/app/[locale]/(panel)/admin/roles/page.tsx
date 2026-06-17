@@ -57,6 +57,7 @@ const MODULE_GRADIENTS = [
 ];
 
 export default function RolesPage() {
+  const t = useTranslations('roles');
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
@@ -90,18 +91,18 @@ export default function RolesPage() {
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-bold tracking-tight">Rollar</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Rollarni boshqaring va har biriga ruxsatlar bering</div>
+            <div className="text-lg font-bold tracking-tight">{t('title')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('subtitle')}</div>
           </div>
           {canManage && (
             <Button size="sm" onClick={openCreate} className="rounded-full font-semibold">
-              <Plus className="h-3.5 w-3.5 mr-1.5" />Yangi rol
+              <Plus className="h-3.5 w-3.5 mr-1.5" />{t('newRole')}
             </Button>
           )}
         </div>
 
         {(rolesData?.items?.length ?? 0) === 0 ? (
-          <Card><CardContent className="p-0"><EmptyState icon={ShieldCheck} title="Hali rollar yo'q" /></CardContent></Card>
+          <Card><CardContent className="p-0"><EmptyState icon={ShieldCheck} title={t('emptyTitle')} /></CardContent></Card>
         ) : (
           <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
             {rolesData!.items.map((r) => {
@@ -144,6 +145,7 @@ function RoleDialog({
   permTree: PermModule[];
   permGroups: PermGroup[];
 }) {
+  const t = useTranslations('roles');
   const tc = useTranslations('common');
   const qc = useQueryClient();
   const [name, setName] = useState('');
@@ -237,7 +239,7 @@ function RoleDialog({
   // Tree yo'q bo'lsa eski groups'dan tree quramiz (backward compat)
   const tree: PermModule[] = permTree.length > 0
     ? permTree
-    : [{ module: 'Hamma ruxsatlar', pages: permGroups.map((g) => ({ name: g.group, items: g.items })) }];
+    : [{ module: t('allPermissions'), pages: permGroups.map((g) => ({ name: g.group, items: g.items })) }];
 
   // Qidiruv bo'yicha filtrlash — modul/sahifa/action label yoki value mos kelsa qoldiriladi
   const q = permQuery.trim().toLowerCase();
@@ -283,10 +285,10 @@ function RoleDialog({
             <DialogHeader className="text-white">
               <DialogTitle className="text-white flex items-center gap-2">
                 <Shield className="h-5 w-5" />
-                {editing ? `${editing.label}` : 'Yangi rol yaratish'}
+                {editing ? `${editing.label}` : t('createRole')}
               </DialogTitle>
               <DialogDescription className="text-white/80">
-                Rolga nom bering va kerakli ruxsatlarni belgilang
+                {t('dialogDesc')}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -295,7 +297,7 @@ function RoleDialog({
         <div className="p-6 space-y-4">
           {!editing && (
             <div className="space-y-2">
-              <Label>Tizim nomi (lotin, katta harf)</Label>
+              <Label>{t('systemName')}</Label>
               <Input value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="ACCOUNTANT" className="font-mono" />
             </div>
@@ -308,7 +310,7 @@ function RoleDialog({
               className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             >
               {detailsOpen ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ko'rinish nomi va tavsif</span>
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">{t('displayNameAndDesc')}</span>
               {!detailsOpen && label && (
                 <span className="text-xs text-slate-400 dark:text-slate-500 truncate">· {label}</span>
               )}
@@ -316,12 +318,12 @@ function RoleDialog({
             {detailsOpen && (
               <div className="px-3 pb-3 pt-1 space-y-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="space-y-2">
-                  <Label>Ko'rinish nomi</Label>
-                  <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Hisobchi" />
+                  <Label>{t('displayName')}</Label>
+                  <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('displayNamePlaceholder')} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Tavsif</Label>
-                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Ixtiyoriy" />
+                  <Label>{t('description')}</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('optional')} />
                 </div>
               </div>
             )}
@@ -333,11 +335,11 @@ function RoleDialog({
                 <span className="inline-grid place-items-center h-6 w-6 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-sm shadow-indigo-500/30">
                   <Lock className="h-3.5 w-3.5" />
                 </span>
-                <span>Ruxsatlar</span>
-                <span className="hidden sm:inline text-[11px] font-normal text-slate-400 dark:text-slate-500">modul · sahifa · action</span>
+                <span>{t('permissions')}</span>
+                <span className="hidden sm:inline text-[11px] font-normal text-slate-400 dark:text-slate-500">{t('permHint')}</span>
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-normal tabular-nums">
-                <span className="font-bold text-indigo-700 dark:text-indigo-300">{permissions.size}</span> ta belgilangan
+                <span className="font-bold text-indigo-700 dark:text-indigo-300">{permissions.size}</span> {t('selectedSuffix')}
               </span>
             </Label>
 
@@ -348,7 +350,7 @@ function RoleDialog({
                 <Input
                   value={permQuery}
                   onChange={(e) => setPermQuery(e.target.value)}
-                  placeholder="Ruxsat qidirish — modul, sahifa yoki kalit..."
+                  placeholder={t('permSearchPlaceholder')}
                   className="pl-9 pr-9 h-9"
                 />
                 {permQuery && (
@@ -360,11 +362,11 @@ function RoleDialog({
               </div>
               <Button type="button" variant="outline" size="sm" className="h-9 gap-1.5 shrink-0"
                 onClick={() => bulkVisible(true)}>
-                <CheckCheck className="h-4 w-4" /> Hammasi
+                <CheckCheck className="h-4 w-4" /> {tc('all')}
               </Button>
               <Button type="button" variant="ghost" size="sm" className="h-9 gap-1.5 shrink-0 text-slate-500"
                 onClick={() => bulkVisible(false)}>
-                <X className="h-4 w-4" /> Tozalash
+                <X className="h-4 w-4" /> {tc('clear')}
               </Button>
             </div>
 
@@ -372,7 +374,7 @@ function RoleDialog({
               {filteredTree.length === 0 && (
                 <div className="flex flex-col items-center justify-center gap-2 py-16 text-slate-400 dark:text-slate-500">
                   <Search className="h-8 w-8 opacity-40" />
-                  <span className="text-sm">«{permQuery}» bo'yicha ruxsat topilmadi</span>
+                  <span className="text-sm">{t('permNotFound', { q: permQuery })}</span>
                 </div>
               )}
               {filteredTree.map((mod, mi) => {
@@ -408,7 +410,7 @@ function RoleDialog({
                         className="flex flex-col items-start flex-1 min-w-0 text-left">
                         <span className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate w-full">{mod.module}</span>
                         <span className="text-[11px] text-slate-400 dark:text-slate-500 flex items-center gap-1">
-                          <FolderOpen className="h-3 w-3" /> {mod.pages.length} ta sahifa
+                          <FolderOpen className="h-3 w-3" /> {t('pagesCount', { n: mod.pages.length })}
                         </span>
                       </button>
                       <span className={cn(
@@ -417,7 +419,7 @@ function RoleDialog({
                       )}>{modCount}/{allItems.length}</span>
                       <button type="button"
                         onClick={() => toggleModule(mod)}
-                        title="Modul ruxsatlarini belgilash"
+                        title={t('selectModulePerms')}
                         className={cn(
                           "w-5 h-5 rounded-md grid place-items-center text-white shrink-0 transition-colors",
                           modAll ? "bg-indigo-600" : modSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600",
@@ -452,7 +454,7 @@ function RoleDialog({
                                 </button>
                                 <button type="button"
                                   onClick={() => toggleGroup(p.items)}
-                                  title="Sahifani belgilash"
+                                  title={t('selectPage')}
                                   className={cn(
                                     "w-4 h-4 rounded grid place-items-center text-white text-[9px] transition-colors shrink-0",
                                     pageAll ? "bg-indigo-600" : pageSome ? "bg-amber-500" : "bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600",
@@ -549,6 +551,8 @@ function ProRoleCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const t = useTranslations('roles');
+  const tc = useTranslations('common');
   // Permissions'larni modul bo'yicha guruhlash (visualizatsiya uchun)
   const byModule: Record<string, number> = {};
   r.permissions.forEach((p) => {
@@ -610,17 +614,17 @@ function ProRoleCard({
                 <span className="text-[16px] font-bold tracking-tight text-slate-900 dark:text-slate-100 truncate">{r.label}</span>
                 {isSuper && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-200 dark:ring-amber-900 px-1.5 py-0.5 rounded-full">
-                    <Sparkles className="h-2.5 w-2.5" /> Super
+                    <Sparkles className="h-2.5 w-2.5" /> {t('badgeSuper')}
                   </span>
                 )}
                 {r.isSystem && !isSuper && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-1.5 py-0.5 rounded-full">
-                    <Lock className="h-2.5 w-2.5" /> System
+                    <Lock className="h-2.5 w-2.5" /> {t('badgeSystem')}
                   </span>
                 )}
                 {!r.isSystem && (
                   <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-1.5 py-0.5 rounded-full">
-                    <Activity className="h-2.5 w-2.5" /> Custom
+                    <Activity className="h-2.5 w-2.5" /> {t('badgeCustom')}
                   </span>
                 )}
               </div>
@@ -632,7 +636,7 @@ function ProRoleCard({
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={onEdit}
-                  title="Tahrirlash"
+                  title={tc('edit')}
                   className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-indigo-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -640,7 +644,7 @@ function ProRoleCard({
                 {!r.isSystem && (
                   <button
                     onClick={onDelete}
-                    title="O'chirish"
+                    title={tc('delete')}
                     className="w-8 h-8 rounded-lg grid place-items-center bg-slate-100 dark:bg-slate-800 hover:bg-rose-600 text-slate-600 dark:text-slate-300 hover:text-white transition-colors"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -654,7 +658,7 @@ function ProRoleCard({
           {r.description ? (
             <p className="text-[12px] text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mb-4 min-h-[32px]">{r.description}</p>
           ) : (
-            <p className="text-[12px] text-slate-400 dark:text-slate-500 italic mb-4 min-h-[32px]">Tavsif yo'q</p>
+            <p className="text-[12px] text-slate-400 dark:text-slate-500 italic mb-4 min-h-[32px]">{t('noDescription')}</p>
           )}
 
           {/* Metrics grid: coverage ring + stats */}
@@ -684,7 +688,7 @@ function ProRoleCard({
                 <div className="absolute inset-0 grid place-items-center">
                   <div className="text-center">
                     <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200 tabular-nums leading-none">{coverage}%</div>
-                    <div className="text-[8px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">qamrov</div>
+                    <div className="text-[8px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mt-0.5">{t('coverage')}</div>
                   </div>
                 </div>
               </div>
@@ -695,7 +699,7 @@ function ProRoleCard({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                   <Zap className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
-                  Ruxsatlar
+                  {t('permissions')}
                 </span>
                 <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
                   {r.permissions.length}<span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">/{totalPerms}</span>
@@ -704,7 +708,7 @@ function ProRoleCard({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                   <Users className="h-3 w-3 text-emerald-500 dark:text-emerald-400" />
-                  Foydalanuvchi
+                  {t('users')}
                 </span>
                 <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
                   {r._count?.users ?? 0}
@@ -713,7 +717,7 @@ function ProRoleCard({
               <div className="flex items-center justify-between">
                 <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-300">
                   <Eye className="h-3 w-3 text-cyan-500 dark:text-cyan-400" />
-                  Modul
+                  {t('modules')}
                 </span>
                 <span className="font-bold tabular-nums text-[13px] text-slate-900 dark:text-slate-100">
                   {Object.keys(byModule).length}

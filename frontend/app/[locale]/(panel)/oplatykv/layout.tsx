@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +14,7 @@ const TABS = [
 ];
 
 export default function OplatyKvLayout({ children }: { children: React.ReactNode }) {
+  const t = useTranslations('oplatykv');
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
   const activeKey = (() => {
@@ -25,7 +27,7 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
     <>
       <Topbar
         title="ОплатыКв"
-        subtitle="Kvartira to'lovlari · CRM va Bank sverkasi"
+        subtitle={t('subtitle')}
       />
       <div className="px-6 lg:px-8 pt-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-700 sticky top-0 z-30">
         <nav className="flex items-center gap-1" role="tablist">

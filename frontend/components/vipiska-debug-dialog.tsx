@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Search, Loader2, X, AlertTriangle, Database,
@@ -43,6 +44,8 @@ interface VipiskaDebugResult {
 export function VipiskaDebugDialog({
   open, onClose,
 }: { open: boolean; onClose: () => void }) {
+  const t = useTranslations('vipiskaDebug');
+  const tc = useTranslations('common');
   const [accountId, setAccountId] = useState('');
   const [accountSearch, setAccountSearch] = useState('');
   const [accountOpen, setAccountOpen] = useState(false);
@@ -66,12 +69,12 @@ export function VipiskaDebugDialog({
     }, { timeout: 60_000 }),
     onSuccess: (r) => {
       setResult(r);
-      if (r?.ok) toast.success(`${r.totals?.matched ?? 0}/${r.totals?.fetched ?? 0} ta qator topildi`);
-      else toast.error(r?.error || 'Xato');
+      if (r?.ok) toast.success(t('rowsFound', { matched: r.totals?.matched ?? 0, fetched: r.totals?.fetched ?? 0 }));
+      else toast.error(r?.error || tc('error'));
     },
     onError: (e: any) => {
-      setResult({ ok: false, error: e?.message || "So'rov xato" });
-      toast.error(e?.message || "So'rov xato");
+      setResult({ ok: false, error: e?.message || t('requestError') });
+      toast.error(e?.message || t('requestError'));
     },
   });
 
@@ -94,12 +97,12 @@ export function VipiskaDebugDialog({
               <Search className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Bank API</div>
-              <div className="text-xl font-black tracking-tight">Vipiska tekshiruvi</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('bankApi')}</div>
+              <div className="text-xl font-black tracking-tight">{t('title')}</div>
             </div>
           </div>
           <div className="text-[11.5px] text-white/80 mt-2">
-            Vipiska Excel'da bor lekin DB'da yo'q tranzaksiyalarni bank API orqali tekshirish (DB ga yozilmaydi)
+            {t('description')}
           </div>
         </div>
 
@@ -108,10 +111,10 @@ export function VipiskaDebugDialog({
             {/* Searchable account combobox — kengaytirildi (6 ustun) */}
             <div className="relative md:col-span-6">
               <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 flex items-center justify-between">
-                <span>Bank hisobi * (qidirish: raqami yoki ism)</span>
+                <span>{t('accountLabel')}</span>
                 {accountId && (
                   <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold normal-case tracking-normal">
-                    ✓ tanlandi
+                    ✓ {t('selected')}
                   </span>
                 )}
               </Label>
@@ -126,7 +129,7 @@ export function VipiskaDebugDialog({
                     if (accountId) setAccountId('');
                   }}
                   onFocus={() => setAccountOpen(true)}
-                  placeholder={accountsQuery.isLoading ? 'Yuklanmoqda...' : "Qidirish: '29896', 'XONSAROY'..."}
+                  placeholder={accountsQuery.isLoading ? tc('loading') : t('searchPlaceholder')}
                   className={cn(
                     "h-10 pl-9 text-[12.5px]",
                     accountId ? "pr-9 text-ellipsis" : "pr-3",
@@ -142,7 +145,7 @@ export function VipiskaDebugDialog({
                       setAccountOpen(true);
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-                    title="Tozalash"
+                    title={tc('clear')}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -167,7 +170,7 @@ export function VipiskaDebugDialog({
                       if (filtered.length === 0) {
                         return (
                           <div className="px-3 py-4 text-center text-[12px] text-slate-500 dark:text-slate-400">
-                            Hech narsa topilmadi
+                            {t('nothingFound')}
                           </div>
                         );
                       }
@@ -204,7 +207,7 @@ export function VipiskaDebugDialog({
 
             <div className="md:col-span-2">
               <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                Sana *
+                {t('dateLabel')}
               </Label>
               <Input
                 type="date"
@@ -216,7 +219,7 @@ export function VipiskaDebugDialog({
 
             <div className="md:col-span-4">
               <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                № док (vergul bilan)
+                {t('docNumbers')}
               </Label>
               <Input
                 type="text"
@@ -235,11 +238,11 @@ export function VipiskaDebugDialog({
               className="h-10 px-5 gap-2 bg-gradient-to-br from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
             >
               {fetchMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              Bank API'dan tekshirish
+              {t('checkFromBank')}
             </Button>
             {result && (
               <Button variant="ghost" onClick={() => setResult(null)} className="text-slate-500 dark:text-slate-400">
-                <X className="h-4 w-4 mr-1" /> Tozalash
+                <X className="h-4 w-4 mr-1" /> {tc('clear')}
               </Button>
             )}
           </div>
@@ -252,15 +255,15 @@ export function VipiskaDebugDialog({
                 </div>
                 <div className="flex-1 grid grid-cols-3 gap-3 text-[12px]">
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Bank API javobi</div>
-                    <div className="text-[14px] font-black text-slate-800 dark:text-slate-200">{result.totals?.fetched ?? 0} ta qator</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">{t('bankResponse')}</div>
+                    <div className="text-[14px] font-black text-slate-800 dark:text-slate-200">{t('rowsCount', { n: result.totals?.fetched ?? 0 })}</div>
                   </div>
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Filtr natijasi</div>
-                    <div className="text-[14px] font-black text-cyan-700 dark:text-cyan-300">{result.totals?.matched ?? 0} ta moslik</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">{t('filterResults')}</div>
+                    <div className="text-[14px] font-black text-cyan-700 dark:text-cyan-300">{t('matchCount', { n: result.totals?.matched ?? 0 })}</div>
                   </div>
                   <div>
-                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">Bank</div>
+                    <div className="text-[9.5px] uppercase font-bold text-slate-500 dark:text-slate-400">{tc('bank')}</div>
                     <div className="text-[12.5px] font-bold text-slate-700 dark:text-slate-300">{result.bank?.name}</div>
                   </div>
                 </div>
@@ -268,7 +271,7 @@ export function VipiskaDebugDialog({
 
               {(result.errors?.length || 0) > 0 && (
                 <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300">
-                  <b>Xato(lar):</b> {result.errors!.join(' · ')}
+                  <b>{t('errorsLabel')}</b> {result.errors!.join(' · ')}
                 </div>
               )}
 
@@ -276,10 +279,10 @@ export function VipiskaDebugDialog({
                 <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-4 py-6 text-center">
                   <AlertTriangle className="h-8 w-8 text-amber-600 dark:text-amber-400 mx-auto mb-2" />
                   <div className="text-[13px] font-bold text-amber-800 dark:text-amber-300">
-                    Bank API'da bunday qator topilmadi
+                    {t('noRowsInBank')}
                   </div>
                   <div className="text-[11.5px] text-amber-700 dark:text-amber-300 mt-1">
-                    Vipiska Excel va bank API ma'lumotlari mos kelmagan bo'lishi mumkin
+                    {t('mismatch')}
                   </div>
                 </div>
               ) : (
@@ -287,12 +290,12 @@ export function VipiskaDebugDialog({
                   <table className="w-full text-[11.5px]">
                     <thead className="bg-slate-100 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-300">
                       <tr>
-                        <th className="px-3 py-2 text-left">№ док</th>
-                        <th className="px-3 py-2 text-left">Sana</th>
-                        <th className="px-3 py-2 text-right">Summa</th>
-                        <th className="px-3 py-2 text-center">Yo'nalish</th>
-                        <th className="px-3 py-2 text-left">Yuboruvchi</th>
-                        <th className="px-3 py-2 text-left">Composite ID</th>
+                        <th className="px-3 py-2 text-left">{t('docNumberHeader')}</th>
+                        <th className="px-3 py-2 text-left">{tc('date')}</th>
+                        <th className="px-3 py-2 text-right">{tc('amount')}</th>
+                        <th className="px-3 py-2 text-center">{t('directionHeader')}</th>
+                        <th className="px-3 py-2 text-left">{t('senderHeader')}</th>
+                        <th className="px-3 py-2 text-left">{t('compositeIdHeader')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -308,7 +311,7 @@ export function VipiskaDebugDialog({
                               'px-1.5 py-0.5 rounded text-[9.5px] font-bold',
                               it.direction === 'IN' ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
                             )}>
-                              {it.direction === 'IN' ? 'KIRIM' : 'CHIQIM'}
+                              {it.direction === 'IN' ? t('inflow') : t('outflow')}
                             </span>
                           </td>
                           <td className="px-3 py-2 truncate max-w-[180px]" title={it.sender?.name || ''}>
@@ -319,10 +322,10 @@ export function VipiskaDebugDialog({
                             <button
                               onClick={() => {
                                 navigator.clipboard.writeText(it.compositeId);
-                                toast.success('Composite ID nusxalandi');
+                                toast.success(t('compositeIdCopied'));
                               }}
                               className="ml-1 text-cyan-600 dark:text-cyan-400 hover:text-cyan-800 dark:hover:text-cyan-300"
-                              title="Nusxalash"
+                              title={tc('copy')}
                             >
                               📋
                             </button>
@@ -339,8 +342,8 @@ export function VipiskaDebugDialog({
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
               <X className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
               <div className="text-[13px] text-rose-800 dark:text-rose-300">
-                <div className="font-bold mb-0.5">Xato</div>
-                <div className="text-rose-700 dark:text-rose-300">{result.error || "Noma'lum xato"}</div>
+                <div className="font-bold mb-0.5">{tc('error')}</div>
+                <div className="text-rose-700 dark:text-rose-300">{result.error || t('unknownError')}</div>
               </div>
             </div>
           )}

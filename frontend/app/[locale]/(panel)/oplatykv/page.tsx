@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import * as React from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -69,10 +70,11 @@ function getSource(it: OplataKvItem): 'manual' | 'excel' | 'transaction' {
   return 'manual';
 }
 
-const SOURCE_LABEL: Record<string, string> = {
-  manual:      "Qo'lda",
-  excel:       'Excel',
-  transaction: 'Tranzaksiya',
+// Manba badge matni — 'excel' texnik nom, qolganlari t() orqali tarjima qilinadi
+const SOURCE_LABEL_KEY: Record<string, string | null> = {
+  manual:      'sourceManual',
+  excel:       null, // 'Excel' — texnik nom, tarjima qilinmaydi
+  transaction: 'sourceTransaction',
 };
 const SOURCE_CLS: Record<string, string> = {
   manual:      'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
@@ -127,6 +129,8 @@ function amountCls(v: string | number | null | undefined): string {
 }
 
 export default function OplataKvPage() {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const user = useAuth((s) => s.user);
   // Granular permissions — har bir action faqat aniq permission'ga bog'liq.
@@ -218,10 +222,10 @@ export default function OplataKvPage() {
     try {
       await navigator.clipboard.writeText(id);
       setCopiedId(id);
-      toast.success(`ID nusxalandi: ${id.slice(0, 12)}…`);
+      toast.success(t('idCopied', { id: `${id.slice(0, 12)}…` }));
       setTimeout(() => setCopiedId((prev) => (prev === id ? null : prev)), 1500);
     } catch {
-      toast.error('Nusxalashda xato');
+      toast.error(tc('copyError'));
     }
   };
 
@@ -232,9 +236,9 @@ export default function OplataKvPage() {
     try {
       const ts = new Date().toISOString().slice(0, 10);
       await apiDownload(`/oplata-kv/export?${qsForExport}`, `oplaty-kv-${ts}.xlsx`);
-      toast.success('Excel yuklab olindi');
+      toast.success(t('excelDownloaded'));
     } catch (e: any) {
-      toast.error(e?.message || 'Excel yuklab olishda xato');
+      toast.error(e?.message || t('excelDownloadError'));
     } finally {
       setExporting(null);
     }
@@ -245,9 +249,9 @@ export default function OplataKvPage() {
     try {
       const ts = new Date().toISOString().slice(0, 10);
       await apiDownload(`/oplata-kv/export-json?${qsForExport}`, `oplaty-kv-${ts}.json`);
-      toast.success('JSON yuklab olindi');
+      toast.success(t('jsonDownloaded'));
     } catch (e: any) {
-      toast.error(e?.message || 'JSON yuklab olishda xato');
+      toast.error(e?.message || t('jsonDownloadError'));
     } finally {
       setExporting(null);
     }
@@ -410,7 +414,7 @@ export default function OplataKvPage() {
                 />
                 <TypewriterPlaceholder
                   visible={!q}
-                  phrases={["Дог № qidirish...", "Mijoz nomi...", "Obyekt...", "ID...", "Summa..."]}
+                  phrases={[t('searchContract'), t('searchClient'), t('searchObject'), t('searchId'), t('searchAmount')]}
                 />
                 {q && (
                   <button
@@ -426,7 +430,7 @@ export default function OplataKvPage() {
               <button
                 onClick={() => setAktSverkaOpen(true)}
                 className="h-10 w-10 rounded-xl bg-slate-50/60 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center transition-colors"
-                title="Akt Sverka — shartnoma bo'yicha to'lov tarixi"
+                title={t('aktSverkaTitle')}
               >
                 <FileCheck2 className="h-4 w-4" />
               </button>
@@ -443,7 +447,7 @@ export default function OplataKvPage() {
                     )}
                     title={(dateFrom || dateTo)
                       ? `${dateFrom ? fmtDateRu(dateFrom) : '…'} — ${dateTo ? fmtDateRu(dateTo) : '…'}`
-                      : "Sana oralig'i"}
+                      : t('dateRange')}
                   >
                     <Calendar className="h-4 w-4" />
                     {(dateFrom || dateTo) && (
@@ -452,9 +456,9 @@ export default function OplataKvPage() {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="p-3 w-[280px] space-y-2">
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Sana oralig'i</div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{t('dateRange')}</div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Boshlanish</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{t('rangeStart')}</label>
                     <Input
                       type="date"
                       className="h-9 rounded-lg"
@@ -463,7 +467,7 @@ export default function OplataKvPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Tugash</label>
+                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{t('rangeEnd')}</label>
                     <Input
                       type="date"
                       className="h-9 rounded-lg"
@@ -476,7 +480,7 @@ export default function OplataKvPage() {
                       className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                       onClick={() => { setDateFrom(''); setDateTo(''); }}
                     >
-                      Tozalash
+                      {tc('clear')}
                     </button>
                   )}
                 </DropdownMenuContent>
@@ -497,7 +501,7 @@ export default function OplataKvPage() {
                     ? 'bg-indigo-600 text-white ring-indigo-700 hover:bg-indigo-700 shadow-md shadow-indigo-500/30'
                     : 'bg-slate-50/60 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
                 )}
-                title={columnFilterMode ? "Ustun filter rejimini o'chirish" : "Ustun filter rejimini yoqish"}
+                title={columnFilterMode ? t('columnFilterDisable') : t('columnFilterEnable')}
               >
                 <FilterIcon className="h-4 w-4" />
                 {activeColumnFiltersCount > 0 && (
@@ -513,7 +517,7 @@ export default function OplataKvPage() {
                   <DropdownMenuTrigger asChild>
                     <button
                       className="h-10 w-10 rounded-xl bg-slate-50/60 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 grid place-items-center transition-colors"
-                      title="Yuklab olish"
+                      title={tc('download')}
                     >
                       {exporting
                         ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400" />
@@ -525,21 +529,21 @@ export default function OplataKvPage() {
                       <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                       <div className="flex-1">
                         <div className="text-[13px] font-semibold">Excel (.xlsx)</div>
-                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Filtr bo'yicha barchasi</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('filterAllByFilter')}</div>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={downloadJson} className="gap-2 cursor-pointer">
                       <FileJson className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                       <div className="flex-1">
                         <div className="text-[13px] font-semibold">JSON (.json)</div>
-                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Filtr bo'yicha barchasi</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('filterAllByFilter')}</div>
                       </div>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={printPdf} className="gap-2 cursor-pointer">
                       <Printer className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
                       <div className="flex-1">
-                        <div className="text-[13px] font-semibold">Chop etish / PDF</div>
-                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Brauzer print dialogi</div>
+                        <div className="text-[13px] font-semibold">{t('printPdf')}</div>
+                        <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('browserPrintDialog')}</div>
                       </div>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -550,7 +554,7 @@ export default function OplataKvPage() {
                 <button
                   onClick={() => setAddChoiceOpen(true)}
                   className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white shadow-md grid place-items-center transition-colors"
-                  title="Yangi qator"
+                  title={t('newRow')}
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -589,7 +593,7 @@ export default function OplataKvPage() {
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
-                  <ColumnTh label="Manba" column="source"
+                  <ColumnTh label={t('columnManba')} column="source"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
@@ -607,7 +611,7 @@ export default function OplataKvPage() {
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
                   <tr><td colSpan={10} className="p-12 text-center text-slate-400 dark:text-slate-500">
-                    Hech qanday qator topilmadi
+                    {t('noRowsFound')}
                   </td></tr>
                 )}
                 {items.map((it) => {
@@ -622,9 +626,9 @@ export default function OplataKvPage() {
                       {it.crmXato ? (
                         <span
                           className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"
-                          title="CRM da topilmadi — Tranzaksiyada to'g'rilang (Qo'lda yoki Ariza)"
+                          title={t('crmNotFoundFixTx')}
                         >
-                          XATO
+                          {t('badgeError')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1.5">
@@ -639,17 +643,17 @@ export default function OplataKvPage() {
                           {it.contractSource === 'ariza' && (
                             <span
                               className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-1 ring-violet-200 dark:ring-violet-900"
-                              title="Tranzaksiyada Ariza orqali kiritilgan (hujjat biriktirilgan)"
+                              title={t('arizaBadgeTitle')}
                             >
-                              ARIZA
+                              {t('badgeAriza')}
                             </span>
                           )}
                           {it.contractSource === 'manual' && (
                             <span
                               className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900"
-                              title="Tranzaksiyada qo'lda kiritilgan (CRM tekshirilmagan)"
+                              title={t('manualBadgeTitle')}
                             >
-                              QO'LDA
+                              {t('badgeManual')}
                             </span>
                           )}
                         </span>
@@ -674,12 +678,12 @@ export default function OplataKvPage() {
                     <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
                     <td className="px-3 py-2.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
-                        {SOURCE_LABEL[src]}
+                        {SOURCE_LABEL_KEY[src] ? t(SOURCE_LABEL_KEY[src]!) : 'Excel'}
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                       <button
-                        title={`ID: ${it.id}`}
+                        title={t('copyIdTitle', { id: it.id })}
                         onClick={() => copyId(it.id)}
                         className={cn(
                           'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors',
@@ -702,7 +706,10 @@ export default function OplataKvPage() {
 
           {/* Pagination footer */}
           <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
-            <div>Jami: <b className="text-slate-700 dark:text-slate-300">{total.toLocaleString('ru-RU')}</b> qator</div>
+            <div>{t.rich('totalRows', {
+              n: total.toLocaleString('ru-RU'),
+              b: (chunks) => <b className="text-slate-700 dark:text-slate-300">{chunks}</b>,
+            })}</div>
             <div className="flex items-center gap-2">
               <Select value={String(perPage)} onValueChange={(v) => setPerPage(Number(v))}>
                 <SelectTrigger className="h-8 w-[80px] text-[12px]"><SelectValue /></SelectTrigger>
@@ -869,6 +876,7 @@ function ColumnTh({
   setOpenFilterColumn: (c: string | null) => void;
   activeFilterParams: string;
 }) {
+  const t = useTranslations('oplatykv');
   const activeCount = columnFilters[column]?.size || 0;
   const isOpen = openFilterColumn === column;
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -907,7 +915,7 @@ function ColumnTh({
                 ? 'bg-indigo-600 text-white hover:bg-indigo-700'
                 : 'text-slate-400 dark:text-slate-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300',
             )}
-            title={activeCount > 0 ? `${activeCount} tanlangan` : 'Filter'}
+            title={activeCount > 0 ? t('filterSelectedCount', { n: activeCount }) : t('filterLabel')}
           >
             <FilterIcon className="h-3 w-3" />
             {activeCount > 0 && (
@@ -952,6 +960,8 @@ function ColumnFilterPopover({
   onChange: (next: Set<string>) => void;
   onClose: () => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -1016,14 +1026,14 @@ function ColumnFilterPopover({
       onClick={(e) => e.stopPropagation()}
     >
       <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2 px-1">
-        Filter: <span className="text-slate-800 dark:text-slate-200">{label}</span>
+        {t('filterLabel')}: <span className="text-slate-800 dark:text-slate-200">{label}</span>
       </div>
       <div className="relative">
         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
         <Input
           autoFocus
           className="pl-7 h-8 text-[12px] rounded-lg"
-          placeholder="Qidirish..."
+          placeholder={tc('search')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -1032,11 +1042,11 @@ function ColumnFilterPopover({
         {isLoading ? (
           <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
-            Yuklanmoqda...
+            {tc('loading')}
           </div>
         ) : values.length === 0 ? (
           <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
-            Qiymat topilmadi
+            {t('valueNotFound')}
           </div>
         ) : (
           [...tanlangan, ...qolgan].map((v) => (
@@ -1066,16 +1076,16 @@ function ColumnFilterPopover({
             onClick={() => onChange(new Set())}
             className="text-rose-600 dark:text-rose-400 text-[11.5px] font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1 rounded-md transition-colors"
           >
-            Tozalash ({selected.size})
+            {t('clearCount', { n: selected.size })}
           </button>
         ) : (
-          <span className="text-[11px] text-slate-400 dark:text-slate-500">{values.length} ta variant</span>
+          <span className="text-[11px] text-slate-400 dark:text-slate-500">{t('variantCount', { n: values.length })}</span>
         )}
         <button
           onClick={onClose}
           className="ml-auto bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded-md text-[11.5px] font-semibold transition-colors"
         >
-          Tayyor
+          {t('ready')}
         </button>
       </div>
     </div>,
@@ -1095,6 +1105,8 @@ function AktSverkaDialog({
   copiedId: string | null;
   onRowClick: (it: OplataKvItem) => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
@@ -1172,9 +1184,9 @@ function AktSverkaDialog({
       const p = new URLSearchParams();
       p.set('contractNos', selectedContract);
       await apiDownload(`/oplata-kv/export?${p.toString()}`, `akt-sverka-${selectedContract}-${new Date().toISOString().slice(0, 10)}.xlsx`);
-      toast.success('Excel yuklab olindi');
+      toast.success(t('excelDownloaded'));
     } catch (e: any) {
-      toast.error(e?.message || 'Excel xato');
+      toast.error(e?.message || t('excelError'));
     }
   };
 
@@ -1231,8 +1243,8 @@ function AktSverkaDialog({
               <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">
                 Akt Sverka
               </div>
-              <h2 className="text-2xl font-black tracking-tight">Shartnoma bo'yicha to'lov tarixi</h2>
-              <p className="text-[12px] text-white/85 mt-0.5">Shartnoma raqamini tanlang — barcha to'lovlar ko'rsatiladi</p>
+              <h2 className="text-2xl font-black tracking-tight">{t('aktSverkaHeading')}</h2>
+              <p className="text-[12px] text-white/85 mt-0.5">{t('aktSverceHeroSubtitle')}</p>
             </div>
           </div>
         </div>
@@ -1240,7 +1252,7 @@ function AktSverkaDialog({
         {/* SEARCH (autocomplete) — print'da yashirin */}
         <div className="px-7 py-5 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 shrink-0 print:hidden">
           <label className="block text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2">
-            Shartnoma raqami
+            {t('contractNumberLabel')}
           </label>
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
@@ -1248,7 +1260,7 @@ function AktSverkaDialog({
               <Input
                 autoFocus
                 className="pl-10 h-12 rounded-xl text-[14px] font-mono font-semibold"
-                placeholder="Дог № yozish..."
+                placeholder={t('contractNumberPlaceholder')}
                 value={selectedContract || search}
                 onFocus={() => setSuggestOpen(true)}
                 onChange={(e) => {
@@ -1261,7 +1273,7 @@ function AktSverkaDialog({
                 <button
                   onClick={() => { setSearch(''); setSelectedContract(null); setSuggestOpen(false); setCrmMode(false); }}
                   className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-rose-500 hover:text-white transition-colors z-10"
-                  title="Tozalash"
+                  title={tc('clear')}
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
@@ -1273,11 +1285,11 @@ function AktSverkaDialog({
                   {suggestQuery.isLoading ? (
                     <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
                       <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1" />
-                      Yuklanmoqda...
+                      {tc('loading')}
                     </div>
                   ) : (suggestQuery.data?.values?.length || 0) === 0 ? (
                     <div className="py-6 text-center text-[12px] text-slate-400 dark:text-slate-500">
-                      Shartnoma topilmadi
+                      {t('contractNotFound')}
                     </div>
                   ) : (
                     suggestQuery.data!.values.slice(0, 50).map((v) => (
@@ -1309,7 +1321,7 @@ function AktSverkaDialog({
                     ? 'bg-gradient-to-br from-fuchsia-600 to-pink-600 ring-fuchsia-700 text-white shadow-md shadow-fuchsia-500/30 hover:scale-105'
                     : 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-50 dark:hover:bg-fuchsia-950/40 hover:scale-105',
               )}
-              title="CRM Sverka — Transactions bilan taqqoslash"
+              title={t('crmSverkaTitle')}
             >
               <GitCompareArrows className="h-5 w-5" />
             </button>
@@ -1330,19 +1342,19 @@ function AktSverkaDialog({
               <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/30 grid place-items-center mx-auto mb-3">
                 <FileCheck2 className="h-8 w-8 text-amber-600 dark:text-amber-400" />
               </div>
-              <div className="text-[15px] font-bold text-slate-700 dark:text-slate-300">Shartnoma tanlang</div>
+              <div className="text-[15px] font-bold text-slate-700 dark:text-slate-300">{t('selectContract')}</div>
               <p className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                Yuqoridagi maydonga shartnoma raqamini yozing yoki ro'yxatdan tanlang
+                {t('selectContractHint')}
               </p>
             </div>
           ) : contractQuery.isLoading ? (
             <div className="px-7 py-16 text-center text-slate-400 dark:text-slate-500">
               <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-              Yuklanmoqda...
+              {tc('loading')}
             </div>
           ) : data && data.items.length === 0 ? (
             <div className="px-7 py-12 text-center text-slate-400 dark:text-slate-500">
-              Bu shartnoma bo'yicha to'lovlar topilmadi
+              {t('noPaymentsForContract')}
             </div>
           ) : data ? (
             <div className="px-7 py-5 space-y-5">
@@ -1361,11 +1373,11 @@ function AktSverkaDialog({
                   <div className="text-[15px] font-black text-sky-900 dark:text-sky-300 tabular-nums">{formatMoney(data.sums.monthlyAmount, '')}</div>
                 </div>
                 <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400 mb-1">Жами</div>
-                  <div className="text-[15px] font-black text-emerald-900 dark:text-emerald-300 tabular-nums">{data.count} <span className="text-xs text-emerald-500 dark:text-emerald-400">ta</span></div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400 mb-1">{t('totalShort')}</div>
+                  <div className="text-[15px] font-black text-emerald-900 dark:text-emerald-300 tabular-nums">{data.count} <span className="text-xs text-emerald-500 dark:text-emerald-400">{t('countSuffix')}</span></div>
                 </div>
                 <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5 col-span-2 sm:col-span-1">
-                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 mb-1">Obyekt</div>
+                  <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300 mb-1">{t('objectLabel')}</div>
                   <div className="text-[13px] font-bold text-slate-800 dark:text-slate-200 truncate" title={data.meta?.object || '—'}>
                     {data.meta?.object || '—'}
                   </div>
@@ -1376,18 +1388,18 @@ function AktSverkaDialog({
               <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
                 <div className="bg-slate-50 dark:bg-slate-900 px-4 py-2.5 flex items-center justify-between border-b border-slate-200 dark:border-slate-700">
                   <div className="text-[11px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">
-                    To'lovlar tarixi · <span className="text-slate-400 dark:text-slate-500 normal-case">{data.count} ta</span>
+                    {t('paymentsHistory')} · <span className="text-slate-400 dark:text-slate-500 normal-case">{data.count} {t('countSuffix')}</span>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12.5px]">
                     <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-wider">
                       <tr>
-                        <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                        <th className="px-3 py-2 text-left font-semibold">{tc('date')}</th>
                         <th className="px-3 py-2 text-right font-semibold">Сумма</th>
                         <th className="px-3 py-2 text-right font-semibold">1 взнос</th>
                         <th className="px-3 py-2 text-right font-semibold">Ежемес.</th>
-                        <th className="px-3 py-2 text-left font-semibold">Tip</th>
+                        <th className="px-3 py-2 text-left font-semibold">{t('typeShort')}</th>
                         <th className="px-3 py-2 text-center font-semibold print:hidden">ID</th>
                       </tr>
                     </thead>
@@ -1402,7 +1414,7 @@ function AktSverkaDialog({
                           key={it.id}
                           className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
                           onClick={() => onRowClick(it)}
-                          title="To'liq ma'lumotni ko'rish"
+                          title={t('viewFullInfo')}
                         >
                           <td className="px-3 py-2 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
                           <td className={cn('px-3 py-2 text-right tabular-nums', amountCls(it.paymentAmount))}>
@@ -1451,9 +1463,9 @@ function AktSverkaDialog({
         <div className="px-7 py-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900 flex items-center justify-between gap-2 shrink-0 print:hidden">
           <div className="text-[11.5px] text-slate-500 dark:text-slate-400">
             {selectedContract ? (
-              <>Shartnoma: <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedContract}</span></>
+              <>{t('contractLabel')}: <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{selectedContract}</span></>
             ) : (
-              <>Shartnoma tanlanmadi</>
+              <>{t('contractNotSelected')}</>
             )}
           </div>
           <div className="flex items-center gap-2">
@@ -1462,7 +1474,7 @@ function AktSverkaDialog({
               disabled={!selectedContract || !data || data.items.length === 0}
               className="h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <Printer className="h-3.5 w-3.5" /> Chop etish
+              <Printer className="h-3.5 w-3.5" /> {t('print')}
             </button>
             <button
               onClick={downloadExcel}
@@ -1488,18 +1500,20 @@ function CrmSverkaView({
   isLoading: boolean;
   onRowClick: (it: OplataKvItem) => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   if (isLoading) {
     return (
       <div className="px-7 py-16 text-center text-slate-400 dark:text-slate-500">
         <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-        CRM sverka yuklanmoqda...
+        {t('crmSverkaLoading')}
       </div>
     );
   }
   if (!data) {
     return (
       <div className="px-7 py-12 text-center text-slate-400 dark:text-slate-500">
-        Ma'lumot yo'q
+        {t('noData')}
       </div>
     );
   }
@@ -1513,7 +1527,7 @@ function CrmSverkaView({
       {!crm.connected && (
         <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 text-[12px] text-rose-700 dark:text-rose-300 flex items-center gap-2">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <div>CRM bilan aloqa o'rnatib bo'lmadi{crm.error ? `: ${crm.error}` : ''}</div>
+          <div>{t('crmConnectFailed')}{crm.error ? `: ${crm.error}` : ''}</div>
         </div>
       )}
 
@@ -1522,12 +1536,12 @@ function CrmSverkaView({
         <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white p-4 shadow-lg shadow-indigo-500/20">
           <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">OplatyKv</div>
           <div className="text-2xl font-black tabular-nums">{formatMoney(comparison.oplataTotal, '')}</div>
-          <div className="text-[11px] text-white/85 mt-1">{oplata.count} ta to'lov</div>
+          <div className="text-[11px] text-white/85 mt-1">{t('paymentsCount', { n: oplata.count })}</div>
         </div>
         <div className="rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-600 text-white p-4 shadow-lg shadow-sky-500/20">
           <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1">XonSaroy CRM</div>
           <div className="text-2xl font-black tabular-nums">{formatMoney(comparison.crmTotal, '')}</div>
-          <div className="text-[11px] text-white/85 mt-1">{crm.count} ta payment_history</div>
+          <div className="text-[11px] text-white/85 mt-1">{t('paymentHistoryCount', { n: crm.count })}</div>
         </div>
         <div className={cn(
           'rounded-2xl p-4 shadow-lg ring-1',
@@ -1540,7 +1554,7 @@ function CrmSverkaView({
               ? <CheckCircle2 className="h-4 w-4" />
               : <AlertTriangle className="h-4 w-4" />}
             <div className="text-[10px] uppercase tracking-widest font-bold text-white/90">
-              {matched ? 'Natija — Mos' : 'Natija — Xato'}
+              {matched ? t('resultMatched') : t('resultError')}
             </div>
           </div>
           <div className="text-2xl font-black tabular-nums">
@@ -1548,10 +1562,10 @@ function CrmSverkaView({
           </div>
           <div className="text-[11px] text-white/85 mt-1">
             {matched
-              ? "Summalar bir xil — sverka muvaffaqiyatli"
+              ? t('sumsMatchSuccess')
               : oplataMore
-                ? `OplatyKv'da ${formatMoney(Math.abs(comparison.diff), '')} ortiqcha`
-                : `CRM'da ${formatMoney(Math.abs(comparison.diff), '')} ortiqcha`}
+                ? t('oplataMoreBy', { amount: formatMoney(Math.abs(comparison.diff), '') })
+                : t('crmMoreBy', { amount: formatMoney(Math.abs(comparison.diff), '') })}
           </div>
         </div>
       </div>
@@ -1559,13 +1573,13 @@ function CrmSverkaView({
       {/* Kategoriya bo'yicha taqqoslash */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <CategoryCompareCard
-          title="Boshlang'ich"
+          title={t('categoryInitial')}
           oplata={oplata.initial}
           crm={crm.initialSum}
           diff={comparison.diffInitial}
         />
         <CategoryCompareCard
-          title="Oylik"
+          title={t('categoryMonthly')}
           oplata={oplata.monthly}
           crm={crm.monthlySum}
           diff={comparison.diffMonthly}
@@ -1588,7 +1602,7 @@ function CrmSverkaView({
             <table className="w-full text-[12px]">
               <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Sana</th>
+                  <th className="px-3 py-2 text-left font-semibold">{tc('date')}</th>
                   <th className="px-3 py-2 text-right font-semibold">Сумма</th>
                   <th className="px-3 py-2 text-right font-semibold">1 взнос</th>
                   <th className="px-3 py-2 text-right font-semibold">Ежемес.</th>
@@ -1596,7 +1610,7 @@ function CrmSverkaView({
               </thead>
               <tbody>
                 {oplata.items.length === 0 ? (
-                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">To'lov yo'q</td></tr>
+                  <tr><td colSpan={4} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('noPayments')}</td></tr>
                 ) : [...oplata.items].sort((a: OplataKvItem, b: OplataKvItem) => {
                   const ta = a.date ? new Date(a.date).getTime() : 0;
                   const tb = b.date ? new Date(b.date).getTime() : 0;
@@ -1638,15 +1652,15 @@ function CrmSverkaView({
             <table className="w-full text-[12px]">
               <thead className="bg-slate-50/60 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] uppercase sticky top-0">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Sana</th>
-                  <th className="px-3 py-2 text-left font-semibold">Tip</th>
-                  <th className="px-3 py-2 text-right font-semibold">Summa</th>
+                  <th className="px-3 py-2 text-left font-semibold">{tc('date')}</th>
+                  <th className="px-3 py-2 text-left font-semibold">{t('typeShort')}</th>
+                  <th className="px-3 py-2 text-right font-semibold">{tc('amount')}</th>
                 </tr>
               </thead>
               <tbody>
                 {crm.histories.length === 0 ? (
                   <tr><td colSpan={3} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">
-                    {crm.connected ? "CRM'da to'lov tarixi yo'q" : "CRM ulanmadi"}
+                    {crm.connected ? t('crmNoPaymentHistory') : t('crmNotConnected')}
                   </td></tr>
                 ) : crm.histories.map((h: any, i: number) => {
                   const isInitial = h.typeKey.toLowerCase().includes('init') || h.typeKey.toLowerCase().includes('boshlang');
@@ -1681,6 +1695,7 @@ function CrmSverkaView({
 }
 
 function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; oplata: number; crm: number; diff: number }) {
+  const t = useTranslations('oplatykv');
   const matched = Math.abs(diff) < 0.01;
   return (
     <div className={cn(
@@ -1703,7 +1718,7 @@ function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; opla
           <div className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{formatMoney(crm, '')}</div>
         </div>
         <div>
-          <div className="text-[9px] uppercase font-semibold text-slate-500 dark:text-slate-400">Farq</div>
+          <div className="text-[9px] uppercase font-semibold text-slate-500 dark:text-slate-400">{t('difference')}</div>
           <div className={cn('font-bold tabular-nums', matched ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>
             {matched ? '✓' : (diff > 0 ? '+' : '') + formatMoney(diff, '')}
           </div>
@@ -1729,6 +1744,8 @@ function OplataKvDetailDialog({
   onCopyId: (id: string) => void;
   copiedId: string | null;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   // Live query — qator ma'lumotini real-time olib turadi (split/edit'dan keyin avto refresh)
   const initialRow = row;
   const detailQuery = useQuery({
@@ -1772,9 +1789,9 @@ function OplataKvDetailDialog({
               {row.crmXato ? (
                 <div
                   className="font-mono text-2xl font-black tracking-tight text-rose-100"
-                  title="CRM da TOPILMADI — Tranzaksiyada to'g'rilang"
+                  title={t('crmNotFoundFixTitle')}
                 >
-                  XATO
+                  {t('badgeError')}
                 </div>
               ) : (
                 <>
@@ -1786,11 +1803,11 @@ function OplataKvDetailDialog({
                       onClick={async () => {
                         try {
                           await navigator.clipboard.writeText(row.contractNo);
-                          toast.success(`Shartnoma nusxalandi: ${row.contractNo}`);
-                        } catch { toast.error('Nusxalashda xato'); }
+                          toast.success(t('contractCopied', { contract: row.contractNo }));
+                        } catch { toast.error(tc('copyError')); }
                       }}
                       className="w-7 h-7 rounded-lg bg-white/15 hover:bg-white/25 grid place-items-center text-white/80 hover:text-white transition-all hover:scale-110"
-                      title="Shartnoma raqamini nusxalash"
+                      title={t('copyContractTitle')}
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -1798,17 +1815,17 @@ function OplataKvDetailDialog({
                   {row.contractSource === 'ariza' && (
                     <span
                       className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-violet-500/30 ring-violet-300/50 text-violet-50 whitespace-nowrap"
-                      title="Tranzaksiyada Ariza orqali kiritilgan (hujjat biriktirilgan)"
+                      title={t('arizaBadgeTitle')}
                     >
-                      📎 ARIZA
+                      📎 {t('badgeAriza')}
                     </span>
                   )}
                   {row.contractSource === 'manual' && (
                     <span
                       className="px-2.5 py-1 rounded-lg text-[11px] font-bold ring-1 bg-amber-500/30 ring-amber-300/50 text-amber-50 whitespace-nowrap"
-                      title="Tranzaksiyada qo'lda kiritilgan (CRM tekshirilmagan)"
+                      title={t('manualBadgeTitle')}
                     >
-                      ✍ QO'LDA
+                      ✍ {t('badgeManual')}
                     </span>
                   )}
                 </>
@@ -1823,7 +1840,7 @@ function OplataKvDetailDialog({
               {fmtDateRu(row.date)} · <span className="font-mono">{row.id.slice(0, 8)}…</span>
               {row.crmXato && (
                 <span className="ml-2 text-rose-200 text-[11px]">
-                  · CRM da topilmadi — Tranzaksiyada to'g'rilang
+                  · {t('crmNotFoundShort')}
                 </span>
               )}
             </div>
@@ -1852,12 +1869,12 @@ function OplataKvDetailDialog({
           {/* Meta */}
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-3 text-[11px] text-slate-500 dark:text-slate-400">
             <div>
-              <div className="uppercase tracking-wider font-semibold mb-0.5">Yaratildi</div>
+              <div className="uppercase tracking-wider font-semibold mb-0.5">{t('createdAt')}</div>
               <div className="text-slate-700 dark:text-slate-300">{fmtDateTime(row.createdAt)}</div>
               {row.createdByName && <div className="text-slate-500 dark:text-slate-400">{row.createdByName}</div>}
             </div>
             <div>
-              <div className="uppercase tracking-wider font-semibold mb-0.5">O'zgartirildi</div>
+              <div className="uppercase tracking-wider font-semibold mb-0.5">{t('updatedAt')}</div>
               <div className="text-slate-700 dark:text-slate-300">{fmtDateTime(row.updatedAt)}</div>
             </div>
           </div>
@@ -1877,7 +1894,7 @@ function OplataKvDetailDialog({
                   ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                   : 'bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 ring-1 ring-slate-200 dark:ring-slate-700',
               )}
-              title="Nusxalash"
+              title={tc('copy')}
             >
               {copiedId === row.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             </button>
@@ -1891,7 +1908,7 @@ function OplataKvDetailDialog({
               onClick={() => onHistory(row)}
               className="h-10 px-3 rounded-xl text-[13px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-800 transition-colors inline-flex items-center gap-1.5"
             >
-              <History className="h-4 w-4" /> Tarix
+              <History className="h-4 w-4" /> {t('history')}
             </button>
             {row.sourceTxId && canEdit && (
               <ReSplitButton row={row} />
@@ -1903,7 +1920,7 @@ function OplataKvDetailDialog({
                 onClick={() => onDelete(row)}
                 className="h-10 px-4 rounded-xl text-[13px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900 transition-colors inline-flex items-center gap-1.5"
               >
-                <Trash2 className="h-4 w-4" /> O'chirish
+                <Trash2 className="h-4 w-4" /> {tc('delete')}
               </button>
             )}
             {canEdit && (
@@ -1911,7 +1928,7 @@ function OplataKvDetailDialog({
                 onClick={() => onEdit(row)}
                 className="h-10 px-4 rounded-xl text-[13px] font-semibold text-white bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-md inline-flex items-center gap-1.5"
               >
-                <Edit3 className="h-4 w-4" /> Tahrirlash
+                <Edit3 className="h-4 w-4" /> {tc('edit')}
               </button>
             )}
           </div>
@@ -1923,18 +1940,19 @@ function OplataKvDetailDialog({
 
 // Re-split tugmasi — modal yopilmaydi, jonli React Query invalidate orqali refresh
 function ReSplitButton({ row }: { row: OplataKvItem }) {
+  const t = useTranslations('oplatykv');
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const splitMut = useMutation({
     mutationFn: () => api.post<{ filled?: number; contracts?: number }>(`/oplata-kv/${row.id}/split`, {}),
     onSuccess: (r) => {
-      toast.success(`Split: ${r.filled ?? 1} qator yangilandi (${r.contracts ?? 1} shartnoma)`);
+      toast.success(t('splitDone', { filled: r.filled ?? 1, contracts: r.contracts ?? 1 }));
       // React Query orqali jonli yangilash (sahifa reload qilinmaydi, modal yopilmaydi)
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       qc.invalidateQueries({ queryKey: ['oplata-kv-detail', row.id] });
       qc.invalidateQueries({ queryKey: ['oplata-kv-history', row.id] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Split xato'),
+    onError: (e: any) => toast.error(e?.message || t('splitError')),
   });
   return (
     <button
@@ -1954,12 +1972,12 @@ function ReSplitButton({ row }: { row: OplataKvItem }) {
           ? 'bg-fuchsia-600 text-white ring-fuchsia-600 shadow-lg shadow-fuchsia-500/30 scale-105'
           : 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/30',
       )}
-      title="Bu shartnoma bo'yicha 1-vznos/oylik qayta hisoblash"
+      title={t('reSplitTitle')}
     >
       {splitMut.isPending
         ? <Loader2 className="h-4 w-4 animate-spin" />
         : <Receipt className="h-4 w-4" />}
-      {confirming ? 'Bosib tasdiqlang' : 'Re-split'}
+      {confirming ? t('pressToConfirm') : t('reSplit')}
     </button>
   );
 }
@@ -2030,6 +2048,7 @@ function SumCard({ label, value, color }: { label: string; value: number; color:
 }
 
 function CountCard({ label, count }: { label: string; count: number }) {
+  const t = useTranslations('oplatykv');
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <CardContent className="p-4 flex items-center gap-3">
@@ -2039,7 +2058,7 @@ function CountCard({ label, count }: { label: string; count: number }) {
         <div className="min-w-0 flex-1">
           <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{label}</div>
           <div className="text-xl font-bold tabular-nums mt-0.5 text-slate-900 dark:text-slate-100">
-            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">шт.</span>
+            {count.toLocaleString('ru-RU')} <span className="text-sm font-semibold text-slate-400 dark:text-slate-500">{t('rowCountUnit')}</span>
           </div>
         </div>
       </CardContent>
@@ -2125,6 +2144,8 @@ function OplataKvFormDialog({
   open: boolean; row?: OplataKvItem | null;
   onClose: () => void; onSaved: () => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const isEdit = !!row;
   // Tashqi manbadan kelgan qator (bank tx YOKI Excel import) — asosiy
   // maydonlarni lock qilamiz. Faqat qo'lda yaratilgan qatorlarda
@@ -2193,11 +2214,11 @@ function OplataKvFormDialog({
           error?: string;
         }>(`/oplata-kv/crm-lookup?contractNo=${encodeURIComponent(cn)}`);
         if (!res.ok) {
-          setCrmLookupState({ status: 'error', msg: res.error || "CRM so'rovi xato" });
+          setCrmLookupState({ status: 'error', msg: res.error || t('crmRequestError') });
           return;
         }
         if (!res.found) {
-          setCrmLookupState({ status: 'not-found', msg: "CRM da topilmadi — qo'lda to'ldiring" });
+          setCrmLookupState({ status: 'not-found', msg: t('crmNotFoundFillManual') });
           return;
         }
         // Auto-fill — faqat bo'sh maydonlarga
@@ -2206,11 +2227,11 @@ function OplataKvFormDialog({
         setCrmLookupState({
           status: 'found',
           msg: res.objectNameOriginal && res.objectName !== res.objectNameOriginal
-            ? `Topildi · obyekt: "${res.objectNameOriginal}" → "${res.objectName}"`
-            : "CRM da topildi · ma'lumotlar to'ldirildi",
+            ? t('crmFoundObjectMapped', { from: res.objectNameOriginal, to: res.objectName })
+            : t('crmFoundFilled'),
         });
       } catch (e: any) {
-        setCrmLookupState({ status: 'error', msg: e?.message || "So'rov xato" });
+        setCrmLookupState({ status: 'error', msg: e?.message || t('requestError') });
       }
     }, 600);
 
@@ -2254,11 +2275,12 @@ function OplataKvFormDialog({
     const sumFM = (f ?? 0) + (m ?? 0);
     // Floating tolerance (kichik xatolik uchun)
     const eq = Math.abs(sumFM - p) < 0.01;
-    if (eq) return { ok: true, msg: `Tekshirildi: ${formatMoney(sumFM)} = ${formatMoney(p)}` };
+    if (eq) return { ok: true, msg: t('checkedEquals', { sum: formatMoney(sumFM), payment: formatMoney(p) }) };
     return {
       ok: false,
-      msg: `1 взнос + ежемесячный = ${formatMoney(sumFM)} · lekin Сумма оплаты = ${formatMoney(p)} (farq: ${formatMoney(sumFM - p)})`,
+      msg: t('sumMismatch', { sum: formatMoney(sumFM), payment: formatMoney(p), diff: formatMoney(sumFM - p) }),
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentAmount, firstInstallment, monthlyAmount]);
 
   const saveMut = useMutation({
@@ -2283,11 +2305,11 @@ function OplataKvFormDialog({
       return api.post('/oplata-kv', body);
     },
     onSuccess: () => {
-      toast.success(isEdit ? 'Tahrir saqlandi' : 'Qator qoshildi');
+      toast.success(isEdit ? t('editSaved') : t('rowAdded'));
       onSaved();
       onClose();
     },
-    onError: (e: any) => toast.error(e?.message || 'Xatolik yuz berdi'),
+    onError: (e: any) => toast.error(e?.message || t('genericError')),
   });
 
   return (
@@ -2296,10 +2318,10 @@ function OplataKvFormDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {isEdit ? <Edit3 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> : <Plus className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />}
-            {isEdit ? 'Qatorni tahrirlash' : 'Yangi qator'}
+            {isEdit ? t('editRowTitle') : t('newRow')}
           </DialogTitle>
           <DialogDescription>
-            ОплатыКв jadvali · har qanday o'zgarish history'ga avto yoziladi.
+            {t('formDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -2308,8 +2330,7 @@ function OplataKvFormDialog({
           <div className="mt-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 flex items-start gap-2">
             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
             <div className="text-[12px] text-amber-900 dark:text-amber-300 leading-relaxed">
-              <b>{row?.sourceTxId ? 'Bankdan kelgan qator' : "Excel'dan import qilingan qator"}</b> — Дог №, Дата, Сумма оплаты, Клиент, Назначение
-              maydonlari tahrirlab bo'lmaydi. Qolgan maydonlarni o'zgartirishingiz mumkin.
+              <b>{row?.sourceTxId ? t('rowFromBank') : t('rowFromExcel')}</b> {t('lockedFieldsBanner')}
             </div>
           </div>
         )}
@@ -2343,7 +2364,7 @@ function OplataKvFormDialog({
                 {crmLookupState.status === 'found' && <CheckCircle2 className="h-3.5 w-3.5" />}
                 {crmLookupState.status === 'not-found' && <AlertTriangle className="h-3.5 w-3.5" />}
                 {crmLookupState.status === 'error' && <X className="h-3.5 w-3.5" />}
-                {crmLookupState.status === 'loading' ? 'CRM tekshirilmoqda...' : crmLookupState.msg}
+                {crmLookupState.status === 'loading' ? t('crmChecking') : crmLookupState.msg}
               </div>
             </div>
           )}
@@ -2358,9 +2379,9 @@ function OplataKvFormDialog({
           <Field label="ежемесячный">
             <MoneyInput value={monthlyAmount} onChange={setMonthlyAmount} placeholder="0" />
           </Field>
-          <Field label="Оплата (turi)">
+          <Field label={t('paymentTypeLabel')}>
             <Select value={paymentCategory || 'none'} onValueChange={(v) => setPaymentCategory(v === 'none' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="Tanlang" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('selectPlaceholder')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">—</SelectItem>
                 <SelectItem value="MONTHLY">ежемесячный</SelectItem>
@@ -2382,7 +2403,7 @@ function OplataKvFormDialog({
                 )}
               >
                 {sumValidation.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />}
-                {sumValidation.msg || '1 взнос + ежемесячный = Сумма оплаты bo\'lishi shart'}
+                {sumValidation.msg || t('sumMustEqual')}
               </div>
             </div>
           )}
@@ -2393,7 +2414,7 @@ function OplataKvFormDialog({
           <Field label="Объект">
             <Select value={object || '__empty'} onValueChange={(v) => setObject(v === '__empty' ? '' : v)}>
               <SelectTrigger>
-                <SelectValue placeholder={mappingsQuery.isLoading ? 'Yuklanmoqda...' : 'Obyekt tanlang'} />
+                <SelectValue placeholder={mappingsQuery.isLoading ? tc('loading') : t('selectObjectPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__empty">—</SelectItem>
@@ -2406,7 +2427,7 @@ function OplataKvFormDialog({
 
           <Field label="Способ оплаты">
             <Select value={paymentMethod || '__empty'} onValueChange={(v) => setPaymentMethod(v === '__empty' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="Tanlang" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={t('selectPlaceholder')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="__empty">—</SelectItem>
                 <SelectItem value="Перечисление">Перечисление</SelectItem>
@@ -2432,7 +2453,7 @@ function OplataKvFormDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+          <Button variant="ghost" onClick={onClose}>{tc('cancel')}</Button>
           <Button
             onClick={() => saveMut.mutate()}
             disabled={
@@ -2446,7 +2467,7 @@ function OplataKvFormDialog({
             className="bg-gradient-to-br from-indigo-600 to-violet-600 text-white"
           >
             {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-            {isEdit ? 'Saqlash' : 'Qoshish'}
+            {isEdit ? t('save') : t('add')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2457,6 +2478,7 @@ function OplataKvFormDialog({
 function Field({
   label, full, locked, children,
 }: { label: string; full?: boolean; locked?: boolean; children: React.ReactNode }) {
+  const t = useTranslations('oplatykv');
   return (
     <div className={cn('space-y-1', full && 'col-span-2')}>
       <label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1">
@@ -2464,7 +2486,7 @@ function Field({
         {locked && (
           <Lock
             className="h-3 w-3 text-amber-500 dark:text-amber-400"
-            aria-label="Bankdan kelgan — tahrirlab bo'lmaydi"
+            aria-label={t('lockedFieldTitle')}
           />
         )}
       </label>
@@ -2479,6 +2501,8 @@ function Field({
 function DeleteConfirmDialog({ row, onClose, onDeleted }: {
   row: OplataKvItem | null; onClose: () => void; onDeleted: () => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const isPerereboska = !!row?.perereboskaGroupId;
   const delMut = useMutation({
     mutationFn: () => {
@@ -2489,10 +2513,10 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
       return api.delete(`/oplata-kv/${row!.id}`);
     },
     onSuccess: () => {
-      toast.success(isPerereboska ? "Переброска guruh o'chirildi" : "Qator o'chirildi");
+      toast.success(isPerereboska ? t('perereboskaGroupDeleted') : t('rowDeleted'));
       onDeleted(); onClose();
     },
-    onError: (e: any) => toast.error(e?.message || "O'chirib bo'lmadi"),
+    onError: (e: any) => toast.error(e?.message || t('deleteFailed')),
   });
 
   return (
@@ -2500,10 +2524,10 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-300">
-            <Trash2 className="h-5 w-5" /> O'chirishni tasdiqlash
+            <Trash2 className="h-5 w-5" /> {t('deleteConfirmTitle')}
           </DialogTitle>
           <DialogDescription>
-            Quyidagi qator butunlay o'chiriladi. Tarix yozuvi qoladi.
+            {t('deleteConfirmDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -2516,24 +2540,21 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
             {isPerereboska && (
               <div className="mt-2 pt-2 border-t border-rose-200 dark:border-rose-900 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-start gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                <span>
-                  Bu <b>Переброска</b> guruhiga tegishli qator — butun guruh
-                  (manba + barcha maqsadlar) o'chiriladi va Telegram'ga xabar yuboriladi.
-                </span>
+                <span>{t('perereboskaDeleteWarning')}</span>
               </div>
             )}
           </div>
         )}
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+          <Button variant="ghost" onClick={onClose}>{tc('cancel')}</Button>
           <Button
             onClick={() => delMut.mutate()}
             disabled={delMut.isPending}
             className="bg-rose-600 hover:bg-rose-700 text-white"
           >
             {delMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Trash2 className="h-4 w-4 mr-1.5" />}
-            O'chirish
+            {tc('delete')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -2545,6 +2566,8 @@ function DeleteConfirmDialog({ row, onClose, onDeleted }: {
 // History viewer
 // ─────────────────────────────────────────────────────────
 function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: () => void }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const historyQuery = useQuery({
     queryKey: ['oplata-kv-history', row?.id],
     queryFn: () => api.get<{ ok: boolean; items: any[] }>(`/oplata-kv/${row!.id}/history?limit=200`),
@@ -2558,7 +2581,7 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Qator tarixi
+            <History className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> {t('rowHistoryTitle')}
           </DialogTitle>
           {row && (
             <DialogDescription className="font-mono text-[12px]">
@@ -2572,25 +2595,25 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
             <Skeleton key={i} className="h-16 w-full rounded-lg" />
           ))}
           {!historyQuery.isLoading && items.length === 0 && (
-            <div className="text-center text-slate-400 dark:text-slate-500 py-8">Tarix bo'sh</div>
+            <div className="text-center text-slate-400 dark:text-slate-500 py-8">{t('historyEmpty')}</div>
           )}
           {items.map((h) => (
             <div key={h.id} className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 bg-white dark:bg-slate-900">
               <div className="flex items-center justify-between gap-2 mb-1">
                 <div className="flex items-center gap-2">
                   <ActionBadge action={h.action} />
-                  <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{h.actorName || 'Tizim'}</span>
+                  <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{h.actorName || t('system')}</span>
                 </div>
                 <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{fmtDateTime(h.createdAt)}</span>
               </div>
               {Array.isArray(h.fieldsChanged) && h.fieldsChanged.length > 0 && h.fieldsChanged[0] !== '*' && (
                 <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1">
-                  O'zgargan maydonlar: <span className="font-mono text-slate-700 dark:text-slate-300">{h.fieldsChanged.join(', ')}</span>
+                  {t('changedFields')}: <span className="font-mono text-slate-700 dark:text-slate-300">{h.fieldsChanged.join(', ')}</span>
                 </div>
               )}
               {h.changes && typeof h.changes === 'object' && (
                 <details className="mt-1.5">
-                  <summary className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 cursor-pointer">Tafsilot</summary>
+                  <summary className="text-[11px] text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 cursor-pointer">{t('detail')}</summary>
                   <pre className="mt-1.5 text-[10.5px] bg-slate-50 dark:bg-slate-900 rounded p-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(h.changes, null, 2)}</pre>
                 </details>
               )}
@@ -2600,7 +2623,7 @@ function HistoryDialog({ row, onClose }: { row: OplataKvItem | null; onClose: ()
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>Yopish</Button>
+          <Button variant="ghost" onClick={onClose}>{tc('close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -2631,16 +2654,18 @@ function AddChoiceDialog({
   onPickManual: () => void;
   onPickPerereboska: () => void;
 }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden gap-0">
         <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
           <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
-            Yangi yozuv
+            {t('newRecord')}
           </div>
-          <div className="text-xl font-black tracking-tight">Qaysi turdagi yozuv qo'shamiz?</div>
+          <div className="text-xl font-black tracking-tight">{t('whichRecordType')}</div>
           <div className="text-[12px] text-white/80 mt-1">
-            Oddiy to'lov yoki shartnomadan shartnomaga pul o'tkazma (Переброска)
+            {t('addChoiceDesc')}
           </div>
         </div>
         <div className="p-5 grid grid-cols-2 gap-4 bg-slate-50/40 dark:bg-slate-900">
@@ -2654,13 +2679,12 @@ function AddChoiceDialog({
               <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-md mb-3">
                 <PlusCircle className="h-6 w-6" />
               </div>
-              <div className="font-bold text-slate-900 dark:text-slate-100 text-[15px]">Oddiy to'lov</div>
+              <div className="font-bold text-slate-900 dark:text-slate-100 text-[15px]">{t('regularPayment')}</div>
               <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                Bitta shartnoma uchun to'lov ma'lumotini qo'lda kiritish. CRM
-                tekshiruvi avtomatik.
+                {t('regularPaymentDesc')}
               </div>
               <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1">
-                Boshlash <ChevronRight className="h-3 w-3" />
+                {t('start')} <ChevronRight className="h-3 w-3" />
               </div>
             </div>
           </button>
@@ -2678,21 +2702,20 @@ function AddChoiceDialog({
               <div className="font-bold text-slate-900 dark:text-slate-100 text-[15px] inline-flex items-center gap-1.5">
                 Переброска
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-fuchsia-100 dark:bg-fuchsia-900/30 text-fuchsia-700 dark:text-fuchsia-300 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900">
-                  YANGI
+                  {t('badgeNew')}
                 </span>
               </div>
               <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
-                Bir shartnomadan boshqa shartnoma(lar)ga pul o'tkazma.
-                Obyekt nomlari teng bo'lishi shart, hujjat majburiy.
+                {t('perereboskaCardDesc')}
               </div>
               <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400 inline-flex items-center gap-1">
-                Boshlash <ChevronRight className="h-3 w-3" />
+                {t('start')} <ChevronRight className="h-3 w-3" />
               </div>
             </div>
           </button>
         </div>
         <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex justify-end">
-          <Button variant="ghost" onClick={onClose}>Bekor qilish</Button>
+          <Button variant="ghost" onClick={onClose}>{tc('cancel')}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -2716,6 +2739,8 @@ interface PerereboskaDest {
 function PerereboskaDialog({
   open, onClose, onSaved,
 }: { open: boolean; onClose: () => void; onSaved: () => void; }) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
   const [fromCn, setFromCn] = useState('');
   const [date, setDate] = useState('');
   const [amount, setAmount] = useState('');             // raw money
@@ -2770,7 +2795,7 @@ function PerereboskaDialog({
           foundInCrm: boolean;
         }>(`/oplata-kv/contract-balance?contractNo=${encodeURIComponent(cn)}`);
         if (!res.foundInCrm) {
-          setFromLookup({ status: 'not-found', msg: "CRM da topilmadi" });
+          setFromLookup({ status: 'not-found', msg: t('crmNotFound') });
           setFromInfo(null);
         } else {
           setFromInfo({
@@ -2781,11 +2806,11 @@ function PerereboskaDialog({
           });
           setFromLookup({
             status: 'found',
-            msg: `Mijoz: ${res.customerName || '?'} · Obyekt: ${res.objectName || '?'} · Qoldiq: ${formatMoney(res.totalPaid)}`,
+            msg: t('clientFound', { client: res.customerName || '?', object: res.objectName || '?', balance: formatMoney(res.totalPaid) }),
           });
         }
       } catch (e: any) {
-        setFromLookup({ status: 'error', msg: e?.message || "So'rov xato" });
+        setFromLookup({ status: 'error', msg: e?.message || t('requestError') });
         setFromInfo(null);
       }
     }, 600);
@@ -2812,7 +2837,7 @@ function PerereboskaDialog({
         if (!res.foundInCrm) {
           setDestinations((prev) => prev.map((d, i) => i === idx ? {
             ...d, customerName: null, objectName: null, foundInCrm: false, totalPaid: 0,
-            lookupStatus: 'not-found', lookupMsg: 'CRM da topilmadi',
+            lookupStatus: 'not-found', lookupMsg: t('crmNotFound'),
           } : d));
         } else {
           setDestinations((prev) => prev.map((d, i) => i === idx ? {
@@ -2822,12 +2847,12 @@ function PerereboskaDialog({
             foundInCrm: true,
             totalPaid: res.totalPaid,
             lookupStatus: 'found',
-            lookupMsg: `Joriy: ${formatMoney(res.totalPaid)}`,
+            lookupMsg: t('currentLabel', { amount: formatMoney(res.totalPaid) }),
           } : d));
         }
       } catch (e: any) {
         setDestinations((prev) => prev.map((d, i) => i === idx ? {
-          ...d, lookupStatus: 'error', lookupMsg: e?.message || "So'rov xato",
+          ...d, lookupStatus: 'error', lookupMsg: e?.message || t('requestError'),
         } : d));
       }
     }, 600);
@@ -2888,11 +2913,11 @@ function PerereboskaDialog({
       fd.append('file', file);
 
       await api.postForm('/oplata-kv/perereboska', fd, { timeout: 60_000 });
-      toast.success("Переброска saqlandi va Telegram'ga yuborildi");
+      toast.success(t('perereboskaSaved'));
       onSaved();
       onClose();
     } catch (e: any) {
-      toast.error(e?.message || 'Xatolik');
+      toast.error(e?.message || t('genericError'));
     } finally {
       setSubmitting(false);
     }
@@ -2921,12 +2946,12 @@ function PerereboskaDialog({
               <ArrowRightLeft className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Yangi tranzaksiya</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('newTransaction')}</div>
               <div className="text-xl font-black tracking-tight">Переброска</div>
             </div>
           </div>
           <div className="text-[11.5px] text-white/80 mt-2">
-            Bir shartnomadan boshqa shartnoma(lar)ga pul o'tkazish. Obyekt nomlari teng bo'lishi shart · Hujjat majburiy
+            {t('perereboskaHeroDesc')}
           </div>
         </div>
 
@@ -2935,7 +2960,7 @@ function PerereboskaDialog({
           {/* SOURCE block */}
           <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
             <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
-              <Upload className="h-4 w-4" /> 1. Manba shartnoma (qaysidan)
+              <Upload className="h-4 w-4" /> {t('stepSource')}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="ДОГ № *">
@@ -2960,14 +2985,14 @@ function PerereboskaDialog({
               )}>
                 {fromLookup.status === 'loading' && <Loader2 className="h-4 w-4 animate-spin" />}
                 {fromLookup.status !== 'loading' && <X className="h-4 w-4" />}
-                {fromLookup.status === 'loading' ? 'CRM tekshirilmoqda...' : fromLookup.msg}
+                {fromLookup.status === 'loading' ? t('crmChecking') : fromLookup.msg}
               </div>
             )}
             {fromInfo?.foundInCrm && (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100/50 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5">
                   <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5">
-                    <User2 className="h-3 w-3" /> Mijoz
+                    <User2 className="h-3 w-3" /> {t('client')}
                   </div>
                   <div className="text-[13px] font-bold text-slate-800 dark:text-slate-200 leading-tight" title={fromInfo.customerName || ''}>
                     {fromInfo.customerName || '—'}
@@ -2975,7 +3000,7 @@ function PerereboskaDialog({
                 </div>
                 <div className="rounded-xl bg-gradient-to-br from-violet-50 to-violet-100/50 ring-1 ring-violet-200 dark:ring-violet-900 p-3.5">
                   <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-700 dark:text-violet-300 mb-1.5">
-                    <Building2 className="h-3 w-3" /> Obyekt
+                    <Building2 className="h-3 w-3" /> {t('objectLabel')}
                   </div>
                   <div className="text-[15px] font-black text-violet-900 dark:text-violet-300 leading-tight">
                     {fromInfo.objectName || '—'}
@@ -2983,7 +3008,7 @@ function PerereboskaDialog({
                 </div>
                 <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
                   <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 mb-1.5">
-                    <Wallet className="h-3 w-3" /> Joriy qoldiq
+                    <Wallet className="h-3 w-3" /> {t('currentBalance')}
                   </div>
                   <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 leading-tight tabular-nums">
                     {formatMoney(fromInfo.totalPaid)}
@@ -2997,9 +3022,9 @@ function PerereboskaDialog({
           {/* AMOUNT block */}
           <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
             <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
-              <Wallet className="h-4 w-4" /> 2. Otkazma summasi
+              <Wallet className="h-4 w-4" /> {t('stepAmount')}
             </div>
-            <Field label="Summa (manfiy) *">
+            <Field label={t('amountNegative')}>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-600 dark:text-rose-400 font-bold pointer-events-none">−</span>
                 <MoneyInput
@@ -3016,30 +3041,30 @@ function PerereboskaDialog({
                 <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
                   <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                   <div className="text-[13px] text-rose-800 dark:text-rose-300 leading-relaxed">
-                    <div className="font-bold mb-0.5">Summa qoldiqdan oshib ketdi</div>
+                    <div className="font-bold mb-0.5">{t('amountOverBalance')}</div>
                     <div className="text-rose-700 dark:text-rose-300">
-                      Yozildi: <b className="tabular-nums">{formatMoney(amountNum)}</b>
+                      {t('written')}: <b className="tabular-nums">{formatMoney(amountNum)}</b>
                       <span className="mx-1.5 text-rose-400 dark:text-rose-500">›</span>
-                      Qoldiq: <b className="tabular-nums">{formatMoney(fromInfo.totalPaid)}</b>
+                      {t('balance')}: <b className="tabular-nums">{formatMoney(fromInfo.totalPaid)}</b>
                     </div>
                   </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl bg-gradient-to-br from-rose-50 to-pink-50 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-1">Olinadi (−)</div>
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-rose-600 dark:text-rose-400 mb-1">{t('willDeduct')}</div>
                     <div className="text-[16px] font-black text-rose-700 dark:text-rose-300 tabular-nums leading-tight">
                       −{formatMoney(amountNum)}
                     </div>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">Hozirgi qoldiq</div>
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">{t('currentBalanceShort')}</div>
                     <div className="text-[14.5px] font-bold text-slate-700 dark:text-slate-300 tabular-nums leading-tight">
                       {formatMoney(fromInfo.totalPaid)}
                     </div>
                   </div>
                   <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3.5">
-                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 mb-1">Yangi qoldiq</div>
+                    <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 mb-1">{t('newBalance')}</div>
                     <div className="text-[16px] font-black text-emerald-800 dark:text-emerald-300 tabular-nums leading-tight">
                       {formatMoney(fromInfo.totalPaid - amountNum)}
                     </div>
@@ -3053,20 +3078,20 @@ function PerereboskaDialog({
           <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
-                <Building2 className="h-4 w-4" /> 3. Maqsadli shartnoma(lar) ({destinations.length})
+                <Building2 className="h-4 w-4" /> {t('stepDestinations', { n: destinations.length })}
               </div>
               <button
                 onClick={addDestination}
                 disabled={submitting}
                 className="h-7 px-2.5 rounded-lg text-[11px] font-semibold text-fuchsia-700 dark:text-fuchsia-300 bg-fuchsia-50 dark:bg-fuchsia-950/40 hover:bg-fuchsia-100 dark:hover:bg-fuchsia-900/30 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900 transition-colors inline-flex items-center gap-1"
               >
-                <Plus className="h-3 w-3" /> Yana shartnoma
+                <Plus className="h-3 w-3" /> {t('addContract')}
               </button>
             </div>
             {!fromInfo?.objectName && (
               <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300 inline-flex items-center gap-1.5">
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Avval manba shartnoma'ni tanlang (obyekt nomi keladigan joydan)
+                {t('selectSourceFirst')}
               </div>
             )}
             {destinations.map((d, idx) => {
@@ -3112,7 +3137,7 @@ function PerereboskaDialog({
                         disabled={submitting}
                       />
                     </Field>
-                    <Field label="Summa *">
+                    <Field label={`${tc('amount')} *`}>
                       <MoneyInput
                         value={d.amount}
                         onChange={(v) => setDestinations((prev) => prev.map((x, i) => i === idx ? { ...x, amount: v } : x))}
@@ -3126,11 +3151,9 @@ function PerereboskaDialog({
                     <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
                       <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                       <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
-                        <div className="font-bold mb-0.5">O'z-o'ziga o'tkazma mumkin emas</div>
+                        <div className="font-bold mb-0.5">{t('selfTransferTitle')}</div>
                         <div className="text-rose-700 dark:text-rose-300">
-                          <code className="font-mono font-bold">{fromCn.trim()}</code> manba shartnoma
-                          bo'lib turibdi — uni maqsadli ro'yxatga qo'sha olmaysiz.
-                          Boshqa shartnoma raqamini kiriting.
+                          <code className="font-mono font-bold">{fromCn.trim()}</code> {t('selfTransferDesc')}
                         </div>
                       </div>
                     </div>
@@ -3140,10 +3163,9 @@ function PerereboskaDialog({
                     <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
                       <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                       <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
-                        <div className="font-bold mb-0.5">Maqsadli shartnoma takrorlanmoqda</div>
+                        <div className="font-bold mb-0.5">{t('duplicateDestTitle')}</div>
                         <div className="text-rose-700 dark:text-rose-300">
-                          <code className="font-mono font-bold">{d.contractNo.trim()}</code> yuqorida
-                          allaqachon mavjud — har bir shartnoma faqat bir marta.
+                          <code className="font-mono font-bold">{d.contractNo.trim()}</code> {t('duplicateDestDesc')}
                         </div>
                       </div>
                     </div>
@@ -3157,7 +3179,7 @@ function PerereboskaDialog({
                     )}>
                       {d.lookupStatus === 'loading' && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                       {d.lookupStatus !== 'loading' && <X className="h-3.5 w-3.5" />}
-                      {d.lookupStatus === 'loading' ? 'CRM tekshirilmoqda...' : (d.lookupMsg || 'Xato')}
+                      {d.lookupStatus === 'loading' ? t('crmChecking') : (d.lookupMsg || t('lookupError'))}
                     </div>
                   )}
                   {/* Object mismatch warning */}
@@ -3165,12 +3187,12 @@ function PerereboskaDialog({
                     <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3 flex items-start gap-2.5">
                       <AlertTriangle className="h-5 w-5 text-rose-600 dark:text-rose-400 mt-0.5 shrink-0" />
                       <div className="text-[12.5px] text-rose-800 dark:text-rose-300 leading-relaxed">
-                        <div className="font-bold mb-0.5">Obyekt nomi mos kelmaydi</div>
+                        <div className="font-bold mb-0.5">{t('objectMismatchTitle')}</div>
                         <div className="text-rose-700 dark:text-rose-300">
                           <b>{d.objectName}</b>
                           <span className="mx-1.5 text-rose-400 dark:text-rose-500">≠</span>
                           <b>{fromInfo?.objectName}</b>
-                          <span className="ml-1.5 text-rose-500/80 dark:text-rose-400">— faqat bir xil obyekt o'rtasida transfer mumkin</span>
+                          <span className="ml-1.5 text-rose-500/80 dark:text-rose-400">{t('objectMismatchHint')}</span>
                         </div>
                       </div>
                     </div>
@@ -3180,14 +3202,14 @@ function PerereboskaDialog({
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 sm:col-span-1">
                         <div className="flex items-center gap-1 text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">
-                          <User2 className="h-2.5 w-2.5" /> Mijoz
+                          <User2 className="h-2.5 w-2.5" /> {t('client')}
                         </div>
                         <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={d.customerName || ''}>
                           {d.customerName || '—'}
                         </div>
                       </div>
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
-                        <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">Joriy</div>
+                        <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-0.5">{t('currentColLabel')}</div>
                         <div className="text-[12.5px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">
                           {formatMoney(d.totalPaid)}
                         </div>
@@ -3201,7 +3223,7 @@ function PerereboskaDialog({
                         <div className={cn(
                           'text-[9.5px] uppercase tracking-wider font-bold mb-0.5',
                           dAmt !== undefined && dAmt > 0 ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-500 dark:text-slate-400',
-                        )}>Kelajak (+ otkazma)</div>
+                        )}>{t('future')}</div>
                         <div className={cn(
                           'text-[12.5px] font-black tabular-nums',
                           dAmt !== undefined && dAmt > 0 ? 'text-emerald-800 dark:text-emerald-300' : 'text-slate-400 dark:text-slate-500',
@@ -3233,20 +3255,20 @@ function PerereboskaDialog({
                 </div>
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 text-[12px]">
                   <div>
-                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>Jami maqsadli</div>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>{t('totalDestinations')}</div>
                     <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900 dark:text-emerald-300' : 'text-rose-900 dark:text-rose-300')}>
                       {formatMoney(destSumNum)}
                     </div>
                   </div>
                   <div>
-                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>Manba</div>
+                    <div className={cn('text-[9.5px] uppercase tracking-wider font-bold', destSumOk ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300')}>{t('source')}</div>
                     <div className={cn('text-[14px] font-black tabular-nums', destSumOk ? 'text-emerald-900 dark:text-emerald-300' : 'text-rose-900 dark:text-rose-300')}>
                       {formatMoney(amountNum)}
                     </div>
                   </div>
                   {!destSumOk && (
                     <div>
-                      <div className="text-[9.5px] uppercase tracking-wider font-bold text-rose-700 dark:text-rose-300">Farq</div>
+                      <div className="text-[9.5px] uppercase tracking-wider font-bold text-rose-700 dark:text-rose-300">{t('difference')}</div>
                       <div className="text-[14px] font-black text-rose-900 dark:text-rose-300 tabular-nums">
                         {formatMoney(destSumNum - amountNum)}
                       </div>
@@ -3260,9 +3282,9 @@ function PerereboskaDialog({
           {/* FILE + NOTE block */}
           <div className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-4 space-y-3">
             <div className="flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-fuchsia-700 dark:text-fuchsia-300">
-              <Paperclip className="h-4 w-4" /> 4. Hujjat va izoh
+              <Paperclip className="h-4 w-4" /> {t('stepDocument')}
             </div>
-            <Field label="Hujjat (rasm / PDF) *" full>
+            <Field label={t('documentLabel')} full>
               <label className={cn(
                 "flex items-center gap-3 rounded-xl border-2 border-dashed px-4 py-3 cursor-pointer transition-colors",
                 file ? 'border-emerald-300 dark:border-emerald-900 bg-emerald-50/40 dark:bg-emerald-950/40' : 'border-slate-300 dark:border-slate-700 hover:border-fuchsia-400 hover:bg-fuchsia-50/30 dark:hover:bg-fuchsia-950/40',
@@ -3276,8 +3298,8 @@ function PerereboskaDialog({
                     </>
                   ) : (
                     <>
-                      <div className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-300">Hujjat tanlash</div>
-                      <div className="text-[10.5px] text-slate-500 dark:text-slate-400">Rasm yoki PDF · maksimum 25 MB</div>
+                      <div className="text-[12.5px] font-semibold text-slate-700 dark:text-slate-300">{t('selectDocument')}</div>
+                      <div className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('documentHint')}</div>
                     </>
                   )}
                 </div>
@@ -3290,8 +3312,8 @@ function PerereboskaDialog({
                 />
               </label>
             </Field>
-            <Field label="Izoh (Примечание)" full>
-              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ixtiyoriy" disabled={submitting} />
+            <Field label={t('noteLabel')} full>
+              <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('optionalPlaceholder')} disabled={submitting} />
             </Field>
           </div>
         </div>
@@ -3299,16 +3321,16 @@ function PerereboskaDialog({
         {/* Footer — sticky, shrink-0, doim ko'rinadigan */}
         <div className="shrink-0 px-5 py-3 border-t border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shadow-[0_-4px_12px_-4px_rgba(0,0,0,0.06)]">
           <div className="text-[11px] text-slate-500 dark:text-slate-400 flex-1 min-w-0 truncate">
-            {!canSave && fromInfo?.foundInCrm && !noSelfTransfer && "⚠ Manba shartnoma maqsadli ro'yxatda — o'z-o'ziga otkazma mumkin emas"}
-            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && hasDuplicateDest && '⚠ Maqsadli shartnomalar takrorlanmoqda'}
-            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && !file && '⚠ Hujjat (file) tanlanmagan'}
-            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && !destSumOk && '⚠ Maqsadli summalar manbaga teng emas'}
-            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && !allObjectsMatch && '⚠ Obyekt nomlari mos kelmaydi'}
-            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && allObjectsMatch && overBalance && '⚠ Summa qoldiqdan oshib ketdi'}
-            {canSave && '✓ Saqlashga tayyor'}
+            {!canSave && fromInfo?.foundInCrm && !noSelfTransfer && t('footerSelfTransfer')}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && hasDuplicateDest && t('footerDuplicate')}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && !file && t('footerNoFile')}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && !destSumOk && t('footerSumMismatch')}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && !allObjectsMatch && t('footerObjectMismatch')}
+            {!canSave && fromInfo?.foundInCrm && noSelfTransfer && !hasDuplicateDest && file && destSumOk && allObjectsMatch && overBalance && t('footerOverBalance')}
+            {canSave && t('footerReady')}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <Button variant="ghost" onClick={onClose} disabled={submitting}>Bekor qilish</Button>
+            <Button variant="ghost" onClick={onClose} disabled={submitting}>{tc('cancel')}</Button>
             <Button
               onClick={handleSave}
               disabled={!canSave}
@@ -3317,7 +3339,7 @@ function PerereboskaDialog({
               {submitting
                 ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
                 : <CheckCircle2 className="h-4 w-4 mr-1.5" />}
-              {submitting ? 'Saqlanmoqda...' : "Tasdiqlash va saqlash"}
+              {submitting ? t('saving') : t('confirmAndSave')}
             </Button>
           </div>
         </div>

@@ -40,6 +40,7 @@ type Tab = 'profile' | 'security' | 'settings';
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
+  const tc = useTranslations('common');
   const cachedUser = useAuth((s) => s.user);
 
   const { data: me } = useQuery({
@@ -71,14 +72,14 @@ export default function ProfilePage() {
   function handleAvatarUpload(file: File) {
     if (!user?.id) return;
     if (file.size > 2 * 1024 * 1024) {
-      toast.error('Rasm hajmi 2MB dan oshmasligi kerak');
+      toast.error(t('avatarTooLarge'));
       return;
     }
     const reader = new FileReader();
     reader.onload = (e) => {
       const dataUrl = e.target?.result as string;
       setAvatar(user.id, dataUrl); // emit qiladi — barcha komponentlar yangilaydi
-      toast.success('Profil rasmi yangilandi — barcha joylarda ko\'rinadi');
+      toast.success(t('avatarUpdated'));
     };
     reader.readAsDataURL(file);
   }
@@ -86,7 +87,7 @@ export default function ProfilePage() {
   function removeAvatar() {
     if (!user?.id) return;
     setAvatar(user.id, null);
-    toast.success('Rasm olib tashlandi');
+    toast.success(t('avatarRemoved'));
   }
 
   return (
@@ -107,6 +108,7 @@ export default function ProfilePage() {
             actionCount={actionCount}
             moduleCount={moduleCount}
             t={t}
+            tc={tc}
             onTimerClick={() => setTimerOpen(true)}
           />
 
@@ -116,21 +118,21 @@ export default function ProfilePage() {
               active={tab === 'profile'}
               onClick={() => setTab('profile')}
               icon={<UserCircle className="h-4 w-4" />}
-              label="Profilim"
+              label={t('tabProfile')}
               gradient="from-indigo-500 to-violet-600"
             />
             <TabButton
               active={tab === 'security'}
               onClick={() => setTab('security')}
               icon={<Lock className="h-4 w-4" />}
-              label="Xavfsizlik"
+              label={t('tabSecurity')}
               gradient="from-amber-500 to-orange-600"
             />
             <TabButton
               active={tab === 'settings'}
               onClick={() => setTab('settings')}
               icon={<Settings className="h-4 w-4" />}
-              label="Sozlamalar"
+              label={t('tabSettings')}
               gradient="from-slate-500 to-slate-700"
             />
           </div>
@@ -162,7 +164,7 @@ export default function ProfilePage() {
 
 /* ═══════════════════ ULTRA HERO ═══════════════════ */
 
-function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, t, onTimerClick }: any) {
+function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, actionCount, moduleCount, t, tc, onTimerClick }: any) {
   // Hisob yashi (kunlarda)
   const daysActive = user?.createdAt
     ? Math.floor((Date.now() - new Date(user.createdAt).getTime()) / 86400000)
@@ -201,7 +203,7 @@ function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, ac
           <div className="flex items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md ring-1 ring-white/15 text-[10px] uppercase tracking-[0.2em] font-bold text-white/90">
               <Sparkles className="h-3 w-3" />
-              Mening hisobim
+              {t('myAccount')}
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-400/20 backdrop-blur-md ring-1 ring-emerald-300/40 text-[10px] uppercase tracking-[0.2em] font-bold text-emerald-200">
               <span className="relative flex h-2 w-2">
@@ -215,7 +217,7 @@ function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, ac
           <div className="flex items-center gap-2">
             <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-md ring-1 ring-white/20 text-[11px] font-semibold hover:bg-white/15 transition-colors">
               <FileEdit className="h-3.5 w-3.5" />
-              Tahrirlash
+              {tc('edit')}
             </button>
           </div>
         </div>
@@ -295,20 +297,20 @@ function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, ac
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md ring-1 ring-white/20 text-xs font-semibold text-white">
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                Tasdiqlangan
+                {t('verified')}
               </span>
               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-md ring-1 ring-white/20 text-xs font-semibold text-white">
                 <Activity className="h-3.5 w-3.5 text-cyan-300" />
-                Faol hisob
+                {t('activeAccount')}
               </span>
             </div>
 
             {/* INLINE MINI STATS — glass cards */}
             <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <MiniStat icon={<KeyRound className="h-3.5 w-3.5" />} label="Ruxsatlar" value={String(actionCount)} accent="text-cyan-300" />
-              <MiniStat icon={<Layers className="h-3.5 w-3.5" />} label="Modullar" value={String(moduleCount)} accent="text-emerald-300" />
-              <MiniStat icon={<Flame className="h-3.5 w-3.5" />} label="Faol kun" value={String(daysActive)} accent="text-amber-300" />
-              <MiniStat icon={<Award className="h-3.5 w-3.5" />} label="Daraja" value={t(powerKey)} accent="text-fuchsia-300" small />
+              <MiniStat icon={<KeyRound className="h-3.5 w-3.5" />} label={t('permissions')} value={String(actionCount)} accent="text-cyan-300" />
+              <MiniStat icon={<Layers className="h-3.5 w-3.5" />} label={t('modules')} value={String(moduleCount)} accent="text-emerald-300" />
+              <MiniStat icon={<Flame className="h-3.5 w-3.5" />} label={t('daysActive')} value={String(daysActive)} accent="text-amber-300" />
+              <MiniStat icon={<Award className="h-3.5 w-3.5" />} label={t('powerLevel')} value={t(powerKey)} accent="text-fuchsia-300" small />
             </div>
           </div>
 
@@ -316,7 +318,7 @@ function UltraHero({ user, avatarUrl, initial, isSuper, powerKey, powerColor, ac
           <div className="shrink-0 hidden lg:block">
             <button
               onClick={onTimerClick}
-              title="Pomodoro Fokus Timer'ni ochish"
+              title={t('pomodoroOpen')}
               className="group relative"
             >
               {/* Pulsing glow rings */}
@@ -398,6 +400,8 @@ function ProfileTab({ user, avatarUrl, initial, onAvatarUpload, onAvatarRemove }
 }
 
 function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
+  const t = useTranslations('profile');
+  const tc = useTranslations('common');
   const fileRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
 
@@ -416,8 +420,8 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
             <ImagePlus className="h-5 w-5" />
           </div>
           <div>
-            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Profil rasmi</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">PNG, JPG, WebP. Maksimal 2MB.</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">{t('avatarTitle')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('avatarFormats')}</div>
           </div>
         </div>
       </div>
@@ -440,15 +444,15 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
                 <button
                   onClick={onRemove}
                   className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-rose-500 ring-4 ring-white dark:ring-slate-900 grid place-items-center shadow-lg hover:bg-rose-600 transition-colors"
-                  title="O'chirish"
+                  title={tc('delete')}
                 >
                   <X className="h-4 w-4 text-white" />
                 </button>
               )}
             </div>
             <div className="mt-3 text-center">
-              <div className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{avatarUrl ? 'Joriy rasm' : 'Standart avatar'}</div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">Brauzerda saqlangan</div>
+              <div className="text-[12px] font-semibold text-slate-700 dark:text-slate-300">{avatarUrl ? t('avatarCurrent') : t('avatarDefault')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{t('avatarStoredBrowser')}</div>
             </div>
           </div>
 
@@ -470,10 +474,10 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
                 <Upload className="h-7 w-7" />
               </div>
               <div className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">
-                Rasmni shu yerga tashlang yoki <span className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2">tanlang</span>
+                {t('dropzoneText')} <span className="text-indigo-600 dark:text-indigo-400 underline underline-offset-2">{t('dropzoneSelect')}</span>
               </div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                PNG, JPG, WebP · Maks. 2 MB · 1:1 nisbat tavsiya etiladi
+                {t('dropzoneHint')}
               </div>
 
               <input
@@ -496,11 +500,11 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
               </div>
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-center">
                 <Sparkles className="h-4 w-4 text-amber-600 dark:text-amber-400 mx-auto mb-1" />
-                <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">2 MB chegara</div>
+                <div className="text-[10px] font-semibold text-amber-700 dark:text-amber-300">{t('chip2mb')}</div>
               </div>
               <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 text-center">
                 <Database className="h-4 w-4 text-cyan-600 dark:text-cyan-400 mx-auto mb-1" />
-                <div className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">Brauzerda</div>
+                <div className="text-[10px] font-semibold text-cyan-700 dark:text-cyan-300">{t('chipBrowser')}</div>
               </div>
             </div>
           </div>
@@ -511,6 +515,7 @@ function AvatarUploadSection({ avatarUrl, initial, onUpload, onRemove }: any) {
 }
 
 function LoginHistorySection({ user }: any) {
+  const t = useTranslations('profile');
   const sessions = [
     {
       id: 'current',
@@ -540,12 +545,12 @@ function LoginHistorySection({ user }: any) {
             <History className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Kirish tarixi</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Tizimga kirgan vaqtlar va qurilmalar</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">{t('loginHistory')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('loginHistorySubtitle')}</div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
             <Wifi className="h-3.5 w-3.5" />
-            {sessions.length} ta sessiya
+            {t('sessionCount', { n: sessions.length })}
           </span>
         </div>
       </div>
@@ -571,7 +576,7 @@ function LoginHistorySection({ user }: any) {
                         <span className="animate-ping absolute inset-0 rounded-full bg-emerald-400 opacity-75" />
                         <span className="relative rounded-full h-1.5 w-1.5 bg-emerald-500" />
                       </span>
-                      Joriy
+                      {t('sessionCurrent')}
                     </span>
                   )}
                 </div>
@@ -583,14 +588,14 @@ function LoginHistorySection({ user }: any) {
               </div>
               <div className="text-right shrink-0">
                 <div className="text-[12px] font-bold text-slate-700 dark:text-slate-300">{formatDateTime(s.time)}</div>
-                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.current ? 'Hozir faol' : 'Tugagan'}</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">{s.current ? t('sessionNowActive') : t('sessionEnded')}</div>
               </div>
             </div>
           ))}
         </div>
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400">
           <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
-          To'liq audit tarix backend log'lariga ulangach ko'rinadi
+          {t('auditHistoryNote')}
         </div>
       </CardContent>
     </Card>
@@ -600,13 +605,15 @@ function LoginHistorySection({ user }: any) {
 /* ═══════════════════ SECURITY TAB — Actions Table + Tips ═══════════════════ */
 
 function SecurityTab({ user }: any) {
+  const t = useTranslations('profile');
+  const tc = useTranslations('common');
   // Sintetik amallar — keyin backend audit log'idan keladi
   const actions = [
-    { id: 1, action: 'Tizimga kirish', module: 'auth', ip: '192.168.1.1', time: new Date().toISOString(), status: 'success' },
-    { id: 2, action: "Tranzaksiya tahrirlandi", module: 'transactions', ip: '192.168.1.1', time: new Date(Date.now() - 3600000).toISOString(), status: 'success' },
-    { id: 3, action: 'Yangi rol yaratildi', module: 'roles', ip: '192.168.1.1', time: new Date(Date.now() - 7200000).toISOString(), status: 'success' },
-    { id: 4, action: 'Sverka qayta ishga tushirildi', module: 'sync', ip: '192.168.1.1', time: new Date(Date.now() - 14400000).toISOString(), status: 'success' },
-    { id: 5, action: 'Foydalanuvchi parolini yangilash', module: 'users', ip: '192.168.1.1', time: new Date(Date.now() - 86400000).toISOString(), status: 'success' },
+    { id: 1, action: t('actLogin'), module: 'auth', ip: '192.168.1.1', time: new Date().toISOString(), status: 'success' },
+    { id: 2, action: t('actTxEdited'), module: 'transactions', ip: '192.168.1.1', time: new Date(Date.now() - 3600000).toISOString(), status: 'success' },
+    { id: 3, action: t('actRoleCreated'), module: 'roles', ip: '192.168.1.1', time: new Date(Date.now() - 7200000).toISOString(), status: 'success' },
+    { id: 4, action: t('actSyncRestarted'), module: 'sync', ip: '192.168.1.1', time: new Date(Date.now() - 14400000).toISOString(), status: 'success' },
+    { id: 5, action: t('actUserPwdUpdate'), module: 'users', ip: '192.168.1.1', time: new Date(Date.now() - 86400000).toISOString(), status: 'success' },
   ];
 
   const moduleColors: Record<string, string> = {
@@ -628,19 +635,19 @@ function SecurityTab({ user }: any) {
               <Shield className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-800 dark:text-slate-200">Xavfsizlik holati</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Hisobingiz himoyalangan</div>
+              <div className="text-base font-bold text-slate-800 dark:text-slate-200">{t('securityStatus')}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('accountProtected')}</div>
             </div>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Xavfsiz
+              {t('secure')}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <SecurityCheck icon={<Lock className="h-4 w-4" />} label="Parol o'rnatilgan" status="ok" />
-            <SecurityCheck icon={<CheckCircle2 className="h-4 w-4" />} label="Hisob tasdiqlangan" status="ok" />
-            <SecurityCheck icon={<Wifi className="h-4 w-4" />} label="Faol sessiya" status="ok" />
+            <SecurityCheck icon={<Lock className="h-4 w-4" />} label={t('checkPasswordSet')} status="ok" />
+            <SecurityCheck icon={<CheckCircle2 className="h-4 w-4" />} label={t('checkAccountVerified')} status="ok" />
+            <SecurityCheck icon={<Wifi className="h-4 w-4" />} label={t('checkActiveSession')} status="ok" />
           </div>
         </CardContent>
       </Card>
@@ -653,11 +660,11 @@ function SecurityTab({ user }: any) {
               <Activity className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Qilgan amallar</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Tizimda bajargan harakatlar tarixi</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">{t('actionsDone')}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('actionsDoneSubtitle')}</div>
             </div>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs font-bold ring-1 ring-amber-200 dark:ring-amber-900">
-              {actions.length} ta amal
+              {t('actionCount', { n: actions.length })}
             </span>
           </div>
         </div>
@@ -666,11 +673,11 @@ function SecurityTab({ user }: any) {
           <table className="w-full text-[13px]">
             <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
               <tr>
-                <th className="text-left px-6 py-3">Amal</th>
-                <th className="text-left px-3 py-3">Modul</th>
+                <th className="text-left px-6 py-3">{t('colAction')}</th>
+                <th className="text-left px-3 py-3">{t('colModule')}</th>
                 <th className="text-left px-3 py-3">IP</th>
-                <th className="text-left px-3 py-3">Vaqt</th>
-                <th className="text-right px-6 py-3">Holat</th>
+                <th className="text-left px-3 py-3">{tc('time')}</th>
+                <th className="text-right px-6 py-3">{tc('status')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -690,7 +697,7 @@ function SecurityTab({ user }: any) {
                   <td className="px-6 py-3 text-right">
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] font-bold ring-1 ring-emerald-200 dark:ring-emerald-900">
                       <CheckCircle2 className="h-3 w-3" />
-                      Muvaffaqiyatli
+                      {t('statusSuccess')}
                     </span>
                   </td>
                 </tr>
@@ -701,7 +708,7 @@ function SecurityTab({ user }: any) {
 
         <div className="px-6 py-3 bg-slate-50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 text-center text-[11px] text-slate-500 dark:text-slate-400">
           <Sparkles className="inline h-3 w-3 mr-1 text-amber-500" />
-          To'liq audit log backend qo'shilgach jonli ma'lumotlardan to'ldiriladi
+          {t('auditLogNote')}
         </div>
       </Card>
 
@@ -710,14 +717,14 @@ function SecurityTab({ user }: any) {
         <SecurityTip
           icon={<Lock />}
           gradient="from-emerald-500 to-teal-600"
-          title="Xavfsiz parol"
-          body="12+ belgi, katta/kichik harf, raqam va maxsus belgi ishlating. Parolingizni hech kim bilan ulashmang."
+          title={t('tipPasswordTitle')}
+          body={t('tipPasswordBody')}
         />
         <SecurityTip
           icon={<Shield />}
           gradient="from-indigo-500 to-violet-600"
-          title="Begona qurilmalardan chiqing"
-          body="Boshqa kompyuter yoki telefonda login bo'lsangiz, ishingiz tugagach albatta tizimdan chiqing."
+          title={t('tipLogoutTitle')}
+          body={t('tipLogoutBody')}
         />
       </div>
     </div>
@@ -764,6 +771,8 @@ function SecurityTip({ icon, gradient, title, body }: any) {
 /* ═══════════════════ SETTINGS TAB — Working theme switcher ═══════════════════ */
 
 function SettingsTab() {
+  const t = useTranslations('profile');
+  const tc = useTranslations('common');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [notifications, setNotifications] = useState(true);
 
@@ -783,14 +792,14 @@ function SettingsTab() {
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
     document.documentElement.classList.toggle('dark', newTheme === 'dark');
-    toast.success(newTheme === 'dark' ? '🌙 Tungi rejim yoqildi' : '☀️ Yorug\' rejim yoqildi');
+    toast.success(newTheme === 'dark' ? `🌙 ${t('themeDarkOn')}` : `☀️ ${t('themeLightOn')}`);
   }
 
   function toggleNotifications() {
     const newVal = !notifications;
     setNotifications(newVal);
     localStorage.setItem('notifications', String(newVal));
-    toast.success(newVal ? '🔔 Bildirishnomalar yoqildi' : '🔕 Bildirishnomalar o\'chirildi');
+    toast.success(newVal ? `🔔 ${t('notifOn')}` : `🔕 ${t('notifOff')}`);
   }
 
   return (
@@ -803,14 +812,14 @@ function SettingsTab() {
               <Palette className="h-5 w-5" />
             </div>
             <div>
-              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Ko'rinish</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Tizim ko'rinishini sozlang</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">{t('appearance')}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('appearanceSubtitle')}</div>
             </div>
           </div>
         </div>
 
         <CardContent className="p-6">
-          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">Tema</div>
+          <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">{t('theme')}</div>
           <div className="grid grid-cols-2 gap-3 max-w-md">
             <button
               onClick={() => applyTheme('light')}
@@ -829,8 +838,8 @@ function SettingsTab() {
                   <Sun className={cn("h-6 w-6", theme === 'light' ? 'text-white' : 'text-slate-500 dark:text-slate-400')} />
                 </div>
                 <div>
-                  <div className="font-bold text-slate-800 dark:text-slate-200">Yorug'</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">Standart rejim</div>
+                  <div className="font-bold text-slate-800 dark:text-slate-200">{t('themeLight')}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('themeLightDesc')}</div>
                 </div>
               </div>
               {theme === 'light' && (
@@ -859,8 +868,8 @@ function SettingsTab() {
                   <Moon className={cn("h-6 w-6", theme === 'dark' ? 'text-white' : 'text-slate-500 dark:text-slate-400')} />
                 </div>
                 <div>
-                  <div className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-slate-800')}>Tungi</div>
-                  <div className={cn("text-[11px]", theme === 'dark' ? 'text-white/60' : 'text-slate-500')}>Ko'zlar uchun yumshoq</div>
+                  <div className={cn("font-bold", theme === 'dark' ? 'text-white' : 'text-slate-800')}>{t('themeDark')}</div>
+                  <div className={cn("text-[11px]", theme === 'dark' ? 'text-white/60' : 'text-slate-500')}>{t('themeDarkDesc')}</div>
                 </div>
               </div>
               {theme === 'dark' && (
@@ -876,8 +885,8 @@ function SettingsTab() {
           <div className="mt-4 p-3 rounded-xl bg-cyan-50 dark:bg-cyan-950/40 ring-1 ring-cyan-200 dark:ring-cyan-900 text-[11px] text-cyan-800 dark:text-cyan-300 flex items-start gap-2">
             <Sparkles className="h-4 w-4 mt-0.5 shrink-0 text-cyan-600 dark:text-cyan-400" />
             <div>
-              <span className="font-bold">Brauzerda saqlanadi:</span> tanlovingiz <code className="font-mono">localStorage</code>'ga yoziladi va keyingi kirganda avtomatik qo'llaniladi.
-              {theme === 'dark' && ' Tungi rejim hozirgi sahifada to\'liq ko\'rinmaydi — qolgan sahifalar uchun keyingi yangilanishlarda qo\'shiladi.'}
+              <span className="font-bold">{t('storedBrowserLabel')}</span> {t('storedBrowserBefore')} <code className="font-mono">localStorage</code>{t('storedBrowserAfter')}
+              {theme === 'dark' && ` ${t('darkPartialNote')}`}
             </div>
           </div>
         </CardContent>
@@ -892,8 +901,8 @@ function SettingsTab() {
               <Bell className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-base font-bold text-slate-900 dark:text-slate-100">Bildirishnomalar</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">Push va email bildirishnomalari</div>
+              <div className="text-base font-bold text-slate-900 dark:text-slate-100">{t('notifications')}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('notificationsSubtitle')}</div>
             </div>
             <button
               onClick={toggleNotifications}
@@ -911,8 +920,8 @@ function SettingsTab() {
 
           <div className="text-[11px] text-slate-500 dark:text-slate-400 pl-13">
             {notifications
-              ? '✓ Sizga muhim hodisalar haqida xabar yuboriladi'
-              : '○ Hech qanday bildirishnoma yuborilmaydi'}
+              ? `✓ ${t('notifEnabledHint')}`
+              : `○ ${t('notifDisabledHint')}`}
           </div>
         </CardContent>
       </Card>
@@ -925,8 +934,8 @@ function SettingsTab() {
             <Globe className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <div className="text-base font-bold text-slate-900 dark:text-slate-100">Til</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Tizim tilini topbar'dagi 🌐 tugma orqali o'zgartiring</div>
+            <div className="text-base font-bold text-slate-900 dark:text-slate-100">{tc('language')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('languageHint')}</div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 text-xs font-bold ring-1 ring-cyan-200 dark:ring-cyan-900">
             UZ · RU · EN

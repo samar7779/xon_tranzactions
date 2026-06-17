@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   ScanLine, Search, X, Loader2, AlertTriangle, CheckCircle2,
@@ -44,6 +45,8 @@ export function IdInspectorDialog({
   initialId,
   hideTrigger,
 }: IdInspectorDialogProps) {
+  const t = useTranslations('idInspector');
+  const tc = useTranslations('common');
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
   const setOpen = (o: boolean) => {
@@ -70,7 +73,7 @@ export function IdInspectorDialog({
   const mut = useMutation({
     mutationFn: (rawId: string) => api.post<any>('/transactions/inspect-id', { id: rawId }, { timeout: 30_000 }),
     onSuccess: (r: any) => { setResult(r); setError(null); },
-    onError: (e: any) => { setError(e?.message || 'Xato'); setResult(null); },
+    onError: (e: any) => { setError(e?.message || tc('error')); setResult(null); },
   });
 
   // initialId tashqaridan kelsa — avtomatik qidirish
@@ -152,9 +155,9 @@ export function IdInspectorDialog({
         results: rows.map((r) => ({ id: r.id, result: r.result, error: r.error })),
       };
       await apiDownloadPost('/transactions/export-inspect-results', payload, 'id_tekshiruv.xlsx');
-      toast.success("Excel yuklab olindi");
+      toast.success(t('excelDownloaded'));
     } catch (e: any) {
-      toast.error(e?.message || 'Excel yuklash xato');
+      toast.error(e?.message || t('excelDownloadError'));
     } finally {
       setDownloading(false);
     }
@@ -172,12 +175,12 @@ export function IdInspectorDialog({
         '/transactions/parse-ids-excel',
         fd,
       );
-      if (!r.ok) throw new Error(r.error || 'Excel parse xatosi');
+      if (!r.ok) throw new Error(r.error || t('excelParseError'));
       const ids = r.ids || [];
-      if (ids.length === 0) throw new Error("A ustunda ID topilmadi");
+      if (ids.length === 0) throw new Error(t('noIdInColumnA'));
       setRows(ids.map((id) => ({ id, status: 'pending' })));
     } catch (err: any) {
-      setError(err?.message || 'Yuklash xato');
+      setError(err?.message || t('uploadError'));
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -197,7 +200,7 @@ export function IdInspectorDialog({
         const r = await api.post<any>('/transactions/inspect-id', { id: updated[i].id }, { timeout: 60_000 });
         updated[i] = { ...updated[i], status: 'done', result: r };
       } catch (e: any) {
-        updated[i] = { ...updated[i], status: 'error', error: e?.message || 'xato' };
+        updated[i] = { ...updated[i], status: 'error', error: e?.message || tc('error') };
       }
       setRows([...updated]);
       setBulkProgress(i + 1);
@@ -214,7 +217,7 @@ export function IdInspectorDialog({
       {!hideTrigger && (
         <DialogTrigger asChild>
           <button
-            title="ID bo'yicha bankdan qidirish"
+            title={t('triggerTitle')}
             className={cn(
               'inline-flex items-center justify-center rounded-xl shrink-0',
               'bg-gradient-to-br from-indigo-500 to-purple-600 text-white',
@@ -225,7 +228,7 @@ export function IdInspectorDialog({
             )}
           >
             <ScanLine className={iconOnly ? 'h-4 w-4' : 'h-3.5 w-3.5'} />
-            {!iconOnly && <span>ID tekshirish</span>}
+            {!iconOnly && <span>{t('triggerLabel')}</span>}
           </button>
         </DialogTrigger>
       )}
@@ -235,7 +238,7 @@ export function IdInspectorDialog({
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 grid place-items-center text-white">
               <ScanLine className="h-3.5 w-3.5" />
             </div>
-            Tranzaksiya ID — bankdan qidirish
+            {t('dialogTitle')}
           </DialogTitle>
         </DialogHeader>
 
@@ -249,7 +252,7 @@ export function IdInspectorDialog({
             )}
           >
             <Hash className="h-3.5 w-3.5" />
-            <span>Bitta ID</span>
+            <span>{t('singleID')}</span>
           </button>
           <button
             onClick={() => setMode('bulk')}
@@ -259,7 +262,7 @@ export function IdInspectorDialog({
             )}
           >
             <FileSpreadsheet className="h-3.5 w-3.5" />
-            <span>Excel'dan import (A ustun)</span>
+            <span>{t('excelImport')}</span>
           </button>
         </div>
 
@@ -291,9 +294,9 @@ export function IdInspectorDialog({
                 className="h-10 px-4 rounded-xl font-semibold gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white"
               >
                 {mut.isPending ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Qidirilmoqda</>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {t('searching')}</>
                 ) : (
-                  <><Search className="h-4 w-4" /> Qidirish</>
+                  <><Search className="h-4 w-4" /> {tc('search')}</>
                 )}
               </Button>
             </form>
@@ -326,15 +329,15 @@ export function IdInspectorDialog({
                 className="h-10 px-4 rounded-xl gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
               >
                 {uploading ? (
-                  <><Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...</>
+                  <><Loader2 className="h-4 w-4 animate-spin" /> {tc('loading')}</>
                 ) : (
-                  <><Upload className="h-4 w-4" /> Excel yuklash (.xlsx)</>
+                  <><Upload className="h-4 w-4" /> {t('uploadExcel')}</>
                 )}
               </Button>
               {rows.length > 0 && (
                 <>
                   <div className="text-[12px] text-slate-600 dark:text-slate-300 ml-1">
-                    <b className="text-slate-800 dark:text-slate-200">{rows.length}</b> ta ID
+                    <b className="text-slate-800 dark:text-slate-200">{rows.length}</b> {t('idCountSuffix')}
                     {bulkRunning && <span className="ml-1.5 text-indigo-600 dark:text-indigo-400 font-semibold">· {bulkProgress}/{rows.length}</span>}
                   </div>
                   <Button
@@ -343,15 +346,15 @@ export function IdInspectorDialog({
                     className="h-10 px-4 rounded-xl gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white ml-auto"
                   >
                     {bulkRunning ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Tekshirilyapti</>
+                      <><Loader2 className="h-4 w-4 animate-spin" /> {t('checking')}</>
                     ) : (
-                      <><Search className="h-4 w-4" /> Tekshirishni boshlash</>
+                      <><Search className="h-4 w-4" /> {t('startCheck')}</>
                     )}
                   </Button>
                   <Button
                     onClick={downloadResults}
                     disabled={downloading || bulkRunning || counts.pending === rows.length}
-                    title="Excel'ga yuklab olish"
+                    title={t('downloadToExcel')}
                     className="h-10 w-10 rounded-xl p-0 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300"
                   >
                     {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -363,14 +366,14 @@ export function IdInspectorDialog({
             {/* Status filter chip'lar */}
             {rows.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <StatusChip label="Hammasi" value="all" count={counts.all}        active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} />
-                <StatusChip label="Mavjud"   value="found"     count={counts.found}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="emerald" />
-                <StatusChip label="Bekor"    value="cancelled" count={counts.cancelled}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
-                <StatusChip label="Kun siljigan" value="shifted" count={counts.shifted}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
-                <StatusChip label="Qisman"   value="partial"   count={counts.partial}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
-                <StatusChip label="Yo'q"     value="no_data"   count={counts.no_data}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
-                <StatusChip label="Xato"     value="error"     count={counts.error}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
-                <StatusChip label="Kutilmoqda" value="pending" count={counts.pending}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
+                <StatusChip label={tc('all')} value="all" count={counts.all}        active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} />
+                <StatusChip label={t('found')}   value="found"     count={counts.found}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="emerald" />
+                <StatusChip label={t('cancelled')}    value="cancelled" count={counts.cancelled}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
+                <StatusChip label={t('shifted')} value="shifted" count={counts.shifted}  active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
+                <StatusChip label={t('partial')}   value="partial"   count={counts.partial}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="amber" />
+                <StatusChip label={t('notFound')}     value="no_data"   count={counts.no_data}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
+                <StatusChip label={tc('error')}     value="error"     count={counts.error}      active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="rose" />
+                <StatusChip label={t('pending')} value="pending" count={counts.pending}    active={statusFilter} onClick={(v) => { setStatusFilter(v); setPage(1); }} color="slate" />
               </div>
             )}
 
@@ -383,8 +386,8 @@ export function IdInspectorDialog({
 
             {!rows.length && !uploading && !error && (
               <div className="text-center text-[12px] text-slate-400 dark:text-slate-500 py-8 rounded-xl ring-1 ring-dashed ring-slate-200 dark:ring-slate-700">
-                Excel faylda <b>A ustun</b>da ID'lar bo'lsin (har bir qator alohida ID).<br />
-                Birinchi qator header bo'lishi mumkin — avtomatik aniqlanadi.
+                {t('excelHintLine1')}<br />
+                {t('excelHintLine2')}
               </div>
             )}
 
@@ -393,7 +396,7 @@ export function IdInspectorDialog({
                 <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-700 overflow-hidden">
                   {pagedRows.length === 0 ? (
                     <div className="px-3 py-8 text-center text-[12px] text-slate-400 dark:text-slate-500">
-                      Bu status bo'yicha qator topilmadi
+                      {t('noRowsForStatus')}
                     </div>
                   ) : (
                     pagedRows.map(({ row, originalIndex }) => (
@@ -422,9 +425,10 @@ export function IdInspectorDialog({
 }
 
 function BulkRowItem({ row, index }: { row: BulkRow; index: number }) {
+  const t = useTranslations('idInspector');
   const [open, setOpen] = useState(false);
   const isDone = row.status === 'done';
-  const v = isDone ? verdictStyle(row.result?.verdict || 'no_data') : null;
+  const v = isDone ? verdictStyle(row.result?.verdict || 'no_data', t) : null;
 
   return (
     <div>
@@ -439,14 +443,14 @@ function BulkRowItem({ row, index }: { row: BulkRow; index: number }) {
         <span className="text-slate-400 dark:text-slate-500 font-mono w-7 shrink-0">{index + 1}.</span>
         <span className="font-mono truncate flex-1 text-slate-700 dark:text-slate-300">{row.id}</span>
         {row.status === 'pending' && (
-          <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">kutilmoqda</span>
+          <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">{t('pendingShort')}</span>
         )}
         {row.status === 'loading' && (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500 shrink-0" />
         )}
         {row.status === 'error' && (
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold shrink-0">
-            xato
+            {t('errorShort')}
           </span>
         )}
         {isDone && v && (
@@ -551,20 +555,22 @@ function Pager({ page, total, onChange }: { page: number; total: number; onChang
   );
 }
 
-function verdictStyle(verdict: string): { bg: string; ring: string; text: string; title: string; short: string } {
+function verdictStyle(verdict: string, t: (k: string) => string): { bg: string; ring: string; text: string; title: string; short: string } {
   const map: Record<string, { bg: string; ring: string; text: string; title: string; short: string }> = {
-    found:     { bg: 'bg-emerald-50 dark:bg-emerald-950/40', ring: 'ring-emerald-200 dark:ring-emerald-900', text: 'text-emerald-900 dark:text-emerald-300', title: '✅ Bankda mavjud',          short: '✅ Mavjud' },
-    shifted:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: "⚠️ Boshqa kunga ko'chirilgan", short: '⚠️ Kun siljigan' },
-    cancelled: { bg: 'bg-rose-50 dark:bg-rose-950/40',    ring: 'ring-rose-200 dark:ring-rose-900',    text: 'text-rose-900 dark:text-rose-300',    title: "🔴 Bekor qilingan to'lov",   short: '🔴 Bekor' },
-    no_data:   { bg: 'bg-slate-50 dark:bg-slate-900',   ring: 'ring-slate-200 dark:ring-slate-700',   text: 'text-slate-700 dark:text-slate-300',   title: "ℹ️ Ma'lumot olinmadi",        short: 'ℹ️ Yo\'q' },
-    partial:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: "⚠️ To'liq emas",               short: '⚠️ Qisman' },
+    found:     { bg: 'bg-emerald-50 dark:bg-emerald-950/40', ring: 'ring-emerald-200 dark:ring-emerald-900', text: 'text-emerald-900 dark:text-emerald-300', title: '✅ ' + t('verdictFound'),          short: '✅ ' + t('shortFound') },
+    shifted:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: '⚠️ ' + t('verdictShifted'), short: '⚠️ ' + t('shortShifted') },
+    cancelled: { bg: 'bg-rose-50 dark:bg-rose-950/40',    ring: 'ring-rose-200 dark:ring-rose-900',    text: 'text-rose-900 dark:text-rose-300',    title: '🔴 ' + t('verdictCancelled'),   short: '🔴 ' + t('shortCancelled') },
+    no_data:   { bg: 'bg-slate-50 dark:bg-slate-900',   ring: 'ring-slate-200 dark:ring-slate-700',   text: 'text-slate-700 dark:text-slate-300',   title: 'ℹ️ ' + t('verdictNoData'),        short: 'ℹ️ ' + t('shortNoData') },
+    partial:   { bg: 'bg-amber-50 dark:bg-amber-950/40',   ring: 'ring-amber-200 dark:ring-amber-900',   text: 'text-amber-900 dark:text-amber-300',   title: '⚠️ ' + t('verdictPartial'),               short: '⚠️ ' + t('shortPartial') },
   };
   return map[verdict] || map.no_data;
 }
 
 function SingleResult({ data }: { data: any }) {
+  const t = useTranslations('idInspector');
+  const tc = useTranslations('common');
   const p = data.parsed || {};
-  const v = verdictStyle(data.verdict || 'no_data');
+  const v = verdictStyle(data.verdict || 'no_data', t);
   const bankItem = data.bankResponse?.item;
   // Bank javobidan to'liq matnli ma'lumotlar (topilgan bo'lsa)
   const purpose = bankItem?.purpose || null;
@@ -575,17 +581,17 @@ function SingleResult({ data }: { data: any }) {
       <div className={cn('px-4 py-3 rounded-xl ring-1', v.bg, v.ring, v.text)}>
         <div className="text-[13px] font-bold">{v.title}</div>
       </div>
-      <InfoBox title="Bu ID ga tegishli to'lov">
+      <InfoBox title={t('paymentForThisId')}>
         <KV k="general_id" v={p.generalId} mono />
         <KV k="num" v={p.num} mono />
-        <KV k="sana" v={p.ddate} />
-        <KV k="summa" v={p.amountSom != null ? p.amountSom.toLocaleString('uz-UZ') + " so'm" : '—'} />
-        <KV k="yo'nalish" v={p.direction} />
+        <KV k={tc('date')} v={p.ddate} />
+        <KV k={tc('amount')} v={p.amountSom != null ? p.amountSom.toLocaleString('uz-UZ') + ' ' + t('sumUnit') : '—'} />
+        <KV k={t('direction')} v={p.direction} />
         <KV k="acc_dt (debit)" v={p.accDt} mono small />
-        {nameDt && <KV k="yuboruvchi" v={nameDt} small />}
+        {nameDt && <KV k={t('sender')} v={nameDt} small />}
         <KV k="acc_ct (credit)" v={p.accCt} mono small />
-        {nameCt && <KV k="qabul qiluvchi" v={nameCt} small />}
-        {purpose && <KV k="to'lov maqsadi" v={purpose} small />}
+        {nameCt && <KV k={t('receiver')} v={nameCt} small />}
+        {purpose && <KV k={t('paymentPurpose')} v={purpose} small />}
       </InfoBox>
     </div>
   );

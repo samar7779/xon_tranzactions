@@ -862,6 +862,7 @@ function SuggestionRow({
   onHover: () => void;
   apiLang: 'uz' | 'ru';
 }) {
+  const tCrm = useTranslations('crm');
   const contract = item.contract || item.contract_number || '—';
   const obj = item.object || item.info?.object || item.object_name || '';
   const ownerRaw = item.client || item.client_name || '';
@@ -883,8 +884,8 @@ function SuggestionRow({
   // Trashed (soft-deleted) — Laravel SoftDelete: deleted_at to'ldirilgan
   const isTrashed = !!(item.deleted_at || item.is_trashed || item.trashed);
   // I18n etiketkalar — locale'ga qarab
-  const trashedLabel = apiLang === 'ru' ? 'УДАЛЁН' : "BEKOR QILINGAN";
-  const activeLabel = apiLang === 'ru' ? 'АКТИВНЫЙ' : 'FAOL';
+  const trashedLabel = tCrm('deleted');
+  const activeLabel = tCrm('active');
 
   return (
     <button

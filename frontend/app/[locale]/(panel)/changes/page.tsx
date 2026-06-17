@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -56,6 +57,8 @@ interface ListResp {
 }
 
 export default function ChangesPage() {
+  const t = useTranslations('changes');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const canCheck = useHasPermission(PERMS.CHANGED_TXN_CHECK);
   const [dateFrom, setDateFrom] = useState('');
@@ -100,36 +103,36 @@ export default function ChangesPage() {
 
   return (
     <>
-      <Topbar title="O'zgargan to'lovlar" subtitle="Bank tomonida o'chirilgan yoki o'zgartirilgan tranzaksiyalar tarixi" />
+      <Topbar title={t('title')} subtitle={t('subtitle')} />
       <TransactionsTabs />
 
       <div className="flex-1 p-3 sm:p-5 lg:p-6 space-y-5 w-full">
         {/* ═══ KPI ROW ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
           <KpiCard
-            label="Jami yozuvlar"
-            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            label={t('kpiTotal')}
+            sub={hasActiveFilters ? t('kpiSubMatch') : t('kpiSubAll')}
             value={total.toLocaleString('ru-RU')}
             icon={ListChecks}
             tone="indigo"
           />
           <KpiCard
-            label="Bank o'chirgan"
-            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            label={t('kpiDeleted')}
+            sub={hasActiveFilters ? t('kpiSubMatch') : t('kpiSubAll')}
             value={totals.deleted.toLocaleString('ru-RU')}
             icon={Trash2}
             tone="rose"
           />
           <KpiCard
-            label="Bank o'zgartirgan"
-            sub={hasActiveFilters ? 'filterga mos' : 'umumiy'}
+            label={t('kpiEdited')}
+            sub={hasActiveFilters ? t('kpiSubMatch') : t('kpiSubAll')}
             value={totals.edited.toLocaleString('ru-RU')}
             icon={Edit3}
             tone="amber"
           />
           <KpiCard
-            label="Sahifa summasi"
-            sub={`${items.length} ta yozuv`}
+            label={t('kpiPageAmount')}
+            sub={t('kpiPageRecords', { n: items.length })}
             value={formatMoney(pageAmount, 'UZS').replace(' UZS', '')}
             suffix="UZS"
             icon={Banknote}
@@ -146,7 +149,7 @@ export default function ChangesPage() {
               <Input
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                placeholder="Composite ID, shartnoma, hisob raqami, bank nomi..."
+                placeholder={t('searchPlaceholder')}
                 className="h-10 pl-9 pr-9"
               />
               {q && (
@@ -162,9 +165,9 @@ export default function ChangesPage() {
             {/* Hisob */}
             <div className="col-span-12 sm:col-span-6 lg:col-span-3">
               <Select value={accountId} onValueChange={(v) => { setAccountId(v); setPage(1); }}>
-                <SelectTrigger className="h-10"><SelectValue placeholder="Barcha hisoblar" /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue placeholder={tc('allAccounts')} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Barcha hisoblar</SelectItem>
+                  <SelectItem value="all">{tc('allAccounts')}</SelectItem>
                   {(accountsQ.data?.items || []).map((a: any) => (
                     <SelectItem key={a.id} value={a.id}>
                       {a.accountNo}{a.ownerName ? ' · ' + a.ownerName : ''}
@@ -179,9 +182,9 @@ export default function ChangesPage() {
               <Select value={changeType} onValueChange={(v) => { setChangeType(v); setPage(1); }}>
                 <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Hammasi</SelectItem>
-                  <SelectItem value="DELETED">O'chirilgan</SelectItem>
-                  <SelectItem value="EDITED">Tahrirlangan</SelectItem>
+                  <SelectItem value="all">{t('typeAll')}</SelectItem>
+                  <SelectItem value="DELETED">{t('typeDeleted')}</SelectItem>
+                  <SelectItem value="EDITED">{t('typeEdited')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -202,16 +205,16 @@ export default function ChangesPage() {
             <div className="flex items-center gap-3 text-[11.5px] text-slate-500 dark:text-slate-400">
               {hasActiveFilters ? (
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-100 dark:ring-indigo-900 font-medium">
-                  <Filter className="h-3 w-3" /> filterlar aktiv
+                  <Filter className="h-3 w-3" /> {t('filtersActive')}
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5 text-slate-400 dark:text-slate-500">
-                  <Filter className="h-3 w-3" /> filtrlar yo'q
+                  <Filter className="h-3 w-3" /> {t('filtersNone')}
                 </span>
               )}
               <span className="hidden lg:inline-flex items-center gap-1.5 text-slate-500 dark:text-slate-400">
                 <Database className="h-3 w-3" />
-                Sahifada: <b className="text-slate-700 dark:text-slate-300 tabular-nums">{items.length}</b> / {total.toLocaleString('ru-RU')}
+                {t('onPage')} <b className="text-slate-700 dark:text-slate-300 tabular-nums">{items.length}</b> / {total.toLocaleString('ru-RU')}
               </span>
             </div>
 
@@ -226,7 +229,7 @@ export default function ChangesPage() {
                     setAccountId('all'); setChangeType('all'); setPage(1);
                   }}
                 >
-                  <X className="h-3.5 w-3.5" /> Tozalash
+                  <X className="h-3.5 w-3.5" /> {tc('clear')}
                 </Button>
               )}
               <Button
@@ -235,19 +238,19 @@ export default function ChangesPage() {
                 className="h-9 gap-1.5"
                 onClick={() => listQ.refetch()}
                 disabled={listQ.isFetching}
-                title="Qayta yuklash"
+                title={t('refreshTitle')}
               >
                 <RefreshCw className={cn('h-3.5 w-3.5', listQ.isFetching && 'animate-spin')} />
-                Yangilash
+                {tc('refresh')}
               </Button>
               {canCheck && (
                 <Button
                   onClick={() => setCheckOpen(true)}
                   size="sm"
                   className="h-9 gap-1.5 bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all"
-                  title="Sana orqali qo'lda tekshirish"
+                  title={t('manualCheckTitle')}
                 >
-                  <Sparkles className="h-3.5 w-3.5" /> Qo'lda tekshirish
+                  <Sparkles className="h-3.5 w-3.5" /> {t('manualCheck')}
                 </Button>
               )}
             </div>
@@ -261,22 +264,22 @@ export default function ChangesPage() {
               <thead className="bg-gradient-to-b from-slate-50 to-slate-50/40 dark:from-slate-800 dark:to-slate-800/40 text-[10px] uppercase tracking-wider text-slate-600 dark:text-slate-300 font-bold">
                 <tr className="border-b border-slate-200 dark:border-slate-700">
                   <th className="px-3 py-3 text-left w-12">#</th>
-                  <th className="px-3 py-3 text-left w-32">Turi</th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">Aniqlangan</th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">Tranzaksiya sanasi</th>
-                  <th className="px-3 py-3 text-left">Bank · Hisob</th>
+                  <th className="px-3 py-3 text-left w-32">{t('colType')}</th>
+                  <th className="px-3 py-3 text-left whitespace-nowrap">{t('colDetected')}</th>
+                  <th className="px-3 py-3 text-left whitespace-nowrap">{t('colTxnDate')}</th>
+                  <th className="px-3 py-3 text-left">{t('colBankAccount')}</th>
                   <th className="px-3 py-3 text-left">Composite ID</th>
-                  <th className="px-3 py-3 text-left">Shartnoma</th>
-                  <th className="px-3 py-3 text-right whitespace-nowrap">Summa</th>
-                  <th className="px-3 py-3 text-left">O'zgarishlar</th>
-                  <th className="px-3 py-3 text-left w-20">Kim</th>
+                  <th className="px-3 py-3 text-left">{t('colContract')}</th>
+                  <th className="px-3 py-3 text-right whitespace-nowrap">{t('colAmount')}</th>
+                  <th className="px-3 py-3 text-left">{t('colChanges')}</th>
+                  <th className="px-3 py-3 text-left w-20">{t('colWho')}</th>
                 </tr>
               </thead>
               <tbody>
                 {listQ.isLoading && (
                   <tr><td colSpan={10} className="px-4 py-16 text-center text-slate-400 dark:text-slate-500">
                     <Loader2 className="h-6 w-6 animate-spin inline mr-2" />
-                    <span className="font-medium">Yuklanmoqda...</span>
+                    <span className="font-medium">{tc('loading')}</span>
                   </td></tr>
                 )}
                 {!listQ.isLoading && items.length === 0 && (
@@ -285,11 +288,11 @@ export default function ChangesPage() {
                       <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 grid place-items-center mb-3 ring-1 ring-slate-200 dark:ring-slate-700">
                         <AlertOctagon className="h-7 w-7 text-slate-400 dark:text-slate-500" />
                       </div>
-                      <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200">Yozuvlar topilmadi</div>
+                      <div className="text-[15px] font-bold text-slate-800 dark:text-slate-200">{t('emptyTitle')}</div>
                       <div className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">
                         {hasActiveFilters
-                          ? "Filterlar ostida hech narsa topilmadi. Filterni o'zgartiring yoki tozalang."
-                          : "Sync har safar ishlaganda avtomatik tekshiriladi. Hozircha bank tomonida o'zgargan to'lovlar yo'q."}
+                          ? t('emptyFiltered')
+                          : t('emptyNone')}
                       </div>
                       {canCheck && !hasActiveFilters && (
                         <Button
@@ -297,7 +300,7 @@ export default function ChangesPage() {
                           variant="outline"
                           className="mt-5 gap-2"
                         >
-                          <Sparkles className="h-4 w-4" /> Qo'lda tekshirishni boshlash
+                          <Sparkles className="h-4 w-4" /> {t('startManualCheck')}
                         </Button>
                       )}
                     </div>
@@ -324,7 +327,7 @@ export default function ChangesPage() {
                             : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
                         )}>
                           {isDel ? <Trash2 className="h-3 w-3" /> : <Edit3 className="h-3 w-3" />}
-                          {isDel ? "O'CHIRILGAN" : 'TAHRIRLANGAN'}
+                          {isDel ? t('badgeDeleted') : t('badgeEdited')}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-slate-700 dark:text-slate-300 tabular-nums whitespace-nowrap text-[12px]">
@@ -367,7 +370,7 @@ export default function ChangesPage() {
                       <td className="px-3 py-3">
                         {isDel ? (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 text-[10px] font-bold ring-1 ring-rose-100 dark:ring-rose-900">
-                            <Trash2 className="h-2.5 w-2.5" /> butun yozuv
+                            <Trash2 className="h-2.5 w-2.5" /> {t('wholeRecord')}
                           </span>
                         ) : it.fieldsChanged && it.fieldsChanged.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
@@ -403,15 +406,15 @@ export default function ChangesPage() {
             <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px] text-slate-600 dark:text-slate-300">
               <div className="flex items-center gap-3">
                 <span>
-                  Jami: <b className="tabular-nums text-slate-800 dark:text-slate-200">{total.toLocaleString('ru-RU')}</b>
+                  {tc('total')}: <b className="tabular-nums text-slate-800 dark:text-slate-200">{total.toLocaleString('ru-RU')}</b>
                 </span>
                 <span className="text-slate-300 dark:text-slate-600">·</span>
                 <span>
-                  Sahifa <b className="tabular-nums text-slate-800 dark:text-slate-200">{page}</b>/<b className="tabular-nums">{totalPages}</b>
+                  {t('pageOf')} <b className="tabular-nums text-slate-800 dark:text-slate-200">{page}</b>/<b className="tabular-nums">{totalPages}</b>
                 </span>
                 <span className="text-slate-300 dark:text-slate-600 hidden sm:inline">·</span>
                 <div className="hidden sm:flex items-center gap-1.5">
-                  <Label className="text-[11px] text-slate-500 dark:text-slate-400 m-0">Sahifada:</Label>
+                  <Label className="text-[11px] text-slate-500 dark:text-slate-400 m-0">{tc('perPage')}</Label>
                   <Select value={String(perPage)} onValueChange={(v) => { setPerPage(Number(v)); setPage(1); }}>
                     <SelectTrigger className="h-7 w-16 text-[11px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
@@ -502,6 +505,8 @@ function KpiCard({
 // Detail dialog
 // ════════════════════════════════════════════════════════
 function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClose: () => void }) {
+  const t = useTranslations('changes');
+  const tc = useTranslations('common');
   if (!item) return null;
   const isDel = item.changeType === 'DELETED';
   return (
@@ -519,7 +524,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-widest font-bold text-white/80">
-                {isDel ? "Bank tomonida o'chirilgan" : "Bank tomonida tahrirlangan"}
+                {isDel ? t('detailDeleted') : t('detailEdited')}
               </div>
               <div className="text-xl font-black tracking-tight leading-tight">
                 {item.bankNameSnap || item.account?.bank?.name || '—'}
@@ -535,12 +540,12 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
 
         <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/40 dark:bg-slate-900">
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 text-[12px]">
-            <InfoRow label="Aniqlangan" value={formatDateTime(item.detectedAt)} icon={Calendar} />
-            <InfoRow label="Aniqlovchi" value={item.detectedBy || '—'} icon={Activity} />
-            <InfoRow label="Tranzaksiya sanasi" value={item.txnDate ? new Date(item.txnDate).toLocaleDateString('ru-RU') : '—'} icon={Calendar} />
-            <InfoRow label="Yo'nalish" value={item.direction === 'IN' ? '⬇ Kirim' : item.direction === 'OUT' ? '⬆ Chiqim' : '—'} />
-            <InfoRow label="Summa" value={item.amount ? formatMoney(Math.abs(Number(item.amount)), 'UZS') : '—'} mono />
-            <InfoRow label="Shartnoma" value={item.contractNumber || '—'} mono />
+            <InfoRow label={t('detailDetected')} value={formatDateTime(item.detectedAt)} icon={Calendar} />
+            <InfoRow label={t('detailDetector')} value={item.detectedBy || '—'} icon={Activity} />
+            <InfoRow label={t('detailTxnDate')} value={item.txnDate ? new Date(item.txnDate).toLocaleDateString('ru-RU') : '—'} icon={Calendar} />
+            <InfoRow label={t('detailDirection')} value={item.direction === 'IN' ? t('directionIn') : item.direction === 'OUT' ? t('directionOut') : '—'} />
+            <InfoRow label={t('detailAmount')} value={item.amount ? formatMoney(Math.abs(Number(item.amount)), 'UZS') : '—'} mono />
+            <InfoRow label={t('detailContract')} value={item.contractNumber || '—'} mono />
           </div>
 
           {item.note && (
@@ -553,7 +558,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           {!isDel && item.fieldsChanged?.length > 0 && (
             <div className="rounded-2xl ring-1 ring-amber-200 dark:ring-amber-900 bg-white dark:bg-slate-900 overflow-hidden shadow-soft">
               <div className="px-4 py-2.5 bg-gradient-to-r from-amber-100/80 to-amber-50 dark:from-amber-950/40 dark:to-amber-950/30 text-[11px] uppercase tracking-wider font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
-                <Edit3 className="h-3.5 w-3.5" /> O'zgargan maydonlar ({item.fieldsChanged.length})
+                <Edit3 className="h-3.5 w-3.5" /> {t('changedFields', { n: item.fieldsChanged.length })}
               </div>
               <div className="divide-y divide-amber-100 dark:divide-amber-900">
                 {item.fieldsChanged.map((f) => {
@@ -581,7 +586,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
           {isDel && item.oldData && (
             <div className="rounded-2xl ring-1 ring-rose-200 dark:ring-rose-900 bg-white dark:bg-slate-900 overflow-hidden shadow-soft">
               <div className="px-4 py-2.5 bg-gradient-to-r from-rose-100/80 to-rose-50 dark:from-rose-950/40 dark:to-rose-950/30 text-[11px] uppercase tracking-wider font-bold text-rose-800 dark:text-rose-300 flex items-center gap-2">
-                <Trash2 className="h-3.5 w-3.5" /> O'chirilgan yozuv snapshot
+                <Trash2 className="h-3.5 w-3.5" /> {t('deletedSnapshot')}
               </div>
               <pre className="px-4 py-3 text-[10.5px] font-mono text-slate-700 dark:text-slate-300 overflow-x-auto max-h-[320px] bg-slate-50/60 dark:bg-slate-800/60">
                 {JSON.stringify(item.oldData, null, 2)}
@@ -591,7 +596,7 @@ function ChangeDetailDialog({ item, onClose }: { item: ChangeItem | null; onClos
         </div>
 
         <DialogFooter className="shrink-0 px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
-          <Button variant="ghost" onClick={onClose}>Yopish</Button>
+          <Button variant="ghost" onClick={onClose}>{tc('close')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -621,6 +626,8 @@ function ManualCheckDialog({
   accounts: any[];
   onSuccess: () => void;
 }) {
+  const t = useTranslations('changes');
+  const tc = useTranslations('common');
   const today = new Date().toISOString().slice(0, 10);
   const defaultFrom = (() => {
     const d = new Date();
@@ -657,13 +664,13 @@ function ManualCheckDialog({
     onSuccess: (r: any) => {
       setResult(r);
       if (r?.ok) {
-        toast.success(`Tekshirildi: ${r.deleted ?? 0} o'chirilgan, ${r.edited ?? 0} tahrirlangan`);
+        toast.success(t('toastChecked', { deleted: r.deleted ?? 0, edited: r.edited ?? 0 }));
         onSuccess();
       } else {
-        toast.error(r?.error || 'Xato');
+        toast.error(r?.error || tc('error'));
       }
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   const fromTooEarly = !!minDate && dateFrom < minDate;
@@ -681,13 +688,12 @@ function ManualCheckDialog({
               <Sparkles className="h-6 w-6" />
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-bold text-white/85">Qo'lda re-verify</div>
-              <div className="text-xl font-black tracking-tight">Sana orqali tekshirish</div>
+              <div className="text-[10px] uppercase tracking-widest font-bold text-white/85">{t('reVerifyBadge')}</div>
+              <div className="text-xl font-black tracking-tight">{t('checkByDate')}</div>
             </div>
           </div>
           <div className="text-[12px] text-white/85 mt-3 leading-relaxed">
-            Tanlangan sana oralig'idagi mavjud tranzaksiyalarni bank API bilan solishtirib
-            o'chirilgan / o'zgartirilganlarini aniqlaydi.
+            {t('manualCheckDesc')}
           </div>
         </div>
 
@@ -695,18 +701,18 @@ function ManualCheckDialog({
           {minDate && (
             <div className="rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[12px] inline-flex items-center gap-2 text-amber-800 dark:text-amber-300">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              Sync chegarasi: <b className="tabular-nums">{minDate}</b> — bundan oldinga chiqib bo'lmaydi
+              {t('syncLimit', { date: minDate })}
             </div>
           )}
 
           {!result && (
             <>
               <div>
-                <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Hisob</Label>
+                <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">{t('account')}</Label>
                 <Select value={accountId} onValueChange={setAccountId}>
                   <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Barcha sync yoqilgan hisoblar</SelectItem>
+                    <SelectItem value="all">{t('allSyncAccounts')}</SelectItem>
                     {accounts.map((a: any) => (
                       <SelectItem key={a.id} value={a.id}>
                         {a.accountNo}{a.ownerName ? ' · ' + a.ownerName : ''}
@@ -717,7 +723,7 @@ function ManualCheckDialog({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Sanadan</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">{tc('from')}</Label>
                   <Input
                     type="date"
                     value={dateFrom}
@@ -728,7 +734,7 @@ function ManualCheckDialog({
                   />
                 </div>
                 <div>
-                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">Sanagacha</Label>
+                  <Label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1.5 block">{tc('to')}</Label>
                   <Input
                     type="date"
                     value={dateTo}
@@ -741,14 +747,13 @@ function ManualCheckDialog({
               </div>
               {fromTooEarly && (
                 <div className="rounded-lg bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-3 py-2 text-[12px] text-rose-800 dark:text-rose-300 inline-flex items-center gap-2">
-                  <X className="h-3.5 w-3.5" /> Sanadan {minDate} dan oldin bo'lmasligi kerak
+                  <X className="h-3.5 w-3.5" /> {t('fromTooEarly', { date: minDate })}
                 </div>
               )}
               {!fromTooEarly && dayDiff > 0 && (
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-900 px-3 py-2 text-[12px] text-slate-700 dark:text-slate-300 inline-flex items-center gap-2">
                   <Calendar className="h-3.5 w-3.5 text-slate-500 dark:text-slate-400" />
-                  <b className="tabular-nums">{dayDiff}</b> ta kun ·{' '}
-                  <b>{accountId === 'all' ? 'barcha sync hisoblar' : '1 ta hisob'}</b>
+                  {t('rangeSummary', { days: dayDiff, scope: accountId === 'all' ? t('scopeAllSync') : t('scopeOneAccount') })}
                 </div>
               )}
             </>
@@ -759,17 +764,17 @@ function ManualCheckDialog({
               <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 px-4 py-3 flex items-start gap-2.5">
                 <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                 <div className="text-[12.5px] text-emerald-900 dark:text-emerald-300">
-                  <div className="font-bold mb-1">Tekshirish yakunlandi</div>
+                  <div className="font-bold mb-1">{t('checkDone')}</div>
                   <div className="grid grid-cols-3 gap-2 mt-2">
-                    <ResultBadge label="Tekshirildi" value={result.checked} color="indigo" />
-                    <ResultBadge label="O'chirilgan" value={result.deleted} color="rose" />
-                    <ResultBadge label="Tahrirlangan" value={result.edited} color="amber" />
+                    <ResultBadge label={t('resultChecked')} value={result.checked} color="indigo" />
+                    <ResultBadge label={t('resultDeleted')} value={result.deleted} color="rose" />
+                    <ResultBadge label={t('resultEdited')} value={result.edited} color="amber" />
                   </div>
                 </div>
               </div>
               {result.skippedAccounts?.length > 0 && (
                 <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 px-3 py-2 text-[11.5px] text-amber-800 dark:text-amber-300">
-                  <b>O'tkazib yuborilgan ({result.skippedAccounts.length}):</b>{' '}
+                  <b>{t('skippedAccounts', { n: result.skippedAccounts.length })}</b>{' '}
                   {result.skippedAccounts.slice(0, 5).join(', ')}
                   {result.skippedAccounts.length > 5 && '...'}
                 </div>
@@ -780,17 +785,17 @@ function ManualCheckDialog({
 
         <DialogFooter className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900">
           {result?.ok ? (
-            <Button onClick={onClose}>Yopish</Button>
+            <Button onClick={onClose}>{tc('close')}</Button>
           ) : (
             <>
-              <Button variant="ghost" onClick={onClose}>Bekor</Button>
+              <Button variant="ghost" onClick={onClose}>{t('cancel')}</Button>
               <Button
                 onClick={() => mut.mutate()}
                 disabled={mut.isPending || fromTooEarly || dayDiff <= 0}
                 className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 text-white shadow-md"
               >
                 {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Sparkles className="h-4 w-4 mr-1.5" />}
-                {mut.isPending ? 'Tekshirilmoqda...' : 'Tekshirishni boshlash'}
+                {mut.isPending ? t('checking') : t('startCheck')}
               </Button>
             </>
           )}

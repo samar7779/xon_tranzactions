@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Wifi, Send, Loader2, Eye, EyeOff, Copy, Check, ChevronRight,
@@ -75,6 +76,8 @@ const STATE_LABELS: Record<number, { label: string; tone: 'emerald' | 'amber' | 
 type Step = 'login' | 'transactions' | 'account';
 
 export default function ApiExplorerPage() {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   const [step, setStep] = useState<Step>('login');
   const [showPwd, setShowPwd] = useState(false);
   const today = new Date();
@@ -112,13 +115,13 @@ export default function ApiExplorerPage() {
     }),
     onSuccess: (r) => {
       if (r.ok) {
-        toast.success(`✓ Ulanish muvaffaqiyatli (${r.summary?.totalAccounts} hisob)`);
+        toast.success(`✓ ${t('toastLoginOk', { n: r.summary?.totalAccounts })}`);
         // Auto-fill first account/branch if found
         if (r.result?.clients?.[0]?.accounts?.[0]) {
           const a = r.result.clients[0].accounts[0];
           setForm((s) => ({ ...s, branch: a.branch, account: a.account }));
         }
-      } else toast.error(r.error || 'Xato');
+      } else toast.error(r.error || tc('error'));
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -142,8 +145,8 @@ export default function ApiExplorerPage() {
       useProxy,
     }),
     onSuccess: (r) => {
-      if (r.ok) toast.success(`✓ ${r.summary?.itemsCount} ta tranzaksiya olindi`);
-      else toast.error(r.error || 'Xato');
+      if (r.ok) toast.success(`✓ ${t('toastTxnsOk', { n: r.summary?.itemsCount })}`);
+      else toast.error(r.error || tc('error'));
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -158,8 +161,8 @@ export default function ApiExplorerPage() {
       useProxy,
     }),
     onSuccess: (r) => {
-      if (r.ok) toast.success('✓ Hisob ma\'lumotlari olindi');
-      else toast.error(r.error || 'Xato');
+      if (r.ok) toast.success(`✓ ${t('toastAccountOk')}`);
+      else toast.error(r.error || tc('error'));
     },
     onError: (e: any) => toast.error(e?.message),
   });
@@ -185,21 +188,21 @@ export default function ApiExplorerPage() {
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-bold tracking-tight">API Explorer</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Bank API'dan keladigan barcha ma'lumotlarni tekshirish</div>
+            <div className="text-lg font-bold tracking-tight">{t('title')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('subtitle')}</div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
-            <Zap className="h-3 w-3" /> DEV / DEBUG
+            <Zap className="h-3 w-3" /> {tc('devDebug')}
           </span>
         </div>
 
         {/* ═══ STEPS PROGRESS ═══ */}
         <div className="flex items-center gap-2">
-          <StepChip num={1} label="Bank ulanishi" active={step === 'login'} done={loginMut.data?.ok} onClick={() => setStep('login')} />
+          <StepChip num={1} label={t('step1')} active={step === 'login'} done={loginMut.data?.ok} onClick={() => setStep('login')} />
           <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-          <StepChip num={2} label="Tranzaksiyalar" active={step === 'transactions'} done={txnsMut.data?.ok} onClick={() => setStep('transactions')} disabled={!loginMut.data?.ok} />
+          <StepChip num={2} label={t('step2')} active={step === 'transactions'} done={txnsMut.data?.ok} onClick={() => setStep('transactions')} disabled={!loginMut.data?.ok} />
           <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600" />
-          <StepChip num={3} label="Hisob saldo" active={step === 'account'} done={accMut.data?.ok} onClick={() => setStep('account')} disabled={!loginMut.data?.ok} />
+          <StepChip num={3} label={t('step3')} active={step === 'account'} done={accMut.data?.ok} onClick={() => setStep('account')} disabled={!loginMut.data?.ok} />
         </div>
 
         {/* ═══ FORM ═══ */}
@@ -207,7 +210,7 @@ export default function ApiExplorerPage() {
           <CardContent className="p-6 space-y-4">
             {/* Bank presets */}
             <div className="space-y-2.5">
-              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Bank tanlash</Label>
+              <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('selectBank')}</Label>
 
               {/* Aktiv banklar — rangli, effektli */}
               <div className="flex flex-wrap gap-2">
@@ -236,13 +239,13 @@ export default function ApiExplorerPage() {
               {inactiveBanks.length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 font-semibold mt-3 mb-1.5">
-                    Kelajakda — integratsiya yo'q
+                    {t('futureNoIntegration')}
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {inactiveBanks.map((b: any) => (
                       <span
                         key={b.id}
-                        title="Bu bank uchun API integratsiyasi hali yo'q"
+                        title={t('noApiIntegration')}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 ring-1 ring-slate-150 dark:ring-slate-700 cursor-not-allowed"
                       >
                         <Building2 className="h-3 w-3" />
@@ -278,21 +281,21 @@ export default function ApiExplorerPage() {
               </button>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">ahost orqali yuborish</span>
+                  <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{t('proxyToggle')}</span>
                   {useProxy ? (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">
-                      YOQILGAN
+                      {tc('on')}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                      OFF
+                      {tc('off')}
                     </span>
                   )}
                 </div>
                 <div className="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
                   {useProxy
-                    ? <>So'rovlar <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded text-emerald-700 dark:text-emerald-300">ahost (37.153.159.11)</code> orqali yuboriladi — bank whitelist'da bo'lgan IP</>
-                    : <>So'rovlar to'g'ridan-to'g'ri bizning serverdan (<code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded">185.228.88.247</code>) yuboriladi</>}
+                    ? <>{t('proxyOnPrefix')} <code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded text-emerald-700 dark:text-emerald-300">ahost (37.153.159.11)</code> {t('proxyOnSuffix')}</>
+                    : <>{t('proxyOffPrefix')} (<code className="font-mono bg-white dark:bg-slate-800 px-1 py-0.5 rounded">185.228.88.247</code>) {t('proxyOffSuffix')}</>}
                 </div>
               </div>
               <Zap className={cn("h-5 w-5 shrink-0 transition-colors", useProxy ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500")} />
@@ -320,7 +323,7 @@ export default function ApiExplorerPage() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Login nomi</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('loginName')}</Label>
                 <Input
                   value={form.login}
                   onChange={(e) => setForm({ ...form, login: e.target.value })}
@@ -330,7 +333,7 @@ export default function ApiExplorerPage() {
               </div>
 
               <div className="space-y-1.5 md:col-span-2">
-                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Parol</Label>
+                <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('password')}</Label>
                 <div className="relative">
                   <Input
                     type={showPwd ? 'text' : 'password'}
@@ -355,7 +358,7 @@ export default function ApiExplorerPage() {
                     <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
                       <span>Branch (MFO)</span>
                       {form.branch && form.branch !== branchPadded && (
-                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium normal-case tracking-normal">→ {branchPadded} (5 xonalik)</span>
+                        <span className="text-[10px] text-amber-700 dark:text-amber-300 font-medium normal-case tracking-normal">→ {branchPadded} ({t('fiveDigits')})</span>
                       )}
                     </Label>
                     <Input
@@ -365,10 +368,10 @@ export default function ApiExplorerPage() {
                       placeholder="00974"
                       maxLength={5}
                     />
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod (74 / 974 → 00074 / 00974)</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('mfoHint')}</div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Hisob raqami</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('accountNumber')}</Label>
                     <Input
                       value={form.account}
                       onChange={(e) => setForm({ ...form, account: e.target.value.replace(/\D/g, '').slice(0, 20) })}
@@ -376,7 +379,7 @@ export default function ApiExplorerPage() {
                       placeholder="20208000..."
                       maxLength={20}
                     />
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">20 xonalik hisob raqami</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('accountNumberHint')}</div>
                   </div>
                 </>
               )}
@@ -384,7 +387,7 @@ export default function ApiExplorerPage() {
               {step === 'transactions' && (
                 <>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Boshlanish sanasi</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('dateFrom')}</Label>
                     <Input
                       type="date"
                       value={form.dateFrom}
@@ -393,14 +396,14 @@ export default function ApiExplorerPage() {
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">Tugash sanasi</Label>
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('dateTo')}</Label>
                     <Input
                       type="date"
                       value={form.dateTo}
                       onChange={(e) => setForm({ ...form, dateTo: e.target.value })}
                       className="text-sm h-10 rounded-xl"
                     />
-                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Maksimal 31 kun oralig'i</div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('max31days')}</div>
                   </div>
                 </>
               )}
@@ -415,7 +418,7 @@ export default function ApiExplorerPage() {
                   className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
                 >
                   {loginMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Wifi className="h-4 w-4 mr-2" />}
-                  APILogin tekshirish
+                  APILogin {tc('check')}
                 </Button>
               )}
               {step === 'transactions' && (
@@ -425,7 +428,7 @@ export default function ApiExplorerPage() {
                   className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
                 >
                   {txnsMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  GetDoc1C — Tranzaksiyalarni olish
+                  GetDoc1C — {t('btnGetTxns')}
                 </Button>
               )}
               {step === 'account' && (
@@ -435,7 +438,7 @@ export default function ApiExplorerPage() {
                   className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold"
                 >
                   {accMut.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Database className="h-4 w-4 mr-2" />}
-                  GetAcc1C — Hisob saldo
+                  GetAcc1C — {t('btnAccountBalance')}
                 </Button>
               )}
             </div>
@@ -487,6 +490,8 @@ function StepChip({
 }
 
 function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branch: string, account: string) => void }) {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   // Hooks — early return'dan oldin chaqirilishi shart
   const [addTargets, setAddTargets] = useState<any[] | null>(null);
 
@@ -538,7 +543,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
     const byCur = new Map<string, Map<string, any[]>>();
     for (const a of allAccs) {
       const cur = normCurrency(a.val);
-      const type = a.__salary ? 'Oylik (ZP) hisob' : accTypeLabel(a.account);
+      const type = a.__salary ? t('salaryAccount') : accTypeLabel(a.account);
       if (!byCur.has(cur)) byCur.set(cur, new Map());
       const byType = byCur.get(cur)!;
       if (!byType.has(type)) byType.set(type, []);
@@ -554,9 +559,9 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
       const byType = byCur.get(cur)!;
       const types = Array.from(byType.keys()).sort();
       const count = types.reduce((s, t) => s + byType.get(t)!.length, 0);
-      return { cur, count, types: types.map((t) => ({ type: t, accs: byType.get(t)! })) };
+      return { cur, count, types: types.map((tt) => ({ type: tt, accs: byType.get(tt)! })) };
     });
-  }, [allAccs]);
+  }, [allAccs, t]);
 
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
 
@@ -565,13 +570,13 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
   return (
     <>
       <SuccessCard
-        title="APILogin muvaffaqiyatli"
+        title={`APILogin ${t('successSuffix')}`}
         duration={data.durationMs}
         summary={[
-          { label: 'Klient', value: summary?.name || '—' },
+          { label: t('client'), value: summary?.name || '—' },
           { label: 'STIR', value: summary?.inn || '—', mono: true },
-          { label: 'Hisoblar', value: String(summary?.totalAccounts || allAccs.length || 0) },
-          { label: 'Bazada bor', value: `${addedCount} / ${allAccs.length}` },
+          { label: t('accounts'), value: String(summary?.totalAccounts || allAccs.length || 0) },
+          { label: t('inDbCount'), value: `${addedCount} / ${allAccs.length}` },
         ]}
       />
 
@@ -580,10 +585,10 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
         <CardContent className="p-0">
           <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800">
             <div className="text-base font-semibold tracking-tight">
-              Mavjud hisoblar <span className="text-slate-400 dark:text-slate-500 font-normal">({allAccs.length})</span>
+              {t('availableAccounts')} <span className="text-slate-400 dark:text-slate-500 font-normal">({allAccs.length})</span>
             </div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Valyuta va hisob turi bo'yicha guruhlangan · qatorni bosing → tranzaksiyalar · <span className="text-emerald-600 dark:text-emerald-400 font-medium">+ Qo'shish</span> → bazaga
+              {t('accountsHintPrefix')} · <span className="text-emerald-600 dark:text-emerald-400 font-medium">+ {t('add')}</span> {t('accountsHintSuffix')}
             </div>
           </div>
 
@@ -594,15 +599,15 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                   <ChevronRight className="h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-90" />
                   <Wallet className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
                   <span className="text-[13px] font-bold text-slate-800 dark:text-slate-200">{g.cur}</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">· {g.count} ta hisob</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">· {t('accountsCount', { n: g.count })}</span>
                 </summary>
 
-                {g.types.map((t) => {
-                  const isSalary = t.type.includes('Oylik');
+                {g.types.map((grp) => {
+                  const isSalary = grp.accs.some((a: any) => a.__salary);
                   // Bazada yo'q, oylik bo'lmagan hisoblar — bulk qo'shish uchun
-                  const addable = isSalary ? [] : t.accs.filter((a: any) => !dbSet.has(a.account));
+                  const addable = isSalary ? [] : grp.accs.filter((a: any) => !dbSet.has(a.account));
                   return (
-                  <div key={t.type}>
+                  <div key={grp.type}>
                     <div className={cn(
                       "px-6 py-1.5 flex items-center gap-1.5 border-t border-slate-50 dark:border-slate-800",
                       isSalary ? "bg-amber-50/70 dark:bg-amber-950/40" : "bg-white dark:bg-slate-900",
@@ -612,22 +617,22 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                         "text-[10px] uppercase tracking-wider font-semibold",
                         isSalary ? "text-amber-700 dark:text-amber-300" : "text-slate-400 dark:text-slate-500",
                       )}>
-                        {t.type}
+                        {grp.type}
                       </span>
-                      <span className={cn("text-[10px]", isSalary ? "text-amber-400 dark:text-amber-500" : "text-slate-300 dark:text-slate-600")}>· {t.accs.length}</span>
+                      <span className={cn("text-[10px]", isSalary ? "text-amber-400 dark:text-amber-500" : "text-slate-300 dark:text-slate-600")}>· {grp.accs.length}</span>
                       {isSalary && (
-                        <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 ml-1">— faqat oylik chiqariladi, vipiska uchun emas</span>
+                        <span className="text-[10px] text-amber-600/80 dark:text-amber-400/80 ml-1">{t('salaryOnlyNote')}</span>
                       )}
                       {addable.length > 0 && (
                         <button
                           onClick={() => setAddTargets(addable)}
                           className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-900 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition-colors"
                         >
-                          <Plus className="h-3 w-3" /> {addable.length} ta yangini qo'shish
+                          <Plus className="h-3 w-3" /> {t('addNewCount', { n: addable.length })}
                         </button>
                       )}
                     </div>
-                    {t.accs.map((a: any, i: number) => {
+                    {grp.accs.map((a: any, i: number) => {
                       const inDb = dbSet.has(a.account);
                       return (
                         <div
@@ -648,17 +653,17 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
                           </button>
 
                           {isSalary ? (
-                            <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 italic shrink-0">vipiska uchun emas</span>
+                            <span className="text-[10px] text-amber-600/70 dark:text-amber-400/70 italic shrink-0">{t('notForStatement')}</span>
                           ) : inDb ? (
                             <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 shrink-0">
-                              <CheckCircle2 className="h-3 w-3" /> Bazada
+                              <CheckCircle2 className="h-3 w-3" /> {tc('inDatabase')}
                             </span>
                           ) : (
                             <button
                               onClick={() => setAddTargets([a])}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-bold bg-indigo-600 text-white hover:bg-indigo-700 transition-colors shrink-0"
                             >
-                              <Plus className="h-3 w-3" /> Qo'shish
+                              <Plus className="h-3 w-3" /> {t('add')}
                             </button>
                           )}
                           <ChevronRight className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0" />
@@ -679,7 +684,7 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
       {/* Raw JSON — yopiq holatda, bosilganda ochiladi */}
       <details className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
         <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
-          <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
+          <FileText className="h-3.5 w-3.5" /> {t('showRawJson', { kb: (JSON.stringify(result).length / 1024).toFixed(1) })}
         </summary>
         <JsonViewer title="" json={result} />
       </details>
@@ -689,6 +694,8 @@ function LoginResult({ data, onPickAccount }: { data: any; onPickAccount: (branc
 
 // Bankdan kelgan hisob(lar)ni bazaga qo'shish — credential tanlash bilan (bitta yoki bulk)
 function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | null; creds: any[]; onClose: () => void }) {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const [credentialId, setCredentialId] = useState('');
 
@@ -719,15 +726,15 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
     },
     onSuccess: (r: any) => {
       if (isBulk) {
-        toast.success(`✓ ${r?.added ?? 0} qo'shildi · ${r?.skipped ?? 0} mavjud · ${r?.errors?.length ?? 0} xato`);
+        toast.success(`✓ ${t('bulkResult', { added: r?.added ?? 0, skipped: r?.skipped ?? 0, errors: r?.errors?.length ?? 0 })}`);
       } else {
-        toast.success('Hisob bazaga qo\'shildi');
+        toast.success(t('accountAdded'));
       }
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
       onClose();
       setCredentialId('');
     },
-    onError: (e: any) => toast.error(e?.message || 'Qo\'shishda xato'),
+    onError: (e: any) => toast.error(e?.message || t('addError')),
   });
 
   if (!accounts || accounts.length === 0) return null;
@@ -738,22 +745,22 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Plus className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-            {isBulk ? `${list.length} ta hisobni bazaga qo'shish` : "Hisobni bazaga qo'shish"}
+            {isBulk ? t('addAccountsTitle', { n: list.length }) : t('addAccountTitle')}
           </DialogTitle>
-          <DialogDescription>Hisob(lar)ni qaysi bank ulanishiga biriktiramiz?</DialogDescription>
+          <DialogDescription>{t('addAccountDesc')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Tanlangan hisob(lar) */}
           {isBulk ? (
             <div className="rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
-              <div className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">{list.length} ta hisob qo'shiladi</div>
+              <div className="text-[12px] font-semibold text-slate-900 dark:text-slate-100 mb-1.5">{t('accountsWillBeAdded', { n: list.length })}</div>
               <div className="max-h-32 overflow-y-auto space-y-0.5">
                 {list.slice(0, 30).map((a, i) => (
                   <div key={i} className="font-mono text-[10px] text-slate-500 dark:text-slate-400 truncate">{a.account}</div>
                 ))}
                 {list.length > 30 && (
-                  <div className="text-[10px] text-slate-400 dark:text-slate-500">… va yana {list.length - 30} ta</div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500">{t('andMore', { n: list.length - 30 })}</div>
                 )}
               </div>
             </div>
@@ -769,15 +776,15 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
           {/* Credential tanlash */}
           <div className="space-y-1.5">
             <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              Bank ulanishi <span className="text-rose-500 dark:text-rose-400">*</span>
+              {t('bankConnection')} <span className="text-rose-500 dark:text-rose-400">*</span>
             </Label>
             <Select value={credentialId} onValueChange={setCredentialId}>
               <SelectTrigger className={cn(!credentialId && 'ring-1 ring-rose-200 dark:ring-rose-900')}>
-                <SelectValue placeholder="Ulanishni tanlang" />
+                <SelectValue placeholder={tc('selectConnection')} />
               </SelectTrigger>
               <SelectContent>
                 {creds.length === 0 ? (
-                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">Saqlangan bank ulanishi yo'q</div>
+                  <div className="px-3 py-2 text-xs text-slate-500 dark:text-slate-400">{t('noSavedConnection')}</div>
                 ) : (
                   creds.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.label} · {c.bank?.name}</SelectItem>
@@ -787,16 +794,16 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
             </Select>
             {creds.length === 0 && (
               <div className="text-[10px] text-slate-500 dark:text-slate-400">
-                Avval Sozlash → Bank ulanishlari bo'limidan ulanish qo'shing
+                {t('addConnectionFirst')}
               </div>
             )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => { onClose(); setCredentialId(''); }}>Bekor qilish</Button>
+          <Button variant="outline" onClick={() => { onClose(); setCredentialId(''); }}>{tc('cancel')}</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending || !credentialId}>
-            {mut.isPending ? 'Qo\'shilmoqda...' : isBulk ? `${list.length} tani qo'shish` : "Qo'shish"}
+            {mut.isPending ? t('adding') : isBulk ? t('addNCount', { n: list.length }) : t('add')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -805,6 +812,8 @@ function AddBankAccountDialog({ accounts, creds, onClose }: { accounts: any[] | 
 }
 
 function TransactionsResult({ data }: { data: any }) {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
 
   const { summary, result, perDay = [], days = 1 } = data;
@@ -826,13 +835,13 @@ function TransactionsResult({ data }: { data: any }) {
   return (
     <>
       <SuccessCard
-        title={`${summary?.itemsCount || 0} ta tranzaksiya · ${data.dateFrom} → ${data.dateTo} (${days} kun)`}
+        title={t('txnsSummaryTitle', { n: summary?.itemsCount || 0, from: data.dateFrom, to: data.dateTo, days })}
         duration={data.durationMs}
         summary={[
-          { label: 'Kunlar soni', value: String(days) },
-          { label: 'Operatsiyalar', value: String(summary?.itemsCount || 0) },
-          { label: 'Jami kirim', value: fmt(summary?.totalCredit) + ' UZS', accent: 'emerald' },
-          { label: 'Jami chiqim', value: fmt(summary?.totalDebit) + ' UZS', accent: 'rose' },
+          { label: t('daysCount'), value: String(days) },
+          { label: t('operations'), value: String(summary?.itemsCount || 0) },
+          { label: t('totalCredit'), value: fmt(summary?.totalCredit) + ' UZS', accent: 'emerald' },
+          { label: t('totalDebit'), value: fmt(summary?.totalDebit) + ' UZS', accent: 'rose' },
         ]}
       />
 
@@ -840,17 +849,17 @@ function TransactionsResult({ data }: { data: any }) {
       <Card className="border-0 shadow-soft overflow-hidden">
         <CardContent className="p-0">
           <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between">
-            <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">Kunma-kun taqsimot</div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Sanani bosing → o'sha kun tranzaksiyalari ko'rinadi</div>
+            <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">{t('perDayTitle')}</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('perDayHint')}</div>
           </div>
           <table className="w-full text-[12px]">
             <thead>
               <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
-                <th className="text-left px-3 py-2">Sana</th>
-                <th className="text-right px-3 py-2">Operatsiyalar</th>
-                <th className="text-right px-3 py-2">Kirim (UZS)</th>
-                <th className="text-right px-3 py-2">Chiqim (UZS)</th>
-                <th className="text-left px-3 py-2">Holat</th>
+                <th className="text-left px-3 py-2">{tc('date')}</th>
+                <th className="text-right px-3 py-2">{t('operations')}</th>
+                <th className="text-right px-3 py-2">{t('inflowUzs')}</th>
+                <th className="text-right px-3 py-2">{t('outflowUzs')}</th>
+                <th className="text-left px-3 py-2">{tc('status')}</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -878,7 +887,7 @@ function TransactionsResult({ data }: { data: any }) {
                         <span className="text-[10px] text-rose-700 dark:text-rose-300 truncate max-w-[200px] inline-block" title={d.error}>{d.error}</span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900">
-                          OK
+                          {tc('ok')}
                         </span>
                       )}
                     </td>
@@ -905,19 +914,19 @@ function TransactionsResult({ data }: { data: any }) {
             <div className="px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-indigo-50/40 dark:bg-indigo-950/40 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Calendar className="h-3.5 w-3.5 text-indigo-700 dark:text-indigo-300" />
-                <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">{selectedDate} — {itemsForSelected.length} ta tranzaksiya</div>
+                <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">{selectedDate} — {t('txnCount', { n: itemsForSelected.length })}</div>
               </div>
-              <div className="text-[10px] text-slate-500 dark:text-slate-400">Tranzaksiyani bosing → barcha 29 ta field modal'da ochiladi</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('txnRowHint')}</div>
             </div>
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-700">
-                  <th className="text-left px-3 py-2 w-20">Vaqt</th>
-                  <th className="text-left px-3 py-2 w-20">Yo'nalish</th>
-                  <th className="text-left px-3 py-2">Kontragent</th>
-                  <th className="text-left px-3 py-2">Maqsad</th>
-                  <th className="text-right px-3 py-2 w-32">Summa (UZS)</th>
-                  <th className="text-left px-3 py-2 w-16">Hujjat</th>
+                  <th className="text-left px-3 py-2 w-20">{tc('time')}</th>
+                  <th className="text-left px-3 py-2 w-20">{t('direction')}</th>
+                  <th className="text-left px-3 py-2">{t('counterparty')}</th>
+                  <th className="text-left px-3 py-2">{t('purpose')}</th>
+                  <th className="text-right px-3 py-2 w-32">{t('amountUzs')}</th>
+                  <th className="text-left px-3 py-2 w-16">{t('document')}</th>
                   <th className="w-8"></th>
                 </tr>
               </thead>
@@ -937,7 +946,7 @@ function TransactionsResult({ data }: { data: any }) {
                           "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border",
                           it.dir === 2 ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900" : "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-900",
                         )}>
-                          {it.dir === 2 ? 'KIRIM' : 'CHIQIM'}
+                          {it.dir === 2 ? t('inflow') : t('outflow')}
                         </span>
                       </td>
                       <td className="px-3 py-2 max-w-[280px]">
@@ -971,14 +980,14 @@ function TransactionsResult({ data }: { data: any }) {
           <CardContent className="p-6">
             <div className="flex items-center gap-2 mb-4">
               <Sparkles className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-              <div className="text-base font-semibold tracking-tight">Tranzaksiya field tahlili</div>
+              <div className="text-base font-semibold tracking-tight">{t('fieldAnalysis')}</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-emerald-700 dark:text-emerald-300 font-semibold mb-2 flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  Saqlanyapti ({summary.fieldsSaved.length})
+                  {tc('saved')} ({summary.fieldsSaved.length})
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {summary.fieldsSaved.filter((f: string) => summary.fieldsInFirstItem.includes(f)).map((f: string) => (
@@ -990,7 +999,7 @@ function TransactionsResult({ data }: { data: any }) {
               <div>
                 <div className="text-[11px] uppercase tracking-wider text-rose-700 dark:text-rose-300 font-semibold mb-2 flex items-center gap-1.5">
                   <AlertCircle className="h-3.5 w-3.5" />
-                  Saqlanmaydi ({summary.fieldsNotSaved.length})
+                  {tc('notSaved')} ({summary.fieldsNotSaved.length})
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {summary.fieldsNotSaved.map((f: string) => (
@@ -999,7 +1008,7 @@ function TransactionsResult({ data }: { data: any }) {
                 </div>
                 {summary.fieldsNotSaved.length > 0 && (
                   <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2">
-                    Bu fieldlar bizning DB'da saqlanmaydi. Agar kerak bo'lsa schema'ga qo'shamiz.
+                    {t('notSavedNote')}
                   </div>
                 )}
               </div>
@@ -1011,7 +1020,7 @@ function TransactionsResult({ data }: { data: any }) {
       {/* Raw JSON (collapsed by default) */}
       <details className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
         <summary className="px-4 py-2.5 cursor-pointer text-[12px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2">
-          <FileText className="h-3.5 w-3.5" /> To'liq raw JSON ko'rsatish ({(JSON.stringify(result).length / 1024).toFixed(1)} KB)
+          <FileText className="h-3.5 w-3.5" /> {t('showRawJson', { kb: (JSON.stringify(result).length / 1024).toFixed(1) })}
         </summary>
         <JsonViewer title="" json={result} />
       </details>
@@ -1021,6 +1030,8 @@ function TransactionsResult({ data }: { data: any }) {
 
 // Tranzaksiya tafsiloti modal — tozalangan, biznes ma'lumotga ustivor
 function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => void }) {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   if (!txn) return null;
   const fmt = (n: number) => new Intl.NumberFormat('uz-UZ').format((n || 0) / 100);
 
@@ -1032,7 +1043,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
     rose:    'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
     slate:   'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',
   }[state.tone];
-  const dtypeLabel = DTYPE_LABELS[txn.dtype] || `${txn.dtype} (Boshqa)`;
+  const dtypeLabel = DTYPE_LABELS[txn.dtype] || `${txn.dtype} (${t('other')})`;
 
   // Yuboruvchi va qabul qiluvchi — agar kirim bo'lsa, biz qabul qiluvchimiz
   const sender = { name: txn.name_dt, inn: txn.inn_dt, account: txn.acc_dt, mfo: txn.mfo_dt };
@@ -1050,7 +1061,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-white/20 backdrop-blur-sm text-[11px] font-bold">
-                  {isIn ? <><ArrowDownLeft className="h-3 w-3" /> KIRIM</> : <><ArrowUpRight className="h-3 w-3" /> CHIQIM</>}
+                  {isIn ? <><ArrowDownLeft className="h-3 w-3" /> {t('inflow')}</> : <><ArrowUpRight className="h-3 w-3" /> {t('outflow')}</>}
                 </span>
                 <span className="text-[11px] text-white/85">{txn.ddate}{txn.time && ` · ${txn.time}`}</span>
                 {txn.anor === 1 && (
@@ -1077,13 +1088,13 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 
           {/* Status & document */}
           <div className="grid grid-cols-2 gap-3">
-            <DetailField label="Holat">
+            <DetailField label={tc('status')}>
               <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ring-1 ring-inset", stateClass)}>
                 <span className={cn("w-1.5 h-1.5 rounded-full", state.tone === 'emerald' && "bg-emerald-500", state.tone === 'amber' && "bg-amber-500", state.tone === 'rose' && "bg-rose-500", state.tone === 'slate' && "bg-slate-400")} />
                 {state.label}
               </span>
             </DetailField>
-            <DetailField label="Hujjat turi">
+            <DetailField label={t('documentType')}>
               <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100">{dtypeLabel}</div>
               {txn.num && <div className="font-mono text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">#{txn.num}</div>}
             </DetailField>
@@ -1091,7 +1102,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 
           {/* Sender */}
           <Party
-            title="Yuboruvchi"
+            title={t('sender')}
             color="rose"
             highlighted={!isIn}
             name={sender.name}
@@ -1102,7 +1113,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 
           {/* Receiver */}
           <Party
-            title="Qabul qiluvchi"
+            title={t('receiver')}
             color="emerald"
             highlighted={isIn}
             name={receiver.name}
@@ -1114,12 +1125,12 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
           {/* Purpose */}
           {txn.purpose && (
             <div>
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5">To'lov maqsadi</div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5">{t('paymentPurpose')}</div>
               <div className="rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 px-4 py-3">
                 <div className="text-[13px] text-slate-900 dark:text-slate-100 leading-relaxed whitespace-pre-wrap">{txn.purpose.trim()}</div>
                 {txn.purp_code && (
                   <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700 flex items-center gap-2 text-[11px]">
-                    <span className="text-slate-500 dark:text-slate-400">Maqsad kodi:</span>
+                    <span className="text-slate-500 dark:text-slate-400">{t('purposeCode')}</span>
                     <span className="font-mono font-semibold text-slate-700 dark:text-slate-300">{txn.purp_code}</span>
                   </div>
                 )}
@@ -1129,7 +1140,7 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
 
           {/* Value date if differs */}
           {txn.vdate && txn.vdate !== txn.ddate && (
-            <DetailField label="Value date (mablag' mavjud bo'lish sanasi)">
+            <DetailField label={t('valueDateLabel')}>
               <div className="text-[13px] font-semibold text-slate-900 dark:text-slate-100 tabular-nums">{txn.vdate}</div>
             </DetailField>
           )}
@@ -1137,9 +1148,9 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
           {/* Error if any */}
           {(txn.err && txn.err !== '0' && txn.err !== 0) || txn.err_msg ? (
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 px-4 py-3">
-              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-rose-700 dark:text-rose-300 mb-1">Bank xatosi</div>
+              <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-rose-700 dark:text-rose-300 mb-1">{t('bankError')}</div>
               <div className="text-[12px] text-rose-900 dark:text-rose-300">
-                {txn.err_msg || `Kod: ${txn.err}`}
+                {txn.err_msg || t('errorCode', { code: txn.err })}
               </div>
             </div>
           ) : null}
@@ -1147,20 +1158,20 @@ function TransactionDetailModal({ txn, onClose }: { txn: any; onClose: () => voi
           {/* Technical details (collapsed by default) */}
           <details className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
             <summary className="px-4 py-2.5 cursor-pointer text-[11px] font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 uppercase tracking-wider">
-              <FileText className="h-3.5 w-3.5" /> Texnik tafsilot (ID, vaqt, raw)
+              <FileText className="h-3.5 w-3.5" /> {t('technicalDetails')}
             </summary>
             <div className="px-4 py-3 bg-slate-50/60 dark:bg-slate-800/60 space-y-2 text-[11px]">
               <TechRow label="B2 ID" value={txn.b2_id} mono />
               <TechRow label="Global ID (NCI)" value={txn.general_id} mono />
               <TechRow label="Unique ID" value={txn.uniq} mono />
-              <TechRow label="Klient ID" value={txn.client_id} mono />
-              <TechRow label="Filial MFO" value={txn.branch} mono />
-              <TechRow label="Hujjat sanasi (ddate)" value={txn.ddate} />
+              <TechRow label={t('clientId')} value={txn.client_id} mono />
+              <TechRow label={t('branchMfo')} value={txn.branch} mono />
+              <TechRow label={t('documentDate')} value={txn.ddate} />
               <TechRow label="Value date (vdate)" value={txn.vdate} />
-              <TechRow label="Operatsiya vaqti" value={txn.time} />
-              <TechRow label="Kiritilgan" value={`${txn.input_date || '—'} ${txn.input_time || ''}`} />
-              <TechRow label="Settlement vaqti (stime)" value={txn.stime} />
-              <TechRow label="Anor 24/7" value={txn.anor === 1 ? 'Ha' : "Yo'q"} />
+              <TechRow label={t('operationTime')} value={txn.time} />
+              <TechRow label={t('inputDate')} value={`${txn.input_date || '—'} ${txn.input_time || ''}`} />
+              <TechRow label={t('settlementTime')} value={txn.stime} />
+              <TechRow label="Anor 24/7" value={txn.anor === 1 ? tc('yes') : tc('no')} />
               <details className="pt-2">
                 <summary className="cursor-pointer text-[10px] text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">Raw JSON</summary>
                 <pre className="mt-2 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded text-[10px] font-mono overflow-x-auto max-h-60 overflow-y-auto">{JSON.stringify(txn, null, 2)}</pre>
@@ -1194,6 +1205,7 @@ function Party({
   account?: string;
   mfo?: string;
 }) {
+  const t = useTranslations('apiExplorer');
   const c = {
     rose:    { bg: 'bg-rose-50/60 dark:bg-rose-950/40',    ring: 'ring-rose-200 dark:ring-rose-900', dot: 'bg-rose-500', label: 'text-rose-700 dark:text-rose-300' },
     emerald: { bg: 'bg-emerald-50/60 dark:bg-emerald-950/40', ring: 'ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500', label: 'text-emerald-700 dark:text-emerald-300' },
@@ -1203,7 +1215,7 @@ function Party({
       <div className="text-[10px] uppercase tracking-[0.15em] font-bold text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
         <span className={cn("w-1.5 h-1.5 rounded-full", c.dot)} />
         {title}
-        {highlighted && <span className={cn("text-[9px] font-bold uppercase", c.label)}>· siz</span>}
+        {highlighted && <span className={cn("text-[9px] font-bold uppercase", c.label)}>· {t('you')}</span>}
       </div>
       <div className={cn("rounded-xl ring-1 px-4 py-3 space-y-1.5", highlighted ? `${c.bg} ${c.ring}` : 'bg-slate-50 dark:bg-slate-800 ring-slate-200 dark:ring-slate-700')}>
         <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100 truncate">{name || '—'}</div>
@@ -1213,11 +1225,11 @@ function Party({
             <div className="font-mono text-slate-900 dark:text-slate-100">{inn || '—'}</div>
           </div>
           <div>
-            <div className="text-slate-500 dark:text-slate-400 mb-0.5">Bank MFO</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5">{t('bankMfo')}</div>
             <div className="font-mono text-slate-900 dark:text-slate-100">{mfo || '—'}</div>
           </div>
           <div className="col-span-2">
-            <div className="text-slate-500 dark:text-slate-400 mb-0.5">Hisob raqami</div>
+            <div className="text-slate-500 dark:text-slate-400 mb-0.5">{t('accountNumber')}</div>
             <div className="font-mono text-slate-900 dark:text-slate-100 truncate">{account || '—'}</div>
           </div>
         </div>
@@ -1227,31 +1239,33 @@ function Party({
 }
 
 function TechRow({ label, value, mono }: { label: string; value: any; mono?: boolean }) {
+  const t = useTranslations('apiExplorer');
   const isEmpty = value === null || value === undefined || value === '' || value === 'null';
   return (
     <div className="flex items-baseline justify-between gap-3">
       <div className="text-slate-500 dark:text-slate-400 shrink-0">{label}</div>
       <div className={cn("text-slate-900 dark:text-slate-100 text-right truncate", mono && "font-mono", isEmpty && "text-slate-400 dark:text-slate-500 italic")}>
-        {isEmpty ? "bo'sh" : String(value)}
+        {isEmpty ? t('empty') : String(value)}
       </div>
     </div>
   );
 }
 
 function AccountResult({ data }: { data: any }) {
+  const t = useTranslations('apiExplorer');
   if (!data.ok) return <ErrorCard error={data.error} duration={data.durationMs} />;
   const accounts = data.result || [];
   return (
     <>
       <SuccessCard
-        title="GetAcc1C muvaffaqiyatli"
+        title={`GetAcc1C ${t('successSuffix')}`}
         duration={data.durationMs}
         summary={[
-          { label: 'Topilgan hisoblar', value: String(accounts.length) },
-          { label: 'Field soni', value: String(data.summary?.fieldsInFirst?.length || 0) },
+          { label: t('accountsFound'), value: String(accounts.length) },
+          { label: t('fieldCount'), value: String(data.summary?.fieldsInFirst?.length || 0) },
         ]}
       />
-      <JsonViewer title="To'liq raw javob (GetAcc1C)" json={data.result} />
+      <JsonViewer title={t('rawResponseTitle')} json={data.result} />
     </>
   );
 }
@@ -1263,6 +1277,7 @@ function SuccessCard({
   duration: number;
   summary: { label: string; value: string; mono?: boolean; accent?: 'emerald' | 'rose' }[];
 }) {
+  const t = useTranslations('apiExplorer');
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="h-1.5 bg-gradient-to-r from-emerald-500 to-teal-600" />
@@ -1274,7 +1289,7 @@ function SuccessCard({
             </div>
             <div>
               <div className="text-base font-bold tracking-tight">{title}</div>
-              <div className="text-xs text-slate-500 dark:text-slate-400">{duration} ms da bajarildi</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">{t('completedInMs', { ms: duration })}</div>
             </div>
           </div>
         </div>
@@ -1297,6 +1312,7 @@ function SuccessCard({
 }
 
 function ErrorCard({ error, duration }: { error: string; duration: number }) {
+  const tc = useTranslations('common');
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="h-1.5 bg-gradient-to-r from-rose-500 to-red-600" />
@@ -1306,7 +1322,7 @@ function ErrorCard({ error, duration }: { error: string; duration: number }) {
             <XCircle className="h-5 w-5" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-bold tracking-tight">Xato</div>
+            <div className="text-base font-bold tracking-tight">{tc('error')}</div>
             <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">{duration} ms</div>
             <div className="text-sm text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 rounded-lg px-3 py-2 font-mono break-words">
               {error}
@@ -1319,6 +1335,8 @@ function ErrorCard({ error, duration }: { error: string; duration: number }) {
 }
 
 function JsonViewer({ title, json }: { title: string; json: any }) {
+  const t = useTranslations('apiExplorer');
+  const tc = useTranslations('common');
   const [copied, setCopied] = useState(false);
   const str = JSON.stringify(json, null, 2);
 
@@ -1336,11 +1354,11 @@ function JsonViewer({ title, json }: { title: string; json: any }) {
             <FileText className="h-4 w-4 text-slate-600 dark:text-slate-300" />
             <div className="text-base font-semibold tracking-tight">{title}</div>
             <span className="text-[10px] text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-              {str.length.toLocaleString()} bayt
+              {t('bytes', { n: str.length.toLocaleString() })}
             </span>
           </div>
           <Button size="sm" variant="outline" onClick={copy} className="h-8 gap-1.5 rounded-full text-xs">
-            {copied ? <><Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> Nusxalandi</> : <><Copy className="h-3.5 w-3.5" /> Nusxalash</>}
+            {copied ? <><Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> {tc('copied')}</> : <><Copy className="h-3.5 w-3.5" /> {tc('copy')}</>}
           </Button>
         </div>
         <pre className="px-6 py-4 text-[11px] font-mono leading-relaxed overflow-x-auto max-h-[600px] overflow-y-auto bg-slate-50/40 dark:bg-slate-900/40">

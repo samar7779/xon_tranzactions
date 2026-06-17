@@ -1,8 +1,11 @@
+'use client';
+
 /**
  * Pure-SVG chart komponentlar — tashqi paket talab qilinmaydi.
  * Modern fintech dashboard'lari uslubida.
  */
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
 // ─────────────── Dual area chart (kirim/chiqim) ───────────────
@@ -19,11 +22,13 @@ interface DualAreaChartProps {
 export function DualAreaChart({ data, height = 300, className }: DualAreaChartProps) {
   const id = useMemo(() => `dual-${Math.random().toString(36).slice(2, 8)}`, []);
   const [hover, setHover] = useState<number | null>(null);
+  const tch = useTranslations('charts');
+  const tc = useTranslations('common');
 
   if (data.length === 0) {
     return (
       <div className={cn('grid place-items-center text-xs text-slate-400 dark:text-slate-500', className)} style={{ height }}>
-        Ma'lumot yo'q
+        {tch('noData')}
       </div>
     );
   }
@@ -255,16 +260,16 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
                 <div className="px-3 py-2 space-y-1">
                   <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                     <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-slate-500 dark:text-slate-400">Kirim</span>
+                    <span className="text-slate-500 dark:text-slate-400">{tc('inflow')}</span>
                     <span className="ml-auto font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatFull(data[h].inflow)}</span>
                   </div>
                   <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />
-                    <span className="text-slate-500 dark:text-slate-400">Chiqim</span>
+                    <span className="text-slate-500 dark:text-slate-400">{tc('outflow')}</span>
                     <span className="ml-auto font-bold text-rose-700 dark:text-rose-300 tabular-nums">{formatFull(data[h].outflow)}</span>
                   </div>
                   <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
-                    <span className="text-slate-500 dark:text-slate-400">Sof</span>
+                    <span className="text-slate-500 dark:text-slate-400">{tc('net')}</span>
                     <span className={cn(
                       "ml-auto font-bold tabular-nums",
                       data[h].inflow - data[h].outflow >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-rose-700 dark:text-rose-300",
@@ -305,13 +310,13 @@ export function DualAreaChart({ data, height = 300, className }: DualAreaChartPr
       {/* Legenda */}
       <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-slate-500 dark:text-slate-400">
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Kirim
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> {tc('inflow')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> Chiqim
+          <span className="w-2.5 h-2.5 rounded-full bg-rose-500" /> {tc('outflow')}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 dark:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900" /> Dam olish kuni
+          <span className="w-2.5 h-2.5 rounded-sm bg-rose-100 dark:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900" /> {tc('weekend')}
         </span>
       </div>
     </div>
@@ -534,11 +539,13 @@ interface DailyBarChartProps {
  */
 export function DailyBarChart({ data, height = 260, className }: DailyBarChartProps) {
   const [hover, setHover] = useState<number | null>(null);
+  const tch = useTranslations('charts');
+  const tc = useTranslations('common');
 
   if (data.length === 0) {
     return (
       <div className={cn('grid place-items-center text-xs text-slate-400 dark:text-slate-500', className)} style={{ height }}>
-        Ma'lumot yo'q
+        {tch('noData')}
       </div>
     );
   }
@@ -586,18 +593,18 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
                     <div className="px-3 py-2 space-y-1">
                       <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                         <span className="w-2 h-2 rounded-sm bg-emerald-500" />
-                        <span className="text-slate-500 dark:text-slate-400">Kirim</span>
+                        <span className="text-slate-500 dark:text-slate-400">{tc('inflow')}</span>
                         <span className="ml-auto font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{formatFull(d.inflow)}</span>
                       </div>
                       <div className="flex items-center gap-2 whitespace-nowrap text-[11px]">
                         <span className="w-2 h-2 rounded-sm bg-rose-500" />
-                        <span className="text-slate-500 dark:text-slate-400">Chiqim</span>
+                        <span className="text-slate-500 dark:text-slate-400">{tc('outflow')}</span>
                         <span className="ml-auto font-bold text-rose-700 dark:text-rose-300 tabular-nums">{formatFull(d.outflow)}</span>
                       </div>
                       <div className="flex items-center gap-2 whitespace-nowrap text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800">
                         <span className="w-2 h-2 rounded-sm bg-blue-500" />
-                        <span className="text-slate-500 dark:text-slate-400">Tranzaksiya</span>
-                        <span className="ml-auto font-bold text-blue-700 dark:text-blue-300 tabular-nums">{d.count} ta</span>
+                        <span className="text-slate-500 dark:text-slate-400">{tc('transaction')}</span>
+                        <span className="ml-auto font-bold text-blue-700 dark:text-blue-300 tabular-nums">{tch('countUnit', { count: d.count })}</span>
                       </div>
                     </div>
                   </div>
@@ -637,10 +644,10 @@ export function DailyBarChart({ data, height = 260, className }: DailyBarChartPr
 
       {/* Legenda */}
       <div className="flex items-center justify-center gap-4 mt-2 text-[10px] text-slate-500 dark:text-slate-400">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> Kirim</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" /> Chiqim</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500" /> Tranzaksiya soni</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-300 dark:ring-amber-900" /> Dam olish kuni</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-emerald-500" /> {tc('inflow')}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-rose-500" /> {tc('outflow')}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-blue-500" /> {tc('transactionCount')}</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-amber-100 dark:bg-amber-900/30 ring-1 ring-amber-300 dark:ring-amber-900" /> {tc('weekend')}</span>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { ArrowUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -17,6 +18,7 @@ export function ScrollToTop({
   threshold?: number;
 }) {
   const [visible, setVisible] = useState(false);
+  const tc = useTranslations('common');
 
   useEffect(() => {
     const el = document.querySelector<HTMLElement>(targetSelector);
@@ -39,8 +41,8 @@ export function ScrollToTop({
     <button
       type="button"
       onClick={jumpTop}
-      aria-label="Yuqoriga"
-      title="Yuqoriga"
+      aria-label={tc('scrollToTop')}
+      title={tc('scrollToTop')}
       className={cn(
         'fixed bottom-24 right-6 z-40',
         'w-11 h-11 rounded-full',

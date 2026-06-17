@@ -66,7 +66,7 @@ export default function CredentialsPage() {
   const revealMut = useMutation({
     mutationFn: (id: string) => api.get<any>(`/bank-credentials/${id}/reveal-password`),
     onSuccess: (r) => setRevealed(r),
-    onError: (e: any) => toast.error(e?.message || 'Parolni ko\'rish uchun ruxsat yo\'q'),
+    onError: (e: any) => toast.error(e?.message || t('revealNoPermission')),
   });
 
   const list = creds?.items || [];
@@ -78,7 +78,7 @@ export default function CredentialsPage() {
     <>
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
-          <div className="text-lg font-bold tracking-tight">Bank ulanishlari</div>
+          <div className="text-lg font-bold tracking-tight">{t('title')}</div>
           <Button
             size="sm"
             onClick={() => { setEditing(null); setDialogOpen(true); }}
@@ -90,10 +90,10 @@ export default function CredentialsPage() {
 
         {/* ═══ KPI ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiTile label="Jami ulanish" value={String(list.length)} icon={KeyRound} color="indigo" />
-          <KpiTile label="Faol" value={String(activeCount)} icon={CheckCircle2} color="emerald" />
-          <KpiTile label="Tekshirilgan" value={String(verifiedCount)} icon={Shield} color="cyan" />
-          <KpiTile label="Xato bilan" value={String(errorCount)} icon={AlertCircle} color="rose" />
+          <KpiTile label={t('kpiTotal')} value={String(list.length)} icon={KeyRound} color="indigo" />
+          <KpiTile label={t('active')} value={String(activeCount)} icon={CheckCircle2} color="emerald" />
+          <KpiTile label={t('kpiVerified')} value={String(verifiedCount)} icon={Shield} color="cyan" />
+          <KpiTile label={t('kpiWithError')} value={String(errorCount)} icon={AlertCircle} color="rose" />
         </div>
 
         {/* ═══ CONNECTION CARDS ═══ */}
@@ -106,8 +106,8 @@ export default function CredentialsPage() {
             <CardContent className="p-0">
               <EmptyState
                 icon={KeyRound}
-                title="Hali bank ulanishi qo'shilmagan"
-                description="Birinchi bank ulanishini qo'shing — login va parol bilan, IP whitelist orqali avtomatik avtorizatsiya"
+                title={t('noData')}
+                description={t('emptyHint')}
               />
             </CardContent>
           </Card>
@@ -147,13 +147,15 @@ export default function CredentialsPage() {
 }
 
 function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => void }) {
+  const t = useTranslations('credentials');
+  const tc = useTranslations('common');
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showPwd, setShowPwd] = useState(false);
 
   function copy(field: string, value: string) {
     navigator.clipboard.writeText(value);
     setCopiedField(field);
-    toast.success(`${field} nusxalandi`);
+    toast.success(tc('labelCopied', { label: field }));
     setTimeout(() => setCopiedField(null), 2000);
   }
 
@@ -165,16 +167,16 @@ function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => voi
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-6 py-4 text-white">
           <div className="flex items-center gap-2 mb-1">
             <Eye className="h-4 w-4" />
-            <span className="text-[11px] uppercase tracking-wider font-bold">Maxfiy ma'lumotlar</span>
+            <span className="text-[11px] uppercase tracking-wider font-bold">{t('secretData')}</span>
           </div>
           <div className="text-base font-bold tracking-tight">{data.label}</div>
           <div className="text-xs text-white/80">{data.bank}</div>
         </div>
         <div className="p-5 space-y-3">
-          <RevealRow label="Login" value={data.loginFull} onCopy={() => copy('Login', data.loginFull)} copied={copiedField === 'Login'} />
-          <RevealRow label="Bank MFO" value={data.branch || '—'} onCopy={() => copy('MFO', data.branch || '')} copied={copiedField === 'MFO'} />
+          <RevealRow label={t('loginName')} value={data.loginFull} onCopy={() => copy(t('loginName'), data.loginFull)} copied={copiedField === t('loginName')} />
+          <RevealRow label={t('bankMfo')} value={data.branch || '—'} onCopy={() => copy(t('bankMfo'), data.branch || '')} copied={copiedField === t('bankMfo')} />
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">Parol</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold mb-1.5">{t('password')}</div>
             <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 rounded-xl px-3 py-2.5">
               <code className="flex-1 font-mono text-sm text-slate-900 dark:text-slate-100 break-all select-all">
                 {showPwd ? data.password : '•'.repeat(Math.min(data.password.length, 16))}
@@ -188,15 +190,15 @@ function RevealPasswordDialog({ data, onClose }: { data: any; onClose: () => voi
               </button>
               <button
                 type="button"
-                onClick={() => copy('Parol', data.password)}
+                onClick={() => copy(t('password'), data.password)}
                 className="text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-300 shrink-0 p-1"
               >
-                {copiedField === 'Parol' ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+                {copiedField === t('password') ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
             <div className="flex items-center gap-1.5 mt-2 text-[10px] text-rose-600 dark:text-rose-400">
               <Shield className="h-3 w-3" />
-              Ehtiyot bo'ling: parolni faqat ishonchli joyda nusxalang. Bu amal logga yoziladi.
+              {t('revealWarning')}
             </div>
           </div>
         </div>
@@ -269,6 +271,7 @@ function CredentialCard({
   onEdit: () => void;
   testing: boolean;
 }) {
+  const t = useTranslations('credentials');
   const login = (c.loginPrefix || '') + (c.loginName || '');
   return (
     <Card className="group border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700 transition-all overflow-hidden bg-white dark:bg-slate-900">
@@ -289,19 +292,19 @@ function CredentialCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onTest} disabled={testing}>
-                  <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> Ulanishni tekshirish
+                  <Wifi className={cn("h-4 w-4 mr-2", testing && "animate-pulse")} /> {t('testConnection')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={onEdit}>
-                  <Pencil className="h-4 w-4 mr-2" /> Tahrirlash
+                  <Pencil className="h-4 w-4 mr-2" /> {t('edit')}
                 </DropdownMenuItem>
                 {onReveal && (
                   <DropdownMenuItem onClick={onReveal} className="text-amber-700 dark:text-amber-300">
-                    <Eye className="h-4 w-4 mr-2" /> Parolni ko'rsatish
+                    <Eye className="h-4 w-4 mr-2" /> {t('revealPassword')}
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-rose-600 dark:text-rose-400" onClick={onDelete}>
-                  <Trash2 className="h-4 w-4 mr-2" /> O'chirish
+                  <Trash2 className="h-4 w-4 mr-2" /> {t('delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -324,35 +327,35 @@ function CredentialCard({
                   status === 'untested' && "bg-slate-300",
                 )} />
               </span>
-              {status === 'ok' ? 'Ulangan' : status === 'error' ? 'Xato' : 'Tekshirilmagan'}
+              {status === 'ok' ? t('statusConnected') : status === 'error' ? t('statusError') : t('statusUntested')}
             </span>
             <span className="text-[10px] text-slate-400 dark:text-slate-500 flex-1 truncate">
-              {c.lastVerifiedAt ? formatDateTime(c.lastVerifiedAt) : 'Hech tekshirilmagan'}
+              {c.lastVerifiedAt ? formatDateTime(c.lastVerifiedAt) : t('neverVerified')}
             </span>
             <Button
               size="sm" onClick={onTest} disabled={testing}
               className="h-8 rounded-lg text-xs font-medium gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
             >
               <Wifi className={cn("h-3.5 w-3.5", testing && "animate-pulse")} />
-              {testing ? 'Tekshirilmoqda...' : 'Tekshirish'}
+              {testing ? t('testing') : t('test')}
             </Button>
           </div>
         </div>
 
         {/* Info grid */}
         <div className="px-4 pb-4 grid grid-cols-2 gap-2">
-          <InfoTile label="Login"><span className="font-mono">{login || '—'}</span></InfoTile>
-          <InfoTile label="MFO"><span className="font-mono">{c.branch || '—'}</span></InfoTile>
-          <InfoTile label="Avtorizatsiya">
+          <InfoTile label={t('loginName')}><span className="font-mono">{login || '—'}</span></InfoTile>
+          <InfoTile label={t('branch')}><span className="font-mono">{c.branch || '—'}</span></InfoTile>
+          <InfoTile label={t('authMode')}>
             <span className="flex items-center gap-1">
               {c.authMode === 'IP_WHITELIST'
                 ? <><Globe className="h-3 w-3 text-slate-400 dark:text-slate-500" /> IP Whitelist</>
                 : <><Lock className="h-3 w-3 text-slate-400 dark:text-slate-500" /> SMS SID</>}
             </span>
           </InfoTile>
-          <InfoTile label="Yo'l">
+          <InfoTile label={t('route')}>
             <span className={cn("font-semibold", c.useProxy ? "text-emerald-700 dark:text-emerald-300" : "text-slate-600 dark:text-slate-300")}>
-              {c.useProxy ? 'ahost orqali' : "to'g'ridan-to'g'ri"}
+              {c.useProxy ? t('viaProxy') : t('direct')}
             </span>
           </InfoTile>
         </div>
@@ -427,13 +430,13 @@ function CredDialog({
         <div className="bg-gradient-to-br from-indigo-500 to-blue-600 px-6 py-5 text-white">
           <div className="flex items-center gap-1.5 mb-1.5 text-white/80">
             <KeyRound className="h-3.5 w-3.5" />
-            <span className="text-[10px] uppercase tracking-[0.15em] font-bold">Bank ulanishi</span>
+            <span className="text-[10px] uppercase tracking-[0.15em] font-bold">{t('bankConnection')}</span>
           </div>
           <DialogTitle className="text-white text-lg font-bold tracking-tight">
-            {isEdit ? 'Ulanishni tahrirlash' : t('add')}
+            {isEdit ? t('editConnection') : t('add')}
           </DialogTitle>
           <DialogDescription className="text-white/75 text-xs mt-0.5">
-            Banklar API uchun login/parol — bir ulanish bir nechta hisobni o'z ichiga oladi
+            {t('dialogDesc')}
           </DialogDescription>
         </div>
 
@@ -452,7 +455,7 @@ function CredDialog({
                   {banks.filter((b) => b.isActive).length > 0 && (
                     <>
                       <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
-                        ✓ Aktiv (API ishlaydi)
+                        ✓ {t('groupActive')}
                       </div>
                       {banks.filter((b) => b.isActive).map((b) => (
                         <SelectItem key={b.id} value={b.id}>
@@ -467,7 +470,7 @@ function CredDialog({
                   {banks.filter((b) => !b.isActive).length > 0 && (
                     <>
                       <div className="px-2 py-1 text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 mt-1">
-                        🚧 Kelajakda (tanlash mumkin emas)
+                        🚧 {t('groupFuture')}
                       </div>
                       {banks.filter((b) => !b.isActive).map((b) => (
                         <SelectItem key={b.id} value={b.id} disabled className="opacity-60">
@@ -506,7 +509,7 @@ function CredDialog({
 
           <div className="space-y-1.5">
             <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-              API login <span className="text-rose-500">*</span>
+              {t('loginName')} <span className="text-rose-500">*</span>
             </Label>
             <div className="flex gap-2">
               <Input
@@ -519,12 +522,12 @@ function CredDialog({
               <Input
                 value={form.loginName}
                 onChange={(e) => setForm({ ...form, loginName: e.target.value })}
-                placeholder="login nomi"
+                placeholder={t('loginNamePlaceholder')}
                 autoComplete="off"
                 className={cn('flex-1 font-mono', !form.loginName && 'ring-1 ring-rose-200')}
               />
             </div>
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">Prefiks (KapitalBank uchun "IB#") + login nomi</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('loginHint')}</div>
           </div>
 
           <div className="space-y-1.5">
@@ -534,7 +537,7 @@ function CredDialog({
                 type={showPwd ? 'text' : 'password'}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder={isEdit ? "Bo'sh qoldirsangiz o'zgartirilmaydi" : '••••••••'}
+                placeholder={isEdit ? t('passwordEditPlaceholder') : '••••••••'}
                 autoComplete="new-password"
                 className="pr-10 font-mono"
               />
@@ -547,7 +550,7 @@ function CredDialog({
               </button>
             </div>
             {isEdit && (
-              <div className="text-[10px] text-slate-500 dark:text-slate-400">Parolni o'zgartirish uchun yangi parolni kiriting</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('passwordEditHint')}</div>
             )}
           </div>
 
@@ -563,7 +566,7 @@ function CredDialog({
               autoComplete="off"
               className={cn('font-mono', !form.branch && 'ring-1 ring-rose-200')}
             />
-            <div className="text-[10px] text-slate-500 dark:text-slate-400">5 xonalik MFO kod — majburiy</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400">{t('mfoHint')}</div>
           </div>
 
           {/* ahost proxy toggle */}
@@ -585,11 +588,11 @@ function CredDialog({
               )} />
             </button>
             <div className="flex-1 min-w-0">
-              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">ahost orqali yuborish</div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100">{t('proxyToggleTitle')}</div>
               <div className="text-[10px] text-slate-600 dark:text-slate-300 mt-0.5">
                 {form.useProxy
-                  ? "Bank API'ga so'rovlar ahost (37.153.159.11) orqali — IP whitelist'da bor"
-                  : "To'g'ridan-to'g'ri bizning server (185.228.88.247) dan — whitelist talab qiladi"}
+                  ? t('proxyOnHint', { ip: '37.153.159.11' })
+                  : t('proxyOffHint', { ip: '185.228.88.247' })}
               </div>
             </div>
           </div>
@@ -602,7 +605,7 @@ function CredDialog({
             onClick={() => mut.mutate()}
             disabled={mut.isPending || !form.bankId || !form.branch || !form.loginName}
           >
-            {mut.isPending ? 'Saqlanmoqda...' : tc('save')}
+            {mut.isPending ? t('saving') : tc('save')}
           </Button>
         </div>
       </DialogContent>

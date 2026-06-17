@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -24,20 +25,20 @@ import { cn, formatDateTime } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 
-const STATUS_CONFIG: Record<string, { icon: any; label: string; cls: string; dot: string }> = {
-  SUCCESS: { icon: CheckCircle2, label: 'Muvaffaqiyatli', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500' },
-  FAILED:  { icon: XCircle, label: 'Xato', cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900', dot: 'bg-rose-500' },
-  RUNNING: { icon: Loader2, label: 'Bajarilmoqda', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', dot: 'bg-blue-500' },
-  PARTIAL: { icon: AlertTriangle, label: 'Qisman', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', dot: 'bg-amber-500' },
+const STATUS_CONFIG: Record<string, { icon: any; labelKey: string; cls: string; dot: string }> = {
+  SUCCESS: { icon: CheckCircle2, labelKey: 'statusSuccess', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', dot: 'bg-emerald-500' },
+  FAILED:  { icon: XCircle, labelKey: 'statusFailed', cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900', dot: 'bg-rose-500' },
+  RUNNING: { icon: Loader2, labelKey: 'statusRunning', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', dot: 'bg-blue-500' },
+  PARTIAL: { icon: AlertTriangle, labelKey: 'statusPartial', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', dot: 'bg-amber-500' },
 };
 
 const STATUS_FILTERS = [
-  { value: 'all', label: 'Barchasi' },
-  { value: 'SUCCESS', label: 'Muvaffaqiyatli' },
-  { value: 'FAILED', label: 'Xato' },
-  { value: 'PARTIAL', label: 'Qisman' },
-  { value: 'RUNNING', label: 'Bajarilmoqda' },
-  { value: 'BACKFILL', label: 'Tarix yuklash' },
+  { value: 'all', labelKey: 'filterAll' },
+  { value: 'SUCCESS', labelKey: 'statusSuccess' },
+  { value: 'FAILED', labelKey: 'statusFailed' },
+  { value: 'PARTIAL', labelKey: 'statusPartial' },
+  { value: 'RUNNING', labelKey: 'statusRunning' },
+  { value: 'BACKFILL', labelKey: 'backfill' },
 ];
 
 const isBackfillLog = (l: any) => (l.source || '').includes('backfill');
@@ -47,6 +48,8 @@ type SubTab = 'history' | 'settings';
 const PAGE_SIZE = 20;
 
 export default function SyncLogsPage() {
+  const t = useTranslations('syncLogs');
+  const tc = useTranslations('common');
   const user = useAuth((s) => s.user);
   const hasAll = !!user?.permissions?.includes(PERMS.SYNC_VIEW);
   const canHistory = hasAll || !!user?.permissions?.includes(PERMS.SYNC_HISTORY_VIEW);
@@ -113,7 +116,7 @@ export default function SyncLogsPage() {
                   subTab === 'history' ? 'bg-white dark:bg-slate-900 text-indigo-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                 )}
               >
-                <History className="h-3.5 w-3.5" /> Tarix
+                <History className="h-3.5 w-3.5" /> {t('tabHistory')}
               </button>
             )}
             {canSettings && (
@@ -124,7 +127,7 @@ export default function SyncLogsPage() {
                   subTab === 'settings' ? 'bg-white dark:bg-slate-900 text-indigo-700 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                 )}
               >
-                <Settings className="h-3.5 w-3.5" /> Sozlamalar
+                <Settings className="h-3.5 w-3.5" /> {t('tabSettings')}
               </button>
             )}
           </div>
@@ -135,24 +138,24 @@ export default function SyncLogsPage() {
         {subTab === 'history' && canHistory && <>
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-bold tracking-tight">Sync tarixi</div>
-            <div className="text-xs text-slate-500 dark:text-slate-400">Banklardan ma'lumot olish jurnali</div>
+            <div className="text-lg font-bold tracking-tight">{t('title')}</div>
+            <div className="text-xs text-slate-500 dark:text-slate-400">{t('subtitle')}</div>
           </div>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
             <span className="relative flex h-2 w-2">
               <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            Live · 10s yangilanish
+            {t('liveBadge')}
           </span>
         </div>
 
         {/* ═══ KPI ═══ */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <KpiCard label="Muvaffaqiyat darajasi" value={`${stats.successRate}%`} sub={`${stats.success} muvaffaqiyatli`} icon={CheckCircle2} color="emerald" spark={durationSpark} />
-          <KpiCard label="Xatolar" value={String(stats.failed)} sub={`${stats.count} ta operatsiya`} icon={XCircle} color="rose" />
-          <KpiCard label="Olingan / Saqlangan" value={`${stats.totalFetched} / ${stats.totalSaved}`} sub="Jami tranzaksiya" icon={Database} color="indigo" />
-          <KpiCard label="O'rtacha vaqt" value={`${stats.avgDuration} ms`} sub="Bir sync ishi" icon={Zap} color="amber" />
+          <KpiCard label={t('kpiSuccessRate')} value={`${stats.successRate}%`} sub={t('kpiSuccessSub', { n: stats.success })} icon={CheckCircle2} color="emerald" spark={durationSpark} />
+          <KpiCard label={t('kpiErrors')} value={String(stats.failed)} sub={t('kpiOpsSub', { n: stats.count })} icon={XCircle} color="rose" />
+          <KpiCard label={t('kpiFetchedSaved')} value={`${stats.totalFetched} / ${stats.totalSaved}`} sub={t('kpiTotalTx')} icon={Database} color="indigo" />
+          <KpiCard label={t('kpiAvgTime')} value={`${stats.avgDuration} ms`} sub={t('kpiPerSync')} icon={Zap} color="amber" />
         </div>
 
         {/* ═══ TIMELINE ═══ */}
@@ -163,9 +166,9 @@ export default function SyncLogsPage() {
                 <div>
                   <div className="text-base font-semibold tracking-tight flex items-center gap-2">
                     <Activity className="h-4 w-4 text-indigo-600" />
-                    Sync tarixi
+                    {t('title')}
                   </div>
-                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Oxirgi 100 ta operatsiya · har 10 soniyada yangilanadi</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{t('timelineSub')}</div>
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px]">
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300 font-medium">
@@ -189,7 +192,7 @@ export default function SyncLogsPage() {
                         statusFilter === f.value ? 'bg-white dark:bg-slate-900 shadow-sm text-slate-900 dark:text-slate-100' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300',
                       )}
                     >
-                      {f.label}
+                      {t(f.labelKey)}
                     </button>
                   ))}
                 </div>
@@ -197,7 +200,7 @@ export default function SyncLogsPage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                   <Input
                     className="pl-8 h-9 rounded-xl bg-slate-50/60 dark:bg-slate-900/60 text-sm"
-                    placeholder="Hisob raqami, egasi yoki xato matni..."
+                    placeholder={t('searchPlaceholder')}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
                   />
@@ -220,10 +223,10 @@ export default function SyncLogsPage() {
             ) : filtered.length === 0 ? (
               <EmptyState
                 icon={RefreshCcw}
-                title={(data?.items?.length ?? 0) === 0 ? "Sync logi yo'q" : "Filtr bo'yicha topilmadi"}
+                title={(data?.items?.length ?? 0) === 0 ? t('emptyTitle') : t('emptyFilterTitle')}
                 description={(data?.items?.length ?? 0) === 0
-                  ? "Cron har 5 daqiqada ishlaydi yoki bank hisobini qo'lda sync qilganingizda log yoziladi"
-                  : "Filtr yoki qidiruvni o'zgartirib ko'ring"}
+                  ? t('emptyDesc')
+                  : t('emptyFilterDesc')}
               />
             ) : (
               <>
@@ -256,11 +259,11 @@ export default function SyncLogsPage() {
                                       "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ring-1 ring-inset",
                                       cfg.cls,
                                     )}>
-                                      {cfg.label}
+                                      {t(cfg.labelKey)}
                                     </span>
                                     {isBackfillLog(l) && (
                                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-1 ring-inset ring-violet-200 dark:ring-violet-900">
-                                        Tarix yuklash
+                                        {t('backfill')}
                                       </span>
                                     )}
                                     <span className="font-mono text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 px-1.5 py-0.5 rounded">{l.source}</span>
@@ -274,9 +277,9 @@ export default function SyncLogsPage() {
                                 </div>
 
                                 <div className="flex items-center gap-4 text-[11px] shrink-0">
-                                  <Stat icon={Database} value={l.fetched ?? 0} label="olindi" />
-                                  <Stat icon={CheckCircle2} value={l.saved ?? 0} label="saqlandi" tone={l.saved > 0 ? 'emerald' : 'slate'} />
-                                  {(l.errors ?? 0) > 0 && <Stat icon={XCircle} value={l.errors} label="xato" tone="rose" />}
+                                  <Stat icon={Database} value={l.fetched ?? 0} label={t('statFetched')} />
+                                  <Stat icon={CheckCircle2} value={l.saved ?? 0} label={t('statSaved')} tone={l.saved > 0 ? 'emerald' : 'slate'} />
+                                  {(l.errors ?? 0) > 0 && <Stat icon={XCircle} value={l.errors} label={t('statErrors')} tone="rose" />}
                                   {l.durationMs && (
                                     <span className="inline-flex items-center gap-1 text-slate-500 dark:text-slate-400">
                                       <Clock className="h-3 w-3" />
@@ -311,6 +314,8 @@ export default function SyncLogsPage() {
 
 // ═══ SYNC SOZLAMALARI — syncMinDate + oplatykv TX minDate ═══
 function SyncSettingsPanel() {
+  const t = useTranslations('syncLogs');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['sync-settings'],
@@ -354,7 +359,7 @@ function SyncSettingsPanel() {
   const mut = useMutation({
     mutationFn: (vals: any) => api.patch<any>('/sync/settings', vals),
     onSuccess: (r: any) => {
-      toast.success("Sozlama saqlandi");
+      toast.success(t('settingSaved'));
       if (r.syncMinDate !== undefined) { setSyncMinDate(r.syncMinDate || ''); setDirty1(false); }
       if (r.oplatykvTxMinDate !== undefined) { setOplatykvTxMinDate(r.oplatykvTxMinDate || ''); setDirty2(false); }
       if (r.oplatykvAutoSyncMinutes !== undefined) { setOplatykvAutoSyncMinutes(String(r.oplatykvAutoSyncMinutes || 0)); setDirty3(false); }
@@ -365,7 +370,7 @@ function SyncSettingsPanel() {
       if (r.oplatykvAutoXatoCleanup !== undefined) { setAutoXato(r.oplatykvAutoXatoCleanup); setDirty5(false); }
       qc.invalidateQueries({ queryKey: ['sync-settings'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Saqlash xato'),
+    onError: (e: any) => toast.error(e?.message || t('saveError')),
   });
 
   // Sync progress modal state
@@ -398,7 +403,7 @@ function SyncSettingsPanel() {
       }
     },
     onError: (e: any) => {
-      setSyncError(e?.message || 'Sync xato');
+      setSyncError(e?.message || t('syncError'));
     },
   });
 
@@ -505,9 +510,9 @@ function SyncSettingsPanel() {
       const rangeText = r.dateFrom || r.dateTo
         ? ` (${r.dateFrom || '∞'} → ${r.dateTo || '∞'})`
         : '';
-      toast.success(`O'chirildi: ${r.deleted} ta qator${rangeText}`);
+      toast.success(`${t('deletedRows', { n: r.deleted })}${rangeText}`);
     },
-    onError: (e: any) => toast.error(e?.message || 'Tozalashda xato'),
+    onError: (e: any) => toast.error(e?.message || t('cleanupError')),
   });
 
   // Cleanup uchun sana oralig'i
@@ -534,34 +539,34 @@ function SyncSettingsPanel() {
   const addMappingMut = useMutation({
     mutationFn: () => api.post<any>('/oplata-kv/object-mappings', { crmName: newCrmName.trim(), oplataName: newOplataName.trim() }),
     onSuccess: () => {
-      toast.success("Mapping qo'shildi");
+      toast.success(t('mappingAdded'));
       setNewCrmName('');
       setNewOplataName('');
       qc.invalidateQueries({ queryKey: ['oplatykv-object-mappings'] });
     },
-    onError: (e: any) => toast.error(e?.message || "Qo'shishda xato"),
+    onError: (e: any) => toast.error(e?.message || t('addError')),
   });
 
   const deleteMappingMut = useMutation({
     mutationFn: (id: string) => api.delete<any>(`/oplata-kv/object-mappings/${id}`),
     onSuccess: () => {
-      toast.success("O'chirildi");
+      toast.success(t('deletedOk'));
       qc.invalidateQueries({ queryKey: ['oplatykv-object-mappings'] });
     },
-    onError: (e: any) => toast.error(e?.message || "O'chirishda xato"),
+    onError: (e: any) => toast.error(e?.message || t('deleteError')),
   });
 
   function handleCleanup() {
     const range = { dateFrom: cleanupDateFrom || null, dateTo: cleanupDateTo || null };
     let msg: string;
     if (range.dateFrom && range.dateTo) {
-      msg = `${range.dateFrom} dan ${range.dateTo} gacha bo'lgan tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!`;
+      msg = t('confirmCleanupRange', { from: range.dateFrom, to: range.dateTo });
     } else if (range.dateFrom) {
-      msg = `${range.dateFrom} dan keyingi (shu kun bilan birga) tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?`;
+      msg = t('confirmCleanupFrom', { from: range.dateFrom });
     } else if (range.dateTo) {
-      msg = `${range.dateTo} gacha (shu kun bilan birga) tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?`;
+      msg = t('confirmCleanupTo', { to: range.dateTo });
     } else {
-      msg = "BARCHA tranzaksiya-manba qatorlarni o'chirishni xohlaysizmi?\n\nBu amal qaytarib bo'lmaydi!";
+      msg = t('confirmCleanupAll');
     }
     if (!confirm(msg)) return;
     cleanupTxMut.mutate(range);
@@ -590,9 +595,9 @@ function SyncSettingsPanel() {
             <ShieldAlert className="h-5 w-5 text-indigo-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-slate-800 dark:text-slate-200">Sync chegarasi (minimal sana)</div>
+            <div className="text-base font-bold text-slate-800 dark:text-slate-200">{t('syncLimitTitle')}</div>
             <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              {data?.syncMinDate ? `Aktiv: ${data.syncMinDate}` : "Chegara yo'q — barcha tarix sync bo'ladi"}
+              {data?.syncMinDate ? t('activeValue', { value: data.syncMinDate }) : t('noSyncLimit')}
             </div>
           </div>
           <ChevronDown className={cn('h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', openSync && 'rotate-180')} />
@@ -600,15 +605,14 @@ function SyncSettingsPanel() {
         {openSync && (
         <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100 dark:border-slate-800">
           <div className="text-[12px] text-slate-500 dark:text-slate-400 max-w-2xl">
-            Sync bu sanadan oldingi tranzaksiyalarni <b>HECH QACHON olmaydi</b>.
-            Qo'lda import qilingan tarixiy ma'lumotlarni himoya qilish uchun ishlatiladi.
+            {t('syncLimitDesc')}
           </div>
           {isLoading ? (
             <Skeleton className="h-10 w-64" />
           ) : (
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-                Sync minimal sana
+                {t('syncMinDateLabel')}
               </Label>
               <div className="flex items-center gap-2">
                 <div className="relative">
@@ -622,7 +626,7 @@ function SyncSettingsPanel() {
                     <button
                       type="button"
                       onClick={() => { setSyncMinDate(''); setDirty1(true); }}
-                      title="Tozalash"
+                      title={tc('clear')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -635,11 +639,11 @@ function SyncSettingsPanel() {
                   className="h-10 px-4 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Saqlash
+                  {tc('save')}
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
-                Misol: 31.12.2025 qo'ysangiz, sync 01.01.2026 dan boshlab boshlanadi.
+                {t('syncMinDateExample')}
               </div>
             </div>
           )}
@@ -659,9 +663,9 @@ function SyncSettingsPanel() {
             <ShieldAlert className="h-5 w-5 text-amber-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-base font-bold text-slate-800 dark:text-slate-200">ОплатыКв — Tranzaksiyalardan auto-import</div>
+            <div className="text-base font-bold text-slate-800 dark:text-slate-200">{t('oplataAutoImportTitle')}</div>
             <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-              {data?.oplatykvTxMinDate ? `Aktiv: ${data.oplatykvTxMinDate}` : "Sozlanmagan — auto-import o'chirilgan"}
+              {data?.oplatykvTxMinDate ? t('activeValue', { value: data.oplatykvTxMinDate }) : t('oplataNotConfigured')}
             </div>
           </div>
           <ChevronDown className={cn('h-5 w-5 text-slate-400 dark:text-slate-500 transition-transform shrink-0', openOplata && 'rotate-180')} />
@@ -669,10 +673,7 @@ function SyncSettingsPanel() {
         {openOplata && (
         <CardContent className="px-6 pb-6 pt-2 space-y-5 border-t border-slate-100 dark:border-slate-800">
           <div className="text-[12px] text-slate-500 dark:text-slate-400 max-w-2xl">
-            Tranzaksiyalardan ОплатыКв jadvaliga avto-import minimal sanasi.
-            Faqat <b>CLIENT</b> (Клиент / Физ.Л / Юр.Л) kategoriyasidagi <b>KIRIM</b>
-            tranzaksiyalar, shartnoma raqami bor va sanasi <b>shu sanadan keyin</b>
-            bo'lganlar qo'shiladi. Dedup — Transaction ID orqali.
+            {t('oplataAutoImportDesc')}
           </div>
 
           {/* Sozlamalar collapse — 4 ta funksiya bir tugma orqasiga yashiriladi */}
@@ -688,9 +689,9 @@ function SyncSettingsPanel() {
           >
             <div className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
-              <span className="text-[12.5px] font-semibold">Sozlamalar va vositalar</span>
+              <span className="text-[12.5px] font-semibold">{t('settingsAndTools')}</span>
               <span className="text-[10.5px] text-slate-500 dark:text-slate-400">
-                · Auto-import sana · Cron · Vaqt oraliqlari · Tx cleanup · Object mapping
+                {t('settingsAndToolsSub')}
               </span>
             </div>
             <ChevronDown className={cn('h-4 w-4 text-slate-400 dark:text-slate-500 transition-transform', showOplataSettings && 'rotate-180')} />
@@ -701,7 +702,7 @@ function SyncSettingsPanel() {
           ) : showOplataSettings && (
             <div className="space-y-2">
               <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">
-                ОплатыКв TX minimal sana
+                {t('oplataTxMinDateLabel')}
               </Label>
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="relative">
@@ -715,7 +716,7 @@ function SyncSettingsPanel() {
                     <button
                       type="button"
                       onClick={() => { setOplatykvTxMinDate(''); setDirty2(true); }}
-                      title="Tozalash"
+                      title={tc('clear')}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -728,16 +729,16 @@ function SyncSettingsPanel() {
                   className="h-10 px-4 gap-2 bg-amber-600 hover:bg-amber-700 text-white"
                 >
                   {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  Saqlash
+                  {tc('save')}
                 </Button>
                 <Button
                   onClick={() => syncTxMut.mutate(oplatykvTxMinDate || null)}
                   disabled={syncTxMut.isPending}
                   className="h-10 px-5 gap-2 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white shadow-md shadow-emerald-500/30"
-                  title="HAMMASINI bajaradi: 1) Sync tranzaksiyadan  2) XATO splitlarni tozalash  3) Obyekt/Mijoz CRM dan  4) 1 взнос/oylik split"
+                  title={t('syncAllTitle')}
                 >
                   {syncTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {syncTxMut.isPending ? 'Bajarilmoqda... (5-10 daqiqa)' : 'Hozir sync (HAMMASI)'}
+                  {syncTxMut.isPending ? t('runningWithTime') : t('syncNowAll')}
                 </Button>
                 <Button
                   onClick={() => debugXatoMut.mutate()}
@@ -751,24 +752,24 @@ function SyncSettingsPanel() {
                 </Button>
               </div>
               <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
-                Misol: 01.05.2026 qo'ysangiz — 02.05.2026 va undan keyingi CLIENT-IN tranzaksiyalar avtomatik OplatyKv'ga qo'shiladi.
+                {t('oplataTxMinDateExample')}
                 <br />
-                <b>Sync ichida AVTOMATIK:</b> obyekt + client + 1 взнос/oylik ajratish CRM'dan orqada to'ldiriladi.
+                {t('oplataSyncAutoNote')}
               </div>
 
               {/* AUTO-SYNC INTERVAL */}
               <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-[11px] uppercase tracking-wider font-semibold text-emerald-600 flex items-center gap-1.5">
                   <Clock className="h-3.5 w-3.5" />
-                  Avtomatik sync (cron)
+                  {t('autoSyncCron')}
                 </Label>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
-                  Backend har belgilangan daqiqada avtomatik sync'ni ishga tushiradi. <b>0</b> qo'ysangiz — o'chirilgan.
+                  {t('autoSyncCronDesc')}
                 </div>
                 <div className="flex items-end gap-2 flex-wrap">
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                      Har necha daqiqada
+                      {t('everyNMinutes')}
                     </Label>
                     <Input
                       type="number"
@@ -776,7 +777,7 @@ function SyncSettingsPanel() {
                       max={1440}
                       value={oplatykvAutoSyncMinutes}
                       onChange={(e) => { setOplatykvAutoSyncMinutes(e.target.value); setDirty3(true); }}
-                      placeholder="0 = o'chirilgan"
+                      placeholder={t('zeroDisabled')}
                       className="h-10 w-32"
                     />
                   </div>
@@ -786,27 +787,27 @@ function SyncSettingsPanel() {
                     className="h-10 px-4 gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
                   >
                     {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                    Saqlash
+                    {tc('save')}
                   </Button>
                   <div className="text-[11px] text-slate-500 dark:text-slate-400 self-center">
                     {Number(oplatykvAutoSyncMinutes) > 0
-                      ? <>✓ Faol: har <b>{oplatykvAutoSyncMinutes} daqiqada</b> bir marta</>
-                      : <>○ O'chirilgan</>}
+                      ? <>✓ {t('autoSyncActive', { n: oplatykvAutoSyncMinutes })}</>
+                      : <>○ {t('disabled')}</>}
                   </div>
                 </div>
                 <div className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-2">
-                  Misol: <b>15</b> qo'ysangiz — backend har 15 daqiqada avtomatik tx-dan sync qiladi.
+                  {t('autoSyncExample')}
                 </div>
 
                 {/* DAY/NIGHT TIME WINDOWS */}
                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3">
                   <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" /> Vaqt oraliqlari (Tashkent)
+                    <Clock className="h-3.5 w-3.5" /> {t('timeWindows')}
                   </Label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {/* DAY mode */}
                     <div className="rounded-xl bg-amber-50/50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-300">☀ KUNDUZ ({oplatykvAutoSyncMinutes}min, limit 1000)</div>
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-amber-700 dark:text-amber-300">☀ {t('dayMode', { n: oplatykvAutoSyncMinutes })}</div>
                       <div className="flex items-center gap-2">
                         <Input type="time" value={dayStart} onChange={(e) => { setDayStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
                         <span className="text-slate-400 dark:text-slate-500">—</span>
@@ -815,7 +816,7 @@ function SyncSettingsPanel() {
                     </div>
                     {/* NIGHT batch */}
                     <div className="rounded-xl bg-indigo-50/50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 p-3 space-y-2">
-                      <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-300">🌙 TUN (kuniga 1, FULL batch)</div>
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-indigo-700 dark:text-indigo-300">🌙 {t('nightMode')}</div>
                       <div className="flex items-center gap-2">
                         <Input type="time" value={nightStart} onChange={(e) => { setNightStart(e.target.value); setDirty4(true); }} className="h-9 w-28" />
                         <span className="text-slate-400 dark:text-slate-500">—</span>
@@ -829,7 +830,7 @@ function SyncSettingsPanel() {
                     className="h-9 px-4 gap-2 bg-slate-600 hover:bg-slate-700 text-white text-[12px]"
                   >
                     {mut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Vaqtlarni saqlash
+                    {t('saveTimes')}
                   </Button>
                 </div>
 
@@ -839,12 +840,12 @@ function SyncSettingsPanel() {
               <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-[11px] uppercase tracking-wider font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
                   <X className="h-3.5 w-3.5" />
-                  Tranzaksiya manbasini tozalash
+                  {t('cleanupTxSource')}
                 </Label>
                 <div className="flex items-end gap-2 flex-wrap mt-2">
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                      Boshlanish
+                      {t('rangeStart')}
                     </Label>
                     <div className="relative">
                       <Input
@@ -857,7 +858,7 @@ function SyncSettingsPanel() {
                         <button
                           type="button"
                           onClick={() => setCleanupDateFrom('')}
-                          title="Tozalash"
+                          title={tc('clear')}
                           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <X className="h-3.5 w-3.5" />
@@ -868,7 +869,7 @@ function SyncSettingsPanel() {
                   <div className="text-slate-400 dark:text-slate-500 text-lg pb-2">—</div>
                   <div>
                     <Label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                      Tugash
+                      {t('rangeEnd')}
                     </Label>
                     <div className="relative">
                       <Input
@@ -881,7 +882,7 @@ function SyncSettingsPanel() {
                         <button
                           type="button"
                           onClick={() => setCleanupDateTo('')}
-                          title="Tozalash"
+                          title={tc('clear')}
                           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400"
                         >
                           <X className="h-3.5 w-3.5" />
@@ -894,25 +895,25 @@ function SyncSettingsPanel() {
                     disabled={cleanupTxMut.isPending}
                     className="h-10 px-4 gap-2 bg-gradient-to-br from-rose-500 to-red-600 hover:from-rose-600 hover:to-red-700 text-white"
                     title={cleanupDateFrom || cleanupDateTo
-                      ? `${cleanupDateFrom || '∞'} dan ${cleanupDateTo || '∞'} gacha tozalash`
-                      : "BARCHA tranzaksiya-manba qatorlarini o'chirish"}
+                      ? t('cleanupRangeTitle', { from: cleanupDateFrom || '∞', to: cleanupDateTo || '∞' })
+                      : t('cleanupAllTitle')}
                   >
                     {cleanupTxMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                    Tozalash
+                    {tc('clear')}
                   </Button>
                 </div>
                 <div className="text-[10.5px] text-slate-400 dark:text-slate-500 mt-2">
-                  <b>Sana oralig'i</b> — qatorlarning <code>date</code> maydoni bo'yicha filtr:
+                  {t('cleanupHelpIntro')}
                   <br />
-                  • Faqat <b>boshlanish</b> → shu sanadan keyingi (shu kun bilan)
+                  {t('cleanupHelpFrom')}
                   <br />
-                  • Faqat <b>tugash</b> → shu sanagacha (shu kun bilan)
+                  {t('cleanupHelpTo')}
                   <br />
-                  • <b>Ikkalasi</b> → oraliq ichida
+                  {t('cleanupHelpBoth')}
                   <br />
-                  • <b>Bo'sh</b> → BARCHA tranzaksiya-manba qatorlar (ehtiyot)
+                  {t('cleanupHelpEmpty')}
                   <br />
-                  Tarix saqlanadi (deleted log).
+                  {t('cleanupHelpHistory')}
                 </div>
               </div>
 
@@ -920,22 +921,21 @@ function SyncSettingsPanel() {
               <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
                 <Label className="text-[11px] uppercase tracking-wider font-semibold text-fuchsia-600 dark:text-fuchsia-400 flex items-center gap-1.5">
                   <Building2 className="h-3.5 w-3.5" />
-                  Obyekt nomi mapping (CRM → OplatyKv)
+                  {t('objectMappingTitle')}
                 </Label>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
-                  CRM <b>"XON SAROY AFSONASI"</b> bersa, OplatyKv'ga <b>"АФСОНА"</b> deb yozish uchun.
-                  Mapping bo'lmasa — CRM nomi qanday bo'lsa shunday yoziladi.
+                  {t('objectMappingDescA')} <b>"XON SAROY AFSONASI"</b> {t('objectMappingDescB')} <b>"АФСОНА"</b> {t('objectMappingDescC')}
                 </div>
 
                 {/* Yangi mapping qo'shish */}
                 <div className="rounded-xl bg-fuchsia-50/40 dark:bg-fuchsia-950/40 ring-1 ring-fuchsia-200 dark:ring-fuchsia-900 p-3 space-y-2">
                   <div className="text-[10px] uppercase tracking-wider font-semibold text-fuchsia-700 dark:text-fuchsia-300 flex items-center gap-1.5">
-                    <Plus className="h-3 w-3" /> Yangi mapping
+                    <Plus className="h-3 w-3" /> {t('newMapping')}
                   </div>
                   <div className="flex items-end gap-2 flex-wrap">
                     <div className="flex-1 min-w-[160px]">
                       <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                        CRM nomi
+                        {t('crmName')}
                       </Label>
                       <Input
                         type="text"
@@ -948,7 +948,7 @@ function SyncSettingsPanel() {
                     <ArrowRight className="h-4 w-4 text-slate-400 dark:text-slate-500 pb-2.5 shrink-0" />
                     <div className="flex-1 min-w-[160px]">
                       <Label className="text-[9.5px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 mb-1 block">
-                        OplatyKv nomi
+                        {t('oplataName')}
                       </Label>
                       <Input
                         type="text"
@@ -964,7 +964,7 @@ function SyncSettingsPanel() {
                       className="h-9 px-3 gap-1.5 bg-gradient-to-br from-fuchsia-600 to-pink-600 hover:from-fuchsia-700 hover:to-pink-700 text-white text-[12px]"
                     >
                       {addMappingMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
-                      Qo'shish
+                      {t('addBtn')}
                     </Button>
                   </div>
                 </div>
@@ -972,7 +972,7 @@ function SyncSettingsPanel() {
                 {/* Mavjud mappinglar */}
                 <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden mt-3">
                   <div className="bg-slate-50 dark:bg-slate-800 px-3 py-1.5 border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase tracking-wider font-bold text-slate-600 dark:text-slate-300">
-                    Mavjud mappinglar
+                    {t('existingMappings')}
                     {(mappingsQuery.data?.items?.length || 0) > 0 && (
                       <span className="text-slate-400 dark:text-slate-500 font-medium ml-1 normal-case">
                         · {mappingsQuery.data!.items.length}
@@ -982,11 +982,11 @@ function SyncSettingsPanel() {
                   {mappingsQuery.isLoading ? (
                     <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 dark:text-slate-500">
                       <Loader2 className="h-3.5 w-3.5 animate-spin mx-auto mb-1" />
-                      Yuklanmoqda...
+                      {tc('loading')}
                     </div>
                   ) : (mappingsQuery.data?.items?.length || 0) === 0 ? (
                     <div className="px-3 py-4 text-center text-[11.5px] text-slate-400 dark:text-slate-500 italic">
-                      Mapping mavjud emas
+                      {t('noMappings')}
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-64 overflow-y-auto">
@@ -1003,13 +1003,13 @@ function SyncSettingsPanel() {
                           </div>
                           <button
                             onClick={() => {
-                              if (confirm(`'${m.crmName}' mapping'ini o'chirishni xohlaysizmi?`)) {
+                              if (confirm(t('confirmDeleteMapping', { name: m.crmName }))) {
                                 deleteMappingMut.mutate(m.id);
                               }
                             }}
                             disabled={deleteMappingMut.isPending}
                             className="w-7 h-7 rounded grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
-                            title="O'chirish"
+                            title={tc('delete')}
                           >
                             <Trash2 className="h-3 w-3" />
                           </button>
@@ -1020,7 +1020,7 @@ function SyncSettingsPanel() {
                 </div>
 
                 <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-2">
-                  Eslatma: mapping faqat <b>keyingi sync'larga</b> ta'sir qiladi.
+                  {t('mappingNote')}
                 </div>
               </div>
             </div>
@@ -1030,11 +1030,10 @@ function SyncSettingsPanel() {
           <div className="mt-5 pt-5 border-t border-slate-100 dark:border-slate-800">
             <Label className="text-[11px] uppercase tracking-wider font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
               <Download className="h-3.5 w-3.5" />
-              Hujjatlarni ZIP qilib yuklab olish
+              {t('zipExportTitle')}
             </Label>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 mb-3 max-w-2xl">
-              Tizimdagi barcha biriktirilgan hujjatlarni bir arxivda yuklab olish.
-              Har bir hujjat shartnoma raqami bo'yicha papkalarga taqsimlanadi.
+              {t('zipExportDesc')}
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <button
@@ -1047,7 +1046,7 @@ function SyncSettingsPanel() {
                   // fetch + blob orqali yuklab olamiz (auth header bilan)
                   (async () => {
                     try {
-                      toast.info("Arizalar yig'ilmoqda...");
+                      toast.info(t('arizasCollecting'));
                       const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/oplata-kv/export/arizas-zip`, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       });
@@ -1061,9 +1060,9 @@ function SyncSettingsPanel() {
                       link.click();
                       link.remove();
                       URL.revokeObjectURL(url);
-                      toast.success('Arizalar ZIP yuklab olindi');
+                      toast.success(t('arizasZipDownloaded'));
                     } catch (e: any) {
-                      toast.error(e?.message || "Yuklab olishda xato");
+                      toast.error(e?.message || t('downloadError'));
                     }
                   })();
                 }}
@@ -1074,8 +1073,8 @@ function SyncSettingsPanel() {
                     <FileText className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">Arizalarni yuklash</div>
-                    <div className="text-[11px] text-slate-600 dark:text-slate-300">Barcha ariza fayllari (PDF, rasmlar) — ZIP</div>
+                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">{t('downloadArizas')}</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300">{t('downloadArizasSub')}</div>
                   </div>
                   <Download className="h-4 w-4 text-amber-600 group-hover:translate-y-0.5 transition-transform" />
                 </div>
@@ -1087,7 +1086,7 @@ function SyncSettingsPanel() {
                   const token = typeof window !== 'undefined' ? window.localStorage.getItem('xt_token') : null;
                   (async () => {
                     try {
-                      toast.info("Переброска fayllari yig'ilmoqda...");
+                      toast.info(t('pereboskaCollecting'));
                       const r = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api'}/oplata-kv/export/perereboski-zip`, {
                         headers: token ? { Authorization: `Bearer ${token}` } : {},
                       });
@@ -1101,9 +1100,9 @@ function SyncSettingsPanel() {
                       link.click();
                       link.remove();
                       URL.revokeObjectURL(url);
-                      toast.success('Переброска ZIP yuklab olindi');
+                      toast.success(t('pereboskaZipDownloaded'));
                     } catch (e: any) {
-                      toast.error(e?.message || "Yuklab olishda xato");
+                      toast.error(e?.message || t('downloadError'));
                     }
                   })();
                 }}
@@ -1114,8 +1113,8 @@ function SyncSettingsPanel() {
                     <ArrowRightLeft className="h-5 w-5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">Перереброскаlarni yuklash</div>
-                    <div className="text-[11px] text-slate-600 dark:text-slate-300">Barcha o'tkazma fayllari — ZIP</div>
+                    <div className="text-[13.5px] font-bold text-slate-900 dark:text-slate-100">{t('downloadPereboskas')}</div>
+                    <div className="text-[11px] text-slate-600 dark:text-slate-300">{t('downloadPereboskasSub')}</div>
                   </div>
                   <Download className="h-4 w-4 text-fuchsia-600 group-hover:translate-y-0.5 transition-transform" />
                 </div>
@@ -1235,6 +1234,7 @@ function SyncProgressDialog({
   bgStatus: any | null;
   error: string | null;
 }) {
+  const t = useTranslations('syncLogs');
   // Elapsed timer (faqat pending paytda yangilanadi)
   const [elapsed, setElapsed] = useState(0);
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -1293,17 +1293,17 @@ function SyncProgressDialog({
   const steps = [
     {
       icon: RefreshCcw,
-      title: 'Tranzaksiyalardan sync',
-      desc: 'Yangi tranzaksiyalarni OplatyKv ga qo\'shish/yangilash + XATO splitlar tozalanadi (atomar)',
+      title: t('step1Title'),
+      desc: t('step1Desc'),
       done: !!result,
       active: isPending,
       result: result && (
         <>
-          Qo'shildi: <b>{result.added}</b>, yangilandi: <b>{result.updated}</b>, o'tkazildi: <b>{result.skipped}</b>
+          {t('stepAdded')}: <b>{result.added}</b>, {t('stepUpdated')}: <b>{result.updated}</b>, {t('stepSkipped')}: <b>{result.skipped}</b>
           {result.xatoQuickClean > 0 && (
             <>
               <br />
-              🧹 XATO splitlar tozalandi: <b>{result.xatoQuickClean}</b> qator
+              🧹 {t('xatoSplitsCleaned')}: <b>{result.xatoQuickClean}</b> {t('rowsUnit')}
             </>
           )}
         </>
@@ -1312,30 +1312,30 @@ function SyncProgressDialog({
     },
     {
       icon: Layers,
-      title: 'Obyekt va Mijoz to\'ldirish',
-      desc: 'CRM dan obyekt/mijoz nomi olib qatorlarga yoziladi (orqada)',
+      title: t('step2Title'),
+      desc: t('step2Desc'),
       done: !!bgFill,
       active: bgRunning && bgPhase === 'fill',
       result: bgFill && (
         <>
-          To'ldirildi: <b>{bgFill.filled}</b>/{bgFill.total} · CRM topmadi: <b>{bgFill.notFound}</b>
+          {t('stepFilled')}: <b>{bgFill.filled}</b>/{bgFill.total} · {t('stepCrmNotFound')}: <b>{bgFill.notFound}</b>
         </>
       ),
       color: 'indigo',
     },
     {
       icon: Split,
-      title: '1 взнос va Oylik ajratish',
-      desc: 'CRM payment_histories asosida split (orqada) — XATO ga split qilinmaydi',
+      title: t('step3Title'),
+      desc: t('step3Desc'),
       done: !!bgSplit,
       active: bgRunning && bgPhase === 'split',
       result: bgSplit && (
         <>
-          {bgSplit.contracts} shartnoma · To'ldirildi: <b>{bgSplit.filled}</b>/{bgSplit.total} · CRM topmadi: <b>{bgSplit.notFound}</b>
+          {t('contractsUnit', { n: bgSplit.contracts })} · {t('stepFilled')}: <b>{bgSplit.filled}</b>/{bgSplit.total} · {t('stepCrmNotFound')}: <b>{bgSplit.notFound}</b>
           {bgSplit.xatoCleaned > 0 && (
             <>
               <br />
-              🧹 XATO splitlar tozalandi: <b>{bgSplit.xatoCleaned}</b> qator
+              🧹 {t('xatoSplitsCleaned')}: <b>{bgSplit.xatoCleaned}</b> {t('rowsUnit')}
             </>
           )}
         </>
@@ -1382,9 +1382,9 @@ function SyncProgressDialog({
             </div>
             <div className="flex items-center gap-3">
               <div className="text-2xl font-black tracking-tight">
-                {done && !errored ? '✓ HAMMASI TUGADI'
-                  : errored ? '✗ XATO'
-                  : 'Bajarilmoqda...'}
+                {done && !errored ? `✓ ${t('allDone')}`
+                  : errored ? `✗ ${t('errorUpper')}`
+                  : t('running')}
               </div>
               {isPending && <Loader2 className="h-6 w-6 animate-spin" />}
               {done && !errored && <Sparkles className="h-6 w-6" />}
@@ -1392,7 +1392,7 @@ function SyncProgressDialog({
             <div className="mt-2 flex items-center gap-2 text-[12px] text-white/85">
               <Clock className="h-3.5 w-3.5" />
               <span className="font-mono tabular-nums">{mm}:{ss}</span>
-              {isPending && <span className="text-white/60">· kuting, sahifani yopmang</span>}
+              {isPending && <span className="text-white/60">{t('waitDontClose')}</span>}
             </div>
           </div>
         </div>
@@ -1448,7 +1448,7 @@ function SyncProgressDialog({
                     {isActive && (
                       <div className="mt-2 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1.5">
                         <span className="inline-block w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse" />
-                        Bajarilmoqda...
+                        {t('running')}
                       </div>
                     )}
                   </div>
@@ -1470,8 +1470,8 @@ function SyncProgressDialog({
         {/* Footer */}
         <div className="px-6 py-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-3">
           <div className="text-[11px] text-slate-500 dark:text-slate-400">
-            {isPending ? 'Jarayon davom etmoqda — 5-10 daqiqa olishi mumkin'
-              : done ? 'Tayyor — OplatyKv sahifasini yangilang'
+            {isPending ? t('processOngoing')
+              : done ? t('readyRefreshOplata')
               : ''}
           </div>
           <Button
@@ -1482,7 +1482,7 @@ function SyncProgressDialog({
               done ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : '',
             )}
           >
-            {isPending ? 'Iltimos kuting...' : 'Yopish'}
+            {isPending ? t('pleaseWait') : t('closeBtn')}
           </Button>
         </div>
       </DialogContent>

@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -78,6 +79,8 @@ interface XonpayRow {
 
 export default function BilingPage() {
   const qc = useQueryClient();
+  const t = useTranslations('billing');
+  const tc = useTranslations('common');
   const { locale } = useParams<{ locale: string }>();
   const today = new Date().toISOString().slice(0, 10);
   // Default: boshidan bugungacha — barchasini ko'rsatish
@@ -137,10 +140,10 @@ export default function BilingPage() {
   const setCronIntervalMut = useMutation({
     mutationFn: (minutes: number) => api.post<any>(`/xonpay/cron/interval?minutes=${minutes}`, {}),
     onSuccess: (r: any) => {
-      toast.success(`Interval ${r.intervalMinutes} daqiqaga o'rnatildi`);
+      toast.success(t('intervalSet', { n: r.intervalMinutes }));
       qc.invalidateQueries({ queryKey: ['xonpay-cron-info'] });
     },
-    onError: (e: any) => toast.error(e?.message || "O'rnatib bo'lmadi"),
+    onError: (e: any) => toast.error(e?.message || t('intervalSetError')),
   });
 
   const historyQuery = useQuery<{ ok: true; items: any[] }>({
@@ -172,19 +175,19 @@ export default function BilingPage() {
   const startSyncMut = useMutation({
     mutationFn: () => api.post<{ ok: true; started: boolean; message: string }>('/xonpay/sync', {}),
     onSuccess: (r) => { toast.message(r.message); qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] }); },
-    onError: (e: any) => toast.error(e?.message || 'Sync boshlanmadi'),
+    onError: (e: any) => toast.error(e?.message || t('syncNotStarted')),
   });
   const cancelSyncMut = useMutation({
     mutationFn: () => api.post('/xonpay/sync/cancel', {}),
-    onSuccess: () => { toast.message("Sync bekor qilish so'raldi"); qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] }); },
+    onSuccess: () => { toast.message(t('syncCancelRequested')); qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] }); },
   });
   const cronToggleMut = useMutation({
     mutationFn: (enabled: boolean) => api.post<any>(`/xonpay/cron/toggle?enabled=${enabled}`, {}),
     onSuccess: (r) => {
-      toast.success(r.enabled ? 'Avtomatik sync YOQILDI' : "Avtomatik sync O'CHIRILDI");
+      toast.success(r.enabled ? t('autoSyncOn') : t('autoSyncOff'));
       qc.invalidateQueries({ queryKey: ['xonpay-cron-info'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => toast.error(e?.message || tc('error')),
   });
 
   const cancelByIdMut = useMutation({
@@ -194,7 +197,7 @@ export default function BilingPage() {
       qc.invalidateQueries({ queryKey: ['xonpay-history'] });
       qc.invalidateQueries({ queryKey: ['xonpay-sync-status'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Bekor qilish xato'),
+    onError: (e: any) => toast.error(e?.message || t('cancelError')),
   });
   const matchAllMut = useMutation({
     mutationFn: () => api.post<{ ok: true; message: string }>('/xonpay/match-all?onlyUnmatched=true', {}),
@@ -205,18 +208,18 @@ export default function BilingPage() {
       setProgressModalOpen(true);
       setProgressModalDismissed(false);
     },
-    onError: (e: any) => toast.error(e?.message || 'Match boshlanmadi'),
+    onError: (e: any) => toast.error(e?.message || t('matchNotStarted')),
   });
 
   async function recheckOne(externalId: string) {
     setRechecking((s) => new Set(s).add(externalId));
     try {
       const r = await api.post<{ ok: true; matched: boolean }>(`/xonpay/${encodeURIComponent(externalId)}/recheck`, {});
-      toast.success(r.matched ? 'Topildi' : 'Hali ham topilmadi');
+      toast.success(r.matched ? t('found') : t('stillNotFound'));
       qc.invalidateQueries({ queryKey: ['xonpay-list'] });
       qc.invalidateQueries({ queryKey: ['xonpay-stats'] });
     } catch (e: any) {
-      toast.error(e?.message || 'Xato');
+      toast.error(e?.message || tc('error'));
     } finally {
       setRechecking((s) => { const n = new Set(s); n.delete(externalId); return n; });
     }
@@ -251,50 +254,53 @@ export default function BilingPage() {
           <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white shadow-lg shadow-violet-500/20">
             <Receipt className="h-5 w-5" />
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">Biling</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('title')}</h1>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KpiCardModern
-            label="Jami XonPay"
+            label={t('totalXonpay')}
             count={summary?.totalCount || 0}
             amount={summary?.totalAmount || '0'}
             color="violet"
             icon={<Receipt className="h-4 w-4" />}
             loading={statsQuery.isLoading}
+            countLabel={t('paymentsCount', { n: fmt(summary?.totalCount || 0) })}
           />
           <KpiCardModern
-            label="Kapitalga tushgan"
+            label={t('matchedToCapital')}
             count={summary?.matchedCount || 0}
             amount={summary?.matchedAmount || '0'}
             color="emerald"
             icon={<CheckCircle2 className="h-4 w-4" />}
             loading={statsQuery.isLoading}
+            countLabel={t('paymentsCount', { n: fmt(summary?.matchedCount || 0) })}
             extra={summary && Number(summary.totalCount) > 0
-              ? `${Math.round((Number(summary.matchedCount) / Number(summary.totalCount)) * 100)}% mos`
+              ? t('pctMatched', { n: Math.round((Number(summary.matchedCount) / Number(summary.totalCount)) * 100) })
               : undefined}
           />
           <KpiCardModern
-            label="Topilmagan (qolgan)"
+            label={t('missingRemaining')}
             count={summary?.missingCount || 0}
             amount={summary?.missingAmount || '0'}
             color="rose"
             icon={<AlertCircle className="h-4 w-4" />}
             loading={statsQuery.isLoading}
+            countLabel={t('paymentsCount', { n: fmt(summary?.missingCount || 0) })}
           />
         </div>
 
         {/* Compact inline indicator — modul yopilgan paytda ham progress ko'rinsin */}
         {(syncRunning || matchRunning) && !progressModalOpen && (
           <button onClick={() => { setProgressModalOpen(true); setProgressModalDismissed(false); }}
-            title="Sync progressini ko'rsatish"
+            title={t('showSyncProgress')}
             className="w-full rounded-lg ring-1 ring-violet-200 dark:ring-violet-900 bg-violet-50 dark:bg-violet-950/40 hover:bg-violet-100 dark:hover:bg-violet-900/30 transition-colors px-4 py-2.5 text-[12px] flex items-center gap-3">
             <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-600 dark:text-violet-400 shrink-0" />
             <span className="font-semibold text-violet-900 dark:text-violet-300">
-              {syncRunning ? 'Sync ishlamoqda' : 'Match ishlamoqda'} —
+              {syncRunning ? t('syncRunning') : t('matchRunning')} —
             </span>
             <span className="text-violet-700 dark:text-violet-300">
               {syncRunning && syncStatusQuery.data?.progress
-                ? `page ${syncStatusQuery.data.progress.page}, +${syncStatusQuery.data.progress.inserted} yangi, ${syncStatusQuery.data.progress.matched} matched`
+                ? t('syncProgressLine', { page: syncStatusQuery.data.progress.page, inserted: syncStatusQuery.data.progress.inserted, matched: syncStatusQuery.data.progress.matched })
                 : matchRunning && matchStatusQuery.data?.progress
                   ? `${matchStatusQuery.data.progress.done}/${matchStatusQuery.data.progress.total}`
                   : ''}
@@ -311,9 +317,9 @@ export default function BilingPage() {
             <div className="w-full px-4 py-3 flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
               <button onClick={() => setHistoryOpen(o => !o)} className="flex items-center gap-2 flex-1 text-left">
                 <History className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                <h3 className="text-[13px] font-bold">Sync tarixi <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">(qo'lda + cron)</span></h3>
+                <h3 className="text-[13px] font-bold">{t('syncHistory')} <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">{t('manualAndCron')}</span></h3>
                 {historyQuery.data?.items?.length != null && (
-                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400">{historyQuery.data.items.length} ta</span>
+                  <span className="text-[10.5px] text-slate-500 dark:text-slate-400">{t('countItems', { n: historyQuery.data.items.length })}</span>
                 )}
               </button>
 
@@ -322,7 +328,7 @@ export default function BilingPage() {
                 <button
                   onClick={() => cancelSyncMut.mutate()}
                   disabled={cancelSyncMut.isPending}
-                  title="Sync ni to'xtatish"
+                  title={t('stopSync')}
                   className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-all"
                 >
                   {cancelSyncMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
@@ -331,7 +337,7 @@ export default function BilingPage() {
                 <button
                   onClick={() => startSyncMut.mutate()}
                   disabled={startSyncMut.isPending}
-                  title="CRM dan sync"
+                  title={t('syncFromCrm')}
                   className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-violet-600 text-white hover:bg-violet-700 shadow-sm hover:shadow-md hover:shadow-violet-500/30 transition-all"
                 >
                   {startSyncMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -342,7 +348,7 @@ export default function BilingPage() {
               <button
                 onClick={() => matchAllMut.mutate()}
                 disabled={matchAllMut.isPending || matchRunning}
-                title="Qolganlarni tekshirish (match-all)"
+                title={t('checkRemaining')}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-900 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all disabled:opacity-50"
               >
                 {(matchAllMut.isPending || matchRunning) ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -351,7 +357,7 @@ export default function BilingPage() {
               {/* Tozalash (orphan'lar) — icon */}
               <button
                 onClick={() => setCleanupModalOpen(true)}
-                title="CRM da yo'q (orphan) yozuvlarni tozalash"
+                title={t('cleanupOrphans')}
                 className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-orange-50 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 ring-1 ring-orange-200 dark:ring-orange-900 hover:bg-orange-100 dark:hover:bg-orange-900/30 transition-all"
               >
                 <Trash2 className="h-4 w-4" />
@@ -361,7 +367,7 @@ export default function BilingPage() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    title="Avtomatik sync (cron) haqida"
+                    title={t('cronAbout')}
                     className={cn(
                       'inline-flex items-center justify-center w-8 h-8 rounded-md transition-all ring-1',
                       cronInfoQuery.data?.enabled
@@ -375,7 +381,7 @@ export default function BilingPage() {
                 <DropdownMenuContent align="end" className="p-3 w-72">
                   <div className="flex items-center gap-2 mb-2">
                     <Zap className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                    <h4 className="text-[12px] font-bold">Avtomatik sync (cron)</h4>
+                    <h4 className="text-[12px] font-bold">{t('autoSyncCron')}</h4>
                     <span className={cn(
                       "ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ring-1",
                       cronInfoQuery.data?.enabled
@@ -383,17 +389,17 @@ export default function BilingPage() {
                         : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700",
                     )}>
                       {cronInfoQuery.data?.enabled
-                        ? <><CheckCircle2 className="h-2.5 w-2.5" /> Yoqilgan</>
-                        : <><XCircle className="h-2.5 w-2.5" /> O'chirilgan</>}
+                        ? <><CheckCircle2 className="h-2.5 w-2.5" /> {t('enabled')}</>
+                        : <><XCircle className="h-2.5 w-2.5" /> {t('disabled')}</>}
                     </span>
                   </div>
                   <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1.5">
-                    <div><span className="text-slate-400 dark:text-slate-500">Jadval:</span> <div className="font-mono text-[10.5px] mt-0.5">{cronInfoQuery.data?.schedule || '—'}</div></div>
+                    <div><span className="text-slate-400 dark:text-slate-500">{t('schedule')}</span> <div className="font-mono text-[10.5px] mt-0.5">{cronInfoQuery.data?.schedule || '—'}</div></div>
                     <div>
-                      <span className="text-slate-400 dark:text-slate-500">Oxirgi:</span>{' '}
+                      <span className="text-slate-400 dark:text-slate-500">{t('last')}</span>{' '}
                       {cronInfoQuery.data?.lastRunAt
                         ? <span className="font-mono">{new Date(cronInfoQuery.data.lastRunAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}</span>
-                        : <span className="text-slate-400 dark:text-slate-500">hali yo'q</span>}
+                        : <span className="text-slate-400 dark:text-slate-500">{t('notYet')}</span>}
                     </div>
                     {cronInfoQuery.data?.lastSkipReason && (
                       <div className="text-amber-700 dark:text-amber-300 text-[10.5px] flex items-start gap-1 pt-1 border-t border-slate-100 dark:border-slate-800"><AlertCircle className="h-3 w-3 shrink-0 mt-0.5" /> {cronInfoQuery.data.lastSkipReason}</div>
@@ -403,7 +409,7 @@ export default function BilingPage() {
                   {/* Interval o'zgartirish */}
                   <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
                     <div className="text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">
-                      Interval (daqiqada)
+                      {t('intervalMinutes')}
                     </div>
                     <div className="grid grid-cols-3 gap-1.5">
                       {[15, 30, 60, 120, 180, 360].map((m) => {
@@ -421,7 +427,7 @@ export default function BilingPage() {
                               setCronIntervalMut.isPending && 'opacity-60 cursor-not-allowed',
                             )}
                           >
-                            {m < 60 ? `${m} daq` : m === 60 ? '1 soat' : `${Math.floor(m / 60)} soat`}
+                            {m < 60 ? t('minShort', { n: m }) : m === 60 ? t('oneHour') : t('hours', { n: Math.floor(m / 60) })}
                           </button>
                         );
                       })}
@@ -438,7 +444,7 @@ export default function BilingPage() {
                         className="w-full gap-1.5 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300"
                       >
                         {cronToggleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
-                        Avtomatik sync ni o'chirish
+                        {t('disableAutoSync')}
                       </Button>
                     ) : (
                       <Button
@@ -448,7 +454,7 @@ export default function BilingPage() {
                         className="w-full gap-1.5 bg-emerald-600 hover:bg-emerald-700"
                       >
                         {cronToggleMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                        Avtomatik sync ni yoqish
+                        {t('enableAutoSync')}
                       </Button>
                     )}
                   </div>
@@ -468,14 +474,14 @@ export default function BilingPage() {
                   <Input
                     value={histQ}
                     onChange={(e) => setHistQ(e.target.value)}
-                    placeholder="Ism yoki email..."
+                    placeholder={t('searchNameEmail')}
                     className="pl-7 h-8 w-52 text-[11px]"
                   />
                 </div>
                 <Select value={histStatus} onValueChange={(v: any) => setHistStatus(v)}>
                   <SelectTrigger className="h-8 w-32 text-[11px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Barcha status</SelectItem>
+                    <SelectItem value="all">{tc('allStatuses')}</SelectItem>
                     <SelectItem value="running">Running</SelectItem>
                     <SelectItem value="success">Success</SelectItem>
                     <SelectItem value="failed">Failed</SelectItem>
@@ -491,28 +497,28 @@ export default function BilingPage() {
                   className="h-8 w-36 text-[11px]" />
                 {(histQ || histStatus !== 'all' || histDateFrom || histDateTo) && (
                   <Button variant="ghost" size="sm" onClick={() => { setHistQ(''); setHistStatus('all'); setHistDateFrom(''); setHistDateTo(''); }} className="h-8 text-[11px] text-slate-500 dark:text-slate-400">
-                    Tozalash
+                    {tc('clear')}
                   </Button>
                 )}
               </div>
               {historyQuery.isLoading ? (
                 <div className="p-3 space-y-1"><Skeleton className="h-6 w-full" /><Skeleton className="h-6 w-full" /></div>
               ) : !historyQuery.data?.items?.length ? (
-                <div className="p-5 text-center text-[11px] text-slate-400 dark:text-slate-500">Hali sync qilinmagan</div>
+                <div className="p-5 text-center text-[11px] text-slate-400 dark:text-slate-500">{t('notSyncedYet')}</div>
               ) : (
                 <div className="max-h-[180px] overflow-y-auto">
                   <table className="w-full text-[11px]">
                     <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 sticky top-0">
                       <tr>
-                        <th className="text-left px-3 py-1.5 font-semibold">Vaqt</th>
-                        <th className="text-left px-3 py-1.5 font-semibold">Tur</th>
-                        <th className="text-left px-3 py-1.5 font-semibold">Kim</th>
-                        <th className="text-center px-2 py-1.5 font-semibold">Status</th>
+                        <th className="text-left px-3 py-1.5 font-semibold">{tc('time')}</th>
+                        <th className="text-left px-3 py-1.5 font-semibold">{t('colTrigger')}</th>
+                        <th className="text-left px-3 py-1.5 font-semibold">{tc('who')}</th>
+                        <th className="text-center px-2 py-1.5 font-semibold">{tc('status')}</th>
                         <th className="text-right px-2 py-1.5 font-semibold">XonPay</th>
-                        <th className="text-right px-2 py-1.5 font-semibold">Yangi</th>
+                        <th className="text-right px-2 py-1.5 font-semibold">{t('newCol')}</th>
                         <th className="text-right px-2 py-1.5 font-semibold">Matched</th>
-                        <th className="text-right px-2 py-1.5 font-semibold">Vaqt</th>
-                        <th className="text-center px-2 py-1.5 font-semibold">Amal</th>
+                        <th className="text-right px-2 py-1.5 font-semibold">{tc('time')}</th>
+                        <th className="text-center px-2 py-1.5 font-semibold">{tc('actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -528,7 +534,7 @@ export default function BilingPage() {
                                 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase',
                                 h.trigger === 'cron' ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900' : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-200 dark:ring-blue-900',
                               )}>
-                                {h.trigger === 'cron' ? <><Zap className="h-2.5 w-2.5" /> cron</> : <><Activity className="h-2.5 w-2.5" /> qo'lda</>}
+                                {h.trigger === 'cron' ? <><Zap className="h-2.5 w-2.5" /> cron</> : <><Activity className="h-2.5 w-2.5" /> {t('manual')}</>}
                               </span>
                             </td>
                             <td className="px-3 py-1.5 max-w-[180px] truncate" title={`${h.actorName || ''} (${h.actorEmail || ''})`}>
@@ -552,7 +558,7 @@ export default function BilingPage() {
                                 <button
                                   onClick={() => cancelByIdMut.mutate(h.id)}
                                   disabled={cancelByIdMut.isPending}
-                                  title="Bu sync ni to'xtatish"
+                                  title={t('stopThisSync')}
                                   className="inline-flex items-center justify-center w-6 h-6 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 transition-all"
                                 >
                                   {cancelByIdMut.isPending && cancelByIdMut.variables === h.id
@@ -578,9 +584,9 @@ export default function BilingPage() {
           <CardContent className="p-0">
             <button onClick={() => setDailyOpen(o => !o)}
               className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
-              <h2 className="text-[13px] font-bold flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" /> Kunlik statistika</h2>
+              <h2 className="text-[13px] font-bold flex items-center gap-2"><TrendingUp className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" /> {t('dailyStats')}</h2>
               <div className="flex items-center gap-3">
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">{statsQuery.data?.days?.length || 0} kun</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('daysCount', { n: statsQuery.data?.days?.length || 0 })}</div>
                 {dailyOpen ? <ChevronUp className="h-4 w-4 text-slate-400 dark:text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
               </div>
             </button>
@@ -588,19 +594,19 @@ export default function BilingPage() {
             {statsQuery.isLoading ? (
               <div className="p-3 space-y-1.5">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-7 w-full" />)}</div>
             ) : !statsQuery.data?.days?.length ? (
-              <div className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">Ma'lumot yo'q</div>
+              <div className="p-8 text-center text-sm text-slate-400 dark:text-slate-500">{t('noData')}</div>
             ) : (
               <div className="overflow-x-auto max-h-[400px]">
                 <table className="w-full text-[12px]">
                   <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 sticky top-0">
                     <tr>
-                      <th className="text-left px-3 py-2 font-semibold">Sana</th>
-                      <th className="text-right px-3 py-2 font-semibold">Jami</th>
-                      <th className="text-right px-3 py-2 font-semibold">Jami (UZS)</th>
-                      <th className="text-right px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-300">Tushgan</th>
-                      <th className="text-right px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-300">Tushgan (UZS)</th>
-                      <th className="text-right px-3 py-2 font-semibold text-rose-700 dark:text-rose-300">Qolgan</th>
-                      <th className="text-right px-3 py-2 font-semibold text-rose-700 dark:text-rose-300">Qolgan (UZS)</th>
+                      <th className="text-left px-3 py-2 font-semibold">{tc('date')}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{tc('total')}</th>
+                      <th className="text-right px-3 py-2 font-semibold">{t('totalUzs')}</th>
+                      <th className="text-right px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-300">{t('received')}</th>
+                      <th className="text-right px-3 py-2 font-semibold text-emerald-700 dark:text-emerald-300">{t('receivedUzs')}</th>
+                      <th className="text-right px-3 py-2 font-semibold text-rose-700 dark:text-rose-300">{t('remaining')}</th>
+                      <th className="text-right px-3 py-2 font-semibold text-rose-700 dark:text-rose-300">{t('remainingUzs')}</th>
                       <th className="text-right px-3 py-2 font-semibold">%</th>
                     </tr>
                   </thead>
@@ -610,7 +616,7 @@ export default function BilingPage() {
                       return (
                         <tr key={d.date} className="border-t border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
                           onClick={() => { setDateFrom(d.date); setDateTo(d.date); setPage(1); }}
-                          title="Bu kunni alohida ko'rish uchun bosing">
+                          title={t('clickDayHint')}>
                           <td className="px-3 py-1.5 font-mono whitespace-nowrap">{d.date}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums">{fmt(d.totalCount)}</td>
                           <td className="px-3 py-1.5 text-right tabular-nums font-semibold">{fmt(d.totalAmount)}</td>
@@ -645,9 +651,9 @@ export default function BilingPage() {
               className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors border-b border-slate-100 dark:border-slate-800">
               <h2 className="text-[13px] font-bold flex items-center gap-2">
                 <Hash className="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-                XonPay to'lovlar ro'yxati
+                {t('xonpayPaymentsList')}
                 {listQuery.data?.total != null && (
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">({fmt(listQuery.data.total)} ta)</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">({t('countItems', { n: fmt(listQuery.data.total) })})</span>
                 )}
               </h2>
               {listOpen ? <ChevronUp className="h-4 w-4 text-slate-400 dark:text-slate-500" /> : <ChevronDown className="h-4 w-4 text-slate-400 dark:text-slate-500" />}
@@ -658,15 +664,15 @@ export default function BilingPage() {
                 <div className="relative">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                   <Input value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }}
-                    placeholder="Shartnoma, F.I.O., UUID..."
+                    placeholder={t('searchContractFioUuid')}
                     className="pl-8 h-9 w-72 text-[12px]" />
                 </div>
                 <Select value={matched} onValueChange={(v: any) => { setMatched(v); setPage(1); }}>
                   <SelectTrigger className="h-9 w-44 text-[12px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">Hammasi</SelectItem>
-                    <SelectItem value="matched">Tushgan</SelectItem>
-                    <SelectItem value="unmatched">Topilmagan</SelectItem>
+                    <SelectItem value="all">{tc('all')}</SelectItem>
+                    <SelectItem value="matched">{t('received')}</SelectItem>
+                    <SelectItem value="unmatched">{t('notFound')}</SelectItem>
                   </SelectContent>
                 </Select>
                 <Input type="date" value={dateFrom} max={dateTo} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9 w-36 text-[12px]" />
@@ -679,7 +685,7 @@ export default function BilingPage() {
               <div className="p-3 space-y-1">{[...Array(8)].map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}</div>
             ) : !listQuery.data?.items?.length ? (
               <div className="p-12 text-center text-sm text-slate-400 dark:text-slate-500">
-                Ma'lumot yo'q. Yuqoridagi <b>CRM dan sync</b> tugmasini bosing.
+                {t.rich('noDataSyncHint', { b: (c) => <b>{c}</b> })}
               </div>
             ) : (
               <>
@@ -687,14 +693,14 @@ export default function BilingPage() {
                   <table className="w-full text-[12px]">
                     <thead className="bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 uppercase text-[10px] tracking-wider">
                       <tr>
-                        <th className="text-left px-3 py-2 font-bold">Sana</th>
-                        <th className="text-left px-3 py-2 font-bold">Obyekt</th>
-                        <th className="text-left px-3 py-2 font-bold">Shartnoma</th>
-                        <th className="text-left px-3 py-2 font-bold">Mijoz</th>
-                        <th className="text-right px-3 py-2 font-bold">Summa (UZS)</th>
-                        <th className="text-center px-3 py-2 font-bold">Status</th>
+                        <th className="text-left px-3 py-2 font-bold">{tc('date')}</th>
+                        <th className="text-left px-3 py-2 font-bold">{t('colObject')}</th>
+                        <th className="text-left px-3 py-2 font-bold">{t('colContract')}</th>
+                        <th className="text-left px-3 py-2 font-bold">{tc('client')}</th>
+                        <th className="text-right px-3 py-2 font-bold">{t('amountUzs')}</th>
+                        <th className="text-center px-3 py-2 font-bold">{tc('status')}</th>
                         <th className="text-center px-3 py-2 font-bold">Tx</th>
-                        <th className="text-right px-3 py-2 font-bold">Amal</th>
+                        <th className="text-right px-3 py-2 font-bold">{tc('actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -702,7 +708,7 @@ export default function BilingPage() {
                         <tr key={it.externalId}
                           className="border-t border-slate-100 dark:border-slate-800 hover:bg-violet-50/40 dark:hover:bg-violet-950/40 cursor-pointer transition-colors"
                           onClick={() => setDetailRow(it)}
-                          title="Tafsilotlarni ko'rish uchun bosing"
+                          title={t('rowDetailHint')}
                         >
                           <td className="px-3 py-2 font-mono tabular-nums whitespace-nowrap text-slate-700 dark:text-slate-300">
                             {it.datePaid?.slice(0, 10) || '—'}
@@ -726,11 +732,11 @@ export default function BilingPage() {
                           <td className="px-3 py-2 text-center">
                             {it.isMatched ? (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
-                                <CheckCircle2 className="h-3 w-3" /> Tushgan
+                                <CheckCircle2 className="h-3 w-3" /> {t('received')}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900">
-                                <XCircle className="h-3 w-3" /> Topilmagan
+                                <XCircle className="h-3 w-3" /> {t('notFound')}
                               </span>
                             )}
                           </td>
@@ -739,7 +745,7 @@ export default function BilingPage() {
                               <Link
                                 href={`/${locale}/transactions?searchId=${encodeURIComponent(it.matchedTx.externalId)}`}
                                 onClick={(e) => e.stopPropagation()}
-                                title={`Tranzaksiyalar sahifasida ochish: ${it.matchedTx.externalId}`}
+                                title={t('openInTransactions', { id: it.matchedTx.externalId })}
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white shadow-sm hover:shadow-md hover:shadow-fuchsia-500/40 hover:scale-110 transition-all"
                               >
                                 <ScanLine className="h-3.5 w-3.5" />
@@ -756,7 +762,7 @@ export default function BilingPage() {
                               {rechecking.has(it.externalId)
                                 ? <Loader2 className="h-3 w-3 animate-spin" />
                                 : <RefreshCw className="h-3 w-3" />}
-                              Tekshirish
+                              {tc('recheck')}
                             </Button>
                           </td>
                         </tr>
@@ -838,6 +844,8 @@ function XonpayDetailDialog({
   locale: string;
   onClose: () => void;
 }) {
+  const t = useTranslations('billing');
+  const tc = useTranslations('common');
   return (
     <Dialog open={true} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -846,26 +854,26 @@ function XonpayDetailDialog({
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 grid place-items-center text-white">
               <Receipt className="h-3.5 w-3.5" />
             </div>
-            XonPay to'lov tafsilotlari
+            {t('xonpayDetailTitle')}
             {row.isMatched ? (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
-                <CheckCircle2 className="h-3 w-3" /> Tushgan
+                <CheckCircle2 className="h-3 w-3" /> {t('received')}
               </span>
             ) : (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900">
-                <XCircle className="h-3 w-3" /> Topilmagan
+                <XCircle className="h-3 w-3" /> {t('notFound')}
               </span>
             )}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            CRM XonPay to'lovi {row.isMatched ? "Kapitalbank ga muvaffaqiyatli tushgan" : "Kapitalbank da hali topilmagan"}
+            {row.isMatched ? t('detailDescMatched') : t('detailDescUnmatched')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
           {/* ── Asosiy summa karta ── */}
           <div className="rounded-xl bg-gradient-to-br from-violet-50 to-purple-50 ring-1 ring-violet-200 dark:ring-violet-900 p-4">
-            <div className="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400 font-bold">Summa</div>
+            <div className="text-[10px] uppercase tracking-wider text-violet-600 dark:text-violet-400 font-bold">{tc('amount')}</div>
             <div className="text-3xl font-bold tracking-tight tabular-nums text-violet-900 dark:text-violet-300 mt-1">
               {fmt(row.amount)} <span className="text-sm text-violet-600 dark:text-violet-400 font-normal">UZS</span>
             </div>
@@ -877,22 +885,22 @@ function XonpayDetailDialog({
           {/* ── CRM ma'lumotlari ── */}
           <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
             <div className="px-3 py-2 bg-slate-50 dark:bg-slate-900 text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">
-              CRM ma'lumotlari
+              {t('crmData')}
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-700">
-              <DetailRow label="Obyekt" value={
+              <DetailRow label={t('colObject')} value={
                 row.objectName
                   ? <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11.5px] font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700">
                       <Home className="h-3 w-3 text-slate-500 dark:text-slate-400" /> {row.objectName}
                     </span>
                   : '—'
               } />
-              <DetailRow label="Shartnoma" value={
+              <DetailRow label={t('colContract')} value={
                 <code className="font-mono text-[12px] font-bold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 px-2 py-0.5 rounded ring-1 ring-indigo-200 dark:ring-indigo-900">
                   {row.contract || '—'}
                 </code>
               } />
-              <DetailRow label="Mijoz F.I.O." value={row.fullName || '—'} />
+              <DetailRow label={t('clientFio')} value={row.fullName || '—'} />
               <DetailRow label="Type" value={row.type || '—'} />
               <DetailRow label="Category" value={row.category || '—'} />
               <DetailRow label="Status" value={row.status || '—'} />
@@ -901,14 +909,14 @@ function XonpayDetailDialog({
                   <div className="flex items-center gap-2">
                     <code className="font-mono text-[11px] text-violet-700 dark:text-violet-300">{row.xonpayUuid}</code>
                     <button
-                      onClick={() => { navigator.clipboard.writeText(row.xonpayUuid!); toast.success('UUID nusxalandi'); }}
+                      onClick={() => { navigator.clipboard.writeText(row.xonpayUuid!); toast.success(t('uuidCopied')); }}
                       className="text-slate-400 dark:text-slate-500 hover:text-violet-600 dark:hover:text-violet-400"
-                      title="Nusxalash"
+                      title={tc('copy')}
                     >
                       <Copy className="h-3 w-3" />
                     </button>
                   </div>
-                ) : <span className="text-rose-600 dark:text-rose-400">UUID extract qilinmadi</span>
+                ) : <span className="text-rose-600 dark:text-rose-400">{t('uuidNotExtracted')}</span>
               } />
               <DetailRow label="CRM external_id" value={
                 <code className="font-mono text-[10px] text-slate-600 dark:text-slate-300 break-all">{row.externalId}</code>
@@ -924,25 +932,25 @@ function XonpayDetailDialog({
             <div className="rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 overflow-hidden">
               <div className="px-3 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                Kapitalbank tranzaksiyasi (topilgan)
+                {t('capitalTxFound')}
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                <DetailRow label="Tx ID (external)" value={
+                <DetailRow label={t('txIdExternal')} value={
                   <div className="flex items-center gap-2">
                     <code className="font-mono text-[10px] text-emerald-700 dark:text-emerald-300 break-all">{row.matchedTx.externalId || row.matchedTx.id}</code>
                     {row.matchedTx.externalId && (
                       <button
-                        onClick={() => { navigator.clipboard.writeText(row.matchedTx!.externalId!); toast.success('ID nusxalandi'); }}
+                        onClick={() => { navigator.clipboard.writeText(row.matchedTx!.externalId!); toast.success(t('idCopied')); }}
                         className="text-slate-400 dark:text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 shrink-0"
-                        title="Nusxalash"
+                        title={tc('copy')}
                       >
                         <Copy className="h-3 w-3" />
                       </button>
                     )}
                   </div>
                 } />
-                <DetailRow label="Sana" value={row.matchedTx.txnDate?.slice(0, 10) || '—'} />
-                <DetailRow label="Summa" value={
+                <DetailRow label={tc('date')} value={row.matchedTx.txnDate?.slice(0, 10) || '—'} />
+                <DetailRow label={tc('amount')} value={
                   <span className="font-bold tabular-nums">{fmt(row.matchedTx.amount)} UZS</span>
                 } />
                 <DetailRow label="Description" value={
@@ -953,7 +961,7 @@ function XonpayDetailDialog({
                 {row.matchedTx.externalId && (
                   <Link href={`/${locale}/transactions?searchId=${encodeURIComponent(row.matchedTx.externalId)}`}>
                     <Button size="sm" className="gap-1.5 h-8 text-[11px] bg-emerald-600 hover:bg-emerald-700">
-                      <ScanLine className="h-3.5 w-3.5" /> Tranzaksiyani ochish
+                      <ScanLine className="h-3.5 w-3.5" /> {t('openTransaction')}
                     </Button>
                   </Link>
                 )}
@@ -963,10 +971,9 @@ function XonpayDetailDialog({
             <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
               <div className="text-[12px] text-rose-800 dark:text-rose-300">
-                <div className="font-bold">Kapitalbank da topilmadi</div>
+                <div className="font-bold">{t('notFoundInCapital')}</div>
                 <div className="text-[11px] text-rose-700 dark:text-rose-300 mt-0.5">
-                  Bu to'lov XonPay'dan jo'natilgan lekin bizning bank hisoblariga hali tushmagan (yoki UUID mos kelmagan).
-                  Yuqoridagi <b>Tekshirish</b> tugmasi orqali qayta tekshiring.
+                  {t.rich('notFoundInCapitalDesc', { b: (c) => <b>{c}</b> })}
                 </div>
               </div>
             </div>
@@ -1006,12 +1013,14 @@ function SyncProgressDialog({
   onCancelSync: () => void;
   cancelPending: boolean;
 }) {
+  const t = useTranslations('billing');
+  const tc = useTranslations('common');
   const isActive = syncRunning || matchRunning;
   const elapsedSec = syncStartedAt
     ? Math.floor((Date.now() - new Date(syncStartedAt).getTime()) / 1000)
     : 0;
   const elapsedStr = elapsedSec >= 60
-    ? `${Math.floor(elapsedSec / 60)} daq ${elapsedSec % 60}s`
+    ? `${t('minShort', { n: Math.floor(elapsedSec / 60) })} ${elapsedSec % 60}s`
     : `${elapsedSec}s`;
 
   // Sync progress %
@@ -1031,14 +1040,14 @@ function SyncProgressDialog({
             )}>
               {isActive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
             </div>
-            {syncRunning && 'CRM dan sync ishlamoqda'}
-            {matchRunning && !syncRunning && 'Qolganlarni tekshirish (match)'}
-            {!isActive && (syncFinishedAt ? 'Sync tugadi' : 'Holat')}
+            {syncRunning && t('syncRunningTitle')}
+            {matchRunning && !syncRunning && t('matchTitle')}
+            {!isActive && (syncFinishedAt ? t('syncDone') : t('state'))}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            {syncRunning && `CRM dan XonPay to'lovlari yuklanmoqda · ${elapsedStr}`}
-            {matchRunning && !syncRunning && "Topilmagan XonPay to'lovlari uchun Kapitalbank tx qidirilmoqda (UUID bo'yicha)"}
-            {!isActive && syncFinishedAt && `Yakunlandi: ${new Date(syncFinishedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19)}`}
+            {syncRunning && t('syncRunningDesc', { elapsed: elapsedStr })}
+            {matchRunning && !syncRunning && t('matchRunningDesc')}
+            {!isActive && syncFinishedAt && t('finishedAt', { at: new Date(syncFinishedAt).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour12: false }).slice(0, 19) })}
           </DialogDescription>
         </DialogHeader>
 
@@ -1050,7 +1059,7 @@ function SyncProgressDialog({
               <div>
                 <div className="flex items-center justify-between text-[11px] mb-1.5">
                   <span className="font-semibold text-slate-700 dark:text-slate-300">
-                    Sahifa {sp.page} / {sp.lastPage || '?'}
+                    {t('pageOf', { page: sp.page, last: sp.lastPage || '?' })}
                   </span>
                   <span className="text-violet-700 dark:text-violet-300 font-bold">{pct}%</span>
                 </div>
@@ -1067,16 +1076,16 @@ function SyncProgressDialog({
 
               {/* Statistika grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <ProgressStat label="CRM dan keldi" value={fmt(sp.fetched)} color="slate" />
+                <ProgressStat label={t('fromCrm')} value={fmt(sp.fetched)} color="slate" />
                 <ProgressStat label="XonPay" value={fmt(sp.xonpay)} color="violet" />
-                <ProgressStat label="Yangi" value={`+${fmt(sp.inserted)}`} color="emerald" />
-                <ProgressStat label="Yangilangan" value={`~${fmt(sp.updated)}`} color="amber" />
+                <ProgressStat label={tc('new')} value={`+${fmt(sp.inserted)}`} color="emerald" />
+                <ProgressStat label={t('updated')} value={`~${fmt(sp.updated)}`} color="amber" />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <ProgressStat label="Matched" value={fmt(sp.matched)} color="blue" icon={<CheckCircle2 className="h-3 w-3" />} />
-                <ProgressStat label="Xatolar" value={fmt(sp.errors)} color={sp.errors > 0 ? 'rose' : 'slate'} icon={sp.errors > 0 ? <XCircle className="h-3 w-3" /> : undefined} />
-                <ProgressStat label="Vaqt" value={elapsedStr} color="slate" icon={<Activity className="h-3 w-3" />} />
-                <ProgressStat label="Holat" value={syncRunning ? 'ishlamoqda' : 'tugadi'} color={syncRunning ? 'violet' : 'emerald'} />
+                <ProgressStat label={t('errors')} value={fmt(sp.errors)} color={sp.errors > 0 ? 'rose' : 'slate'} icon={sp.errors > 0 ? <XCircle className="h-3 w-3" /> : undefined} />
+                <ProgressStat label={tc('time')} value={elapsedStr} color="slate" icon={<Activity className="h-3 w-3" />} />
+                <ProgressStat label={t('state')} value={syncRunning ? t('running') : t('finished')} color={syncRunning ? 'violet' : 'emerald'} />
               </div>
             </div>
           )}
@@ -1088,7 +1097,7 @@ function SyncProgressDialog({
                 <div className="flex items-center justify-between text-[11px] mb-1.5">
                   <span className="font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     {matchRunning ? <Loader2 className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
-                    Match (Topilmaganlarni Kapitalbank bilan moslashtirish)
+                    {t('matchSectionTitle')}
                   </span>
                   <span className="text-blue-700 dark:text-blue-300 font-bold tabular-nums">
                     {matchProgress.total > 0 ? Math.round((matchProgress.done / matchProgress.total) * 100) : 0}%
@@ -1108,20 +1117,20 @@ function SyncProgressDialog({
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <ProgressStat
-                  label="Tekshirildi"
+                  label={t('checked')}
                   value={`${fmt(matchProgress.done)} / ${fmt(matchProgress.total)}`}
                   color="blue"
                   icon={<Activity className="h-3 w-3" />}
                 />
                 <ProgressStat
-                  label="Topildi (matched)"
+                  label={t('foundMatched')}
                   value={fmt(matchProgress.matched)}
                   color="emerald"
                   icon={<CheckCircle2 className="h-3 w-3" />}
                 />
                 <ProgressStat
-                  label="Holat"
-                  value={matchRunning ? 'ishlamoqda' : 'tugadi'}
+                  label={t('state')}
+                  value={matchRunning ? t('running') : t('finished')}
                   color={matchRunning ? 'blue' : 'emerald'}
                 />
               </div>
@@ -1132,7 +1141,7 @@ function SyncProgressDialog({
           {syncLastError && !syncRunning && (
             <div className="rounded-lg ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/40 p-3 text-[11.5px] text-rose-800 dark:text-rose-300 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div><b>Xato:</b> {syncLastError}</div>
+              <div><b>{tc('error')}:</b> {syncLastError}</div>
             </div>
           )}
 
@@ -1141,9 +1150,9 @@ function SyncProgressDialog({
             <div className="rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 text-[11px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
               <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
               <div>
-                Sync fonda davom etadi. Bu modul yopilsa ham sync to'xtamaydi.
+                {t('syncInfoBackground')}
                 <br />
-                <b>100% matched kunlar avtomatik skip qilinadi</b> — qaytadan tekshirilmaydi.
+                <b>{t('syncInfoSkip')}</b> {t('syncInfoSkipTail')}
               </div>
             </div>
           )}
@@ -1158,11 +1167,11 @@ function SyncProgressDialog({
                 className="gap-1.5 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300"
               >
                 {cancelPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
-                Sync ni to'xtatish
+                {t('stopSync')}
               </Button>
             )}
             <Button variant="outline" onClick={onClose}>
-              {isActive ? 'Modulni yopish (sync davom etadi)' : 'Yopish'}
+              {isActive ? t('closeModuleSyncContinues') : tc('close')}
             </Button>
           </div>
         </div>
@@ -1202,6 +1211,8 @@ function ProgressStat({
 //  CLEANUP ORPHANS MODAL — CRM da yo'q (orphan) yozuvlarni tozalash
 // ════════════════════════════════════════════════════
 function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
+  const t = useTranslations('billing');
+  const tc = useTranslations('common');
   const qc = useQueryClient();
   const [phase, setPhase] = useState<'idle' | 'confirm' | 'truncating' | 'done' | 'error'>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -1218,7 +1229,7 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
       qc.invalidateQueries({ queryKey: ['xonpay-history'] });
       setPhase('done');
     } catch (e: any) {
-      setLastError(e?.message || 'Xato');
+      setLastError(e?.message || tc('error'));
       setPhase('error');
     }
   }
@@ -1233,10 +1244,10 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
             <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center text-white shadow-lg shadow-rose-500/30">
               <Trash2 className="h-4 w-4" />
             </div>
-            XonPay ma'lumotlarini tozalash
+            {t('cleanupTitle')}
           </DialogTitle>
           <DialogDescription className="text-[12px]">
-            Jadvalni to'liq tozalaydi (TRUNCATE). Bog'langan bank tx'lar tegmaydi.
+            {t('cleanupDesc')}
           </DialogDescription>
         </DialogHeader>
 
@@ -1248,15 +1259,14 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
                 <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center text-white shadow-lg shadow-rose-500/30 mb-3">
                   <AlertCircle className="h-7 w-7" />
                 </div>
-                <div className="text-[14px] font-bold text-rose-900 dark:text-rose-300 mb-1">Diqqat — xavfli amal</div>
+                <div className="text-[14px] font-bold text-rose-900 dark:text-rose-300 mb-1">{t('dangerAction')}</div>
                 <div className="text-[12px] text-rose-700 dark:text-rose-300">
-                  Barcha <b>XonpayTransaction</b> yozuvlari (taxminan ~19k ta) butunlay o'chiriladi.
-                  Bog'langan Transaction'lar (bank tx) saqlanadi, faqat <code className="font-mono text-[11px] bg-white/60 dark:bg-slate-900 px-1 rounded">matched_tx_id</code> link uzipladi.
+                  {t.rich('cleanupWarning', { b: (c) => <b>{c}</b>, code: (c) => <code className="font-mono text-[11px] bg-white/60 dark:bg-slate-900 px-1 rounded">{c}</code> })}
                 </div>
               </div>
               <div className="rounded-lg ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50 dark:bg-amber-950/40 p-3 text-[11.5px] text-amber-800 dark:text-amber-300 flex items-start gap-2">
                 <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                <div>Tozalangandan keyin <b>"CRM dan sync"</b> tugmasini bosib qaytadan to'ldirishingiz mumkin (avtomatik boshlanmaydi).</div>
+                <div>{t.rich('cleanupRefillHint', { b: (c) => <b>{c}</b> })}</div>
               </div>
             </>
           )}
@@ -1267,9 +1277,9 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
               <div className="w-14 h-14 mx-auto rounded-2xl bg-rose-600 grid place-items-center text-white shadow-lg shadow-rose-500/40 mb-3 animate-pulse">
                 <AlertCircle className="h-7 w-7" />
               </div>
-              <div className="text-[14px] font-bold text-rose-900 dark:text-rose-300 mb-2">Aniqmi?</div>
+              <div className="text-[14px] font-bold text-rose-900 dark:text-rose-300 mb-2">{t('confirmSure')}</div>
               <div className="text-[12px] text-rose-700 dark:text-rose-300">
-                Bu amal qaytarib bo'lmaydi. "Ha, o'chirish" tugmasini bosing tasdiqlash uchun.
+                {t('confirmDeleteDesc')}
               </div>
             </div>
           )}
@@ -1278,8 +1288,8 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
           {phase === 'truncating' && (
             <div className="rounded-2xl ring-1 ring-violet-200 dark:ring-violet-900 bg-violet-50 dark:bg-violet-950/40 p-5 text-center">
               <Loader2 className="h-10 w-10 mx-auto animate-spin text-violet-600 dark:text-violet-400 mb-3" />
-              <div className="text-[13px] font-bold text-violet-900 dark:text-violet-300">Tozalanmoqda...</div>
-              <div className="text-[11px] text-violet-600 dark:text-violet-400 mt-1">Bir necha soniya...</div>
+              <div className="text-[13px] font-bold text-violet-900 dark:text-violet-300">{t('cleaning')}</div>
+              <div className="text-[11px] text-violet-600 dark:text-violet-400 mt-1">{t('fewSeconds')}</div>
             </div>
           )}
 
@@ -1289,11 +1299,11 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
               <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center text-white shadow-lg shadow-emerald-500/30 mb-3">
                 <CheckCircle2 className="h-7 w-7" />
               </div>
-              <div className="text-[14px] font-bold text-emerald-900 dark:text-emerald-300 mb-1">Tugadi!</div>
+              <div className="text-[14px] font-bold text-emerald-900 dark:text-emerald-300 mb-1">{tc('done')}</div>
               <div className="text-[24px] font-bold text-emerald-700 dark:text-emerald-300 tabular-nums">{fmt(deletedCount || 0)}</div>
-              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">ta yozuv o'chirildi</div>
+              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-0.5">{t('recordsDeleted')}</div>
               <div className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-3">
-                Endi "CRM dan sync" tugmasini bosib qaytadan to'ldiring.
+                {t('cleanupDoneHint')}
               </div>
             </div>
           )}
@@ -1302,7 +1312,7 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
           {lastError && (
             <div className="rounded-lg ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50 dark:bg-rose-950/40 p-3 text-[12px] text-rose-800 dark:text-rose-300 flex items-start gap-2">
               <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div><b>Xato:</b> {lastError}</div>
+              <div><b>{tc('error')}:</b> {lastError}</div>
             </div>
           )}
 
@@ -1310,27 +1320,27 @@ function CleanupOrphansDialog({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-end gap-2 pt-2 border-t">
             {phase === 'idle' && (
               <>
-                <Button variant="outline" onClick={onClose}>Bekor qilish</Button>
+                <Button variant="outline" onClick={onClose}>{tc('cancel')}</Button>
                 <Button onClick={() => setPhase('confirm')} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
-                  <Trash2 className="h-3.5 w-3.5" /> O'chirish
+                  <Trash2 className="h-3.5 w-3.5" /> {tc('delete')}
                 </Button>
               </>
             )}
             {phase === 'confirm' && (
               <>
-                <Button variant="outline" onClick={() => setPhase('idle')}>Orqaga</Button>
+                <Button variant="outline" onClick={() => setPhase('idle')}>{tc('back')}</Button>
                 <Button onClick={doTruncate} className="gap-1.5 bg-rose-600 hover:bg-rose-700">
-                  <Trash2 className="h-3.5 w-3.5" /> Ha, o'chirish
+                  <Trash2 className="h-3.5 w-3.5" /> {tc('yesDelete')}
                 </Button>
               </>
             )}
             {busy && (
               <Button variant="outline" disabled className="gap-1.5">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Kuting...
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> {tc('wait')}
               </Button>
             )}
             {(phase === 'done' || phase === 'error') && (
-              <Button onClick={onClose}>Yopish</Button>
+              <Button onClick={onClose}>{tc('close')}</Button>
             )}
           </div>
         </div>
@@ -1358,7 +1368,7 @@ function InfoBox({ label, value, color }: { label: string; value: string; color?
 //  KPI KARTA — zamonaviy (gradient bg, big number, sparkle)
 // ════════════════════════════════════════════════════
 function KpiCardModern({
-  label, count, amount, color, icon, loading, extra,
+  label, count, amount, color, icon, loading, extra, countLabel,
 }: {
   label: string;
   count: number;
@@ -1367,6 +1377,7 @@ function KpiCardModern({
   icon: React.ReactNode;
   loading: boolean;
   extra?: string;
+  countLabel: string;
 }) {
   const m = {
     violet:  { bg: 'from-violet-500/10 to-purple-500/5', ring: 'ring-violet-200 dark:ring-violet-900', text: 'text-violet-700 dark:text-violet-300', accent: 'from-violet-500 to-purple-600' },
@@ -1396,7 +1407,7 @@ function KpiCardModern({
             {fmt(amount)} <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">UZS</span>
           </div>
           <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums font-semibold">
-            {fmt(count)} ta to'lov
+            {countLabel}
           </div>
         </>
       )}

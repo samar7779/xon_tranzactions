@@ -12,6 +12,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Play, Pause, RotateCcw, Sparkles, Droplets, Circle, Hash,
@@ -29,11 +30,11 @@ interface SessionStats {
   totalSeconds: number;
 }
 
-const STYLE_OPTIONS: { value: TimerStyle; label: string; icon: any }[] = [
-  { value: 'orb',     label: 'Orb',         icon: Sparkles },
-  { value: 'liquid',  label: 'Suyuq',       icon: Droplets },
-  { value: 'ring',    label: 'Doira',       icon: Circle   },
-  { value: 'display', label: 'Display',     icon: Hash     },
+const STYLE_OPTIONS: { value: TimerStyle; labelKey: string; icon: any }[] = [
+  { value: 'orb',     labelKey: 'styleOrb',     icon: Sparkles },
+  { value: 'liquid',  labelKey: 'styleLiquid',  icon: Droplets },
+  { value: 'ring',    labelKey: 'styleRing',    icon: Circle   },
+  { value: 'display', labelKey: 'styleDisplay', icon: Hash     },
 ];
 
 function todayKey() { return new Date().toISOString().slice(0, 10); }
@@ -55,6 +56,7 @@ function saveStats(s: SessionStats) {
 }
 
 export function PomodoroTimer() {
+  const t = useTranslations('pomodoro');
   const [style, setStyle] = useState<TimerStyle>('orb');
   const [mode, setMode] = useState<Mode>('focus');
   const [running, setRunning] = useState(false);
@@ -163,11 +165,11 @@ export function PomodoroTimer() {
       };
       setStats(newStats);
       saveStats(newStats);
-      toast.success(`🎉 ${focusMin} daqiqa fokus tugadi! Endi ${breakMin} daqiqa dam`, { duration: 5000 });
+      toast.success(`🎉 ${t('focusComplete', { min: focusMin, breakMin })}`, { duration: 5000 });
       setMode('break');
       setSecondsLeft(breakMin * 60);
     } else {
-      toast.info(`☕ Dam tugadi — yana ishga!`, { duration: 4000 });
+      toast.info(`☕ ${t('breakDone')}`, { duration: 4000 });
       setMode('focus');
       setSecondsLeft(focusMin * 60);
     }
@@ -206,7 +208,9 @@ export function PomodoroTimer() {
   const totalMin = Math.floor(stats.totalSeconds / 60);
   const totalH = Math.floor(totalMin / 60);
   const totalM = totalMin % 60;
-  const totalStr = totalH > 0 ? `${totalH}s ${totalM}d` : `${totalM} daqiqa`;
+  const totalStr = totalH > 0
+    ? `${totalH}${t('hourShort')} ${totalM}${t('minuteShort')}`
+    : `${totalM} ${t('minutes')}`;
 
   return (
     <div className="border-0 shadow-soft overflow-hidden rounded-2xl bg-white dark:bg-slate-900">
@@ -223,10 +227,10 @@ export function PomodoroTimer() {
         </div>
         <div className="flex-1">
           <div className="text-base font-bold text-slate-900 dark:text-slate-100">
-            {mode === 'focus' ? 'Fokus rejimi' : 'Dam olish'}
+            {mode === 'focus' ? t('focusMode') : t('breakTime')}
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">
-            Pomodoro · {mode === 'focus' ? `${focusMin} daqiqa ish` : `${breakMin} daqiqa dam`}
+            Pomodoro · {mode === 'focus' ? t('focusWork', { min: focusMin }) : t('breakRest', { min: breakMin })}
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -236,7 +240,7 @@ export function PomodoroTimer() {
               "w-8 h-8 rounded-lg grid place-items-center transition-colors",
               muted ? "bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500" : "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300",
             )}
-            title={muted ? "Ovoz o'chirilgan" : "Ovoz yoqilgan"}
+            title={muted ? t('soundOff') : t('soundOn')}
           >
             {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
           </button>
@@ -257,7 +261,7 @@ export function PomodoroTimer() {
         <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">Fokus (daqiqa)</label>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">{t('focusMinutes')}</label>
               <input
                 type="number"
                 value={focusMin}
@@ -272,7 +276,7 @@ export function PomodoroTimer() {
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">Dam (daqiqa)</label>
+              <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1 block">{t('breakMinutes')}</label>
               <input
                 type="number"
                 value={breakMin}
@@ -288,7 +292,7 @@ export function PomodoroTimer() {
             </div>
           </div>
           <div>
-            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2 block">Zamonaviy dizayn — har birini ko'rib turing</label>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-2 block">{t('designLabel')}</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {STYLE_OPTIONS.map((opt) => {
                 const active = style === opt.value;
@@ -329,12 +333,12 @@ export function PomodoroTimer() {
                         "text-[12px] font-bold tracking-tight",
                         active ? "text-indigo-700 dark:text-indigo-300" : "text-slate-700 dark:text-slate-300",
                       )}>
-                        {opt.label}
+                        {t(opt.labelKey)}
                       </div>
                       {active && (
                         <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-600 text-white text-[8px] uppercase tracking-wider font-bold">
                           <CheckCircle2 className="h-2.5 w-2.5" />
-                          Tanlangan
+                          {t('selected')}
                         </div>
                       )}
                     </div>
@@ -355,7 +359,7 @@ export function PomodoroTimer() {
             mode === 'focus' ? 'bg-amber-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
           )}
         >
-          <Brain className="inline h-3.5 w-3.5 mr-1" /> Fokus
+          <Brain className="inline h-3.5 w-3.5 mr-1" /> {t('focusTab')}
         </button>
         <button
           onClick={() => switchMode('break')}
@@ -364,7 +368,7 @@ export function PomodoroTimer() {
             mode === 'break' ? 'bg-cyan-500 text-white shadow-md' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400',
           )}
         >
-          <Coffee className="inline h-3.5 w-3.5 mr-1" /> Dam
+          <Coffee className="inline h-3.5 w-3.5 mr-1" /> {t('breakTab')}
         </button>
       </div>
 
@@ -392,7 +396,7 @@ export function PomodoroTimer() {
             }}
           >
             <Play className="h-4 w-4 fill-current" />
-            Boshlash
+            {t('start')}
           </button>
         ) : (
           <button
@@ -400,13 +404,13 @@ export function PomodoroTimer() {
             className="px-8 h-12 rounded-2xl bg-slate-800 text-white font-bold hover:bg-slate-900 transition-all inline-flex items-center gap-2 shadow-lg"
           >
             <Pause className="h-4 w-4 fill-current" />
-            To'xtatish
+            {t('pause')}
           </button>
         )}
         <button
           onClick={reset}
           className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors grid place-items-center shadow-sm"
-          title="Qaytarish"
+          title={t('reset')}
         >
           <RotateCcw className="h-4 w-4" />
         </button>
@@ -419,7 +423,7 @@ export function PomodoroTimer() {
             <Flame className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Bugungi sessiya</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">{t('todaySession')}</div>
             <div className="text-lg font-black text-slate-900 dark:text-slate-100 tabular-nums leading-none mt-0.5">{stats.sessions}</div>
           </div>
         </div>
@@ -428,7 +432,7 @@ export function PomodoroTimer() {
             <Brain className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">Jami fokus</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-bold">{t('totalFocus')}</div>
             <div className="text-lg font-black text-slate-900 dark:text-slate-100 tabular-nums leading-none mt-0.5">{totalStr}</div>
           </div>
         </div>
@@ -603,6 +607,7 @@ function LiquidTimer({ progress, mode, timeStr, running }: { progress: number; m
 /* ═════════════════════ MINIMAL RING — clean modern ═════════════════════ */
 
 function MinimalRing({ progress, mode, timeStr }: { progress: number; mode: Mode; timeStr: string }) {
+  const t = useTranslations('pomodoro');
   const RADIUS = 100;
   const CIRC = 2 * Math.PI * RADIUS;
   const dashOffset = CIRC - progress * CIRC;
@@ -663,7 +668,7 @@ function MinimalRing({ progress, mode, timeStr }: { progress: number; mode: Mode
             {timeStr}
           </div>
           <div className="text-[10px] uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 mt-2 font-bold">
-            {mode === 'focus' ? 'Fokus' : 'Dam olish'}
+            {mode === 'focus' ? t('focusTab') : t('breakTime')}
           </div>
         </div>
       </div>
@@ -784,6 +789,7 @@ function StylePreview({ style, active, mode }: { style: TimerStyle; active: bool
 /* ═════════════════════ MODERN DISPLAY — frosted glass + neon ═════════════════════ */
 
 function ModernDisplay({ timeStr, mode, progress }: { timeStr: string; mode: Mode; progress: number }) {
+  const t = useTranslations('pomodoro');
   const color = mode === 'focus' ? 'rgb(251 191 36)' : 'rgb(34 211 238)';
 
   return (
@@ -815,7 +821,7 @@ function ModernDisplay({ timeStr, mode, progress }: { timeStr: string; mode: Mod
             mode === 'focus' ? 'bg-amber-100 text-amber-700' : 'bg-cyan-100 text-cyan-700',
           )}>
             {mode === 'focus' ? <Brain className="h-3 w-3" /> : <Coffee className="h-3 w-3" />}
-            {mode === 'focus' ? 'Fokus' : 'Dam olish'}
+            {mode === 'focus' ? t('focusTab') : t('breakTime')}
           </span>
         </div>
 
