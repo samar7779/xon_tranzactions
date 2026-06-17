@@ -941,3 +941,64 @@ model OplataKvHistory {
   @@index([action])
   @@map("oplata_kv_history")
 }
+
+// ═══════════════════════════════════════════════════════════════
+// DEVELOPER API — tashqi tizim integratsiyasi uchun REST API tokenlar
+// Key + Secret juftligi: keyId ochiq (X-API-Key headerda), secret hash'lab
+// saqlanadi. Har so'rov ApiRequestLog'ga yoziladi (audit + analytics).
+// ═══════════════════════════════════════════════════════════════
+model ApiKey {
+  id              String       @id @default(cuid())
+  keyId           String       @unique @map("key_id") @db.VarChar(64)   // public, masalan "xk_live_abc123..."
+  secretHash      String       @map("secret_hash") @db.VarChar(128)     // SHA-256 hex
+  secretPreview   String       @map("secret_preview") @db.VarChar(20)   // oxirgi 4 belgi, UI'da ko'rsatish uchun
+  name            String       @db.VarChar(190)
+  description     String?      @db.Text
+  scopes          String[]     @default([])                              // ["transactions:read", ...]
+  expiresAt       DateTime?    @map("expires_at")                        // null = cheksiz
+  isActive        Boolean      @default(true) @map("is_active")
+  allowedIps      String[]     @default([]) @map("allowed_ips")          // bo'sh = barcha IP
+  createdById     String?      @map("created_by_id")
+  createdByEmail  String?      @map("created_by_email") @db.VarChar(190)
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  revokedAt       DateTime?    @map("revoked_at")
+  revokedReason   String?      @map("revoked_reason") @db.Text
+
+  // Foydalanish stats (denormalized — fast read)
+  lastUsedAt      DateTime?    @map("last_used_at")
+  lastUsedIp      String?      @map("last_used_ip") @db.VarChar(64)
+  totalRequests   Int          @default(0) @map("total_requests")
+
+  logs            ApiRequestLog[]
+
+  @@index([isActive, expiresAt])
+  @@index([createdAt(sort: Desc)])
+  @@map("api_keys")
+}
+
+// ─────────────────────────────────────────────────────────────────
+// API REQUEST LOG — har bir /api/v1/* so'rov audit yozuvi
+// IP, path, status, latency, query, response size. Hech qanday parol
+// yoki sezgir ma'lumot saqlanmaydi.
+// ─────────────────────────────────────────────────────────────────
+model ApiRequestLog {
+  id            String     @id @default(cuid())
+  apiKeyId      String?    @map("api_key_id")
+  apiKey        ApiKey?    @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  method        String     @db.VarChar(10)
+  path          String     @db.VarChar(255)
+  query         Json?
+  statusCode    Int        @map("status_code")
+  durationMs    Int        @map("duration_ms")
+  ip            String?    @db.VarChar(64)
+  userAgent     String?    @map("user_agent") @db.VarChar(512)
+  responseSize  Int?       @map("response_size")
+  errorMessage  String?    @map("error_message") @db.VarChar(512)
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  @@index([apiKeyId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@index([statusCode])
+  @@map("api_request_logs")
+}

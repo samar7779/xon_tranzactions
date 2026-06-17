@@ -52,6 +52,10 @@ export const PERMS = {
   IMPORT_RUN: 'import:run',
   SYSTEM_DEPLOY: 'system:deploy',
 
+  // Developer API
+  API_KEYS_VIEW: 'api_keys:view',
+  API_KEYS_MANAGE: 'api_keys:manage',
+
   // Qo'shimcha
   CRM_VIEW: 'crm:view',
   CATEGORIES_VIEW: 'categories:view',
