@@ -173,10 +173,13 @@ export class TransactionsService {
     if (csList) {
       const includeNone = csList.includes('__NONE__');
       const includeXato = csList.includes('__XATO__');
-      const nums = csList.filter((s) => s !== '__NONE__' && s !== '__XATO__');
+      const includeBekor = csList.includes('__BEKOR__');
+      const nums = csList.filter((s) => s !== '__NONE__' && s !== '__XATO__' && s !== '__BEKOR__');
       const conds: any[] = [];
       if (nums.length > 0) conds.push({ contractNumber: { in: nums } });
       if (includeNone) conds.push({ contractNumber: null });
+      // __BEKOR__ — CRM'da cancelled status'li shartnomalar (JOIN yo'q, keyin qayta ishlanadi)
+      if (includeBekor) (where as any).__bekor_requested = true;
       // __XATO__ — Prisma'da to'g'ridan-to'g'ri JOIN yo'q, shuning uchun Set yondashuvi:
       // Bu yerda faqat 'contractNumber not null' qo'shamiz, post-filter qilamiz
       // (haqiqiy aniq emas, lekin verifiedSet ham yetishishi mumkin emas list endpoint'da)
@@ -222,10 +225,41 @@ export class TransactionsService {
     return where;
   }
 
+  /** CRM'da bekor qilingan (cancelled / отменен / бекор) shartnoma raqamlari. */
+  private async cancelledContractNumbers(): Promise<string[]> {
+    const rows = await this.prisma.crmContract.findMany({
+      where: {
+        OR: [
+          { status: { contains: 'cancel', mode: 'insensitive' } },
+          { status: { contains: 'отмен', mode: 'insensitive' } },
+          { status: { contains: 'бекор', mode: 'insensitive' } },
+        ],
+      },
+      select: { contractNumber: true },
+    });
+    return rows.map((r) => r.contractNumber);
+  }
+
+  /**
+   * __bekor_requested marker bo'lsa — CRM'da cancelled status'li shartnoma
+   * raqamlarini topib OR shartiga qo'shamiz (buildWhere'da JOIN qilolmaymiz).
+   */
+  private async applyBekorFilter(where: any): Promise<any> {
+    if (!where.__bekor_requested) return where;
+    delete where.__bekor_requested;
+    const nums = await this.cancelledContractNumbers();
+    // nums bo'sh bo'lsa — { in: [] } hech narsani topmaydi (to'g'ri: bekor yo'q)
+    const bekorCond = { contractNumber: { in: nums } };
+    if (where.OR) where.OR.push(bekorCond);
+    else where.OR = [bekorCond];
+    return where;
+  }
+
   async list(query: ListTransactionsDto) {
     const { page: rawPage = 1, perPage = 50 } = query;
     let where = this.buildWhere(query);
     where = await this.applyXatoFilter(where);
+    where = await this.applyBekorFilter(where);
 
     // Page'ni katta sonlar uchun cheklash (xavfsizlik) — frontend stale state
     // page=19859 yuborsa OFFSET million bo'lib ketmasligi uchun.
@@ -407,6 +441,7 @@ export class TransactionsService {
     if (selfParam) delete queryExcludingSelf[selfParam];
     let where = this.buildWhere(queryExcludingSelf);
     where = await this.applyXatoFilter(where);
+    where = await this.applyBekorFilter(where);
 
     switch (column) {
       case 'bank': {
@@ -528,6 +563,15 @@ export class TransactionsService {
         if (hasUnverified && !search) {
           const unverifiedCount = allUsedContracts.filter((c) => !verifiedSet.has(c)).length;
           values.unshift({ id: '__XATO__', name: `⚠ Xato (CRM tasdiqlamagan, ${unverifiedCount} ta)` });
+        }
+
+        // 3.5) Bekor qilingan (CRM cancelled) shartnomalar — bittagina entry
+        if (!search) {
+          const cancelledSet = new Set(await this.cancelledContractNumbers());
+          const cancelledCount = allUsedContracts.filter((c) => cancelledSet.has(c)).length;
+          if (cancelledCount > 0) {
+            values.unshift({ id: '__BEKOR__', name: `⊘ Bekor qilingan (${cancelledCount} ta)` });
+          }
         }
 
         // 4) Bo'sh (shartnomasi yo'q)
@@ -1023,6 +1067,7 @@ export class TransactionsService {
     }
 
     where = await this.applyXatoFilter(where);
+    where = await this.applyBekorFilter(where);
 
     const [grouped, total, byBank] = await Promise.all([
       this.prisma.transaction.groupBy({

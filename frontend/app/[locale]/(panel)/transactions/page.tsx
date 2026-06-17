@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  RefreshCw, Landmark,
+  RefreshCw, Landmark, Ban,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -1218,7 +1218,7 @@ export default function TransactionsPage() {
                                 </div>
                               ) : (
                                 // Verified — shartnoma raqami ko'rinadi (+ BEKOR badge agar cancelled)
-                                <div className="flex items-center gap-1">
+                                <div className="flex flex-col items-start gap-1">
                                   <code
                                     className="inline-block w-fit font-mono text-[11px] font-bold px-1.5 py-0.5 rounded ring-1 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900"
                                     title={it.contractCustomer || ''}
@@ -1226,8 +1226,8 @@ export default function TransactionsPage() {
                                     {it.contractNumber}
                                   </code>
                                   {it.contractCrmStatus && /cancel|отмен|бекор/i.test(it.contractCrmStatus) && (
-                                    <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM: ${it.contractCrmStatus}`}>
-                                      ⊘ {t('badgeCancelled')}
+                                    <span className="inline-flex items-center gap-0.5 w-fit px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900 whitespace-nowrap" title={`CRM: ${it.contractCrmStatus}`}>
+                                      <Ban className="h-2.5 w-2.5 shrink-0" /> {t('badgeCancelled')}
                                     </span>
                                   )}
                                 </div>
@@ -2386,7 +2386,7 @@ function TransactionDetailDialog({
                       )}
                       {liveRow.contractCrmStatus && /cancel|отмен|бекор/i.test(liveRow.contractCrmStatus) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 ring-1 ring-orange-200 dark:ring-orange-900" title={`CRM status: ${liveRow.contractCrmStatus}`}>
-                          ⊘ {t('badgeCancelled')}
+                          <Ban className="h-3 w-3 shrink-0" /> {t('badgeCancelled')}
                         </span>
                       )}
                     </div>
