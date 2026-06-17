@@ -459,20 +459,64 @@ function LandingView({ onLogin, dark }: {
   const [showSecret, setShowSecret] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [touched, setTouched] = useState<{ key: boolean; secret: boolean }>({ key: false, secret: false });
 
-  const validate = (field: 'key' | 'secret', value: string) => {
-    if (touched[field] && !value.trim()) {
+  // ─── Progressive disclosure state machine ───
+  // 'key'        — faqat key input ko'rinadi
+  // 'secret'     — secret input ham ochiladi
+  // 'ready'      — submit tugmasi ham ochiladi
+  // 'submitting' — server bilan tekshirilmoqda
+  type Stage = 'key' | 'secret' | 'ready' | 'submitting';
+  const [stage, setStage] = useState<Stage>('key');
+
+  // ─── Infra illustration triggers ───
+  const [pulseKey, setPulseKey] = useState(0);
+  const [infraState, setInfraState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+
+  const firePulse = (state: 'processing' | 'success' | 'error') => {
+    setInfraState(state);
+    setPulseKey((p) => p + 1);
+  };
+
+  const validate = (value: string) => {
+    if (!value.trim()) {
       setError(t('login.errorRequired'));
     } else if (error === t('login.errorRequired')) {
       setError(null);
     }
   };
 
+  // Key field — Enter yoki blur to'liq input bilan → progress to secret
+  const advanceFromKey = () => {
+    if (!keyId.trim() || stage !== 'key') return;
+    firePulse('processing');
+    setError(null);
+    setTimeout(() => {
+      setStage('secret');
+      setInfraState('idle');
+    }, 1200);
+  };
+
+  // Secret field — Enter yoki blur to'liq input bilan → progress to ready
+  const advanceFromSecret = () => {
+    if (!secret.trim() || stage !== 'secret') return;
+    firePulse('processing');
+    setError(null);
+    setTimeout(() => {
+      setStage('ready');
+      setInfraState('idle');
+    }, 1200);
+  };
+
   const doLogin = async () => {
     setError(null);
-    if (!keyId.trim() || !secret.trim()) { setError(t('login.errorRequired')); return; }
+    if (!keyId.trim() || !secret.trim()) {
+      setError(t('login.errorRequired'));
+      return;
+    }
     setLoading(true);
+    setStage('submitting');
+    firePulse('processing');
+
     try {
       const resp = await fetch(`${window.location.origin}/api/v1/_whoami`, {
         headers: { 'X-API-Key': keyId.trim(), 'X-API-Secret': secret.trim() },
@@ -483,13 +527,22 @@ function LandingView({ onLogin, dark }: {
         else if (resp.status === 403) setError(t('login.errorForbidden'));
         else if (resp.status >= 500) setError(t('login.errorServer'));
         else setError(data?.message || `HTTP ${resp.status}`);
+        firePulse('error');
+        setStage('ready');
+        // Reset infra back to idle after 2.5s
+        setTimeout(() => setInfraState('idle'), 2500);
         return;
       }
+      // Success — fire success animation, then transition
+      firePulse('success');
       const auth = { keyId: keyId.trim(), secret: secret.trim(), whoami: data };
       sessionStorage.setItem('xt_dev_api_auth', JSON.stringify(auth));
-      onLogin(auth);
+      setTimeout(() => onLogin(auth), 900);
     } catch (e: any) {
       setError(e?.message || t('login.errorNetwork'));
+      firePulse('error');
+      setStage('ready');
+      setTimeout(() => setInfraState('idle'), 2500);
     } finally {
       setLoading(false);
     }
@@ -500,9 +553,9 @@ function LandingView({ onLogin, dark }: {
 
   return (
     <section className="relative overflow-hidden min-h-[calc(100vh-56px)]">
-      {/* ─── FULL-BLEED BACKGROUND — Infrastructure illustration ─── */}
+      {/* ─── FULL-BLEED BACKGROUND — Infrastructure illustration (reactive) ─── */}
       <div className="absolute inset-0 z-0" aria-hidden="true">
-        <ApiHeroInfra dark={dark} className="w-full h-full" fullBleed />
+        <ApiHeroInfra dark={dark} className="w-full h-full" fullBleed pulseKey={pulseKey} state={infraState} />
       </div>
 
       {/* Gradient overlay — login tarafga oqib o'tadi (login o'qilishi yengilroq) */}
@@ -570,47 +623,93 @@ function LandingView({ onLogin, dark }: {
             {/* Glass card wrapper */}
             <div className="absolute -inset-4 rounded-2xl bg-gradient-to-br from-indigo-500/8 via-violet-500/8 to-fuchsia-500/8 dark:from-indigo-500/15 dark:via-violet-500/15 dark:to-fuchsia-500/15 blur-2xl -z-10" aria-hidden="true" />
 
+            {/* STEP 1 — Key input (har doim ko'rinadi) */}
             <div>
-              <label htmlFor="api-key" className={cn(eyebrow, 'mb-2 block text-slate-600 dark:text-slate-400')}>{t('login.keyLabel')}</label>
+              <label htmlFor="api-key" className={cn(eyebrow, 'mb-2 flex items-center justify-between text-slate-600 dark:text-slate-400')}>
+                <span>{t('login.keyLabel')}</span>
+                <span className="text-[9px] normal-case tracking-normal text-slate-400 font-medium">Step 1 / 3</span>
+              </label>
               <div className="relative group">
                 <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-fuchsia-500/0 group-focus-within:from-indigo-500/30 group-focus-within:via-violet-500/30 group-focus-within:to-fuchsia-500/30 blur-md transition-all" aria-hidden="true" />
                 <input
                   id="api-key"
                   type="text"
                   value={keyId}
-                  onChange={(e) => { setKeyId(e.target.value); validate('key', e.target.value); }}
-                  onBlur={() => { setTouched((p) => ({ ...p, key: true })); validate('key', keyId); }}
+                  onChange={(e) => { setKeyId(e.target.value); validate(e.target.value); }}
+                  onBlur={() => { if (keyId.trim() && stage === 'key') advanceFromKey(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); advanceFromKey(); } }}
                   placeholder={t('login.keyPlaceholder')}
                   autoComplete="off"
                   aria-required="true"
-                  className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all"
+                  disabled={stage === 'submitting' || infraState === 'processing'}
+                  className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all disabled:opacity-60"
                 />
+                {/* Check indicator — key bosqichi tugaganda */}
+                {(stage === 'secret' || stage === 'ready' || stage === 'submitting') && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 grid place-items-center"
+                  >
+                    <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                  </motion.div>
+                )}
               </div>
             </div>
 
-            <div>
-              <label htmlFor="api-secret" className={cn(eyebrow, 'mb-2 flex items-center justify-between text-slate-600 dark:text-slate-400')}>
-                <span>{t('login.secretLabel')}</span>
-                <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide secret' : 'Show secret'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-0.5 outline-none">
-                  {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </label>
-              <div className="relative group">
-                <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-fuchsia-500/0 group-focus-within:from-indigo-500/30 group-focus-within:via-violet-500/30 group-focus-within:to-fuchsia-500/30 blur-md transition-all" aria-hidden="true" />
-                <input
-                  id="api-secret"
-                  type={showSecret ? 'text' : 'password'}
-                  value={secret}
-                  onChange={(e) => { setSecret(e.target.value); validate('secret', e.target.value); }}
-                  onBlur={() => { setTouched((p) => ({ ...p, secret: true })); validate('secret', secret); }}
-                  placeholder={t('login.secretPlaceholder')}
-                  onKeyDown={(e) => { if (e.key === 'Enter') doLogin(); }}
-                  autoComplete="off"
-                  aria-required="true"
-                  className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all"
-                />
-              </div>
-            </div>
+            {/* STEP 2 — Secret input (faqat key to'ldirilgach ochiladi) */}
+            <AnimatePresence>
+              {(stage === 'secret' || stage === 'ready' || stage === 'submitting') && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  transition={{ duration: reduced ? 0 : 0.35 }}
+                >
+                  <label htmlFor="api-secret" className={cn(eyebrow, 'mb-2 flex items-center justify-between text-slate-600 dark:text-slate-400')}>
+                    <span className="flex items-center gap-2">
+                      {t('login.secretLabel')}
+                      <button type="button" onClick={() => setShowSecret(!showSecret)} aria-label={showSecret ? 'Hide secret' : 'Show secret'} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 normal-case font-normal focus-visible:ring-2 focus-visible:ring-indigo-500 rounded p-0.5 outline-none">
+                        {showSecret ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </span>
+                    <span className="text-[9px] normal-case tracking-normal text-slate-400 font-medium">Step 2 / 3</span>
+                  </label>
+                  <div className="relative group">
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-indigo-500/0 via-violet-500/0 to-fuchsia-500/0 group-focus-within:from-indigo-500/30 group-focus-within:via-violet-500/30 group-focus-within:to-fuchsia-500/30 blur-md transition-all" aria-hidden="true" />
+                    <input
+                      id="api-secret"
+                      type={showSecret ? 'text' : 'password'}
+                      value={secret}
+                      onChange={(e) => { setSecret(e.target.value); validate(e.target.value); }}
+                      onBlur={() => { if (secret.trim() && stage === 'secret') advanceFromSecret(); }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (stage === 'secret') advanceFromSecret();
+                          else if (stage === 'ready') doLogin();
+                        }
+                      }}
+                      placeholder={t('login.secretPlaceholder')}
+                      autoComplete="off"
+                      aria-required="true"
+                      autoFocus={stage === 'secret'}
+                      disabled={stage === 'submitting' || infraState === 'processing'}
+                      className="relative w-full h-12 px-4 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none text-[13.5px] font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-600 transition-all disabled:opacity-60"
+                    />
+                    {(stage === 'ready' || stage === 'submitting') && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-emerald-500 grid place-items-center"
+                      >
+                        <Check className="h-3 w-3 text-white" strokeWidth={3} />
+                      </motion.div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {error && (
               <motion.div
@@ -625,26 +724,34 @@ function LandingView({ onLogin, dark }: {
               </motion.div>
             )}
 
-            {/* Premium gradient button */}
-            <div className="relative group pt-1">
-              <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 opacity-60 group-hover:opacity-100 blur transition-opacity" aria-hidden="true" />
-              <button
-                type="submit"
-                disabled={loading || !canSubmit}
-                className="relative w-full h-13 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:from-indigo-500 hover:via-violet-500 hover:to-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-[14px] flex items-center justify-center gap-2 transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950 shadow-lg shadow-violet-500/25"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                ) : !canSubmit ? (
-                  <span>{t('login.submitIdle')}</span>
-                ) : (
-                  <>
-                    <span>{t('login.submit')}</span>
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </>
-                )}
-              </button>
-            </div>
+            {/* STEP 3 — Submit (faqat ready yoki submitting holatda) */}
+            <AnimatePresence>
+              {(stage === 'ready' || stage === 'submitting') && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: 'auto' }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  transition={{ duration: reduced ? 0 : 0.35 }}
+                  className="relative group pt-1"
+                >
+                  <div className="absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 opacity-60 group-hover:opacity-100 blur transition-opacity" aria-hidden="true" />
+                  <button
+                    type="submit"
+                    disabled={loading || !canSubmit || stage === 'submitting'}
+                    className="relative w-full h-12 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 hover:from-indigo-500 hover:via-violet-500 hover:to-fuchsia-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-[14px] flex items-center justify-center gap-2 transition-all outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-slate-950 shadow-lg shadow-violet-500/25"
+                  >
+                    {loading || stage === 'submitting' ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <>
+                        <span>{t('login.submit')}</span>
+                        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                      </>
+                    )}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Trust strip */}
             <div className="pt-3 flex items-center justify-center gap-4 text-[11.5px] text-slate-500 dark:text-slate-400">
