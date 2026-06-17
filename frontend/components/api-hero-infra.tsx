@@ -12,11 +12,11 @@ import { cn } from '@/lib/utils';
  * SVG-based, lightweight, premium.
  */
 
-export function ApiHeroInfra({ dark = true, className }: { dark?: boolean; className?: string }) {
+export function ApiHeroInfra({ dark = true, className, fullBleed = false }: { dark?: boolean; className?: string; fullBleed?: boolean }) {
   const reduced = usePrefersReducedMotion();
 
   return (
-    <div className={cn('relative w-full h-full min-h-[420px] lg:min-h-[600px] overflow-hidden rounded-2xl', className)} aria-hidden="true">
+    <div className={cn('relative w-full h-full min-h-[420px] lg:min-h-[600px] overflow-hidden', !fullBleed && 'rounded-2xl', className)} aria-hidden="true">
       {/* Background — dark with subtle radial glow */}
       <div
         className="absolute inset-0"
@@ -54,7 +54,7 @@ export function ApiHeroInfra({ dark = true, className }: { dark?: boolean; class
       <svg
         viewBox="0 0 800 500"
         className="absolute inset-0 w-full h-full"
-        preserveAspectRatio="xMidYMid meet"
+        preserveAspectRatio={fullBleed ? 'xMidYMid slice' : 'xMidYMid meet'}
       >
         <defs>
           {/* Gradients */}
