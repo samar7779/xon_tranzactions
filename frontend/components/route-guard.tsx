@@ -112,7 +112,7 @@ function AccessDenied({ locale, tc }: { locale: string; tc: (k: string) => strin
         loop
         muted
         playsInline
-        className="w-full max-w-[560px] rounded-2xl"
+        className="w-full max-w-[min(92%,1100px)] rounded-2xl"
       />
 
       {/* Matn + tugma — pastki chap burchakda ixcham kartochka */}
