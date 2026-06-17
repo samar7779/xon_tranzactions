@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   Plus, Search, Copy, Check, KeyRound, ShieldAlert, CircleSlash, RefreshCw,
   Edit3, Trash2, Eye, EyeOff, Loader2, Activity, Globe, AlertOctagon, Code2,
-  X, CheckCircle2, BarChart3, Clock, ExternalLink,
+  X, CheckCircle2, BarChart3, Clock, ExternalLink, BookOpen,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -113,12 +113,12 @@ export default function ApiKeysPage() {
             asChild
             variant="outline"
             size="sm"
-            className="h-9 gap-1.5 border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-700 hover:from-indigo-100 hover:to-violet-100 dark:from-indigo-950/40 dark:to-violet-950/40 dark:text-indigo-300 dark:border-indigo-800/60"
+            title="Public hujjatlar (yangi tabda ochiladi)"
+            aria-label="Public hujjatlar"
+            className="h-9 w-9 p-0 border-indigo-200 bg-gradient-to-br from-indigo-50 to-violet-50 text-indigo-700 hover:from-indigo-100 hover:to-violet-100 dark:from-indigo-950/40 dark:to-violet-950/40 dark:text-indigo-300 dark:border-indigo-800/60"
           >
             <Link href={`/${locale}/api`} target="_blank" rel="noopener noreferrer">
-              <Code2 className="h-3.5 w-3.5" />
-              Hujjatlar
-              <ExternalLink className="h-3 w-3 opacity-70" />
+              <BookOpen className="h-4 w-4" />
             </Link>
           </Button>
           <Button
