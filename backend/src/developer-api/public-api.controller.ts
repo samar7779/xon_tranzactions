@@ -220,20 +220,31 @@ export class PublicApiController {
     };
   }
 
-  @Get('accounts/:id')
+  @Get('accounts/:idOrAccountNo')
   @RequireApiScopes(API_SCOPES.ACCOUNTS_READ)
-  @ApiOperation({ summary: 'Bitta hisob raqami tafsiloti' })
-  async getAccount(@Param('id') id: string) {
-    const a = await this.prisma.bankAccount.findUnique({
-      where: { id },
-      select: {
-        id: true, branch: true, accountNo: true, ownerName: true,
-        currency: true, balance: true, syncEnabled: true, lastSyncedAt: true,
-        createdAt: true,
-        bank: { select: { id: true, code: true, name: true } },
-      },
+  @ApiOperation({
+    summary: 'Bitta hisob raqami tafsiloti',
+    description: 'ID (cuid) yoki hisob raqami (20 raqam) qabul qiladi. Ikkalasi ham qidiriladi.',
+  })
+  async getAccount(@Param('idOrAccountNo') idOrAccountNo: string) {
+    const select = {
+      id: true, branch: true, accountNo: true, ownerName: true,
+      currency: true, balance: true, syncEnabled: true, lastSyncedAt: true,
+      createdAt: true,
+      bank: { select: { id: true, code: true, name: true } },
+    };
+    // Avval ID (cuid) bo'yicha, keyin accountNo bo'yicha qidiramiz
+    let a = await this.prisma.bankAccount.findUnique({
+      where: { id: idOrAccountNo },
+      select,
     });
-    if (!a) throw new NotFoundException('Hisob raqami topilmadi');
+    if (!a) {
+      a = await this.prisma.bankAccount.findFirst({
+        where: { accountNo: idOrAccountNo },
+        select,
+      });
+    }
+    if (!a) throw new NotFoundException('Hisob topilmadi (id yoki accountNo bo\'yicha)');
     return {
       ok: true,
       account: {
@@ -307,6 +318,144 @@ export class PublicApiController {
     });
     if (!cp) throw new NotFoundException('Kontragent topilmadi');
     return { ok: true, counterparty: cp };
+  }
+
+  // ─── META: filter qurish uchun ─────────────────────────────────
+  // Tashqi tizim filter UI yaratishi uchun barcha enum/ro'yxatlarni
+  // bitta joydan beradi. Scope kerak emas — kalit faol bo'lishi yetarli.
+
+  @Get('_meta/all')
+  @ApiOperation({ summary: 'Barcha meta-ma\'lumotlar bitta javobda (UI filter qurish uchun)' })
+  async metaAll() {
+    const [banks, accounts, categories, subcategories] = await Promise.all([
+      this.prisma.bank.findMany({
+        select: { id: true, code: true, name: true, apiKind: true, isActive: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.bankAccount.findMany({
+        select: {
+          id: true, accountNo: true, ownerName: true, currency: true,
+          bank: { select: { id: true, code: true, name: true } },
+        },
+        orderBy: [{ ownerName: 'asc' }, { accountNo: 'asc' }],
+      }),
+      this.prisma.category.findMany({
+        where: { parentId: null },
+        select: { id: true, code: true, name: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.category.findMany({
+        where: { parentId: { not: null } },
+        select: { id: true, code: true, name: true, parentId: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      banks,
+      accounts: accounts.map((a) => ({
+        id: a.id, accountNo: a.accountNo, ownerName: a.ownerName,
+        currency: a.currency, bank: a.bank,
+      })),
+      categories: categories.map((c) => ({
+        ...c,
+        subcategories: subcategories.filter((s) => s.parentId === c.id),
+      })),
+      enums: {
+        direction: ['IN', 'OUT'],
+        status: ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REVERSED'],
+        type: ['TRANSFER', 'PAYMENT', 'SALARY', 'TAX', 'FEE', 'REFUND'],
+        matchStatus: ['UNMATCHED', 'AUTO', 'MANUAL', 'PARTIAL', 'IGNORED'],
+        source: ['SYNC', 'IMPORT', 'MANUAL', 'ALOQA_BANK'],
+        oplataKvCategory: ['MONTHLY', 'FIRST', 'GENERAL'],
+      },
+    };
+  }
+
+  @Get('_meta/banks')
+  @ApiOperation({ summary: 'Banklar ro\'yxati' })
+  async metaBanks() {
+    const banks = await this.prisma.bank.findMany({
+      select: { id: true, code: true, name: true, apiKind: true, isActive: true },
+      orderBy: { name: 'asc' },
+    });
+    return { ok: true, total: banks.length, items: banks };
+  }
+
+  @Get('_meta/accounts')
+  @ApiOperation({ summary: 'Barcha hisob raqamlar (filter uchun, accounts ga teng)' })
+  async metaAccounts() {
+    const items = await this.prisma.bankAccount.findMany({
+      select: {
+        id: true, accountNo: true, ownerName: true, currency: true,
+        bank: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: [{ ownerName: 'asc' }, { accountNo: 'asc' }],
+    });
+    return { ok: true, total: items.length, items };
+  }
+
+  @Get('_meta/categories')
+  @ApiOperation({ summary: 'Kategoriya va subkategoriyalar (ierarxik)' })
+  async metaCategories() {
+    const [parents, children] = await Promise.all([
+      this.prisma.category.findMany({
+        where: { parentId: null },
+        select: { id: true, code: true, name: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.category.findMany({
+        where: { parentId: { not: null } },
+        select: { id: true, code: true, name: true, parentId: true, sortOrder: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+    ]);
+    return {
+      ok: true,
+      items: parents.map((p) => ({
+        ...p,
+        subcategories: children.filter((c) => c.parentId === p.id),
+      })),
+    };
+  }
+
+  @Get('_meta/enums')
+  @ApiOperation({ summary: 'Barcha enum qiymatlar (direction, status, type, source va h.k.)' })
+  metaEnums() {
+    return {
+      ok: true,
+      direction: { values: ['IN', 'OUT'], labels: { IN: 'Kirim', OUT: 'Chiqim' } },
+      status: {
+        values: ['PENDING', 'COMPLETED', 'FAILED', 'CANCELLED', 'REVERSED'],
+        labels: {
+          PENDING: 'Kutilmoqda', COMPLETED: 'Yakunlangan', FAILED: 'Muvaffaqiyatsiz',
+          CANCELLED: 'Bekor qilingan', REVERSED: 'Qaytarilgan',
+        },
+      },
+      type: {
+        values: ['TRANSFER', 'PAYMENT', 'SALARY', 'TAX', 'FEE', 'REFUND'],
+        labels: {
+          TRANSFER: 'O\'tkazma', PAYMENT: 'To\'lov', SALARY: 'Maosh',
+          TAX: 'Soliq', FEE: 'Komissiya', REFUND: 'Qaytarish',
+        },
+      },
+      matchStatus: {
+        values: ['UNMATCHED', 'AUTO', 'MANUAL', 'PARTIAL', 'IGNORED'],
+        labels: {
+          UNMATCHED: 'Topilmagan', AUTO: 'Avto-mos', MANUAL: 'Qo\'lda',
+          PARTIAL: 'Qisman', IGNORED: 'E\'tiborsiz',
+        },
+      },
+      source: {
+        values: ['SYNC', 'IMPORT', 'MANUAL', 'ALOQA_BANK'],
+        labels: { SYNC: 'Bank API sync', IMPORT: 'Excel import', MANUAL: 'Qo\'lda', ALOQA_BANK: 'Aloqa Bank import' },
+      },
+      oplataKvCategory: {
+        values: ['MONTHLY', 'FIRST', 'GENERAL'],
+        labels: { MONTHLY: 'Ежемесячный', FIRST: '1 взнос', GENERAL: 'Общий' },
+      },
+    };
   }
 
   // ─── INTERNAL HELPERS ───────────────────────────────────────────
