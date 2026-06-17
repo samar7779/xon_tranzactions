@@ -15,7 +15,12 @@ import {
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
   PlusCircle, Paperclip, Wallet, Building2, Box,
 } from 'lucide-react';
-import { Apartment3DDialog } from '@/components/apartment-3d-view';
+import dynamic from 'next/dynamic';
+
+const Apartment3DDialog = dynamic(
+  () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
+  { ssr: false },
+);
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
