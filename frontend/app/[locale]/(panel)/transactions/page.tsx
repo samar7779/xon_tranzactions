@@ -3895,18 +3895,24 @@ function ManualContractDialog({
   const t = useTranslations('transactions');
   const [contract, setContract] = useState(row?.contractNumber || '');
   const [selectedTopId, setSelectedTopId] = useState<string | null>(row?.categoryId || null);
+  const [selectedSubId, setSelectedSubId] = useState<string | null>(row?.subcategoryId || null);
 
   const HIDDEN_KONTRAGENTS = ['COUNTERPARTY_RETURN', 'COUNTERPARTY'];
   const visibleTree = (tree || []).filter((t: any) => !HIDDEN_KONTRAGENTS.includes(t.code));
+  const selectedTop = (tree || []).find((t: any) => t.id === selectedTopId);
+  const subs = selectedTop?.children || [];
+  const topColor = selectedTop?.color || '#f59e0b';
 
   const saving = savingContract || savingCategory;
   const contractTrimmed = contract.trim();
   const contractChanged = contractTrimmed !== (row?.contractNumber || '');
-  const categoryChanged = selectedTopId !== (row?.categoryId || null);
+  const categoryChanged =
+    selectedTopId !== (row?.categoryId || null) ||
+    selectedSubId !== (row?.subcategoryId || null);
   const canSave = !!selectedTopId && !!contractTrimmed && (contractChanged || categoryChanged);
 
   function handleSave() {
-    if (categoryChanged) onSaveCategory(selectedTopId, null);
+    if (categoryChanged) onSaveCategory(selectedTopId, selectedSubId);
     if (contractChanged) onSaveContract(contractTrimmed || null);
   }
 
@@ -3926,20 +3932,30 @@ function ManualContractDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-2">
-          {/* ═══ KONTRAGENT (top kategoriya) ═══ */}
+          {/* ═══ STEP 1: KATEGORIYA (asosiy) ═══ */}
           <div>
             <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">1</span>
-              {t('kontragent')}
+              {t('detailCategoryLabel')}
+              {!selectedTop && (
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1 text-[10px]">
+                  (tanlang → subkategoriyalar)
+                </span>
+              )}
+              {selectedTop && subs.length > 0 && (
+                <span className="text-amber-600 dark:text-amber-400 font-normal normal-case tracking-normal ml-1 text-[10px]">
+                  · subkategoriyalar pastda ↓
+                </span>
+              )}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
-              {visibleTree.map((t: any) => {
-                const selected = selectedTopId === t.id;
-                const color = t.color || '#64748b';
+              {visibleTree.map((tt: any) => {
+                const selected = selectedTopId === tt.id;
+                const color = tt.color || '#64748b';
                 return (
                   <button
-                    key={t.id}
-                    onClick={() => setSelectedTopId(t.id)}
+                    key={tt.id}
+                    onClick={() => { setSelectedTopId(tt.id); setSelectedSubId(null); }}
                     disabled={saving}
                     className={cn(
                       'text-left px-3 py-2 rounded-lg ring-1 ring-inset text-[12px] font-medium transition-all',
@@ -3947,7 +3963,7 @@ function ManualContractDialog({
                     )}
                     style={selected ? { backgroundColor: `${color}15`, color, borderColor: color } : {}}
                   >
-                    {t.name}
+                    {tt.name}
                     {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1.5" style={{ color }} />}
                   </button>
                 );
@@ -3955,10 +3971,53 @@ function ManualContractDialog({
             </div>
           </div>
 
-          {/* ═══ SHARTNOMA RAQAMI ═══ */}
+          {/* ═══ STEP 2: SUB-KATEGORIYA (faqat top tanlangan va subs bor bo'lsa) ═══ */}
+          {selectedTop && subs.length > 0 && (
+            <div className="pt-3 border-t-2 border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20 -mx-2 px-2 py-3 rounded-lg">
+              <label className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">2</span>
+                {t('subcategory')}
+                <span className="text-slate-500 dark:text-slate-400 font-normal normal-case tracking-normal ml-1">
+                  ({selectedTop.name} uchun · ixtiyoriy)
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  onClick={() => setSelectedSubId(null)}
+                  disabled={saving}
+                  className={cn(
+                    'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all',
+                    !selectedSubId ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 ring-slate-900 dark:ring-slate-100' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900',
+                  )}
+                >
+                  {t('noneDash')}
+                </button>
+                {subs.map((s: any) => {
+                  const selected = selectedSubId === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedSubId(s.id)}
+                      disabled={saving}
+                      className={cn(
+                        'px-3 py-1.5 rounded-md text-[11px] font-medium ring-1 ring-inset transition-all bg-white dark:bg-slate-900',
+                        selected ? 'ring-2' : 'ring-slate-200 dark:ring-slate-700 hover:ring-slate-300 dark:hover:ring-slate-700 text-slate-700 dark:text-slate-300',
+                      )}
+                      style={selected ? { backgroundColor: `${topColor}15`, color: topColor, borderColor: topColor } : {}}
+                    >
+                      {s.name}
+                      {selected && <CheckCircle2 className="inline-block h-3 w-3 ml-1" style={{ color: topColor }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ STEP 3: SHARTNOMA RAQAMI ═══ */}
           <div className="space-y-1.5 pt-3 border-t border-slate-100 dark:border-slate-800">
             <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1 block flex items-center gap-1">
-              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">2</span>
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-600 text-white text-[9px]">3</span>
               {t('contractNumberLabel')}
             </label>
             <Input
