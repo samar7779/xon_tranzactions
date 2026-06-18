@@ -1253,11 +1253,11 @@ export class OplataKvService {
       }
     }
     // For batch case: raw SQL bilan filter qo'shamiz (Prisma'ning JOIN/EXISTS sintaksisi yo'q)
-    let rows: Array<{ id: string; contractNo: string; date: Date; paymentAmount: any }>;
+    let rows: Array<{ id: string; contractNo: string; date: Date; paymentAmount: any; sourceTxId: string | null }>;
     if (opts.contractNo) {
       rows = await this.prisma.oplataKv.findMany({
         where,
-        select: { id: true, contractNo: true, date: true, paymentAmount: true },
+        select: { id: true, contractNo: true, date: true, paymentAmount: true, sourceTxId: true },
         orderBy: { date: 'asc' },
         take: limit,
       });
@@ -1267,7 +1267,7 @@ export class OplataKvService {
         ? ''
         : 'AND first_installment IS NULL AND monthly_amount IS NULL AND payment_category IS NULL';
       const rawRows: any[] = await this.prisma.$queryRawUnsafe(`
-        SELECT id, contract_no AS "contractNo", date, payment_amount AS "paymentAmount"
+        SELECT id, contract_no AS "contractNo", date, payment_amount AS "paymentAmount", source_tx_id AS "sourceTxId"
           FROM oplata_kv
          WHERE source_tx_id IS NOT NULL
            AND payment_amount IS NOT NULL
@@ -1281,6 +1281,28 @@ export class OplataKvService {
          LIMIT $1
       `, limit);
       rows = rawRows;
+    }
+
+    // ─── SCHOTCHIK FILTER: Transaction subcategory CLIENT_SCHETCHIK bo'lganlarni ajratish ──
+    // Bunday qatorlar split qilinmaydi — first/monthly NULL, running totals'ga qo'shilmaydi.
+    // Source_tx_id Transaction.externalId yoki Transaction.id ga ishora qiladi.
+    const sourceIdsAll = rows.map((r) => r.sourceTxId).filter((s): s is string => !!s);
+    const schetchikSourceIds = new Set<string>();
+    if (sourceIdsAll.length > 0) {
+      const schetchikTxs = await this.prisma.transaction.findMany({
+        where: {
+          OR: [
+            { id: { in: sourceIdsAll } },
+            { externalId: { in: sourceIdsAll } },
+          ],
+          subcategory: { code: 'CLIENT_SCHETCHIK' },
+        },
+        select: { id: true, externalId: true },
+      });
+      for (const tx of schetchikTxs) {
+        if (tx.externalId) schetchikSourceIds.add(tx.externalId);
+        schetchikSourceIds.add(tx.id);
+      }
     }
     if (rows.length === 0) {
       return { total: 0, contracts: 0, filled: 0, notFound: 0, errors: 0, duration: 0, xatoCleaned: xatoCleanup };
@@ -1341,6 +1363,23 @@ export class OplataKvService {
 
           for (const item of items) {
             const amount = Number(item.paymentAmount);
+
+            // ── SCHOTCHIK SKIP: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
+            // Kvartira badali emas — running totals'ga qo'shmaymiz, first/monthly = NULL.
+            // paymentCategory ham NULL — bu kvartira to'lov kategoriyalaridan emas.
+            if (item.sourceTxId && schetchikSourceIds.has(item.sourceTxId)) {
+              await this.prisma.oplataKv.update({
+                where: { id: item.id },
+                data: {
+                  firstInstallment: null,
+                  monthlyAmount:    null,
+                  paymentCategory:  null,
+                },
+              });
+              filled++;
+              continue; // running totals'ga qo'shmaymiz
+            }
+
             let firstInstallment = 0;
             let monthlyAmount = 0;
             let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
@@ -1456,10 +1495,32 @@ export class OplataKvService {
   }> {
     const row = await this.prisma.oplataKv.findUnique({
       where: { id },
-      select: { id: true, contractNo: true, date: true, paymentAmount: true },
+      select: { id: true, contractNo: true, date: true, paymentAmount: true, sourceTxId: true },
     });
     if (!row) return { ok: false, error: 'Qator topilmadi' };
     if (!row.paymentAmount) return { ok: false, error: 'paymentAmount yo\'q' };
+
+    // ── SCHOTCHIK SKIP: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
+    // Bu kvartira badali emas — split shart emas, NULL ga qo'yamiz.
+    if (row.sourceTxId) {
+      const linkedTx = await this.prisma.transaction.findFirst({
+        where: {
+          OR: [{ id: row.sourceTxId }, { externalId: row.sourceTxId }],
+          subcategory: { code: 'CLIENT_SCHETCHIK' },
+        },
+        select: { id: true },
+      });
+      if (linkedTx) {
+        await this.prisma.oplataKv.update({
+          where: { id: row.id },
+          data: { firstInstallment: null, monthlyAmount: null, paymentCategory: null },
+        });
+        return {
+          ok: true,
+          item: { firstInstallment: 0, monthlyAmount: 0, paymentCategory: null },
+        };
+      }
+    }
 
     // CRM tekshirish — XATO shartnoma uchun split mumkin emas
     const resp: any = await this.crmService.show({ contract: row.contractNo }).catch(() => null);
