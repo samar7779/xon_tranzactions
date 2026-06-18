@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  RefreshCw, Landmark, Ban,
+  RefreshCw, Landmark, Ban, Gauge,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -259,6 +259,7 @@ export default function TransactionsPage() {
 
   // Recategorize progress modal — live polling bilan ko'rsatadi
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
+  const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const recategorizeAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
     onSuccess: (r: any) => {
@@ -690,6 +691,15 @@ export default function TransactionsPage() {
                           ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600 dark:text-amber-400" />
                           : <Wand2 className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />}
                         <span className="flex-1">{t('categorize')}</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setSchotchikBackfillOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Gauge className="h-4 w-4 mr-2 text-cyan-600 dark:text-cyan-400" />
+                        <span className="flex-1">Schotchik backfill</span>
                       </DropdownMenuItem>
                     )}
                   </div>
@@ -1311,6 +1321,7 @@ export default function TransactionsPage() {
 
       {/* ═══ KATEGORIYALASH JARAYONI (LIVE) ═══ */}
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
+      <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
 
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
@@ -5057,6 +5068,303 @@ function TodayStatsInline() {
           </div>
         )
       )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   SchotchikBackfillDialog — счётчик to'lovlarini qayta tasniflash
+// ═══════════════════════════════════════════════════════════════
+
+type SchotchikResult = {
+  ok: boolean;
+  dryRun: boolean;
+  dateFrom: string;
+  dateTo: string;
+  stats: {
+    scanned: number;
+    matched: number;
+    alreadyCorrect: number;
+    needsUpdate: number;
+    affectedContracts: number;
+    otherRowsToReset: number;
+    transactionsUpdated?: number;
+    oplataKvUpdated?: number;
+    otherRowsResetted?: number;
+  };
+  groupByCurrent: Array<{ name: string; count: number }>;
+  samples: Array<{
+    id: string;
+    date: string;
+    amount: number;
+    direction: string;
+    description: string;
+    currentSubcategory: string | null;
+  }>;
+};
+
+function SchotchikBackfillDialog({
+  open, onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [stage, setStage] = useState<'preview' | 'applying' | 'done'>('preview');
+  const [result, setResult] = useState<SchotchikResult | null>(null);
+
+  // Dry-run query — modal ochilgach avtomatik chaqiriladi
+  const dryRunQuery = useQuery({
+    queryKey: ['schotchik-backfill-dryrun'],
+    queryFn: () => api.post<SchotchikResult>('/categorization/backfill-schotchik', { dryRun: true }),
+    enabled: open && stage === 'preview',
+    refetchOnWindowFocus: false,
+    staleTime: 0,
+  });
+
+  // Apply mutation
+  const applyMut = useMutation({
+    mutationFn: () => api.post<SchotchikResult>('/categorization/backfill-schotchik', { dryRun: false }),
+    onSuccess: (r) => {
+      setResult(r);
+      setStage('done');
+      toast.success(`${r.stats.transactionsUpdated || 0} ta tranzaksiya yangilandi`);
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (e: any) => {
+      toast.error(e?.message || 'Xato');
+      setStage('preview');
+    },
+  });
+
+  // Modal yopilganda holatni reset qilamiz
+  useEffect(() => {
+    if (!open) {
+      setTimeout(() => {
+        setStage('preview');
+        setResult(null);
+      }, 300);
+    }
+  }, [open]);
+
+  const data = result || dryRunQuery.data;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/40 dark:to-blue-950/40">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 grid place-items-center shadow-md shrink-0">
+              <Gauge className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Schotchik tranzaksiyalarini qayta tasniflash
+              </DialogTitle>
+              <DialogDescription className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Счётчик / hisoblagich to'lovlari avval noto'g'ri "Взносы за квартиры" ga tushgan — endi to'g'rilaymiz.
+              </DialogDescription>
+            </div>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="px-6 py-5 space-y-4">
+          {dryRunQuery.isLoading && (
+            <div className="py-12 text-center text-slate-500">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-3 text-cyan-500" />
+              <div className="text-[13px]">Tahlil qilinmoqda...</div>
+            </div>
+          )}
+
+          {dryRunQuery.error && (
+            <div className="py-8 text-center">
+              <AlertCircle className="h-8 w-8 text-rose-500 mx-auto mb-2" />
+              <div className="text-[13px] text-rose-700 dark:text-rose-300">
+                Xato: {(dryRunQuery.error as any)?.message || 'Tahlil bajarib bo\'lmadi'}
+              </div>
+            </div>
+          )}
+
+          {data && (
+            <>
+              {/* Date range info */}
+              <div className="rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 flex items-center gap-2 text-[12px]">
+                <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                <span className="text-slate-600 dark:text-slate-400">Tekshirilgan sana oralig'i:</span>
+                <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                  {data.dateFrom} → {data.dateTo}
+                </span>
+              </div>
+
+              {/* Stats grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                <BackfillStatCard label="Topildi" value={data.stats.matched} color="indigo" />
+                <BackfillStatCard label="Allaqachon to'g'ri" value={data.stats.alreadyCorrect} color="emerald" />
+                <BackfillStatCard
+                  label={data.dryRun ? "Yangilash kerak" : "Yangilandi"}
+                  value={data.dryRun ? data.stats.needsUpdate : (data.stats.transactionsUpdated ?? data.stats.needsUpdate)}
+                  color="amber"
+                  highlight
+                />
+                <BackfillStatCard label="Affected kontrakt" value={data.stats.affectedContracts} color="violet" />
+              </div>
+
+              {/* Apply result (after apply) */}
+              {stage === 'done' && data.stats.transactionsUpdated !== undefined && (
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3 space-y-1.5 text-[12.5px]">
+                  <div className="flex items-center gap-2 font-bold text-emerald-900 dark:text-emerald-300 mb-1.5">
+                    <CheckCircle2 className="h-4 w-4" />
+                    Yangilash muvaffaqiyatli bajarildi
+                  </div>
+                  <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
+                    <span>Transactions yangilandi:</span>
+                    <span className="font-bold tabular-nums">{data.stats.transactionsUpdated} ta</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
+                    <span>OplataKv qatorlar yangilandi:</span>
+                    <span className="font-bold tabular-nums">{data.stats.oplataKvUpdated ?? 0} ta</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-800 dark:text-emerald-300">
+                    <span>Boshqa qatorlar (split reset):</span>
+                    <span className="font-bold tabular-nums">{data.stats.otherRowsResetted ?? 0} ta</span>
+                  </div>
+                  <div className="mt-2 pt-2 border-t border-emerald-200 dark:border-emerald-900 text-[11.5px] text-emerald-700 dark:text-emerald-400">
+                    💡 Endi admin paneldan <strong>"Barcha hisoblar — orqa sanaga sync"</strong> tugmasini bosing yoki kuting — splitInstallments cron qayta hisoblaydi.
+                  </div>
+                </div>
+              )}
+
+              {/* Group by current category */}
+              {data.groupByCurrent.length > 0 && stage === 'preview' && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    Hozirgi kategoriyalar bo'yicha
+                  </div>
+                  <div className="space-y-1.5">
+                    {data.groupByCurrent.map((g, i) => (
+                      <div key={i} className="flex items-center justify-between text-[12.5px] px-3 py-1.5 rounded-md bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
+                        <span className="text-slate-700 dark:text-slate-300 truncate flex-1">
+                          {g.name}
+                        </span>
+                        <ArrowUpRight className="h-3 w-3 mx-2 text-slate-400 shrink-0" />
+                        <span className="text-cyan-700 dark:text-cyan-300 font-semibold shrink-0">
+                          За счетчик
+                        </span>
+                        <span className="ml-3 font-bold tabular-nums text-slate-800 dark:text-slate-200 shrink-0">
+                          {g.count.toLocaleString('ru-RU')} ta
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Samples */}
+              {data.samples.length > 0 && stage === 'preview' && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 mb-2">
+                    Namuna (eng yangi {Math.min(10, data.samples.length)} ta)
+                  </div>
+                  <div className="space-y-1.5 max-h-[280px] overflow-y-auto">
+                    {data.samples.map((s, i) => (
+                      <div key={i} className="rounded-md bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 px-3 py-2">
+                        <div className="flex items-center justify-between text-[11.5px] mb-1">
+                          <span className="font-mono text-slate-500 dark:text-slate-400">{s.date}</span>
+                          <span className={cn(
+                            'font-bold tabular-nums',
+                            s.direction === 'IN' ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400',
+                          )}>
+                            {s.direction === 'IN' ? '+' : '−'}{formatMoney(Math.abs(s.amount), '')} UZS
+                          </span>
+                        </div>
+                        <div className="text-[12px] text-slate-700 dark:text-slate-300 truncate" title={s.description}>
+                          {s.description}
+                        </div>
+                        <div className="text-[10.5px] text-slate-500 mt-1">
+                          {s.currentSubcategory || '(kategoriyasiz)'} → <span className="text-cyan-600 dark:text-cyan-400 font-semibold">За счетчик</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Info box (preview only) */}
+              {stage === 'preview' && data.stats.needsUpdate > 0 && (
+                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 p-3 text-[12px] text-amber-900 dark:text-amber-200">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <div>
+                      <div className="font-bold mb-1">Tasdiqlasangiz quyidagilar bajariladi:</div>
+                      <ul className="space-y-0.5 list-disc pl-4 text-[11.5px]">
+                        <li><strong>{data.stats.needsUpdate}</strong> ta tranzaksiya — kategoriya "За счетчик" ga ko'chiriladi</li>
+                        <li><strong>{data.stats.affectedContracts}</strong> ta kontrakt ta'sirlanadi</li>
+                        <li><strong>{data.stats.otherRowsToReset}</strong> ta boshqa OplataKv qator split reset bo'ladi (re-hisob uchun)</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* No changes needed */}
+              {stage === 'preview' && data.stats.needsUpdate === 0 && (
+                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3 text-[12.5px] text-emerald-900 dark:text-emerald-300 text-center">
+                  <CheckCircle2 className="h-5 w-5 mx-auto mb-1.5" />
+                  <div className="font-bold">Hech narsa yangilash shart emas</div>
+                  <div className="text-[11.5px] text-emerald-700 dark:text-emerald-400 mt-0.5">
+                    Barcha schotchik tranzaksiyalari allaqachon to'g'ri kategoriyada
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        <DialogFooter className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 gap-2">
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+          >
+            {stage === 'done' ? 'Yopish' : 'Bekor qilish'}
+          </Button>
+          {stage === 'preview' && data && data.stats.needsUpdate > 0 && (
+            <Button
+              onClick={() => {
+                setStage('applying');
+                applyMut.mutate();
+              }}
+              disabled={applyMut.isPending || dryRunQuery.isLoading}
+              className="bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white shadow-md gap-1.5"
+            >
+              {applyMut.isPending
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Yangilanmoqda...</>
+                : <><CheckCircle2 className="h-4 w-4" /> Tasdiqlayman, yangila ({data.stats.needsUpdate} ta)</>}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BackfillStatCard({ label, value, color, highlight }: { label: string; value: number; color: string; highlight?: boolean }) {
+  const colors: Record<string, string> = {
+    indigo:  'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-200 dark:ring-indigo-900 text-indigo-900 dark:text-indigo-300',
+    emerald: 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-300',
+    amber:   'bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900 text-amber-900 dark:text-amber-300',
+    violet:  'bg-violet-50 dark:bg-violet-950/40 ring-violet-200 dark:ring-violet-900 text-violet-900 dark:text-violet-300',
+  };
+  return (
+    <div className={cn(
+      'rounded-lg ring-1 p-3',
+      colors[color] || colors.indigo,
+      highlight && 'ring-2',
+    )}>
+      <div className="text-[9px] uppercase tracking-wider font-bold opacity-70 mb-0.5">{label}</div>
+      <div className="text-[18px] font-black tabular-nums">{value.toLocaleString('ru-RU')}</div>
     </div>
   );
 }

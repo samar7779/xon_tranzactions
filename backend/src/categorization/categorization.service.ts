@@ -1566,4 +1566,232 @@ export class CategorizationService {
     this.categoryRefs = null;
     this.ownAccountsCache = null;
   }
+
+  // ═══════════════════════════════════════════════════════════════
+  //   BACKFILL: schotchik tranzaksiyalarini qayta tasniflash
+  // ═══════════════════════════════════════════════════════════════
+  /**
+   * Eski (commit 2da4412 dan oldingi) noto'g'ri tasniflangan schotchik
+   * tranzaksiyalarni topib, CLIENT > CLIENT_SCHETCHIK kategoriyaga ko'chiradi.
+   * Bog'langan OplataKv qatorlarini ham yangilaydi (sinxron).
+   *
+   * @param opts.dryRun    true = faqat tahlil (default), false = haqiqatda yangilaydi
+   * @param opts.dateFrom  ixtiyoriy boshlanish sanasi (default: sync.minDate sozlamasi)
+   * @param opts.dateTo    ixtiyoriy tugash sanasi (default: hozir)
+   */
+  async backfillSchotchik(opts?: {
+    dryRun?: boolean;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<{
+    ok: boolean;
+    dryRun: boolean;
+    dateFrom: string;
+    dateTo: string;
+    stats: {
+      scanned: number;
+      matched: number;
+      alreadyCorrect: number;
+      needsUpdate: number;
+      affectedContracts: number;
+      otherRowsToReset: number;
+      transactionsUpdated?: number;
+      oplataKvUpdated?: number;
+      otherRowsResetted?: number;
+    };
+    groupByCurrent: Array<{ name: string; count: number }>;
+    samples: Array<{
+      id: string;
+      date: string;
+      amount: number;
+      direction: string;
+      description: string;
+      currentSubcategory: string | null;
+    }>;
+  }> {
+    const dryRun = opts?.dryRun !== false;
+
+    // ── Sanaga konfiguratsiyani aniqlash ──
+    let minDate: Date;
+    if (opts?.dateFrom) {
+      minDate = new Date(opts.dateFrom);
+    } else {
+      const setting = await this.prisma.setting.findUnique({ where: { key: 'sync.minDate' } });
+      minDate = setting?.value ? new Date(setting.value) : new Date('2024-01-01');
+    }
+    const maxDate = opts?.dateTo ? new Date(opts.dateTo) : new Date();
+
+    // ── Kategoriya ID larini topish ──
+    const clientCat = await this.prisma.category.findFirst({
+      where: { code: 'CLIENT', parentId: null },
+      select: { id: true },
+    });
+    const schetchikCat = await this.prisma.category.findFirst({
+      where: { code: 'CLIENT_SCHETCHIK' },
+      select: { id: true },
+    });
+    if (!clientCat || !schetchikCat) {
+      throw new Error('CLIENT yoki CLIENT_SCHETCHIK kategoriyalar topilmadi (seed yetishmaydi)');
+    }
+
+    // ── Yangi keyword logikasi (kodda ham mavjud) ──
+    const KEYWORDS = ['HISOBLAG', 'ХИСОБЛАГ', 'ХИСЛОБЛАГ', 'СЧЕТЧИК'];
+    const normalizeYo = (s: string) => s.replace(/Ё/g, 'Е').replace(/ё/g, 'е');
+    const matchesSchetchik = (desc: string | null): boolean => {
+      if (!desc) return false;
+      const norm = normalizeYo(desc.toUpperCase());
+      return KEYWORDS.some((k) => norm.includes(k));
+    };
+
+    // ── Potentsial qatorlarni DB dan olish ──
+    const allTx = await this.prisma.transaction.findMany({
+      where: {
+        txnDate: { gte: minDate, lte: maxDate },
+        OR: [
+          { description: { contains: 'СЧЕТЧИК', mode: 'insensitive' } },
+          { description: { contains: 'СЧЁТЧИК', mode: 'insensitive' } },
+          { description: { contains: 'HISOBLAG', mode: 'insensitive' } },
+          { description: { contains: 'ХИСОБЛАГ', mode: 'insensitive' } },
+          { description: { contains: 'ХИСЛОБЛАГ', mode: 'insensitive' } },
+        ],
+      },
+      select: {
+        id: true,
+        externalId: true,
+        txnDate: true,
+        amount: true,
+        direction: true,
+        description: true,
+        categoryId: true,
+        subcategoryId: true,
+        subcategory: { select: { id: true, code: true, name: true } },
+      },
+      orderBy: { txnDate: 'desc' },
+    });
+
+    // ── JS tarafda yangi keyword bilan aniq filtr ──
+    const matched = allTx.filter((tx) => matchesSchetchik(tx.description));
+    const needsUpdate = matched.filter((tx) => tx.subcategoryId !== schetchikCat.id);
+    const alreadyCorrect = matched.length - needsUpdate.length;
+
+    // ── Hozirgi kategoriyalar guruh statistikasi ──
+    const groupMap = new Map<string, number>();
+    for (const tx of needsUpdate) {
+      const k = tx.subcategory?.name || tx.subcategory?.code || '(kategoriyasiz)';
+      groupMap.set(k, (groupMap.get(k) || 0) + 1);
+    }
+    const groupByCurrent = [...groupMap.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── Namuna (10 ta) ──
+    const samples = needsUpdate.slice(0, 10).map((tx) => ({
+      id: tx.id,
+      date: tx.txnDate.toISOString().slice(0, 10),
+      amount: Number(tx.amount),
+      direction: tx.direction,
+      description: (tx.description || '').slice(0, 120),
+      currentSubcategory: tx.subcategory?.name || null,
+    }));
+
+    // ── Bog'langan OplataKv qatorlarni topish ──
+    const sourceIds: string[] = [];
+    for (const tx of needsUpdate) {
+      if (tx.externalId) sourceIds.push(tx.externalId);
+      sourceIds.push(tx.id);
+    }
+    const linkedOplataKv = sourceIds.length > 0
+      ? await this.prisma.oplataKv.findMany({
+          where: { sourceTxId: { in: sourceIds } },
+          select: { id: true, contractNo: true },
+        })
+      : [];
+    const affectedContracts = new Set(linkedOplataKv.map((r) => r.contractNo));
+
+    // ── Bir xil kontraktdagi BOSHQA split qatorlar ──
+    const otherRowsToReset = affectedContracts.size > 0
+      ? await this.prisma.oplataKv.count({
+          where: {
+            contractNo: { in: [...affectedContracts] },
+            id: { notIn: linkedOplataKv.map((r) => r.id) },
+            OR: [
+              { firstInstallment: { not: null } },
+              { monthlyAmount: { not: null } },
+              { paymentCategory: { not: null } },
+            ],
+          },
+        })
+      : 0;
+
+    const baseStats = {
+      scanned: allTx.length,
+      matched: matched.length,
+      alreadyCorrect,
+      needsUpdate: needsUpdate.length,
+      affectedContracts: affectedContracts.size,
+      otherRowsToReset,
+    };
+
+    const baseResult = {
+      ok: true,
+      dryRun,
+      dateFrom: minDate.toISOString().slice(0, 10),
+      dateTo: maxDate.toISOString().slice(0, 10),
+      stats: baseStats,
+      groupByCurrent,
+      samples,
+    };
+
+    if (dryRun || needsUpdate.length === 0) {
+      return baseResult;
+    }
+
+    // ── APPLY: jadvallarni yangilash (transaktsiyada) ──
+    const txIds = needsUpdate.map((t) => t.id);
+    const linkedIds = linkedOplataKv.map((r) => r.id);
+
+    const result = await this.prisma.$transaction([
+      // A) transactions
+      this.prisma.transaction.updateMany({
+        where: { id: { in: txIds } },
+        data: { categoryId: clientCat.id, subcategoryId: schetchikCat.id },
+      }),
+      // B) oplata_kv (bog'langan)
+      linkedIds.length > 0
+        ? this.prisma.oplataKv.updateMany({
+            where: { id: { in: linkedIds } },
+            data: {
+              txType: 'За счетчик',
+              firstInstallment: null,
+              monthlyAmount: null,
+              paymentCategory: null,
+            },
+          })
+        : this.prisma.$queryRaw`SELECT 0`,
+      // C) bir xil kontraktdagi boshqa qatorlar — reset
+      affectedContracts.size > 0
+        ? this.prisma.oplataKv.updateMany({
+            where: {
+              contractNo: { in: [...affectedContracts] },
+              id: { notIn: linkedIds },
+            },
+            data: {
+              firstInstallment: null,
+              monthlyAmount: null,
+              paymentCategory: null,
+            },
+          })
+        : this.prisma.$queryRaw`SELECT 0`,
+    ]);
+
+    return {
+      ...baseResult,
+      stats: {
+        ...baseStats,
+        transactionsUpdated: (result[0] as any)?.count ?? 0,
+        oplataKvUpdated: (result[1] as any)?.count ?? 0,
+        otherRowsResetted: (result[2] as any)?.count ?? 0,
+      },
+    };
+  }
 }
