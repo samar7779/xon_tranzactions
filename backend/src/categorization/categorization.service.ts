@@ -553,7 +553,7 @@ export class CategorizationService {
     txId: string,
     body: { categoryId: string | null; subcategoryId?: string | null },
     actorId: string,
-  ): Promise<{ ok: true }> {
+  ): Promise<{ ok: true; oplataKvUpdated?: boolean }> {
     // Subkategoriya parent'i — top kategoriya bo'lishi kerak
     if (body.subcategoryId) {
       const sub = await this.prisma.category.findUnique({ where: { id: body.subcategoryId } });
@@ -564,10 +564,10 @@ export class CategorizationService {
       if (!body.categoryId) body.categoryId = sub.parentId;
     }
 
-    // Eskisini olamiz (tarix uchun)
+    // Eskisini olamiz (tarix uchun va OplataKv sync uchun)
     const old = await this.prisma.transaction.findUnique({
       where: { id: txId },
-      select: { categoryId: true, subcategoryId: true, contractNumber: true },
+      select: { categoryId: true, subcategoryId: true, contractNumber: true, externalId: true },
     });
 
     await this.prisma.transaction.update({
@@ -593,7 +593,122 @@ export class CategorizationService {
       reason: "qo'lda o'zgartirildi",
     });
 
-    return { ok: true };
+    // ─── OplataKv'ni sinxronlash (CLIENT subcategory o'zgargan bo'lsa) ───
+    // Misol: 'Взносы за квартиры' → 'За счетчик' — OplataKv qatorda
+    // txType yangilanadi va split qiymatlari NULL ga reset bo'ladi (qayta
+    // hisoblanishi uchun splitInstallments cron kutadi).
+    const subcategoryChanged = (old?.subcategoryId || null) !== (body.subcategoryId || null);
+    let oplataKvUpdated = false;
+    if (subcategoryChanged) {
+      try {
+        oplataKvUpdated = await this.syncCategoryChangeToOplataKv({
+          txId,
+          externalId: old?.externalId || null,
+          newCategoryId: body.categoryId,
+          newSubcategoryId: body.subcategoryId || null,
+        });
+      } catch (e: any) {
+        this.log.warn(`syncCategoryChangeToOplataKv xato (txId=${txId}): ${e?.message}`);
+      }
+    }
+
+    return { ok: true, oplataKvUpdated };
+  }
+
+  /**
+   * Tranzaksiya subkategoriyasi o'zgargach OplataKv qatorni sinxronlash.
+   *
+   * Asosiy ish:
+   *  1. Yangi kategoriya CLIENT emasligini tekshirish (boshqa kategoriyalar
+   *     OplataKv'da yo'q) — bo'lsa qaytarish.
+   *  2. Bog'langan OplataKv qatorni topish (sourceTxId orqali).
+   *  3. txType ni yangi subkategoriya.name ga yangilash, split qiymatlarni
+   *     NULL ga qo'yish (splitInstallments cron qayta hisoblaydi — bu yerda
+   *     SCHETCHIK uchun NULL qoldiriladi, boshqalari uchun FIRST/MONTHLY
+   *     to'g'ri tanlanadi).
+   *  4. Affected kontraktdagi BOSHQA qatorlarni ham reset qilish (running
+   *     totals o'zgargani uchun).
+   *  5. OplataKvHistory ga audit yozuv.
+   */
+  private async syncCategoryChangeToOplataKv(p: {
+    txId: string;
+    externalId: string | null;
+    newCategoryId: string | null;
+    newSubcategoryId: string | null;
+  }): Promise<boolean> {
+    // 1) Yangi kategoriya CLIENT emas — propagation kerak emas
+    if (!p.newCategoryId) return false;
+    const newCat = await this.prisma.category.findUnique({
+      where: { id: p.newCategoryId },
+      select: { code: true, name: true },
+    });
+    if (newCat?.code !== 'CLIENT') {
+      return false; // Faqat CLIENT subtree uchun
+    }
+
+    // 2) Bog'langan OplataKv qatorni topish
+    const dedupKeys = Array.from(new Set([p.externalId, p.txId].filter((x): x is string => !!x)));
+    if (dedupKeys.length === 0) return false;
+    const linked = await this.prisma.oplataKv.findFirst({
+      where: { sourceTxId: { in: dedupKeys } },
+      select: { id: true, contractNo: true, txType: true },
+    });
+    if (!linked) return false;
+
+    // 3) Yangi subkategoriya nomini olish (txType uchun)
+    let newTxType = 'Взносы за квартиры'; // default fallback
+    if (p.newSubcategoryId) {
+      const sub = await this.prisma.category.findUnique({
+        where: { id: p.newSubcategoryId },
+        select: { name: true },
+      });
+      newTxType = sub?.name || newTxType;
+    }
+
+    // 4) OplataKv qatorni yangilash
+    await this.prisma.oplataKv.update({
+      where: { id: linked.id },
+      data: {
+        txType: newTxType,
+        firstInstallment: null,
+        monthlyAmount:    null,
+        paymentCategory:  null,
+      },
+    });
+
+    // 5) Affected kontraktdagi BOSHQA qatorlar — split reset (running totals o'zgaradi)
+    await this.prisma.oplataKv.updateMany({
+      where: {
+        contractNo: linked.contractNo,
+        id: { not: linked.id },
+      },
+      data: {
+        firstInstallment: null,
+        monthlyAmount:    null,
+        paymentCategory:  null,
+      },
+    });
+
+    // 6) Audit log
+    try {
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: linked.id,
+          action: 'edited',
+          actorType: 'system',
+          actorId: null,
+          actorName: 'tranzaksiyadan (kategoriya o\'zgardi)',
+          fieldsChanged: ['txType', 'firstInstallment', 'monthlyAmount', 'paymentCategory'],
+          changes: { txType: { old: linked.txType, new: newTxType } } as any,
+          note: `Tranzaksiyada kategoriya qo'lda o'zgartirildi (txId: ${p.txId}) — txType "${newTxType}" ga yangilandi, split reset qilindi`,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`OplataKv history yozish xato: ${e?.message}`);
+    }
+
+    this.log.log(`OplataKv ${linked.id} synced after category change (tx ${p.txId} -> ${newTxType})`);
+    return true;
   }
 
   /**

@@ -2614,8 +2614,8 @@ function OplataKvFormDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Тип">
-            <Input value={txType} onChange={(e) => setTxType(e.target.value)} />
+          <Field label="Тип" locked={isFromTx}>
+            <Input value={txType} onChange={(e) => setTxType(e.target.value)} disabled={isFromTx} />
           </Field>
 
           <Field label="Назначение платежа" full locked={isFromTx}>
