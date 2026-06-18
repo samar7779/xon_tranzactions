@@ -1232,7 +1232,12 @@ function AktSverkaDialog({
         className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col print:max-h-none print:overflow-visible print:max-w-full print:rounded-none print:shadow-none print:ring-0 print:border-0"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
+        aria-describedby="akt-sverka-description"
       >
+        {/* Screen-reader uchun yashirin title + description (Radix a11y talab) */}
+        <DialogTitle className="sr-only">{t('aktSverkaHeading')}</DialogTitle>
+        <DialogDescription id="akt-sverka-description" className="sr-only">{t('aktSverceHeroSubtitle')}</DialogDescription>
+
         {/* HERO */}
         <div className="relative bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500 px-7 pt-6 pb-5 text-white shrink-0">
           <div
@@ -1934,7 +1939,14 @@ function OplataKvDetailDialog({
         )}
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
+        aria-describedby="oplatakv-detail-description"
       >
+        {/* Screen-reader uchun yashirin title + description (Radix a11y talab) */}
+        <DialogTitle className="sr-only">{row?.contractNo || 'OplataKv detail'}</DialogTitle>
+        <DialogDescription id="oplatakv-detail-description" className="sr-only">
+          Kvartira to'lov tafsiloti
+        </DialogDescription>
+
         {/* Hero header */}
         <div className="relative bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
           <div

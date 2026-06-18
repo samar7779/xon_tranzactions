@@ -2,7 +2,7 @@
 
 import { Suspense, useRef, useMemo, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Float, Text } from '@react-three/drei';
+import { OrbitControls, Float } from '@react-three/drei';
 import * as THREE from 'three';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Home, Banknote, User2, Calendar, Building2, TrendingUp, AlertCircle } from 'lucide-react';
@@ -149,19 +149,17 @@ function Building({
                   <torusGeometry args={[2.1, 0.02, 8, 48]} />
                   <meshBasicMaterial color={accent} transparent opacity={0.4} />
                 </mesh>
-                {/* "Sizning xonadoningiz" label */}
-                <Float speed={1.5} rotationIntensity={0} floatIntensity={0.1}>
-                  <Text
-                    position={[1.8, 0, 0]}
-                    fontSize={0.2}
-                    color={accent}
-                    anchorX="left"
-                    anchorY="middle"
-                    outlineWidth={0.01}
-                    outlineColor="#000"
-                  >
-                    ← {targetFloor}-qavat
-                  </Text>
+                {/* Yon tarafda yorqin sphere — qavat ko'rsatkichi (Text o'rniga) */}
+                <Float speed={1.5} rotationIntensity={0} floatIntensity={0.15}>
+                  <mesh position={[2.3, 0, 0]}>
+                    <sphereGeometry args={[0.13, 16, 16]} />
+                    <meshBasicMaterial color={accent} />
+                  </mesh>
+                  {/* Sphere atrofida glow */}
+                  <mesh position={[2.3, 0, 0]}>
+                    <sphereGeometry args={[0.2, 16, 16]} />
+                    <meshBasicMaterial color={accent} transparent opacity={0.3} />
+                  </mesh>
                 </Float>
               </>
             )}
@@ -189,19 +187,16 @@ function Building({
         <meshBasicMaterial color="#ef4444" />
       </mesh>
 
-      {/* Floating progress label — tepada */}
+      {/* Tepa yorqin sphere — progress ko'rsatkich (Text o'rniga, HTML overlay'da raqam ko'rsatamiz) */}
       <Float speed={2} rotationIntensity={0} floatIntensity={0.4}>
-        <Text
-          position={[0, FLOORS * 0.55 + 1.4, 0]}
-          fontSize={0.55}
-          color={accent}
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.02}
-          outlineColor="#000"
-        >
-          {Math.round(progress)}%
-        </Text>
+        <mesh position={[0, FLOORS * 0.55 + 1.2, 0]}>
+          <sphereGeometry args={[0.18, 24, 24]} />
+          <meshBasicMaterial color={accent} />
+        </mesh>
+        <mesh position={[0, FLOORS * 0.55 + 1.2, 0]}>
+          <sphereGeometry args={[0.32, 24, 24]} />
+          <meshBasicMaterial color={accent} transparent opacity={0.25} />
+        </mesh>
       </Float>
 
       {/* Light beam pastdan tepaga */}
@@ -494,6 +489,39 @@ export function Apartment3DDialog({
                         />
                       </Suspense>
                     </Canvas>
+
+                    {/* HTML overlay — progress raqami (3D Text o'rniga, worker xato yo'q) */}
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
+                      <div
+                        className="text-4xl font-black tracking-tight tabular-nums drop-shadow-2xl"
+                        style={{
+                          color: accent,
+                          textShadow: `0 0 20px ${accent}80, 0 2px 6px rgba(0,0,0,0.6)`,
+                        }}
+                      >
+                        {Math.round(animatedProgress)}%
+                      </div>
+                    </div>
+
+                    {/* HTML overlay — target qavat label */}
+                    {apt?.floor != null && (
+                      <div
+                        className="absolute top-1/2 right-8 -translate-y-1/2 pointer-events-none flex items-center gap-2"
+                      >
+                        <div
+                          className="px-3 py-1.5 rounded-full backdrop-blur-md ring-1 font-bold text-[12px] flex items-center gap-1.5"
+                          style={{
+                            background: `${accent}22`,
+                            borderColor: `${accent}80`,
+                            color: accent,
+                          }}
+                        >
+                          <span className="text-[14px]">⬆</span>
+                          {apt.floor}-qavat
+                          {apt.aptNumber && <span className="text-white/70 font-normal">· №{apt.aptNumber}</span>}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Bottom hint */}
                     <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-slate-900/70 backdrop-blur-sm text-[10px] text-slate-400 font-medium pointer-events-none">
