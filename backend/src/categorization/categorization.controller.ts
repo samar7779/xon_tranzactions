@@ -215,4 +215,23 @@ export class CategorizationController {
   history(@Param('id') id: string, @Query('limit') limit?: string) {
     return this.svc.getHistory(id, limit ? Number(limit) : 50);
   }
+
+  // ─── Schotchik backfill: eski noto'g'ri tasniflangan tranzaksiyalarni qayta tasniflash ───
+  @Post('backfill-schotchik')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "Schotchik tranzaksiyalarini qayta tasniflash (DRY-RUN yoki APPLY)",
+    description:
+      "Eski (commit 2da4412 dan oldingi) noto'g'ri 'Взносы за квартиры' ga tushgan " +
+      "счётчик / hisoblagich to'lovlarini topib, CLIENT_SCHETCHIK ('За счетчик') ga ko'chiradi. " +
+      "Bog'langan OplataKv qatorlarini ham yangilaydi (sinxron). " +
+      "Default — dryRun=true (tahlil natijasi). APPLY uchun: { dryRun: false }.",
+  })
+  backfillSchotchik(@Body() body: { dryRun?: boolean; dateFrom?: string; dateTo?: string }) {
+    return this.svc.backfillSchotchik({
+      dryRun: body?.dryRun !== false,
+      dateFrom: body?.dateFrom,
+      dateTo: body?.dateTo,
+    });
+  }
 }
