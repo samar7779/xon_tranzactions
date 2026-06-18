@@ -1778,7 +1778,7 @@
     "formDesc": "ОплатыКв jadvali · har qanday o'zgarish history'ga avto yoziladi.",
     "rowFromBank": "Bankdan kelgan qator",
     "rowFromExcel": "Excel'dan import qilingan qator",
-    "lockedFieldsBanner": "— Дог №, Дата, Сумма оплаты, Клиент, Назначение maydonlari tahrirlab bo'lmaydi. Qolgan maydonlarni o'zgartirishingiz mumkin.",
+    "lockedFieldsBanner": "— Дог №, Дата, Сумма оплаты, Клиент, Назначение, Тип maydonlari tahrirlab bo'lmaydi (tranzaksiyadan avto). Qolgan maydonlarni o'zgartirishingiz mumkin.",
     "crmChecking": "CRM tekshirilmoqda...",
     "paymentTypeLabel": "Оплата (turi)",
     "save": "Saqlash",

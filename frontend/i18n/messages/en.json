@@ -1778,7 +1778,7 @@
     "formDesc": "ОплатыКв table · every change is automatically logged to history.",
     "rowFromBank": "Row from bank",
     "rowFromExcel": "Row imported from Excel",
-    "lockedFieldsBanner": "— the Дог №, Дата, Сумма оплаты, Клиент, Назначение fields cannot be edited. You can change the rest.",
+    "lockedFieldsBanner": "— the Дог №, Дата, Сумма оплаты, Клиент, Назначение, Тип fields cannot be edited (auto from transaction). You can change the rest.",
     "crmChecking": "Checking CRM...",
     "paymentTypeLabel": "Оплата (type)",
     "save": "Save",
