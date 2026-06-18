@@ -3452,11 +3452,16 @@ function CombinedEditDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* ═══ STEP 1: KONTRAGENT (top kategoriya) ═══ */}
+          {/* ═══ STEP 1: KATEGORIYA (asosiy) ═══ */}
           <div>
             <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
               <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">1</span>
-              {t('kontragent')}
+              {t('detailCategoryLabel')}
+              {!selectedTop && (
+                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1 text-[10px]">
+                  (tanlang → subkategoriyalar ochiladi)
+                </span>
+              )}
             </label>
             <div className="grid grid-cols-2 gap-1.5">
               {visibleTree.map((cat: any) => {
@@ -3561,13 +3566,13 @@ function CombinedEditDialog({
             </div>
           </div>
 
-          {/* ═══ STEP 2: KATEGORIYA (subkategoriya — faqat top tanlangan bo'lsa) ═══ */}
+          {/* ═══ STEP 2: SUBKATEGORIYA (faqat top tanlangan bo'lsa) ═══ */}
           {selectedTop && (
-            <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
+            <div className="pt-3 border-t-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20 -mx-2 px-2 py-3 rounded-lg">
+              <label className="text-[11px] font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px]">2</span>
-                {t('detailCategoryLabel')}
-                <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">
+                {t('subcategory')}
+                <span className="text-slate-500 dark:text-slate-400 font-normal normal-case tracking-normal ml-1">
                   {t('forCategory', { name: selectedTop.name })}
                 </span>
               </label>
@@ -4239,6 +4244,16 @@ function AttachmentsDialog({
                 <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">1</span>
                 {t('detailCategoryLabel')}
                 <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">{t('optionalUnchanged')}</span>
+                {selectedTopId && (
+                  <span className="text-violet-500 dark:text-violet-400 font-normal normal-case tracking-normal ml-1 text-[10px]">
+                    · subkategoriyalar pastda ↓
+                  </span>
+                )}
+                {!selectedTopId && (
+                  <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1 text-[10px]">
+                    (tanlang → subkategoriyalar)
+                  </span>
+                )}
               </label>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
@@ -4273,11 +4288,13 @@ function AttachmentsDialog({
 
             {/* 2. Sub-kategoriya — agar top tanlangan va subs bor bo'lsa */}
             {selectedTop && subs.length > 0 && (
-              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
-                <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
+              <div className="pt-3 border-t-2 border-violet-200 dark:border-violet-800 bg-violet-50/40 dark:bg-violet-950/20 -mx-2 px-2 py-3 rounded-lg">
+                <label className="text-[11px] font-bold text-violet-700 dark:text-violet-300 uppercase tracking-wider mb-2 block flex items-center gap-1">
                   <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-violet-600 text-white text-[9px]">2</span>
                   {t('subcategory')}
-                  <span className="text-slate-400 dark:text-slate-500 font-normal normal-case tracking-normal ml-1">{t('optional')}</span>
+                  <span className="text-slate-500 dark:text-slate-400 font-normal normal-case tracking-normal ml-1">
+                    ({selectedTop.name} uchun)
+                  </span>
                 </label>
                 <div className="flex flex-wrap gap-1.5">
                   <button
