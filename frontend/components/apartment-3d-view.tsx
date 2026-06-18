@@ -1,38 +1,43 @@
 'use client';
 
-import { Suspense, useRef, useMemo, useEffect, useState } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Float } from '@react-three/drei';
-import * as THREE from 'three';
+import { useMemo, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Home, Banknote, User2, Calendar, Building2, TrendingUp, AlertCircle } from 'lucide-react';
+import {
+  X, Home, User2, Calendar, Building2, TrendingUp, AlertCircle, Compass,
+  ArrowLeft, ArrowRight, ArrowUp, DoorOpen, Bath, Bed, ChefHat, Sofa,
+} from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
 /**
- * 3D apartment ko'rinishi — shartnoma to'lov holatini vizual ko'rsatadi.
+ * Xonadon planirovka ko'rinishi — top-down arxitekturali plan.
  *
- * Bino qavatlari "yoritiladi" to'lov foiziga qarab:
- *   - 80% to'langan → 4/5 qavat yoritilgan (oltin)
- *   - Tepa qavat — qisman yoritilgan (40% to'langan = 4/10 yorug')
+ * Top-down SVG floor plan: xonalar, devorlar, eshiklar, derazalar,
+ * mebellar (qisqacha), m² label'lar bilan.
  *
- * Ma'lumotlar manbai: /oplata-kv/crm-sverka — CRM'dagi shartnoma narxi va to'lovlar.
+ * Ma'lumotlar manbai: /oplata-kv/crm-sverka — CRM'dagi shartnoma narxi,
+ * xonadon ma'lumotlari (xonalar soni, m², qavat, blok).
+ *
+ * Planirovka procedurally yaratiladi:
+ *   - 1 xona: studio (zal+oshxona birga + vanna)
+ *   - 2 xona: zal + yotoq + oshxona + vanna
+ *   - 3 xona: zal + 2 yotoq + oshxona + vanna + WC
+ *   - 4+ xona: zal + 3 yotoq + oshxona + 2 vanna
  */
 
 type ApartmentData = {
   contractNo: string;
   object: string | null;
   client: string | null;
-  totalPrice: number;        // CRM contractInfo.price
-  totalPaid: number;         // initialPaid + monthlyPaid
+  totalPrice: number;
+  totalPaid: number;
   initialPlan: number;
   initialPaid: number;
   monthlyPlan: number;
   monthlyPaid: number;
   contractDate: string | null;
   status: string | null;
-  // Xonadon ma'lumotlari (CRM dan)
   aptNumber: string | null;
   rooms: number | null;
   area: number | null;
@@ -42,740 +47,550 @@ type ApartmentData = {
 };
 
 // ═══════════════════════════════════════════════════════════════
-//                    PREMIUM RESIDENTIAL BUILDING
+//                    PROCEDURAL FLOOR PLAN GENERATOR
 // ═══════════════════════════════════════════════════════════════
 
-// Bino o'lchamlari (umumiy konstanta)
-const BUILDING_WIDTH = 2.6;
-const BUILDING_DEPTH = 1.9;
-const FLOOR_HEIGHT = 0.62;
-const LOBBY_HEIGHT = 0.85;
+type RoomKind = 'living' | 'bedroom' | 'kitchen' | 'bathroom' | 'wc' | 'corridor' | 'balcony';
 
-// ─── BIR QAVAT (qatlam) ─────────────────────────────────────
-function ResidentialFloor({
-  y, fill, isTarget, accent, floorNumber,
+type Room = {
+  kind: RoomKind;
+  label: string;
+  x: number;       // top-left x (m)
+  y: number;       // top-left y (m)
+  w: number;       // width (m)
+  h: number;       // height (m)
+  area: number;    // m²
+};
+
+type Door = {
+  x: number;       // hinge x (m)
+  y: number;       // hinge y (m)
+  width: number;   // door width (m)
+  direction: 'N' | 'E' | 'S' | 'W';  // qaysi tomonga ochiladi
+  swing: 'left' | 'right';
+};
+
+type Window = {
+  x: number;       // start x
+  y: number;       // start y
+  length: number;
+  orientation: 'horizontal' | 'vertical';
+};
+
+type FloorPlan = {
+  totalWidth: number;  // m
+  totalHeight: number; // m
+  totalArea: number;   // m²
+  rooms: Room[];
+  doors: Door[];
+  windows: Window[];
+};
+
+// Procedural plan generation based on room count + area
+function generatePlan(rooms: number | null, area: number | null): FloorPlan {
+  const totalArea = area || 50;
+  const roomCount = Math.max(1, Math.min(5, rooms || 2));
+
+  // Aspect ratio depending on area (real apartments ~1.4:1)
+  const aspectRatio = 1.45;
+  const totalWidth  = Math.sqrt(totalArea * aspectRatio);
+  const totalHeight = totalArea / totalWidth;
+
+  // ROOM SIZE PROPORTIONS — generate based on roomCount
+  // (proportions are typical for Uzbek apartments)
+  if (roomCount === 1) {
+    // 1-xona / studio
+    const W = totalWidth, H = totalHeight;
+    const livingW = W * 0.65, livingH = H * 0.6;
+    const kitchenW = W * 0.35, kitchenH = H * 0.6;
+    const corrW = W, corrH = H * 0.18;
+    const bathW = W * 0.35, bathH = H * 0.22;
+    return {
+      totalWidth: W, totalHeight: H, totalArea,
+      rooms: [
+        { kind: 'living',   label: 'Zal',     x: 0,        y: 0,                w: livingW,  h: livingH,  area: livingW * livingH },
+        { kind: 'kitchen',  label: 'Oshxona', x: livingW,  y: 0,                w: kitchenW, h: kitchenH, area: kitchenW * kitchenH },
+        { kind: 'corridor', label: 'Dahliz',  x: 0,        y: livingH,          w: corrW,    h: corrH,    area: corrW * corrH },
+        { kind: 'bathroom', label: 'Vanna',   x: W - bathW, y: livingH + corrH, w: bathW,    h: bathH,    area: bathW * bathH },
+      ],
+      doors: [
+        { x: W * 0.4,        y: H - 0.05,  width: 0.9, direction: 'S', swing: 'left' },  // entrance
+        { x: livingW * 0.3,  y: livingH,   width: 0.8, direction: 'N', swing: 'right' }, // living from corridor
+        { x: livingW + 0.4,  y: livingH,   width: 0.8, direction: 'N', swing: 'left' },  // kitchen from corridor
+        { x: W - bathW + 0.3, y: livingH + corrH, width: 0.7, direction: 'N', swing: 'right' }, // bathroom
+      ],
+      windows: [
+        { x: livingW * 0.15, y: 0, length: livingW * 0.7,  orientation: 'horizontal' },
+        { x: livingW + kitchenW * 0.2, y: 0, length: kitchenW * 0.6, orientation: 'horizontal' },
+      ],
+    };
+  }
+
+  if (roomCount === 2) {
+    // 2-xona
+    const W = totalWidth, H = totalHeight;
+    const livingW = W * 0.55, livingH = H * 0.55;
+    const bedW = W * 0.45, bedH = H * 0.55;
+    const kitchenW = W * 0.4, kitchenH = H * 0.25;
+    const bathW = W * 0.25, bathH = H * 0.25;
+    const corrW = W * 0.35, corrH = H * 0.25;
+    const balconyW = livingW, balconyH = H * 0.2;
+    return {
+      totalWidth: W, totalHeight: H, totalArea,
+      rooms: [
+        { kind: 'living',   label: 'Zal',     x: 0,        y: 0,                  w: livingW,  h: livingH,  area: livingW * livingH },
+        { kind: 'bedroom',  label: 'Yotoq',   x: livingW,  y: 0,                  w: bedW,     h: bedH,     area: bedW * bedH },
+        { kind: 'corridor', label: 'Dahliz',  x: livingW - corrW, y: livingH,     w: corrW,    h: corrH,    area: corrW * corrH },
+        { kind: 'kitchen',  label: 'Oshxona', x: 0,        y: livingH,            w: kitchenW, h: kitchenH, area: kitchenW * kitchenH },
+        { kind: 'bathroom', label: 'Vanna',   x: livingW,  y: bedH,               w: bathW,    h: bathH,    area: bathW * bathH },
+        { kind: 'balcony',  label: 'Balkon',  x: 0,        y: H - balconyH,       w: balconyW, h: balconyH, area: balconyW * balconyH },
+      ],
+      doors: [
+        { x: livingW - corrW + 0.4, y: H - 0.05, width: 0.9, direction: 'S', swing: 'left' },
+        { x: corrW * 0.3 + (livingW - corrW), y: livingH, width: 0.8, direction: 'N', swing: 'right' },
+        { x: livingW + 0.3, y: livingH * 0.3, width: 0.8, direction: 'E', swing: 'left' },
+        { x: 0.5, y: livingH, width: 0.8, direction: 'N', swing: 'left' },
+        { x: livingW + 0.3, y: bedH, width: 0.7, direction: 'N', swing: 'right' },
+        { x: 0.4, y: H - balconyH, width: 0.8, direction: 'N', swing: 'left' },
+      ],
+      windows: [
+        { x: livingW * 0.2, y: 0, length: livingW * 0.6, orientation: 'horizontal' },
+        { x: livingW + bedW * 0.2, y: 0, length: bedW * 0.6, orientation: 'horizontal' },
+        { x: W - 0.05, y: bedH + bathH + 0.2, length: H - bedH - bathH - 0.4, orientation: 'vertical' },
+      ],
+    };
+  }
+
+  if (roomCount === 3) {
+    // 3-xona (foydalanuvchining holati: 68.4m²)
+    const W = totalWidth, H = totalHeight;
+    const livingW = W * 0.48, livingH = H * 0.5;
+    const bed1W = W * 0.52, bed1H = H * 0.42;
+    const bed2W = W * 0.32, bed2H = H * 0.32;
+    const kitchenW = W * 0.32, kitchenH = H * 0.3;
+    const bathW = W * 0.2, bathH = H * 0.18;
+    const wcW = W * 0.16, wcH = H * 0.18;
+    const corrW = W * 0.36, corrH = H * 0.5;
+    const balconyW = livingW * 0.7, balconyH = H * 0.18;
+    return {
+      totalWidth: W, totalHeight: H, totalArea,
+      rooms: [
+        // Top row
+        { kind: 'living',   label: 'Zal',      x: 0,                  y: 0,                w: livingW,  h: livingH,  area: livingW * livingH },
+        { kind: 'bedroom',  label: 'Yotoq 1',  x: livingW,            y: 0,                w: bed1W,    h: bed1H,    area: bed1W * bed1H },
+        // Middle row
+        { kind: 'kitchen',  label: 'Oshxona',  x: 0,                  y: livingH,          w: kitchenW, h: kitchenH, area: kitchenW * kitchenH },
+        { kind: 'bathroom', label: 'Vanna',    x: kitchenW,           y: livingH,          w: bathW,    h: bathH,    area: bathW * bathH },
+        { kind: 'wc',       label: 'WC',       x: kitchenW + bathW,   y: livingH,          w: wcW,      h: wcH,      area: wcW * wcH },
+        { kind: 'bedroom',  label: 'Yotoq 2',  x: livingW + bed1W - bed2W, y: bed1H,       w: bed2W,    h: bed2H,    area: bed2W * bed2H },
+        // Bottom row — corridor + balcony
+        { kind: 'corridor', label: 'Dahliz',   x: kitchenW - 0.4,     y: livingH + bathH,  w: corrW,    h: H - livingH - bathH, area: corrW * (H - livingH - bathH) },
+        { kind: 'balcony',  label: 'Balkon',   x: 0,                  y: H - balconyH,     w: balconyW, h: balconyH, area: balconyW * balconyH },
+      ],
+      doors: [
+        { x: kitchenW + 0.4, y: H - 0.05,             width: 1.0, direction: 'S', swing: 'left' },  // entrance
+        { x: corrW * 0.2 + kitchenW, y: livingH + 0.3, width: 0.85, direction: 'N', swing: 'right' }, // to living
+        { x: livingW + 0.3,  y: livingH * 0.5,        width: 0.8, direction: 'E', swing: 'left' },   // to bedroom1
+        { x: 0.5,            y: livingH,              width: 0.8, direction: 'N', swing: 'left' },   // to kitchen
+        { x: kitchenW + 0.3, y: livingH,              width: 0.75, direction: 'N', swing: 'right' }, // to bathroom
+        { x: kitchenW + bathW + 0.2, y: livingH,      width: 0.6, direction: 'N', swing: 'left' },   // to wc
+        { x: livingW + bed1W - bed2W + 0.3, y: bed1H, width: 0.8, direction: 'N', swing: 'right' },  // to bedroom2
+        { x: 0.4,            y: H - balconyH,         width: 0.8, direction: 'N', swing: 'left' },   // to balcony
+      ],
+      windows: [
+        { x: livingW * 0.15, y: 0, length: livingW * 0.7,  orientation: 'horizontal' },
+        { x: livingW + bed1W * 0.2, y: 0, length: bed1W * 0.6, orientation: 'horizontal' },
+        { x: W - 0.05, y: bed1H * 0.3, length: bed1H * 0.4, orientation: 'vertical' },
+        { x: W - 0.05, y: bed1H + bed2H * 0.3, length: bed2H * 0.4, orientation: 'vertical' },
+      ],
+    };
+  }
+
+  // 4+ xona
+  const W = totalWidth, H = totalHeight;
+  const livingW = W * 0.45, livingH = H * 0.45;
+  const bed1W = W * 0.32, bed1H = H * 0.4;
+  const bed2W = W * 0.23, bed2H = H * 0.4;
+  const bed3W = W * 0.3, bed3H = H * 0.3;
+  const kitchenW = W * 0.45, kitchenH = H * 0.3;
+  const bathW = W * 0.22, bathH = H * 0.2;
+  const corrW = W * 0.45, corrH = H * 0.25;
+  return {
+    totalWidth: W, totalHeight: H, totalArea,
+    rooms: [
+      { kind: 'living',   label: 'Zal',     x: 0,                  y: 0,                w: livingW,  h: livingH,  area: livingW * livingH },
+      { kind: 'bedroom',  label: 'Yotoq 1', x: livingW,            y: 0,                w: bed1W,    h: bed1H,    area: bed1W * bed1H },
+      { kind: 'bedroom',  label: 'Yotoq 2', x: livingW + bed1W,    y: 0,                w: bed2W,    h: bed2H,    area: bed2W * bed2H },
+      { kind: 'kitchen',  label: 'Oshxona', x: 0,                  y: livingH,          w: kitchenW, h: kitchenH, area: kitchenW * kitchenH },
+      { kind: 'bedroom',  label: 'Yotoq 3', x: livingW,            y: bed1H,            w: bed3W,    h: bed3H,    area: bed3W * bed3H },
+      { kind: 'bathroom', label: 'Vanna',   x: 0,                  y: livingH + kitchenH, w: bathW,  h: bathH,    area: bathW * bathH },
+      { kind: 'wc',       label: 'WC',      x: bathW,              y: livingH + kitchenH, w: bathW * 0.7, h: bathH, area: bathW * 0.7 * bathH },
+      { kind: 'corridor', label: 'Dahliz',  x: kitchenW,           y: livingH + bed3H,  w: corrW,    h: corrH,    area: corrW * corrH },
+    ],
+    doors: [
+      { x: kitchenW + 0.4, y: H - 0.05,   width: 1.0, direction: 'S', swing: 'left' },
+      { x: 0.5,            y: livingH,    width: 0.85, direction: 'N', swing: 'left' },
+      { x: livingW + 0.3,  y: livingH * 0.5, width: 0.8, direction: 'E', swing: 'left' },
+      { x: livingW + bed1W + 0.2, y: bed2H, width: 0.7, direction: 'N', swing: 'right' },
+      { x: livingW + 0.3,  y: bed1H,      width: 0.8, direction: 'N', swing: 'left' },
+    ],
+    windows: [
+      { x: livingW * 0.2, y: 0, length: livingW * 0.6, orientation: 'horizontal' },
+      { x: livingW + bed1W * 0.2, y: 0, length: bed1W * 0.6, orientation: 'horizontal' },
+      { x: livingW + bed1W + bed2W * 0.2, y: 0, length: bed2W * 0.5, orientation: 'horizontal' },
+      { x: W - 0.05, y: bed1H + bed3H * 0.3, length: bed3H * 0.4, orientation: 'vertical' },
+    ],
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+//                    ROOM COLORS & ICONS
+// ═══════════════════════════════════════════════════════════════
+
+const ROOM_STYLE: Record<RoomKind, { fill: string; stroke: string; fillDark: string }> = {
+  living:   { fill: '#fef3c7', stroke: '#f59e0b', fillDark: '#451a03' },
+  bedroom:  { fill: '#dbeafe', stroke: '#3b82f6', fillDark: '#172554' },
+  kitchen:  { fill: '#dcfce7', stroke: '#10b981', fillDark: '#052e16' },
+  bathroom: { fill: '#cffafe', stroke: '#06b6d4', fillDark: '#083344' },
+  wc:       { fill: '#e0f2fe', stroke: '#0ea5e9', fillDark: '#0c4a6e' },
+  corridor: { fill: '#f3f4f6', stroke: '#9ca3af', fillDark: '#1f2937' },
+  balcony:  { fill: '#fae8ff', stroke: '#a855f7', fillDark: '#3b0764' },
+};
+
+// ═══════════════════════════════════════════════════════════════
+//                    SVG FLOOR PLAN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
+function FloorPlanSVG({
+  plan, aptNumber, areaActual, accent,
 }: {
-  y: number;
-  fill: number;            // 0..1 — qancha yoritilgan
-  isTarget: boolean;       // mijoz qavatimi
+  plan: FloorPlan;
+  aptNumber: string | null;
+  areaActual: number | null;
   accent: string;
-  floorNumber: number;     // qavat raqami (1-based)
 }) {
-  // Qavat rangi va emission — fill ga qarab
-  const litColor = isTarget ? accent : '#fef3c7';     // warm yellow window
-  const dimColor = '#0a1322';                          // dark off window
-  const emissiveIntensity = isTarget ? 1.3 : fill * 0.85;
+  // SVG scale: 1m = SCALE pixels
+  const SCALE = 50;
+  const PADDING = 60;
+  const svgW = plan.totalWidth * SCALE + PADDING * 2;
+  const svgH = plan.totalHeight * SCALE + PADDING * 2;
 
-  // Front + back window grid — har tomonda 5 ta katta deraza
-  const WINDOWS = 5;
-  const winW = 0.38;
-  const winH = 0.42;
-  const gap = (BUILDING_WIDTH - WINDOWS * winW) / (WINDOWS + 1);
-
-  // Yon tomonlarda 3 ta deraza
-  const SIDE_WINDOWS = 3;
-  const sideWinW = 0.32;
-  const sideGap = (BUILDING_DEPTH - SIDE_WINDOWS * sideWinW) / (SIDE_WINDOWS + 1);
+  // Mapping helpers
+  const mx = (x: number) => PADDING + x * SCALE;
+  const my = (y: number) => PADDING + y * SCALE;
+  const ms = (s: number) => s * SCALE;
 
   return (
-    <group position={[0, y, 0]}>
-      {/* ─── ASOSIY DEVOR (concrete) — yon ramkalar ─── */}
-      {/* Chap concrete pilastri */}
-      <mesh castShadow>
-        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
-      </mesh>
-      <mesh position={[-BUILDING_WIDTH / 2 + 0.09, 0, 0]} castShadow>
-        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
-      </mesh>
-      <mesh position={[BUILDING_WIDTH / 2 - 0.09, 0, 0]} castShadow>
-        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
-      </mesh>
+    <svg
+      viewBox={`0 0 ${svgW} ${svgH}`}
+      className="w-full h-full max-h-[80vh]"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      <defs>
+        {/* Grid pattern (kichik kvadratlar fonda) */}
+        <pattern id="floorGrid" x="0" y="0" width="25" height="25" patternUnits="userSpaceOnUse">
+          <path d="M 25 0 L 0 0 0 25" fill="none" stroke="#1e293b" strokeWidth="0.5" opacity="0.4" />
+        </pattern>
+        {/* Wall hatching pattern */}
+        <pattern id="wallHatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+          <line x1="0" y1="0" x2="0" y2="6" stroke="#475569" strokeWidth="3" />
+        </pattern>
+        {/* Drop shadow for rooms */}
+        <filter id="roomShadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="2" />
+          <feOffset dx="0" dy="2" result="offsetblur" />
+          <feComponentTransfer><feFuncA type="linear" slope="0.25" /></feComponentTransfer>
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
 
-      {/* ─── SHISHA FASAD (front + back) ─── */}
-      {[
-        { z: BUILDING_DEPTH / 2 + 0.002, rot: 0 },
-        { z: -BUILDING_DEPTH / 2 - 0.002, rot: Math.PI },
-      ].map(({ z, rot }, side) => (
-        <group key={side} position={[0, 0, z]} rotation={[0, rot, 0]}>
-          {/* Asosiy shisha panel (qora oyna) */}
-          <mesh>
-            <planeGeometry args={[BUILDING_WIDTH - 0.36, FLOOR_HEIGHT]} />
-            <meshPhysicalMaterial
-              color="#0a1322"
-              metalness={0.4}
-              roughness={0.1}
-              clearcoat={1}
-              clearcoatRoughness={0}
-              emissive={isTarget ? accent : '#000'}
-              emissiveIntensity={isTarget ? 0.08 : 0}
-            />
-          </mesh>
+      {/* Grid background */}
+      <rect width={svgW} height={svgH} fill="url(#floorGrid)" />
 
-          {/* Derazalar — 5 ta */}
-          {Array.from({ length: WINDOWS }).map((_, wx) => {
-            const isLit = isTarget || fill > (wx + 0.5) / WINDOWS;
-            const partial = !isTarget && fill > wx / WINDOWS && fill < (wx + 1) / WINDOWS;
-            return (
-              <mesh
-                key={wx}
-                position={[-BUILDING_WIDTH / 2 + 0.18 + gap + winW / 2 + wx * (winW + gap), 0, 0.001]}
-              >
-                <planeGeometry args={[winW, winH]} />
-                <meshBasicMaterial
-                  color={isLit ? litColor : dimColor}
-                  transparent
-                  opacity={isLit ? 0.96 : 0.55}
-                />
-              </mesh>
-            );
-          })}
+      {/* ─── OUTER WALL (qora qalin chiziq) ─── */}
+      <rect
+        x={mx(0) - 4}
+        y={my(0) - 4}
+        width={ms(plan.totalWidth) + 8}
+        height={ms(plan.totalHeight) + 8}
+        fill="#0f172a"
+        opacity="0.4"
+      />
 
-          {/* Deraza ramkalari (vertical/horizontal mullions) — har deraza orasi */}
-          {Array.from({ length: WINDOWS - 1 }).map((_, mx) => (
-            <mesh
-              key={`m-${mx}`}
-              position={[-BUILDING_WIDTH / 2 + 0.18 + gap + winW + mx * (winW + gap) + gap / 2, 0, 0.002]}
-            >
-              <planeGeometry args={[0.025, winH + 0.05]} />
-              <meshBasicMaterial color="#475569" />
-            </mesh>
-          ))}
-        </group>
-      ))}
-
-      {/* ─── YON TOMONLAR (chap/o'ng) — 3 ta kichik deraza ─── */}
-      {[
-        { x: BUILDING_WIDTH / 2 + 0.002, rot: Math.PI / 2 },
-        { x: -BUILDING_WIDTH / 2 - 0.002, rot: -Math.PI / 2 },
-      ].map(({ x, rot }, side) => (
-        <group key={`s-${side}`} position={[x, 0, 0]} rotation={[0, rot, 0]}>
-          <mesh>
-            <planeGeometry args={[BUILDING_DEPTH - 0.2, FLOOR_HEIGHT]} />
-            <meshPhysicalMaterial
-              color="#0a1322"
-              metalness={0.4}
-              roughness={0.1}
-              emissive={isTarget ? accent : '#000'}
-              emissiveIntensity={isTarget ? 0.05 : 0}
-            />
-          </mesh>
-          {Array.from({ length: SIDE_WINDOWS }).map((_, wx) => {
-            const isLit = isTarget || fill > (wx + 0.5) / SIDE_WINDOWS;
-            return (
-              <mesh
-                key={wx}
-                position={[-BUILDING_DEPTH / 2 + 0.1 + sideGap + sideWinW / 2 + wx * (sideWinW + sideGap), 0, 0.001]}
-              >
-                <planeGeometry args={[sideWinW, winH]} />
-                <meshBasicMaterial
-                  color={isLit ? litColor : dimColor}
-                  transparent
-                  opacity={isLit ? 0.96 : 0.55}
-                />
-              </mesh>
-            );
-          })}
-        </group>
-      ))}
-
-      {/* ─── BALKON (front, har 2 qavatda bitta) ─── */}
-      {floorNumber % 2 === 0 && (
-        <group position={[0, -FLOOR_HEIGHT / 2 + 0.04, BUILDING_DEPTH / 2 + 0.18]}>
-          {/* Balkon platformasi */}
-          <mesh castShadow>
-            <boxGeometry args={[BUILDING_WIDTH - 0.4, 0.06, 0.4]} />
-            <meshStandardMaterial color="#334155" roughness={0.7} metalness={0.3} />
-          </mesh>
-          {/* Panjara (railing) — 3 ta vertikal panel */}
-          {[-0.7, 0, 0.7].map((dx, i) => (
-            <mesh key={i} position={[dx, 0.18, 0.18]}>
-              <boxGeometry args={[0.04, 0.32, 0.04]} />
-              <meshStandardMaterial color="#64748b" metalness={0.8} roughness={0.3} />
-            </mesh>
-          ))}
-          {/* Yuqori reyling */}
-          <mesh position={[0, 0.35, 0.18]}>
-            <boxGeometry args={[BUILDING_WIDTH - 0.45, 0.04, 0.04]} />
-            <meshStandardMaterial color="#64748b" metalness={0.9} roughness={0.2} />
-          </mesh>
-        </group>
-      )}
-
-      {/* ─── QAVAT ORASIDAGI PLITA (slab) ─── */}
-      <mesh position={[0, FLOOR_HEIGHT / 2 + 0.01, 0]}>
-        <boxGeometry args={[BUILDING_WIDTH + 0.05, 0.05, BUILDING_DEPTH + 0.05]} />
-        <meshStandardMaterial color="#475569" metalness={0.4} roughness={0.5} />
-      </mesh>
-
-      {/* ─── TARGET QAVAT MARKER — halqalar va spotlight ─── */}
-      {isTarget && (
-        <>
-          {/* Asosiy aylanma halqa — bino atrofida */}
-          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[1.95, 0.04, 12, 64]} />
-            <meshBasicMaterial color={accent} />
-          </mesh>
-          {/* Tashqi pulsatsiya halqa */}
-          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[2.25, 0.025, 8, 64]} />
-            <meshBasicMaterial color={accent} transparent opacity={0.5} />
-          </mesh>
-          {/* Eng tashqi yorug' halqa */}
-          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[2.55, 0.015, 6, 64]} />
-            <meshBasicMaterial color={accent} transparent opacity={0.25} />
-          </mesh>
-          {/* Yon tarafda yorqin sphere */}
-          <Float speed={1.5} rotationIntensity={0} floatIntensity={0.15}>
-            <mesh position={[2.5, 0, 0]}>
-              <sphereGeometry args={[0.11, 16, 16]} />
-              <meshBasicMaterial color={accent} />
-            </mesh>
-            <mesh position={[2.5, 0, 0]}>
-              <sphereGeometry args={[0.22, 16, 16]} />
-              <meshBasicMaterial color={accent} transparent opacity={0.35} />
-            </mesh>
-          </Float>
-        </>
-      )}
-    </group>
-  );
-}
-
-// ─── PASTKI QAVAT (LOBBY) — kirish, eshik, sign ────────────
-function GroundLobby({ accent }: { accent: string }) {
-  return (
-    <group position={[0, LOBBY_HEIGHT / 2 - 0.05, 0]}>
-      {/* Pastki concrete asos */}
-      <mesh castShadow>
-        <boxGeometry args={[BUILDING_WIDTH + 0.15, LOBBY_HEIGHT, BUILDING_DEPTH + 0.15]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.15} />
-      </mesh>
-
-      {/* Front facade — kirish */}
-      <group position={[0, 0, (BUILDING_DEPTH + 0.15) / 2 + 0.005]}>
-        {/* Asosiy oyna devor */}
-        <mesh>
-          <planeGeometry args={[BUILDING_WIDTH, LOBBY_HEIGHT - 0.1]} />
-          <meshPhysicalMaterial
-            color="#0a1322"
-            metalness={0.5}
-            roughness={0.1}
-            emissive="#fef3c7"
-            emissiveIntensity={0.15}
-          />
-        </mesh>
-
-        {/* Kirish eshigi (yorug' to'rtburchak) — lobby interyer chiroyi */}
-        <mesh position={[0, -0.1, 0.001]}>
-          <planeGeometry args={[0.6, 0.55]} />
-          <meshBasicMaterial color="#fef3c7" />
-        </mesh>
-
-        {/* Eshik ramkasi */}
-        <mesh position={[0, -0.1, 0.003]}>
-          <planeGeometry args={[0.04, 0.6]} />
-          <meshBasicMaterial color={accent} />
-        </mesh>
-
-        {/* Yorqin chiziq — kirish ustida (LED strip) */}
-        <mesh position={[0, 0.28, 0.002]}>
-          <planeGeometry args={[BUILDING_WIDTH - 0.3, 0.025]} />
-          <meshBasicMaterial color={accent} />
-        </mesh>
-      </group>
-
-      {/* Kirish ustidagi kichik kozyorek */}
-      <mesh position={[0, LOBBY_HEIGHT / 2 - 0.05, (BUILDING_DEPTH + 0.15) / 2 + 0.18]} castShadow>
-        <boxGeometry args={[BUILDING_WIDTH - 0.2, 0.06, 0.4]} />
-        <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.4} />
-      </mesh>
-    </group>
-  );
-}
-
-// ─── TOM (ROOF) — parapet + AC unitlar + antenna ───────────
-function Roof({ accent, totalFloors }: { accent: string; totalFloors: number }) {
-  const roofY = LOBBY_HEIGHT + totalFloors * FLOOR_HEIGHT;
-  return (
-    <group position={[0, roofY, 0]}>
-      {/* Parapet devori (atrofida) */}
-      <mesh position={[0, 0.15, BUILDING_DEPTH / 2 - 0.02]} castShadow>
-        <boxGeometry args={[BUILDING_WIDTH, 0.3, 0.05]} />
-        <meshStandardMaterial color="#334155" roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 0.15, -BUILDING_DEPTH / 2 + 0.02]} castShadow>
-        <boxGeometry args={[BUILDING_WIDTH, 0.3, 0.05]} />
-        <meshStandardMaterial color="#334155" roughness={0.8} />
-      </mesh>
-      <mesh position={[BUILDING_WIDTH / 2 - 0.02, 0.15, 0]} castShadow>
-        <boxGeometry args={[0.05, 0.3, BUILDING_DEPTH]} />
-        <meshStandardMaterial color="#334155" roughness={0.8} />
-      </mesh>
-      <mesh position={[-BUILDING_WIDTH / 2 + 0.02, 0.15, 0]} castShadow>
-        <boxGeometry args={[0.05, 0.3, BUILDING_DEPTH]} />
-        <meshStandardMaterial color="#334155" roughness={0.8} />
-      </mesh>
-
-      {/* Tom yuzasi */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[BUILDING_WIDTH - 0.05, 0.04, BUILDING_DEPTH - 0.05]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.9} />
-      </mesh>
-
-      {/* AC unitlar (2 ta) */}
-      <mesh position={[-0.7, 0.18, 0.4]} castShadow>
-        <boxGeometry args={[0.45, 0.32, 0.35]} />
-        <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.4} />
-      </mesh>
-      <mesh position={[0.6, 0.16, -0.3]} castShadow>
-        <boxGeometry args={[0.38, 0.28, 0.3]} />
-        <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.4} />
-      </mesh>
-
-      {/* Antenna asosi */}
-      <mesh position={[0.9, 0.12, 0.5]}>
-        <boxGeometry args={[0.12, 0.2, 0.12]} />
-        <meshStandardMaterial color="#334155" metalness={0.6} roughness={0.5} />
-      </mesh>
-      {/* Antenna pilon */}
-      <mesh position={[0.9, 0.65, 0.5]}>
-        <cylinderGeometry args={[0.015, 0.015, 0.9]} />
-        <meshStandardMaterial color="#94a3b8" metalness={1} roughness={0.3} />
-      </mesh>
-      {/* Antenna pichoq */}
-      <mesh position={[0.9, 1.0, 0.5]}>
-        <boxGeometry args={[0.25, 0.02, 0.02]} />
-        <meshStandardMaterial color="#94a3b8" metalness={1} />
-      </mesh>
-      {/* Pulsatsiya qiluvchi qizil chiroq */}
-      <mesh position={[0.9, 1.15, 0.5]}>
-        <sphereGeometry args={[0.05]} />
-        <meshBasicMaterial color="#ef4444" />
-      </mesh>
-      <mesh position={[0.9, 1.15, 0.5]}>
-        <sphereGeometry args={[0.1]} />
-        <meshBasicMaterial color="#ef4444" transparent opacity={0.3} />
-      </mesh>
-
-      {/* Yon panjarali to'siq (yon balkonlar) */}
-      <mesh position={[-0.5, 0.32, 0.6]}>
-        <boxGeometry args={[0.4, 0.02, 0.02]} />
-        <meshStandardMaterial color="#64748b" metalness={0.8} />
-      </mesh>
-
-      {/* Tomda yorqin top sphere — progress ko'rsatkichi */}
-      <Float speed={2} rotationIntensity={0} floatIntensity={0.45}>
-        <mesh position={[0, 1.6, 0]}>
-          <sphereGeometry args={[0.15, 24, 24]} />
-          <meshBasicMaterial color={accent} />
-        </mesh>
-        <mesh position={[0, 1.6, 0]}>
-          <sphereGeometry args={[0.28, 24, 24]} />
-          <meshBasicMaterial color={accent} transparent opacity={0.3} />
-        </mesh>
-        <mesh position={[0, 1.6, 0]}>
-          <sphereGeometry args={[0.45, 24, 24]} />
-          <meshBasicMaterial color={accent} transparent opacity={0.12} />
-        </mesh>
-      </Float>
-    </group>
-  );
-}
-
-// ─── ASOSIY BINO ─────────────────────────────────────────
-function Building({
-  progress, accent, totalFloors, targetFloor,
-}: {
-  progress: number;
-  accent: string;
-  totalFloors: number;
-  targetFloor: number | null;
-}) {
-  const groupRef = useRef<THREE.Group>(null);
-  const FLOORS = Math.max(3, Math.min(20, totalFloors));
-
-  useFrame(() => {
-    if (groupRef.current) {
-      groupRef.current.rotation.y += 0.0015;
-    }
-  });
-
-  // Har qavat necha foizda yoritilishini hisoblaymiz
-  const floorFills = useMemo(() => {
-    const arr: number[] = [];
-    for (let i = 0; i < FLOORS; i++) {
-      const floorStart = (i / FLOORS) * 100;
-      const floorEnd = ((i + 1) / FLOORS) * 100;
-      if (progress >= floorEnd) arr.push(1);
-      else if (progress <= floorStart) arr.push(0);
-      else arr.push((progress - floorStart) / (floorEnd - floorStart));
-    }
-    return arr;
-  }, [progress, FLOORS]);
-
-  const targetIdx = targetFloor ? targetFloor - 1 : -1;
-
-  return (
-    <group ref={groupRef} position={[0, -1.5, 0]}>
-      {/* Lobby (kirish) */}
-      <GroundLobby accent={accent} />
-
-      {/* Qavatlar — lobby ustida */}
-      {Array.from({ length: FLOORS }).map((_, i) => {
-        const y = LOBBY_HEIGHT + 0.05 + i * FLOOR_HEIGHT + FLOOR_HEIGHT / 2;
+      {/* ─── ROOMS ─── */}
+      {plan.rooms.map((room, i) => {
+        const style = ROOM_STYLE[room.kind];
         return (
-          <ResidentialFloor
-            key={i}
-            y={y}
-            fill={floorFills[i]}
-            isTarget={i === targetIdx}
-            accent={accent}
-            floorNumber={i + 1}
-          />
+          <g key={i} filter="url(#roomShadow)">
+            {/* Room fill */}
+            <rect
+              x={mx(room.x)}
+              y={my(room.y)}
+              width={ms(room.w)}
+              height={ms(room.h)}
+              fill={style.fillDark}
+              stroke={style.stroke}
+              strokeWidth={1.5}
+              opacity={0.95}
+            />
+            {/* Top-left light */}
+            <rect
+              x={mx(room.x)}
+              y={my(room.y)}
+              width={ms(room.w)}
+              height={ms(room.h)}
+              fill="url(#floorGrid)"
+              opacity={0.3}
+            />
+          </g>
         );
       })}
 
-      {/* Tom */}
-      <Roof accent={accent} totalFloors={FLOORS} />
-
-      {/* Pastdan tepa light beam — fill progress */}
-      <pointLight
-        position={[0, LOBBY_HEIGHT + (progress / 100) * FLOORS * FLOOR_HEIGHT, 0]}
-        intensity={2}
-        color={accent}
-        distance={6}
+      {/* ─── INNER WALLS (xonalar orasidagi) ─── */}
+      {/* Outer thick wall */}
+      <rect
+        x={mx(0)}
+        y={my(0)}
+        width={ms(plan.totalWidth)}
+        height={ms(plan.totalHeight)}
+        fill="none"
+        stroke="#cbd5e1"
+        strokeWidth={6}
       />
 
-      {/* Target qavat uchun maxsus spot light */}
-      {targetIdx >= 0 && (
-        <>
-          <pointLight
-            position={[2.2, LOBBY_HEIGHT + targetIdx * FLOOR_HEIGHT + FLOOR_HEIGHT / 2, 0]}
-            intensity={3}
-            color={accent}
-            distance={4}
-          />
-          <pointLight
-            position={[-2.2, LOBBY_HEIGHT + targetIdx * FLOOR_HEIGHT + FLOOR_HEIGHT / 2, 0]}
-            intensity={3}
-            color={accent}
-            distance={4}
-          />
-        </>
-      )}
-    </group>
+      {/* ─── WINDOWS (qo'sh chiziq) ─── */}
+      {plan.windows.map((w, i) => {
+        if (w.orientation === 'horizontal') {
+          return (
+            <g key={i}>
+              <line x1={mx(w.x)} y1={my(w.y)} x2={mx(w.x + w.length)} y2={my(w.y)} stroke="#0f172a" strokeWidth={6} />
+              <line x1={mx(w.x)} y1={my(w.y) - 2} x2={mx(w.x + w.length)} y2={my(w.y) - 2} stroke="#60a5fa" strokeWidth={1.5} />
+              <line x1={mx(w.x)} y1={my(w.y) + 2} x2={mx(w.x + w.length)} y2={my(w.y) + 2} stroke="#60a5fa" strokeWidth={1.5} />
+              {/* Cross pattern (oyna tartibi) */}
+              <line x1={mx(w.x + w.length / 2)} y1={my(w.y) - 3} x2={mx(w.x + w.length / 2)} y2={my(w.y) + 3} stroke="#3b82f6" strokeWidth={1} />
+            </g>
+          );
+        } else {
+          return (
+            <g key={i}>
+              <line x1={mx(w.x)} y1={my(w.y)} x2={mx(w.x)} y2={my(w.y + w.length)} stroke="#0f172a" strokeWidth={6} />
+              <line x1={mx(w.x) - 2} y1={my(w.y)} x2={mx(w.x) - 2} y2={my(w.y + w.length)} stroke="#60a5fa" strokeWidth={1.5} />
+              <line x1={mx(w.x) + 2} y1={my(w.y)} x2={mx(w.x) + 2} y2={my(w.y + w.length)} stroke="#60a5fa" strokeWidth={1.5} />
+              <line x1={mx(w.x) - 3} y1={my(w.y + w.length / 2)} x2={mx(w.x) + 3} y2={my(w.y + w.length / 2)} stroke="#3b82f6" strokeWidth={1} />
+            </g>
+          );
+        }
+      })}
+
+      {/* ─── DOORS (eshik + arc) ─── */}
+      {plan.doors.map((d, i) => {
+        const cx = mx(d.x);
+        const cy = my(d.y);
+        const r = ms(d.width);
+        // Arc start/end depending on direction + swing
+        let path = '';
+        if (d.direction === 'S') {
+          path = `M ${cx} ${cy} L ${cx + r} ${cy} A ${r} ${r} 0 0 0 ${cx} ${cy - r}`;
+        } else if (d.direction === 'N') {
+          path = `M ${cx} ${cy} L ${cx + r} ${cy} A ${r} ${r} 0 0 1 ${cx} ${cy + r}`;
+        } else if (d.direction === 'E') {
+          path = `M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 1 ${cx - r} ${cy}`;
+        } else {
+          path = `M ${cx} ${cy} L ${cx} ${cy + r} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`;
+        }
+        return (
+          <g key={i}>
+            {/* Gap in wall (white slot) */}
+            <rect
+              x={cx - 2}
+              y={cy - 4}
+              width={r}
+              height={8}
+              fill="#0f172a"
+            />
+            {/* Arc (door swing) */}
+            <path d={path} fill="none" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="2 2" />
+            {/* Door line */}
+            <line
+              x1={cx}
+              y1={cy}
+              x2={cx + r}
+              y2={cy}
+              stroke="#cbd5e1"
+              strokeWidth={2.5}
+            />
+          </g>
+        );
+      })}
+
+      {/* ─── FURNITURE ICONS ─── */}
+      {plan.rooms.map((room, i) => {
+        const cx = mx(room.x + room.w / 2);
+        const cy = my(room.y + room.h / 2);
+        const sz = Math.min(ms(room.w), ms(room.h)) * 0.5;
+        return (
+          <g key={`f-${i}`}>
+            {renderFurniture(room.kind, cx, cy, sz)}
+          </g>
+        );
+      })}
+
+      {/* ─── ROOM LABELS ─── */}
+      {plan.rooms.map((room, i) => {
+        const cx = mx(room.x + room.w / 2);
+        const cy = my(room.y + room.h / 2);
+        const style = ROOM_STYLE[room.kind];
+        return (
+          <g key={`l-${i}`}>
+            {/* Label background */}
+            <rect
+              x={cx - 38}
+              y={cy + ms(room.h) * 0.18}
+              width={76}
+              height={28}
+              rx={6}
+              fill="#020617"
+              fillOpacity={0.85}
+              stroke={style.stroke}
+              strokeWidth={1}
+            />
+            <text x={cx} y={cy + ms(room.h) * 0.18 + 12} textAnchor="middle" fontSize={11} fontWeight={700} fill={style.fill}>
+              {room.label}
+            </text>
+            <text x={cx} y={cy + ms(room.h) * 0.18 + 23} textAnchor="middle" fontSize={9} fill="#cbd5e1" fontFamily="monospace">
+              {room.area.toFixed(1)} m²
+            </text>
+          </g>
+        );
+      })}
+
+      {/* ─── DIMENSIONS (tashqi o'lchamlar) ─── */}
+      {/* Top width */}
+      <g>
+        <line x1={mx(0)} y1={my(0) - 30} x2={mx(plan.totalWidth)} y2={my(0) - 30} stroke="#64748b" strokeWidth={1} />
+        <line x1={mx(0)} y1={my(0) - 35} x2={mx(0)} y2={my(0) - 25} stroke="#64748b" strokeWidth={1} />
+        <line x1={mx(plan.totalWidth)} y1={my(0) - 35} x2={mx(plan.totalWidth)} y2={my(0) - 25} stroke="#64748b" strokeWidth={1} />
+        <text x={mx(plan.totalWidth / 2)} y={my(0) - 36} textAnchor="middle" fontSize={11} fill="#94a3b8" fontFamily="monospace">
+          {plan.totalWidth.toFixed(2)} m
+        </text>
+      </g>
+      {/* Left height */}
+      <g>
+        <line x1={mx(0) - 30} y1={my(0)} x2={mx(0) - 30} y2={my(plan.totalHeight)} stroke="#64748b" strokeWidth={1} />
+        <line x1={mx(0) - 35} y1={my(0)} x2={mx(0) - 25} y2={my(0)} stroke="#64748b" strokeWidth={1} />
+        <line x1={mx(0) - 35} y1={my(plan.totalHeight)} x2={mx(0) - 25} y2={my(plan.totalHeight)} stroke="#64748b" strokeWidth={1} />
+        <text
+          x={mx(0) - 40}
+          y={my(plan.totalHeight / 2)}
+          textAnchor="middle"
+          fontSize={11}
+          fill="#94a3b8"
+          fontFamily="monospace"
+          transform={`rotate(-90, ${mx(0) - 40}, ${my(plan.totalHeight / 2)})`}
+        >
+          {plan.totalHeight.toFixed(2)} m
+        </text>
+      </g>
+
+      {/* ─── NORTH ARROW (compass) ─── */}
+      <g transform={`translate(${svgW - 50}, 50)`}>
+        <circle r={22} fill="#020617" fillOpacity={0.8} stroke={accent} strokeWidth={1.5} />
+        <path d="M 0 -14 L 5 6 L 0 2 L -5 6 Z" fill={accent} />
+        <text x={0} y={-18} textAnchor="middle" fontSize={10} fontWeight={700} fill={accent}>N</text>
+      </g>
+
+      {/* ─── TITLE BLOCK ─── */}
+      <g transform={`translate(${PADDING - 10}, ${svgH - 50})`}>
+        <rect width={200} height={36} rx={6} fill="#020617" fillOpacity={0.85} stroke="#334155" strokeWidth={1} />
+        <text x={10} y={15} fontSize={9} fontWeight={700} fill="#64748b" fontFamily="monospace" letterSpacing={1.5}>PLANIROVKA</text>
+        <text x={10} y={29} fontSize={12} fontWeight={700} fill="#f1f5f9">
+          {aptNumber ? `№ ${aptNumber}` : 'Xonadon'} · {areaActual ? `${areaActual} m²` : `${plan.totalArea.toFixed(1)} m²`}
+        </text>
+      </g>
+    </svg>
   );
 }
 
-// ─── ATROF MUHIT: ER + TROTUAR ─────────────────────────────
-function Ground() {
-  return (
-    <group position={[0, -1.55, 0]}>
-      {/* Asosiy diskli platforma */}
-      <mesh receiveShadow>
-        <cylinderGeometry args={[5.5, 5.7, 0.15, 64]} />
-        <meshStandardMaterial color="#0a1322" roughness={0.95} metalness={0.05} />
-      </mesh>
-      {/* Yuqori plyonka — toshlar imitatsiyasi */}
-      <mesh position={[0, 0.08, 0]} receiveShadow>
-        <cylinderGeometry args={[5.4, 5.4, 0.02, 64]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.1} />
-      </mesh>
-      {/* Yorug' halqa — er chetida */}
-      <mesh position={[0, 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[5.3, 5.4, 64]} />
-        <meshBasicMaterial color="#334155" transparent opacity={0.5} />
-      </mesh>
-      {/* Markaziy plitka — bino tagida */}
-      <mesh position={[0, 0.1, 0]} receiveShadow>
-        <boxGeometry args={[BUILDING_WIDTH + 1, 0.02, BUILDING_DEPTH + 1]} />
-        <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.2} />
-      </mesh>
-      {/* Trotuar liniyalari */}
-      {[-2, -1, 1, 2].map((x, i) => (
-        <mesh key={i} position={[x * 0.6, 0.11, 2.5]}>
-          <planeGeometry args={[0.05, 0.6]} />
-          <meshBasicMaterial color="#475569" />
-        </mesh>
-      ))}
-    </group>
-  );
+// ─── FURNITURE RENDERER ──────────────────────────────────────
+function renderFurniture(kind: RoomKind, cx: number, cy: number, sz: number): React.ReactNode {
+  const size = Math.min(sz, 60);
+  switch (kind) {
+    case 'living':
+      // Divan (sofa)
+      return (
+        <g opacity={0.55}>
+          <rect x={cx - size * 0.6} y={cy - size * 0.3} width={size * 1.2} height={size * 0.5} rx={4} fill="#f59e0b" />
+          <rect x={cx - size * 0.6} y={cy - size * 0.45} width={size * 1.2} height={size * 0.2} rx={3} fill="#fbbf24" />
+          {/* TV stand */}
+          <rect x={cx - size * 0.4} y={cy + size * 0.35} width={size * 0.8} height={size * 0.12} fill="#92400e" />
+        </g>
+      );
+    case 'bedroom':
+      // Krovat (bed)
+      return (
+        <g opacity={0.55}>
+          <rect x={cx - size * 0.45} y={cy - size * 0.6} width={size * 0.9} height={size * 1.0} rx={4} fill="#3b82f6" />
+          <rect x={cx - size * 0.4} y={cy - size * 0.55} width={size * 0.8} height={size * 0.25} rx={3} fill="#60a5fa" />
+          {/* Side table */}
+          <rect x={cx + size * 0.45} y={cy - size * 0.5} width={size * 0.18} height={size * 0.18} fill="#1d4ed8" />
+        </g>
+      );
+    case 'kitchen':
+      // L-shaped kitchen counter
+      return (
+        <g opacity={0.55}>
+          <rect x={cx - size * 0.55} y={cy - size * 0.55} width={size * 1.1} height={size * 0.25} fill="#10b981" />
+          <rect x={cx - size * 0.55} y={cy - size * 0.55} width={size * 0.25} height={size * 1.0} fill="#10b981" />
+          {/* Hob (gas stove) — 4 circles */}
+          <circle cx={cx + size * 0.1} cy={cy - size * 0.42} r={size * 0.05} fill="#064e3b" />
+          <circle cx={cx + size * 0.3} cy={cy - size * 0.42} r={size * 0.05} fill="#064e3b" />
+          {/* Sink */}
+          <rect x={cx - size * 0.5} y={cy - size * 0.15} width={size * 0.18} height={size * 0.18} fill="#064e3b" rx={2} />
+        </g>
+      );
+    case 'bathroom':
+      // Bath + sink
+      return (
+        <g opacity={0.55}>
+          <rect x={cx - size * 0.45} y={cy - size * 0.4} width={size * 0.9} height={size * 0.45} rx={6} fill="#06b6d4" />
+          <ellipse cx={cx} cy={cy - size * 0.18} rx={size * 0.35} ry={size * 0.15} fill="#155e75" />
+          {/* Sink */}
+          <ellipse cx={cx} cy={cy + size * 0.3} rx={size * 0.2} ry={size * 0.1} fill="#06b6d4" />
+        </g>
+      );
+    case 'wc':
+      // Toilet
+      return (
+        <g opacity={0.55}>
+          <ellipse cx={cx} cy={cy} rx={size * 0.25} ry={size * 0.35} fill="#0ea5e9" />
+          <rect x={cx - size * 0.18} y={cy - size * 0.5} width={size * 0.36} height={size * 0.2} rx={2} fill="#075985" />
+        </g>
+      );
+    case 'corridor':
+      // No furniture
+      return null;
+    case 'balcony':
+      // Stool + plant
+      return (
+        <g opacity={0.55}>
+          <circle cx={cx - size * 0.3} cy={cy} r={size * 0.15} fill="#a855f7" />
+          {/* Plant */}
+          <circle cx={cx + size * 0.3} cy={cy} r={size * 0.18} fill="#22c55e" />
+          <rect x={cx + size * 0.25} y={cy + size * 0.1} width={size * 0.1} height={size * 0.15} fill="#854d0e" />
+        </g>
+      );
+    default:
+      return null;
+  }
 }
 
-// ─── KO'CHA CHIROQLARI ─────────────────────────────────────
-function StreetLamps() {
-  // 4 ta chiroq — binoga simmetrik
-  const lamps = [
-    { pos: [3.5, 0, 2.5] as [number, number, number] },
-    { pos: [-3.5, 0, 2.5] as [number, number, number] },
-    { pos: [3.5, 0, -2.5] as [number, number, number] },
-    { pos: [-3.5, 0, -2.5] as [number, number, number] },
-  ];
-  return (
-    <>
-      {lamps.map((lamp, i) => (
-        <group key={i} position={[lamp.pos[0], -1.5, lamp.pos[2]]}>
-          {/* Asos */}
-          <mesh>
-            <cylinderGeometry args={[0.1, 0.15, 0.15]} />
-            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.5} />
-          </mesh>
-          {/* Pilon */}
-          <mesh position={[0, 0.85, 0]}>
-            <cylinderGeometry args={[0.04, 0.05, 1.7]} />
-            <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.4} />
-          </mesh>
-          {/* Eg'rilik — yuqori qism */}
-          <mesh position={[0, 1.75, 0]} rotation={[0, 0, Math.PI / 6]}>
-            <cylinderGeometry args={[0.035, 0.045, 0.3]} />
-            <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.4} />
-          </mesh>
-          {/* Chiroq sharcha */}
-          <mesh position={[0.1, 1.85, 0]}>
-            <sphereGeometry args={[0.1, 16, 16]} />
-            <meshBasicMaterial color="#fef3c7" />
-          </mesh>
-          {/* Chiroq glow */}
-          <mesh position={[0.1, 1.85, 0]}>
-            <sphereGeometry args={[0.2, 16, 16]} />
-            <meshBasicMaterial color="#fef3c7" transparent opacity={0.3} />
-          </mesh>
-          {/* Real point light — soyalar uchun */}
-          <pointLight position={[0.1, 1.85, 0]} intensity={1.2} color="#fbbf24" distance={4} decay={1.5} />
-        </group>
-      ))}
-    </>
-  );
-}
+// ═══════════════════════════════════════════════════════════════
+//                    MAIN DIALOG COMPONENT
+// ═══════════════════════════════════════════════════════════════
 
-// ─── DARAXTLAR (atrof) ──────────────────────────────────────
-function Trees() {
-  // 6 ta daraxt — atrofda
-  const trees = [
-    { pos: [4.2, -1.5, 1.2] as [number, number, number], scale: 1.0 },
-    { pos: [-4.2, -1.5, 1.2] as [number, number, number], scale: 1.1 },
-    { pos: [4.2, -1.5, -1.2] as [number, number, number], scale: 0.9 },
-    { pos: [-4.2, -1.5, -1.2] as [number, number, number], scale: 1.05 },
-    { pos: [2.8, -1.5, 3.8] as [number, number, number], scale: 0.85 },
-    { pos: [-2.8, -1.5, 3.8] as [number, number, number], scale: 0.95 },
-  ];
-  return (
-    <>
-      {trees.map((t, i) => (
-        <group key={i} position={t.pos} scale={t.scale}>
-          {/* Tana (trunk) */}
-          <mesh castShadow>
-            <cylinderGeometry args={[0.06, 0.08, 0.5]} />
-            <meshStandardMaterial color="#3f2a1d" roughness={0.95} />
-          </mesh>
-          {/* Yuqori barglar (konus) */}
-          <mesh position={[0, 0.7, 0]} castShadow>
-            <coneGeometry args={[0.4, 0.8, 8]} />
-            <meshStandardMaterial color="#15803d" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 0.95, 0]} castShadow>
-            <coneGeometry args={[0.3, 0.6, 8]} />
-            <meshStandardMaterial color="#16a34a" roughness={0.9} />
-          </mesh>
-          <mesh position={[0, 1.15, 0]} castShadow>
-            <coneGeometry args={[0.2, 0.4, 8]} />
-            <meshStandardMaterial color="#22c55e" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-    </>
-  );
-}
-
-// ─── YULDUZLAR (sky) ────────────────────────────────────────
-function Starfield() {
-  const positions = useMemo(() => {
-    const arr = new Float32Array(400 * 3);
-    for (let i = 0; i < 400; i++) {
-      // Hemisphere ustida tarqalgan
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random()) - 0.1; // ustki yarmida
-      const r = 18 + Math.random() * 4;
-      arr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      arr[i * 3 + 1] = r * Math.cos(phi) + 2;
-      arr[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
-    }
-    return arr;
-  }, []);
-
-  return (
-    <points>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.08} color="#e0e7ff" transparent opacity={0.85} sizeAttenuation />
-    </points>
-  );
-}
-
-// ─── AURORA — tepada chiroyli rangli plyonka ────────────────
-function Aurora() {
-  const ref = useRef<THREE.Mesh>(null);
-  useFrame((state) => {
-    if (ref.current) {
-      const t = state.clock.elapsedTime;
-      ref.current.rotation.z = Math.sin(t * 0.1) * 0.1;
-    }
-  });
-  return (
-    <group position={[0, 8, -8]}>
-      <mesh ref={ref}>
-        <planeGeometry args={[20, 4]} />
-        <meshBasicMaterial
-          color="#6366f1"
-          transparent
-          opacity={0.15}
-          side={THREE.DoubleSide}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-      <mesh position={[0, -1.5, 0]}>
-        <planeGeometry args={[16, 2.5]} />
-        <meshBasicMaterial
-          color="#a855f7"
-          transparent
-          opacity={0.12}
-          side={THREE.DoubleSide}
-          blending={THREE.AdditiveBlending}
-        />
-      </mesh>
-    </group>
-  );
-}
-
-// ─── OY (moon) ──────────────────────────────────────────────
-function Moon() {
-  return (
-    <group position={[-7, 7, -10]}>
-      <mesh>
-        <sphereGeometry args={[0.7, 32, 32]} />
-        <meshBasicMaterial color="#f1f5f9" />
-      </mesh>
-      {/* Glow */}
-      <mesh>
-        <sphereGeometry args={[1.1, 32, 32]} />
-        <meshBasicMaterial color="#e0e7ff" transparent opacity={0.25} />
-      </mesh>
-      <mesh>
-        <sphereGeometry args={[1.6, 32, 32]} />
-        <meshBasicMaterial color="#c7d2fe" transparent opacity={0.1} />
-      </mesh>
-    </group>
-  );
-}
-
-// ─── PUL ZARRACHALARI (uchayotgan tangalar) ────────────────
-function MoneyParticles({ enabled, accent }: { enabled: boolean; accent: string }) {
-  const ref = useRef<THREE.Points>(null);
-  const count = 60;
-
-  const { positions, velocities } = useMemo(() => {
-    const positions = new Float32Array(count * 3);
-    const velocities = new Float32Array(count * 3);
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const r = 3 + Math.random() * 3;
-      positions[i * 3] = Math.cos(angle) * r;
-      positions[i * 3 + 1] = Math.random() * 7 - 1.5;
-      positions[i * 3 + 2] = Math.sin(angle) * r;
-      velocities[i * 3 + 1] = 0.004 + Math.random() * 0.012;
-    }
-    return { positions, velocities };
-  }, []);
-
-  useFrame(() => {
-    if (!enabled || !ref.current) return;
-    const pos = ref.current.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < count; i++) {
-      const y = pos.getY(i) + velocities[i * 3 + 1];
-      pos.setY(i, y > 8 ? -1.5 : y);
-    }
-    pos.needsUpdate = true;
-  });
-
-  return (
-    <points ref={ref}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-      </bufferGeometry>
-      <pointsMaterial size={0.09} color={accent} transparent opacity={0.85} sizeAttenuation blending={THREE.AdditiveBlending} />
-    </points>
-  );
-}
-
-// ─── ASOSIY SCENE — premium kechki muhit ─────────────────
-function Scene({
-  progress, accent, totalFloors, targetFloor,
-}: {
-  progress: number;
-  accent: string;
-  totalFloors: number;
-  targetFloor: number | null;
-}) {
-  return (
-    <>
-      {/* ─── KECHKI LIGHTING ─── */}
-      {/* Hemispherelight — yumshoq ko'k osmondan, qora yerdan reflection */}
-      <hemisphereLight args={['#1e3a8a', '#020617', 0.55]} />
-
-      {/* Asosiy moonlight — yuqoridan sovuq oq nur */}
-      <directionalLight
-        position={[-8, 12, -6]}
-        intensity={1.2}
-        color="#dbeafe"
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
-
-      {/* Yumshoq ko'k fill light — orqadan */}
-      <directionalLight position={[5, 5, -8]} intensity={0.4} color="#818cf8" />
-
-      {/* Accent rang light — yon tarafdan, mood */}
-      <pointLight position={[-6, 3, 4]} intensity={1.5} color="#818cf8" distance={15} />
-      <pointLight position={[6, 2, -4]} intensity={1.2} color="#f472b6" distance={15} />
-
-      {/* Pastdan yumshoq violet glow — bino fundament accent */}
-      <pointLight position={[0, -1, 0]} intensity={0.8} color="#7c3aed" distance={8} />
-
-      {/* ─── MUHIT ELEMENTLARI ─── */}
-      <Starfield />
-      <Moon />
-      <Aurora />
-      <Ground />
-      <Trees />
-      <StreetLamps />
-
-      {/* ─── ASOSIY OBYEKT ─── */}
-      <Building progress={progress} accent={accent} totalFloors={totalFloors} targetFloor={targetFloor} />
-      <MoneyParticles enabled={progress > 0} accent={accent} />
-
-      {/* ─── KAMERA NAZORATI ─── */}
-      <OrbitControls
-        enablePan={false}
-        enableZoom={true}
-        minDistance={7}
-        maxDistance={18}
-        minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 2.05}
-        autoRotate={false}
-        dampingFactor={0.08}
-        enableDamping
-      />
-    </>
-  );
-}
-
-// ─── MAIN COMPONENT ───────────────────────────────────────
 export function Apartment3DDialog({
   open, onClose, contractNo,
 }: {
@@ -785,7 +600,7 @@ export function Apartment3DDialog({
 }) {
   const [animatedProgress, setAnimatedProgress] = useState(0);
 
-  // CRM'dan ma'lumot — narx, to'lovlar, mijoz, xonadon
+  // CRM'dan ma'lumot
   const dataQuery = useQuery({
     queryKey: ['oplata-kv-3d-view', contractNo],
     queryFn: () => api.get<{
@@ -805,7 +620,6 @@ export function Apartment3DDialog({
     enabled: open && !!contractNo,
   });
 
-  // Meta — client, object (alohida endpoint'dan, fallback uchun)
   const metaQuery = useQuery({
     queryKey: ['oplata-kv-by-contract', contractNo],
     queryFn: () => api.get<{
@@ -843,19 +657,11 @@ export function Apartment3DDialog({
     };
   }, [dataQuery.data, metaQuery.data, contractNo]);
 
-  // Bino qavatlar soni — agar mijoz qavati ma'lum bo'lsa, undan kamida 2 qavat ko'p qilamiz
-  // Aks holda standart 9 qavat
-  const totalFloors = useMemo(() => {
-    if (!apt?.floor) return 9;
-    return Math.max(9, apt.floor + 2);
-  }, [apt?.floor]);
-
   const targetProgress = useMemo(() => {
     if (!apt || apt.totalPrice <= 0) return 0;
     return Math.min(100, (apt.totalPaid / apt.totalPrice) * 100);
   }, [apt]);
 
-  // Smooth animation pastdan tepaga
   useEffect(() => {
     if (!open) {
       setAnimatedProgress(0);
@@ -863,11 +669,10 @@ export function Apartment3DDialog({
     }
     setAnimatedProgress(0);
     const startTime = performance.now();
-    const duration = 2200; // 2.2 sek
+    const duration = 1800;
     const tick = (now: number) => {
       const elapsed = now - startTime;
       const t = Math.min(1, elapsed / duration);
-      // ease-out cubic
       const eased = 1 - Math.pow(1 - t, 3);
       setAnimatedProgress(targetProgress * eased);
       if (t < 1) requestAnimationFrame(tick);
@@ -875,18 +680,23 @@ export function Apartment3DDialog({
     requestAnimationFrame(tick);
   }, [open, targetProgress]);
 
-  // Accent color progress'ga qarab — qizil (qarz) → sariq → yashil (to'la)
   const accent = useMemo(() => {
-    if (targetProgress >= 100) return '#10b981'; // emerald
-    if (targetProgress >= 70) return '#f59e0b';  // amber
-    if (targetProgress >= 40) return '#eab308';  // yellow
-    if (targetProgress > 0) return '#f97316';    // orange
-    return '#ef4444';                            // red
+    if (targetProgress >= 100) return '#10b981';
+    if (targetProgress >= 70) return '#f59e0b';
+    if (targetProgress >= 40) return '#eab308';
+    if (targetProgress > 0) return '#f97316';
+    return '#ef4444';
   }, [targetProgress]);
 
   const remaining = (apt?.totalPrice || 0) - (apt?.totalPaid || 0);
   const crmNotConnected = dataQuery.data && !dataQuery.data.crmConnected;
   const noContractInfo = dataQuery.data?.ok && dataQuery.data.crmConnected && !dataQuery.data.crm.contractInfo;
+
+  // Generate floor plan
+  const plan = useMemo(() => {
+    if (!apt) return null;
+    return generatePlan(apt.rooms, apt.area);
+  }, [apt]);
 
   return (
     <AnimatePresence>
@@ -904,7 +714,7 @@ export function Apartment3DDialog({
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.94, y: 20 }}
             transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-[1100px] h-[88vh] rounded-2xl overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 ring-1 ring-slate-800 shadow-2xl flex flex-col"
+            className="relative w-full max-w-[1200px] h-[90vh] rounded-2xl overflow-hidden bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 ring-1 ring-slate-800 shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
@@ -913,9 +723,9 @@ export function Apartment3DDialog({
                 <Building2 className="h-5 w-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">3D Ko'rinish</div>
+                <div className="text-[10px] uppercase tracking-widest text-slate-400 font-bold">Planirovka</div>
                 <div className="text-base font-bold text-white truncate">
-                  {apt?.object || 'Shartnoma 3D'}
+                  {apt?.object || 'Xonadon plani'}
                   {contractNo && (
                     <span className="ml-2 text-[12px] font-mono font-normal text-slate-400">#{contractNo}</span>
                   )}
@@ -930,10 +740,10 @@ export function Apartment3DDialog({
               </button>
             </div>
 
-            {/* Body: 3D scene + info panel */}
+            {/* Body: SVG plan + info panel */}
             <div className="flex-1 grid lg:grid-cols-[1fr_360px] min-h-0">
-              {/* 3D scene */}
-              <div className="relative bg-gradient-to-b from-slate-900 to-black">
+              {/* SVG floor plan */}
+              <div className="relative bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 overflow-auto">
                 {dataQuery.isLoading || metaQuery.isLoading ? (
                   <div className="absolute inset-0 grid place-items-center text-slate-400">
                     <div className="text-center">
@@ -947,7 +757,7 @@ export function Apartment3DDialog({
                       <AlertCircle className="h-12 w-12 text-amber-400 mx-auto mb-3" />
                       <div className="text-amber-200 font-semibold mb-1">CRM bog'lanmagan</div>
                       <div className="text-[13px] text-slate-400">
-                        3D ko'rinish uchun CRM'da shartnoma narxi va to'lov rejasi kerak.
+                        Planirovka uchun CRM'da xonalar soni va m² kerak.
                       </div>
                     </div>
                   </div>
@@ -961,65 +771,14 @@ export function Apartment3DDialog({
                       </div>
                     </div>
                   </div>
+                ) : plan && apt ? (
+                  <div className="w-full h-full p-6 flex items-center justify-center">
+                    <FloorPlanSVG plan={plan} aptNumber={apt.aptNumber} areaActual={apt.area} accent={accent} />
+                  </div>
                 ) : (
-                  <>
-                    <Canvas
-                      shadows
-                      camera={{ position: [10, 5, 10], fov: 42 }}
-                      gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
-                      dpr={[1, 2]}
-                    >
-                      {/* Gradient sky background — kechki ko'k */}
-                      <color attach="background" args={['#0a0e1a']} />
-                      <fog attach="fog" args={['#0a0e1a', 14, 28]} />
-                      <Suspense fallback={null}>
-                        <Scene
-                          progress={animatedProgress}
-                          accent={accent}
-                          totalFloors={totalFloors}
-                          targetFloor={apt?.floor || null}
-                        />
-                      </Suspense>
-                    </Canvas>
-
-                    {/* HTML overlay — progress raqami (3D Text o'rniga, worker xato yo'q) */}
-                    <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
-                      <div
-                        className="text-4xl font-black tracking-tight tabular-nums drop-shadow-2xl"
-                        style={{
-                          color: accent,
-                          textShadow: `0 0 20px ${accent}80, 0 2px 6px rgba(0,0,0,0.6)`,
-                        }}
-                      >
-                        {Math.round(animatedProgress)}%
-                      </div>
-                    </div>
-
-                    {/* HTML overlay — target qavat label */}
-                    {apt?.floor != null && (
-                      <div
-                        className="absolute top-1/2 right-8 -translate-y-1/2 pointer-events-none flex items-center gap-2"
-                      >
-                        <div
-                          className="px-3 py-1.5 rounded-full backdrop-blur-md ring-1 font-bold text-[12px] flex items-center gap-1.5"
-                          style={{
-                            background: `${accent}22`,
-                            borderColor: `${accent}80`,
-                            color: accent,
-                          }}
-                        >
-                          <span className="text-[14px]">⬆</span>
-                          {apt.floor}-qavat
-                          {apt.aptNumber && <span className="text-white/70 font-normal">· №{apt.aptNumber}</span>}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Bottom hint */}
-                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-slate-900/70 backdrop-blur-sm text-[10px] text-slate-400 font-medium pointer-events-none">
-                      Sichqoncha bilan aylantirish · scroll bilan zoom
-                    </div>
-                  </>
+                  <div className="absolute inset-0 grid place-items-center text-slate-500 text-[13px]">
+                    Planirovka uchun ma'lumot yetarli emas
+                  </div>
                 )}
               </div>
 
@@ -1038,10 +797,9 @@ export function Apartment3DDialog({
                           {targetProgress.toFixed(1)}%
                         </div>
                         <div className="text-[11px] text-slate-500">
-                          {targetProgress >= 100 ? 'to\'la to\'langan' : targetProgress >= 50 ? 'yarmidan oshgan' : 'jarayonda'}
+                          {targetProgress >= 100 ? "to'la to'langan" : targetProgress >= 50 ? 'yarmidan oshgan' : 'jarayonda'}
                         </div>
                       </div>
-                      {/* Progress bar */}
                       <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
                         <motion.div
                           initial={{ width: 0 }}
@@ -1056,7 +814,7 @@ export function Apartment3DDialog({
                       </div>
                     </div>
 
-                    {/* Apartment specs — chip'lar to'plami (eng yuqorida, ko'zga tashlanadi) */}
+                    {/* Apartment specs */}
                     {(apt.aptNumber || apt.rooms != null || apt.area != null || apt.floor != null || apt.block || apt.building) && (
                       <div className="rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 ring-1 ring-indigo-500/20 p-3.5">
                         <div className="text-[9.5px] uppercase tracking-widest text-indigo-300 font-bold mb-2.5 flex items-center gap-1.5">
@@ -1064,35 +822,39 @@ export function Apartment3DDialog({
                           Xonadon ma'lumotlari
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {apt.aptNumber && (
-                            <Chip color="violet">№ {apt.aptNumber}</Chip>
-                          )}
-                          {apt.rooms != null && (
-                            <Chip color="indigo">{apt.rooms} xonalar</Chip>
-                          )}
-                          {apt.area != null && (
-                            <Chip color="cyan">{apt.area} m²</Chip>
-                          )}
-                          {apt.building && (
-                            <Chip color="emerald">{apt.building}</Chip>
-                          )}
-                          {apt.block && (
-                            <Chip color="amber">{apt.block}-blok</Chip>
-                          )}
-                          {apt.floor != null && (
-                            <Chip color="rose">⬆ {apt.floor}-qavat</Chip>
-                          )}
+                          {apt.aptNumber && <Chip color="violet">№ {apt.aptNumber}</Chip>}
+                          {apt.rooms != null && <Chip color="indigo">{apt.rooms} xonalar</Chip>}
+                          {apt.area != null && <Chip color="cyan">{apt.area} m²</Chip>}
+                          {apt.building && <Chip color="emerald">{apt.building}</Chip>}
+                          {apt.block && <Chip color="amber">{apt.block}-blok</Chip>}
+                          {apt.floor != null && <Chip color="rose">⬆ {apt.floor}-qavat</Chip>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Room legend */}
+                    {plan && (
+                      <div>
+                        <div className="text-[9.5px] uppercase tracking-widest text-slate-400 font-bold mb-2">Xonalar</div>
+                        <div className="space-y-1.5">
+                          {plan.rooms.map((r, i) => {
+                            const style = ROOM_STYLE[r.kind];
+                            return (
+                              <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: style.stroke }} />
+                                  <span className="text-slate-200 truncate">{r.label}</span>
+                                </div>
+                                <span className="text-slate-400 tabular-nums shrink-0">{r.area.toFixed(1)} m²</span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     )}
 
                     {/* Meta */}
-                    {apt.client && (
-                      <InfoRow icon={<User2 className="h-3.5 w-3.5" />} label="Mijoz" value={apt.client} />
-                    )}
-                    {apt.object && (
-                      <InfoRow icon={<Home className="h-3.5 w-3.5" />} label="Obyekt" value={apt.object} />
-                    )}
+                    {apt.client && <InfoRow icon={<User2 className="h-3.5 w-3.5" />} label="Mijoz" value={apt.client} />}
                     {apt.contractDate && (
                       <InfoRow icon={<Calendar className="h-3.5 w-3.5" />} label="Shartnoma sanasi" value={new Date(apt.contractDate).toLocaleDateString('ru-RU')} />
                     )}
@@ -1101,37 +863,7 @@ export function Apartment3DDialog({
                     <div className="pt-3 border-t border-slate-800 space-y-2.5">
                       <SumRow label="Jami narx" value={apt.totalPrice} color="text-slate-200" />
                       <SumRow label="To'langan" value={apt.totalPaid} color="text-emerald-400" prefix="+" />
-                      <SumRow
-                        label="Qoldiq"
-                        value={remaining}
-                        color={remaining > 0 ? 'text-rose-400' : 'text-emerald-400'}
-                        prefix={remaining > 0 ? '−' : ''}
-                      />
-                    </div>
-
-                    {/* Breakdown */}
-                    <div className="pt-3 border-t border-slate-800">
-                      <div className="text-[9.5px] uppercase tracking-widest text-slate-400 font-bold mb-2">Reja bo'yicha</div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="rounded-lg bg-slate-800/60 p-2.5">
-                          <div className="text-[9px] uppercase text-slate-500 mb-1">1 vznos</div>
-                          <div className="text-[12px] font-bold tabular-nums text-slate-200">
-                            {formatMoney(apt.initialPaid)}
-                          </div>
-                          <div className="text-[10px] text-slate-500 tabular-nums">
-                            / {formatMoney(apt.initialPlan)}
-                          </div>
-                        </div>
-                        <div className="rounded-lg bg-slate-800/60 p-2.5">
-                          <div className="text-[9px] uppercase text-slate-500 mb-1">Oylik</div>
-                          <div className="text-[12px] font-bold tabular-nums text-slate-200">
-                            {formatMoney(apt.monthlyPaid)}
-                          </div>
-                          <div className="text-[10px] text-slate-500 tabular-nums">
-                            / {formatMoney(apt.monthlyPlan)}
-                          </div>
-                        </div>
-                      </div>
+                      <SumRow label="Qoldiq" value={remaining} color={remaining > 0 ? 'text-rose-400' : 'text-emerald-400'} prefix={remaining > 0 ? '−' : ''} />
                     </div>
 
                     {/* Status badge */}
