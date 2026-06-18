@@ -69,7 +69,10 @@ const KEYWORDS_SALARY = [
 ];
 const KEYWORDS_BANK = ['CORPORATE', 'ТАРИФ', 'TARIF'];
 const KEYWORDS_LOAN = ['(ЗАЙМ)', '(ЗАЕМ)'];
-const KEYWORDS_SCHETCHIK = ['HISOBLAGICH', 'ХИСОБЛАГИЧ', 'СЧЕТЧИК'];
+// SCHETCHIK keywords — stem (o'zak) shaklida, qo'shimchalar (...ЛАР, ...И, ...ГА) bilan ham match.
+// 'ХИСЛОБЛАГ' — bank operatorlari typo'si (С dan keyin qo'shimcha Л qo'yiladi).
+// 'СЧЁТЧИК' shart emas — pastda desc Ё→Е normalize qilinadi va 'СЧЕТЧИК' bo'lib qoladi.
+const KEYWORDS_SCHETCHIK = ['HISOBLAG', 'ХИСОБЛАГ', 'ХИСЛОБЛАГ', 'СЧЕТЧИК'];
 const KEYWORD_PEREOFORM = 'ПЕРЕОФОРМЛЕНИЕ';
 
 // Молия Вазирлиги — E ustun (fromName) aniq matn bilan
@@ -1225,8 +1228,11 @@ export class CategorizationService {
     }
 
     const refs = await this.getRefs();
-    const desc = (tx.description || '').toUpperCase();
-    const fromName = (tx.fromName || '').toUpperCase().trim();
+    // Kirill Ё→Е normalize: .toUpperCase() o'zi Ё (U+0401) ni Е (U+0415) ga aylantirmaydi.
+    // Bank purposida 'СЧЁТЧИК', 'ЗАЁМ' va h.k. uchrasa — Е variantiga keltirib match qilamiz.
+    const normalizeYo = (s: string) => s.replace(/Ё/g, 'Е').replace(/ё/g, 'е');
+    const desc = normalizeYo((tx.description || '').toUpperCase());
+    const fromName = normalizeYo((tx.fromName || '').toUpperCase().trim());
     const direction = (tx.direction || 'IN') as Direction;
 
     let categoryId: string | null = null;
