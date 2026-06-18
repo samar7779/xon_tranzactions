@@ -41,22 +41,366 @@ type ApartmentData = {
   floor: number | null;
 };
 
-// ─── 3D BUILDING ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//                    PREMIUM RESIDENTIAL BUILDING
+// ═══════════════════════════════════════════════════════════════
+
+// Bino o'lchamlari (umumiy konstanta)
+const BUILDING_WIDTH = 2.6;
+const BUILDING_DEPTH = 1.9;
+const FLOOR_HEIGHT = 0.62;
+const LOBBY_HEIGHT = 0.85;
+
+// ─── BIR QAVAT (qatlam) ─────────────────────────────────────
+function ResidentialFloor({
+  y, fill, isTarget, accent, floorNumber,
+}: {
+  y: number;
+  fill: number;            // 0..1 — qancha yoritilgan
+  isTarget: boolean;       // mijoz qavatimi
+  accent: string;
+  floorNumber: number;     // qavat raqami (1-based)
+}) {
+  // Qavat rangi va emission — fill ga qarab
+  const litColor = isTarget ? accent : '#fef3c7';     // warm yellow window
+  const dimColor = '#0a1322';                          // dark off window
+  const emissiveIntensity = isTarget ? 1.3 : fill * 0.85;
+
+  // Front + back window grid — har tomonda 5 ta katta deraza
+  const WINDOWS = 5;
+  const winW = 0.38;
+  const winH = 0.42;
+  const gap = (BUILDING_WIDTH - WINDOWS * winW) / (WINDOWS + 1);
+
+  // Yon tomonlarda 3 ta deraza
+  const SIDE_WINDOWS = 3;
+  const sideWinW = 0.32;
+  const sideGap = (BUILDING_DEPTH - SIDE_WINDOWS * sideWinW) / (SIDE_WINDOWS + 1);
+
+  return (
+    <group position={[0, y, 0]}>
+      {/* ─── ASOSIY DEVOR (concrete) — yon ramkalar ─── */}
+      {/* Chap concrete pilastri */}
+      <mesh castShadow>
+        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
+      </mesh>
+      <mesh position={[-BUILDING_WIDTH / 2 + 0.09, 0, 0]} castShadow>
+        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
+      </mesh>
+      <mesh position={[BUILDING_WIDTH / 2 - 0.09, 0, 0]} castShadow>
+        <boxGeometry args={[0.18, FLOOR_HEIGHT, BUILDING_DEPTH]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.1} />
+      </mesh>
+
+      {/* ─── SHISHA FASAD (front + back) ─── */}
+      {[
+        { z: BUILDING_DEPTH / 2 + 0.002, rot: 0 },
+        { z: -BUILDING_DEPTH / 2 - 0.002, rot: Math.PI },
+      ].map(({ z, rot }, side) => (
+        <group key={side} position={[0, 0, z]} rotation={[0, rot, 0]}>
+          {/* Asosiy shisha panel (qora oyna) */}
+          <mesh>
+            <planeGeometry args={[BUILDING_WIDTH - 0.36, FLOOR_HEIGHT]} />
+            <meshPhysicalMaterial
+              color="#0a1322"
+              metalness={0.4}
+              roughness={0.1}
+              clearcoat={1}
+              clearcoatRoughness={0}
+              emissive={isTarget ? accent : '#000'}
+              emissiveIntensity={isTarget ? 0.08 : 0}
+            />
+          </mesh>
+
+          {/* Derazalar — 5 ta */}
+          {Array.from({ length: WINDOWS }).map((_, wx) => {
+            const isLit = isTarget || fill > (wx + 0.5) / WINDOWS;
+            const partial = !isTarget && fill > wx / WINDOWS && fill < (wx + 1) / WINDOWS;
+            return (
+              <mesh
+                key={wx}
+                position={[-BUILDING_WIDTH / 2 + 0.18 + gap + winW / 2 + wx * (winW + gap), 0, 0.001]}
+              >
+                <planeGeometry args={[winW, winH]} />
+                <meshBasicMaterial
+                  color={isLit ? litColor : dimColor}
+                  transparent
+                  opacity={isLit ? 0.96 : 0.55}
+                />
+              </mesh>
+            );
+          })}
+
+          {/* Deraza ramkalari (vertical/horizontal mullions) — har deraza orasi */}
+          {Array.from({ length: WINDOWS - 1 }).map((_, mx) => (
+            <mesh
+              key={`m-${mx}`}
+              position={[-BUILDING_WIDTH / 2 + 0.18 + gap + winW + mx * (winW + gap) + gap / 2, 0, 0.002]}
+            >
+              <planeGeometry args={[0.025, winH + 0.05]} />
+              <meshBasicMaterial color="#475569" />
+            </mesh>
+          ))}
+        </group>
+      ))}
+
+      {/* ─── YON TOMONLAR (chap/o'ng) — 3 ta kichik deraza ─── */}
+      {[
+        { x: BUILDING_WIDTH / 2 + 0.002, rot: Math.PI / 2 },
+        { x: -BUILDING_WIDTH / 2 - 0.002, rot: -Math.PI / 2 },
+      ].map(({ x, rot }, side) => (
+        <group key={`s-${side}`} position={[x, 0, 0]} rotation={[0, rot, 0]}>
+          <mesh>
+            <planeGeometry args={[BUILDING_DEPTH - 0.2, FLOOR_HEIGHT]} />
+            <meshPhysicalMaterial
+              color="#0a1322"
+              metalness={0.4}
+              roughness={0.1}
+              emissive={isTarget ? accent : '#000'}
+              emissiveIntensity={isTarget ? 0.05 : 0}
+            />
+          </mesh>
+          {Array.from({ length: SIDE_WINDOWS }).map((_, wx) => {
+            const isLit = isTarget || fill > (wx + 0.5) / SIDE_WINDOWS;
+            return (
+              <mesh
+                key={wx}
+                position={[-BUILDING_DEPTH / 2 + 0.1 + sideGap + sideWinW / 2 + wx * (sideWinW + sideGap), 0, 0.001]}
+              >
+                <planeGeometry args={[sideWinW, winH]} />
+                <meshBasicMaterial
+                  color={isLit ? litColor : dimColor}
+                  transparent
+                  opacity={isLit ? 0.96 : 0.55}
+                />
+              </mesh>
+            );
+          })}
+        </group>
+      ))}
+
+      {/* ─── BALKON (front, har 2 qavatda bitta) ─── */}
+      {floorNumber % 2 === 0 && (
+        <group position={[0, -FLOOR_HEIGHT / 2 + 0.04, BUILDING_DEPTH / 2 + 0.18]}>
+          {/* Balkon platformasi */}
+          <mesh castShadow>
+            <boxGeometry args={[BUILDING_WIDTH - 0.4, 0.06, 0.4]} />
+            <meshStandardMaterial color="#334155" roughness={0.7} metalness={0.3} />
+          </mesh>
+          {/* Panjara (railing) — 3 ta vertikal panel */}
+          {[-0.7, 0, 0.7].map((dx, i) => (
+            <mesh key={i} position={[dx, 0.18, 0.18]}>
+              <boxGeometry args={[0.04, 0.32, 0.04]} />
+              <meshStandardMaterial color="#64748b" metalness={0.8} roughness={0.3} />
+            </mesh>
+          ))}
+          {/* Yuqori reyling */}
+          <mesh position={[0, 0.35, 0.18]}>
+            <boxGeometry args={[BUILDING_WIDTH - 0.45, 0.04, 0.04]} />
+            <meshStandardMaterial color="#64748b" metalness={0.9} roughness={0.2} />
+          </mesh>
+        </group>
+      )}
+
+      {/* ─── QAVAT ORASIDAGI PLITA (slab) ─── */}
+      <mesh position={[0, FLOOR_HEIGHT / 2 + 0.01, 0]}>
+        <boxGeometry args={[BUILDING_WIDTH + 0.05, 0.05, BUILDING_DEPTH + 0.05]} />
+        <meshStandardMaterial color="#475569" metalness={0.4} roughness={0.5} />
+      </mesh>
+
+      {/* ─── TARGET QAVAT MARKER — halqalar va spotlight ─── */}
+      {isTarget && (
+        <>
+          {/* Asosiy aylanma halqa — bino atrofida */}
+          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[1.95, 0.04, 12, 64]} />
+            <meshBasicMaterial color={accent} />
+          </mesh>
+          {/* Tashqi pulsatsiya halqa */}
+          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[2.25, 0.025, 8, 64]} />
+            <meshBasicMaterial color={accent} transparent opacity={0.5} />
+          </mesh>
+          {/* Eng tashqi yorug' halqa */}
+          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[2.55, 0.015, 6, 64]} />
+            <meshBasicMaterial color={accent} transparent opacity={0.25} />
+          </mesh>
+          {/* Yon tarafda yorqin sphere */}
+          <Float speed={1.5} rotationIntensity={0} floatIntensity={0.15}>
+            <mesh position={[2.5, 0, 0]}>
+              <sphereGeometry args={[0.11, 16, 16]} />
+              <meshBasicMaterial color={accent} />
+            </mesh>
+            <mesh position={[2.5, 0, 0]}>
+              <sphereGeometry args={[0.22, 16, 16]} />
+              <meshBasicMaterial color={accent} transparent opacity={0.35} />
+            </mesh>
+          </Float>
+        </>
+      )}
+    </group>
+  );
+}
+
+// ─── PASTKI QAVAT (LOBBY) — kirish, eshik, sign ────────────
+function GroundLobby({ accent }: { accent: string }) {
+  return (
+    <group position={[0, LOBBY_HEIGHT / 2 - 0.05, 0]}>
+      {/* Pastki concrete asos */}
+      <mesh castShadow>
+        <boxGeometry args={[BUILDING_WIDTH + 0.15, LOBBY_HEIGHT, BUILDING_DEPTH + 0.15]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.85} metalness={0.15} />
+      </mesh>
+
+      {/* Front facade — kirish */}
+      <group position={[0, 0, (BUILDING_DEPTH + 0.15) / 2 + 0.005]}>
+        {/* Asosiy oyna devor */}
+        <mesh>
+          <planeGeometry args={[BUILDING_WIDTH, LOBBY_HEIGHT - 0.1]} />
+          <meshPhysicalMaterial
+            color="#0a1322"
+            metalness={0.5}
+            roughness={0.1}
+            emissive="#fef3c7"
+            emissiveIntensity={0.15}
+          />
+        </mesh>
+
+        {/* Kirish eshigi (yorug' to'rtburchak) — lobby interyer chiroyi */}
+        <mesh position={[0, -0.1, 0.001]}>
+          <planeGeometry args={[0.6, 0.55]} />
+          <meshBasicMaterial color="#fef3c7" />
+        </mesh>
+
+        {/* Eshik ramkasi */}
+        <mesh position={[0, -0.1, 0.003]}>
+          <planeGeometry args={[0.04, 0.6]} />
+          <meshBasicMaterial color={accent} />
+        </mesh>
+
+        {/* Yorqin chiziq — kirish ustida (LED strip) */}
+        <mesh position={[0, 0.28, 0.002]}>
+          <planeGeometry args={[BUILDING_WIDTH - 0.3, 0.025]} />
+          <meshBasicMaterial color={accent} />
+        </mesh>
+      </group>
+
+      {/* Kirish ustidagi kichik kozyorek */}
+      <mesh position={[0, LOBBY_HEIGHT / 2 - 0.05, (BUILDING_DEPTH + 0.15) / 2 + 0.18]} castShadow>
+        <boxGeometry args={[BUILDING_WIDTH - 0.2, 0.06, 0.4]} />
+        <meshStandardMaterial color="#334155" metalness={0.5} roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+// ─── TOM (ROOF) — parapet + AC unitlar + antenna ───────────
+function Roof({ accent, totalFloors }: { accent: string; totalFloors: number }) {
+  const roofY = LOBBY_HEIGHT + totalFloors * FLOOR_HEIGHT;
+  return (
+    <group position={[0, roofY, 0]}>
+      {/* Parapet devori (atrofida) */}
+      <mesh position={[0, 0.15, BUILDING_DEPTH / 2 - 0.02]} castShadow>
+        <boxGeometry args={[BUILDING_WIDTH, 0.3, 0.05]} />
+        <meshStandardMaterial color="#334155" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 0.15, -BUILDING_DEPTH / 2 + 0.02]} castShadow>
+        <boxGeometry args={[BUILDING_WIDTH, 0.3, 0.05]} />
+        <meshStandardMaterial color="#334155" roughness={0.8} />
+      </mesh>
+      <mesh position={[BUILDING_WIDTH / 2 - 0.02, 0.15, 0]} castShadow>
+        <boxGeometry args={[0.05, 0.3, BUILDING_DEPTH]} />
+        <meshStandardMaterial color="#334155" roughness={0.8} />
+      </mesh>
+      <mesh position={[-BUILDING_WIDTH / 2 + 0.02, 0.15, 0]} castShadow>
+        <boxGeometry args={[0.05, 0.3, BUILDING_DEPTH]} />
+        <meshStandardMaterial color="#334155" roughness={0.8} />
+      </mesh>
+
+      {/* Tom yuzasi */}
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[BUILDING_WIDTH - 0.05, 0.04, BUILDING_DEPTH - 0.05]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.9} />
+      </mesh>
+
+      {/* AC unitlar (2 ta) */}
+      <mesh position={[-0.7, 0.18, 0.4]} castShadow>
+        <boxGeometry args={[0.45, 0.32, 0.35]} />
+        <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.4} />
+      </mesh>
+      <mesh position={[0.6, 0.16, -0.3]} castShadow>
+        <boxGeometry args={[0.38, 0.28, 0.3]} />
+        <meshStandardMaterial color="#475569" metalness={0.7} roughness={0.4} />
+      </mesh>
+
+      {/* Antenna asosi */}
+      <mesh position={[0.9, 0.12, 0.5]}>
+        <boxGeometry args={[0.12, 0.2, 0.12]} />
+        <meshStandardMaterial color="#334155" metalness={0.6} roughness={0.5} />
+      </mesh>
+      {/* Antenna pilon */}
+      <mesh position={[0.9, 0.65, 0.5]}>
+        <cylinderGeometry args={[0.015, 0.015, 0.9]} />
+        <meshStandardMaterial color="#94a3b8" metalness={1} roughness={0.3} />
+      </mesh>
+      {/* Antenna pichoq */}
+      <mesh position={[0.9, 1.0, 0.5]}>
+        <boxGeometry args={[0.25, 0.02, 0.02]} />
+        <meshStandardMaterial color="#94a3b8" metalness={1} />
+      </mesh>
+      {/* Pulsatsiya qiluvchi qizil chiroq */}
+      <mesh position={[0.9, 1.15, 0.5]}>
+        <sphereGeometry args={[0.05]} />
+        <meshBasicMaterial color="#ef4444" />
+      </mesh>
+      <mesh position={[0.9, 1.15, 0.5]}>
+        <sphereGeometry args={[0.1]} />
+        <meshBasicMaterial color="#ef4444" transparent opacity={0.3} />
+      </mesh>
+
+      {/* Yon panjarali to'siq (yon balkonlar) */}
+      <mesh position={[-0.5, 0.32, 0.6]}>
+        <boxGeometry args={[0.4, 0.02, 0.02]} />
+        <meshStandardMaterial color="#64748b" metalness={0.8} />
+      </mesh>
+
+      {/* Tomda yorqin top sphere — progress ko'rsatkichi */}
+      <Float speed={2} rotationIntensity={0} floatIntensity={0.45}>
+        <mesh position={[0, 1.6, 0]}>
+          <sphereGeometry args={[0.15, 24, 24]} />
+          <meshBasicMaterial color={accent} />
+        </mesh>
+        <mesh position={[0, 1.6, 0]}>
+          <sphereGeometry args={[0.28, 24, 24]} />
+          <meshBasicMaterial color={accent} transparent opacity={0.3} />
+        </mesh>
+        <mesh position={[0, 1.6, 0]}>
+          <sphereGeometry args={[0.45, 24, 24]} />
+          <meshBasicMaterial color={accent} transparent opacity={0.12} />
+        </mesh>
+      </Float>
+    </group>
+  );
+}
+
+// ─── ASOSIY BINO ─────────────────────────────────────────
 function Building({
   progress, accent, totalFloors, targetFloor,
 }: {
   progress: number;
   accent: string;
-  totalFloors: number;       // Binodagi qavatlar soni (default 9)
-  targetFloor: number | null; // Mijozning qavati (highlighted)
+  totalFloors: number;
+  targetFloor: number | null;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const FLOORS = Math.max(3, Math.min(20, totalFloors));
 
   useFrame(() => {
     if (groupRef.current) {
-      // Sekin avtomatik aylanish
-      groupRef.current.rotation.y += 0.002;
+      groupRef.current.rotation.y += 0.0015;
     }
   });
 
@@ -73,156 +417,277 @@ function Building({
     return arr;
   }, [progress, FLOORS]);
 
-  // Target floor index (0-based) — pastdan boshlanadi
   const targetIdx = targetFloor ? targetFloor - 1 : -1;
 
   return (
-    <group ref={groupRef} position={[0, -1.4, 0]}>
-      {/* Asos (er) — kattalashtirilgan platforma */}
-      <mesh position={[0, -0.35, 0]} receiveShadow>
-        <cylinderGeometry args={[3.2, 3.4, 0.25, 32]} />
-        <meshStandardMaterial color="#0f172a" roughness={0.85} metalness={0.2} />
-      </mesh>
-      <mesh position={[0, -0.21, 0]}>
-        <cylinderGeometry args={[3.1, 3.1, 0.05, 32]} />
-        <meshStandardMaterial color="#1e293b" roughness={0.6} />
-      </mesh>
+    <group ref={groupRef} position={[0, -1.5, 0]}>
+      {/* Lobby (kirish) */}
+      <GroundLobby accent={accent} />
 
-      {/* Bino qavatlari */}
+      {/* Qavatlar — lobby ustida */}
       {Array.from({ length: FLOORS }).map((_, i) => {
-        const y = i * 0.55;
-        const fill = floorFills[i];
-        const isTarget = i === targetIdx;
+        const y = LOBBY_HEIGHT + 0.05 + i * FLOOR_HEIGHT + FLOOR_HEIGHT / 2;
         return (
-          <group key={i} position={[0, y, 0]}>
-            {/* Qavat tashqi shisha */}
-            <mesh castShadow>
-              <boxGeometry args={[2.4, 0.55, 2.4]} />
-              <meshPhysicalMaterial
-                color={isTarget ? accent : fill > 0 ? accent : '#334155'}
-                emissive={isTarget ? accent : fill > 0 ? accent : '#0f172a'}
-                emissiveIntensity={isTarget ? Math.max(0.9, fill * 1.2) : fill * 0.7}
-                metalness={0.3}
-                roughness={0.15}
-                transmission={isTarget ? 0.05 : 0.15}
-                thickness={0.3}
-                clearcoat={1}
-                clearcoatRoughness={0}
-              />
-            </mesh>
-
-            {/* Qavat orasidagi metall ramka */}
-            <mesh position={[0, 0.275, 0]}>
-              <boxGeometry args={[2.5, 0.04, 2.5]} />
-              <meshStandardMaterial color="#475569" metalness={0.8} roughness={0.3} />
-            </mesh>
-
-            {/* Window grid — har tomonda 4 ta deraza */}
-            {[
-              [0, 1.21, 0],     // front
-              [0, -1.21, Math.PI], // back
-            ].map(([offset, z, rot], side) => (
-              <group key={side} position={[0, 0, z as number]} rotation={[0, rot as number, 0]}>
-                {[0, 1, 2, 3].map((wx) => (
-                  <mesh key={wx} position={[-0.75 + wx * 0.5, 0, 0]}>
-                    <planeGeometry args={[0.32, 0.32]} />
-                    <meshBasicMaterial
-                      color={isTarget ? '#fef9c3' : fill > wx / 4 ? '#fef9c3' : '#0f172a'}
-                      transparent
-                      opacity={isTarget ? 1 : fill > wx / 4 ? 0.95 : 0.4}
-                    />
-                  </mesh>
-                ))}
-              </group>
-            ))}
-
-            {/* Target qavat uchun ko'rsatkich strelka */}
-            {isTarget && (
-              <>
-                {/* Aylanma halqa */}
-                <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <torusGeometry args={[1.85, 0.04, 8, 48]} />
-                  <meshBasicMaterial color={accent} />
-                </mesh>
-                {/* Pulsatsiya qiluvchi halqa */}
-                <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                  <torusGeometry args={[2.1, 0.02, 8, 48]} />
-                  <meshBasicMaterial color={accent} transparent opacity={0.4} />
-                </mesh>
-                {/* Yon tarafda yorqin sphere — qavat ko'rsatkichi (Text o'rniga) */}
-                <Float speed={1.5} rotationIntensity={0} floatIntensity={0.15}>
-                  <mesh position={[2.3, 0, 0]}>
-                    <sphereGeometry args={[0.13, 16, 16]} />
-                    <meshBasicMaterial color={accent} />
-                  </mesh>
-                  {/* Sphere atrofida glow */}
-                  <mesh position={[2.3, 0, 0]}>
-                    <sphereGeometry args={[0.2, 16, 16]} />
-                    <meshBasicMaterial color={accent} transparent opacity={0.3} />
-                  </mesh>
-                </Float>
-              </>
-            )}
-          </group>
+          <ResidentialFloor
+            key={i}
+            y={y}
+            fill={floorFills[i]}
+            isTarget={i === targetIdx}
+            accent={accent}
+            floorNumber={i + 1}
+          />
         );
       })}
 
-      {/* Tom (roof) — taper bilan */}
-      <mesh position={[0, FLOORS * 0.55, 0]}>
-        <boxGeometry args={[2.5, 0.15, 2.5]} />
-        <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.4} />
-      </mesh>
-      <mesh position={[0, FLOORS * 0.55 + 0.15, 0]}>
-        <boxGeometry args={[2.0, 0.08, 2.0]} />
-        <meshStandardMaterial color="#0f172a" metalness={0.8} roughness={0.3} />
-      </mesh>
+      {/* Tom */}
+      <Roof accent={accent} totalFloors={FLOORS} />
 
-      {/* Antenna */}
-      <mesh position={[0.8, FLOORS * 0.55 + 0.55, 0.8]}>
-        <cylinderGeometry args={[0.02, 0.02, 0.7]} />
-        <meshStandardMaterial color="#94a3b8" metalness={1} />
-      </mesh>
-      <mesh position={[0.8, FLOORS * 0.55 + 0.95, 0.8]}>
-        <sphereGeometry args={[0.04]} />
-        <meshBasicMaterial color="#ef4444" />
-      </mesh>
+      {/* Pastdan tepa light beam — fill progress */}
+      <pointLight
+        position={[0, LOBBY_HEIGHT + (progress / 100) * FLOORS * FLOOR_HEIGHT, 0]}
+        intensity={2}
+        color={accent}
+        distance={6}
+      />
 
-      {/* Tepa yorqin sphere — progress ko'rsatkich (Text o'rniga, HTML overlay'da raqam ko'rsatamiz) */}
-      <Float speed={2} rotationIntensity={0} floatIntensity={0.4}>
-        <mesh position={[0, FLOORS * 0.55 + 1.2, 0]}>
-          <sphereGeometry args={[0.18, 24, 24]} />
-          <meshBasicMaterial color={accent} />
-        </mesh>
-        <mesh position={[0, FLOORS * 0.55 + 1.2, 0]}>
-          <sphereGeometry args={[0.32, 24, 24]} />
-          <meshBasicMaterial color={accent} transparent opacity={0.25} />
-        </mesh>
-      </Float>
-
-      {/* Light beam pastdan tepaga */}
-      <pointLight position={[0, progress / 100 * FLOORS * 0.55, 0]} intensity={2} color={accent} distance={6} />
-
-      {/* Target qavat uchun spot light */}
+      {/* Target qavat uchun maxsus spot light */}
       {targetIdx >= 0 && (
-        <pointLight position={[2, targetIdx * 0.55, 0]} intensity={3} color={accent} distance={4} />
+        <>
+          <pointLight
+            position={[2.2, LOBBY_HEIGHT + targetIdx * FLOOR_HEIGHT + FLOOR_HEIGHT / 2, 0]}
+            intensity={3}
+            color={accent}
+            distance={4}
+          />
+          <pointLight
+            position={[-2.2, LOBBY_HEIGHT + targetIdx * FLOOR_HEIGHT + FLOOR_HEIGHT / 2, 0]}
+            intensity={3}
+            color={accent}
+            distance={4}
+          />
+        </>
       )}
     </group>
   );
 }
 
-// ─── PARTICLES — pul belgilari uchayotgan effekt ──────────
-function MoneyParticles({ enabled }: { enabled: boolean }) {
+// ─── ATROF MUHIT: ER + TROTUAR ─────────────────────────────
+function Ground() {
+  return (
+    <group position={[0, -1.55, 0]}>
+      {/* Asosiy diskli platforma */}
+      <mesh receiveShadow>
+        <cylinderGeometry args={[5.5, 5.7, 0.15, 64]} />
+        <meshStandardMaterial color="#0a1322" roughness={0.95} metalness={0.05} />
+      </mesh>
+      {/* Yuqori plyonka — toshlar imitatsiyasi */}
+      <mesh position={[0, 0.08, 0]} receiveShadow>
+        <cylinderGeometry args={[5.4, 5.4, 0.02, 64]} />
+        <meshStandardMaterial color="#1e293b" roughness={0.7} metalness={0.1} />
+      </mesh>
+      {/* Yorug' halqa — er chetida */}
+      <mesh position={[0, 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[5.3, 5.4, 64]} />
+        <meshBasicMaterial color="#334155" transparent opacity={0.5} />
+      </mesh>
+      {/* Markaziy plitka — bino tagida */}
+      <mesh position={[0, 0.1, 0]} receiveShadow>
+        <boxGeometry args={[BUILDING_WIDTH + 1, 0.02, BUILDING_DEPTH + 1]} />
+        <meshStandardMaterial color="#334155" roughness={0.6} metalness={0.2} />
+      </mesh>
+      {/* Trotuar liniyalari */}
+      {[-2, -1, 1, 2].map((x, i) => (
+        <mesh key={i} position={[x * 0.6, 0.11, 2.5]}>
+          <planeGeometry args={[0.05, 0.6]} />
+          <meshBasicMaterial color="#475569" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ─── KO'CHA CHIROQLARI ─────────────────────────────────────
+function StreetLamps() {
+  // 4 ta chiroq — binoga simmetrik
+  const lamps = [
+    { pos: [3.5, 0, 2.5] as [number, number, number] },
+    { pos: [-3.5, 0, 2.5] as [number, number, number] },
+    { pos: [3.5, 0, -2.5] as [number, number, number] },
+    { pos: [-3.5, 0, -2.5] as [number, number, number] },
+  ];
+  return (
+    <>
+      {lamps.map((lamp, i) => (
+        <group key={i} position={[lamp.pos[0], -1.5, lamp.pos[2]]}>
+          {/* Asos */}
+          <mesh>
+            <cylinderGeometry args={[0.1, 0.15, 0.15]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.6} roughness={0.5} />
+          </mesh>
+          {/* Pilon */}
+          <mesh position={[0, 0.85, 0]}>
+            <cylinderGeometry args={[0.04, 0.05, 1.7]} />
+            <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.4} />
+          </mesh>
+          {/* Eg'rilik — yuqori qism */}
+          <mesh position={[0, 1.75, 0]} rotation={[0, 0, Math.PI / 6]}>
+            <cylinderGeometry args={[0.035, 0.045, 0.3]} />
+            <meshStandardMaterial color="#334155" metalness={0.7} roughness={0.4} />
+          </mesh>
+          {/* Chiroq sharcha */}
+          <mesh position={[0.1, 1.85, 0]}>
+            <sphereGeometry args={[0.1, 16, 16]} />
+            <meshBasicMaterial color="#fef3c7" />
+          </mesh>
+          {/* Chiroq glow */}
+          <mesh position={[0.1, 1.85, 0]}>
+            <sphereGeometry args={[0.2, 16, 16]} />
+            <meshBasicMaterial color="#fef3c7" transparent opacity={0.3} />
+          </mesh>
+          {/* Real point light — soyalar uchun */}
+          <pointLight position={[0.1, 1.85, 0]} intensity={1.2} color="#fbbf24" distance={4} decay={1.5} />
+        </group>
+      ))}
+    </>
+  );
+}
+
+// ─── DARAXTLAR (atrof) ──────────────────────────────────────
+function Trees() {
+  // 6 ta daraxt — atrofda
+  const trees = [
+    { pos: [4.2, -1.5, 1.2] as [number, number, number], scale: 1.0 },
+    { pos: [-4.2, -1.5, 1.2] as [number, number, number], scale: 1.1 },
+    { pos: [4.2, -1.5, -1.2] as [number, number, number], scale: 0.9 },
+    { pos: [-4.2, -1.5, -1.2] as [number, number, number], scale: 1.05 },
+    { pos: [2.8, -1.5, 3.8] as [number, number, number], scale: 0.85 },
+    { pos: [-2.8, -1.5, 3.8] as [number, number, number], scale: 0.95 },
+  ];
+  return (
+    <>
+      {trees.map((t, i) => (
+        <group key={i} position={t.pos} scale={t.scale}>
+          {/* Tana (trunk) */}
+          <mesh castShadow>
+            <cylinderGeometry args={[0.06, 0.08, 0.5]} />
+            <meshStandardMaterial color="#3f2a1d" roughness={0.95} />
+          </mesh>
+          {/* Yuqori barglar (konus) */}
+          <mesh position={[0, 0.7, 0]} castShadow>
+            <coneGeometry args={[0.4, 0.8, 8]} />
+            <meshStandardMaterial color="#15803d" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.95, 0]} castShadow>
+            <coneGeometry args={[0.3, 0.6, 8]} />
+            <meshStandardMaterial color="#16a34a" roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 1.15, 0]} castShadow>
+            <coneGeometry args={[0.2, 0.4, 8]} />
+            <meshStandardMaterial color="#22c55e" roughness={0.9} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  );
+}
+
+// ─── YULDUZLAR (sky) ────────────────────────────────────────
+function Starfield() {
+  const positions = useMemo(() => {
+    const arr = new Float32Array(400 * 3);
+    for (let i = 0; i < 400; i++) {
+      // Hemisphere ustida tarqalgan
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(Math.random()) - 0.1; // ustki yarmida
+      const r = 18 + Math.random() * 4;
+      arr[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      arr[i * 3 + 1] = r * Math.cos(phi) + 2;
+      arr[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    return arr;
+  }, []);
+
+  return (
+    <points>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial size={0.08} color="#e0e7ff" transparent opacity={0.85} sizeAttenuation />
+    </points>
+  );
+}
+
+// ─── AURORA — tepada chiroyli rangli plyonka ────────────────
+function Aurora() {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((state) => {
+    if (ref.current) {
+      const t = state.clock.elapsedTime;
+      ref.current.rotation.z = Math.sin(t * 0.1) * 0.1;
+    }
+  });
+  return (
+    <group position={[0, 8, -8]}>
+      <mesh ref={ref}>
+        <planeGeometry args={[20, 4]} />
+        <meshBasicMaterial
+          color="#6366f1"
+          transparent
+          opacity={0.15}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+      <mesh position={[0, -1.5, 0]}>
+        <planeGeometry args={[16, 2.5]} />
+        <meshBasicMaterial
+          color="#a855f7"
+          transparent
+          opacity={0.12}
+          side={THREE.DoubleSide}
+          blending={THREE.AdditiveBlending}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+// ─── OY (moon) ──────────────────────────────────────────────
+function Moon() {
+  return (
+    <group position={[-7, 7, -10]}>
+      <mesh>
+        <sphereGeometry args={[0.7, 32, 32]} />
+        <meshBasicMaterial color="#f1f5f9" />
+      </mesh>
+      {/* Glow */}
+      <mesh>
+        <sphereGeometry args={[1.1, 32, 32]} />
+        <meshBasicMaterial color="#e0e7ff" transparent opacity={0.25} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[1.6, 32, 32]} />
+        <meshBasicMaterial color="#c7d2fe" transparent opacity={0.1} />
+      </mesh>
+    </group>
+  );
+}
+
+// ─── PUL ZARRACHALARI (uchayotgan tangalar) ────────────────
+function MoneyParticles({ enabled, accent }: { enabled: boolean; accent: string }) {
   const ref = useRef<THREE.Points>(null);
-  const count = 80;
+  const count = 60;
 
   const { positions, velocities } = useMemo(() => {
     const positions = new Float32Array(count * 3);
     const velocities = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 8;
-      positions[i * 3 + 1] = Math.random() * 6 - 1;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 8;
-      velocities[i * 3 + 1] = 0.005 + Math.random() * 0.015;
+      const angle = Math.random() * Math.PI * 2;
+      const r = 3 + Math.random() * 3;
+      positions[i * 3] = Math.cos(angle) * r;
+      positions[i * 3 + 1] = Math.random() * 7 - 1.5;
+      positions[i * 3 + 2] = Math.sin(angle) * r;
+      velocities[i * 3 + 1] = 0.004 + Math.random() * 0.012;
     }
     return { positions, velocities };
   }, []);
@@ -232,7 +697,7 @@ function MoneyParticles({ enabled }: { enabled: boolean }) {
     const pos = ref.current.geometry.attributes.position as THREE.BufferAttribute;
     for (let i = 0; i < count; i++) {
       const y = pos.getY(i) + velocities[i * 3 + 1];
-      pos.setY(i, y > 7 ? -1 : y);
+      pos.setY(i, y > 8 ? -1.5 : y);
     }
     pos.needsUpdate = true;
   });
@@ -242,12 +707,12 @@ function MoneyParticles({ enabled }: { enabled: boolean }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial size={0.06} color="#fbbf24" transparent opacity={0.7} sizeAttenuation />
+      <pointsMaterial size={0.09} color={accent} transparent opacity={0.85} sizeAttenuation blending={THREE.AdditiveBlending} />
     </points>
   );
 }
 
-// ─── ASOSIY SCENE ─────────────────────────────────────────
+// ─── ASOSIY SCENE — premium kechki muhit ─────────────────
 function Scene({
   progress, accent, totalFloors, targetFloor,
 }: {
@@ -258,27 +723,53 @@ function Scene({
 }) {
   return (
     <>
-      {/* Environment preset olib tashlandi — HDR worker 'window is not defined' beradi.
-          Manual lighting bilan ham yaxshi ko'rinadi. */}
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[5, 10, 5]} intensity={1.5} castShadow />
-      <directionalLight position={[-5, 6, -3]} intensity={0.6} color="#818cf8" />
-      <pointLight position={[-5, 4, -3]} intensity={2} color="#818cf8" />
-      <pointLight position={[5, 2, -3]} intensity={1.5} color="#f472b6" />
-      <pointLight position={[0, 8, 0]} intensity={1} color="#fff" />
+      {/* ─── KECHKI LIGHTING ─── */}
+      {/* Hemispherelight — yumshoq ko'k osmondan, qora yerdan reflection */}
+      <hemisphereLight args={['#1e3a8a', '#020617', 0.55]} />
 
+      {/* Asosiy moonlight — yuqoridan sovuq oq nur */}
+      <directionalLight
+        position={[-8, 12, -6]}
+        intensity={1.2}
+        color="#dbeafe"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+
+      {/* Yumshoq ko'k fill light — orqadan */}
+      <directionalLight position={[5, 5, -8]} intensity={0.4} color="#818cf8" />
+
+      {/* Accent rang light — yon tarafdan, mood */}
+      <pointLight position={[-6, 3, 4]} intensity={1.5} color="#818cf8" distance={15} />
+      <pointLight position={[6, 2, -4]} intensity={1.2} color="#f472b6" distance={15} />
+
+      {/* Pastdan yumshoq violet glow — bino fundament accent */}
+      <pointLight position={[0, -1, 0]} intensity={0.8} color="#7c3aed" distance={8} />
+
+      {/* ─── MUHIT ELEMENTLARI ─── */}
+      <Starfield />
+      <Moon />
+      <Aurora />
+      <Ground />
+      <Trees />
+      <StreetLamps />
+
+      {/* ─── ASOSIY OBYEKT ─── */}
       <Building progress={progress} accent={accent} totalFloors={totalFloors} targetFloor={targetFloor} />
-      <MoneyParticles enabled={progress > 0} />
+      <MoneyParticles enabled={progress > 0} accent={accent} />
 
-      {/* Kamera nazorati — foydalanuvchi qo'l bilan ham aylantirishi mumkin */}
+      {/* ─── KAMERA NAZORATI ─── */}
       <OrbitControls
         enablePan={false}
         enableZoom={true}
-        minDistance={6}
-        maxDistance={14}
+        minDistance={7}
+        maxDistance={18}
         minPolarAngle={Math.PI / 6}
-        maxPolarAngle={Math.PI / 1.8}
+        maxPolarAngle={Math.PI / 2.05}
         autoRotate={false}
+        dampingFactor={0.08}
+        enableDamping
       />
     </>
   );
@@ -474,12 +965,13 @@ export function Apartment3DDialog({
                   <>
                     <Canvas
                       shadows
-                      camera={{ position: [8, 4, 8], fov: 45 }}
+                      camera={{ position: [10, 5, 10], fov: 42 }}
                       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
                       dpr={[1, 2]}
                     >
-                      <color attach="background" args={['#020617']} />
-                      <fog attach="fog" args={['#020617', 12, 22]} />
+                      {/* Gradient sky background — kechki ko'k */}
+                      <color attach="background" args={['#0a0e1a']} />
+                      <fog attach="fog" args={['#0a0e1a', 14, 28]} />
                       <Suspense fallback={null}>
                         <Scene
                           progress={animatedProgress}
