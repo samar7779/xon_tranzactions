@@ -36,11 +36,14 @@ export default function LoginPage() {
 
   // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
   // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
-  // Tovush o'rniga — haptik vibratsiya: click → 0.3s scan → 2.0s success (ACCESS GRANTED bilan birga)
+  // Tovush o'rniga — haptik vibratsiya. MUHIM: butun pattern BITTA chaqiruvda
+  // (bosish paytida) yuboriladi — pauzalarni API o'zi boshqaradi. setTimeout
+  // bilan kechiktirilgan vibratsiya Android Chrome'da gesture'dan tashqarida
+  // deb bloklanadi, shuning uchun bir chaqiruvda:
+  //   80ms buzz (click) · 220 pauza · 130 buzz (~0.3s scan) ·
+  //   ~1.57s pauza · 60·50·60·50·160 (~2.0s success / ACCESS GRANTED)
   const handleKirish = () => {
-    vibrate(40);                                            // KIRISH bosildi — qisqa
-    setTimeout(() => vibrate(120), 300);                    // scan — uzunroq buzz
-    setTimeout(() => vibrate([60, 50, 60, 50, 140]), 2000); // success — pattern
+    vibrate([80, 220, 130, 1570, 60, 50, 60, 50, 160]);
     setScanning(true);
     setTimeout(() => {
       setOpen(true);
