@@ -305,7 +305,8 @@ export class SverkaTelegramService {
       ownerName?: string | null;
       bankName?: string | null;
       diff?: { credit?: number; debit?: number; formula?: number };
-      bank?: { credit?: number; debit?: number };
+      bank?: { opening?: number; closing?: number; debit?: number; credit?: number };
+      db?: { inflow?: number; outflow?: number; inCount?: number; outCount?: number };
     }>,
     date: string,
   ): Promise<void> {
@@ -336,25 +337,53 @@ export class SverkaTelegramService {
       }
       if (newOnes.length === 0) return;
 
-      // Notification yuborish (har biri uchun alohida)
+      const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
+
+      // Notification yuborish (har biri uchun alohida, BATAFSIL)
       for (const it of newOnes) {
-        const farqAmount =
-          Math.abs(Number(it.diff?.formula) || 0) ||
-          Math.abs(Number(it.diff?.credit) || 0) ||
-          Math.abs(Number(it.diff?.debit) || 0);
+        const bankKirim = Number(it.bank?.credit) || 0;
+        const bankChiqim = Number(it.bank?.debit) || 0;
+        const dbKirim = Number(it.db?.inflow) || 0;
+        const dbChiqim = Number(it.db?.outflow) || 0;
+        const farqKirim = bankKirim - dbKirim;   // + = bankda ko'p, − = DB'da ko'p
+        const farqChiqim = bankChiqim - dbChiqim;
+        const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
 
         const lines: string[] = [];
         lines.push(`⚠️ <b>Sverka farq aniqlandi</b>`);
         lines.push('');
-        if (it.bankName) lines.push(`<b>Bank:</b> ${it.bankName}`);
-        if (it.accountNo) lines.push(`<b>Hisob:</b> <code>${it.accountNo}</code>`);
-        if (it.ownerName) lines.push(`<b>Egasi:</b> ${it.ownerName}`);
-        lines.push(`<b>Sana:</b> ${date}`);
-        if (farqAmount > 0) {
-          lines.push(`<b>Farq:</b> <code>${farqAmount.toLocaleString('ru-RU')}</code> UZS`);
-        }
+        if (it.bankName) lines.push(`🏦 <b>Bank:</b> ${it.bankName}`);
+        if (it.accountNo) lines.push(`💳 <b>Hisob:</b> <code>${it.accountNo}</code>`);
+        if (it.ownerName) lines.push(`👤 <b>Egasi:</b> ${it.ownerName}`);
+        lines.push(`📅 <b>Sana:</b> ${date}`);
         lines.push('');
-        lines.push(`<i>Tekshiring va kerakli amalni bajaring.</i>`);
+
+        // Tafsilot — kirim
+        if (Math.abs(farqKirim) > 0.01) {
+          const sign = farqKirim > 0 ? '+' : '−';
+          const who = farqKirim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
+          lines.push(`📥 <b>Kirim oborot:</b>`);
+          lines.push(`  • Bank: <code>${fmt(bankKirim)}</code>`);
+          lines.push(`  • DB:   <code>${fmt(dbKirim)}</code> (${it.db?.inCount || 0} ta)`);
+          lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqKirim))}</code> ${who}`);
+        }
+
+        // Tafsilot — chiqim
+        if (Math.abs(farqChiqim) > 0.01) {
+          const sign = farqChiqim > 0 ? '+' : '−';
+          const who = farqChiqim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
+          lines.push(`📤 <b>Chiqim oborot:</b>`);
+          lines.push(`  • Bank: <code>${fmt(bankChiqim)}</code>`);
+          lines.push(`  • DB:   <code>${fmt(dbChiqim)}</code> (${it.db?.outCount || 0} ta)`);
+          lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqChiqim))}</code> ${who}`);
+        }
+
+        lines.push('');
+        lines.push(`💰 <b>UMUMIY FARQ:</b> <code>${fmt(totalFarq)}</code> UZS`);
+        lines.push('');
+        lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
+        lines.push(`<i>Sayt'ga kiring va kerakli amalni bajaring:</i>`);
+        lines.push(`<i>transactions.xonapps.uz/uz/check</i>`);
 
         this.sendNotification({ text: lines.join('\n'), role: 'all' }).catch((e) => {
           this.log.warn(`Mismatch notification yuborish xato: ${e?.message}`);
@@ -397,37 +426,22 @@ export class SverkaTelegramService {
   }
 
   /**
-   * Sverka actions uchun notification — backend chaqiradi action bajarilganda.
-   * Misol: fix-tx-date, fix-all-missing va h.k.
+   * Sverka actions uchun — faqat history'ga yozish.
+   * Telegram'ga xabar YUBORILMAYDI (foydalanuvchi web'dan o'zi bajaradi,
+   * o'ziga echo kelishi shart emas).
+   *
+   * Telegram'ga xabar faqat notifyNewMismatches() orqali (yangi farq
+   * topilganda) ketadi — bu "to'g'rilang" deb eslatuvchi xabar.
    */
   async notifySverkaAction(p: {
-    action: string;                 // 'fix-tx-date' | 'fix-all-missing' | h.k.
-    label: string;                  // foydalanuvchi tushuna oladigan nom
-    accountInfo?: string;           // Hisob nomi yoki raqami
-    count?: number;                 // tuzatilgan soni
-    actorName: string;              // kim
-    extra?: Record<string, any>;    // qo'shimcha ma'lumotlar
+    action: string;
+    label: string;
+    accountInfo?: string;
+    count?: number;
+    actorName: string;
+    extra?: Record<string, any>;
   }): Promise<void> {
-    const lines: string[] = [];
-    lines.push(`⚙️ <b>Sverka amal bajarildi</b>`);
-    lines.push('');
-    lines.push(`<b>Amal:</b> ${p.label}`);
-    if (p.accountInfo) lines.push(`<b>Hisob:</b> ${p.accountInfo}`);
-    if (p.count != null) lines.push(`<b>Miqdor:</b> ${p.count}`);
-    lines.push(`<b>Bajardi:</b> ${p.actorName}`);
-    lines.push(`<b>Vaqt:</b> ${new Date().toLocaleString('ru-RU')}`);
-
-    if (p.extra) {
-      lines.push('');
-      lines.push('<i>Tafsilot:</i>');
-      for (const [k, v] of Object.entries(p.extra)) {
-        lines.push(`  • ${k}: <code>${String(v)}</code>`);
-      }
-    }
-
-    const text = lines.join('\n');
-
-    // Avval history'ga yozamiz
+    // Faqat history — Telegram yuborilmaydi
     await this.appendHistory({
       action: p.action,
       source: 'web',
@@ -436,9 +450,34 @@ export class SverkaTelegramService {
       details: { accountInfo: p.accountInfo, count: p.count, ...p.extra },
     });
 
-    // Keyin notification yuboramiz (xato bo'lsa ham asosiy oqim tushmaydi)
-    this.sendNotification({ text, role: 'all' }).catch((e) => {
-      this.log.warn(`notifySverkaAction yuborish xato: ${e?.message}`);
+    // ESLATMA: Agar web'dan bajarilgan amal hisob uchun farqni TUZATIB
+    // qo'ysa, keyingi reconcileToday'da notifiedKeys'dan o'sha hisob OLINIB
+    // tashlanadi — chunki bu hisob endi mismatch emas, kelajakda yangi
+    // farq paydo bo'lsa qayta xabar boradi.
+    if (p.accountInfo) {
+      this.removeFromNotified(p.accountInfo).catch(() => {});
+    }
+  }
+
+  /**
+   * Account uchun notified set'dan olib tashlash — qaytib farq paydo
+   * bo'lsa, xabar berish uchun.
+   */
+  private async removeFromNotified(accountId: string): Promise<void> {
+    const setting = await this.prisma.setting.findUnique({
+      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+    });
+    if (!setting?.value) return;
+    let stored: { date: string; keys: string[] } | null = null;
+    try { stored = JSON.parse(setting.value); } catch { return; }
+    if (!stored) return;
+
+    const filtered = (stored.keys || []).filter((k) => k !== accountId);
+    if (filtered.length === stored.keys.length) return;
+
+    await this.prisma.setting.update({
+      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+      data: { value: JSON.stringify({ date: stored.date, keys: filtered }) },
     });
   }
 }
