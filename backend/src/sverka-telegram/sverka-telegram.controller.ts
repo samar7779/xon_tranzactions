@@ -104,4 +104,17 @@ export class SverkaTelegramController {
   async test(@CurrentUser('email') email: string) {
     return this.svc.sendTestNotification({ name: email });
   }
+
+  @Post('reset-notified')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
+  @ApiOperation({
+    summary: 'Notified set\'ni tozalash — keyingi sverka\'da barcha farqlarga xabar yuboriladi',
+    description: 'Test, yangi chat qo\'shilgach yoki xato bilan yuborilmagan xabarlarni qayta yuborish uchun.',
+  })
+  async resetNotified(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+  ) {
+    return this.svc.resetNotifiedToday({ id: userId, name: email });
+  }
 }
