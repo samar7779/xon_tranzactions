@@ -900,7 +900,7 @@ export class CounterpartiesService {
   private static readonly SETTING_AUTO_REFRESH = 'counterparties.autoRefreshEnabled';
   private static readonly SETTING_ACTIVITY_LOG = 'counterparties.activityLog';
   private static readonly TRUNCATE_PASSWORD = '7779';
-  private static readonly ACTIVITY_LOG_LIMIT = 200;
+  private static readonly ACTIVITY_LOG_LIMIT = 1000;
 
   /** Auto-refresh yoqilganmi? (default: true) */
   async isAutoRefreshEnabled(): Promise<boolean> {
@@ -985,23 +985,82 @@ export class CounterpartiesService {
     }
   }
 
-  /** Activity log o'qish (oxirgi N qator). */
-  async getActivityLog(limit: number = 100): Promise<Array<{
-    timestamp: string;
-    action: string;
-    actorId: string | null;
-    actorName: string | null;
-    details: any;
-  }>> {
+  /**
+   * Activity log o'qish — pagination + filter + search bilan.
+   * Default: page=1, perPage=20, hech qanday filtr yo'q.
+   */
+  async getActivityLog(opts: {
+    page?: number;
+    perPage?: number;
+    q?: string;                  // search action/actorName/details
+    actorName?: string;          // aniq aktor bo'yicha (cron yoki email)
+    action?: string;             // aniq action turi
+  } = {}): Promise<{
+    items: Array<{
+      timestamp: string;
+      action: string;
+      actorId: string | null;
+      actorName: string | null;
+      details: any;
+    }>;
+    total: number;
+    page: number;
+    perPage: number;
+    actors: string[];            // unique actor ro'yxati (filter UI uchun)
+    actions: string[];            // unique action turlari (filter UI uchun)
+  }> {
+    const page = Math.max(1, Number(opts.page) || 1);
+    const perPage = Math.min(100, Math.max(1, Number(opts.perPage) || 20));
+
     const cur = await this.prisma.setting.findUnique({
       where: { key: CounterpartiesService.SETTING_ACTIVITY_LOG },
     });
-    if (!cur?.value) return [];
+    let all: any[] = [];
     try {
-      const arr = JSON.parse(cur.value);
-      if (!Array.isArray(arr)) return [];
-      return arr.slice(0, Math.max(1, Math.min(200, limit)));
-    } catch { return []; }
+      all = cur?.value ? JSON.parse(cur.value) : [];
+      if (!Array.isArray(all)) all = [];
+    } catch { all = []; }
+
+    // Unique actors va actions — har doim to'liq ro'yxatdan (filter UI uchun)
+    const actorsSet = new Set<string>();
+    const actionsSet = new Set<string>();
+    for (const e of all) {
+      const a = e?.actorName || 'cron';
+      actorsSet.add(a);
+      if (e?.action) actionsSet.add(e.action);
+    }
+    const actors = [...actorsSet].sort();
+    const actions = [...actionsSet].sort();
+
+    // Filtr
+    let filtered = all;
+    if (opts.actorName) {
+      const target = opts.actorName.trim();
+      filtered = filtered.filter((e) => (e?.actorName || 'cron') === target);
+    }
+    if (opts.action) {
+      filtered = filtered.filter((e) => e?.action === opts.action);
+    }
+    if (opts.q) {
+      const q = opts.q.toLowerCase().trim();
+      if (q) {
+        filtered = filtered.filter((e) => {
+          const hay = [
+            e?.action || '',
+            e?.actorName || '',
+            e?.actorId || '',
+            JSON.stringify(e?.details || {}),
+          ].join(' ').toLowerCase();
+          return hay.includes(q);
+        });
+      }
+    }
+
+    const total = filtered.length;
+    const start = (page - 1) * perPage;
+    const items = filtered.slice(start, start + perPage);
+
+    return { items, total, page, perPage, actors, actions };
   }
 
   /** Butun kontragentlar bazasini TOZALASH (parol bilan). */

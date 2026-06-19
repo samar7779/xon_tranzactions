@@ -49,10 +49,22 @@ export class CounterpartiesController {
 
   @Get('_activity-log')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
-  @ApiOperation({ summary: 'Faoliyat tarixi (sync, truncate, settings)' })
-  async getActivityLog(@Query('limit') limit?: string) {
-    const items = await this.svc.getActivityLog(limit ? Number(limit) : 100);
-    return { ok: true, items };
+  @ApiOperation({ summary: 'Faoliyat tarixi — pagination + filter + search' })
+  async getActivityLog(
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+    @Query('q') q?: string,
+    @Query('actorName') actorName?: string,
+    @Query('action') action?: string,
+  ) {
+    const result = await this.svc.getActivityLog({
+      page: page ? Number(page) : 1,
+      perPage: perPage ? Number(perPage) : 20,
+      q: q || undefined,
+      actorName: actorName || undefined,
+      action: action || undefined,
+    });
+    return { ok: true, ...result };
   }
 
   @Post('_settings/auto-refresh')
