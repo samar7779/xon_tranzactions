@@ -863,6 +863,29 @@ function CounterpartiesSettingsDialog({
   const [tab, setTab] = useState<'settings' | 'history'>('settings');
   const [truncateOpen, setTruncateOpen] = useState(false);
 
+  // History filter/search/pagination state
+  const [logQ, setLogQ] = useState('');
+  const [logQDebounced, setLogQDebounced] = useState('');
+  const [logActor, setLogActor] = useState<string>('');
+  const [logPage, setLogPage] = useState(1);
+  const logPerPage = 20;
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setLogQDebounced(logQ.trim()), 300);
+    return () => clearTimeout(t);
+  }, [logQ]);
+
+  // Search/filter o'zgarsa — 1-sahifaga qaytamiz
+  useEffect(() => { setLogPage(1); }, [logQDebounced, logActor]);
+
+  // Modal yopilsa filtrlar reset
+  useEffect(() => {
+    if (!open) {
+      setLogQ(''); setLogQDebounced(''); setLogActor(''); setLogPage(1);
+    }
+  }, [open]);
+
   const settingsQuery = useQuery({
     queryKey: ['counterparties-settings'],
     queryFn: () => api.get<{ autoRefreshEnabled: boolean }>('/counterparties/_settings'),
@@ -871,10 +894,26 @@ function CounterpartiesSettingsDialog({
   });
 
   const logQuery = useQuery({
-    queryKey: ['counterparties-activity-log'],
-    queryFn: () => api.get<{ ok: boolean; items: ActivityLogEntry[] }>('/counterparties/_activity-log?limit=100'),
+    queryKey: ['counterparties-activity-log', logPage, logPerPage, logQDebounced, logActor],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      params.set('page', String(logPage));
+      params.set('perPage', String(logPerPage));
+      if (logQDebounced) params.set('q', logQDebounced);
+      if (logActor) params.set('actorName', logActor);
+      return api.get<{
+        ok: boolean;
+        items: ActivityLogEntry[];
+        total: number;
+        page: number;
+        perPage: number;
+        actors: string[];
+        actions: string[];
+      }>(`/counterparties/_activity-log?${params.toString()}`);
+    },
     enabled: open && tab === 'history',
     refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   });
 
   const toggleMut = useMutation({
@@ -900,6 +939,9 @@ function CounterpartiesSettingsDialog({
 
   const enabled = settingsQuery.data?.autoRefreshEnabled ?? true;
   const items = logQuery.data?.items || [];
+  const logTotal = logQuery.data?.total || 0;
+  const logActors = logQuery.data?.actors || [];
+  const totalPages = Math.max(1, Math.ceil(logTotal / logPerPage));
 
   return (
     <>
@@ -1086,7 +1128,58 @@ function CounterpartiesSettingsDialog({
               </div>
             ) : (
               // ─── HISTORY TAB ───
-              <div>
+              <div className="space-y-3">
+                {/* Search + actor filter */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                    <Input
+                      value={logQ}
+                      onChange={(e) => setLogQ(e.target.value)}
+                      placeholder="Qidirish (action, aktor, details)..."
+                      className="pl-9 pr-8 h-9 text-[12.5px]"
+                    />
+                    {logQ && (
+                      <button
+                        onClick={() => setLogQ('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Select value={logActor || '__all__'} onValueChange={(v) => setLogActor(v === '__all__' ? '' : v)}>
+                    <SelectTrigger className="w-[180px] h-9 text-[12.5px]">
+                      <SelectValue placeholder="Aktor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">Hamma aktorlar</SelectItem>
+                      {logActors.map((a) => (
+                        <SelectItem key={a} value={a}>{a}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(logQDebounced || logActor) && (
+                    <button
+                      onClick={() => { setLogQ(''); setLogActor(''); }}
+                      className="text-[11.5px] text-slate-500 hover:text-rose-600 font-medium inline-flex items-center gap-1 px-2 h-9 rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                    >
+                      <X className="h-3 w-3" /> Tozalash
+                    </button>
+                  )}
+                </div>
+
+                {/* Stats */}
+                <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                  <span>
+                    {logQuery.isFetching && <Loader2 className="h-3 w-3 inline mr-1 animate-spin" />}
+                    Jami: <strong className="text-slate-700 dark:text-slate-300">{logTotal}</strong>
+                    {(logQDebounced || logActor) && <> (filtrlangan)</>}
+                  </span>
+                  <span>Sahifa <strong className="text-slate-700 dark:text-slate-300">{logPage}</strong> / {totalPages}</span>
+                </div>
+
+                {/* Items */}
                 {logQuery.isLoading ? (
                   <div className="py-12 text-center text-slate-400">
                     <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
@@ -1095,8 +1188,12 @@ function CounterpartiesSettingsDialog({
                 ) : items.length === 0 ? (
                   <div className="py-12 text-center text-slate-400 dark:text-slate-500">
                     <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <div className="text-[13px] font-medium">Tarix bo'sh</div>
-                    <div className="text-[11px] mt-1">Auto-refresh yoqilgach yoki amallar bajarilgach, bu yerda ko'rinadi.</div>
+                    <div className="text-[13px] font-medium">
+                      {(logQDebounced || logActor) ? "Hech narsa topilmadi" : "Tarix bo'sh"}
+                    </div>
+                    {!(logQDebounced || logActor) && (
+                      <div className="text-[11px] mt-1">Auto-refresh yoqilgach yoki amallar bajarilgach, bu yerda ko'rinadi.</div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -1135,6 +1232,45 @@ function CounterpartiesSettingsDialog({
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLogPage((p) => Math.max(1, p - 1))}
+                      disabled={logPage <= 1 || logQuery.isFetching}
+                      className="h-8 text-[11.5px]"
+                    >
+                      ← Oldingi
+                    </Button>
+                    <div className="flex items-center gap-1.5 text-[11.5px] text-slate-600 dark:text-slate-400">
+                      <span>Sahifa</span>
+                      <input
+                        type="number"
+                        value={logPage}
+                        onChange={(e) => {
+                          const n = Number(e.target.value);
+                          if (n >= 1 && n <= totalPages) setLogPage(n);
+                        }}
+                        min={1}
+                        max={totalPages}
+                        className="w-12 h-7 px-1 text-center rounded-md ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 tabular-nums text-[11.5px] font-semibold"
+                      />
+                      <span>/ {totalPages}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setLogPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={logPage >= totalPages || logQuery.isFetching}
+                      className="h-8 text-[11.5px]"
+                    >
+                      Keyingi →
+                    </Button>
                   </div>
                 )}
               </div>
