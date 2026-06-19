@@ -21,6 +21,7 @@ import { PaymentsModule } from './payments/payments.module';
 import { ApiExplorerModule } from './api-explorer/api-explorer.module';
 import { CrmModule } from './crm/crm.module';
 import { CounterpartiesModule } from './counterparties/counterparties.module';
+import { SverkaTelegramModule } from './sverka-telegram/sverka-telegram.module';
 import { CategorizationModule } from './categorization/categorization.module';
 import { ImportModule } from './import/import.module';
 import { AttachmentsModule } from './attachments/attachments.module';
@@ -57,6 +58,7 @@ import { DeveloperApiModule } from './developer-api/developer-api.module';
     ApiExplorerModule,
     CrmModule,
     CounterpartiesModule,
+    SverkaTelegramModule,
     CategorizationModule,
     ImportModule,
     AttachmentsModule,

@@ -16,6 +16,7 @@ import { PERMISSIONS } from '../auth/permissions';
 import { SyncService } from '../sync/sync.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SverkaTelegramService } from '../sverka-telegram/sverka-telegram.service';
 
 @ApiTags('transactions')
 @ApiBearerAuth()
@@ -29,6 +30,7 @@ export class TransactionsController {
     private readonly inspectorSvc: InspectorService,
     private readonly syncSvc: SyncService,
     private readonly prisma: PrismaService,
+    private readonly sverkaTg: SverkaTelegramService,
   ) {}
 
   @Post('inspect-id')
@@ -158,19 +160,43 @@ export class TransactionsController {
   @Post('reconcile/fix-missing')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({ summary: "Bankda bor lekin DB da yo'q tranzaksiyani qayta sync qilib DB ga qo'shadi" })
-  fixMissing(@Body() body: { accountId: string; b2Id?: string; generalId?: string; date: string }) {
-    return this.reconcileSvc.fixMissing(body?.accountId, body?.b2Id, body?.generalId, body?.date);
+  async fixMissing(
+    @Body() body: { accountId: string; b2Id?: string; generalId?: string; date: string },
+    @CurrentUser('email') email?: string,
+  ) {
+    const result = await this.reconcileSvc.fixMissing(body?.accountId, body?.b2Id, body?.generalId, body?.date);
+    this.sverkaTg.notifySverkaAction({
+      action: 'fix-missing',
+      label: 'Yo\'qolgan tranzaksiya qo\'shildi',
+      accountInfo: body?.accountId,
+      count: 1,
+      actorName: email || 'web',
+      extra: { date: body?.date, b2Id: body?.b2Id || '-', generalId: body?.generalId || '-' },
+    }).catch(() => {});
+    return result;
   }
 
   @Post('reconcile/fix-all-missing')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
   @ApiOperation({ summary: "Bir nechta yo'qolgan tranzaksiyalarni bitta zaprosda DB ga qo'shadi" })
-  fixAllMissing(@Body() body: {
-    accountId: string;
-    date: string;
-    items: Array<{ b2Id?: string; generalId?: string }>;
-  }) {
-    return this.reconcileSvc.fixAllMissing(body?.accountId, body?.date, body?.items || []);
+  async fixAllMissing(
+    @Body() body: {
+      accountId: string;
+      date: string;
+      items: Array<{ b2Id?: string; generalId?: string }>;
+    },
+    @CurrentUser('email') email?: string,
+  ) {
+    const result = await this.reconcileSvc.fixAllMissing(body?.accountId, body?.date, body?.items || []);
+    this.sverkaTg.notifySverkaAction({
+      action: 'fix-all-missing',
+      label: 'Hammasini qo\'shish (bulk)',
+      accountInfo: body?.accountId,
+      count: body?.items?.length || 0,
+      actorName: email || 'web',
+      extra: { date: body?.date },
+    }).catch(() => {});
+    return result;
   }
 
   @Post('reconcile/fix-tx-date')
@@ -179,11 +205,19 @@ export class TransactionsController {
     summary: "Bitta tx'ning sanasini tuzatish (foydalanuvchi tasdiqi bilan)",
     description: "Sverka diagnose'da 'boshqa sanada bor' deb topilgan tx uchun ishlatiladi. Faqat txnDate tegadi, boshqa hech narsa o'zgarmaydi.",
   })
-  fixTxDate(
+  async fixTxDate(
     @Body() body: { txId: string; newDate: string },
     @CurrentUser('email') email?: string,
   ) {
-    return this.reconcileSvc.fixTxDate(body?.txId, body?.newDate, email ? `manual:${email}` : 'manual');
+    const result = await this.reconcileSvc.fixTxDate(body?.txId, body?.newDate, email ? `manual:${email}` : 'manual');
+    this.sverkaTg.notifySverkaAction({
+      action: 'fix-tx-date',
+      label: 'Tranzaksiya sanasi tuzatildi',
+      count: 1,
+      actorName: email || 'web',
+      extra: { txId: body?.txId, newDate: body?.newDate },
+    }).catch(() => {});
+    return result;
   }
 
   @Post('reconcile/fix-all-tx-date')
@@ -192,11 +226,18 @@ export class TransactionsController {
     summary: "Bir nechta tx'ning sanalarini birdaniga tuzatish (bulk)",
     description: "Faqat txnDate UPDATE, boshqa fieldlar tegmaydi. Har biri uchun natija (updated/skipped/error) qaytadi.",
   })
-  fixAllTxDate(
+  async fixAllTxDate(
     @Body() body: { items: Array<{ txId: string; newDate: string }> },
     @CurrentUser('email') email?: string,
   ) {
-    return this.reconcileSvc.fixAllTxDate(body?.items || [], email ? `manual:${email}` : 'manual');
+    const result = await this.reconcileSvc.fixAllTxDate(body?.items || [], email ? `manual:${email}` : 'manual');
+    this.sverkaTg.notifySverkaAction({
+      action: 'fix-all-tx-date',
+      label: 'Sanani tuzatish (bulk)',
+      count: body?.items?.length || 0,
+      actorName: email || 'web',
+    }).catch(() => {});
+    return result;
   }
 
   @Get('export')
