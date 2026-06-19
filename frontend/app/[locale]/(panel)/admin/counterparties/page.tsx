@@ -849,6 +849,10 @@ const ACTION_META: Record<string, { label: string; icon: string; tone: string }>
   imported:                { label: 'Excel\'dan import qilindi',           icon: '📥', tone: 'violet' },
   manual_refresh:          { label: 'Qo\'lda yangilash',                   icon: '👆', tone: 'amber' },
   deleted:                 { label: 'Qator o\'chirildi',                   icon: '✗',  tone: 'rose' },
+  xontaminot_sync_started: { label: 'Taminot DB sync boshlandi',           icon: '🔄', tone: 'indigo' },
+  xontaminot_sync_completed: { label: 'Taminot DB sync yakunlandi',         icon: '✓',  tone: 'emerald' },
+  xontaminot_sync_failed:  { label: 'Taminot DB sync XATO',                 icon: '⚠️', tone: 'rose' },
+  xontaminot_settings_changed: { label: 'Taminot DB sozlamalari o\'zgardi', icon: '⚙️', tone: 'amber' },
 };
 
 function CounterpartiesSettingsDialog({
@@ -936,6 +940,72 @@ function CounterpartiesSettingsDialog({
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
+
+  // ─── XONTAMINOT ───
+  const xtSettingsQuery = useQuery({
+    queryKey: ['counterparties-xontaminot-settings'],
+    queryFn: () => api.get<{
+      autoSync: boolean;
+      intervalMin: number;
+      startHour: number;
+      endHour: number;
+      lastSyncAt: string | null;
+      lastSyncStats: any;
+      isConfigured: boolean;
+    }>('/counterparties/_xontaminot/settings'),
+    enabled: open,
+    refetchOnWindowFocus: false,
+  });
+
+  const xtStatusQuery = useQuery({
+    queryKey: ['counterparties-xontaminot-status'],
+    queryFn: () => api.get<{ running: boolean; startedAt: string | null; progress: { done: number; total: number } | null }>('/counterparties/_xontaminot/status'),
+    enabled: open,
+    refetchInterval: 3000,
+    refetchOnWindowFocus: false,
+  });
+
+  const xtTestMut = useMutation({
+    mutationFn: () => api.get<{ ok: boolean; suppliersCount?: number; error?: string }>('/counterparties/_xontaminot/test'),
+    onSuccess: (r: any) => {
+      if (r.ok) toast.success(`Ulanish OK — ${r.suppliersCount} ta yozuv mavjud`);
+      else toast.error(`Ulanish xato: ${r.error}`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const xtSyncMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/counterparties/_xontaminot/sync'),
+    onSuccess: (r: any) => {
+      if (r?.started) toast.success(r?.message || 'Sync boshlandi');
+      else toast.warning(r?.message || 'Sync boshlanmadi');
+      qc.invalidateQueries({ queryKey: ['counterparties-xontaminot-status'] });
+      qc.invalidateQueries({ queryKey: ['counterparties-activity-log'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const xtSaveSettingsMut = useMutation({
+    mutationFn: (body: { autoSync?: boolean; intervalMin?: number; startHour?: number; endHour?: number }) =>
+      api.post<{ ok: boolean }>('/counterparties/_xontaminot/settings', body),
+    onSuccess: () => {
+      toast.success('Sozlamalar saqlandi');
+      qc.invalidateQueries({ queryKey: ['counterparties-xontaminot-settings'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  // Local schedule edit state (so user can change before clicking save)
+  const [xtInterval, setXtInterval] = useState<number>(60);
+  const [xtStartHour, setXtStartHour] = useState<number>(8);
+  const [xtEndHour, setXtEndHour] = useState<number>(22);
+  useEffect(() => {
+    if (xtSettingsQuery.data) {
+      setXtInterval(xtSettingsQuery.data.intervalMin);
+      setXtStartHour(xtSettingsQuery.data.startHour);
+      setXtEndHour(xtSettingsQuery.data.endHour);
+    }
+  }, [xtSettingsQuery.data?.intervalMin, xtSettingsQuery.data?.startHour, xtSettingsQuery.data?.endHour]);
 
   const enabled = settingsQuery.data?.autoRefreshEnabled ?? true;
   const items = logQuery.data?.items || [];
@@ -1096,6 +1166,166 @@ function CounterpartiesSettingsDialog({
                           Avval yuqoridagi togglni yoqing — so'rovlar o'chirilgan
                         </div>
                       )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* ─── XONTAMINOT (Taminot DB) ─── */}
+                <div className="rounded-xl ring-1 ring-cyan-200 dark:ring-cyan-900 bg-cyan-50/40 dark:bg-cyan-950/20 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-cyan-100 dark:bg-cyan-900/40 text-cyan-700 dark:text-cyan-300 grid place-items-center shrink-0">
+                      <Building2 className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <div className="font-bold text-[13.5px] text-slate-900 dark:text-slate-100">
+                          Taminot DB sinxronlash
+                        </div>
+                        {xtSettingsQuery.data?.isConfigured ? (
+                          <span className="text-[9.5px] uppercase tracking-wider font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded">
+                            sozlangan
+                          </span>
+                        ) : (
+                          <span className="text-[9.5px] uppercase tracking-wider font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 px-1.5 py-0.5 rounded">
+                            ENV YO'Q
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11.5px] text-slate-600 dark:text-slate-400 mb-3">
+                        Xontaminot bazasidagi <strong>taminotchilar</strong> jadvalidan ma'lumot olamiz.
+                        Mirror sync: u yerda <strong>o'chirilsa — bizda ham o'chiriladi</strong>,
+                        yangilanganlari yangilanadi, yangilari qo'shiladi.
+                      </div>
+
+                      {/* Status */}
+                      {xtStatusQuery.data?.running && (
+                        <div className="mb-3 rounded-md bg-cyan-100 dark:bg-cyan-900/30 ring-1 ring-cyan-300 dark:ring-cyan-700 px-2.5 py-1.5 text-[11.5px] text-cyan-900 dark:text-cyan-200 flex items-center gap-2">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Sync ishlamoqda
+                          {xtStatusQuery.data?.progress && (
+                            <span className="font-mono">
+                              ({xtStatusQuery.data.progress.done}/{xtStatusQuery.data.progress.total})
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Buttons */}
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        <Button
+                          size="sm"
+                          onClick={() => xtSyncMut.mutate()}
+                          disabled={!xtSettingsQuery.data?.isConfigured || xtSyncMut.isPending || xtStatusQuery.data?.running}
+                          className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-sm hover:from-cyan-600 hover:to-blue-700 gap-1.5"
+                        >
+                          {xtSyncMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                          Hozir sync qilish
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => xtTestMut.mutate()}
+                          disabled={xtTestMut.isPending}
+                          className="gap-1.5"
+                        >
+                          {xtTestMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                          Ulanishni tekshirish
+                        </Button>
+                      </div>
+
+                      {/* Last sync info */}
+                      {xtSettingsQuery.data?.lastSyncAt && (
+                        <div className="mb-3 rounded-md bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 px-2.5 py-2 text-[11px]">
+                          <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 mb-1">
+                            <Clock className="h-3 w-3" />
+                            Oxirgi sync:
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                              {formatDateTime(xtSettingsQuery.data.lastSyncAt)}
+                            </span>
+                          </div>
+                          {xtSettingsQuery.data.lastSyncStats && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-slate-600 dark:text-slate-400 font-mono mt-1">
+                              <span>📥 fetched=<strong>{xtSettingsQuery.data.lastSyncStats.fetched}</strong></span>
+                              <span className="text-emerald-700 dark:text-emerald-400">+created={xtSettingsQuery.data.lastSyncStats.created}</span>
+                              <span className="text-blue-700 dark:text-blue-400">~updated={xtSettingsQuery.data.lastSyncStats.updated}</span>
+                              <span className="text-rose-700 dark:text-rose-400">−deleted={xtSettingsQuery.data.lastSyncStats.deleted}</span>
+                              {xtSettingsQuery.data.lastSyncStats.errors > 0 && (
+                                <span className="text-amber-700 dark:text-amber-400">⚠ errors={xtSettingsQuery.data.lastSyncStats.errors}</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Schedule settings */}
+                      <div className="rounded-md bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-2.5">
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                            Avto-sync sozlamalari
+                          </div>
+                          <button
+                            onClick={() => xtSaveSettingsMut.mutate({ autoSync: !xtSettingsQuery.data?.autoSync })}
+                            disabled={!xtSettingsQuery.data?.isConfigured || xtSaveSettingsMut.isPending}
+                            className={cn(
+                              'relative inline-flex h-5 w-9 items-center rounded-full transition-colors shrink-0',
+                              xtSettingsQuery.data?.autoSync ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700',
+                            )}
+                          >
+                            <span className={cn(
+                              'inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform',
+                              xtSettingsQuery.data?.autoSync ? 'translate-x-4' : 'translate-x-0.5',
+                            )} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Daqiqada</Label>
+                            <Input
+                              type="number"
+                              min={5}
+                              max={1440}
+                              value={xtInterval}
+                              onChange={(e) => setXtInterval(Number(e.target.value) || 60)}
+                              className="h-8 mt-1 text-[12px] tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Soat dan</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={xtStartHour}
+                              onChange={(e) => setXtStartHour(Number(e.target.value) || 0)}
+                              className="h-8 mt-1 text-[12px] tabular-nums"
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Soat gacha</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={23}
+                              value={xtEndHour}
+                              onChange={(e) => setXtEndHour(Number(e.target.value) || 23)}
+                              className="h-8 mt-1 text-[12px] tabular-nums"
+                            />
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+                            Misol: har {xtInterval} daqiqada, {xtStartHour}:00 — {xtEndHour}:00 oralig'ida
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => xtSaveSettingsMut.mutate({ intervalMin: xtInterval, startHour: xtStartHour, endHour: xtEndHour })}
+                            disabled={xtSaveSettingsMut.isPending}
+                            className="h-7 text-[11px]"
+                          >
+                            {xtSaveSettingsMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Saqlash'}
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

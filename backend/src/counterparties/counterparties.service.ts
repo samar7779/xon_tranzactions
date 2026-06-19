@@ -3,6 +3,7 @@ import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { DidoxService, DidoxCompany, DidoxBankInfo } from './didox.service';
 import { ChamberService, ChamberCompany } from './chamber.service';
+import { XontaminotService } from './xontaminot.service';
 
 // vatregstatus raqamlardan matn — Soliq dokumentidan
 const VAT_STATUS_MAP: Record<number, string> = {
@@ -86,6 +87,7 @@ export class CounterpartiesService {
     private prisma: PrismaService,
     private didox: DidoxService,
     private chamber: ChamberService,
+    private xontaminot: XontaminotService,
   ) {}
 
   // ────────────────────────── audit log ──────────────────────────
@@ -1061,6 +1063,424 @@ export class CounterpartiesService {
     const items = filtered.slice(start, start + perPage);
 
     return { items, total, page, perPage, actors, actions };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //   XONTAMINOT SYNC — parallel loyihadan kontragentlar
+  // ═══════════════════════════════════════════════════════════════
+
+  private xontaminotSyncRunning = false;
+  private xontaminotSyncStartedAt: Date | null = null;
+  private xontaminotSyncProgress: { done: number; total: number } | null = null;
+
+  // Xontaminot'dan kelgan kontragentlarni belgilash uchun sentinel
+  private static readonly XONTAMINOT_ADDED_BY = '__xontaminot__';
+
+  // Settings keys
+  private static readonly SETTING_XT_AUTO_SYNC      = 'counterparties.xontaminot.autoSync';        // 'true'/'false'
+  private static readonly SETTING_XT_INTERVAL_MIN   = 'counterparties.xontaminot.intervalMin';     // '60' (har soatda)
+  private static readonly SETTING_XT_START_HOUR     = 'counterparties.xontaminot.startHour';       // '8'
+  private static readonly SETTING_XT_END_HOUR       = 'counterparties.xontaminot.endHour';         // '22'
+  private static readonly SETTING_XT_LAST_SYNC_AT   = 'counterparties.xontaminot.lastSyncAt';      // ISO string
+  private static readonly SETTING_XT_LAST_SYNC_STATS = 'counterparties.xontaminot.lastSyncStats'; // JSON
+
+  /**
+   * Xontaminot loyihasidan kontragent ma'lumotlarini sinxronlash.
+   *
+   * Logika:
+   *   - `taminotchilar` jadvalidan barcha INN'i bo'lganlarni o'qiymiz
+   *   - INN bo'yicha upsert: agar bizda yo'q bo'lsa create, bor bo'lsa update
+   *   - Update'da: faqat bo'sh maydonlarni to'ldiramiz (mavjud ma'lumotni
+   *     ustidan yozmaymiz — xontaminot manba emas, faqat boyitish)
+   *   - `isManual` belgisi tegmaydi
+   *   - lastFetchedAt va `source` 'xontaminot' deb belgilanadi
+   *
+   * Test connection: GET /counterparties/_xontaminot/test
+   */
+  async syncFromXontaminot(actor?: { id: string | null; name: string | null }): Promise<{
+    ok: boolean;
+    started: boolean;
+    message: string;
+    runningSince?: string;
+    progress?: { done: number; total: number };
+  }> {
+    if (!this.xontaminot.isConfigured()) {
+      throw new BadRequestException(
+        "XONTAMINOT_DATABASE_URL env sozlanmagan. Server .env'iga qo'shing.",
+      );
+    }
+    if (this.xontaminotSyncRunning) {
+      const since = this.xontaminotSyncStartedAt;
+      const mins = since ? Math.floor((Date.now() - since.getTime()) / 60000) : 0;
+      const progressStr = this.xontaminotSyncProgress
+        ? ` (${this.xontaminotSyncProgress.done}/${this.xontaminotSyncProgress.total})`
+        : '';
+      return {
+        ok: true,
+        started: false,
+        message: `Sinxronlash allaqachon ishlamoqda${progressStr} — ${mins} daqiqadan beri.`,
+        runningSince: since?.toISOString(),
+        progress: this.xontaminotSyncProgress || undefined,
+      };
+    }
+
+    // Background'da ishga tushiramiz
+    this.runXontaminotSyncInBackground(actor).catch((e) => {
+      this.log.error(`Xontaminot sync background xato: ${e?.message || e}`);
+    });
+    this.appendActivityLog({
+      action: 'xontaminot_sync_started',
+      actorId: actor?.id || null,
+      actorName: actor?.name || null,
+      details: null,
+    }).catch(() => {});
+    return {
+      ok: true,
+      started: true,
+      message: 'Xontaminot sinxronlashi fonda boshlandi.',
+    };
+  }
+
+  getXontaminotSyncStatus(): {
+    running: boolean;
+    startedAt: string | null;
+    progress: { done: number; total: number } | null;
+  } {
+    return {
+      running: this.xontaminotSyncRunning,
+      startedAt: this.xontaminotSyncStartedAt?.toISOString() || null,
+      progress: this.xontaminotSyncProgress,
+    };
+  }
+
+  async testXontaminotConnection() {
+    return this.xontaminot.testConnection();
+  }
+
+  private async runXontaminotSyncInBackground(actor?: { id: string | null; name: string | null }): Promise<void> {
+    if (this.xontaminotSyncRunning) return;
+    this.xontaminotSyncRunning = true;
+    this.xontaminotSyncStartedAt = new Date();
+    this.xontaminotSyncProgress = { done: 0, total: 0 };
+
+    let created = 0;
+    let updated = 0;
+    let deleted = 0;
+    let errors = 0;
+    const startedAt = new Date();
+
+    try {
+      // 1) Xontaminot'dan barcha taminotchilarni o'qish
+      const suppliers = await this.xontaminot.fetchAllSuppliers();
+      const xontaminotInnSet = new Set(suppliers.map((s) => s.inn));
+      this.xontaminotSyncProgress = { done: 0, total: suppliers.length };
+      this.log.log(`Xontaminot MIRROR sync: ${suppliers.length} ta yozuv keldi`);
+
+      // 2) Bizda allaqachon xontaminot'dan kelgan kontragentlarni topish
+      // (addedBy = '__xontaminot__' belgisi orqali)
+      const ourXontaminotRows = await this.prisma.counterparty.findMany({
+        where: { addedBy: CounterpartiesService.XONTAMINOT_ADDED_BY },
+        select: { inn: true },
+      });
+      const ourXontaminotInnSet = new Set(ourXontaminotRows.map((r) => r.inn));
+
+      // 3) DELETE: bizda xontaminot'dan kelgan, lekin xontaminot'da endi yo'q
+      // (MIRROR sync — manba o'chirsa, biz ham o'chiramiz)
+      const toDelete = [...ourXontaminotInnSet].filter((inn) => !xontaminotInnSet.has(inn));
+      if (toDelete.length > 0) {
+        // Foreign key constraint — ManualTransaction bog'langan bo'lsa, avval uzamiz
+        // (BU YERDA xavfsizroq yondashuv: agar manual tranzaksiya bog'langan
+        //  bo'lsa, o'chirmaymiz)
+        const safeToDelete: string[] = [];
+        for (const inn of toDelete) {
+          const linkedCount = await this.prisma.transaction.count({
+            where: { manualCounterparty: { inn } },
+          });
+          if (linkedCount === 0) {
+            safeToDelete.push(inn);
+          } else {
+            this.log.warn(`O'chirilmadi INN=${inn} — ${linkedCount} ta manual tranzaksiya bog'langan`);
+          }
+        }
+        if (safeToDelete.length > 0) {
+          // Avval history'larini o'chirish (FK constraint)
+          await this.prisma.counterpartyHistory.deleteMany({
+            where: { inn: { in: safeToDelete } },
+          });
+          const del = await this.prisma.counterparty.deleteMany({
+            where: { inn: { in: safeToDelete } },
+          });
+          deleted = del.count;
+          this.log.log(`Mirror sync — ${deleted} ta yozuv o'chirildi (xontaminot'dan ham o'chirilgan)`);
+        }
+      }
+
+      // 4) Mavjud kontragentlarni olib mapping qilamiz (UPSERT uchun)
+      const innList = suppliers.map((s) => s.inn);
+      const existing = await this.prisma.counterparty.findMany({
+        where: { inn: { in: innList } },
+        select: {
+          inn: true, name: true, director: true, phone: true, email: true,
+          address: true, vatStatus: true, vatStatusCode: true, opf: true,
+          rating: true, ratingType: true, ratingTitle: true, bankAccounts: true,
+          directorPinfl: true, addedBy: true,
+        },
+      });
+      const existingMap = new Map(existing.map((e) => [e.inn, e]));
+
+      // 5) CREATE / UPDATE
+      const CHUNK = 50;
+      for (let i = 0; i < suppliers.length; i += CHUNK) {
+        const batch = suppliers.slice(i, i + CHUNK);
+        await Promise.all(batch.map(async (s) => {
+          try {
+            const ex = existingMap.get(s.inn);
+            const bankAccounts = (s.bank && s.account)
+              ? [{ account: s.account, bankName: s.bank, mfo: null, lastSeen: new Date().toISOString() }]
+              : null;
+
+            if (!ex) {
+              // CREATE — xontaminot belgisi bilan
+              await this.prisma.counterparty.create({
+                data: {
+                  inn: s.inn,
+                  name: s.name || s.inn,
+                  director: s.director,
+                  directorPinfl: s.pinfl,
+                  phone: s.phone,
+                  email: s.email,
+                  address: s.address,
+                  vatStatus: s.vatStatus,
+                  vatStatusCode: s.vatStatusCode,
+                  opf: s.opf,
+                  rating: s.rating,
+                  ratingType: s.ratingType,
+                  ratingTitle: s.ratingTitle,
+                  bankAccounts: bankAccounts as any,
+                  addedBy: CounterpartiesService.XONTAMINOT_ADDED_BY,
+                  lastFetchedAt: new Date(),
+                  notes: 'Xontaminot bazasidan import qilindi (mirror sync)',
+                },
+              });
+              created++;
+            } else if (ex.addedBy === CounterpartiesService.XONTAMINOT_ADDED_BY) {
+              // UPDATE — xontaminot'dan kelganiga: barcha maydonlarni yangilaymiz
+              // (chunki xontaminot manba — bizdagi qiymat bekor bo'ladi)
+              const data: any = {
+                name: s.name || ex.name,
+                director: s.director,
+                directorPinfl: s.pinfl,
+                phone: s.phone,
+                email: s.email,
+                address: s.address,
+                vatStatus: s.vatStatus,
+                vatStatusCode: s.vatStatusCode,
+                opf: s.opf,
+                rating: s.rating,
+                ratingType: s.ratingType,
+                ratingTitle: s.ratingTitle,
+                bankAccounts: bankAccounts as any,
+                lastFetchedAt: new Date(),
+              };
+              await this.prisma.counterparty.update({
+                where: { inn: s.inn },
+                data,
+              });
+              updated++;
+            } else {
+              // UPDATE — bizdagi yozuv (DIDOX yoki qo'lda kiritilgan):
+              // faqat BO'SH maydonlarni to'ldiramiz, ustidan yozmaymiz
+              const data: any = {};
+              if (!ex.director && s.director)         data.director = s.director;
+              if (!ex.directorPinfl && s.pinfl)       data.directorPinfl = s.pinfl;
+              if (!ex.phone && s.phone)               data.phone = s.phone;
+              if (!ex.email && s.email)               data.email = s.email;
+              if (!ex.address && s.address)           data.address = s.address;
+              if (!ex.vatStatus && s.vatStatus)       data.vatStatus = s.vatStatus;
+              if (!ex.vatStatusCode && s.vatStatusCode != null) data.vatStatusCode = s.vatStatusCode;
+              if (!ex.opf && s.opf)                   data.opf = s.opf;
+              if (ex.rating == null && s.rating != null) data.rating = s.rating;
+              if (!ex.ratingType && s.ratingType)     data.ratingType = s.ratingType;
+              if (!ex.ratingTitle && s.ratingTitle)   data.ratingTitle = s.ratingTitle;
+              if ((!ex.bankAccounts || (Array.isArray(ex.bankAccounts) && ex.bankAccounts.length === 0)) && bankAccounts) {
+                data.bankAccounts = bankAccounts;
+              }
+
+              if (Object.keys(data).length > 0) {
+                data.lastFetchedAt = new Date();
+                await this.prisma.counterparty.update({
+                  where: { inn: s.inn },
+                  data,
+                });
+                updated++;
+              }
+            }
+          } catch (e: any) {
+            errors++;
+            this.log.warn(`Xontaminot upsert xato INN=${s.inn}: ${e?.message}`);
+          } finally {
+            if (this.xontaminotSyncProgress) {
+              this.xontaminotSyncProgress.done++;
+            }
+          }
+        }));
+      }
+
+      const durationSec = Math.round((Date.now() - startedAt.getTime()) / 1000);
+      const stats = { fetched: suppliers.length, created, updated, deleted, errors, durationSec };
+
+      this.log.log(
+        `Xontaminot MIRROR sync yakunlandi: created=${created} updated=${updated} deleted=${deleted} errors=${errors} duration=${durationSec}s`,
+      );
+
+      // Settings'ga oxirgi sync vaqtini va statistikani saqlash
+      await this.saveLastSyncInfo(startedAt.toISOString(), stats);
+
+      await this.appendActivityLog({
+        action: 'xontaminot_sync_completed',
+        actorId: actor?.id || null,
+        actorName: actor?.name || null,
+        details: stats,
+      });
+    } catch (e: any) {
+      this.log.error(`Xontaminot sync xato: ${e?.message}`);
+      await this.appendActivityLog({
+        action: 'xontaminot_sync_failed',
+        actorId: actor?.id || null,
+        actorName: actor?.name || null,
+        details: { error: e?.message || String(e) },
+      }).catch(() => {});
+    } finally {
+      this.xontaminotSyncRunning = false;
+      this.xontaminotSyncStartedAt = null;
+      this.xontaminotSyncProgress = null;
+    }
+  }
+
+  // ─── XONTAMINOT SETTINGS (schedule + last sync info) ──────
+  async getXontaminotSettings(): Promise<{
+    autoSync: boolean;
+    intervalMin: number;
+    startHour: number;
+    endHour: number;
+    lastSyncAt: string | null;
+    lastSyncStats: any;
+    isConfigured: boolean;
+  }> {
+    const [auto, interval, start, end, lastSync, lastStats] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_AUTO_SYNC } }),
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_INTERVAL_MIN } }),
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_START_HOUR } }),
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_END_HOUR } }),
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_AT } }),
+      this.prisma.setting.findUnique({ where: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_STATS } }),
+    ]);
+    let stats: any = null;
+    if (lastStats?.value) {
+      try { stats = JSON.parse(lastStats.value); } catch {}
+    }
+    return {
+      autoSync: auto?.value === 'true',
+      intervalMin: Number(interval?.value) || 60,
+      startHour: Number(start?.value) || 8,
+      endHour: Number(end?.value) || 22,
+      lastSyncAt: lastSync?.value || null,
+      lastSyncStats: stats,
+      isConfigured: this.xontaminot.isConfigured(),
+    };
+  }
+
+  async setXontaminotSettings(
+    s: { autoSync?: boolean; intervalMin?: number; startHour?: number; endHour?: number },
+    actor?: { id: string | null; name: string | null },
+  ): Promise<{ ok: true }> {
+    const upserts: Promise<any>[] = [];
+    const upd = actor?.name || 'system';
+    if (s.autoSync !== undefined) {
+      upserts.push(this.prisma.setting.upsert({
+        where: { key: CounterpartiesService.SETTING_XT_AUTO_SYNC },
+        create: { key: CounterpartiesService.SETTING_XT_AUTO_SYNC, value: s.autoSync ? 'true' : 'false', updatedBy: upd },
+        update: { value: s.autoSync ? 'true' : 'false', updatedBy: upd },
+      }));
+    }
+    if (s.intervalMin !== undefined) {
+      const v = Math.max(5, Math.min(1440, Number(s.intervalMin) || 60));
+      upserts.push(this.prisma.setting.upsert({
+        where: { key: CounterpartiesService.SETTING_XT_INTERVAL_MIN },
+        create: { key: CounterpartiesService.SETTING_XT_INTERVAL_MIN, value: String(v), updatedBy: upd },
+        update: { value: String(v), updatedBy: upd },
+      }));
+    }
+    if (s.startHour !== undefined) {
+      const v = Math.max(0, Math.min(23, Number(s.startHour) || 0));
+      upserts.push(this.prisma.setting.upsert({
+        where: { key: CounterpartiesService.SETTING_XT_START_HOUR },
+        create: { key: CounterpartiesService.SETTING_XT_START_HOUR, value: String(v), updatedBy: upd },
+        update: { value: String(v), updatedBy: upd },
+      }));
+    }
+    if (s.endHour !== undefined) {
+      const v = Math.max(0, Math.min(23, Number(s.endHour) || 23));
+      upserts.push(this.prisma.setting.upsert({
+        where: { key: CounterpartiesService.SETTING_XT_END_HOUR },
+        create: { key: CounterpartiesService.SETTING_XT_END_HOUR, value: String(v), updatedBy: upd },
+        update: { value: String(v), updatedBy: upd },
+      }));
+    }
+    await Promise.all(upserts);
+    await this.appendActivityLog({
+      action: 'xontaminot_settings_changed',
+      actorId: actor?.id || null,
+      actorName: actor?.name || null,
+      details: s,
+    });
+    return { ok: true };
+  }
+
+  private async saveLastSyncInfo(timestamp: string, stats: any): Promise<void> {
+    try {
+      await Promise.all([
+        this.prisma.setting.upsert({
+          where: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_AT },
+          create: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_AT, value: timestamp, updatedBy: 'sync' },
+          update: { value: timestamp, updatedBy: 'sync' },
+        }),
+        this.prisma.setting.upsert({
+          where: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_STATS },
+          create: { key: CounterpartiesService.SETTING_XT_LAST_SYNC_STATS, value: JSON.stringify(stats), updatedBy: 'sync' },
+          update: { value: JSON.stringify(stats), updatedBy: 'sync' },
+        }),
+      ]);
+    } catch (e: any) {
+      this.log.warn(`saveLastSyncInfo xato: ${e?.message}`);
+    }
+  }
+
+  /** Cron tomonidan chaqiriladi — settings'ga ko'ra sync qilinishi kerakmi? */
+  async shouldRunXontaminotCron(): Promise<boolean> {
+    const s = await this.getXontaminotSettings();
+    if (!s.autoSync) return false;
+    if (!s.isConfigured) return false;
+
+    // Toshkent vaqti (UTC+5)
+    const now = new Date();
+    const tashHour = (now.getUTCHours() + 5) % 24;
+
+    if (s.startHour <= s.endHour) {
+      if (tashHour < s.startHour || tashHour > s.endHour) return false;
+    } else {
+      // Tunda chiziq (masalan 22 → 6)
+      if (tashHour < s.startHour && tashHour > s.endHour) return false;
+    }
+
+    // Interval tekshirish
+    if (s.lastSyncAt) {
+      const last = new Date(s.lastSyncAt).getTime();
+      const diffMin = (Date.now() - last) / 60000;
+      if (diffMin < s.intervalMin) return false;
+    }
+
+    return true;
   }
 
   /** Butun kontragentlar bazasini TOZALASH (parol bilan). */
