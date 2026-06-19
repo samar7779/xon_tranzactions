@@ -388,6 +388,15 @@ export class CounterpartiesService {
     const existing = await this.prisma.counterparty.findUnique({ where: { inn } });
     if (!existing) throw new NotFoundException('Kontragent topilmadi');
 
+    // Auto-refresh sozlamasi o'chirilgan bo'lsa — bitta qatorni yangilash ham bloklanadi
+    // (admin to'liq cheklov istagan, DIDOX/Chamber'ga hech qanday so'rov yubormaymiz).
+    const enabled = await this.isAutoRefreshEnabled();
+    if (!enabled) {
+      throw new BadRequestException(
+        "DIDOX va Chamber so'rovlari o'chirilgan. Avval Settings'dan yoqing.",
+      );
+    }
+
     // Nostandart INN — DIDOX/Chamber'ga so'rov yubormaymiz
     if (!isStandardInn(inn)) {
       const friendly = 'Nostandart INN — qo\'lda kiritilgan. Avto-yangilash mumkin emas, "Tahrirlash" tugmasidan foydalaning.';
