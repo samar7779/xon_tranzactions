@@ -239,9 +239,17 @@ function ChatsTab() {
   });
 
   const resetMut = useMutation({
-    mutationFn: () => api.post<{ ok: true; cleared: number }>('/sverka-telegram/reset-notified'),
+    mutationFn: async () => {
+      // 1) Avval notified set'ni tozalaymiz
+      const reset = await api.post<{ ok: true; cleared: number }>('/sverka-telegram/reset-notified');
+      // 2) Keyin reconcile/today'ni qaytadan chaqiramiz — bu safar notification fire bo'ladi
+      await api.get('/transactions/reconcile/today');
+      return reset;
+    },
     onSuccess: (r) => {
-      toast.success(`Notifikatsiyalar reset qilindi (${r.cleared} ta hisob). Keyingi sverka'da barcha farqlar uchun xabar yuboriladi.`);
+      toast.success(`Reset OK (${r.cleared} ta tozalandi). Sverka qayta tekshirildi — farqlar bo'lsa Telegram'ga xabar yuborildi.`);
+      // Asosiy Sverka sahifa va history'ni invalidate qilamiz
+      qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       qc.invalidateQueries({ queryKey: ['sverka-tg-history'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
