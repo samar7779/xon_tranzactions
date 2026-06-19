@@ -47,6 +47,7 @@ export class SverkaTelegramService {
   private static readonly KEY_CHATS     = 'sverka.telegram.chats';
   private static readonly KEY_HISTORY   = 'sverka.telegram.history';
   private static readonly KEY_PASSWORD  = 'sverka.telegram.password';
+  private static readonly KEY_NOTIFIED_TODAY = 'sverka.telegram.notifiedToday';
 
   private static readonly HISTORY_LIMIT = 500;
   private static readonly DEFAULT_PASSWORD = '7779';
@@ -285,6 +286,114 @@ export class SverkaTelegramService {
       details: { sent: result.sent, failed: result.failed },
     });
     return result;
+  }
+
+  /**
+   * Yangi farq topilgan bo'lsa Telegram'ga xabar yuboradi.
+   * Spam'ni oldini olish: shu kun ichida bir kontrakt uchun
+   * bir martagina xabar ketadi (notifiedToday set).
+   *
+   * @param items reconcileToday natijasi (status='mismatch' bo'lganlar)
+   * @param date  sverka sanasi
+   */
+  async notifyNewMismatches(
+    items: Array<{
+      accountId: string;
+      status: string;
+      ok?: boolean;
+      accountNo?: string;
+      ownerName?: string | null;
+      bankName?: string | null;
+      diff?: { credit?: number; debit?: number; formula?: number };
+      bank?: { credit?: number; debit?: number };
+    }>,
+    date: string,
+  ): Promise<void> {
+    try {
+      const mismatches = (items || []).filter(
+        (it) => it.status === 'mismatch' && !it.ok,
+      );
+      if (mismatches.length === 0) return;
+
+      // Bugungi notified set'ni o'qish
+      const setting = await this.prisma.setting.findUnique({
+        where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+      });
+      let stored: { date: string; keys: string[] } | null = null;
+      if (setting?.value) {
+        try { stored = JSON.parse(setting.value); } catch { stored = null; }
+      }
+      const notifiedKeys = new Set<string>(
+        stored && stored.date === date ? stored.keys : [],
+      );
+
+      const newOnes: typeof mismatches = [];
+      for (const it of mismatches) {
+        if (!notifiedKeys.has(it.accountId)) {
+          newOnes.push(it);
+          notifiedKeys.add(it.accountId);
+        }
+      }
+      if (newOnes.length === 0) return;
+
+      // Notification yuborish (har biri uchun alohida)
+      for (const it of newOnes) {
+        const farqAmount =
+          Math.abs(Number(it.diff?.formula) || 0) ||
+          Math.abs(Number(it.diff?.credit) || 0) ||
+          Math.abs(Number(it.diff?.debit) || 0);
+
+        const lines: string[] = [];
+        lines.push(`⚠️ <b>Sverka farq aniqlandi</b>`);
+        lines.push('');
+        if (it.bankName) lines.push(`<b>Bank:</b> ${it.bankName}`);
+        if (it.accountNo) lines.push(`<b>Hisob:</b> <code>${it.accountNo}</code>`);
+        if (it.ownerName) lines.push(`<b>Egasi:</b> ${it.ownerName}`);
+        lines.push(`<b>Sana:</b> ${date}`);
+        if (farqAmount > 0) {
+          lines.push(`<b>Farq:</b> <code>${farqAmount.toLocaleString('ru-RU')}</code> UZS`);
+        }
+        lines.push('');
+        lines.push(`<i>Tekshiring va kerakli amalni bajaring.</i>`);
+
+        this.sendNotification({ text: lines.join('\n'), role: 'all' }).catch((e) => {
+          this.log.warn(`Mismatch notification yuborish xato: ${e?.message}`);
+        });
+      }
+
+      // History'ga yozish — bitta umumiy yozuv (har biriga alohida emas — spam emas)
+      await this.appendHistory({
+        action: 'mismatch_detected',
+        source: 'web',
+        actorId: null,
+        actorName: 'system',
+        details: {
+          date,
+          new: newOnes.length,
+          total: mismatches.length,
+        },
+      });
+
+      // Yangi notified set'ni saqlash
+      await this.prisma.setting.upsert({
+        where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+        create: {
+          key: SverkaTelegramService.KEY_NOTIFIED_TODAY,
+          value: JSON.stringify({ date, keys: [...notifiedKeys] }),
+          updatedBy: 'system',
+        },
+        update: {
+          value: JSON.stringify({ date, keys: [...notifiedKeys] }),
+          updatedBy: 'system',
+        },
+      });
+
+      this.log.log(
+        `Mismatch notification: ${newOnes.length} yangi (jami ${mismatches.length} mismatch, sana ${date})`,
+      );
+    } catch (e: any) {
+      this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
+    }
   }
 
   /**
