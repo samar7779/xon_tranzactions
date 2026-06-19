@@ -438,39 +438,18 @@ export default function CounterpartiesPage() {
               </button>
             )}
 
-            {/* Actions — bitta dropdown ichida */}
+            {/* Actions — faqat Excel export icon (Yangi kontragent Settings dialogga ko'chirildi) */}
             <div className="ml-auto flex items-center gap-2">
               <div className="h-8 w-px bg-slate-200 dark:bg-slate-700" />
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    title={t('actions')}
-                    aria-label={t('actions')}
-                    className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-xl bg-gradient-to-br from-indigo-600 via-violet-600 to-blue-600 text-white shadow-sm hover:shadow-md hover:shadow-indigo-500/30 transition-all"
-                  >
-                    {refreshAllMut.isPending
-                      ? <Loader2 className="h-4 w-4 animate-spin" />
-                      : <Plus className="h-4 w-4" />}
-                    <span className="text-[12px] font-semibold">{t('actions')}</span>
-                    <ChevronDown className="h-3.5 w-3.5 opacity-80" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  {canManage && (
-                    <DropdownMenuItem onClick={() => setAddOpen(true)} className="cursor-pointer">
-                      <Plus className="h-4 w-4 mr-2 text-indigo-600" />
-                      <span className="font-medium">{t('add')}</span>
-                    </DropdownMenuItem>
-                  )}
-                  {/* Import endi alohida sahifaga ko'chirildi: /admin/import → Kontragentlar tab */}
-                  <DropdownMenuItem onClick={onExport} className="cursor-pointer">
-                    <Download className="h-4 w-4 mr-2 text-blue-600" />
-                    <span className="font-medium">{t('export')}</span>
-                  </DropdownMenuItem>
-                  {/* 'Hammasini yangilash' Settings dialogiga ko'chirildi (gear ikonchasi) */}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <button
+                type="button"
+                onClick={onExport}
+                title={t('export')}
+                aria-label={t('export')}
+                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:ring-blue-300 dark:hover:ring-blue-800 text-blue-600 dark:text-blue-400 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -839,6 +818,11 @@ export default function CounterpartiesPage() {
       <CounterpartiesSettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
+        canManage={canManage}
+        onAddNew={() => {
+          setSettingsOpen(false);
+          setAddOpen(true);
+        }}
       />
     </div>
   );
@@ -868,10 +852,12 @@ const ACTION_META: Record<string, { label: string; icon: string; tone: string }>
 };
 
 function CounterpartiesSettingsDialog({
-  open, onOpenChange,
+  open, onOpenChange, canManage, onAddNew,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  canManage: boolean;
+  onAddNew: () => void;
 }) {
   const qc = useQueryClient();
   const [tab, setTab] = useState<'settings' | 'history'>('settings');
@@ -967,6 +953,33 @@ function CounterpartiesSettingsDialog({
           <div className="flex-1 overflow-y-auto p-5">
             {tab === 'settings' ? (
               <div className="space-y-4">
+                {/* Yangi kontragent qo'shish */}
+                {canManage && (
+                  <div className="rounded-xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/20 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 grid place-items-center shrink-0">
+                        <Plus className="h-5 w-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-[13.5px] text-slate-900 dark:text-slate-100 mb-1">
+                          Yangi kontragent
+                        </div>
+                        <div className="text-[11.5px] text-slate-600 dark:text-slate-400 mb-3">
+                          INN va nom kiritib qo'shing — qolgani DIDOX/Chamber'dan avtomatik to'ldiriladi.
+                        </div>
+                        <Button
+                          size="sm"
+                          onClick={onAddNew}
+                          className="bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm hover:from-indigo-600 hover:to-violet-700 gap-1.5"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Yangi kontragent qo'shish
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Auto-refresh toggle */}
                 <div className={cn(
                   'rounded-xl ring-1 p-4 transition-all',
