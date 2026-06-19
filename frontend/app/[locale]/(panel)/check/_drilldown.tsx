@@ -898,6 +898,9 @@ function DiagItem({
                 try {
                   await api.post('/transactions/reconcile/fix-tx-date', { txId: it.existingTxId, newDate: date });
                   toast.success(t('dateFixed', { from: it.existsOnDate ?? '', to: date ?? '' }));
+                  // Parent today query'sini ham invalidate qilamiz (asosiy sahifa
+                  // ham yangi natijani ko'rsatishi uchun)
+                  qc.invalidateQueries({ queryKey: ['reconcile-today'] });
                   onFixed?.();
                 } catch (e: any) { toast.error(e?.message || t('error')); }
               }}
