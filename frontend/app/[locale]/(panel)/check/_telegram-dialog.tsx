@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Send, History, Lock, Trash2, Plus, Eye, EyeOff, Loader2, X,
   Clock, Search, AlertCircle, CheckCircle2, ShieldCheck, MessageSquare,
-  Bot, Users,
+  Bot, Users, Bell,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -238,6 +238,15 @@ function ChatsTab() {
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
+  const resetMut = useMutation({
+    mutationFn: () => api.post<{ ok: true; cleared: number }>('/sverka-telegram/reset-notified'),
+    onSuccess: (r) => {
+      toast.success(`Notifikatsiyalar reset qilindi (${r.cleared} ta hisob). Keyingi sverka'da barcha farqlar uchun xabar yuboriladi.`);
+      qc.invalidateQueries({ queryKey: ['sverka-tg-history'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
   const chats = chatsQuery.data || [];
 
   return (
@@ -301,15 +310,31 @@ function ChatsTab() {
           <div className="text-[12.5px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
             Chatlar ({chats.length})
           </div>
-          <Button
-            variant="outline"
-            onClick={() => testMut.mutate()}
-            disabled={chats.length === 0 || testMut.isPending}
-            className="h-9 text-[12.5px] gap-1.5 px-4"
-          >
-            {testMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
-            Test yuborish
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (confirm('Notifikatsiyalar tarixini tozalaysizmi? Keyingi sverka\'da yuborilmagan barcha farqlar uchun yangi xabar yuboriladi.')) {
+                  resetMut.mutate();
+                }
+              }}
+              disabled={resetMut.isPending}
+              className="h-9 text-[12.5px] gap-1.5 px-3 border-amber-200 text-amber-700 hover:bg-amber-50 dark:border-amber-900 dark:text-amber-300 dark:hover:bg-amber-950/40"
+              title="Bugungi notified set'ni tozalash — keyingi sverka'da barcha farqlar uchun xabar yuboriladi"
+            >
+              {resetMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />}
+              Notif. reset
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => testMut.mutate()}
+              disabled={chats.length === 0 || testMut.isPending}
+              className="h-9 text-[12.5px] gap-1.5 px-4"
+            >
+              {testMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <MessageSquare className="h-3.5 w-3.5" />}
+              Test yuborish
+            </Button>
+          </div>
         </div>
 
         {chatsQuery.isLoading ? (

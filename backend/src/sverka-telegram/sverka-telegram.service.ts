@@ -328,13 +328,8 @@ export class SverkaTelegramService {
         stored && stored.date === date ? stored.keys : [],
       );
 
-      const newOnes: typeof mismatches = [];
-      for (const it of mismatches) {
-        if (!notifiedKeys.has(it.accountId)) {
-          newOnes.push(it);
-          notifiedKeys.add(it.accountId);
-        }
-      }
+      // Faqat hali xabar yuborilmagan hisoblar
+      const newOnes: typeof mismatches = mismatches.filter((it) => !notifiedKeys.has(it.accountId));
       if (newOnes.length === 0) return;
 
       const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
@@ -385,12 +380,21 @@ export class SverkaTelegramService {
         lines.push(`<i>Sayt'ga kiring va kerakli amalni bajaring:</i>`);
         lines.push(`<i>transactions.xonapps.uz/uz/check</i>`);
 
-        this.sendNotification({ text: lines.join('\n'), role: 'all' }).catch((e) => {
-          this.log.warn(`Mismatch notification yuborish xato: ${e?.message}`);
-        });
+        // SEND first, THEN mark as notified — agar muvaffaqiyatsiz bo'lsa
+        // notified set'ga qo'shilmaydi va keyingi safar qaytadan urinadi.
+        const result = await this.sendNotification({ text: lines.join('\n'), role: 'all' });
+        if (result.sent > 0) {
+          notifiedKeys.add(it.accountId);
+          this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${result.sent}, failed=${result.failed})`);
+        } else {
+          this.log.warn(
+            `Mismatch notification YUBORILMADI ${it.accountNo}: sent=${result.sent}, failed=${result.failed}, errors=${result.errors.join(' | ')}`,
+          );
+        }
       }
 
       // History'ga yozish — bitta umumiy yozuv (har biriga alohida emas — spam emas)
+      const actuallySent = newOnes.filter((it) => notifiedKeys.has(it.accountId)).length;
       await this.appendHistory({
         action: 'mismatch_detected',
         source: 'web',
@@ -398,12 +402,13 @@ export class SverkaTelegramService {
         actorName: 'system',
         details: {
           date,
-          new: newOnes.length,
+          attempted: newOnes.length,
+          sent: actuallySent,
           total: mismatches.length,
         },
       });
 
-      // Yangi notified set'ni saqlash
+      // Yangi notified set'ni saqlash (faqat haqiqatan yuborilganlar)
       await this.prisma.setting.upsert({
         where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
         create: {
@@ -418,7 +423,7 @@ export class SverkaTelegramService {
       });
 
       this.log.log(
-        `Mismatch notification: ${newOnes.length} yangi (jami ${mismatches.length} mismatch, sana ${date})`,
+        `Mismatch notification: ${actuallySent}/${newOnes.length} yangi yuborildi (jami ${mismatches.length} mismatch, sana ${date})`,
       );
     } catch (e: any) {
       this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
@@ -457,6 +462,36 @@ export class SverkaTelegramService {
     if (p.accountInfo) {
       this.removeFromNotified(p.accountInfo).catch(() => {});
     }
+  }
+
+  /**
+   * Notified set'ni tozalash — keyingi sverka'da barcha mismatchlar
+   * yangidan xabar yuboriladi. Test va qayta-yuborish uchun.
+   */
+  async resetNotifiedToday(actor?: { id: string | null; name: string | null }): Promise<{ ok: true; cleared: number }> {
+    const setting = await this.prisma.setting.findUnique({
+      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+    });
+    let cleared = 0;
+    if (setting?.value) {
+      try {
+        const parsed = JSON.parse(setting.value);
+        cleared = Array.isArray(parsed?.keys) ? parsed.keys.length : 0;
+      } catch {}
+    }
+    await this.prisma.setting.upsert({
+      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify({ date: '', keys: [] }), updatedBy: actor?.name || 'system' },
+      update: { value: JSON.stringify({ date: '', keys: [] }), updatedBy: actor?.name || 'system' },
+    });
+    await this.appendHistory({
+      action: 'notified_reset',
+      source: 'web',
+      actorId: actor?.id || null,
+      actorName: actor?.name || null,
+      details: { cleared },
+    });
+    return { ok: true, cleared };
   }
 
   /**
