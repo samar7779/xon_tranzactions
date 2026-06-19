@@ -8,7 +8,7 @@ import {
   Search, Plus, Upload, Download, RefreshCw, X, Loader2,
   Briefcase, User, Phone, MapPin, FileText, Trash2, Eye, MoreVertical,
   AlertCircle, CheckCircle2, Clock, Star, Building2, Tag, Receipt,
-  ChevronDown,
+  ChevronDown, Settings as SettingsIcon, Power, History, Lock, ShieldAlert,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -117,6 +117,7 @@ export default function CounterpartiesPage() {
   const [detailRow, setDetailRow] = useState<Counterparty | null>(null);
   const [editRow, setEditRow] = useState<Counterparty | null>(null);
   const [refreshingInn, setRefreshingInn] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function buildQueryParams(): URLSearchParams {
@@ -308,6 +309,19 @@ export default function CounterpartiesPage() {
         {/* Search + compact filter dropdowns + actions */}
         <Card className="border-0 shadow-soft overflow-visible">
           <CardContent className="p-4 flex items-center gap-2 flex-wrap">
+            {/* Settings icon — auto-refresh toggle, refresh all, truncate, tarix */}
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => setSettingsOpen(true)}
+                title="Sozlamalar va tarix"
+                aria-label="Sozlamalar"
+                className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 hover:ring-slate-300 dark:hover:ring-slate-600 text-slate-600 dark:text-slate-300 transition-colors shrink-0"
+              >
+                <SettingsIcon className="h-4 w-4" />
+              </button>
+            )}
+
             {/* Search */}
             <div className="relative flex-1 min-w-[240px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
@@ -454,21 +468,7 @@ export default function CounterpartiesPage() {
                     <Download className="h-4 w-4 mr-2 text-blue-600" />
                     <span className="font-medium">{t('export')}</span>
                   </DropdownMenuItem>
-                  {canManage && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => refreshAllMut.mutate()}
-                        disabled={refreshAllMut.isPending}
-                        className="cursor-pointer"
-                      >
-                        {refreshAllMut.isPending
-                          ? <Loader2 className="h-4 w-4 mr-2 animate-spin text-amber-600" />
-                          : <RefreshCw className="h-4 w-4 mr-2 text-amber-600" />}
-                        <span className="font-medium">{t('refreshAll')}</span>
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  {/* 'Hammasini yangilash' Settings dialogiga ko'chirildi (gear ikonchasi) */}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -834,7 +834,405 @@ export default function CounterpartiesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Settings dialog (gear icon) ─── */}
+      <CounterpartiesSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+      />
     </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   COUNTERPARTIES SETTINGS DIALOG
+// ═══════════════════════════════════════════════════════════════
+
+type ActivityLogEntry = {
+  timestamp: string;
+  action: string;
+  actorId: string | null;
+  actorName: string | null;
+  details: any;
+};
+
+const ACTION_META: Record<string, { label: string; icon: string; tone: string }> = {
+  refresh_all_started:     { label: 'Hammasini yangilash boshlandi',      icon: '🔄', tone: 'indigo' },
+  refresh_all_completed:   { label: 'Hammasini yangilash yakunlandi',      icon: '✓',  tone: 'emerald' },
+  auto_refresh_enabled:    { label: 'Avto-yangilash YOQILDI',              icon: '🟢', tone: 'emerald' },
+  auto_refresh_disabled:   { label: 'Avto-yangilash O\'CHIRILDI',          icon: '🔴', tone: 'rose' },
+  truncated:               { label: 'BAZA TOZALANDI (truncate)',           icon: '🗑️', tone: 'rose' },
+  imported:                { label: 'Excel\'dan import qilindi',           icon: '📥', tone: 'violet' },
+  manual_refresh:          { label: 'Qo\'lda yangilash',                   icon: '👆', tone: 'amber' },
+  deleted:                 { label: 'Qator o\'chirildi',                   icon: '✗',  tone: 'rose' },
+};
+
+function CounterpartiesSettingsDialog({
+  open, onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const qc = useQueryClient();
+  const [tab, setTab] = useState<'settings' | 'history'>('settings');
+  const [truncateOpen, setTruncateOpen] = useState(false);
+
+  const settingsQuery = useQuery({
+    queryKey: ['counterparties-settings'],
+    queryFn: () => api.get<{ autoRefreshEnabled: boolean }>('/counterparties/_settings'),
+    enabled: open,
+    refetchOnWindowFocus: false,
+  });
+
+  const logQuery = useQuery({
+    queryKey: ['counterparties-activity-log'],
+    queryFn: () => api.get<{ ok: boolean; items: ActivityLogEntry[] }>('/counterparties/_activity-log?limit=100'),
+    enabled: open && tab === 'history',
+    refetchOnWindowFocus: false,
+  });
+
+  const toggleMut = useMutation({
+    mutationFn: (enabled: boolean) => api.post<{ ok: boolean; enabled: boolean }>('/counterparties/_settings/auto-refresh', { enabled }),
+    onSuccess: (r) => {
+      toast.success(r.enabled ? 'Avto-yangilash YOQILDI' : 'Avto-yangilash O\'CHIRILDI');
+      qc.invalidateQueries({ queryKey: ['counterparties-settings'] });
+      qc.invalidateQueries({ queryKey: ['counterparties-activity-log'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const refreshAllMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/counterparties/refresh-all'),
+    onSuccess: (r: any) => {
+      if (r?.ok && r?.started) toast.success(r?.message || 'Yangilash boshlandi');
+      else toast.warning(r?.message || 'Yangilash boshlanmadi');
+      qc.invalidateQueries({ queryKey: ['counterparties-activity-log'] });
+      setTimeout(() => qc.invalidateQueries({ queryKey: ['counterparties'] }), 30_000);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const enabled = settingsQuery.data?.autoRefreshEnabled ?? true;
+  const items = logQuery.data?.items || [];
+
+  return (
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden p-0 gap-0 flex flex-col">
+          {/* Header */}
+          <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-700 to-slate-900 dark:from-slate-200 dark:to-slate-100 grid place-items-center text-white dark:text-slate-900">
+                  <SettingsIcon className="h-4 w-4" />
+                </div>
+                Kontragentlar — sozlamalar
+              </DialogTitle>
+              <DialogDescription className="text-[12px]">
+                Auto-yangilash holatini boshqarish, hammasini yangilash, baza tozalash va tarix.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          {/* Tabs */}
+          <div className="px-5 pt-3 border-b border-slate-200 dark:border-slate-800 flex gap-1">
+            <button
+              onClick={() => setTab('settings')}
+              className={cn(
+                'px-3 py-2 text-[12.5px] font-semibold border-b-2 transition-colors -mb-px',
+                tab === 'settings' ? 'border-indigo-600 text-indigo-700 dark:text-indigo-300' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+              )}
+            >
+              <SettingsIcon className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+              Sozlamalar
+            </button>
+            <button
+              onClick={() => setTab('history')}
+              className={cn(
+                'px-3 py-2 text-[12.5px] font-semibold border-b-2 transition-colors -mb-px',
+                tab === 'history' ? 'border-indigo-600 text-indigo-700 dark:text-indigo-300' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300',
+              )}
+            >
+              <History className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+              Tarix
+              {items.length > 0 && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                  {items.length}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-5">
+            {tab === 'settings' ? (
+              <div className="space-y-4">
+                {/* Auto-refresh toggle */}
+                <div className={cn(
+                  'rounded-xl ring-1 p-4 transition-all',
+                  enabled
+                    ? 'ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30'
+                    : 'ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/30',
+                )}>
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      'w-10 h-10 rounded-lg grid place-items-center shrink-0',
+                      enabled
+                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300',
+                    )}>
+                      <Power className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="font-bold text-[13.5px] text-slate-900 dark:text-slate-100">
+                          DIDOX va Chamber so'rovlari
+                        </div>
+                        <button
+                          onClick={() => toggleMut.mutate(!enabled)}
+                          disabled={toggleMut.isPending || settingsQuery.isLoading}
+                          className={cn(
+                            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0',
+                            enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700',
+                          )}
+                        >
+                          <span className={cn(
+                            'inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform',
+                            enabled ? 'translate-x-5' : 'translate-x-0.5',
+                          )} />
+                        </button>
+                      </div>
+                      <div className="text-[11.5px] text-slate-600 dark:text-slate-400 mt-1">
+                        {enabled ? (
+                          <>✓ Yoqilgan — har soatda (08:00-22:00) avtomatik yangilanadi va qo'lda ham ishlatish mumkin.</>
+                        ) : (
+                          <>✗ O'chirilgan — cron va qo'lda yangilash <strong>BLOKLANGAN</strong>. Hech qanday so'rov DIDOX/Chamber'ga yuborilmaydi.</>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Refresh all button */}
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 grid place-items-center shrink-0">
+                      <RefreshCw className={cn('h-5 w-5', refreshAllMut.isPending && 'animate-spin')} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[13.5px] text-slate-900 dark:text-slate-100 mb-1">
+                        Hammasini yangilash
+                      </div>
+                      <div className="text-[11.5px] text-slate-600 dark:text-slate-400 mb-3">
+                        Barcha standart INN'lar uchun DIDOX + Chamber so'rovi yuboriladi. Fonda ishlaydi.
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => refreshAllMut.mutate()}
+                        disabled={refreshAllMut.isPending || !enabled}
+                        className="bg-gradient-to-br from-amber-500 to-orange-600 text-white shadow-sm hover:from-amber-600 hover:to-orange-700 gap-1.5"
+                      >
+                        {refreshAllMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+                        Hammasini yangilash
+                      </Button>
+                      {!enabled && (
+                        <div className="text-[11px] text-rose-600 dark:text-rose-400 mt-2 flex items-center gap-1.5">
+                          <AlertCircle className="h-3 w-3" />
+                          Avval yuqoridagi togglni yoqing — so'rovlar o'chirilgan
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Truncate (DANGER) */}
+                <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/30 dark:bg-rose-950/20 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 grid place-items-center shrink-0">
+                      <ShieldAlert className="h-5 w-5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-[13.5px] text-rose-900 dark:text-rose-300 mb-1">
+                        Bazani tozalash (DANGER)
+                      </div>
+                      <div className="text-[11.5px] text-rose-700 dark:text-rose-400 mb-3">
+                        BARCHA kontragentlar va ularning tarixi o'chiriladi. Bu amal qaytarib bo'lmaydi. Parol talab qilinadi.
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setTruncateOpen(true)}
+                        className="border-rose-200 dark:border-rose-900 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/30 gap-1.5"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Bazani tozalash...
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // ─── HISTORY TAB ───
+              <div>
+                {logQuery.isLoading ? (
+                  <div className="py-12 text-center text-slate-400">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    <div className="text-[12px]">Tarix yuklanmoqda...</div>
+                  </div>
+                ) : items.length === 0 ? (
+                  <div className="py-12 text-center text-slate-400 dark:text-slate-500">
+                    <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <div className="text-[13px] font-medium">Tarix bo'sh</div>
+                    <div className="text-[11px] mt-1">Auto-refresh yoqilgach yoki amallar bajarilgach, bu yerda ko'rinadi.</div>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {items.map((entry, i) => {
+                      const meta = ACTION_META[entry.action] || { label: entry.action, icon: '•', tone: 'slate' };
+                      const tones: Record<string, string> = {
+                        indigo:  'bg-indigo-50  dark:bg-indigo-950/40  ring-indigo-200  dark:ring-indigo-900  text-indigo-900  dark:text-indigo-300',
+                        emerald: 'bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-300',
+                        amber:   'bg-amber-50   dark:bg-amber-950/40   ring-amber-200   dark:ring-amber-900   text-amber-900   dark:text-amber-300',
+                        rose:    'bg-rose-50    dark:bg-rose-950/40    ring-rose-200    dark:ring-rose-900    text-rose-900    dark:text-rose-300',
+                        violet:  'bg-violet-50  dark:bg-violet-950/40  ring-violet-200  dark:ring-violet-900  text-violet-900  dark:text-violet-300',
+                        slate:   'bg-slate-50   dark:bg-slate-900     ring-slate-200    dark:ring-slate-700   text-slate-700   dark:text-slate-300',
+                      };
+                      return (
+                        <div
+                          key={i}
+                          className={cn('rounded-lg ring-1 px-3 py-2 flex items-start gap-2.5', tones[meta.tone] || tones.slate)}
+                        >
+                          <div className="text-lg leading-none shrink-0 mt-0.5">{meta.icon}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12.5px] font-bold truncate">{meta.label}</div>
+                            <div className="text-[10.5px] opacity-80 flex items-center gap-2 mt-0.5">
+                              <Clock className="h-3 w-3" />
+                              <span>{formatDateTime(entry.timestamp)}</span>
+                              <span>·</span>
+                              <span className="truncate">{entry.actorName || 'cron'}</span>
+                            </div>
+                            {entry.details && (
+                              <div className="text-[10.5px] opacity-75 mt-1 font-mono">
+                                {Object.entries(entry.details).map(([k, v]) => (
+                                  <span key={k} className="mr-2">{k}={String(v)}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex justify-end">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Yopish</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Truncate password dialog */}
+      <TruncatePasswordDialog
+        open={truncateOpen}
+        onOpenChange={setTruncateOpen}
+        onSuccess={() => {
+          setTruncateOpen(false);
+          onOpenChange(false);
+          qc.invalidateQueries({ queryKey: ['counterparties'] });
+          qc.invalidateQueries({ queryKey: ['counterparties-activity-log'] });
+        }}
+      />
+    </>
+  );
+}
+
+function TruncatePasswordDialog({
+  open, onOpenChange, onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const [password, setPassword] = useState('');
+  const [confirmText, setConfirmText] = useState('');
+
+  const truncateMut = useMutation({
+    mutationFn: (pw: string) => api.post<{ ok: boolean; deleted: { counterparties: number; history: number } }>('/counterparties/_truncate', { password: pw }),
+    onSuccess: (r) => {
+      toast.success(`Tozalandi: ${r.deleted.counterparties} kontragent + ${r.deleted.history} tarix qator`);
+      setPassword('');
+      setConfirmText('');
+      onSuccess();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  useEffect(() => {
+    if (!open) {
+      setPassword('');
+      setConfirmText('');
+    }
+  }, [open]);
+
+  const canSubmit = password.length > 0 && confirmText === 'TOZALA';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-rose-700 dark:text-rose-300">
+            <ShieldAlert className="h-5 w-5" />
+            Bazani tozalashni tasdiqlash
+          </DialogTitle>
+          <DialogDescription className="text-[12px]">
+            Bu amal <strong>QAYTARIB BO'LMAYDI</strong>. Barcha kontragentlar va ularning tarixi o'chiriladi.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 pt-2">
+          <div>
+            <Label htmlFor="trunc-pw" className="text-[11.5px] font-bold uppercase tracking-wider">Parol</Label>
+            <Input
+              id="trunc-pw"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Parolni kiriting"
+              className="mt-1.5 font-mono"
+              autoFocus
+            />
+          </div>
+          <div>
+            <Label htmlFor="trunc-confirm" className="text-[11.5px] font-bold uppercase tracking-wider">
+              Tasdiqlash uchun "TOZALA" deb yozing
+            </Label>
+            <Input
+              id="trunc-confirm"
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="TOZALA"
+              className="mt-1.5 font-mono"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={truncateMut.isPending}>
+            Bekor qilish
+          </Button>
+          <Button
+            onClick={() => truncateMut.mutate(password)}
+            disabled={!canSubmit || truncateMut.isPending}
+            className="bg-rose-600 hover:bg-rose-700 text-white gap-1.5"
+          >
+            {truncateMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            HAMMASINI TOZALASH
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

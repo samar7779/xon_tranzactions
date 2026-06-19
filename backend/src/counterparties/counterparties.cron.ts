@@ -15,7 +15,13 @@ export class CounterpartiesCron {
   constructor(private svc: CounterpartiesService) {}
 
   @Cron('0 8-22 * * *', { name: 'counterparties-refresh', timeZone: 'Asia/Tashkent' })
-  refreshHourly() {
+  async refreshHourly() {
+    // Avval auto-refresh sozlamasini tekshirish — admin o'chirib qo'ygan bo'lishi mumkin
+    const enabled = await this.svc.isAutoRefreshEnabled();
+    if (!enabled) {
+      this.log.log('Cron: kontragentlarni yangilash O\'CHIRILGAN (settings) — skip');
+      return;
+    }
     this.log.log('Cron: kontragentlarni yangilash boshlandi');
     // refreshAll endi background'ga ishlaydi — log o'zi yozadi
     this.svc.refreshAll();
