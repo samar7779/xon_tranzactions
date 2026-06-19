@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { ShowcaseStage } from '@/components/showcase-stage';
 import { LoginTicker } from '@/components/login-ticker';
-import { playClick, playScan, playSuccess } from '@/lib/login-sounds';
+import { vibrate } from '@/lib/login-sounds';
 
 export default function LoginPage() {
   const t = useTranslations('auth');
@@ -36,11 +36,11 @@ export default function LoginPage() {
 
   // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
   // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
-  // Sound'lar: click → 0.3s scan → 2.0s success (ACCESS GRANTED bilan birga)
+  // Tovush o'rniga — haptik vibratsiya: click → 0.3s scan → 2.0s success (ACCESS GRANTED bilan birga)
   const handleKirish = () => {
-    playClick();
-    setTimeout(() => playScan(), 300);
-    setTimeout(() => playSuccess(), 2000);
+    vibrate(40);                                            // KIRISH bosildi — qisqa
+    setTimeout(() => vibrate(120), 300);                    // scan — uzunroq buzz
+    setTimeout(() => vibrate([60, 50, 60, 50, 140]), 2000); // success — pattern
     setScanning(true);
     setTimeout(() => {
       setOpen(true);
