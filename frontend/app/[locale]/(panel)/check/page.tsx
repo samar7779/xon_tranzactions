@@ -8,7 +8,9 @@ import { toast } from 'sonner';
 import {
   Scale, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
   Search, X, ChevronRight, Wifi, Building2, TrendingUp, Receipt,
+  Send, History, Lock, Trash2, Plus, Eye, EyeOff, Clock,
 } from 'lucide-react';
+import { SverkaTelegramDialog } from './_telegram-dialog';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +56,7 @@ export default function CheckPage() {
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
   const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
   const [showErrors, setShowErrors] = useState(false);
+  const [tgDialogOpen, setTgDialogOpen] = useState(false);
 
   // Bugungi sverka — live: 20 minutda avto + window focus'da yangilanadi
   // Default: sync'siz (tez). Manual refresh'da syncMismatched=true ishlatamiz.
@@ -168,18 +171,32 @@ export default function CheckPage() {
               </div>
             </div>
           </div>
-          <Button
-            onClick={refreshAll}
-            disabled={isRefreshing}
-            className="h-10 rounded-xl font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 gap-1.5 shadow-md shadow-violet-500/20"
-          >
-            {isRefreshing ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> {t('refreshing')}</>
-            ) : (
-              <><RefreshCw className="h-4 w-4" /> {t('refreshAll')}</>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTgDialogOpen(true)}
+              title="Telegram bot va tarix"
+              aria-label="Telegram boshqaruv"
+              className="inline-flex items-center justify-center h-10 w-10 rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-sky-50 dark:hover:bg-sky-950/40 hover:ring-sky-300 dark:hover:ring-sky-700 text-sky-600 dark:text-sky-400 transition-colors shrink-0"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+            <Button
+              onClick={refreshAll}
+              disabled={isRefreshing}
+              className="h-10 rounded-xl font-semibold bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 gap-1.5 shadow-md shadow-violet-500/20"
+            >
+              {isRefreshing ? (
+                <><Loader2 className="h-4 w-4 animate-spin" /> {t('refreshing')}</>
+              ) : (
+                <><RefreshCw className="h-4 w-4" /> {t('refreshAll')}</>
+              )}
+            </Button>
+          </div>
         </div>
+
+        {/* Telegram dialog (parol + chat boshqaruvi + tarix) */}
+        <SverkaTelegramDialog open={tgDialogOpen} onOpenChange={setTgDialogOpen} />
 
         {/* ═══ KPI KARTALAR ═══ */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
