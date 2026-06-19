@@ -95,6 +95,52 @@ export class CounterpartiesController {
     return this.svc.truncateAll(body.password, { id: userId, name: email });
   }
 
+  // ─── Xontaminot integration ─────────────────────────────────
+  @Get('_xontaminot/settings')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Xontaminot sync sozlamalari + oxirgi sync info' })
+  getXontaminotSettings() {
+    return this.svc.getXontaminotSettings();
+  }
+
+  @Post('_xontaminot/settings')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
+  @ApiOperation({ summary: 'Xontaminot sync sozlamalarini yangilash' })
+  async setXontaminotSettings(
+    @Body() body: { autoSync?: boolean; intervalMin?: number; startHour?: number; endHour?: number },
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+  ) {
+    return this.svc.setXontaminotSettings(body, { id: userId, name: email });
+  }
+
+  @Get('_xontaminot/test')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Xontaminot DB ulanishni tekshirish' })
+  testXontaminot() {
+    return this.svc.testXontaminotConnection();
+  }
+
+  @Get('_xontaminot/status')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Xontaminot sync holati (ishlamoqdami?)' })
+  xontaminotStatus() {
+    return this.svc.getXontaminotSyncStatus();
+  }
+
+  @Post('_xontaminot/sync')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
+  @ApiOperation({
+    summary: 'Xontaminot bazasidan MIRROR sync (qo\'lda boshlash)',
+    description: "Background'da ishlaydi. Status: GET /_xontaminot/status",
+  })
+  async syncXontaminot(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+  ) {
+    return this.svc.syncFromXontaminot({ id: userId, name: email });
+  }
+
   @Get(':inn')
   @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
   @ApiOperation({ summary: 'Bitta kontragent' })

@@ -26,4 +26,20 @@ export class CounterpartiesCron {
     // refreshAll endi background'ga ishlaydi — log o'zi yozadi
     this.svc.refreshAll();
   }
+
+  /**
+   * Xontaminot cron — har 5 daqiqada tekshiradi, sozlamalardagi
+   * interval/soat oraliqlariga ko'ra ishga tushadi yoki o'tkazib yuboradi.
+   */
+  @Cron('*/5 * * * *', { name: 'counterparties-xontaminot-sync', timeZone: 'Asia/Tashkent' })
+  async xontaminotSyncTick() {
+    try {
+      const shouldRun = await this.svc.shouldRunXontaminotCron();
+      if (!shouldRun) return;
+      this.log.log('Xontaminot cron: sync boshlanmoqda');
+      await this.svc.syncFromXontaminot({ id: null, name: 'cron' });
+    } catch (e: any) {
+      this.log.error(`Xontaminot cron xato: ${e?.message}`);
+    }
+  }
 }
