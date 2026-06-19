@@ -141,13 +141,19 @@ export class TransactionsController {
   @Get('reconcile/today')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
   @ApiOperation({ summary: "Barcha aktiv hisoblar uchun bugungi sverka. syncMismatched=true bo'lsa farqli hisoblar uchun avto-sync+qayta sverka qiladi (smart 2-pass)" })
-  reconcileToday(
+  async reconcileToday(
     @Query('date') date?: string,
     @Query('syncMismatched') syncMismatched?: string,
   ) {
-    return this.reconcileSvc.reconcileToday(date, {
+    const result: any = await this.reconcileSvc.reconcileToday(date, {
       syncMismatched: syncMismatched === 'true',
     });
+    // Yangi farq topilgan bo'lsa Telegram'ga xabar yuboriladi (kun ichida
+    // bir hisob uchun bir martagina — spam emas).
+    if (result?.items && Array.isArray(result.items) && result.date) {
+      this.sverkaTg.notifyNewMismatches(result.items, result.date).catch(() => {});
+    }
+    return result;
   }
 
   @Post('reconcile/diagnose')
