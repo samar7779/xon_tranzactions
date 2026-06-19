@@ -103,4 +103,50 @@ export class CounterpartiesController {
   refreshAllStatus() {
     return this.svc.getRefreshAllStatus();
   }
+
+  // ─── Settings: Auto-refresh ON/OFF ────────────────────────────
+  @Get('_settings')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Kontragentlar sozlamalari (auto-refresh holati)' })
+  getSettings() {
+    return this.svc.getSettings();
+  }
+
+  @Post('_settings/auto-refresh')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
+  @ApiOperation({ summary: 'Auto-refresh ON/OFF (cron ham shu sozlamani tekshiradi)' })
+  async setAutoRefresh(
+    @Body() body: { enabled: boolean },
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+  ) {
+    return this.svc.setAutoRefresh(!!body?.enabled, { id: userId, name: email });
+  }
+
+  // ─── Activity log ────────────────────────────────────────────
+  @Get('_activity-log')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_VIEW)
+  @ApiOperation({ summary: 'Faoliyat tarixi (sync, truncate, settings)' })
+  async getActivityLog(@Query('limit') limit?: string) {
+    const items = await this.svc.getActivityLog(limit ? Number(limit) : 100);
+    return { ok: true, items };
+  }
+
+  // ─── Truncate (DESTRUCTIVE) — parol bilan ─────────────────────
+  @Post('_truncate')
+  @RequirePermissions(PERMISSIONS.COUNTERPARTIES_MANAGE)
+  @ApiOperation({
+    summary: "Butun kontragentlar bazasini TOZALASH (DANGER)",
+    description: "Barcha kontragent yozuvlari va ularning tarixini o'chiradi. Parol talab qilinadi (body.password).",
+  })
+  async truncate(
+    @Body() body: { password: string },
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+  ) {
+    if (!body?.password) {
+      throw new BadRequestException('Parol kerak');
+    }
+    return this.svc.truncateAll(body.password, { id: userId, name: email });
+  }
 }

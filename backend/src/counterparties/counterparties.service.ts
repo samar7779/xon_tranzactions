@@ -517,7 +517,18 @@ export class CounterpartiesService {
    * Foydalanuvchi 504 timeout kutmaydi: 100 ta kontragent = 5+ daqiqa ish.
    * Cron ham xuddi shu metodni chaqiradi.
    */
-  refreshAll(actorId?: string): { ok: true; started: boolean; message: string; runningSince?: string; progress?: { done: number; total: number } } {
+  async refreshAll(actorId?: string): Promise<{ ok: boolean; started: boolean; message: string; runningSince?: string; progress?: { done: number; total: number } }> {
+    // Auto-refresh o'chirilgan bo'lsa — qo'lda chaqirilsa ham bajarmaymiz
+    // (admin to'liq cheklov istagan, DIDOX/Chamber'ga so'rov yubormaymiz).
+    const enabled = await this.isAutoRefreshEnabled();
+    if (!enabled) {
+      this.log.warn(`refreshAll bloklandi — auto-refresh sozlamasi o'chirilgan (actor: ${actorId || 'cron'})`);
+      return {
+        ok: false,
+        started: false,
+        message: "DIDOX va Chamber so'rovlari o'chirilgan. Avval Settings'dan yoqing.",
+      };
+    }
     if (this.refreshAllRunning) {
       const since = this.refreshAllStartedAt;
       const mins = since ? Math.floor((Date.now() - since.getTime()) / 60000) : 0;
@@ -536,6 +547,13 @@ export class CounterpartiesService {
     this.runRefreshAllInBackground(actorId).catch((e) => {
       this.log.error(`refreshAll background xato: ${e?.message || e}`);
     });
+    // Activity log — manual yoki cron
+    this.appendActivityLog({
+      action: 'refresh_all_started',
+      actorId: actorId || null,
+      actorName: actorId ? null : 'cron',
+      details: null,
+    }).catch(() => {});
     return {
       ok: true,
       started: true,
@@ -863,6 +881,150 @@ export class CounterpartiesService {
       buffer,
       filename: `kontragentlar_${new Date().toISOString().slice(0, 10)}.xlsx`,
       count: items.length,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //   SETTINGS — Auto-refresh ON/OFF + Activity log
+  //   (Setting model orqali — yangi schema kerak emas)
+  // ═══════════════════════════════════════════════════════════════
+  private static readonly SETTING_AUTO_REFRESH = 'counterparties.autoRefreshEnabled';
+  private static readonly SETTING_ACTIVITY_LOG = 'counterparties.activityLog';
+  private static readonly TRUNCATE_PASSWORD = '7779';
+  private static readonly ACTIVITY_LOG_LIMIT = 200;
+
+  /** Auto-refresh yoqilganmi? (default: true) */
+  async isAutoRefreshEnabled(): Promise<boolean> {
+    const s = await this.prisma.setting.findUnique({
+      where: { key: CounterpartiesService.SETTING_AUTO_REFRESH },
+    });
+    if (!s?.value) return true; // default ON
+    return s.value === 'true';
+  }
+
+  /** Auto-refresh holatini o'zgartirish. */
+  async setAutoRefresh(enabled: boolean, actor?: { id: string | null; name: string | null }): Promise<{ ok: true; enabled: boolean }> {
+    await this.prisma.setting.upsert({
+      where: { key: CounterpartiesService.SETTING_AUTO_REFRESH },
+      create: {
+        key: CounterpartiesService.SETTING_AUTO_REFRESH,
+        value: enabled ? 'true' : 'false',
+        updatedBy: actor?.name || actor?.id || 'system',
+      },
+      update: {
+        value: enabled ? 'true' : 'false',
+        updatedBy: actor?.name || actor?.id || 'system',
+      },
+    });
+    await this.appendActivityLog({
+      action: enabled ? 'auto_refresh_enabled' : 'auto_refresh_disabled',
+      actorId: actor?.id || null,
+      actorName: actor?.name || null,
+      details: { enabled },
+    });
+    return { ok: true, enabled };
+  }
+
+  /** Settings ma'lumotini qaytarish. */
+  async getSettings(): Promise<{ autoRefreshEnabled: boolean }> {
+    return { autoRefreshEnabled: await this.isAutoRefreshEnabled() };
+  }
+
+  /** Activity log entry qo'shish (oxirgi N qator saqlanadi). */
+  async appendActivityLog(entry: {
+    action: string;
+    actorId: string | null;
+    actorName: string | null;
+    details?: any;
+  }): Promise<void> {
+    try {
+      const cur = await this.prisma.setting.findUnique({
+        where: { key: CounterpartiesService.SETTING_ACTIVITY_LOG },
+      });
+      let arr: any[] = [];
+      try {
+        arr = cur?.value ? JSON.parse(cur.value) : [];
+        if (!Array.isArray(arr)) arr = [];
+      } catch { arr = []; }
+
+      arr.unshift({
+        timestamp: new Date().toISOString(),
+        action: entry.action,
+        actorId: entry.actorId,
+        actorName: entry.actorName,
+        details: entry.details || null,
+      });
+      // Oxirgi N qator
+      if (arr.length > CounterpartiesService.ACTIVITY_LOG_LIMIT) {
+        arr = arr.slice(0, CounterpartiesService.ACTIVITY_LOG_LIMIT);
+      }
+
+      await this.prisma.setting.upsert({
+        where: { key: CounterpartiesService.SETTING_ACTIVITY_LOG },
+        create: {
+          key: CounterpartiesService.SETTING_ACTIVITY_LOG,
+          value: JSON.stringify(arr),
+          updatedBy: entry.actorName || 'system',
+        },
+        update: {
+          value: JSON.stringify(arr),
+          updatedBy: entry.actorName || 'system',
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`Activity log yozish xato: ${e?.message}`);
+    }
+  }
+
+  /** Activity log o'qish (oxirgi N qator). */
+  async getActivityLog(limit: number = 100): Promise<Array<{
+    timestamp: string;
+    action: string;
+    actorId: string | null;
+    actorName: string | null;
+    details: any;
+  }>> {
+    const cur = await this.prisma.setting.findUnique({
+      where: { key: CounterpartiesService.SETTING_ACTIVITY_LOG },
+    });
+    if (!cur?.value) return [];
+    try {
+      const arr = JSON.parse(cur.value);
+      if (!Array.isArray(arr)) return [];
+      return arr.slice(0, Math.max(1, Math.min(200, limit)));
+    } catch { return []; }
+  }
+
+  /** Butun kontragentlar bazasini TOZALASH (parol bilan). */
+  async truncateAll(password: string, actor?: { id: string | null; name: string | null }): Promise<{
+    ok: true;
+    deleted: { counterparties: number; history: number };
+  }> {
+    if (password !== CounterpartiesService.TRUNCATE_PASSWORD) {
+      throw new BadRequestException("Noto'g'ri parol");
+    }
+    // Avval CounterpartyHistory tozalash (FK constraint sababli)
+    const historyDel = await this.prisma.counterpartyHistory.deleteMany({});
+    const cpDel = await this.prisma.counterparty.deleteMany({});
+    this.log.warn(
+      `Counterparty base TRUNCATED by ${actor?.name || actor?.id || 'unknown'} — ` +
+      `${cpDel.count} kontragent, ${historyDel.count} history qatori o'chirildi`,
+    );
+    await this.appendActivityLog({
+      action: 'truncated',
+      actorId: actor?.id || null,
+      actorName: actor?.name || null,
+      details: {
+        counterpartiesDeleted: cpDel.count,
+        historyDeleted: historyDel.count,
+      },
+    });
+    return {
+      ok: true,
+      deleted: {
+        counterparties: cpDel.count,
+        history: historyDel.count,
+      },
     };
   }
 }
