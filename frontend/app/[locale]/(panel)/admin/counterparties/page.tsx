@@ -1158,27 +1158,22 @@ function TruncatePasswordDialog({
   onSuccess: () => void;
 }) {
   const [password, setPassword] = useState('');
-  const [confirmText, setConfirmText] = useState('');
 
   const truncateMut = useMutation({
     mutationFn: (pw: string) => api.post<{ ok: boolean; deleted: { counterparties: number; history: number } }>('/counterparties/_truncate', { password: pw }),
     onSuccess: (r) => {
       toast.success(`Tozalandi: ${r.deleted.counterparties} kontragent + ${r.deleted.history} tarix qator`);
       setPassword('');
-      setConfirmText('');
       onSuccess();
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
   useEffect(() => {
-    if (!open) {
-      setPassword('');
-      setConfirmText('');
-    }
+    if (!open) setPassword('');
   }, [open]);
 
-  const canSubmit = password.length > 0 && confirmText === 'TOZALA';
+  const canSubmit = password.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1192,31 +1187,18 @@ function TruncatePasswordDialog({
             Bu amal <strong>QAYTARIB BO'LMAYDI</strong>. Barcha kontragentlar va ularning tarixi o'chiriladi.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-3 pt-2">
-          <div>
-            <Label htmlFor="trunc-pw" className="text-[11.5px] font-bold uppercase tracking-wider">Parol</Label>
-            <Input
-              id="trunc-pw"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Parolni kiriting"
-              className="mt-1.5 font-mono"
-              autoFocus
-            />
-          </div>
-          <div>
-            <Label htmlFor="trunc-confirm" className="text-[11.5px] font-bold uppercase tracking-wider">
-              Tasdiqlash uchun "TOZALA" deb yozing
-            </Label>
-            <Input
-              id="trunc-confirm"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              placeholder="TOZALA"
-              className="mt-1.5 font-mono"
-            />
-          </div>
+        <div className="pt-2">
+          <Label htmlFor="trunc-pw" className="text-[11.5px] font-bold uppercase tracking-wider">Parol</Label>
+          <Input
+            id="trunc-pw"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && canSubmit) truncateMut.mutate(password); }}
+            placeholder="Parolni kiriting"
+            className="mt-1.5 font-mono"
+            autoFocus
+          />
         </div>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={truncateMut.isPending}>
