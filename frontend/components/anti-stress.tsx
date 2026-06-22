@@ -33,7 +33,7 @@ const THEMES: Theme[] = [
 ];
 
 const AMBIENT = 130;
-const MAX = 820;
+const MAX = 1600;
 
 export function AntiStress({ onClose }: { onClose: () => void }) {
   const [mounted, setMounted] = useState(false);
@@ -94,13 +94,13 @@ export function AntiStress({ onClose }: { onClose: () => void }) {
       octx.fillStyle = '#fff';
       octx.textAlign = 'center';
       octx.textBaseline = 'middle';
-      let fs = Math.min(H * 0.34, (W * 0.88) / Math.max(1, txt.length * 0.58));
-      fs = Math.max(46, fs);
+      let fs = Math.min(H * 0.42, (W * 0.92) / Math.max(1, txt.length * 0.52));
+      fs = Math.max(60, fs);
       octx.font = `900 ${fs}px Inter, system-ui, sans-serif`;
       octx.fillText(txt, W / 2, H / 2);
       const d = octx.getImageData(0, 0, W, H).data;
       const pts: { x: number; y: number }[] = [];
-      const step = 5;
+      const step = 4;
       for (let y = 0; y < H; y += step) for (let x = 0; x < W; x += step) {
         if (d[(y * W + x) * 4 + 3] > 128) pts.push({ x, y });
       }
@@ -163,10 +163,10 @@ export function AntiStress({ onClose }: { onClose: () => void }) {
       ctx.clearRect(0, 0, c.width, c.height);
       if (textMode) {
         ctx.globalCompositeOperation = 'lighter';
-        ctx.fillStyle = `rgba(${th.dot},.16)`;
-        for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 7); ctx.fill(); }
-        ctx.fillStyle = `rgba(${th.dot},.95)`;
-        for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 1.9, 0, 7); ctx.fill(); }
+        ctx.fillStyle = `rgba(${th.dot},.22)`;
+        for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, 7); ctx.fill(); }
+        ctx.fillStyle = `rgba(${th.dot},1)`;
+        for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, 7); ctx.fill(); }
         ctx.globalCompositeOperation = 'source-over';
       } else {
         for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
