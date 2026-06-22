@@ -23,6 +23,7 @@ import { useAuth } from '@/lib/auth';
 import { useAvatar, setAvatar } from '@/lib/use-avatar';
 import { cn, formatDateTime } from '@/lib/utils';
 import { PomodoroTimer } from '@/components/pomodoro-timer';
+import { AntiStress } from '@/components/anti-stress';
 
 interface MeResponse {
   id: string;
@@ -36,7 +37,7 @@ interface MeResponse {
   createdAt?: string;
 }
 
-type Tab = 'profile' | 'security' | 'settings';
+type Tab = 'profile' | 'security' | 'settings' | 'antistress';
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
@@ -135,6 +136,13 @@ export default function ProfilePage() {
               label={t('tabSettings')}
               gradient="from-slate-500 to-slate-700"
             />
+            <TabButton
+              active={tab === 'antistress'}
+              onClick={() => setTab('antistress')}
+              icon={<Sparkles className="h-4 w-4" />}
+              label="Anti-stress"
+              gradient="from-fuchsia-500 to-violet-600"
+            />
           </div>
 
           {/* ═══ TAB CONTENT ═══ */}
@@ -149,6 +157,7 @@ export default function ProfilePage() {
           )}
           {tab === 'security' && <SecurityTab user={user} />}
           {tab === 'settings' && <SettingsTab />}
+          {tab === 'antistress' && <AntiStress onClose={() => setTab('profile')} />}
         </div>
       </div>
 
