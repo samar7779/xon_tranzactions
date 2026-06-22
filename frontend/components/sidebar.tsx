@@ -111,13 +111,21 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
         })}
       </nav>
 
-      {/* Pastki 3D logo medalon (logo joyida turadi, halqa aylanadi) */}
+      {/* Pastki 3D aylanuvchi tanga — logoning o'zi aylanadi */}
       <div className="sb3d-logo3d">
         <span className="halo" />
-        <div className="med">
-          <span className="ring" />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/xon-saroy-violet.png" alt="XON SAROY" />
+        <div className="sb3d-coin-wrap">
+          <div className="sb3d-coin">
+            <div className="face front">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/xon-saroy-violet.png" alt="XON SAROY" />
+            </div>
+            <div className="face back">
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2c.34 4.6 1.6 5.86 6.2 6.2-4.6.34-5.86 1.6-6.2 6.2-.34-4.6-1.6-5.86-6.2-6.2 4.6-.34 5.86-1.6 6.2-6.2z" />
+              </svg>
+            </div>
+          </div>
         </div>
       </div>
     </>
