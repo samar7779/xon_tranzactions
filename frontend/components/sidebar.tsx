@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -75,19 +74,11 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
     <>
       {/* Brand */}
       <Link href={`/${locale}/dashboard`} aria-label={t('home')} onClick={onItemClick} className="sb3d-brand">
-        <span className="relative w-11 h-11 shrink-0 grid place-items-center" style={{ transform: 'translateZ(28px)' }}>
-          <span className="absolute inset-0 bg-violet-400/25 blur-xl rounded-full" />
-          <Image
-            src="/xon-saroy-logo.png"
-            alt="Xon Saroy"
-            width={44}
-            height={44}
-            priority
-            className="relative w-full h-full object-contain drop-shadow-[0_2px_10px_rgba(124,58,237,0.4)]"
-          />
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900 grid place-items-center">
-            <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
-          </span>
+        <span className="sb3d-emblem">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2c.34 4.6 1.6 5.86 6.2 6.2-4.6.34-5.86 1.6-6.2 6.2-.34-4.6-1.6-5.86-6.2-6.2 4.6-.34 5.86-1.6 6.2-6.2z" />
+          </svg>
+          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-[#1e1b38] z-10" />
         </span>
         <div className="min-w-0">
           <div className="sb3d-wm">XON SAROY</div>
