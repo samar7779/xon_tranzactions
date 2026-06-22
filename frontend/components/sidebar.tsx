@@ -4,12 +4,11 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X, ChevronDown,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
-import { useAvatar } from '@/lib/use-avatar';
 import { PERMS } from '@/lib/permissions';
 import { useEffect, useRef } from 'react';
 
@@ -58,7 +57,6 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
-  const avatarUrl = useAvatar(user?.id);
 
   const canAny = (perms?: string[]) => {
     if (!perms || perms.length === 0) return true;
@@ -68,7 +66,6 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
 
   const visibleItems = NAV.filter((n) => canAny(n.permissions));
   const groups = Array.from(new Set(visibleItems.map((i) => i.group || 'main')));
-  const initial = (user?.fullName || user?.email || '?').charAt(0).toUpperCase();
 
   return (
     <>
@@ -76,9 +73,8 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
       <Link href={`/${locale}/dashboard`} aria-label={t('home')} onClick={onItemClick} className="sb3d-brand">
         <span className="sb3d-emblem">
           <span className="sb3d-emblem-ring" />
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2c.34 4.6 1.6 5.86 6.2 6.2-4.6.34-5.86 1.6-6.2 6.2-.34-4.6-1.6-5.86-6.2-6.2 4.6-.34 5.86-1.6 6.2-6.2z" />
-          </svg>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/xon-saroy-violet.png" alt="XON SAROY" />
         </span>
         <div className="min-w-0">
           <div className="sb3d-wm">XON SAROY</div>
@@ -115,22 +111,14 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
         })}
       </nav>
 
-      {/* Foydalanuvchi kartasi */}
-      <div className="sb3d-user">
-        <div className="sb3d-uav">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            initial
-          )}
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-[#1e1b38]" />
+      {/* Pastki 3D logo medalon (logo joyida turadi, halqa aylanadi) */}
+      <div className="sb3d-logo3d">
+        <span className="halo" />
+        <div className="med">
+          <span className="ring" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/xon-saroy-violet.png" alt="XON SAROY" />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="sb3d-unm truncate">{user?.fullName || user?.email || '—'}</div>
-          <div className="sb3d-url truncate">{user?.roleLabel || user?.role || '—'}</div>
-        </div>
-        <ChevronDown className="h-4 w-4 shrink-0 text-violet-300 dark:text-violet-400/60" />
       </div>
     </>
   );
