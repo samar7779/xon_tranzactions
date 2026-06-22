@@ -11,6 +11,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
   Search, Download, ChevronDown, Settings2, Database,
+  Coins, RotateCcw,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -85,6 +86,7 @@ export default function DashboardPage() {
 
   // ─── Obyektlar bo'yicha to'lovlar (ОплатыКв) — jadval hisoboti ───
   const [objOpen, setObjOpen] = useState(true);
+  const [objMode, setObjMode] = useState<'normal' | 'refund'>('normal');
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
   const [objCustomFrom, setObjCustomFrom] = useState('');
   const [objCustomTo, setObjCustomTo] = useState('');
@@ -101,11 +103,12 @@ export default function DashboardPage() {
 
   interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
   const { data: objReport, isLoading: objLoading } = useQuery({
-    queryKey: ['oplata-by-object', objFrom, objTo],
+    queryKey: ['oplata-by-object', objFrom, objTo, objMode],
     queryFn: () => {
       const p = new URLSearchParams();
       if (objFrom) p.set('dateFrom', objFrom);
       if (objTo) p.set('dateTo', objTo);
+      p.set('mode', objMode);
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
     enabled: objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo),
@@ -382,13 +385,27 @@ export default function DashboardPage() {
               className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
             >
               <ChevronDown className={cn('h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !objOpen && '-rotate-90')} />
-              <div className="w-6 h-6 rounded bg-violet-600 grid place-items-center text-white">
-                <Building2 className="h-3.5 w-3.5" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 grid place-items-center text-white shadow-sm shadow-violet-500/30">
+                <Coins className="h-4 w-4" />
               </div>
               <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('objReportTitle')}</div>
               <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {objFrom || '—'} → {objTo || '—'}</div>
             </button>
             <div className="flex items-center gap-1.5 flex-wrap">
+              {/* Возврат toggle — 0 dan kichik (refund) summalar */}
+              <button
+                type="button"
+                onClick={() => setObjMode((m) => (m === 'refund' ? 'normal' : 'refund'))}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
+                  objMode === 'refund'
+                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/30'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-300',
+                )}
+              >
+                <RotateCcw className="h-3 w-3" /> Возврат
+              </button>
+              <span className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
               <RangeBtn active={objRange === 'today'} onClick={() => setObjRange('today')}>{t('rangeToday')}</RangeBtn>
               <RangeBtn active={objRange === '7d'} onClick={() => setObjRange('7d')}>{t('range7d')}</RangeBtn>
               <RangeBtn active={objRange === '30d'} onClick={() => setObjRange('30d')}>{t('range30d')}</RangeBtn>

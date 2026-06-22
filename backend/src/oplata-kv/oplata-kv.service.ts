@@ -477,13 +477,23 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string } = {}) {
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund' } = {}) {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
       if (opts.dateFrom) range.gte = new Date(opts.dateFrom);
       if (opts.dateTo) range.lte = new Date(`${opts.dateTo}T23:59:59.999`);
       where.date = range;
+    }
+    if (opts.mode === 'refund') {
+      // ВОЗВРАТ: 0 dan kichik summalar + "возврат" bilan boshlanadigan tiplar
+      where.paymentAmount = { lt: 0 };
+      where.txType = { startsWith: 'возврат', mode: 'insensitive' };
+    } else {
+      // Oddiy: 0 dan katta summalar + "взнос" qatnashgan tiplar
+      // (masalan "взнос от имени клиента", "Взносы за автостоянку")
+      where.paymentAmount = { gt: 0 };
+      where.txType = { contains: 'взнос', mode: 'insensitive' };
     }
 
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference

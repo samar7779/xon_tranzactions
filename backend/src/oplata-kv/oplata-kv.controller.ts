@@ -95,8 +95,9 @@ export class OplataKvController {
   byObject(
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
+    @Query('mode') mode?: 'normal' | 'refund',
   ) {
-    return this.svc.byObject({ dateFrom, dateTo });
+    return this.svc.byObject({ dateFrom, dateTo, mode });
   }
 
   @Get('by-contract')
