@@ -83,6 +83,34 @@ export default function DashboardPage() {
     enabled: range !== 'custom' || (!!customFrom && !!customTo),
   });
 
+  // ─── Obyektlar bo'yicha to'lovlar (ОплатыКв) — jadval hisoboti ───
+  const [objOpen, setObjOpen] = useState(true);
+  const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
+  const [objCustomFrom, setObjCustomFrom] = useState('');
+  const [objCustomTo, setObjCustomTo] = useState('');
+  const { from: objFrom, to: objTo } = useMemo(() => {
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    if (objRange === 'custom') return { from: objCustomFrom, to: objCustomTo };
+    if (objRange === 'today') return { from: fmt(today), to: fmt(today) };
+    const back = objRange === '7d' ? 6 : 29;
+    const f = new Date(today);
+    f.setDate(f.getDate() - back);
+    return { from: fmt(f), to: fmt(today) };
+  }, [objRange, objCustomFrom, objCustomTo]);
+
+  interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
+  const { data: objReport, isLoading: objLoading } = useQuery({
+    queryKey: ['oplata-by-object', objFrom, objTo],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (objFrom) p.set('dateFrom', objFrom);
+      if (objTo) p.set('dateTo', objTo);
+      return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
+    },
+    enabled: objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo),
+  });
+
   // Banklar — aktivlar boshida (chart filtri uchun)
   const sortedChartBanks = useMemo(() => {
     return [...(banks?.items || [])].sort((a: any, b: any) => {
@@ -343,6 +371,81 @@ export default function DashboardPage() {
           <DataTile label={t('inflow30')} value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />
           <DataTile label={t('outflow30')} value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
           <DataTile label={t('txn30')} value={String(txnCount)} />
+        </div>
+
+        {/* ═══ OBYEKTLAR BO'YICHA TO'LOVLAR (ОплатыКв) ═══ */}
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+          <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900">
+            <button
+              type="button"
+              onClick={() => setObjOpen((o) => !o)}
+              className="flex items-center gap-2 min-w-0 hover:opacity-75 transition-opacity"
+            >
+              <ChevronDown className={cn('h-4 w-4 text-slate-500 dark:text-slate-400 transition-transform', !objOpen && '-rotate-90')} />
+              <div className="w-6 h-6 rounded bg-violet-600 grid place-items-center text-white">
+                <Building2 className="h-3.5 w-3.5" />
+              </div>
+              <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('objReportTitle')}</div>
+              <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {objFrom || '—'} → {objTo || '—'}</div>
+            </button>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <RangeBtn active={objRange === 'today'} onClick={() => setObjRange('today')}>{t('rangeToday')}</RangeBtn>
+              <RangeBtn active={objRange === '7d'} onClick={() => setObjRange('7d')}>{t('range7d')}</RangeBtn>
+              <RangeBtn active={objRange === '30d'} onClick={() => setObjRange('30d')}>{t('range30d')}</RangeBtn>
+              <RangeBtn active={objRange === 'custom'} onClick={() => setObjRange('custom')}>{t('rangeCustom')}</RangeBtn>
+            </div>
+          </div>
+
+          {objOpen && (
+            <div className="p-3">
+              {objRange === 'custom' && (
+                <div className="flex items-center gap-2 mb-3 text-[12px]">
+                  <input type="date" value={objCustomFrom} onChange={(e) => setObjCustomFrom(e.target.value)}
+                    className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                  <span className="text-slate-400">→</span>
+                  <input type="date" value={objCustomTo} onChange={(e) => setObjCustomTo(e.target.value)}
+                    className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
+                </div>
+              )}
+
+              {objLoading ? (
+                <div className="py-10 text-center text-[12px] text-slate-400 dark:text-slate-500">…</div>
+              ) : (objReport?.rows?.length ?? 0) === 0 ? (
+                <div className="py-10 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('objEmpty')}</div>
+              ) : (
+                <div className="overflow-x-auto rounded ring-1 ring-slate-200 dark:ring-slate-700">
+                  <table className="w-full text-[12px]">
+                    <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th className="text-left font-semibold px-3 py-2">{t('objColObject')}</th>
+                        <th className="text-right font-semibold px-3 py-2">{t('objColPayment')}</th>
+                        <th className="text-right font-semibold px-3 py-2">{t('objColFirst')}</th>
+                        <th className="text-right font-semibold px-3 py-2">{t('objColMonthly')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {objReport!.rows.map((r) => (
+                        <tr key={r.object} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                          <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{r.object}</td>
+                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{r.paymentAmount.toLocaleString('ru-RU')}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{r.firstInstallment.toLocaleString('ru-RU')}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{r.monthlyAmount.toLocaleString('ru-RU')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
+                      <tr>
+                        <td className="px-3 py-2.5">{t('objTotal')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{(objReport!.total.paymentAmount).toLocaleString('ru-RU')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{(objReport!.total.firstInstallment).toLocaleString('ru-RU')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{(objReport!.total.monthlyAmount).toLocaleString('ru-RU')}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}

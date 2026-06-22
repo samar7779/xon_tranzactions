@@ -472,6 +472,53 @@ export class OplataKvService {
     };
   }
 
+  // ───────────────── OBYEKT BO'YICHA HISOBOT (dashboard) ─────────────────
+  /**
+   * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
+   * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
+   */
+  async byObject(opts: { dateFrom?: string; dateTo?: string } = {}) {
+    const where: any = {};
+    if (opts.dateFrom || opts.dateTo) {
+      const range: any = {};
+      if (opts.dateFrom) range.gte = new Date(opts.dateFrom);
+      if (opts.dateTo) range.lte = new Date(`${opts.dateTo}T23:59:59.999`);
+      where.date = range;
+    }
+
+    // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
+    // beradi (ma'lum quirk), shuning uchun cast qilamiz.
+    const grouped = await (this.prisma.oplataKv.groupBy as any)({
+      by: ['objectName'],
+      where,
+      _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+      _count: true,
+    });
+
+    const rows = (grouped as Array<{ objectName: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>)
+      .map((g) => ({
+        object: g.objectName || '—',
+        paymentAmount:    Number(g._sum.paymentAmount    ?? 0),
+        firstInstallment: Number(g._sum.firstInstallment ?? 0),
+        monthlyAmount:    Number(g._sum.monthlyAmount    ?? 0),
+        count: g._count,
+      }))
+      // Obyekt nomi bo'yicha alifbo tartibida (Telegram hisobotidagi kabi)
+      .sort((a, b) => a.object.localeCompare(b.object, 'ru'));
+
+    const total = rows.reduce(
+      (acc, r) => ({
+        paymentAmount:    acc.paymentAmount    + r.paymentAmount,
+        firstInstallment: acc.firstInstallment + r.firstInstallment,
+        monthlyAmount:    acc.monthlyAmount    + r.monthlyAmount,
+        count:            acc.count            + r.count,
+      }),
+      { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0, count: 0 },
+    );
+
+    return { ok: true, rows, total };
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });

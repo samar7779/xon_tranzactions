@@ -89,6 +89,16 @@ export class OplataKvController {
     return this.svc.distinctValues(column, q, search);
   }
 
+  @Get('by-object')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Obyektlar bo'yicha to'lovlar yig'indisi (dashboard hisoboti)" })
+  byObject(
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.svc.byObject({ dateFrom, dateTo });
+  }
+
   @Get('by-contract')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Shartnoma bo'yicha to'lov tarixi (Akt Sverka)" })
