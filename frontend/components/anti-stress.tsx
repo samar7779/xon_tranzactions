@@ -43,10 +43,8 @@ export function AntiStress({ onClose }: { onClose: () => void }) {
 
   useEffect(() => setMounted(true), []);
 
-  // Fullscreen (iloji bo'lsa) + Esc bilan yopish
+  // Esc bilan yopish + chiqishda fullscreen'dan chiqish
   useEffect(() => {
-    const el = rootRef.current;
-    if (el && el.requestFullscreen) el.requestFullscreen().catch(() => {});
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => {
@@ -55,8 +53,9 @@ export function AntiStress({ onClose }: { onClose: () => void }) {
     };
   }, [onClose]);
 
-  // Zarra tizimi
+  // Zarra tizimi — portal (canvas) render bo'lgach ishga tushadi
   useEffect(() => {
+    if (!mounted) return;
     const c = canvasRef.current;
     const ctx = c?.getContext('2d');
     if (!c || !ctx) return;
@@ -178,7 +177,7 @@ export function AntiStress({ onClose }: { onClose: () => void }) {
       c.removeEventListener('pointerleave', onLeave);
       c.removeEventListener('pointerdown', onDown);
     };
-  }, []);
+  }, [mounted]);
 
   if (!mounted) return null;
 

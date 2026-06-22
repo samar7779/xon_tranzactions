@@ -138,7 +138,10 @@ export default function ProfilePage() {
             />
             <TabButton
               active={tab === 'antistress'}
-              onClick={() => setTab('antistress')}
+              onClick={() => {
+                setTab('antistress');
+                try { (document.documentElement as any).requestFullscreen?.(); } catch { /* fullscreen bloklansa — oddiy overlay */ }
+              }}
               icon={<Sparkles className="h-4 w-4" />}
               label="Anti-stress"
               gradient="from-fuchsia-500 to-violet-600"
