@@ -3,6 +3,7 @@ import { RouteGuard } from '@/components/route-guard';
 import { Sidebar } from '@/components/sidebar';
 import { ScrollToTop } from '@/components/scroll-to-top';
 import { DeployModal } from '@/components/deploy-modal';
+import { AntiStressHost } from '@/components/anti-stress';
 
 // Panel sahifalari faqat login'dan keyin ko'rinadi — statik render kerak emas
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,8 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
         <ScrollToTop />
         {/* Deploy bildirishnoma modali — barcha panel sahifalarida */}
         <DeployModal />
+        {/* Anti-stress ekrani — header tangasi yoki profil tabidan ochiladi */}
+        <AntiStressHost />
       </div>
     </AuthGuard>
   );

@@ -23,7 +23,7 @@ import { useAuth } from '@/lib/auth';
 import { useAvatar, setAvatar } from '@/lib/use-avatar';
 import { cn, formatDateTime } from '@/lib/utils';
 import { PomodoroTimer } from '@/components/pomodoro-timer';
-import { AntiStress } from '@/components/anti-stress';
+import { useUI } from '@/lib/ui';
 
 interface MeResponse {
   id: string;
@@ -37,7 +37,12 @@ interface MeResponse {
   createdAt?: string;
 }
 
-type Tab = 'profile' | 'security' | 'settings' | 'antistress';
+type Tab = 'profile' | 'security' | 'settings';
+
+const openAntiStress = (setOpen: (v: boolean) => void) => {
+  setOpen(true);
+  try { (document.documentElement as any).requestFullscreen?.(); } catch { /* bloklansa — oddiy overlay */ }
+};
 
 export default function ProfilePage() {
   const t = useTranslations('profile');
@@ -51,6 +56,7 @@ export default function ProfilePage() {
   });
 
   const user = me || (cachedUser as any as MeResponse | null);
+  const setAntiStressOpen = useUI((s) => s.setAntiStressOpen);
   const [tab, setTab] = useState<Tab>('profile');
   const [timerOpen, setTimerOpen] = useState(false);
   // useAvatar — reaktiv (boshqa joylar bilan sinxron)
@@ -137,11 +143,8 @@ export default function ProfilePage() {
               gradient="from-slate-500 to-slate-700"
             />
             <TabButton
-              active={tab === 'antistress'}
-              onClick={() => {
-                setTab('antistress');
-                try { (document.documentElement as any).requestFullscreen?.(); } catch { /* fullscreen bloklansa — oddiy overlay */ }
-              }}
+              active={false}
+              onClick={() => openAntiStress(setAntiStressOpen)}
               icon={<Sparkles className="h-4 w-4" />}
               label="Anti-stress"
               gradient="from-fuchsia-500 to-violet-600"
@@ -160,7 +163,6 @@ export default function ProfilePage() {
           )}
           {tab === 'security' && <SecurityTab user={user} />}
           {tab === 'settings' && <SettingsTab />}
-          {tab === 'antistress' && <AntiStress onClose={() => setTab('profile')} />}
         </div>
       </div>
 
