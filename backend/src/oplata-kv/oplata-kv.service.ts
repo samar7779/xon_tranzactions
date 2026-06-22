@@ -489,15 +489,15 @@ export class OplataKvService {
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
     // beradi (ma'lum quirk), shuning uchun cast qilamiz.
     const grouped = await (this.prisma.oplataKv.groupBy as any)({
-      by: ['objectName'],
+      by: ['object'],
       where,
       _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
       _count: true,
     });
 
-    const rows = (grouped as Array<{ objectName: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>)
+    const rows = (grouped as Array<{ object: string | null; _sum: { paymentAmount: any; firstInstallment: any; monthlyAmount: any }; _count: number }>)
       .map((g) => ({
-        object: g.objectName || '—',
+        object: g.object || '—',
         paymentAmount:    Number(g._sum.paymentAmount    ?? 0),
         firstInstallment: Number(g._sum.firstInstallment ?? 0),
         monthlyAmount:    Number(g._sum.monthlyAmount    ?? 0),
