@@ -121,9 +121,8 @@ function SidebarContent({ onItemClick }: { onItemClick?: () => void }) {
               <img src="/xon-saroy-violet.png" alt="XON SAROY" />
             </div>
             <div className="face back">
-              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M12 2c.34 4.6 1.6 5.86 6.2 6.2-4.6.34-5.86 1.6-6.2 6.2-.34-4.6-1.6-5.86-6.2-6.2 4.6-.34 5.86-1.6 6.2-6.2z" />
-              </svg>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/xon-saroy-violet.png" alt="XON SAROY" />
             </div>
           </div>
         </div>

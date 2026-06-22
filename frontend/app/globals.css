@@ -502,11 +502,8 @@ html.dark .sb3d-sheen{ background:linear-gradient(115deg,transparent 35%,rgba(25
 .sb3d-logo3d::after{ content:""; position:absolute; bottom:-4px; width:84px; height:14px; border-radius:50%;
   background:radial-gradient(circle, rgba(124,58,237,.35), transparent 70%); filter:blur(6px); animation:sb3d-bob 4.2s ease-in-out infinite reverse; }
 .sb3d-coin-wrap{ transform-style:preserve-3d; animation:sb3d-bob 4.2s ease-in-out infinite; }
-.sb3d-coin{ position:relative; width:104px; height:104px; transform-style:preserve-3d; animation:sb3d-coinspin 5s linear infinite; }
-.sb3d-coin .face{ position:absolute; inset:0; border-radius:50%; display:grid; place-items:center;
+.sb3d-coin{ position:relative; width:124px; height:124px; transform-style:preserve-3d; animation:sb3d-coinspin 5s linear infinite; }
+.sb3d-coin .face{ position:absolute; inset:0; display:grid; place-items:center;
   backface-visibility:hidden; -webkit-backface-visibility:hidden; }
-.sb3d-coin .front{ background:#fff; box-shadow:0 0 0 3px rgba(168,139,250,.55), 0 20px 38px -12px rgba(124,58,237,.5); }
-.sb3d-coin .front img{ width:80px; height:80px; object-fit:contain; }
-.sb3d-coin .back{ transform:rotateY(180deg); background:radial-gradient(circle at 34% 28%, #c4b5fd, #8b5cf6 46%, #6d28d9);
-  box-shadow:0 0 0 3px rgba(255,255,255,.45), 0 20px 38px -12px rgba(124,58,237,.5); }
-.sb3d-coin .back svg{ width:46px; height:46px; fill:#fff; filter:drop-shadow(0 0 8px rgba(255,255,255,.85)); }
+.sb3d-coin .face img{ width:124px; height:124px; object-fit:contain; filter:drop-shadow(0 12px 20px rgba(124,58,237,.55)); }
+.sb3d-coin .back{ transform:rotateY(180deg); }
