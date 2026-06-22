@@ -82,6 +82,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
   const user = useAuth((s) => s.user);
   const logout = useAuth((s) => s.logout);
   const toggleMobileNav = useUI((s) => s.toggleMobileNav);
+  const setAntiStressOpen = useUI((s) => s.setAntiStressOpen);
   const initial = (user?.fullName || user?.email || '?').charAt(0).toUpperCase();
   // Reaktiv avatar — profilda yuklanganda darrov yangilanadi
   const avatarUrl = useAvatar(user?.id);
@@ -141,15 +142,24 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
-          {/* 3D tranzaksiya tangasi */}
-          <div className="tx-coin-wrap hidden sm:block shrink-0 relative z-10">
+          {/* 3D tranzaksiya tangasi — bosilsa Anti-stress ekrani ochiladi */}
+          <button
+            type="button"
+            onClick={() => {
+              setAntiStressOpen(true);
+              try { (document.documentElement as any).requestFullscreen?.(); } catch { /* bloklansa — oddiy overlay */ }
+            }}
+            title="Anti-stress — dam olish"
+            aria-label="Anti-stress"
+            className="tx-coin-wrap hidden sm:block shrink-0 relative z-10 cursor-pointer hover:scale-105 transition-transform"
+          >
             <div className="tx-coin-bob">
               <div className="tx-coin">
                 <div className="face front"><Coins className="h-6 w-6" /></div>
                 <div className="face back"><ArrowDownUp className="h-6 w-6" /></div>
               </div>
             </div>
-          </div>
+          </button>
           <div className="min-w-0 flex-1">
             <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight truncate">{title}</h1>
             {subtitle && <p className="text-[11px] sm:text-[13px] text-white/85 truncate mt-0.5">{subtitle}</p>}

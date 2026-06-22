@@ -4,6 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Type, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useUI } from '@/lib/ui';
+
+/** Global host — istalgan joydan useUI.setAntiStressOpen(true) bilan ochiladi */
+export function AntiStressHost() {
+  const open = useUI((s) => s.antiStressOpen);
+  const setOpen = useUI((s) => s.setAntiStressOpen);
+  if (!open) return null;
+  return <AntiStress onClose={() => setOpen(false)} />;
+}
 
 interface Theme {
   key: string;
