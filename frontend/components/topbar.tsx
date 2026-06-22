@@ -132,7 +132,7 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
         <ConstellationBg />
         <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none animate-float-slow" />
 
-        <div className="relative flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8 text-white gap-3 sm:gap-4">
+        <div className="relative flex h-24 items-center justify-between px-4 sm:px-6 lg:px-8 text-white gap-3 sm:gap-4">
           {/* Mobil hamburger tugmasi — faqat lg dan kichik ekranlarda */}
           <button
             onClick={toggleMobileNav}
