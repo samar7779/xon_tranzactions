@@ -478,3 +478,14 @@ html.dark .sb3d-cnt{ background:rgba(167,139,250,.2); color:#c4b5fd; }
 html.dark .sb3d-user{ background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.08); }
 html.dark .sb3d-unm{ color:#ede9fe; }
 html.dark .sb3d-sheen{ background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,.4) 50%,transparent 65%); }
+
+/* ---- live binafsha doiraviy emblema (logo) ---- */
+@keyframes sb3d-pulse{ 0%,100%{ opacity:.5; transform:scale(1) } 50%{ opacity:1; transform:scale(1.16) } }
+.sb3d-emblem{ position:relative; width:44px; height:44px; border-radius:50%; flex:none; display:grid; place-items:center; transform:translateZ(30px);
+  background:radial-gradient(circle at 32% 26%, #d8b4fe, #8b5cf6 44%, #6d28d9 100%);
+  box-shadow:0 10px 24px -6px rgba(124,58,237,.75), inset 0 2px 6px rgba(255,255,255,.55), inset 0 -8px 13px rgba(76,29,149,.55); }
+.sb3d-emblem::before{ content:""; position:absolute; inset:-6px; border-radius:50%; z-index:-1;
+  background:radial-gradient(circle, rgba(167,139,250,.75), transparent 70%); filter:blur(5px); animation:sb3d-pulse 2.6s ease-in-out infinite; }
+.sb3d-emblem::after{ content:""; position:absolute; top:4px; left:9px; right:15px; height:13px; border-radius:50%;
+  background:linear-gradient(180deg, rgba(255,255,255,.75), transparent); filter:blur(1px); opacity:.8; }
+.sb3d-emblem svg{ width:23px; height:23px; color:#fff; position:relative; z-index:1; filter:drop-shadow(0 0 7px rgba(255,255,255,.9)); }
