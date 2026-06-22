@@ -5,9 +5,9 @@ import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
 import {
   UserCircle, LogOut, ChevronDown, Bell, AlertCircle, CheckCircle2, ChevronRight, Menu,
-  Rocket, Loader2, Sparkles,
+  Rocket, Loader2, Sparkles, Coins, ArrowDownUp,
 } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useUI } from '@/lib/ui';
 import { useAvatar } from '@/lib/use-avatar';
@@ -24,6 +24,51 @@ interface TopbarProps {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+}
+
+/** Header foni — bog'langan nuqtalar tarmog'i (sichqonchaga ergashadi) */
+function ConstellationBg() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const c = ref.current;
+    const parent = c?.parentElement;
+    const ctx = c?.getContext('2d');
+    if (!c || !parent || !ctx) return;
+    let raf = 0;
+    const size = () => { const r = parent.getBoundingClientRect(); c.width = r.width; c.height = r.height; };
+    size();
+    const ro = new ResizeObserver(size); ro.observe(parent);
+    const N = Math.min(60, Math.max(22, Math.floor((c.width || 800) / 18)));
+    const P = Array.from({ length: N }, () => ({
+      x: Math.random() * c.width, y: Math.random() * c.height,
+      vx: (Math.random() - 0.5) * 0.35, vy: (Math.random() - 0.5) * 0.35,
+    }));
+    let mx = -999, my = -999;
+    const onMove = (e: MouseEvent) => { const r = c.getBoundingClientRect(); mx = e.clientX - r.left; my = e.clientY - r.top; };
+    const onLeave = () => { mx = -999; my = -999; };
+    parent.addEventListener('mousemove', onMove);
+    parent.addEventListener('mouseleave', onLeave);
+    const loop = () => {
+      ctx.clearRect(0, 0, c.width, c.height);
+      for (const p of P) {
+        p.x += p.vx; p.y += p.vy;
+        if (p.x < 0 || p.x > c.width) p.vx *= -1;
+        if (p.y < 0 || p.y > c.height) p.vy *= -1;
+        const dx = p.x - mx, dy = p.y - my, d = Math.hypot(dx, dy);
+        if (d < 110 && d > 0) { p.x += dx / d * 0.7; p.y += dy / d * 0.7; }
+      }
+      for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+        const a = P[i], b = P[j], d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < 120) { ctx.strokeStyle = `rgba(220,210,255,${(1 - d / 120) * 0.45})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); }
+      }
+      ctx.fillStyle = 'rgba(233,213,255,.85)';
+      for (const p of P) { ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, 7); ctx.fill(); }
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); parent.removeEventListener('mousemove', onMove); parent.removeEventListener('mouseleave', onLeave); };
+  }, []);
+  return <canvas ref={ref} className="absolute inset-0 w-full h-full pointer-events-none" style={{ zIndex: 0 }} aria-hidden="true" />;
 }
 
 export function Topbar({ title, subtitle, actions }: TopbarProps) {
@@ -83,9 +128,9 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
 
   return (
     <header className="sticky top-0 z-20">
-      <div className="relative overflow-hidden bg-brand-vivid animate-gradient">
-        <div className="absolute inset-0 bg-dots opacity-15 pointer-events-none" />
-        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/15 blur-3xl pointer-events-none animate-float-slow" />
+      <div className="relative overflow-hidden animate-gradient" style={{ backgroundImage: 'linear-gradient(120deg,#4c1d95,#6d28d9 55%,#7c3aed)' }}>
+        <ConstellationBg />
+        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/10 blur-3xl pointer-events-none animate-float-slow" />
 
         <div className="relative flex h-20 items-center justify-between px-4 sm:px-6 lg:px-8 text-white gap-3 sm:gap-4">
           {/* Mobil hamburger tugmasi — faqat lg dan kichik ekranlarda */}
@@ -96,6 +141,15 @@ export function Topbar({ title, subtitle, actions }: TopbarProps) {
           >
             <Menu className="h-5 w-5" />
           </button>
+          {/* 3D tranzaksiya tangasi */}
+          <div className="tx-coin-wrap hidden sm:block shrink-0 relative z-10">
+            <div className="tx-coin-bob">
+              <div className="tx-coin">
+                <div className="face front"><Coins className="h-6 w-6" /></div>
+                <div className="face back"><ArrowDownUp className="h-6 w-6" /></div>
+              </div>
+            </div>
+          </div>
           <div className="min-w-0 flex-1">
             <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight truncate">{title}</h1>
             {subtitle && <p className="text-[11px] sm:text-[13px] text-white/85 truncate mt-0.5">{subtitle}</p>}
