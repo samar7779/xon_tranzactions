@@ -27,6 +27,7 @@ import { EmptyState } from '@/components/empty-state';
 import { Skeleton } from '@/components/skeleton';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useAvatar } from '@/lib/use-avatar';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime } from '@/lib/utils';
 
@@ -59,6 +60,23 @@ function getInitials(name?: string | null, email?: string) {
   const parts = src.split(/[\s@.]+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
+}
+
+/** Avatar (localStorage rasmi) bo'lsa rasmni, bo'lmasa bosh harflarni ko'rsatadi */
+function UserAvatar({ userId, fullName, email, className }: {
+  userId: string; fullName?: string | null; email?: string; className?: string;
+}) {
+  const avatarUrl = useAvatar(userId);
+  return (
+    <div className={cn("relative grid place-items-center overflow-hidden", className)}>
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      ) : (
+        getInitials(fullName, email)
+      )}
+    </div>
+  );
 }
 
 export default function AdminUsersPage() {
@@ -290,6 +308,7 @@ function ProAdminCard({
 }) {
   const t = useTranslations('adminUsers');
   const tc = useTranslations('common');
+  const avatarUrl = useAvatar(u.id);
   const role = u.roleRef?.label || t('noRoleAssigned');
   const roleKey = u.roleRef?.name || '';
   const c = getRoleColor(roleKey);
@@ -351,11 +370,16 @@ function ProAdminCard({
                 c.grad,
               )} />
               <div className={cn(
-                "relative w-14 h-14 rounded-2xl bg-gradient-to-br grid place-items-center text-white font-bold text-base",
+                "relative w-14 h-14 rounded-2xl bg-gradient-to-br grid place-items-center text-white font-bold text-base overflow-hidden",
                 "ring-2 ring-white dark:ring-slate-900 shadow-md",
                 c.grad,
               )}>
-                {getInitials(u.fullName, u.email)}
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                ) : (
+                  getInitials(u.fullName, u.email)
+                )}
               </div>
               {/* Status dot */}
               <span className={cn(
@@ -506,12 +530,15 @@ function AdminTable({
                 )}>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <div className={cn(
-                        "w-9 h-9 rounded-full grid place-items-center text-white text-[11px] font-bold bg-gradient-to-br shrink-0",
-                        c.grad,
-                      )}>
-                        {getInitials(u.fullName, u.email)}
-                      </div>
+                      <UserAvatar
+                        userId={u.id}
+                        fullName={u.fullName}
+                        email={u.email}
+                        className={cn(
+                          "w-9 h-9 rounded-full text-white text-[11px] font-bold bg-gradient-to-br shrink-0",
+                          c.grad,
+                        )}
+                      />
                       <div className="min-w-0">
                         <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1">
                           {u.fullName || '—'}
