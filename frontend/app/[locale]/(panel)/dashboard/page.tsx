@@ -11,7 +11,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
   Search, Download, ChevronDown, Settings2, Database,
-  Coins, RotateCcw,
+  Coins, RotateCcw, EyeOff, Pin,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -113,6 +113,25 @@ export default function DashboardPage() {
     },
     enabled: objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo),
   });
+
+  // Ustunlarni yashirish (secret) — "1 взнос" / "ежемесячный"
+  const [objHidden, setObjHidden] = useState<{ first: boolean; monthly: boolean }>({ first: false, monthly: false });
+  // Qatorni tepaga qadab qo'yish (ustiga bosilganda) — eng oxirgi bosilgani eng tepada
+  const [objPinned, setObjPinned] = useState<string[]>([]);
+  const toggleObjPin = (obj: string) =>
+    setObjPinned((prev) => (prev.includes(obj) ? prev.filter((o) => o !== obj) : [obj, ...prev]));
+
+  const objSortedRows = useMemo(() => {
+    const rows = objReport?.rows || [];
+    if (objPinned.length === 0) return rows;
+    const order = new Map(objPinned.map((o, i) => [o, i]));
+    return [...rows].sort((a, b) => {
+      const pa = order.has(a.object) ? (order.get(a.object) as number) : Infinity;
+      const pb = order.has(b.object) ? (order.get(b.object) as number) : Infinity;
+      return pa - pb; // pinned'lar bosilish tartibida tepada, qolganlari o'z joyida
+    });
+  }, [objReport, objPinned]);
+  const mask = (n: number) => n.toLocaleString('ru-RU');
 
   // Banklar — aktivlar boshida (chart filtri uchun)
   const sortedChartBanks = useMemo(() => {
@@ -436,26 +455,54 @@ export default function DashboardPage() {
                       <tr>
                         <th className="text-left font-semibold px-3 py-2">{t('objColObject')}</th>
                         <th className="text-right font-semibold px-3 py-2">{t('objColPayment')}</th>
-                        <th className="text-right font-semibold px-3 py-2">{t('objColFirst')}</th>
-                        <th className="text-right font-semibold px-3 py-2">{t('objColMonthly')}</th>
+                        <th className="text-right font-semibold px-3 py-2">
+                          <button type="button" onClick={() => setObjHidden((h) => ({ ...h, first: !h.first }))}
+                            title="Ustunni yashirish/ko'rsatish"
+                            className="inline-flex items-center gap-1 hover:text-violet-600 dark:hover:text-violet-300 transition-colors">
+                            {objHidden.first && <EyeOff className="h-3 w-3" />}
+                            {t('objColFirst')}
+                          </button>
+                        </th>
+                        <th className="text-right font-semibold px-3 py-2">
+                          <button type="button" onClick={() => setObjHidden((h) => ({ ...h, monthly: !h.monthly }))}
+                            title="Ustunni yashirish/ko'rsatish"
+                            className="inline-flex items-center gap-1 hover:text-violet-600 dark:hover:text-violet-300 transition-colors">
+                            {objHidden.monthly && <EyeOff className="h-3 w-3" />}
+                            {t('objColMonthly')}
+                          </button>
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {objReport!.rows.map((r) => (
-                        <tr key={r.object} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                          <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">{r.object}</td>
-                          <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{r.paymentAmount.toLocaleString('ru-RU')}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{r.firstInstallment.toLocaleString('ru-RU')}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{r.monthlyAmount.toLocaleString('ru-RU')}</td>
-                        </tr>
-                      ))}
+                      {objSortedRows.map((r) => {
+                        const pinned = objPinned.includes(r.object);
+                        return (
+                          <tr key={r.object}
+                            onClick={() => toggleObjPin(r.object)}
+                            title="Tepaga qadash uchun bosing"
+                            className={cn(
+                              'cursor-pointer transition-colors',
+                              pinned ? 'bg-violet-50/70 dark:bg-violet-950/30' : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/40',
+                            )}>
+                            <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200">
+                              <span className="inline-flex items-center gap-1.5">
+                                {pinned && <Pin className="h-3 w-3 text-violet-500 fill-violet-500" />}
+                                {r.object}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{mask(r.paymentAmount)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{objHidden.first ? '•••' : mask(r.firstInstallment)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{objHidden.monthly ? '•••' : mask(r.monthlyAmount)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                     <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
                       <tr>
                         <td className="px-3 py-2.5">{t('objTotal')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{(objReport!.total.paymentAmount).toLocaleString('ru-RU')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{(objReport!.total.firstInstallment).toLocaleString('ru-RU')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums">{(objReport!.total.monthlyAmount).toLocaleString('ru-RU')}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(objReport!.total.paymentAmount)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{objHidden.first ? '•••' : mask(objReport!.total.firstInstallment)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums">{objHidden.monthly ? '•••' : mask(objReport!.total.monthlyAmount)}</td>
                       </tr>
                     </tfoot>
                   </table>
