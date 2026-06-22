@@ -494,14 +494,19 @@ html.dark .sb3d-sheen{ background:linear-gradient(115deg,transparent 35%,rgba(25
           mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 4px)); }
 .sb3d-emblem img{ width:36px; height:36px; object-fit:contain; position:relative; z-index:1; }
 
-/* pastki 3D logo medalon (1-variant) — logo joyida turadi, halqa aylanadi */
-.sb3d-logo3d{ position:relative; z-index:5; margin:6px 16px 22px; display:grid; place-items:center; transform:translateZ(36px); }
-.sb3d-logo3d .halo{ position:absolute; width:124px; height:124px; border-radius:50%; z-index:-1;
+/* pastki 3D aylanuvchi tanga — logoning o'zi aylanadi (tanga kabi) */
+@keyframes sb3d-coinspin{ to{ transform:rotateY(360deg) } }
+.sb3d-logo3d{ position:relative; z-index:5; margin:6px 16px 24px; display:grid; place-items:center; transform:translateZ(36px); perspective:760px; }
+.sb3d-logo3d .halo{ position:absolute; width:128px; height:128px; border-radius:50%; z-index:-1;
   background:radial-gradient(circle, rgba(167,139,250,.5), transparent 70%); filter:blur(11px); animation:sb3d-pulse 2.8s ease-in-out infinite; }
-.sb3d-logo3d .med{ position:relative; width:104px; height:104px; border-radius:50%; background:#fff; display:grid; place-items:center;
-  box-shadow:0 20px 38px -12px rgba(124,58,237,.55), inset 0 0 0 1px rgba(168,139,250,.18); animation:sb3d-bob 4.2s ease-in-out infinite; }
-.sb3d-logo3d .med img{ width:80px; height:80px; object-fit:contain; position:relative; z-index:1; }
-.sb3d-logo3d .ring{ position:absolute; inset:-6px; border-radius:50%; z-index:0; animation:sb3d-spin 4s linear infinite;
-  background:conic-gradient(from 0deg, #a855f7, #6d28d9, #c4b5fd, #7c3aed, #a855f7);
-  -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px));
-          mask:radial-gradient(farthest-side, transparent calc(100% - 6px), #000 calc(100% - 6px)); }
+.sb3d-logo3d::after{ content:""; position:absolute; bottom:-4px; width:84px; height:14px; border-radius:50%;
+  background:radial-gradient(circle, rgba(124,58,237,.35), transparent 70%); filter:blur(6px); animation:sb3d-bob 4.2s ease-in-out infinite reverse; }
+.sb3d-coin-wrap{ transform-style:preserve-3d; animation:sb3d-bob 4.2s ease-in-out infinite; }
+.sb3d-coin{ position:relative; width:104px; height:104px; transform-style:preserve-3d; animation:sb3d-coinspin 5s linear infinite; }
+.sb3d-coin .face{ position:absolute; inset:0; border-radius:50%; display:grid; place-items:center;
+  backface-visibility:hidden; -webkit-backface-visibility:hidden; }
+.sb3d-coin .front{ background:#fff; box-shadow:0 0 0 3px rgba(168,139,250,.55), 0 20px 38px -12px rgba(124,58,237,.5); }
+.sb3d-coin .front img{ width:80px; height:80px; object-fit:contain; }
+.sb3d-coin .back{ transform:rotateY(180deg); background:radial-gradient(circle at 34% 28%, #c4b5fd, #8b5cf6 46%, #6d28d9);
+  box-shadow:0 0 0 3px rgba(255,255,255,.45), 0 20px 38px -12px rgba(124,58,237,.5); }
+.sb3d-coin .back svg{ width:46px; height:46px; fill:#fff; filter:drop-shadow(0 0 8px rgba(255,255,255,.85)); }
