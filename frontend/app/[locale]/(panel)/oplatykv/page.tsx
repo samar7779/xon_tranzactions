@@ -1830,7 +1830,12 @@ function CrmSverkaView({
                   <tr><td colSpan={3} className="py-6 text-center text-slate-400 dark:text-slate-500 text-[12px]">
                     {crm.connected ? t('crmNoPaymentHistory') : t('crmNotConnected')}
                   </td></tr>
-                ) : crm.histories.map((h: any, i: number) => {
+                ) : [...crm.histories].sort((a: any, b: any) => {
+                  // Chap (OplatyKv) jadval bilan bir xil — sana o'sish tartibida (eski → yangi)
+                  const ta = a.datePaid ? new Date(a.datePaid).getTime() : 0;
+                  const tb = b.datePaid ? new Date(b.datePaid).getTime() : 0;
+                  return ta - tb;
+                }).map((h: any, i: number) => {
                   const isInitial = h.typeKey.toLowerCase().includes('init') || h.typeKey.toLowerCase().includes('boshlang');
                   return (
                     <tr key={i} className="border-t border-slate-100 dark:border-slate-700 hover:bg-sky-50/40 dark:hover:bg-sky-950/40 transition-colors">
