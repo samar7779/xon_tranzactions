@@ -24,12 +24,15 @@ export default async function LocaleLayout({
   const messages = await getMessages();
 
   return (
-    <html lang={locale}>
+    // suppressHydrationWarning — bootstrap script <html>ga 'dark' klass qo'shadi,
+    // server HTML'da u yo'q. Bu attribute bo'lmasa React hydration paytida
+    // nomuvofiqlikni "tuzatib" klassni olib tashlaydi → dark rejim refresh'da yo'qoladi.
+    <html lang={locale} suppressHydrationWarning>
       <head>
         {/* Theme bootstrap — JS bilan birinchi render'da darrov apply qiladi (FOUC oldini olish) */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`,
+            __html: `(function(){try{var t=localStorage.getItem('theme');var d=document.documentElement;if(t==='dark'){d.classList.add('dark');}else{d.classList.remove('dark');}}catch(e){}})();`,
           }}
         />
       </head>
