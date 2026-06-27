@@ -529,6 +529,46 @@ export class OplataKvService {
     return { ok: true, rows, total };
   }
 
+  // ───────────────── SPLIT KERAK SHARTNOMALAR ─────────────────
+  /**
+   * CRM'da topilgan (verified), lekin to'lovi hali split bo'lmagan shartnomalar.
+   * "Split bo'lmagan" = paymentAmount bor, lekin firstInstallment/monthlyAmount/
+   * paymentCategory NULL (qo'lda qo'yilmagan). Har shartnoma uchun qator soni + summa.
+   */
+  async unsplitContracts() {
+    // CRM verified shartnoma raqamlari
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+
+    // Split bo'lmagan qatorlar — splitInstallments where bilan bir xil
+    const grouped = await (this.prisma.oplataKv.groupBy as any)({
+      by: ['contractNo'],
+      where: {
+        sourceTxId: { not: null },
+        paymentAmount: { not: null },
+        firstInstallment: null,
+        monthlyAmount: null,
+        paymentCategory: null,
+      },
+      _count: true,
+      _sum: { paymentAmount: true },
+    });
+
+    const items = (grouped as Array<{ contractNo: string | null; _count: number; _sum: { paymentAmount: any } }>)
+      .filter((g) => g.contractNo && verifiedSet.has(g.contractNo))
+      .map((g) => ({
+        contractNo: g.contractNo as string,
+        count: g._count,
+        totalAmount: Number(g._sum.paymentAmount ?? 0),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return { ok: true, count: items.length, items };
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });
