@@ -155,6 +155,7 @@ export default function TransactionsPage() {
   const [idSearchOpen, setIdSearchOpen] = useState(false);
   const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
   const [vipiskaDebugOpen, setVipiskaDebugOpen] = useState(false);
+  const [xatoModalOpen, setXatoModalOpen] = useState(false);
   const [todayStatsOpen, setTodayStatsOpen] = useState(false);
   const [extraToolsOpen, setExtraToolsOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
@@ -793,6 +794,10 @@ export default function TransactionsPage() {
                     <Search className="h-4 w-4 mr-2 text-cyan-600 dark:text-cyan-400" />
                     <span className="flex-1">{t('toolVipiskaCheck')}</span>
                   </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setXatoModalOpen(true)} className="cursor-pointer">
+                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
+                    <span className="flex-1">{t('toolXatoContracts')}</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel className="text-[11px] uppercase tracking-wider">{t('filtersLabel')}</DropdownMenuLabel>
                   <DropdownMenuItem
@@ -817,6 +822,13 @@ export default function TransactionsPage() {
               <VipiskaDebugDialog
                 open={vipiskaDebugOpen}
                 onClose={() => setVipiskaDebugOpen(false)}
+              />
+
+              {/* XATO shartnomalar moduli */}
+              <XatoContractsModal
+                open={xatoModalOpen}
+                onClose={() => setXatoModalOpen(false)}
+                onPick={(c) => { setQ(c); setPage(1); setXatoModalOpen(false); }}
               />
 
               {/* EXPORT — paperclip stilida (faqat canExport bo‘lsa) */}
@@ -1784,6 +1796,71 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
             </div>
           </>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══ XATO shartnomalar moduli — CRM tasdiqlamagan shartnoma raqamlari ═══
+function XatoContractsModal({ open, onClose, onPick }: {
+  open: boolean; onClose: () => void; onPick: (c: string) => void;
+}) {
+  const t = useTranslations('transactions');
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useQuery({
+    queryKey: ['xato-contracts'],
+    queryFn: () => api.get<{ ok: boolean; count: number; items: Array<{ contractNumber: string; count: number; totalAmount: number }> }>('/transactions/xato-contracts'),
+    enabled: open,
+  });
+  const items = useMemo(() => {
+    const all = data?.items || [];
+    const s = search.trim().toLowerCase();
+    return s ? all.filter((i) => i.contractNumber.toLowerCase().includes(s)) : all;
+  }, [data, search]);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-lg p-0 overflow-hidden gap-0">
+        <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-5 py-4 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-white flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" /> {t('toolXatoContracts')}
+            </DialogTitle>
+            <DialogDescription className="text-white/85 text-[12px]">
+              {t('xatoModalDesc')}
+            </DialogDescription>
+          </DialogHeader>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('xatoModalSearch')} className="pl-9 h-9" />
+            </div>
+            <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 tabular-nums shrink-0 whitespace-nowrap">
+              {data?.count ?? 0} {t('xatoModalCount')}
+            </span>
+          </div>
+          <div className="max-h-[55vh] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+            {isLoading ? (
+              <div className="py-10 text-center text-slate-400 dark:text-slate-500 text-[12px] flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> …
+              </div>
+            ) : items.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
+            ) : items.map((i) => (
+              <div key={i.contractNumber} className="flex items-center gap-3 px-3 py-2 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-colors">
+                <button type="button" onClick={() => onPick(i.contractNumber)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
+                  <code className="font-mono text-[12px] font-bold text-amber-700 dark:text-amber-300">{i.contractNumber}</code>
+                  <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
+                    {i.count} · {formatMoney(i.totalAmount)}
+                  </div>
+                </button>
+                <CopyIdButton value={i.contractNumber} />
+              </div>
+            ))}
+          </div>
+        </div>
       </DialogContent>
     </Dialog>
   );

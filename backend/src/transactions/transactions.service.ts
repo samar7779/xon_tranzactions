@@ -1086,4 +1086,35 @@ export class TransactionsService {
     ]);
     return { ok: true, total, groups: grouped, byBank };
   }
+
+  /**
+   * XATO shartnomalar — tranzaksiyalarda ishlatilgan, lekin CRM tasdiqlamagan
+   * (verified emas) shartnoma raqamlari. Har biri uchun nechta tx va jami summa.
+   */
+  async xatoContracts() {
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+
+    // groupBy — Prisma having mapped-type TS quirk uchun cast
+    const grouped = await (this.prisma.transaction.groupBy as any)({
+      by: ['contractNumber'],
+      where: { contractNumber: { not: null } },
+      _count: true,
+      _sum: { amount: true },
+    });
+
+    const items = (grouped as Array<{ contractNumber: string | null; _count: number; _sum: { amount: any } }>)
+      .filter((g) => g.contractNumber && !verifiedSet.has(g.contractNumber))
+      .map((g) => ({
+        contractNumber: g.contractNumber as string,
+        count: g._count,
+        totalAmount: Number(g._sum.amount ?? 0),
+      }))
+      .sort((a, b) => b.count - a.count);
+
+    return { ok: true, count: items.length, items };
+  }
 }
