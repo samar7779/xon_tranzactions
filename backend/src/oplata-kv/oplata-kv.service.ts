@@ -543,16 +543,34 @@ export class OplataKvService {
     });
     const verifiedSet = new Set(verified.map((c) => c.contractNumber));
 
+    // СЧЁТЧИК to'lovlarini ro'yxatdan chiqaramiz — ular split qilinmaydi
+    // (ularga split paytida Оплата=Общий qo'yiladi, lekin "split kerak" emas).
+    const schetchikTxs = await this.prisma.transaction.findMany({
+      where: { subcategory: { code: 'CLIENT_SCHETCHIK' } },
+      select: { id: true, externalId: true },
+    });
+    const schetchikIds: string[] = [];
+    for (const tx of schetchikTxs) {
+      schetchikIds.push(tx.id);
+      if (tx.externalId) schetchikIds.push(tx.externalId);
+    }
+
+    const splitWhere: any = {
+      sourceTxId: { not: null },
+      paymentAmount: { not: null },
+      firstInstallment: null,
+      monthlyAmount: null,
+      paymentCategory: null,
+    };
+    // notIn juda katta bo'lmasa — счётчик manbalarini chiqaramiz
+    if (schetchikIds.length > 0 && schetchikIds.length <= 30000) {
+      splitWhere.sourceTxId = { not: null, notIn: schetchikIds };
+    }
+
     // Split bo'lmagan qatorlar — splitInstallments where bilan bir xil
     const grouped = await (this.prisma.oplataKv.groupBy as any)({
       by: ['contractNo'],
-      where: {
-        sourceTxId: { not: null },
-        paymentAmount: { not: null },
-        firstInstallment: null,
-        monthlyAmount: null,
-        paymentCategory: null,
-      },
+      where: splitWhere,
       _count: true,
       _sum: { paymentAmount: true },
     });
@@ -1461,16 +1479,17 @@ export class OplataKvService {
           for (const item of items) {
             const amount = Number(item.paymentAmount);
 
-            // ── SCHOTCHIK SKIP: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
-            // Kvartira badali emas — running totals'ga qo'shmaymiz, first/monthly = NULL.
-            // paymentCategory ham NULL — bu kvartira to'lov kategoriyalaridan emas.
+            // ── SCHOTCHIK: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
+            // Kvartira badali emas — split QILINMAYDI (first/monthly = NULL),
+            // lekin Оплата ustuniga "Общий" (GENERAL) qo'yiladi. Running totals'ga
+            // qo'shilmaydi.
             if (item.sourceTxId && schetchikSourceIds.has(item.sourceTxId)) {
               await this.prisma.oplataKv.update({
                 where: { id: item.id },
                 data: {
                   firstInstallment: null,
                   monthlyAmount:    null,
-                  paymentCategory:  null,
+                  paymentCategory:  'GENERAL' as OplataKvCategory,
                 },
               });
               filled++;
@@ -1597,8 +1616,9 @@ export class OplataKvService {
     if (!row) return { ok: false, error: 'Qator topilmadi' };
     if (!row.paymentAmount) return { ok: false, error: 'paymentAmount yo\'q' };
 
-    // ── SCHOTCHIK SKIP: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
-    // Bu kvartira badali emas — split shart emas, NULL ga qo'yamiz.
+    // ── SCHOTCHIK: bog'langan Transaction CLIENT_SCHETCHIK bo'lsa ──
+    // Bu kvartira badali emas — split shart emas (first/monthly = NULL),
+    // lekin Оплата ustuniga "Общий" (GENERAL) qo'yamiz.
     if (row.sourceTxId) {
       const linkedTx = await this.prisma.transaction.findFirst({
         where: {
@@ -1610,11 +1630,11 @@ export class OplataKvService {
       if (linkedTx) {
         await this.prisma.oplataKv.update({
           where: { id: row.id },
-          data: { firstInstallment: null, monthlyAmount: null, paymentCategory: null },
+          data: { firstInstallment: null, monthlyAmount: null, paymentCategory: 'GENERAL' as OplataKvCategory },
         });
         return {
           ok: true,
-          item: { firstInstallment: 0, monthlyAmount: 0, paymentCategory: null },
+          item: { firstInstallment: 0, monthlyAmount: 0, paymentCategory: 'GENERAL' },
         };
       }
     }
