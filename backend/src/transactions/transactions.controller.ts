@@ -116,6 +116,13 @@ export class TransactionsController {
     });
   }
 
+  @Get('xato-contracts')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @ApiOperation({ summary: 'XATO shartnomalar — CRM tasdiqlamagan shartnoma raqamlari (tx soni + jami summa)' })
+  xatoContracts() {
+    return this.svc.xatoContracts();
+  }
+
   @Get('daily')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob/kategoriya filtri bilan)' })
