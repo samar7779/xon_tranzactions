@@ -1818,9 +1818,17 @@ function XatoContractsModal({ open, onClose, onPick }: {
     return s ? all.filter((i) => i.contractNumber.toLowerCase().includes(s)) : all;
   }, [data, search]);
 
+  // Pagination — 7000+ qatorni birdaniga render qilmaslik uchun (qotib qolmasin)
+  const PER_PAGE = 60;
+  const [page, setPage] = useState(1);
+  useEffect(() => { setPage(1); }, [search, open]);
+  const totalPages = Math.max(1, Math.ceil(items.length / PER_PAGE));
+  const pageClamped = Math.min(page, totalPages);
+  const paged = items.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden gap-0">
+      <DialogContent className="max-w-5xl w-[96vw] p-0 overflow-hidden gap-0">
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-5 py-4 text-white">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
@@ -1841,7 +1849,7 @@ function XatoContractsModal({ open, onClose, onPick }: {
               {data?.count ?? 0} {t('xatoModalCount')}
             </span>
           </div>
-          <div className="max-h-[72vh] min-h-[300px] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-2">
+          <div className="max-h-[68vh] min-h-[300px] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-2">
             {isLoading ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px] flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> …
@@ -1849,8 +1857,8 @@ function XatoContractsModal({ open, onClose, onPick }: {
             ) : items.length === 0 ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-1.5">
-                {items.map((i) => (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
+                {paged.map((i) => (
                   <div key={i.contractNumber} className="flex items-center gap-2 px-2.5 py-2 rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-amber-200 dark:hover:ring-amber-900 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-all">
                     <button type="button" onClick={() => onPick(i.contractNumber)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
                       <code className="font-mono text-[12px] font-bold text-amber-700 dark:text-amber-300">{i.contractNumber}</code>
@@ -1864,6 +1872,26 @@ function XatoContractsModal({ open, onClose, onPick }: {
               </div>
             )}
           </div>
+
+          {/* Pagination */}
+          {!isLoading && items.length > PER_PAGE && (
+            <div className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="text-slate-500 dark:text-slate-400 tabular-nums">
+                {(pageClamped - 1) * PER_PAGE + 1}–{Math.min(pageClamped * PER_PAGE, items.length)} / {items.length}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button type="button" disabled={pageClamped <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  className="h-8 w-8 grid place-items-center rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <ChevronLeft className="h-4 w-4" />
+                </button>
+                <span className="px-2 font-semibold tabular-nums">{pageClamped} / {totalPages}</span>
+                <button type="button" disabled={pageClamped >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  className="h-8 w-8 grid place-items-center rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                  <ChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
