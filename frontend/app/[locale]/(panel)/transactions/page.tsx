@@ -824,11 +824,10 @@ export default function TransactionsPage() {
                 onClose={() => setVipiskaDebugOpen(false)}
               />
 
-              {/* XATO shartnomalar moduli */}
+              {/* Split kerak shartnomalar moduli */}
               <XatoContractsModal
                 open={xatoModalOpen}
                 onClose={() => setXatoModalOpen(false)}
-                onPick={(c) => { setQ(c); setPage(1); setXatoModalOpen(false); }}
               />
 
               {/* EXPORT — paperclip stilida (faqat canExport bo‘lsa) */}
@@ -1802,8 +1801,8 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 }
 
 // ═══ Split kerak shartnomalar — CRM topilgan, lekin to'lovi bo'linmagan ═══
-function XatoContractsModal({ open, onClose, onPick }: {
-  open: boolean; onClose: () => void; onPick: (c: string) => void;
+function XatoContractsModal({ open, onClose }: {
+  open: boolean; onClose: () => void;
 }) {
   const t = useTranslations('transactions');
   const qc = useQueryClient();
@@ -1815,6 +1814,14 @@ function XatoContractsModal({ open, onClose, onPick }: {
     queryKey: ['unsplit-contracts'],
     queryFn: () => api.get<{ ok: boolean; count: number; items: Array<{ contractNo: string; count: number; totalAmount: number }> }>('/oplata-kv/unsplit-contracts'),
     enabled: open,
+  });
+
+  // Ochilgan (batafsil ko'rsatilayotgan) shartnoma
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const detailQuery = useQuery({
+    queryKey: ['split-detail', expanded],
+    queryFn: () => api.get<{ ok: boolean; items: Array<{ id: string; date: string | null; paymentAmount: any; firstInstallment: any; monthlyAmount: any; paymentCategory: string | null }> }>(`/oplata-kv/by-contract?contractNo=${encodeURIComponent(expanded || '')}`),
+    enabled: !!expanded,
   });
 
   const splitMut = useMutation({
@@ -1831,6 +1838,11 @@ function XatoContractsModal({ open, onClose, onPick }: {
       qc.invalidateQueries({ queryKey: ['unsplit-contracts'] });
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       qc.invalidateQueries({ queryKey: ['transactions'] });
+      // Bitta shartnoma split qilinsa — uni ochib, qanday bo'linganini ko'rsatamiz
+      if (contractNo) {
+        setExpanded(contractNo);
+        qc.invalidateQueries({ queryKey: ['split-detail', contractNo] });
+      }
     },
     onError: (e: any) => toast.error(e?.message || 'Split xato'),
     onSettled: () => setBusyContract(null),
@@ -1899,28 +1911,71 @@ function XatoContractsModal({ open, onClose, onPick }: {
             ) : items.length === 0 ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-1.5">
+              <div className="space-y-1.5">
                 {paged.map((i) => {
                   const rowBusy = busyContract === i.contractNo;
+                  const isOpen = expanded === i.contractNo;
                   return (
-                    <div key={i.contractNo} className="flex items-center gap-2 px-2.5 py-2 rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-emerald-200 dark:hover:ring-emerald-900 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-all">
-                      <button type="button" onClick={() => onPick(i.contractNo)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
-                        <code className="font-mono text-[12px] font-bold text-emerald-700 dark:text-emerald-300">{i.contractNo}</code>
-                        <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
-                          {i.count} · {formatMoney(i.totalAmount)}
+                    <div key={i.contractNo} className="rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
+                      <div className="flex items-center gap-2 px-2.5 py-2 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-all">
+                        <button type="button" onClick={() => setExpanded(isOpen ? null : i.contractNo)} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+                          <ChevronDown className={cn('h-4 w-4 text-slate-400 shrink-0 transition-transform', !isOpen && '-rotate-90')} />
+                          <span className="min-w-0">
+                            <code className="font-mono text-[12px] font-bold text-emerald-700 dark:text-emerald-300">{i.contractNo}</code>
+                            <span className="block text-[10px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                              {i.count} · {formatMoney(i.totalAmount)}
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={splitMut.isPending}
+                          onClick={() => splitMut.mutate(i.contractNo)}
+                          title={t('splitOne')}
+                          className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold disabled:opacity-50 transition-colors shrink-0"
+                        >
+                          {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
+                          Split
+                        </button>
+                        <CopyIdButton value={i.contractNo} />
+                      </div>
+
+                      {/* Batafsil — to'lovlar id bilan, qanday bo'lingani */}
+                      {isOpen && (
+                        <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 px-2 py-2">
+                          {detailQuery.isLoading ? (
+                            <div className="py-4 text-center text-[11px] text-slate-400 flex items-center justify-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</div>
+                          ) : (
+                            <div className="overflow-x-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
+                              <table className="w-full text-[11px]">
+                                <thead className="bg-white dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 text-[10px] uppercase">
+                                  <tr>
+                                    <th className="px-2 py-1.5 text-left font-semibold">ID</th>
+                                    <th className="px-2 py-1.5 text-left font-semibold">Sana</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">Сумма</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">1 взнос</th>
+                                    <th className="px-2 py-1.5 text-right font-semibold">ежемес.</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                                  {(detailQuery.data?.items || []).map((d) => {
+                                    const split = d.firstInstallment != null || d.monthlyAmount != null;
+                                    return (
+                                      <tr key={d.id} className={cn('transition-colors', split ? 'bg-emerald-50/40 dark:bg-emerald-950/20' : '')}>
+                                        <td className="px-2 py-1.5 font-mono text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">{d.id.slice(0, 8)}…</td>
+                                        <td className="px-2 py-1.5 tabular-nums whitespace-nowrap">{d.date ? new Date(d.date).toLocaleDateString('ru-RU') : '—'}</td>
+                                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{d.paymentAmount ? Number(d.paymentAmount).toLocaleString('ru-RU') : '—'}</td>
+                                        <td className="px-2 py-1.5 text-right tabular-nums text-amber-700 dark:text-amber-300">{d.firstInstallment ? Number(d.firstInstallment).toLocaleString('ru-RU') : '—'}</td>
+                                        <td className="px-2 py-1.5 text-right tabular-nums text-sky-700 dark:text-sky-300">{d.monthlyAmount ? Number(d.monthlyAmount).toLocaleString('ru-RU') : '—'}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
-                      </button>
-                      <button
-                        type="button"
-                        disabled={splitMut.isPending}
-                        onClick={() => splitMut.mutate(i.contractNo)}
-                        title={t('splitOne')}
-                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-[11px] font-semibold disabled:opacity-50 transition-colors shrink-0"
-                      >
-                        {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
-                        Split
-                      </button>
-                      <CopyIdButton value={i.contractNo} />
+                      )}
                     </div>
                   );
                 })}
