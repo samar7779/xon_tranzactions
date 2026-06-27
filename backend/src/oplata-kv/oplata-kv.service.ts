@@ -2229,10 +2229,15 @@ export class OplataKvService {
         FIRST:   '1 взнос',
         GENERAL: 'Общий',
       };
-      let values = rows
+      let values: Array<{ id: string; name: string }> = rows
         .map((r) => r.paymentCategory)
         .filter((v): v is OplataKvCategory => !!v)
-        .map((v) => ({ id: v, name: labels[v] || v }));
+        .map((v) => ({ id: v as string, name: labels[v] || v }));
+      // Bo'sh (paymentCategory = NULL) qatorlar ham bo'lsa — alohida filtr opsiyasi.
+      // buildWhere '__null__' markerini qabul qiladi (NULL bo'yicha filtrlaydi).
+      if (rows.some((r) => !r.paymentCategory)) {
+        values.push({ id: '__null__', name: '— (bo\'sh)' });
+      }
       if (search) {
         const s = search.toLowerCase();
         values = values.filter((v) => v.name.toLowerCase().includes(s));
