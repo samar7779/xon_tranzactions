@@ -1820,7 +1820,7 @@ function XatoContractsModal({ open, onClose, onPick }: {
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg p-0 overflow-hidden gap-0">
+      <DialogContent className="max-w-3xl w-[95vw] p-0 overflow-hidden gap-0">
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-5 py-4 text-white">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
@@ -1841,24 +1841,28 @@ function XatoContractsModal({ open, onClose, onPick }: {
               {data?.count ?? 0} {t('xatoModalCount')}
             </span>
           </div>
-          <div className="max-h-[55vh] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="max-h-[72vh] min-h-[300px] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-2">
             {isLoading ? (
-              <div className="py-10 text-center text-slate-400 dark:text-slate-500 text-[12px] flex items-center justify-center gap-2">
+              <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px] flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> …
               </div>
             ) : items.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
-            ) : items.map((i) => (
-              <div key={i.contractNumber} className="flex items-center gap-3 px-3 py-2 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-colors">
-                <button type="button" onClick={() => onPick(i.contractNumber)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
-                  <code className="font-mono text-[12px] font-bold text-amber-700 dark:text-amber-300">{i.contractNumber}</code>
-                  <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums">
-                    {i.count} · {formatMoney(i.totalAmount)}
+              <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-1.5">
+                {items.map((i) => (
+                  <div key={i.contractNumber} className="flex items-center gap-2 px-2.5 py-2 rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-amber-200 dark:hover:ring-amber-900 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-all">
+                    <button type="button" onClick={() => onPick(i.contractNumber)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
+                      <code className="font-mono text-[12px] font-bold text-amber-700 dark:text-amber-300">{i.contractNumber}</code>
+                      <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                        {i.count} · {formatMoney(i.totalAmount)}
+                      </div>
+                    </button>
+                    <CopyIdButton value={i.contractNumber} />
                   </div>
-                </button>
-                <CopyIdButton value={i.contractNumber} />
+                ))}
               </div>
-            ))}
+            )}
           </div>
         </div>
       </DialogContent>
