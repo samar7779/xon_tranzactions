@@ -282,14 +282,21 @@ export class OplataKvController {
     return this.svc.fillMissingObjects({ limit: body?.limit, actor: actorFrom(user) });
   }
 
+  @Get('unsplit-contracts')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "CRM topilgan, lekin to'lovi split bo'lmagan shartnomalar (split kerak)" })
+  unsplitContracts() {
+    return this.svc.unsplitContracts();
+  }
+
   @Post('split-installments')
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
-  @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM asosida)" })
+  @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM asosida). contractNo berilsa faqat shu shartnoma." })
   async splitInstallments(
-    @Body() body: { limit?: number },
+    @Body() body: { limit?: number; contractNo?: string },
     @CurrentUser() user?: AuthUser,
   ) {
-    return this.svc.splitInstallments({ limit: body?.limit, actor: actorFrom(user) });
+    return this.svc.splitInstallments({ limit: body?.limit, contractNo: body?.contractNo, actor: actorFrom(user) });
   }
 
   @Post('cleanup-xato-splits')

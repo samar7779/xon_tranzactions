@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  RefreshCw, Landmark, Ban, Gauge,
+  RefreshCw, Landmark, Ban, Gauge, Scissors,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -795,7 +795,7 @@ export default function TransactionsPage() {
                     <span className="flex-1">{t('toolVipiskaCheck')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => setXatoModalOpen(true)} className="cursor-pointer">
-                    <AlertTriangle className="h-4 w-4 mr-2 text-amber-600 dark:text-amber-400" />
+                    <Scissors className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
                     <span className="flex-1">{t('toolXatoContracts')}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -1801,38 +1801,63 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
   );
 }
 
-// ═══ XATO shartnomalar moduli — CRM tasdiqlamagan shartnoma raqamlari ═══
+// ═══ Split kerak shartnomalar — CRM topilgan, lekin to'lovi bo'linmagan ═══
 function XatoContractsModal({ open, onClose, onPick }: {
   open: boolean; onClose: () => void; onPick: (c: string) => void;
 }) {
   const t = useTranslations('transactions');
+  const qc = useQueryClient();
   const [search, setSearch] = useState('');
+  const [busyContract, setBusyContract] = useState<string | null>(null);
+  const [lastResult, setLastResult] = useState<{ scope: string; filled: number } | null>(null);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['xato-contracts'],
-    queryFn: () => api.get<{ ok: boolean; count: number; items: Array<{ contractNumber: string; count: number; totalAmount: number }> }>('/transactions/xato-contracts'),
+    queryKey: ['unsplit-contracts'],
+    queryFn: () => api.get<{ ok: boolean; count: number; items: Array<{ contractNo: string; count: number; totalAmount: number }> }>('/oplata-kv/unsplit-contracts'),
     enabled: open,
   });
+
+  const splitMut = useMutation({
+    mutationFn: (contractNo?: string) =>
+      api.post<{ filled: number; total: number; contracts: number }>(
+        '/oplata-kv/split-installments',
+        contractNo ? { contractNo } : {},
+        { timeout: 1_800_000 },
+      ),
+    onMutate: (contractNo) => setBusyContract(contractNo || '__all__'),
+    onSuccess: (r, contractNo) => {
+      setLastResult({ scope: contractNo || t('splitAll'), filled: r.filled });
+      toast.success(t('splitDone', { n: r.filled }));
+      qc.invalidateQueries({ queryKey: ['unsplit-contracts'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      qc.invalidateQueries({ queryKey: ['transactions'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Split xato'),
+    onSettled: () => setBusyContract(null),
+  });
+
   const items = useMemo(() => {
     const all = data?.items || [];
     const s = search.trim().toLowerCase();
-    return s ? all.filter((i) => i.contractNumber.toLowerCase().includes(s)) : all;
+    return s ? all.filter((i) => i.contractNo.toLowerCase().includes(s)) : all;
   }, [data, search]);
 
-  // Pagination — 7000+ qatorni birdaniga render qilmaslik uchun (qotib qolmasin)
+  // Pagination — ko'p qatorni birdaniga render qilmaslik uchun (qotib qolmasin)
   const PER_PAGE = 60;
   const [page, setPage] = useState(1);
   useEffect(() => { setPage(1); }, [search, open]);
   const totalPages = Math.max(1, Math.ceil(items.length / PER_PAGE));
   const pageClamped = Math.min(page, totalPages);
   const paged = items.slice((pageClamped - 1) * PER_PAGE, pageClamped * PER_PAGE);
+  const allBusy = busyContract === '__all__';
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={open} onOpenChange={(o) => !o && !splitMut.isPending && onClose()}>
       <DialogContent className="max-w-5xl w-[96vw] p-0 overflow-hidden gap-0">
-        <div className="bg-gradient-to-br from-amber-500 to-orange-600 px-5 py-4 text-white">
+        <div className="bg-gradient-to-br from-teal-500 to-emerald-600 px-5 py-4 text-white">
           <DialogHeader>
             <DialogTitle className="text-white flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5" /> {t('toolXatoContracts')}
+              <Scissors className="h-5 w-5" /> {t('toolXatoContracts')}
             </DialogTitle>
             <DialogDescription className="text-white/85 text-[12px]">
               {t('xatoModalDesc')}
@@ -1840,16 +1865,33 @@ function XatoContractsModal({ open, onClose, onPick }: {
           </DialogHeader>
         </div>
         <div className="p-4 space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="relative flex-1">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('xatoModalSearch')} className="pl-9 h-9" />
             </div>
-            <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 tabular-nums shrink-0 whitespace-nowrap">
+            <span className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300 tabular-nums whitespace-nowrap">
               {data?.count ?? 0} {t('xatoModalCount')}
             </span>
+            <button
+              type="button"
+              disabled={splitMut.isPending || (data?.count ?? 0) === 0}
+              onClick={() => splitMut.mutate(undefined)}
+              className="inline-flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-semibold disabled:opacity-50 transition-colors"
+            >
+              {allBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scissors className="h-4 w-4" />}
+              {t('splitAll')}
+            </button>
           </div>
-          <div className="max-h-[68vh] min-h-[300px] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-2">
+
+          {lastResult && (
+            <div className="rounded-lg ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30 px-3 py-2 text-[12px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span><b className="font-mono">{lastResult.scope}</b> — {t('splitDone', { n: lastResult.filled })}</span>
+            </div>
+          )}
+
+          <div className="max-h-[64vh] min-h-[280px] overflow-y-auto rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-2">
             {isLoading ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px] flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" /> …
@@ -1857,18 +1899,31 @@ function XatoContractsModal({ open, onClose, onPick }: {
             ) : items.length === 0 ? (
               <div className="py-16 text-center text-slate-400 dark:text-slate-500 text-[12px]">{t('xatoModalEmpty')}</div>
             ) : (
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-1.5">
-                {paged.map((i) => (
-                  <div key={i.contractNumber} className="flex items-center gap-2 px-2.5 py-2 rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-amber-200 dark:hover:ring-amber-900 hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-all">
-                    <button type="button" onClick={() => onPick(i.contractNumber)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
-                      <code className="font-mono text-[12px] font-bold text-amber-700 dark:text-amber-300">{i.contractNumber}</code>
-                      <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
-                        {i.count} · {formatMoney(i.totalAmount)}
-                      </div>
-                    </button>
-                    <CopyIdButton value={i.contractNumber} />
-                  </div>
-                ))}
+              <div className="grid sm:grid-cols-2 gap-1.5">
+                {paged.map((i) => {
+                  const rowBusy = busyContract === i.contractNo;
+                  return (
+                    <div key={i.contractNo} className="flex items-center gap-2 px-2.5 py-2 rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 hover:ring-emerald-200 dark:hover:ring-emerald-900 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-all">
+                      <button type="button" onClick={() => onPick(i.contractNo)} title={t('xatoModalOpenInList')} className="flex-1 min-w-0 text-left">
+                        <code className="font-mono text-[12px] font-bold text-emerald-700 dark:text-emerald-300">{i.contractNo}</code>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                          {i.count} · {formatMoney(i.totalAmount)}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={splitMut.isPending}
+                        onClick={() => splitMut.mutate(i.contractNo)}
+                        title={t('splitOne')}
+                        className="inline-flex items-center gap-1 h-7 px-2 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-[11px] font-semibold disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        {rowBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
+                        Split
+                      </button>
+                      <CopyIdButton value={i.contractNo} />
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
