@@ -132,7 +132,12 @@ export class SverkaTelegramService implements OnModuleInit {
 
   private async editMsg(chatId: string, messageId: number | undefined, text: string): Promise<void> {
     if (!messageId) return;
-    await this.tgCall('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML' });
+    // reply_markup: { inline_keyboard: [] } — inline tugmani olib tashlaydi
+    // (amal bajarilgach tugma kerak emas, qayta bosib bo'lmasin).
+    await this.tgCall('editMessageText', {
+      chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: [] },
+    });
   }
 
   /**
@@ -172,14 +177,27 @@ export class SverkaTelegramService implements OnModuleInit {
       }
       const items = insertable.map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined }));
       const res: any = await reconcile.fixAllMissing(accountId, date, items);
-      const added = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted).length : (res?.summary?.ok ?? items.length);
+      const insertedRows: any[] = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted) : [];
+      const added = insertedRows.length;
+      // Qo'shilgan tranzaksiyalarning ID lari (externalId — composite bank ID)
+      const addedIds: string[] = insertedRows
+        .map((r) => r.externalId || r.transactionId)
+        .filter((x): x is string => !!x);
+
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const idLines = addedIds.length > 0
+        ? '\n🆔 <b>ID lar:</b>\n' + addedIds.slice(0, 15).map((id) => `  • <code>${id}</code>`).join('\n') +
+          (addedIds.length > 15 ? `\n  • … va yana ${addedIds.length - 15} ta` : '')
+        : '';
 
       await this.editMsg(
         chatId, messageId,
         `✅ <b>To'g'rilandi</b>\n\n` +
-        `📅 Sana: ${date}\n` +
-        `➕ Qo'shildi: <b>${added}</b> ta tranzaksiya\n\n` +
-        `<i>Tasdiqlovchi: ${chat.name || chatId}</i>`,
+        `📅 Sverka sanasi: ${date}\n` +
+        `➕ Qo'shildi: <b>${added}</b> ta tranzaksiya` +
+        idLines + `\n\n` +
+        `👤 <b>Kim:</b> ${chat.name || chatId}\n` +
+        `🕐 <b>Qachon:</b> ${nowTk}`,
       );
       await this.appendHistory({
         action: 'telegram_fix_missing',
@@ -187,7 +205,7 @@ export class SverkaTelegramService implements OnModuleInit {
         actorId: null,
         actorName: chat.name || chatId,
         chatId,
-        details: { accountId, date, added, attempted: items.length },
+        details: { accountId, date, added, attempted: items.length, addedIds },
       });
       this.log.log(`Telegram fix: account=${accountId} date=${date} added=${added} (chat=${chatId})`);
     } catch (e: any) {
