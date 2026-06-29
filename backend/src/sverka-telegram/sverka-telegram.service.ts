@@ -204,13 +204,34 @@ export class SverkaTelegramService implements OnModuleInit {
     return s?.value || DEFAULT_BOT_TOKEN;
   }
 
-  async setBotToken(token: string, actor?: { name: string | null }): Promise<{ ok: true }> {
+  async setBotToken(token: string, actor?: { name: string | null }): Promise<{ ok: true; username?: string }> {
+    const clean = (token || '').trim();
+    if (!clean) throw new BadRequestException("Token bo'sh");
+
+    // Telegram'da tekshiramiz — token haqiqiy ekanini va bot kimligini bilamiz
+    let username: string | undefined;
+    try {
+      const res = await axios.post(`https://api.telegram.org/bot${clean}/getMe`, {}, { timeout: 10_000 });
+      if (!res.data?.ok) throw new Error('getMe ok emas');
+      username = res.data.result?.username;
+    } catch (e: any) {
+      const desc = e?.response?.data?.description || e?.message || 'tekshirib bo\'lmadi';
+      throw new BadRequestException(`Token noto'g'ri yoki bot topilmadi: ${desc}`);
+    }
+
     await this.prisma.setting.upsert({
       where: { key: SverkaTelegramService.KEY_BOT_TOKEN },
-      create: { key: SverkaTelegramService.KEY_BOT_TOKEN, value: token, updatedBy: actor?.name || 'system' },
-      update: { value: token, updatedBy: actor?.name || 'system' },
+      create: { key: SverkaTelegramService.KEY_BOT_TOKEN, value: clean, updatedBy: actor?.name || 'system' },
+      update: { value: clean, updatedBy: actor?.name || 'system' },
     });
-    return { ok: true };
+
+    // Yangi bot uchun polling'ni qayta sozlaymiz — eski offset va webhook'ni tozalaymiz
+    this.pollOffset = 0;
+    try { await axios.post(`https://api.telegram.org/bot${clean}/deleteWebhook`, {}, { timeout: 10_000 }); } catch { /* ignore */ }
+    if (!this.polling) this.startPolling();
+
+    this.log.log(`Bot token yangilandi: @${username || '?'} (${actor?.name || 'system'})`);
+    return { ok: true, username };
   }
 
   // ─── PASSWORD ───────────────────────────────────────────
