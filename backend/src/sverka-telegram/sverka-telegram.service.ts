@@ -173,45 +173,68 @@ export class SverkaTelegramService implements OnModuleInit {
     }
   }
 
-  /** Kelgan oddiy xabarlar — /clear va /start komandalarini ushlaymiz. */
+  /** Kelgan oddiy xabarlar — /clear, "Chatni tozalash" tugmasi va /start. */
   private async handleMessage(message: any): Promise<void> {
     const text: string = (message?.text || '').trim();
     const chatId = String(message?.chat?.id ?? '');
     if (!chatId) return;
     const cmd = text.split(/[\s@]/)[0].toLowerCase();
-    if (cmd === '/clear') {
+
+    if (cmd === '/clear' || text === SverkaTelegramService.CLEAR_BTN) {
       await this.handleClear(chatId, message?.message_id);
     } else if (cmd === '/start') {
+      // Xush kelibsiz + pastdagi doimiy "Chatni tozalash" tugmasini o'rnatamiz
       await this.tgCall('sendMessage', {
         chat_id: chatId,
-        text: "👋 <b>Sverka bot</b> ishga tushdi.\n\nBu yerga sverka farqlari haqida xabar keladi. Chatni tozalash uchun /clear yuboring.",
+        text: "👋 <b>Sverka bot</b> ishga tushdi.\n\nBu yerga sverka farqlari haqida xabar keladi.\n\nChatni tozalash uchun pastdagi <b>🧹 Chatni tozalash</b> tugmasini bosing (yoki /clear yuboring).",
         parse_mode: 'HTML',
+        reply_markup: this.clearKeyboard,
       });
     }
   }
 
-  /** Botning shu chatdagi xabarlarini o'chiradi (/clear). */
-  private async handleClear(chatId: string, cmdMessageId?: number): Promise<void> {
-    // Faqat ro'yxatdagi chatlar
+  // Chat ostidagi doimiy "Tozalash" tugmasi
+  private static readonly CLEAR_BTN = '🧹 Chatni tozalash';
+  private get clearKeyboard() {
+    return { keyboard: [[{ text: SverkaTelegramService.CLEAR_BTN }]], resize_keyboard: true, is_persistent: true };
+  }
+
+  /**
+   * Botning shu chatdagi BUTUN xabarlarini o'chiradi (/clear yoki tugma).
+   * Telegram'da "chatni tozalash" API yo'q — shuning uchun joriy message_id'dan
+   * pastga qarab ID oralig'ini supurib o'chiramiz (bot + foydalanuvchi xabarlari,
+   * 48 soatgача bo'lganlari). Kuzatilgan bot ID'lari ham qo'shiladi.
+   */
+  private async handleClear(chatId: string, triggerMessageId?: number): Promise<void> {
     const chats = await this.getChats();
     if (!chats.find((c) => String(c.chatId) === chatId)) return;
 
+    // Kuzatilgan bot xabar ID'lari
     const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_SENT_LOG } });
     let log: Record<string, number[]> = {};
     if (s?.value) { try { log = JSON.parse(s.value) || {}; } catch { log = {}; } }
-    const ids = log[chatId] || [];
+    const trackedIds = log[chatId] || [];
 
-    let deleted = 0;
-    for (const mid of ids) {
-      try {
-        await this.tgCall('deleteMessage', { chat_id: chatId, message_id: mid });
-        deleted++;
-      } catch { /* eski xabar (48h+) — o'chmasligi mumkin */ }
+    // ID oralig'i — joriy xabardan ~400 ta pastga (butun chatni qamrash uchun)
+    const ids = new Set<number>(trackedIds);
+    if (triggerMessageId) {
+      const RANGE = 400;
+      for (let i = triggerMessageId; i > triggerMessageId - RANGE && i > 0; i--) ids.add(i);
     }
-    // /clear komandasining o'zini ham o'chiramiz
-    if (cmdMessageId) await this.tgCall('deleteMessage', { chat_id: chatId, message_id: cmdMessageId }).catch(() => {});
 
-    // Shu chat uchun log'ni tozalaymiz
+    // Parallel o'chirish (20 talik to'plamlarda) — xatolarni e'tiborsiz qoldiramiz
+    const arr = Array.from(ids).sort((a, b) => b - a);
+    let deleted = 0;
+    const BATCH = 20;
+    for (let i = 0; i < arr.length; i += BATCH) {
+      const batch = arr.slice(i, i + BATCH);
+      const results = await Promise.all(batch.map((mid) =>
+        this.tgCall('deleteMessage', { chat_id: chatId, message_id: mid }).then(() => true).catch(() => false),
+      ));
+      deleted += results.filter(Boolean).length;
+    }
+
+    // Log'ni tozalaymiz
     log[chatId] = [];
     await this.prisma.setting.upsert({
       where: { key: SverkaTelegramService.KEY_SENT_LOG },
@@ -219,11 +242,12 @@ export class SverkaTelegramService implements OnModuleInit {
       update: { value: JSON.stringify(log), updatedBy: 'system' },
     });
 
-    // Qisqa tasdiq — faqat shu chatga (sendNotification barchaga yuborardi)
+    // Qisqa tasdiq + pastdagi tugmani qayta o'rnatamiz
     await this.tgCall('sendMessage', {
       chat_id: chatId,
-      text: `🧹 <b>Tozalandi</b> — ${deleted} ta xabar o'chirildi.`,
+      text: `🧹 <b>Chat tozalandi</b>`,
       parse_mode: 'HTML',
+      reply_markup: this.clearKeyboard,
     });
     this.log.log(`/clear: chat=${chatId} — ${deleted} ta xabar o'chirildi`);
   }
@@ -617,7 +641,8 @@ export class SverkaTelegramService implements OnModuleInit {
 
     const chats = await this.getChats();
     const text = `🧪 <b>Test xabarnomasi</b>\n\nSverka bot to'g'ri ishlayapti.\n\n<i>Yuborgan: ${actor?.name || 'admin'}</i>\n<i>Vaqt: ${new Date().toLocaleString('ru-RU')}</i>`;
-    const result = await this.sendNotification({ text, role: 'all' });
+    // Pastdagi doimiy "Chatni tozalash" tugmasini ham o'rnatamiz
+    const result = await this.sendNotification({ text, role: 'all', replyMarkup: this.clearKeyboard });
     await this.appendHistory({
       action: 'test_notification',
       source: 'web',
