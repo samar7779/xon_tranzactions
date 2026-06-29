@@ -228,14 +228,18 @@ function ChatsTab() {
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
+  const [testResult, setTestResult] = useState<{ ok: boolean; sent: number; failed: number; errors: string[]; botOk: boolean; botUsername?: string; chatCount: number } | null>(null);
   const testMut = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; sent: number; failed: number; errors: string[] }>('/sverka-telegram/test'),
+    mutationFn: () => api.post<{ ok: boolean; sent: number; failed: number; errors: string[]; botOk: boolean; botUsername?: string; chatCount: number }>('/sverka-telegram/test'),
     onSuccess: (r) => {
-      if (r.sent > 0) toast.success(`${r.sent} ta chatga test yuborildi`);
-      if (r.failed > 0) toast.error(`${r.failed} ta xato: ${r.errors[0] || ''}`);
+      setTestResult(r);
+      if (!r.botOk) toast.error('❌ Bot ulanmadi — token noto\'g\'ri yoki server Telegram\'ga chiqa olmayapti');
+      else if (r.sent > 0 && r.failed === 0) toast.success(`✅ ${r.sent} ta chatga yuborildi`);
+      else if (r.failed > 0) toast.error(`${r.failed} ta yetkazilmadi — pastdagi sababni ko'ring`);
+      else toast('Yuborilmadi (chat yoki sozlama muammosi)', { icon: 'ℹ️' });
       qc.invalidateQueries({ queryKey: ['sverka-tg-history'] });
     },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onError: (e: any) => { setTestResult(null); toast.error(e?.message || 'So\'rov xato'); },
   });
 
   const resetMut = useMutation({
@@ -344,6 +348,38 @@ function ChatsTab() {
             </Button>
           </div>
         </div>
+
+        {/* Test natijasi — tashxis paneli */}
+        {testResult && (
+          <div className={cn(
+            'rounded-xl ring-1 p-3 text-[12px] space-y-1.5',
+            testResult.botOk && testResult.failed === 0 && testResult.sent > 0
+              ? 'ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/60 dark:bg-emerald-950/30'
+              : 'ring-rose-200 dark:ring-rose-900 bg-rose-50/60 dark:bg-rose-950/30',
+          )}>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-200">Bot:</span>
+              {testResult.botOk
+                ? <span className="text-emerald-700 dark:text-emerald-300">✅ ulandi {testResult.botUsername ? `· @${testResult.botUsername}` : ''}</span>
+                : <span className="text-rose-700 dark:text-rose-300">❌ ulanmadi (token noto'g'ri yoki server Telegram'ga chiqa olmayapti)</span>}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300">
+              Chatlar: <b>{testResult.chatCount}</b> · Yuborildi: <b className="text-emerald-700 dark:text-emerald-300">{testResult.sent}</b> · Yetkazilmadi: <b className="text-rose-700 dark:text-rose-300">{testResult.failed}</b>
+            </div>
+            {testResult.errors?.length > 0 && (
+              <div className="space-y-0.5 pt-1 border-t border-rose-100 dark:border-rose-900/50">
+                {testResult.errors.map((e, i) => (
+                  <div key={i} className="text-[11px] text-rose-700 dark:text-rose-300 font-mono break-all">⚠️ {e}</div>
+                ))}
+              </div>
+            )}
+            {testResult.botOk && testResult.failed > 0 && (
+              <div className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                💡 Ko'p hollarda: chat egasi botni ochib <b>/start</b> bosishi kerak (yoki chat ID noto'g'ri).
+              </div>
+            )}
+          </div>
+        )}
 
         {chatsQuery.isLoading ? (
           <div className="py-12 text-center text-slate-400">
