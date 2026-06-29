@@ -85,57 +85,61 @@ export function PurposeModal({
     <AnimatePresence>
       {open && data && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          initial={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+          animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
+          exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
+          transition={{ duration: 0.3 }}
           // Backdrop: BOSGAN paytda yopilmaydi (overlay click yo'q)
-          // — faqat decorative blur
-          className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/75 p-4"
           aria-modal="true"
           role="dialog"
         >
           <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 30 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-            className="relative w-full max-w-[680px] max-h-[88vh] overflow-hidden bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] flex flex-col"
+            initial={{ opacity: 0, scale: 0.85, y: 60, rotateX: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0, rotateX: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 40, rotateX: 5 }}
+            transition={{
+              duration: 0.45,
+              ease: [0.16, 1, 0.3, 1], // spring-like
+              opacity: { duration: 0.25 },
+            }}
+            style={{ transformPerspective: 1200, transformOrigin: 'center bottom' }}
+            className="relative w-full max-w-[960px] max-h-[92vh] overflow-hidden bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 rounded-3xl ring-1 ring-slate-200 dark:ring-slate-800 shadow-[0_30px_80px_-15px_rgba(0,0,0,0.45)] flex flex-col"
           >
             {/* ─── HEADER — gradient bilan, decorative ─── */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-7 py-6">
+            <div className="relative overflow-hidden bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-9 py-7">
               {/* Decorative dots pattern */}
               <div
                 className="absolute inset-0 opacity-[0.15] pointer-events-none"
                 style={{
                   backgroundImage: 'radial-gradient(circle, white 1px, transparent 1px)',
-                  backgroundSize: '20px 20px',
+                  backgroundSize: '24px 24px',
                 }}
               />
               {/* Glow blob */}
-              <div className="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-white/10 blur-3xl" />
-              <div className="absolute -bottom-12 -left-12 w-44 h-44 rounded-full bg-fuchsia-300/20 blur-3xl" />
+              <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/10 blur-3xl" />
+              <div className="absolute -bottom-16 -left-16 w-64 h-64 rounded-full bg-fuchsia-300/20 blur-3xl" />
 
-              <div className="relative flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md grid place-items-center ring-1 ring-white/30 shadow-xl shrink-0">
-                  <FileText className="h-6 w-6 text-white" />
+              <div className="relative flex items-start gap-5">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md grid place-items-center ring-1 ring-white/30 shadow-xl shrink-0">
+                  <FileText className="h-7 w-7 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/80 mb-1 flex items-center gap-1.5">
-                    <Sparkles className="h-3 w-3" />
+                  <div className="text-[11px] uppercase tracking-widest font-bold text-white/80 mb-1.5 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" />
                     To'lov maqsadi
                   </div>
-                  <h2 className="text-[20px] font-black tracking-tight text-white leading-tight">
-                    Naznachenie platezha
+                  <h2 className="text-[24px] font-black tracking-tight text-white leading-tight">
+                    Porpus
                   </h2>
                   {data.direction && data.amount != null && (
-                    <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/15 backdrop-blur-md ring-1 ring-white/20">
+                    <div className="mt-3 inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white/15 backdrop-blur-md ring-1 ring-white/20">
                       {data.direction === 'IN' ? (
-                        <ArrowDownLeft className="h-3.5 w-3.5 text-emerald-200" />
+                        <ArrowDownLeft className="h-4 w-4 text-emerald-200" />
                       ) : (
-                        <ArrowUpRight className="h-3.5 w-3.5 text-rose-200" />
+                        <ArrowUpRight className="h-4 w-4 text-rose-200" />
                       )}
-                      <span className="text-[14px] font-bold tabular-nums text-white">
+                      <span className="text-[16px] font-bold tabular-nums text-white">
                         {data.direction === 'IN' ? '+' : '−'}
                         {formatMoney(Math.abs(Number(data.amount)), data.currency || 'UZS')}
                       </span>
@@ -144,17 +148,17 @@ export function PurposeModal({
                 </div>
                 <button
                   onClick={onClose}
-                  className="shrink-0 w-9 h-9 rounded-lg bg-white/15 hover:bg-white/25 backdrop-blur-md grid place-items-center text-white transition-colors ring-1 ring-white/20"
+                  className="shrink-0 w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 hover:scale-110 backdrop-blur-md grid place-items-center text-white transition-all ring-1 ring-white/20"
                   aria-label="Yopish"
                   title="Yopish (ESC)"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
 
             {/* ─── BODY — scrollable ─── */}
-            <div className="flex-1 overflow-y-auto p-7 space-y-5">
+            <div className="flex-1 overflow-y-auto p-9 space-y-6">
               {/* Meta chips */}
               {hasMeta && (
                 <div className="flex items-center gap-2 flex-wrap">
@@ -216,13 +220,13 @@ export function PurposeModal({
                     )}
                   </div>
                   {/* Body — purpose text */}
-                  <div className="p-5">
+                  <div className="p-6">
                     {data.purpose ? (
-                      <p className="text-[14.5px] leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words select-text">
+                      <p className="text-[16px] leading-[1.75] text-slate-800 dark:text-slate-200 whitespace-pre-wrap break-words select-text font-medium">
                         {data.purpose}
                       </p>
                     ) : (
-                      <p className="text-[13px] italic text-slate-400 dark:text-slate-500 text-center py-4">
+                      <p className="text-[14px] italic text-slate-400 dark:text-slate-500 text-center py-8">
                         To'lov maqsadi ko'rsatilmagan
                       </p>
                     )}
@@ -242,16 +246,16 @@ export function PurposeModal({
             </div>
 
             {/* ─── FOOTER — yopish ko'rsatkichi ─── */}
-            <div className="px-7 py-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="px-9 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-semibold">ESC</kbd>
+                <kbd className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10.5px] font-semibold">ESC</kbd>
                 <span>yoki</span>
-                <kbd className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10px] font-semibold">X</kbd>
+                <kbd className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10.5px] font-semibold">X</kbd>
                 <span>bilan yopiladi</span>
               </span>
               <button
                 onClick={onClose}
-                className="px-4 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 font-semibold text-[12px] transition-colors"
+                className="px-5 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 font-semibold text-[13px] transition-colors"
               >
                 Yopish
               </button>
