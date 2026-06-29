@@ -290,7 +290,7 @@ export class OplataKvController {
   }
 
   @Post('split-installments')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
   @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM asosida). contractNo berilsa faqat shu shartnoma." })
   async splitInstallments(
     @Body() body: { limit?: number; contractNo?: string },
@@ -329,7 +329,7 @@ export class OplataKvController {
   }
 
   @Post(':id/split')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
   @ApiOperation({ summary: "Bitta qator uchun split — faqat shu qator qayta hisoblanadi (boshqalarga tegmaydi)" })
   async splitOne(
     @Param('id') id: string,

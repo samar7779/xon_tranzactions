@@ -36,6 +36,7 @@ export const PERMISSIONS = {
   OPLATAKV_EDIT: 'oplatakv:edit',                               // Qator tahrirlash
   OPLATAKV_DELETE: 'oplatakv:delete',                           // O'chirish
   OPLATAKV_IMPORT: 'oplatakv:import',                           // Excel import
+  OPLATAKV_SPLIT: 'oplatakv:split',                             // Split / Re-split (1-vznos vs oylik)
   OPLATAKV_MANAGE: 'oplatakv:manage',                           // Legacy (deprecated) — orqaga moslik
 
   // ─── SOZLASH ───
@@ -157,6 +158,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.OPLATAKV_EDIT, label: 'Qatorni tahrirlash' },
           { value: PERMISSIONS.OPLATAKV_DELETE, label: 'O\'chirish' },
           { value: PERMISSIONS.OPLATAKV_IMPORT, label: 'Excel\'dan import' },
+          { value: PERMISSIONS.OPLATAKV_SPLIT, label: 'Split / Re-split (1-vznos vs oylik)' },
         ],
       },
     ],

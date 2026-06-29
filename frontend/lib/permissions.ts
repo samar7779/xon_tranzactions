@@ -21,7 +21,8 @@ export const PERMS = {
   OPLATAKV_EDIT: 'oplatakv:edit',
   OPLATAKV_DELETE: 'oplatakv:delete',
   OPLATAKV_IMPORT: 'oplatakv:import',
-  OPLATAKV_MANAGE: 'oplatakv:manage', // legacy
+  OPLATAKV_SPLIT: 'oplatakv:split',                // Split / Re-split
+  OPLATAKV_MANAGE: 'oplatakv:manage',              // legacy
 
   // Sozlash
   ACCOUNTS_VIEW: 'accounts:view',
