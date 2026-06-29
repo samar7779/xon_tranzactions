@@ -190,15 +190,32 @@ export class SverkaTelegramService implements OnModuleInit {
           (addedIds.length > 15 ? `\n  • … va yana ${addedIds.length - 15} ta` : '')
         : '';
 
-      await this.editMsg(
-        chatId, messageId,
+      const resultText =
         `✅ <b>To'g'rilandi</b>\n\n` +
         `📅 Sverka sanasi: ${date}\n` +
         `➕ Qo'shildi: <b>${added}</b> ta tranzaksiya` +
         idLines + `\n\n` +
-        `👤 <b>Kim:</b> ${chat.name || chatId}\n` +
-        `🕐 <b>Qachon:</b> ${nowTk}`,
-      );
+        `👤 <b>Kim to'g'riladi:</b> ${chat.name || chatId}\n` +
+        `🕐 <b>Qachon:</b> ${nowTk}`;
+
+      // Joriy xabar — natija bilan tahrirlanadi (tugma yo'qoladi)
+      await this.editMsg(chatId, messageId, resultText);
+
+      // BOSHQA tasdiqlovchilardagi SHU farq xabarlari ham — tugma yo'qolsin,
+      // kim to'g'rilagani ko'rinsin. Keyin store'dan olib tashlaymiz.
+      try {
+        const store = await this.getNotifiedStore(date);
+        const entry = store.accounts[accountId];
+        if (entry?.msgs) {
+          for (const m of entry.msgs) {
+            if (String(m.chatId) === chatId && m.messageId === messageId) continue; // joriy — yuqorida
+            await this.editMsg(String(m.chatId), m.messageId, resultText);
+          }
+          delete store.accounts[accountId];
+          await this.saveNotifiedStore(store);
+        }
+      } catch { /* ignore */ }
+
       await this.appendHistory({
         action: 'telegram_fix_missing',
         source: 'telegram',
@@ -414,10 +431,10 @@ export class SverkaTelegramService implements OnModuleInit {
     role?: ChatRole | 'all'; // default: 'all' (har ikkala rolga)
     silent?: boolean;
     replyMarkup?: any; // inline tugmalar (faqat approver uchun)
-  }): Promise<{ ok: boolean; sent: number; failed: number; errors: string[] }> {
+  }): Promise<{ ok: boolean; sent: number; failed: number; errors: string[]; messages: Array<{ chatId: string; messageId: number }> }> {
     const chats = await this.getChats();
     if (chats.length === 0) {
-      return { ok: true, sent: 0, failed: 0, errors: ['No chats configured'] };
+      return { ok: true, sent: 0, failed: 0, errors: ['No chats configured'], messages: [] };
     }
     const filtered = opts.role && opts.role !== 'all'
       ? chats.filter((c) => c.role === opts.role)
@@ -425,16 +442,17 @@ export class SverkaTelegramService implements OnModuleInit {
 
     const token = await this.getBotToken();
     if (!token) {
-      return { ok: false, sent: 0, failed: filtered.length, errors: ['No bot token'] };
+      return { ok: false, sent: 0, failed: filtered.length, errors: ['No bot token'], messages: [] };
     }
 
     let sent = 0;
     let failed = 0;
     const errors: string[] = [];
+    const messages: Array<{ chatId: string; messageId: number }> = [];
 
     await Promise.all(filtered.map(async (chat) => {
       try {
-        await axios.post(
+        const res = await axios.post(
           `https://api.telegram.org/bot${token}/sendMessage`,
           {
             chat_id: chat.chatId,
@@ -446,6 +464,8 @@ export class SverkaTelegramService implements OnModuleInit {
           { timeout: 10_000 },
         );
         sent++;
+        const mid = res.data?.result?.message_id;
+        if (mid) messages.push({ chatId: String(chat.chatId), messageId: mid });
       } catch (e: any) {
         failed++;
         const msg = e?.response?.data?.description || e?.message || 'Unknown error';
@@ -454,7 +474,27 @@ export class SverkaTelegramService implements OnModuleInit {
       }
     }));
 
-    return { ok: failed === 0, sent, failed, errors };
+    return { ok: failed === 0, sent, failed, errors, messages };
+  }
+
+  // ─── NOTIFIED STORE (farq holatini + xabar message_id'larini saqlash) ──
+  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number }> }> }> {
+    const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY } });
+    if (s?.value) {
+      try {
+        const parsed = JSON.parse(s.value);
+        if (parsed?.date === date && parsed.accounts && typeof parsed.accounts === 'object') return parsed;
+      } catch { /* ignore */ }
+    }
+    return { date, accounts: {} };
+  }
+
+  private async saveNotifiedStore(store: { date: string; accounts: Record<string, any> }): Promise<void> {
+    await this.prisma.setting.upsert({
+      where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
+      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify(store), updatedBy: 'system' },
+      update: { value: JSON.stringify(store), updatedBy: 'system' },
+    });
   }
 
   /** Test notification — admin UI'dan chaqiriladi. */
@@ -513,29 +553,47 @@ export class SverkaTelegramService implements OnModuleInit {
     try {
       // MUHIM: reconcile har bir item'da `ok: true` ni hardcode qaytaradi
       // (bu "amal bajarildi" degani, "mos keldi" emas). Haqiqiy holat — `status`.
-      // Shu sababli `!it.ok` ni TEKSHIRMAYMIZ (u doim true bo'lardi va hammasini
-      // chiqarib tashlardi). Farq = status === 'mismatch'.
+      // Farq = status === 'mismatch'.
       const mismatches = (items || []).filter((it) => it.status === 'mismatch');
-      if (mismatches.length === 0) return;
 
-      // Bugungi notified set'ni o'qish
-      const setting = await this.prisma.setting.findUnique({
-        where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-      });
-      let stored: { date: string; keys: string[] } | null = null;
-      if (setting?.value) {
-        try { stored = JSON.parse(setting.value); } catch { stored = null; }
-      }
-      const notifiedKeys = new Set<string>(
-        stored && stored.date === date ? stored.keys : [],
-      );
-
-      // Faqat hali xabar yuborilmagan hisoblar
-      const newOnes: typeof mismatches = mismatches.filter((it) => !notifiedKeys.has(it.accountId));
-      if (newOnes.length === 0) return;
-
+      const store = await this.getNotifiedStore(date);
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
       const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
 
+      // ─── 1) HAL QILINDI: store'da bor, lekin endi MOS (ok) bo'lgan hisoblar ───
+      // Foydalanuvchi tugma bosmasdan saytda o'zi to'g'rilagan bo'lsa —
+      // botdagi xabarni "Hal qilindi" deb yangilaymiz (tugma yo'qoladi).
+      const currentMismatchIds = new Set(mismatches.map((m) => m.accountId));
+      let resolved = 0;
+      for (const accId of Object.keys(store.accounts)) {
+        if (currentMismatchIds.has(accId)) continue; // hali ham farq — tegmaymiz
+        const cur = (items || []).find((it) => it.accountId === accId);
+        if (cur && cur.status === 'ok') {
+          const entry = store.accounts[accId];
+          for (const m of (entry.msgs || [])) {
+            await this.editMsg(m.chatId, m.messageId,
+              `✅ <b>Hal qilindi</b>\n\nBu farq saytda to'g'rilandi — endi mos.\n\n📅 Sverka sanasi: ${date}\n🕐 ${nowTk}`);
+          }
+          delete store.accounts[accId];
+          resolved++;
+        }
+      }
+
+      if (mismatches.length === 0) {
+        if (resolved > 0) await this.saveNotifiedStore(store);
+        return;
+      }
+
+      // ─── 2) YANGI yoki O'ZGARGAN (diff boshqa) farqlar — xabar yuboramiz ───
+      // Bir xil farq (diffKey bir xil) → qayta yubormaymiz (spam emas).
+      // Diff o'zgarsa → yangi xabar (avtomatik, reset shart emas).
+      const newOnes = mismatches.filter((it) => {
+        const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
+        const existing = store.accounts[it.accountId];
+        return !existing || existing.diffKey !== diffKey;
+      });
+
+      let sentCount = 0;
       // Notification yuborish (har biri uchun alohida, BATAFSIL)
       for (const it of newOnes) {
         const bankKirim = Number(it.bank?.credit) || 0;
@@ -589,29 +647,24 @@ export class SverkaTelegramService implements OnModuleInit {
           ]],
         };
 
-        // SEND first, THEN mark as notified — agar muvaffaqiyatsiz bo'lsa
-        // notified set'ga qo'shilmaydi va keyingi safar qaytadan urinadi.
-        // Approver — tugma bilan; watcher — faqat matn.
+        // SEND — approver tugma bilan, watcher faqat matn. Yuborilgan
+        // message_id'lar store'ga yoziladi (keyin "Hal qilindi" deb tahrirlash uchun).
+        const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
         const rApprover = await this.sendNotification({ text: lines.join('\n'), role: 'approver', replyMarkup: button });
         const rWatcher = await this.sendNotification({ text: lines.join('\n'), role: 'watcher' });
-        const result = {
-          ok: rApprover.ok && rWatcher.ok,
-          sent: rApprover.sent + rWatcher.sent,
-          failed: rApprover.failed + rWatcher.failed,
-          errors: [...rApprover.errors, ...rWatcher.errors],
-        };
-        if (result.sent > 0) {
-          notifiedKeys.add(it.accountId);
-          this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${result.sent}, failed=${result.failed})`);
+        const msgs = [...rApprover.messages, ...rWatcher.messages];
+        const sent = rApprover.sent + rWatcher.sent;
+        if (sent > 0) {
+          store.accounts[it.accountId] = { diffKey, msgs };
+          sentCount++;
+          this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${sent})`);
         } else {
-          this.log.warn(
-            `Mismatch notification YUBORILMADI ${it.accountNo}: sent=${result.sent}, failed=${result.failed}, errors=${result.errors.join(' | ')}`,
-          );
+          const errors = [...rApprover.errors, ...rWatcher.errors];
+          this.log.warn(`Mismatch notification YUBORILMADI ${it.accountNo}: errors=${errors.join(' | ')}`);
         }
       }
 
-      // History'ga yozish — bitta umumiy yozuv (har biriga alohida emas — spam emas)
-      const actuallySent = newOnes.filter((it) => notifiedKeys.has(it.accountId)).length;
+      await this.saveNotifiedStore(store);
       await this.appendHistory({
         action: 'mismatch_detected',
         source: 'web',
@@ -619,29 +672,13 @@ export class SverkaTelegramService implements OnModuleInit {
         actorName: 'system',
         details: {
           date,
-          attempted: newOnes.length,
-          sent: actuallySent,
+          sent: sentCount,
+          resolved,
           total: mismatches.length,
         },
       });
 
-      // Yangi notified set'ni saqlash (faqat haqiqatan yuborilganlar)
-      await this.prisma.setting.upsert({
-        where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-        create: {
-          key: SverkaTelegramService.KEY_NOTIFIED_TODAY,
-          value: JSON.stringify({ date, keys: [...notifiedKeys] }),
-          updatedBy: 'system',
-        },
-        update: {
-          value: JSON.stringify({ date, keys: [...notifiedKeys] }),
-          updatedBy: 'system',
-        },
-      });
-
-      this.log.log(
-        `Mismatch notification: ${actuallySent}/${newOnes.length} yangi yuborildi (jami ${mismatches.length} mismatch, sana ${date})`,
-      );
+      this.log.log(`Mismatch notification: ${sentCount} yuborildi, ${resolved} hal qilindi (jami ${mismatches.length} farq, sana ${date})`);
     } catch (e: any) {
       this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
     }
@@ -693,7 +730,9 @@ export class SverkaTelegramService implements OnModuleInit {
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        cleared = Array.isArray(parsed?.keys) ? parsed.keys.length : 0;
+        cleared = Array.isArray(parsed?.keys)
+          ? parsed.keys.length
+          : (parsed?.accounts ? Object.keys(parsed.accounts).length : 0);
       } catch {}
     }
     await this.prisma.setting.upsert({
@@ -720,16 +759,13 @@ export class SverkaTelegramService implements OnModuleInit {
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
     });
     if (!setting?.value) return;
-    let stored: { date: string; keys: string[] } | null = null;
+    let stored: any = null;
     try { stored = JSON.parse(setting.value); } catch { return; }
-    if (!stored) return;
-
-    const filtered = (stored.keys || []).filter((k) => k !== accountId);
-    if (filtered.length === stored.keys.length) return;
-
+    if (!stored?.accounts || !stored.accounts[accountId]) return;
+    delete stored.accounts[accountId];
     await this.prisma.setting.update({
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-      data: { value: JSON.stringify({ date: stored.date, keys: filtered }) },
+      data: { value: JSON.stringify(stored) },
     });
   }
 }
