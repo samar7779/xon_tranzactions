@@ -440,7 +440,24 @@ export class SverkaTelegramService implements OnModuleInit {
   }
 
   /** Test notification — admin UI'dan chaqiriladi. */
-  async sendTestNotification(actor?: { name: string | null }): Promise<{ ok: boolean; sent: number; failed: number; errors: string[] }> {
+  async sendTestNotification(actor?: { name: string | null }): Promise<{
+    ok: boolean; sent: number; failed: number; errors: string[];
+    botOk: boolean; botUsername?: string; chatCount: number;
+  }> {
+    // 1) Bot tekshiruvi — token haqiqiy va Telegram'ga ulanish bormi (getMe)
+    let botOk = false;
+    let botUsername: string | undefined;
+    try {
+      const token = await this.getBotToken();
+      const me = await axios.post(`https://api.telegram.org/bot${token}/getMe`, {}, { timeout: 10_000 });
+      botOk = !!me.data?.ok;
+      botUsername = me.data?.result?.username;
+    } catch (e: any) {
+      botOk = false;
+      this.log.warn(`getMe xato (test): ${e?.response?.data?.description || e?.message}`);
+    }
+
+    const chats = await this.getChats();
     const text = `🧪 <b>Test xabarnomasi</b>\n\nSverka bot to'g'ri ishlayapti.\n\n<i>Yuborgan: ${actor?.name || 'admin'}</i>\n<i>Vaqt: ${new Date().toLocaleString('ru-RU')}</i>`;
     const result = await this.sendNotification({ text, role: 'all' });
     await this.appendHistory({
@@ -448,9 +465,9 @@ export class SverkaTelegramService implements OnModuleInit {
       source: 'web',
       actorId: null,
       actorName: actor?.name || null,
-      details: { sent: result.sent, failed: result.failed },
+      details: { sent: result.sent, failed: result.failed, botOk, botUsername },
     });
-    return result;
+    return { ...result, botOk, botUsername, chatCount: chats.length };
   }
 
   /**
