@@ -21,6 +21,7 @@ import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
+import { PurposeInfoButton } from '@/components/purpose-modal';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1264,7 +1265,21 @@ export default function TransactionsPage() {
                             {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                           </td>
                           <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5 justify-end">
+                              <PurposeInfoButton data={{
+                                purpose: it.description || null,
+                                amount: it.amount,
+                                currency: it.currency,
+                                direction: it.direction as 'IN' | 'OUT',
+                                txnDate: it.txnDate,
+                                contractNumber: it.contractNumber,
+                                bankName: it.bank?.name || null,
+                                accountNo: it.account?.accountNo || null,
+                                ownerName: it.account?.ownerName || null,
+                                externalId: it.externalId,
+                                docNumber: (it as any).docNumber,
+                                purposeCode: (it as any).purposeCode,
+                              }} />
                               <CopyIdButton value={it.externalId || it.id} />
                             </div>
                           </td>

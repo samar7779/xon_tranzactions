@@ -16,6 +16,7 @@ import {
   PlusCircle, Paperclip, Wallet, Building2, Box, BarChart3,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
+import { PurposeInfoButton } from '@/components/purpose-modal';
 
 const Apartment3DDialog = dynamic(
   () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
@@ -689,20 +690,32 @@ export default function OplataKvPage() {
                       </span>
                     </td>
                     <td className="px-3 py-2.5 text-center" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        title={t('copyIdTitle', { id: it.id })}
-                        onClick={() => copyId(it.id)}
-                        className={cn(
-                          'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors',
-                          copiedId === it.id
-                            ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-                            : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400',
-                        )}
-                      >
-                        {copiedId === it.id
-                          ? <Check className="h-3.5 w-3.5" />
-                          : <Copy className="h-3.5 w-3.5" />}
-                      </button>
+                      <div className="inline-flex items-center gap-1">
+                        <PurposeInfoButton data={{
+                          purpose: it.purpose || null,
+                          amount: it.paymentAmount,
+                          currency: 'UZS',
+                          direction: Number(it.paymentAmount) >= 0 ? 'IN' : 'OUT',
+                          txnDate: it.date,
+                          contractNumber: it.contractNo,
+                          ownerName: it.client || null,
+                          externalId: it.sourceTxId || null,
+                        }} />
+                        <button
+                          title={t('copyIdTitle', { id: it.id })}
+                          onClick={() => copyId(it.id)}
+                          className={cn(
+                            'inline-flex items-center justify-center w-7 h-7 rounded-md transition-colors',
+                            copiedId === it.id
+                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                              : 'text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400',
+                          )}
+                        >
+                          {copiedId === it.id
+                            ? <Check className="h-3.5 w-3.5" />
+                            : <Copy className="h-3.5 w-3.5" />}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   );
