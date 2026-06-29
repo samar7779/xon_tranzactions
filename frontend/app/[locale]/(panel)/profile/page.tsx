@@ -17,6 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Topbar } from '@/components/topbar';
+import { useTheme } from '@/components/theme-provider';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -787,25 +788,19 @@ function SecurityTip({ icon, gradient, title, body }: any) {
 function SettingsTab() {
   const t = useTranslations('profile');
   const tc = useTranslations('common');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  // Theme — ThemeProvider'dan (sinxron, refresh'dan keyin to'g'ri saqlanadi)
+  const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
 
-  // Theme'ni localStorage'dan o'qish va html elementga class qo'yish
+  // Faqat notifications uchun (theme provider o'zi boshqaradi)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('theme') as 'light' | 'dark' | null;
-    if (stored) {
-      setTheme(stored);
-      document.documentElement.classList.toggle('dark', stored === 'dark');
-    }
     const storedNotif = localStorage.getItem('notifications');
     if (storedNotif !== null) setNotifications(storedNotif === 'true');
   }, []);
 
   function applyTheme(newTheme: 'light' | 'dark') {
     setTheme(newTheme);
-    localStorage.setItem('theme', newTheme);
-    document.documentElement.classList.toggle('dark', newTheme === 'dark');
     toast.success(newTheme === 'dark' ? `🌙 ${t('themeDarkOn')}` : `☀️ ${t('themeLightOn')}`);
   }
 

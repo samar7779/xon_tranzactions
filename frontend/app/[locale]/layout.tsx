@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import { Toaster } from 'sonner';
 import { locales } from '@/i18n/config';
 import { ReactQueryProvider } from '@/components/providers';
+import { ThemeProvider } from '@/components/theme-provider';
 import '@/app/globals.css';
 
 export function generateStaticParams() {
@@ -37,10 +38,12 @@ export default async function LocaleLayout({
         />
       </head>
       <body>
-        <NextIntlClientProvider locale={locale} messages={messages}>
-          <ReactQueryProvider>{children}</ReactQueryProvider>
-          <Toaster position="top-right" richColors />
-        </NextIntlClientProvider>
+        <ThemeProvider>
+          <NextIntlClientProvider locale={locale} messages={messages}>
+            <ReactQueryProvider>{children}</ReactQueryProvider>
+            <Toaster position="top-right" richColors />
+          </NextIntlClientProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
