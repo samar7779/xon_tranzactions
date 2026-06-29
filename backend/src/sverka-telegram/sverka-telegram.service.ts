@@ -190,10 +190,19 @@ export class SverkaTelegramService implements OnModuleInit {
           (addedIds.length > 15 ? `\n  • … va yana ${addedIds.length - 15} ta` : '')
         : '';
 
+      // Hisob ma'lumoti — natijada ham ko'rinsin
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId }, include: { bank: true },
+      }).catch(() => null);
+      const accLine = acc
+        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
+        : '';
+
       const resultText =
         `✅ <b>To'g'rilandi</b>\n\n` +
-        `📅 Sverka sanasi: ${date}\n` +
-        `➕ Qo'shildi: <b>${added}</b> ta tranzaksiya` +
+        accLine +
+        `📅 <b>Sverka sanasi:</b> ${date}\n` +
+        `➕ <b>Qo'shildi:</b> ${added} ta tranzaksiya` +
         idLines + `\n\n` +
         `👤 <b>Kim to'g'riladi:</b> ${chat.name || chatId}\n` +
         `🕐 <b>Qachon:</b> ${nowTk}`;
@@ -681,6 +690,48 @@ export class SverkaTelegramService implements OnModuleInit {
       this.log.log(`Mismatch notification: ${sentCount} yuborildi, ${resolved} hal qilindi (jami ${mismatches.length} farq, sana ${date})`);
     } catch (e: any) {
       this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
+    }
+  }
+
+  /**
+   * Web'dan to'g'rilanganda — botdagi SHU farq xabarlarini DARROV "Hal qilindi"
+   * deb yangilaydi (barcha chatlarda, tugma yo'qoladi). reconcile'ni kutmaydi.
+   */
+  async markResolvedFromWeb(accountId: string, date: string, actorName?: string | null): Promise<void> {
+    try {
+      if (!accountId || !date) return;
+      const store = await this.getNotifiedStore(date);
+      const entry = store.accounts[accountId];
+      if (!entry?.msgs?.length) return; // bu farq uchun bot xabari yo'q
+
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId },
+        include: { bank: true },
+      }).catch(() => null);
+      const accLine = acc
+        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
+        : '';
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+      const text =
+        `✅ <b>Hal qilindi</b>\n\n` +
+        accLine +
+        `📅 <b>Sverka sanasi:</b> ${date}\n\n` +
+        `Bu farq <b>saytda</b> to'g'rilandi.\n` +
+        `👤 <b>Kim:</b> ${actorName || 'web'}\n` +
+        `🕐 <b>Qachon:</b> ${nowTk}`;
+
+      for (const m of entry.msgs) {
+        await this.editMsg(String(m.chatId), m.messageId, text);
+      }
+      delete store.accounts[accountId];
+      await this.saveNotifiedStore(store);
+      await this.appendHistory({
+        action: 'sverka_resolved_web', source: 'web', actorId: null,
+        actorName: actorName || null, details: { accountId, date },
+      });
+      this.log.log(`Web fix → bot xabari yangilandi: account=${accountId} date=${date}`);
+    } catch (e: any) {
+      this.log.warn(`markResolvedFromWeb xato: ${e?.message}`);
     }
   }
 

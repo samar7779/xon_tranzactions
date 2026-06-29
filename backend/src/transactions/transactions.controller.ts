@@ -186,6 +186,8 @@ export class TransactionsController {
       actorName: email || 'web',
       extra: { date: body?.date, b2Id: body?.b2Id || '-', generalId: body?.generalId || '-' },
     }).catch(() => {});
+    // Botdagi farq xabarini darrov "Hal qilindi" deb yangilaymiz
+    this.sverkaTg.markResolvedFromWeb(body?.accountId, body?.date, email || 'web').catch(() => {});
     return result;
   }
 
@@ -209,6 +211,8 @@ export class TransactionsController {
       actorName: email || 'web',
       extra: { date: body?.date },
     }).catch(() => {});
+    // Botdagi farq xabarini darrov "Hal qilindi" deb yangilaymiz
+    this.sverkaTg.markResolvedFromWeb(body?.accountId, body?.date, email || 'web').catch(() => {});
     return result;
   }
 
