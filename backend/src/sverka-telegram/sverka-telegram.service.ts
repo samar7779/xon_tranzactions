@@ -493,9 +493,11 @@ export class SverkaTelegramService implements OnModuleInit {
     date: string,
   ): Promise<void> {
     try {
-      const mismatches = (items || []).filter(
-        (it) => it.status === 'mismatch' && !it.ok,
-      );
+      // MUHIM: reconcile har bir item'da `ok: true` ni hardcode qaytaradi
+      // (bu "amal bajarildi" degani, "mos keldi" emas). Haqiqiy holat — `status`.
+      // Shu sababli `!it.ok` ni TEKSHIRMAYMIZ (u doim true bo'lardi va hammasini
+      // chiqarib tashlardi). Farq = status === 'mismatch'.
+      const mismatches = (items || []).filter((it) => it.status === 'mismatch');
       if (mismatches.length === 0) return;
 
       // Bugungi notified set'ni o'qish
