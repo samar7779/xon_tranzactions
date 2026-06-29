@@ -556,9 +556,9 @@ function BotTab() {
   });
 
   const tokenMut = useMutation({
-    mutationFn: (token: string) => api.post<{ ok: true }>('/sverka-telegram/bot-token', { token }),
-    onSuccess: () => {
-      toast.success('Token yangilandi');
+    mutationFn: (token: string) => api.post<{ ok: true; username?: string }>('/sverka-telegram/bot-token', { token }),
+    onSuccess: (r) => {
+      toast.success(r?.username ? `✅ Token yangilandi — @${r.username}` : 'Token yangilandi');
       setNewToken('');
       setShowToken(false);
       qc.invalidateQueries({ queryKey: ['sverka-tg-bot-token'] });
