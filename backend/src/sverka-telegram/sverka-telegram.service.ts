@@ -280,13 +280,44 @@ export class SverkaTelegramService implements OnModuleInit {
 
     try {
       const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+
+      // Hisob ma'lumoti — barcha xabarlarda ko'rsatamiz
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId }, include: { bank: true },
+      }).catch(() => null);
+      const accLine = acc
+        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
+        : '';
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+
       const diag: any = await reconcile.diagnoseDay(accountId, date);
       const bankOnly: any[] = diag?.bankOnly || [];
       const insertable = bankOnly.filter((it) => !it.existsOnDate && (it.b2Id || it.generalId));
+
+      // ── Qo'shib bo'lmaydigan farq — tugma bilan to'g'rilab bo'lmaydi ──
       if (insertable.length === 0) {
-        await this.editMsg(chatId, messageId, "✅ <b>Qo'shish uchun yangi yozuv yo'q</b> — ehtimol allaqachon qo'shilgan yoki farq boshqa sababdan.");
+        const dateShift = bankOnly.filter((it) => it.existsOnDate).length;
+        const dbExtra = Array.isArray(diag?.dbOnly) ? diag.dbOnly.length : 0;
+        let reason: string;
+        if (dateShift > 0) {
+          reason = `📅 ${dateShift} ta tranzaksiya <b>boshqa sana</b> ostida saqlangan — saytdagi sverka'da <b>"Sanani tuzatish"</b> kerak.`;
+        } else if (dbExtra > 0) {
+          reason = `📊 DB'da <b>${dbExtra} ta ortiqcha</b> yozuv bor (bankda yo'q) — saytda tekshiring.`;
+        } else {
+          reason = `Farq qo'shish orqali hal bo'lmaydi (boshqa sababdan) — saytda tekshiring.`;
+        }
+        await this.editMsg(
+          chatId, messageId,
+          `⚠️ <b>Avtomatik to'g'rilab bo'lmadi</b>\n\n` +
+          accLine +
+          `📅 <b>Sverka sanasi:</b> ${date}\n\n` +
+          `${reason}\n\n` +
+          `🌐 transactions.xonapps.uz/uz/check\n` +
+          `<i>Tekshirdi: ${chat.name || chatId} · ${nowTk}</i>`,
+        );
         return;
       }
+
       const items = insertable.map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined }));
       const res: any = await reconcile.fixAllMissing(accountId, date, items);
       const insertedRows: any[] = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted) : [];
@@ -296,18 +327,9 @@ export class SverkaTelegramService implements OnModuleInit {
         .map((r) => r.externalId || r.transactionId)
         .filter((x): x is string => !!x);
 
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
       const idLines = addedIds.length > 0
         ? '\n🆔 <b>ID lar:</b>\n' + addedIds.slice(0, 15).map((id) => `  • <code>${id}</code>`).join('\n') +
           (addedIds.length > 15 ? `\n  • … va yana ${addedIds.length - 15} ta` : '')
-        : '';
-
-      // Hisob ma'lumoti — natijada ham ko'rinsin
-      const acc = await this.prisma.bankAccount.findUnique({
-        where: { id: accountId }, include: { bank: true },
-      }).catch(() => null);
-      const accLine = acc
-        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
         : '';
 
       const resultText =
