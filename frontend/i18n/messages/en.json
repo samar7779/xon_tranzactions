@@ -2355,5 +2355,22 @@
     "coverage": "coverage",
     "users": "Users",
     "modules": "Modules"
+  },
+  "purposeModal": {
+    "eyebrow": "Payment purpose",
+    "title": "Purpose",
+    "openTooltip": "Payment purpose",
+    "close": "Close",
+    "closeTooltip": "Close (ESC)",
+    "closeHint": "to close",
+    "closeOr": "or",
+    "mainTextLabel": "Main text",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyToast": "Text copied",
+    "emptyPurpose": "Payment purpose not specified",
+    "externalIdLabel": "External ID",
+    "chipDoc": "Doc №{n}",
+    "chipCode": "Code {n}"
   }
 }

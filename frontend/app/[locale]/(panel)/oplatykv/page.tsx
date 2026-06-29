@@ -149,24 +149,54 @@ export default function OplataKvPage() {
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
 
-  // Filters — URL query orqali persist qilinadi (refresh'da yo'qolmaydi)
+  // Filters — URL query + localStorage orqali persist qilinadi (refresh'da yo'qolmaydi)
   const [q, setQ] = useState(() => {
     if (typeof window === 'undefined') return '';
-    return new URLSearchParams(window.location.search).get('q') || '';
+    const fromUrl = new URLSearchParams(window.location.search).get('q');
+    if (fromUrl) return fromUrl;
+    try { return localStorage.getItem('oplatykv-q-v1') || ''; } catch { return ''; }
   });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
 
-  // q o'zgarganda URL'ni yangilash (browser history'ga emas, replace)
+  // Mount paytida sana filtrlarini localStorage'dan tiklash
+  useEffect(() => {
+    try {
+      const df = localStorage.getItem('oplatykv-dateFrom-v1');
+      const dt = localStorage.getItem('oplatykv-dateTo-v1');
+      if (df) setDateFrom(df);
+      if (dt) setDateTo(dt);
+    } catch { /* ignore */ }
+  }, []);
+
+  // q o'zgarganda URL'ni va localStorage'ni yangilash
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
     if (q) url.searchParams.set('q', q);
     else url.searchParams.delete('q');
     window.history.replaceState({}, '', url.toString());
+    try {
+      if (q) localStorage.setItem('oplatykv-q-v1', q);
+      else localStorage.removeItem('oplatykv-q-v1');
+    } catch { /* ignore */ }
   }, [q]);
+
+  // Sana filtrlarini localStorage'ga yozish
+  useEffect(() => {
+    try {
+      if (dateFrom) localStorage.setItem('oplatykv-dateFrom-v1', dateFrom);
+      else localStorage.removeItem('oplatykv-dateFrom-v1');
+    } catch { /* ignore */ }
+  }, [dateFrom]);
+  useEffect(() => {
+    try {
+      if (dateTo) localStorage.setItem('oplatykv-dateTo-v1', dateTo);
+      else localStorage.removeItem('oplatykv-dateTo-v1');
+    } catch { /* ignore */ }
+  }, [dateTo]);
 
   // Dialog state
   const [detailRow, setDetailRow] = useState<OplataKvItem | null>(null);
@@ -309,6 +339,9 @@ export default function OplataKvPage() {
     const p = new URLSearchParams();
     p.set('page', String(page));
     p.set('perPage', String(perPage));
+    // Har doim sana bo'yicha yangidan-eskigacha (bugun tepada)
+    p.set('sortBy', 'date');
+    p.set('sortDir', 'desc');
     if (q.trim()) p.set('q', q.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
