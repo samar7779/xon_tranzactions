@@ -52,6 +52,7 @@ export class SverkaTelegramService implements OnModuleInit {
   private static readonly KEY_HISTORY   = 'sverka.telegram.history';
   private static readonly KEY_PASSWORD  = 'sverka.telegram.password';
   private static readonly KEY_NOTIFIED_TODAY = 'sverka.telegram.notifiedToday';
+  private static readonly KEY_SENT_LOG = 'sverka.telegram.sentLog'; // /clear uchun — chat bo'yicha message_id'lar
 
   private static readonly HISTORY_LIMIT = 500;
   private static readonly DEFAULT_PASSWORD = '7779';
@@ -81,6 +82,13 @@ export class SverkaTelegramService implements OnModuleInit {
       const token = await this.getBotToken();
       if (token) {
         await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, {}, { timeout: 10_000 }).catch(() => {});
+        // Bot menyusiga komandalarni ro'yxatdan o'tkazamiz (/ tugmasida ko'rinadi)
+        await this.tgCall('setMyCommands', {
+          commands: [
+            { command: 'clear', description: 'Chatni tozalash (bot xabarlarini o\'chirish)' },
+            { command: 'start', description: 'Botni ishga tushirish' },
+          ],
+        });
       }
     } catch { /* ignore */ }
 
@@ -91,7 +99,7 @@ export class SverkaTelegramService implements OnModuleInit {
         if (!token) { await this.sleep(5000); continue; }
         const res = await axios.post(
           `https://api.telegram.org/bot${token}/getUpdates`,
-          { offset: this.pollOffset, timeout: 30, allowed_updates: ['callback_query'] },
+          { offset: this.pollOffset, timeout: 30, allowed_updates: ['callback_query', 'message'] },
           { timeout: 40_000 },
         );
         const updates: any[] = res.data?.result || [];
@@ -99,8 +107,9 @@ export class SverkaTelegramService implements OnModuleInit {
           this.pollOffset = u.update_id + 1;
           try {
             if (u.callback_query) await this.handleFixCallback(u.callback_query);
+            else if (u.message) await this.handleMessage(u.message);
           } catch (e: any) {
-            this.log.warn(`Callback handle xato: ${e?.message}`);
+            this.log.warn(`Update handle xato: ${e?.message}`);
           }
         }
       } catch (e: any) {
@@ -138,6 +147,85 @@ export class SverkaTelegramService implements OnModuleInit {
       chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
       reply_markup: { inline_keyboard: [] },
     });
+  }
+
+  // ─── SENT LOG (/clear uchun bot xabarlarini kuzatish) ─────────────────
+  private async trackSentMessages(msgs: Array<{ chatId: string; messageId: number }>): Promise<void> {
+    if (!msgs.length) return;
+    try {
+      const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_SENT_LOG } });
+      let log: Record<string, number[]> = {};
+      if (s?.value) { try { log = JSON.parse(s.value) || {}; } catch { log = {}; } }
+      for (const m of msgs) {
+        const cid = String(m.chatId);
+        const arr = log[cid] || [];
+        arr.push(m.messageId);
+        // Har chat uchun oxirgi 300 ta — cheksiz o'smasin
+        log[cid] = arr.slice(-300);
+      }
+      await this.prisma.setting.upsert({
+        where: { key: SverkaTelegramService.KEY_SENT_LOG },
+        create: { key: SverkaTelegramService.KEY_SENT_LOG, value: JSON.stringify(log), updatedBy: 'system' },
+        update: { value: JSON.stringify(log), updatedBy: 'system' },
+      });
+    } catch (e: any) {
+      this.log.warn(`trackSentMessages xato: ${e?.message}`);
+    }
+  }
+
+  /** Kelgan oddiy xabarlar — /clear va /start komandalarini ushlaymiz. */
+  private async handleMessage(message: any): Promise<void> {
+    const text: string = (message?.text || '').trim();
+    const chatId = String(message?.chat?.id ?? '');
+    if (!chatId) return;
+    const cmd = text.split(/[\s@]/)[0].toLowerCase();
+    if (cmd === '/clear') {
+      await this.handleClear(chatId, message?.message_id);
+    } else if (cmd === '/start') {
+      await this.tgCall('sendMessage', {
+        chat_id: chatId,
+        text: "👋 <b>Sverka bot</b> ishga tushdi.\n\nBu yerga sverka farqlari haqida xabar keladi. Chatni tozalash uchun /clear yuboring.",
+        parse_mode: 'HTML',
+      });
+    }
+  }
+
+  /** Botning shu chatdagi xabarlarini o'chiradi (/clear). */
+  private async handleClear(chatId: string, cmdMessageId?: number): Promise<void> {
+    // Faqat ro'yxatdagi chatlar
+    const chats = await this.getChats();
+    if (!chats.find((c) => String(c.chatId) === chatId)) return;
+
+    const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_SENT_LOG } });
+    let log: Record<string, number[]> = {};
+    if (s?.value) { try { log = JSON.parse(s.value) || {}; } catch { log = {}; } }
+    const ids = log[chatId] || [];
+
+    let deleted = 0;
+    for (const mid of ids) {
+      try {
+        await this.tgCall('deleteMessage', { chat_id: chatId, message_id: mid });
+        deleted++;
+      } catch { /* eski xabar (48h+) — o'chmasligi mumkin */ }
+    }
+    // /clear komandasining o'zini ham o'chiramiz
+    if (cmdMessageId) await this.tgCall('deleteMessage', { chat_id: chatId, message_id: cmdMessageId }).catch(() => {});
+
+    // Shu chat uchun log'ni tozalaymiz
+    log[chatId] = [];
+    await this.prisma.setting.upsert({
+      where: { key: SverkaTelegramService.KEY_SENT_LOG },
+      create: { key: SverkaTelegramService.KEY_SENT_LOG, value: JSON.stringify(log), updatedBy: 'system' },
+      update: { value: JSON.stringify(log), updatedBy: 'system' },
+    });
+
+    // Qisqa tasdiq — faqat shu chatga (sendNotification barchaga yuborardi)
+    await this.tgCall('sendMessage', {
+      chat_id: chatId,
+      text: `🧹 <b>Tozalandi</b> — ${deleted} ta xabar o'chirildi.`,
+      parse_mode: 'HTML',
+    });
+    this.log.log(`/clear: chat=${chatId} — ${deleted} ta xabar o'chirildi`);
   }
 
   /**
@@ -482,6 +570,9 @@ export class SverkaTelegramService implements OnModuleInit {
         this.log.warn(`Telegram send xato ${chat.chatId}: ${msg}`);
       }
     }));
+
+    // /clear uchun yuborilgan xabarlarni kuzatamiz
+    await this.trackSentMessages(messages);
 
     return { ok: failed === 0, sent, failed, errors, messages };
   }
