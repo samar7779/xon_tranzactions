@@ -1,6 +1,8 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import axios from 'axios';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { ReconcileService } from '../transactions/reconcile.service';
 
 /**
  * Sverka uchun Telegram bot servisi.
@@ -39,8 +41,10 @@ export interface HistoryEntry {
 const DEFAULT_BOT_TOKEN = '8204664457:AAEuJHtbENHB7adP1TUL4ySgf2ia3radUjY';
 
 @Injectable()
-export class SverkaTelegramService {
+export class SverkaTelegramService implements OnModuleInit {
   private readonly log = new Logger(SverkaTelegramService.name);
+  private pollOffset = 0;
+  private polling = false;
 
   // Setting keys
   private static readonly KEY_BOT_TOKEN = 'sverka.telegram.botToken';
@@ -52,7 +56,145 @@ export class SverkaTelegramService {
   private static readonly HISTORY_LIMIT = 500;
   private static readonly DEFAULT_PASSWORD = '7779';
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private moduleRef: ModuleRef,
+  ) {}
+
+  // ─── TELEGRAM LONG-POLLING (tugma bosishlarini eshitish) ──────────────
+  async onModuleInit() {
+    // Bot tugma bosishlarini (callback_query) qabul qilish uchun long-polling.
+    // Webhook ishlatilmaydi — getUpdates outbound (xabar yuborish bilan bir xil yo'l).
+    this.startPolling();
+  }
+
+  private startPolling() {
+    if (this.polling) return;
+    this.polling = true;
+    // Fire-and-forget — onModuleInit'ni bloklamaydi
+    void this.pollLoop();
+  }
+
+  private async pollLoop() {
+    // getUpdates va webhook bir vaqtda ishlamaydi — webhook'ni o'chiramiz
+    try {
+      const token = await this.getBotToken();
+      if (token) {
+        await axios.post(`https://api.telegram.org/bot${token}/deleteWebhook`, {}, { timeout: 10_000 }).catch(() => {});
+      }
+    } catch { /* ignore */ }
+
+    this.log.log('Sverka Telegram long-polling boshlandi');
+    while (this.polling) {
+      try {
+        const token = await this.getBotToken();
+        if (!token) { await this.sleep(5000); continue; }
+        const res = await axios.post(
+          `https://api.telegram.org/bot${token}/getUpdates`,
+          { offset: this.pollOffset, timeout: 30, allowed_updates: ['callback_query'] },
+          { timeout: 40_000 },
+        );
+        const updates: any[] = res.data?.result || [];
+        for (const u of updates) {
+          this.pollOffset = u.update_id + 1;
+          try {
+            if (u.callback_query) await this.handleFixCallback(u.callback_query);
+          } catch (e: any) {
+            this.log.warn(`Callback handle xato: ${e?.message}`);
+          }
+        }
+      } catch (e: any) {
+        // 409 (boshqa instance poll qilyapti) yoki network — kut va davom et
+        const desc = e?.response?.data?.description || e?.message || '';
+        if (!String(desc).includes('terminated by other')) {
+          this.log.debug?.(`getUpdates: ${desc}`);
+        }
+        await this.sleep(3000);
+      }
+    }
+  }
+
+  private sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+  private async tgCall(method: string, payload: any): Promise<void> {
+    const token = await this.getBotToken();
+    if (!token) return;
+    try {
+      await axios.post(`https://api.telegram.org/bot${token}/${method}`, payload, { timeout: 10_000 });
+    } catch (e: any) {
+      this.log.warn(`tg ${method} xato: ${e?.response?.data?.description || e?.message}`);
+    }
+  }
+
+  private async answerCb(id: string, text: string, alert = false): Promise<void> {
+    await this.tgCall('answerCallbackQuery', { callback_query_id: id, text, show_alert: alert });
+  }
+
+  private async editMsg(chatId: string, messageId: number | undefined, text: string): Promise<void> {
+    if (!messageId) return;
+    await this.tgCall('editMessageText', { chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML' });
+  }
+
+  /**
+   * "To'g'rilash" tugmasi bosilganda — faqat TASDIQLOVCHI (approver) chatlar.
+   * callback_data: fix:<accountId>:<date>. diagnoseDay + fixAllMissing ishga tushadi.
+   */
+  private async handleFixCallback(cbq: any): Promise<void> {
+    const data: string = cbq?.data || '';
+    const cbId: string = cbq?.id;
+    const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
+    const messageId: number | undefined = cbq?.message?.message_id;
+    if (!data.startsWith('fix:')) { await this.answerCb(cbId, "Noma'lum amal"); return; }
+
+    // Ruxsat — faqat tasdiqlovchi (approver) chatlar
+    const chats = await this.getChats();
+    const chat = chats.find((c) => String(c.chatId) === chatId);
+    if (!chat || chat.role !== 'approver') {
+      await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi to'g'rilay oladi", true);
+      return;
+    }
+
+    const parts = data.split(':');
+    const accountId = parts[1];
+    const date = parts[2];
+    if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
+
+    await this.answerCb(cbId, "To'g'rilanmoqda...");
+
+    try {
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const diag: any = await reconcile.diagnoseDay(accountId, date);
+      const bankOnly: any[] = diag?.bankOnly || [];
+      const insertable = bankOnly.filter((it) => !it.existsOnDate && (it.b2Id || it.generalId));
+      if (insertable.length === 0) {
+        await this.editMsg(chatId, messageId, "✅ <b>Qo'shish uchun yangi yozuv yo'q</b> — ehtimol allaqachon qo'shilgan yoki farq boshqa sababdan.");
+        return;
+      }
+      const items = insertable.map((it) => ({ b2Id: it.b2Id || undefined, generalId: it.generalId || undefined }));
+      const res: any = await reconcile.fixAllMissing(accountId, date, items);
+      const added = Array.isArray(res?.results) ? res.results.filter((r: any) => r.inserted).length : (res?.summary?.ok ?? items.length);
+
+      await this.editMsg(
+        chatId, messageId,
+        `✅ <b>To'g'rilandi</b>\n\n` +
+        `📅 Sana: ${date}\n` +
+        `➕ Qo'shildi: <b>${added}</b> ta tranzaksiya\n\n` +
+        `<i>Tasdiqlovchi: ${chat.name || chatId}</i>`,
+      );
+      await this.appendHistory({
+        action: 'telegram_fix_missing',
+        source: 'telegram',
+        actorId: null,
+        actorName: chat.name || chatId,
+        chatId,
+        details: { accountId, date, added, attempted: items.length },
+      });
+      this.log.log(`Telegram fix: account=${accountId} date=${date} added=${added} (chat=${chatId})`);
+    } catch (e: any) {
+      await this.editMsg(chatId, messageId, `❌ <b>Xato:</b> ${e?.message || "noma'lum"}`);
+      this.log.warn(`Telegram fix xato: ${e?.message}`);
+    }
+  }
 
   // ─── BOT TOKEN ────────────────────────────────────────────
   async getBotToken(): Promise<string> {
@@ -232,6 +374,7 @@ export class SverkaTelegramService {
     text: string;
     role?: ChatRole | 'all'; // default: 'all' (har ikkala rolga)
     silent?: boolean;
+    replyMarkup?: any; // inline tugmalar (faqat approver uchun)
   }): Promise<{ ok: boolean; sent: number; failed: number; errors: string[] }> {
     const chats = await this.getChats();
     if (chats.length === 0) {
@@ -259,6 +402,7 @@ export class SverkaTelegramService {
             text: opts.text,
             parse_mode: 'HTML',
             disable_notification: !!opts.silent,
+            ...(opts.replyMarkup ? { reply_markup: opts.replyMarkup } : {}),
           },
           { timeout: 10_000 },
         );
@@ -377,12 +521,27 @@ export class SverkaTelegramService {
         lines.push(`💰 <b>UMUMIY FARQ:</b> <code>${fmt(totalFarq)}</code> UZS`);
         lines.push('');
         lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
-        lines.push(`<i>Sayt'ga kiring va kerakli amalni bajaring:</i>`);
-        lines.push(`<i>transactions.xonapps.uz/uz/check</i>`);
+        lines.push(`<i>Tasdiqlovchilar quyidagi tugma orqali (bankda bor, DBda yo'q yozuvlarni qo'shadi) yoki saytda to'g'rilashi mumkin.</i>`);
+
+        // Inline tugma — faqat TASDIQLOVCHI (approver) chatlarga.
+        // callback_data: fix:<accountId>:<date> (64 baytdan kam bo'lishi shart).
+        const button = {
+          inline_keyboard: [[
+            { text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${it.accountId}:${date}` },
+          ]],
+        };
 
         // SEND first, THEN mark as notified — agar muvaffaqiyatsiz bo'lsa
         // notified set'ga qo'shilmaydi va keyingi safar qaytadan urinadi.
-        const result = await this.sendNotification({ text: lines.join('\n'), role: 'all' });
+        // Approver — tugma bilan; watcher — faqat matn.
+        const rApprover = await this.sendNotification({ text: lines.join('\n'), role: 'approver', replyMarkup: button });
+        const rWatcher = await this.sendNotification({ text: lines.join('\n'), role: 'watcher' });
+        const result = {
+          ok: rApprover.ok && rWatcher.ok,
+          sent: rApprover.sent + rWatcher.sent,
+          failed: rApprover.failed + rWatcher.failed,
+          errors: [...rApprover.errors, ...rWatcher.errors],
+        };
         if (result.sent > 0) {
           notifiedKeys.add(it.accountId);
           this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${result.sent}, failed=${result.failed})`);
