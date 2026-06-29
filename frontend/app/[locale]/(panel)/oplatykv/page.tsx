@@ -146,6 +146,7 @@ export default function OplataKvPage() {
   const canEdit = !!user?.permissions?.includes(PERMS.OPLATAKV_EDIT);
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
+  const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
 
   // Filters — URL query orqali persist qilinadi (refresh'da yo'qolmaydi)
   const [q, setQ] = useState(() => {
@@ -745,6 +746,7 @@ export default function OplataKvPage() {
         row={detailRow}
         canEdit={canEdit}
         canDelete={canDelete}
+        canSplit={canSplit}
         onClose={() => setDetailRow(null)}
         onEdit={(it) => setEditRow(it)}
         onDelete={(it) => setDeleteRow(it)}
@@ -1905,11 +1907,12 @@ function CategoryCompareCard({ title, oplata, crm, diff }: { title: string; opla
 // Detail dialog — qator bosilganda barcha ma'lumotni chiroyli ko'rinishda
 // ─────────────────────────────────────────────────────────
 function OplataKvDetailDialog({
-  row, canEdit, canDelete, onClose, onEdit, onDelete, onHistory, onCopyId, copiedId,
+  row, canEdit, canDelete, canSplit, onClose, onEdit, onDelete, onHistory, onCopyId, copiedId,
 }: {
   row: OplataKvItem | null;
   canEdit: boolean;
   canDelete: boolean;
+  canSplit: boolean;
   onClose: () => void;
   onEdit: (r: OplataKvItem) => void;
   onDelete: (r: OplataKvItem) => void;
@@ -2090,7 +2093,7 @@ function OplataKvDetailDialog({
             >
               <History className="h-4 w-4" /> {t('history')}
             </button>
-            {row.sourceTxId && canEdit && (
+            {row.sourceTxId && canSplit && (
               <ReSplitButton row={row} />
             )}
           </div>
