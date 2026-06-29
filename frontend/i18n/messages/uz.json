@@ -2355,5 +2355,22 @@
     "coverage": "qamrov",
     "users": "Foydalanuvchi",
     "modules": "Modul"
+  },
+  "purposeModal": {
+    "eyebrow": "To'lov maqsadi",
+    "title": "Porpus",
+    "openTooltip": "To'lov maqsadi",
+    "close": "Yopish",
+    "closeTooltip": "Yopish (ESC)",
+    "closeHint": "bilan yopiladi",
+    "closeOr": "yoki",
+    "mainTextLabel": "Asosiy matn",
+    "copy": "Nusxalash",
+    "copied": "Nusxalandi",
+    "copyToast": "Matn nusxalandi",
+    "emptyPurpose": "To'lov maqsadi ko'rsatilmagan",
+    "externalIdLabel": "External ID",
+    "chipDoc": "Док №{n}",
+    "chipCode": "Код {n}"
   }
 }

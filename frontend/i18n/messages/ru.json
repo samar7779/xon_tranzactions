@@ -2355,5 +2355,22 @@
     "coverage": "охват",
     "users": "Пользователи",
     "modules": "Модули"
+  },
+  "purposeModal": {
+    "eyebrow": "Назначение платежа",
+    "title": "Назначение",
+    "openTooltip": "Назначение платежа",
+    "close": "Закрыть",
+    "closeTooltip": "Закрыть (ESC)",
+    "closeHint": "для закрытия",
+    "closeOr": "или",
+    "mainTextLabel": "Основной текст",
+    "copy": "Копировать",
+    "copied": "Скопировано",
+    "copyToast": "Текст скопирован",
+    "emptyPurpose": "Назначение платежа не указано",
+    "externalIdLabel": "External ID",
+    "chipDoc": "Док №{n}",
+    "chipCode": "Код {n}"
   }
 }

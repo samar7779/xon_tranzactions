@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTranslations } from 'next-intl';
 import {
   FileText, X, Copy, Check, Building2, Hash, Calendar, ArrowDownLeft,
   ArrowUpRight, Receipt, Sparkles, Info,
@@ -42,6 +43,7 @@ export function PurposeModal({
   onClose: () => void;
   data: PurposeModalData | null;
 }) {
+  const t = useTranslations('purposeModal');
   const [copied, setCopied] = useState(false);
 
   // ESC tugmasi bilan yopish (overlay click esa YO'Q)
@@ -66,7 +68,7 @@ export function PurposeModal({
     if (!data?.purpose) return;
     navigator.clipboard.writeText(data.purpose);
     setCopied(true);
-    toast.success("Matn nusxalandi");
+    toast.success(t('copyToast'));
     setTimeout(() => setCopied(false), 1500);
   }
 
@@ -127,10 +129,10 @@ export function PurposeModal({
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] uppercase tracking-widest font-bold text-white/80 mb-1.5 flex items-center gap-1.5">
                     <Sparkles className="h-3.5 w-3.5" />
-                    To'lov maqsadi
+                    {t('eyebrow')}
                   </div>
                   <h2 className="text-[24px] font-black tracking-tight text-white leading-tight">
-                    Porpus
+                    {t('title')}
                   </h2>
                   {data.direction && data.amount != null && (
                     <div className="mt-3 inline-flex items-center gap-2.5 px-4 py-2 rounded-xl bg-white/15 backdrop-blur-md ring-1 ring-white/20">
@@ -149,8 +151,8 @@ export function PurposeModal({
                 <button
                   onClick={onClose}
                   className="shrink-0 w-10 h-10 rounded-xl bg-white/15 hover:bg-white/25 hover:scale-110 backdrop-blur-md grid place-items-center text-white transition-all ring-1 ring-white/20"
-                  aria-label="Yopish"
-                  title="Yopish (ESC)"
+                  aria-label={t('close')}
+                  title={t('closeTooltip')}
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -186,10 +188,10 @@ export function PurposeModal({
                     </Chip>
                   )}
                   {data.docNumber && (
-                    <Chip mono>Док №{data.docNumber}</Chip>
+                    <Chip mono>{t('chipDoc', { n: data.docNumber })}</Chip>
                   )}
                   {data.purposeCode && (
-                    <Chip mono tone="amber">Код {data.purposeCode}</Chip>
+                    <Chip mono tone="amber">{t('chipCode', { n: data.purposeCode })}</Chip>
                   )}
                 </div>
               )}
@@ -204,7 +206,7 @@ export function PurposeModal({
                   <div className="px-4 py-2.5 bg-gradient-to-r from-slate-100 to-slate-50 dark:from-slate-900 dark:to-slate-950 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                     <div className="text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
                       <Info className="h-3 w-3" />
-                      Asosiy matn
+                      {t('mainTextLabel')}
                     </div>
                     {data.purpose && (
                       <button
@@ -212,9 +214,9 @@ export function PurposeModal({
                         className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-md text-slate-600 dark:text-slate-400 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
                       >
                         {copied ? (
-                          <><Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> Nusxalandi</>
+                          <><Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> {t('copied')}</>
                         ) : (
-                          <><Copy className="h-3 w-3" /> Nusxalash</>
+                          <><Copy className="h-3 w-3" /> {t('copy')}</>
                         )}
                       </button>
                     )}
@@ -227,7 +229,7 @@ export function PurposeModal({
                       </p>
                     ) : (
                       <p className="text-[14px] italic text-slate-400 dark:text-slate-500 text-center py-8">
-                        To'lov maqsadi ko'rsatilmagan
+                        {t('emptyPurpose')}
                       </p>
                     )}
                   </div>
@@ -237,7 +239,7 @@ export function PurposeModal({
               {/* External ID — pastda alohida (mono code) */}
               {data.externalId && (
                 <div className="rounded-xl bg-slate-900 dark:bg-slate-950 ring-1 ring-slate-700 dark:ring-slate-800 px-3 py-2.5 flex items-start gap-2">
-                  <div className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mt-1 shrink-0">External ID</div>
+                  <div className="text-[9px] uppercase tracking-widest font-bold text-slate-400 mt-1 shrink-0">{t('externalIdLabel')}</div>
                   <code className="flex-1 font-mono text-[11px] text-emerald-300 break-all leading-relaxed select-all">
                     {data.externalId}
                   </code>
@@ -249,15 +251,15 @@ export function PurposeModal({
             <div className="px-9 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
               <span className="flex items-center gap-1.5">
                 <kbd className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10.5px] font-semibold">ESC</kbd>
-                <span>yoki</span>
+                <span>{t('closeOr')}</span>
                 <kbd className="px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-800 font-mono text-[10.5px] font-semibold">X</kbd>
-                <span>bilan yopiladi</span>
+                <span>{t('closeHint')}</span>
               </span>
               <button
                 onClick={onClose}
                 className="px-5 py-2 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 font-semibold text-[13px] transition-colors"
               >
-                Yopish
+                {t('close')}
               </button>
             </div>
           </motion.div>
@@ -297,12 +299,13 @@ export function PurposeInfoButton({
   data: PurposeModalData;
   className?: string;
 }) {
+  const t = useTranslations('purposeModal');
   const [open, setOpen] = useState(false);
   return (
     <>
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        title="To'lov maqsadi"
+        title={t('openTooltip')}
         className={`inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-indigo-500 hover:to-violet-600 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm ${className || ''}`}
       >
         <FileText className="h-3.5 w-3.5" />

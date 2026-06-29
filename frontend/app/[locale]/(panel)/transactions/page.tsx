@@ -204,8 +204,40 @@ export default function TransactionsPage() {
       // Filter mode toggle holati
       const rawMode = localStorage.getItem('tx-filter-mode-v1');
       if (rawMode === '1') setColumnFilterMode(true);
+      // Shartnoma manbasi (manual/ariza)
+      const rawCs = localStorage.getItem('tx-contract-sources-v1');
+      if (rawCs) {
+        const arr = JSON.parse(rawCs);
+        if (Array.isArray(arr) && arr.length > 0) setContractSources(new Set(arr));
+      }
+      // Manba (sync/import/aloqa)
+      const rawSrc = localStorage.getItem('tx-sources-v1');
+      if (rawSrc) {
+        const arr = JSON.parse(rawSrc);
+        if (Array.isArray(arr) && arr.length > 0) setSources(new Set(arr));
+      }
     } catch { /* ignore */ }
   }, []);
+
+  // ContractSources va Sources'ni localStorage'ga yozish
+  useEffect(() => {
+    try {
+      if (contractSources.size > 0) {
+        localStorage.setItem('tx-contract-sources-v1', JSON.stringify(Array.from(contractSources)));
+      } else {
+        localStorage.removeItem('tx-contract-sources-v1');
+      }
+    } catch { /* ignore */ }
+  }, [contractSources]);
+  useEffect(() => {
+    try {
+      if (sources.size > 0) {
+        localStorage.setItem('tx-sources-v1', JSON.stringify(Array.from(sources)));
+      } else {
+        localStorage.removeItem('tx-sources-v1');
+      }
+    } catch { /* ignore */ }
+  }, [sources]);
 
   // Filter mode toggle holatini saqlash
   useEffect(() => {
@@ -556,7 +588,11 @@ export default function TransactionsPage() {
     setColumnFilters({});
     setContractSources(new Set());
     setSources(new Set());
-    try { localStorage.removeItem('tx-column-filters-v1'); } catch { /* ignore */ }
+    try {
+      localStorage.removeItem('tx-column-filters-v1');
+      localStorage.removeItem('tx-contract-sources-v1');
+      localStorage.removeItem('tx-sources-v1');
+    } catch { /* ignore */ }
   }
 
   return (
