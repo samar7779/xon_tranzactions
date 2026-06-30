@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, OnModuleInit } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
+import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ReconcileService } from '../transactions/reconcile.service';
@@ -74,6 +75,26 @@ export class SverkaTelegramService implements OnModuleInit {
     this.polling = true;
     // Fire-and-forget — onModuleInit'ni bloklamaydi
     void this.pollLoop();
+  }
+
+  /**
+   * AVTOMATIK sverka + xabar — sahifadan mustaqil (hech kim web'da bo'lmasa ham).
+   * Har 30 daqiqada barcha hisoblar sverkasini qilib, yangi/o'zgargan farqlarni
+   * Telegram'ga yuboradi (notifiedToday dedup spam'ni oldini oladi).
+   */
+  @Cron(process.env.SVERKA_NOTIFY_CRON || '*/30 * * * *')
+  async autoSverkaNotify(): Promise<void> {
+    try {
+      const chats = await this.getChats();
+      if (chats.length === 0) return; // chat yo'q — sverka qilishning hojati yo'q
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const result: any = await reconcile.reconcileToday();
+      if (result?.items && Array.isArray(result.items) && result.date) {
+        await this.notifyNewMismatches(result.items, result.date);
+      }
+    } catch (e: any) {
+      this.log.warn(`autoSverkaNotify xato: ${e?.message}`);
+    }
   }
 
   private async pollLoop() {
