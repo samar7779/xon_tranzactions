@@ -310,46 +310,29 @@ export class OplataKvService {
   }
 
   /**
-   * XATO contractNo'lar ro'yxati — list endpoint XATO filter uchun.
-   * Tx-manba qatorlardagi contractNos dan CRM da found=true bo'lganlarni chiqarib tashlaymiz.
-   * Eski "isContractManual=true" lar ham XATO emas (manual/ariza), shularni ham chiqarib tashlaymiz.
+   * XATO filter — tx-manba qator (sourceTxId bor) + CRM'da found=true EMAS
+   * + manual/ariza EMAS. List va export bir xil ishlatadi.
+   * `notIn: verified` — verified bo'sh bo'lsa ham noto'g'ri "0 qator" qaytmaydi.
    */
-  private async getXatoContractNos(): Promise<{ contracts: string[]; manualSourceTxIds: string[] }> {
-    // 1) Barcha tx-manba qatorlarning unique contract no'lari
-    const txRows = await this.prisma.oplataKv.findMany({
-      where: { sourceTxId: { not: null } },
-      select: { contractNo: true, sourceTxId: true },
-    });
-    const allContractNos = Array.from(new Set(txRows.map((r) => r.contractNo)));
-    if (allContractNos.length === 0) return { contracts: [], manualSourceTxIds: [] };
-
-    // 2) Verified — CRM da found=true
+  private async buildXatoFilter(): Promise<Prisma.OplataKvWhereInput> {
     const verified = await this.prisma.crmContract.findMany({
-      where: { contractNumber: { in: allContractNos }, found: true },
+      where: { found: true },
       select: { contractNumber: true },
     });
-    const verifiedSet = new Set(verified.map((c) => c.contractNumber));
+    const verifiedNos = verified.map((c) => c.contractNumber);
 
-    // 3) Manual/ariza tx — XATO emas
-    const allSourceTxIds = Array.from(new Set(
-      txRows.map((r) => r.sourceTxId).filter((x): x is string => !!x),
-    ));
     const manualTx = await this.prisma.transaction.findMany({
-      where: {
-        OR: [{ externalId: { in: allSourceTxIds } }, { id: { in: allSourceTxIds } }],
-        isContractManual: true,
-      },
+      where: { isContractManual: true },
       select: { id: true, externalId: true },
     });
-    const manualTxIdSet = new Set<string>();
-    manualTx.forEach((t) => {
-      if (t.externalId) manualTxIdSet.add(t.externalId);
-      manualTxIdSet.add(t.id);
-    });
+    const manualIds: string[] = [];
+    manualTx.forEach((t) => { manualIds.push(t.id); if (t.externalId) manualIds.push(t.externalId); });
 
-    // XATO contracts = unverified contracts
-    const xatoContracts = allContractNos.filter((cn) => !verifiedSet.has(cn));
-    return { contracts: xatoContracts, manualSourceTxIds: Array.from(manualTxIdSet) };
+    return {
+      sourceTxId: { not: null },
+      contractNo: { notIn: verifiedNos },
+      ...(manualIds.length > 0 ? { NOT: { sourceTxId: { in: manualIds } } } : {}),
+    };
   }
 
   // ───────────────── LIST ─────────────────
@@ -360,29 +343,15 @@ export class OplataKvService {
     const where = this.buildWhere(q);
 
     // ─── XATO ONLY filter — faqat XATO qatorlarni ko'rsatish ───
+    // XATO = tx-manba qator (sourceTxId bor) + contract CRM'da found=true EMAS
+    //        + manual/ariza EMAS. (Badge bilan bir xil mantiq.)
+    // MUHIM: `notIn: verified` ishlatamiz — agar verified bo'sh bo'lsa ham
+    // (yoki xato ro'yxati bo'sh bo'lsa) noto'g'ri "0 qator" qaytmaydi.
     const xatoOnly = q.xatoOnly === 'true' || q.xatoOnly === '1';
     if (xatoOnly) {
-      const { contracts: xatoContracts, manualSourceTxIds } = await this.getXatoContractNos();
-      if (xatoContracts.length === 0) {
-        // Hech qanday XATO qator yo'q — bo'sh natija qaytaramiz
-        return {
-          ok: true, page, perPage, total: 0, pageCount: 1, items: [],
-          sums: { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 },
-        };
-      }
-      // XATO = tx-manba qator, contract verified emas, manual emas
-      const xatoFilter: Prisma.OplataKvWhereInput = {
-        sourceTxId: { not: null },
-        contractNo: { in: xatoContracts },
-        NOT: manualSourceTxIds.length > 0
-          ? { sourceTxId: { in: manualSourceTxIds } }
-          : undefined,
-      };
-      if (where.AND) {
-        (where.AND as any[]).push(xatoFilter);
-      } else {
-        where.AND = [xatoFilter];
-      }
+      const xatoFilter = await this.buildXatoFilter();
+      if (where.AND) (where.AND as any[]).push(xatoFilter);
+      else where.AND = [xatoFilter];
     }
 
     const sortBy = q.sortBy || 'date';
@@ -2206,13 +2175,7 @@ export class OplataKvService {
     // XATO ONLY filter — list bilan bir xil logika
     const xatoOnly = q.xatoOnly === 'true' || q.xatoOnly === '1';
     if (xatoOnly) {
-      const { contracts: xatoContracts, manualSourceTxIds } = await this.getXatoContractNos();
-      if (xatoContracts.length === 0) return [];
-      const xatoFilter: any = {
-        sourceTxId: { not: null },
-        contractNo: { in: xatoContracts },
-        NOT: manualSourceTxIds.length > 0 ? { sourceTxId: { in: manualSourceTxIds } } : undefined,
-      };
+      const xatoFilter = await this.buildXatoFilter();
       if (where.AND) (where.AND as any[]).push(xatoFilter);
       else where.AND = [xatoFilter];
     }
