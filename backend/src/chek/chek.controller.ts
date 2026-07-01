@@ -34,6 +34,13 @@ export class ChekController {
     return this.svc.crmLookup(contract);
   }
 
+  @Get('crm-search')
+  @RequirePermissions(PERMISSIONS.CHEK_BAZA)
+  @ApiOperation({ summary: 'Shartnoma autocomplete (jonli qidiruv)' })
+  crmSearch(@Query('contract') contract: string) {
+    return this.svc.crmSearch(contract);
+  }
+
   @Post()
   @RequirePermissions(PERMISSIONS.CHEK_BAZA)
   @ApiOperation({ summary: 'Yangi chek yozuvi qo\'shish' })

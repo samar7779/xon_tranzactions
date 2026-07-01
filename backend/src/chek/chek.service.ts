@@ -26,6 +26,11 @@ export class ChekService {
     return this.crm.getContractMeta(contract);
   }
 
+  /** Baza tab — jonli autocomplete (shartnoma yozganda moslar) */
+  async crmSearch(contract: string) {
+    return this.crm.searchContracts(contract, 8);
+  }
+
   async create(dto: CreateChekDto, actor: Actor) {
     const contract = dto.contractNumber?.trim();
     if (!contract) throw new BadRequestException('Shartnoma raqami kerak');

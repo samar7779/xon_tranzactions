@@ -1,13 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuth } from '@/lib/auth';
 import { ShowcaseStage } from './showcase-stage';
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
   const token = useAuth((s) => s.token);
   const hydrate = useAuth((s) => s.hydrate);
@@ -20,13 +21,16 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!hasHydrated) return;
 
     if (!token) {
-      router.replace(`/${locale}/login`);
+      // Login'dan keyin foydalanuvchi shu sahifaga qaytsin (dashboard'ga emas).
+      // Masalan /uz/chek ni ochib, login bo'lgach yana /uz/chek ga qaytadi.
+      const next = pathname && !pathname.includes('/login') ? `?next=${encodeURIComponent(pathname)}` : '';
+      router.replace(`/${locale}/login${next}`);
       return;
     }
     // Panel har ochilganda /auth/me dan yangi ruxsatlarni olamiz — rol
     // o'zgartirilgan bo'lsa, keshlangan eski ruxsatlar bilan qolmaymiz.
     hydrate().finally(() => setReady(true));
-  }, [hasHydrated, token, hydrate, router, locale]);
+  }, [hasHydrated, token, hydrate, router, locale, pathname]);
 
   if (!hasHydrated || !ready) {
     return <SplashLoader />;
