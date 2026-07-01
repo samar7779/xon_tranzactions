@@ -498,6 +498,71 @@ export class OplataKvService {
     return { ok: true, rows, total };
   }
 
+  /**
+   * byObject hisobotining bitta obyekt qatoriga drill-down —
+   * o'sha summani tashkil qilgan alohida to'lovlar (aynan bir xil filter mantiqi).
+   */
+  async byObjectDetail(opts: {
+    object: string;
+    dateFrom?: string;
+    dateTo?: string;
+    mode?: 'normal' | 'refund';
+  }) {
+    const where: any = {};
+
+    // Obyekt filtri — '—' bo'lsa null/bo'sh obyektlar (byObject'dagi kabi)
+    if (!opts.object || opts.object === '—') {
+      where.OR = [{ object: null }, { object: '' }];
+    } else {
+      where.object = opts.object;
+    }
+
+    if (opts.dateFrom || opts.dateTo) {
+      const range: any = {};
+      if (opts.dateFrom) range.gte = new Date(opts.dateFrom);
+      if (opts.dateTo) range.lte = new Date(`${opts.dateTo}T23:59:59.999`);
+      where.date = range;
+    }
+    if (opts.mode === 'refund') {
+      where.paymentAmount = { lt: 0 };
+      where.txType = { startsWith: 'возврат', mode: 'insensitive' };
+    } else {
+      where.paymentAmount = { gt: 0 };
+      where.txType = { contains: 'взнос', mode: 'insensitive' };
+    }
+
+    const rows = await this.prisma.oplataKv.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        contractNo: true,
+        date: true,
+        paymentAmount: true,
+        firstInstallment: true,
+        monthlyAmount: true,
+        paymentCategory: true,
+        txType: true,
+        client: true,
+        object: true,
+        purpose: true,
+        paymentMethod: true,
+      },
+      take: 3000,
+    });
+
+    const total = rows.reduce(
+      (acc, r) => ({
+        paymentAmount:    acc.paymentAmount    + Number(r.paymentAmount    ?? 0),
+        firstInstallment: acc.firstInstallment + Number(r.firstInstallment ?? 0),
+        monthlyAmount:    acc.monthlyAmount    + Number(r.monthlyAmount    ?? 0),
+      }),
+      { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 },
+    );
+
+    return { ok: true, object: opts.object, count: rows.length, rows, total };
+  }
+
   // ───────────────── SPLIT KERAK SHARTNOMALAR ─────────────────
   /**
    * CRM'da topilgan (verified), lekin to'lovi hali split bo'lmagan shartnomalar.

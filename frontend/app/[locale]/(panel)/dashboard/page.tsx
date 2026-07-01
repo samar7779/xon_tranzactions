@@ -21,6 +21,9 @@ import { DualAreaChart, DailyBarChart } from '@/components/charts';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogTitle,
+} from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
@@ -120,6 +123,8 @@ export default function DashboardPage() {
   const [objPinned, setObjPinned] = useState<string[]>([]);
   const toggleObjPin = (obj: string) =>
     setObjPinned((prev) => (prev.includes(obj) ? prev.filter((o) => o !== obj) : [obj, ...prev]));
+  // Drill-down: obyekt to'lov summasiga bosilganda — o'sha to'lovlar modalda
+  const [objDetail, setObjDetail] = useState<string | null>(null);
 
   const objSortedRows = useMemo(() => {
     const rows = objReport?.rows || [];
@@ -490,7 +495,17 @@ export default function DashboardPage() {
                                 {r.object}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{mask(r.paymentAmount)}</td>
+                            <td className="px-3 py-2 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); setObjDetail(r.object); }}
+                                title={t('objDetailHint')}
+                                className="group inline-flex items-center gap-1.5 hover:underline decoration-dotted underline-offset-2 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors"
+                              >
+                                <Eye className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                                {mask(r.paymentAmount)}
+                              </button>
+                            </td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{objHidden.first ? '•••' : mask(r.firstInstallment)}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-600 dark:text-slate-300">{objHidden.monthly ? '•••' : mask(r.monthlyAmount)}</td>
                           </tr>
@@ -511,6 +526,15 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+
+        {/* Drill-down modal — obyekt to'lov summasi bosilganda */}
+        <ObjectDetailDialog
+          object={objDetail}
+          dateFrom={objFrom}
+          dateTo={objTo}
+          mode={objMode}
+          onClose={() => setObjDetail(null)}
+        />
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
         <div ref={kunmaChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
@@ -1368,5 +1392,136 @@ function Mini({ label, value, tone }: { label: string; value: number; tone: 'eme
         {label}
       </div>
     </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// OBYEKT DRILL-DOWN — bitta obyekt to'lov summasini tashkil qilgan qatorlar
+// ═════════════════════════════════════════════════════════════════════
+interface ObjDetailRow {
+  id: string;
+  contractNo: string;
+  date: string;
+  paymentAmount: number | null;
+  firstInstallment: number | null;
+  monthlyAmount: number | null;
+  paymentCategory: string | null;
+  txType: string | null;
+  client: string | null;
+  object: string | null;
+  purpose: string | null;
+  paymentMethod: string | null;
+}
+
+function ObjectDetailDialog({
+  object, dateFrom, dateTo, mode, onClose,
+}: {
+  object: string | null;
+  dateFrom: string;
+  dateTo: string;
+  mode: 'normal' | 'refund';
+  onClose: () => void;
+}) {
+  const t = useTranslations('dashboard');
+  const open = object !== null;
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set('object', object || '');
+      if (dateFrom) p.set('dateFrom', dateFrom);
+      if (dateTo) p.set('dateTo', dateTo);
+      p.set('mode', mode);
+      return api.get<{
+        ok: boolean; object: string; count: number;
+        rows: ObjDetailRow[];
+        total: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
+      }>(`/oplata-kv/by-object-detail?${p}`);
+    },
+    enabled: open,
+  });
+
+  const fmtNum = (n: number | null) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('ru-RU'));
+  const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; } };
+  const catLabel = (c: string | null) =>
+    c === 'MONTHLY' ? 'ежемесячный' : c === 'FIRST' ? '1 взнос' : c === 'GENERAL' ? 'Общий' : '—';
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[1150px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+        {/* Hero header */}
+        <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 px-5 pt-4 pb-3.5 text-white shrink-0">
+          <DialogTitle asChild>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <Building2 className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('objDetailTitle')}</div>
+                <div className="text-lg font-black tracking-tight truncate">{object === '—' ? t('objDetailNoObject') : object}</div>
+              </div>
+            </div>
+          </DialogTitle>
+          <div className="text-[11px] text-white/80 mt-2 flex items-center gap-2 flex-wrap">
+            <span>{dateFrom || '—'} → {dateTo || '—'}</span>
+            <span className="w-px h-3 bg-white/30" />
+            <span>{mode === 'refund' ? 'Возврат' : t('objDetailNormal')}</span>
+            {data && (
+              <>
+                <span className="w-px h-3 bg-white/30" />
+                <span>{t('objDetailCount', { n: data.count })}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Body — scrollable table */}
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+          {isLoading ? (
+            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">…</div>
+          ) : (data?.rows?.length ?? 0) === 0 ? (
+            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('objDetailEmpty')}</div>
+          ) : (
+            <table className="w-full text-[12px]">
+              <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="text-left font-semibold px-3 py-2">Дог №</th>
+                  <th className="text-left font-semibold px-3 py-2">Дата</th>
+                  <th className="text-left font-semibold px-3 py-2">Тип</th>
+                  <th className="text-left font-semibold px-3 py-2">Клиент</th>
+                  <th className="text-left font-semibold px-3 py-2">Оплата</th>
+                  <th className="text-right font-semibold px-3 py-2">Сумма</th>
+                  <th className="text-right font-semibold px-3 py-2">1 взнос</th>
+                  <th className="text-right font-semibold px-3 py-2">ежемес.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                {data!.rows.map((r) => (
+                  <tr key={r.id} className="hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition-colors">
+                    <td className="px-3 py-1.5 font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.contractNo}</td>
+                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">{fmtDate(r.date)}</td>
+                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 max-w-[220px] truncate" title={r.txType || ''}>{r.txType || '—'}</td>
+                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 max-w-[200px] truncate" title={r.client || ''}>{r.client || '—'}</td>
+                    <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">{catLabel(r.paymentCategory)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums font-semibold text-emerald-700 dark:text-emerald-400">{fmtNum(r.paymentAmount)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{fmtNum(r.firstInstallment)}</td>
+                    <td className="px-3 py-1.5 text-right tabular-nums text-slate-600 dark:text-slate-300">{fmtNum(r.monthlyAmount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="sticky bottom-0 bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
+                <tr>
+                  <td className="px-3 py-2.5" colSpan={5}>{t('objTotal')}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{fmtNum(data!.total.paymentAmount)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data!.total.firstInstallment)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data!.total.monthlyAmount)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
