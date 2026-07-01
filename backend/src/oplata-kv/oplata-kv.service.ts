@@ -3102,6 +3102,25 @@ export class OplataKvService {
    * Перереброска uchun: foydalanuvchi shu summadan oshib transfer qila olmaydi.
    * CRM dan ham mijoz/obyekt nomini olib qaytaramiz (form auto-fill uchun).
    */
+  /**
+   * Shartnoma raqami avtoto'ldirish — qisman kiritilgan matnga mos keladigan
+   * mavjud shartnoma raqamlari (to'lov tarixi bor, otkaz shartnomalar ham).
+   * Перереброска modalida ДОГ № maydoni uchun.
+   */
+  async contractSuggest(q: string): Promise<{ ok: true; items: string[] }> {
+    const query = (q || '').trim();
+    if (query.length < 2) return { ok: true, items: [] };
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { contractNo: { contains: query, mode: 'insensitive' } },
+      select: { contractNo: true },
+      distinct: ['contractNo'],
+      orderBy: { contractNo: 'asc' },
+      take: 15,
+    });
+    const items = rows.map((r) => r.contractNo).filter((v): v is string => !!v);
+    return { ok: true, items };
+  }
+
   async contractBalance(contractNo: string) {
     if (!contractNo || !contractNo.trim()) {
       throw new BadRequestException("contractNo bo'sh");

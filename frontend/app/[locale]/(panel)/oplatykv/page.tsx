@@ -2965,6 +2965,109 @@ interface PerereboskaDest {
   lookupMsg?: string;
 }
 
+// Shartnoma raqami avtoto'ldirish — qisman yozganda mos keladiganlarni dropdown'da ko'rsatadi.
+// Foydalanuvchi to'liq raqamni yodda saqlashi shart emas.
+function ContractAutocomplete({
+  value, onChange, placeholder, disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+}) {
+  const [items, setItems] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [highlight, setHighlight] = useState(-1);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const skipNextRef = useRef(false); // tanlanganidan keyingi qidiruvni o'tkazib yuborish
+
+  useEffect(() => {
+    if (skipNextRef.current) { skipNextRef.current = false; return; }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const q = value.trim();
+    if (q.length < 2) { setItems([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const res = await api.get<{ ok: boolean; items: string[] }>(
+          `/oplata-kv/contract-suggest?q=${encodeURIComponent(q)}`,
+        );
+        const list = res.items || [];
+        setItems(list);
+        // Aynan bitta va to'liq mos bo'lsa — dropdown ko'rsatmaymiz
+        setOpen(list.length > 0 && !(list.length === 1 && list[0].toUpperCase() === q.toUpperCase()));
+        setHighlight(-1);
+      } catch {
+        setItems([]); setOpen(false);
+      } finally {
+        setLoading(false);
+      }
+    }, 250);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const select = (v: string) => {
+    skipNextRef.current = true;
+    onChange(v);
+    setOpen(false);
+    setItems([]);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => { if (items.length > 0) setOpen(true); }}
+        onKeyDown={(e) => {
+          if (!open || items.length === 0) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHighlight((h) => Math.min(h + 1, items.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHighlight((h) => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter' && highlight >= 0) { e.preventDefault(); select(items[highlight]); }
+          else if (e.key === 'Escape') { setOpen(false); }
+        }}
+        placeholder={placeholder}
+        disabled={disabled}
+        autoComplete="off"
+      />
+      {loading && (
+        <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-slate-400 pointer-events-none" />
+      )}
+      {open && items.length > 0 && (
+        <div className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto rounded-lg bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-lg py-1">
+          {items.map((it, i) => (
+            <button
+              key={it}
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); select(it); }}
+              onMouseEnter={() => setHighlight(i)}
+              className={cn(
+                'w-full text-left px-3 py-1.5 text-[13px] font-mono transition-colors',
+                i === highlight
+                  ? 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-800 dark:text-fuchsia-200'
+                  : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/50',
+              )}
+            >
+              {it}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PerereboskaDialog({
   open, onClose, onSaved,
 }: { open: boolean; onClose: () => void; onSaved: () => void; }) {
@@ -3193,9 +3296,9 @@ function PerereboskaDialog({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="ДОГ № *">
-                <Input
+                <ContractAutocomplete
                   value={fromCn}
-                  onChange={(e) => setFromCn(e.target.value)}
+                  onChange={setFromCn}
                   placeholder="606ZUR236J"
                   disabled={submitting}
                 />
@@ -3355,10 +3458,9 @@ function PerereboskaDialog({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <Field label="ДОГ № *">
-                      <Input
+                      <ContractAutocomplete
                         value={d.contractNo}
-                        onChange={(e) => {
-                          const v = e.target.value;
+                        onChange={(v) => {
                           setDestinations((prev) => prev.map((x, i) => i === idx ? { ...x, contractNo: v } : x));
                           lookupDestination(idx, v);
                         }}
