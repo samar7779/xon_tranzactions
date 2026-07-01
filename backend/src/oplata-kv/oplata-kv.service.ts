@@ -3118,9 +3118,25 @@ export class OplataKvService {
     const totalPaid = Number(sums._sum.paymentAmount || 0);
     const totalFirst = Number(sums._sum.firstInstallment || 0);
     const totalMonthly = Number(sums._sum.monthlyAmount || 0);
+    const hasPayments = (sums._count || 0) > 0;
 
     // CRM dan mijoz va obyekt — auto-fill uchun
     const crmLookup = await this.crmLookupForForm(cn).catch(() => null);
+
+    let customerName = crmLookup?.customerName || null;
+    let objectName = crmLookup?.objectName || null;
+
+    // Otkaz (bekor qilingan) yoki CRM da topilmaydigan, lekin to'lov tarixi bor
+    // shartnomalar uchun — obyekt/mijoz nomini oplata-kv qatorlaridan fallback qilamiz.
+    if ((!customerName || !objectName) && hasPayments) {
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { contractNo: cn, object: { not: null } },
+        select: { object: true, client: true },
+        orderBy: { date: 'desc' },
+      });
+      if (!objectName) objectName = row?.object || null;
+      if (!customerName) customerName = row?.client || null;
+    }
 
     return {
       ok: true,
@@ -3129,9 +3145,11 @@ export class OplataKvService {
       totalFirst,
       totalMonthly,
       rowCount: sums._count,
-      customerName: crmLookup?.customerName || null,
-      objectName: crmLookup?.objectName || null,
-      foundInCrm: !!crmLookup?.found,
+      customerName,
+      objectName,
+      // Otkaz bo'lgan shartnomalar CRM da found=false bo'lishi mumkin, lekin to'lov
+      // tarixi bor — perereboska uchun ular ham "topilgan" deb qabul qilinadi.
+      foundInCrm: !!crmLookup?.found || hasPayments,
     };
   }
 
@@ -3179,40 +3197,43 @@ export class OplataKvService {
       );
     }
 
-    // CRM tekshirish — source
-    const fromCrm = await this.crmLookupForForm(fromCn);
-    if (!fromCrm.found) {
-      throw new BadRequestException(`Manba shartnoma CRM da topilmadi: ${fromCn}`);
+    // Manba (source) — CRM da yoki to'lov tarixida mavjudligini tekshirish.
+    // Otkaz (bekor qilingan) / CRM da yo'q, lekin to'lovlari bor shartnomalar ham qabul qilinadi.
+    const balance = await this.contractBalance(fromCn);
+    if (!balance.foundInCrm) {
+      throw new BadRequestException(`Manba shartnoma topilmadi (CRM va to'lov tarixida yo'q): ${fromCn}`);
     }
-    if (!fromCrm.objectName) {
+    const fromObjectName = balance.objectName;
+    const fromCustomerName = balance.customerName;
+    if (!fromObjectName) {
       throw new BadRequestException(`Manba shartnoma obyekti aniqlanmadi: ${fromCn}`);
     }
 
     // Source qoldig'i tekshirish
-    const balance = await this.contractBalance(fromCn);
     if (balance.totalPaid < input.amount - 0.01) {
       throw new BadRequestException(
         `Manba qoldig'i yetarli emas: ${balance.totalPaid.toFixed(2)} < ${input.amount.toFixed(2)}`,
       );
     }
 
-    // CRM tekshirish — har bir destination + obyekt teng
+    // Tekshirish — har bir destination + obyekt teng.
+    // Manba kabi: CRM da yoki to'lov tarixida mavjud bo'lsa (otkaz ham) qabul qilinadi.
     const destCrms: Array<{ contractNo: string; customerName: string | null; objectName: string | null }> = [];
     for (const d of input.destinations) {
       const dn = (d.contractNo || '').trim().toUpperCase();
-      const dCrm = await this.crmLookupForForm(dn);
-      if (!dCrm.found) {
-        throw new BadRequestException(`Maqsadli shartnoma CRM da topilmadi: ${dn}`);
+      const dBal = await this.contractBalance(dn);
+      if (!dBal.foundInCrm) {
+        throw new BadRequestException(`Maqsadli shartnoma topilmadi (CRM va to'lov tarixida yo'q): ${dn}`);
       }
-      if (!dCrm.objectName) {
+      if (!dBal.objectName) {
         throw new BadRequestException(`Maqsadli shartnoma obyekti aniqlanmadi: ${dn}`);
       }
-      if (dCrm.objectName !== fromCrm.objectName) {
+      if (dBal.objectName !== fromObjectName) {
         throw new BadRequestException(
-          `Obyekt nomi mos kelmaydi: ${dn} (${dCrm.objectName}) ≠ ${fromCn} (${fromCrm.objectName})`,
+          `Obyekt nomi mos kelmaydi: ${dn} (${dBal.objectName}) ≠ ${fromCn} (${fromObjectName})`,
         );
       }
-      destCrms.push({ contractNo: dn, customerName: dCrm.customerName, objectName: dCrm.objectName });
+      destCrms.push({ contractNo: dn, customerName: dBal.customerName, objectName: dBal.objectName });
     }
 
     // Faylni saqlash
@@ -3243,8 +3264,8 @@ export class OplataKvService {
           txType: TX_TYPE,
           note,
           paymentCategory: null,
-          object: fromCrm.objectName,
-          client: fromCrm.customerName,
+          object: fromObjectName,
+          client: fromCustomerName,
           paymentMethod: TX_TYPE,
           createdById: input.actor.id,
           createdByName: input.actor.name,
@@ -3324,7 +3345,7 @@ export class OplataKvService {
     void this.notifyPerereboskaTelegram('created', {
       groupId,
       fromCn,
-      objectName: fromCrm.objectName,
+      objectName: fromObjectName,
       amount: input.amount,
       destinations: destCrms.map((d, i) => ({ contractNo: d.contractNo, amount: input.destinations[i].amount })),
       actor: input.actor,
