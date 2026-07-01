@@ -94,6 +94,11 @@ export const PERMISSIONS = {
   API_KEYS_VIEW: 'api_keys:view',                                // Kalitlar ro'yxati + loglar
   API_KEYS_MANAGE: 'api_keys:manage',                            // Yaratish, tahrirlash, o'chirish
 
+  // ─── CHEK (alohida sahifa, 3 ta tab) ───
+  CHEK_BAZA: 'chek:baza',           // Baza tab — ma'lumot qo'shish
+  CHEK_TARIX: 'chek:tarix',         // Tarix tab — ko'rish + tahrirlash
+  CHEK_SOZLAMALAR: 'chek:sozlamalar', // Sozlamalar tab
+
   // ─── QO'SHIMCHA ───
   // CRM
   CRM_VIEW: 'crm:view',
@@ -265,6 +270,21 @@ export const PERMISSION_TREE: PermModule[] = [
         items: [
           { value: PERMISSIONS.API_KEYS_VIEW, label: 'API kalitlar va loglarni ko\'rish' },
           { value: PERMISSIONS.API_KEYS_MANAGE, label: 'API kalit yaratish / tahrirlash / o\'chirish' },
+        ],
+      },
+    ],
+  },
+  {
+    module: 'Chek',
+    icon: 'check',
+    pages: [
+      {
+        name: 'Chek — Shartnoma nazorati',
+        description: 'Alohida sahifa (/chek) — 3 ta tab: Baza, Tarix, Sozlamalar',
+        items: [
+          { value: PERMISSIONS.CHEK_BAZA, label: 'Baza tab — ma\'lumot qo\'shish (CRM lookup + forma)' },
+          { value: PERMISSIONS.CHEK_TARIX, label: 'Tarix tab — ro\'yxatni ko\'rish va tahrirlash' },
+          { value: PERMISSIONS.CHEK_SOZLAMALAR, label: 'Sozlamalar tab' },
         ],
       },
     ],
