@@ -4,10 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Search, Loader2, User, Building2, Home, Calendar, FileText,
+  Search, Loader2, User, Building2, Home, FileText,
   Check, X, AlertTriangle, Save, Phone, Coins, Sparkles, CornerDownLeft,
-  ChevronRight, BadgeCheck,
+  ChevronRight, BadgeCheck, Copy, FileCheck2, CopyCheck,
 } from 'lucide-react';
+
+// Shartnoma turi ikonlari
+const VID_ICONS: Record<string, any> = {
+  original: FileText,
+  ekzemplyar: Copy,
+  original_fixed: FileCheck2,
+  ekzemplyar_fixed: CopyCheck,
+};
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -279,19 +287,24 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
 
       {/* ═══ Forma — glassmorphism ═══ */}
       <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-6 space-y-5">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label={t('date')} icon={<Calendar className="h-3.5 w-3.5 text-indigo-500" />}>
-            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 rounded-xl" />
-          </Field>
-          <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
-            <Select value={vidDogovora} onValueChange={setVidDogovora}>
-              <SelectTrigger className="h-11 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {VID_DOGOVORA_KEYS.map((k) => <SelectItem key={k} value={k}>{vidLabel(lang, k)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </Field>
-        </div>
+        {/* Shartnoma turi — to'liq kenglik, iconli */}
+        <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
+          <Select value={vidDogovora} onValueChange={setVidDogovora}>
+            <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
+            <SelectContent>
+              {VID_DOGOVORA_KEYS.map((k) => {
+                const Ico = VID_ICONS[k];
+                return (
+                  <SelectItem key={k} value={k}>
+                    <span className="flex items-center gap-2">
+                      <Ico className="h-4 w-4 text-violet-500" /> {vidLabel(lang, k)}
+                    </span>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </Field>
 
         <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
           <div className="grid grid-cols-2 gap-3">
@@ -313,9 +326,10 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
           </div>
         </Field>
 
-        <div className="pt-1 flex justify-end">
-          <Button onClick={submit} disabled={!canSave}
-            className="h-12 px-7 gap-2 rounded-2xl text-[14px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-lg shadow-indigo-500/25 disabled:opacity-50 disabled:shadow-none">
+        {/* Saqlash — to'liq kenglik; mobil'da pastda yopishib turadi */}
+        <div className="pt-1 sticky bottom-0 z-10 -mx-6 -mb-6 px-6 pt-3 pb-5 bg-gradient-to-t from-white/95 dark:from-slate-900/95 via-white/70 dark:via-slate-900/70 to-transparent backdrop-blur-sm sm:static sm:mx-0 sm:mb-0 sm:px-0 sm:pb-0 sm:bg-none sm:backdrop-blur-0">
+          <Button onClick={submit} disabled={!canSave} style={{ height: 52 }}
+            className="w-full gap-2 rounded-2xl text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none">
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {create.isPending ? t('saving') : t('save')}
           </Button>
@@ -329,16 +343,23 @@ function KontrolyorBtn({ active, tone, label, onClick }: { active: boolean; tone
   const ok = tone === 'ok';
   return (
     <button type="button" onClick={onClick}
-      className={cn('relative flex items-center justify-center gap-2 h-14 rounded-2xl border-2 font-bold text-sm transition-all overflow-hidden',
+      className={cn(
+        'group relative flex flex-col items-center justify-center gap-2 h-24 rounded-2xl font-bold text-[13px] transition-all duration-200 overflow-hidden',
         active
           ? ok
-            ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 shadow-lg shadow-emerald-500/20 scale-[1.02]'
-            : 'border-rose-500 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 shadow-lg shadow-rose-500/20 scale-[1.02]'
-          : 'border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:border-slate-300')}>
-      <span className={cn('grid place-items-center w-7 h-7 rounded-full transition-transform', active && 'scale-110', ok ? (active ? 'bg-emerald-500 text-white' : 'bg-slate-100 dark:bg-slate-800') : (active ? 'bg-rose-500 text-white' : 'bg-slate-100 dark:bg-slate-800'))}>
-        {ok ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
+            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-500/35 scale-[1.03] ring-2 ring-emerald-300/50'
+            : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-xl shadow-rose-500/35 scale-[1.03] ring-2 ring-rose-300/50'
+          : 'bg-white/60 dark:bg-slate-800/50 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-500 dark:text-slate-400 hover:ring-2 ' + (ok ? 'hover:ring-emerald-300 hover:text-emerald-600' : 'hover:ring-rose-300 hover:text-rose-600'),
+      )}>
+      {/* Faol holatda yaltirash */}
+      {active && <span className="absolute -inset-x-2 -top-8 h-16 bg-white/20 blur-2xl rounded-full" />}
+      <span className={cn(
+        'relative grid place-items-center w-11 h-11 rounded-2xl transition-all duration-200',
+        active ? 'bg-white/25 backdrop-blur scale-105' : ok ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 group-hover:scale-105' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-500 group-hover:scale-105',
+      )}>
+        {ok ? <Check className="h-6 w-6" strokeWidth={2.6} /> : <X className="h-6 w-6" strokeWidth={2.6} />}
       </span>
-      {label}
+      <span className="relative">{label}</span>
     </button>
   );
 }
