@@ -563,6 +563,107 @@ export class OplataKvService {
     return { ok: true, object: opts.object, count: rows.length, rows, total };
   }
 
+  /** byObjectDetail drill-down'ni Excel (.xlsx) sifatida eksport qilish. */
+  async byObjectDetailXlsx(opts: {
+    object: string;
+    dateFrom?: string;
+    dateTo?: string;
+    mode?: 'normal' | 'refund';
+  }): Promise<{ buffer: Buffer; filename: string }> {
+    const { rows, total } = await this.byObjectDetail(opts);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Объект');
+
+    ws.columns = [
+      { header: 'Дог №',       key: 'contractNo',       width: 16 },
+      { header: 'Дата',        key: 'date',             width: 12 },
+      { header: 'Тип',         key: 'txType',           width: 24 },
+      { header: 'Клиент',      key: 'client',           width: 30 },
+      { header: 'Оплата',      key: 'paymentCategory',  width: 14 },
+      { header: 'Сумма',       key: 'paymentAmount',    width: 18 },
+      { header: '1 взнос',     key: 'firstInstallment', width: 18 },
+      { header: 'Ежемесячный', key: 'monthlyAmount',    width: 18 },
+    ];
+
+    // Sarlavha ustidagi qator — obyekt nomi + davr
+    const label = `${opts.object || '—'}  ·  ${opts.dateFrom || '—'} → ${opts.dateTo || '—'}  ·  ${opts.mode === 'refund' ? 'Возврат' : 'Платежи'}`;
+    ws.spliceRows(1, 0, [label]);
+    ws.mergeCells('A1:H1');
+    const titleCell = ws.getCell('A1');
+    titleCell.font = { bold: true, size: 12 };
+    titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
+    ws.getRow(1).height = 24;
+
+    const head = ws.getRow(2);
+    head.font = { bold: true, size: 10 };
+    head.height = 22;
+    head.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = {
+        top: { style: 'thin' }, bottom: { style: 'thin' },
+        left: { style: 'thin' }, right: { style: 'thin' },
+      };
+    });
+
+    const categoryLabel: Record<string, string> = {
+      MONTHLY: 'ежемесячный',
+      FIRST:   '1 взнос',
+      GENERAL: 'Общий',
+    };
+
+    for (const it of rows) {
+      let date = '';
+      if (it.date) {
+        const d = new Date(it.date);
+        const dd = String(d.getUTCDate()).padStart(2, '0');
+        const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+        date = `${dd}.${mm}.${d.getUTCFullYear()}`;
+      }
+      const row = ws.addRow({
+        contractNo: it.contractNo || '',
+        date,
+        txType: it.txType || '',
+        client: it.client || '',
+        paymentCategory: it.paymentCategory ? (categoryLabel[it.paymentCategory] || it.paymentCategory) : '',
+        paymentAmount:    it.paymentAmount    != null ? Number(it.paymentAmount)    : null,
+        firstInstallment: it.firstInstallment != null ? Number(it.firstInstallment) : null,
+        monthlyAmount:    it.monthlyAmount    != null ? Number(it.monthlyAmount)    : null,
+      });
+      row.font = { size: 9 };
+      row.getCell('paymentAmount').numFmt    = '#,##0.00';
+      row.getCell('firstInstallment').numFmt = '#,##0.00';
+      row.getCell('monthlyAmount').numFmt    = '#,##0.00';
+      row.getCell('date').numFmt = '@';
+      row.getCell('date').alignment = { horizontal: 'center' };
+    }
+
+    if (rows.length > 0) {
+      const totalRow = ws.addRow({
+        contractNo: 'ИТОГО:',
+        paymentAmount:    total.paymentAmount,
+        firstInstallment: total.firstInstallment,
+        monthlyAmount:    total.monthlyAmount,
+      });
+      totalRow.font = { bold: true, size: 10 };
+      totalRow.getCell('paymentAmount').numFmt    = '#,##0.00';
+      totalRow.getCell('firstInstallment').numFmt = '#,##0.00';
+      totalRow.getCell('monthlyAmount').numFmt    = '#,##0.00';
+      totalRow.eachCell((c) => {
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+      });
+    }
+
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const safeObj = (opts.object || 'obyekt').replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
+    const ts = new Date().toISOString().slice(0, 10);
+    return { buffer, filename: `obyekt-${safeObj}-${ts}.xlsx` };
+  }
+
   // ───────────────── SPLIT KERAK SHARTNOMALAR ─────────────────
   /**
    * CRM'da topilgan (verified), lekin to'lovi hali split bo'lmagan shartnomalar.

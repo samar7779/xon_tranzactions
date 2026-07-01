@@ -24,7 +24,7 @@ import {
 import {
   Dialog, DialogContent, DialogTitle,
 } from '@/components/ui/dialog';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
@@ -1442,6 +1442,25 @@ function ObjectDetailDialog({
     enabled: open,
   });
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (object === null) return;
+    setExporting(true);
+    try {
+      const p = new URLSearchParams();
+      p.set('object', object);
+      if (dateFrom) p.set('dateFrom', dateFrom);
+      if (dateTo) p.set('dateTo', dateTo);
+      p.set('mode', mode);
+      const safe = (object === '—' ? 'obyektsiz' : object).replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
+      await apiDownload(`/oplata-kv/by-object-detail/export?${p.toString()}`, `obyekt-${safe}.xlsx`);
+    } catch {
+      /* apiDownload o'zi xatoni ko'rsatadi */
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const fmtNum = (n: number | null) => (n === null || n === undefined ? '—' : Number(n).toLocaleString('ru-RU'));
   const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; } };
   const catLabel = (c: string | null) =>
@@ -1449,20 +1468,31 @@ function ObjectDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[1150px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+      <DialogContent className="sm:max-w-[1400px] w-[98vw] p-0 overflow-hidden gap-0 max-h-[95vh] flex flex-col">
         {/* Hero header */}
         <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 px-5 pt-4 pb-3.5 text-white shrink-0">
-          <DialogTitle asChild>
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
-                <Building2 className="h-5 w-5" />
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle asChild>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                  <Building2 className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('objDetailTitle')}</div>
+                  <div className="text-lg font-black tracking-tight truncate">{object === '—' ? t('objDetailNoObject') : object}</div>
+                </div>
               </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('objDetailTitle')}</div>
-                <div className="text-lg font-black tracking-tight truncate">{object === '—' ? t('objDetailNoObject') : object}</div>
-              </div>
-            </div>
-          </DialogTitle>
+            </DialogTitle>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exporting || (data?.rows?.length ?? 0) === 0}
+              className="shrink-0 mr-8 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {exporting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Excel
+            </button>
+          </div>
           <div className="text-[11px] text-white/80 mt-2 flex items-center gap-2 flex-wrap">
             <span>{dateFrom || '—'} → {dateTo || '—'}</span>
             <span className="w-px h-3 bg-white/30" />
