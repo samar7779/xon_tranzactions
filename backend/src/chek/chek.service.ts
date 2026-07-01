@@ -60,15 +60,9 @@ export class ChekService {
     const perPage = Math.min(200, Math.max(1, opts.perPage || 50));
     const q = opts.q?.trim();
 
+    // Faqat shartnoma raqami bo'yicha qidiruv
     const where = q
-      ? {
-          OR: [
-            { contractNumber: { contains: q, mode: 'insensitive' as const } },
-            { manager: { contains: q, mode: 'insensitive' as const } },
-            { branchName: { contains: q, mode: 'insensitive' as const } },
-            { objectName: { contains: q, mode: 'insensitive' as const } },
-          ],
-        }
+      ? { contractNumber: { contains: q, mode: 'insensitive' as const } }
       : {};
 
     const [rows, total] = await Promise.all([

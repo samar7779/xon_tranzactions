@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
-  FileText, Coins, AlertTriangle, Inbox,
+  FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -17,6 +17,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import {
   makeT, vidLabel, kontrolyorLabel, VID_DOGOVORA_KEYS, type ChekLang,
 } from './i18n';
@@ -69,26 +72,41 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
 
   const rows = data?.items || [];
   const [editing, setEditing] = useState<ChekRow | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/chek/${id}`),
-    onSuccess: () => {
-      toast.success(t('deleted'));
-      qc.invalidateQueries({ queryKey: ['chek-list'] });
-    },
+    onSuccess: () => { toast.success(t('deleted')); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
     onError: (e: any) => toast.error(e?.message || t('error')),
   });
 
+  // "To'g'rlandi" — rad etilgan yozuvni qabul qilingan holatiga o'tkazadi
+  const correct = useMutation({
+    mutationFn: (id: string) => api.patch(`/chek/${id}`, { kontrolyor: 'prinyat' }),
+    onSuccess: () => { toast.success(t('corrected')); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
+    onError: (e: any) => toast.error(e?.message || t('error')),
+  });
+
+  const cols = canEdit ? 7 : 6; // chevron + contract + manager + branch + object + kontrolyor (+actions)
+
   return (
     <div className="space-y-4">
-      {/* Qidiruv + jami */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Qidiruv — premium (faqat shartnoma raqami bo'yicha) */}
+      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_10px_30px_-20px_rgba(79,70,229,0.4)] p-3 flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[220px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('search')} className="pl-9 h-10" />
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-sm">
+            <Search className="h-3.5 w-3.5" />
+          </div>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('search')}
+            className="pl-12 pr-9 h-11 rounded-xl bg-white/80 dark:bg-slate-900 border-0 ring-1 ring-slate-200 dark:ring-slate-700 font-mono focus-visible:ring-2 focus-visible:ring-indigo-400" />
+          {q && (
+            <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
-        <div className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
-          {t('total')}: <span className="font-bold text-slate-800 dark:text-slate-200 tabular-nums">{data?.total ?? 0}</span>
+        <div className="text-[12px] text-slate-500 dark:text-slate-400 font-medium px-2">
+          {t('total')}: <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{data?.total ?? 0}</span>
           {isFetching && <Loader2 className="inline h-3.5 w-3.5 animate-spin ml-2 text-slate-400" />}
         </div>
       </div>
@@ -98,56 +116,90 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <Th>{t('date')}</Th>
+              <tr className="bg-gradient-to-r from-slate-50 to-indigo-50/40 dark:from-slate-800/60 dark:to-slate-800/60 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <Th className="w-8">{''}</Th>
                 <Th>{t('contractNumber')}</Th>
                 <Th>{t('manager')}</Th>
                 <Th>{t('salesOffice')}</Th>
                 <Th>{t('object')}</Th>
-                <Th>{t('vidDogovora')}</Th>
                 <Th>{t('kontrolyor')}</Th>
-                <Th className="text-right">{t('shtrafy')}</Th>
-                <Th>{t('addedBy')}</Th>
                 {canEdit && <Th className="text-right">{t('actions')}</Th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={canEdit ? 10 : 9} className="py-16 text-center">
+                  <td colSpan={cols} className="py-16 text-center">
                     <Inbox className="h-9 w-9 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
                     <div className="text-sm text-slate-400 dark:text-slate-500">{t('noData')}</div>
                   </td>
                 </tr>
-              ) : rows.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                  <Td className="tabular-nums whitespace-nowrap">{fmtDate(r.data)}</Td>
-                  <Td className="font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.contractNumber}</Td>
-                  <Td>{r.manager || '—'}</Td>
-                  <Td>{r.branchName || '—'}</Td>
-                  <Td className="max-w-[180px] truncate" title={r.objectName || ''}>{r.objectName || '—'}</Td>
-                  <Td className="whitespace-nowrap">{vidLabel(lang, r.vidDogovora)}</Td>
-                  <Td><KontrolyorBadge value={r.kontrolyor} lang={lang} /></Td>
-                  <Td className="text-right tabular-nums whitespace-nowrap">{fmtMoney(r.shtrafy)}</Td>
-                  <Td className="text-slate-400 dark:text-slate-500 text-[12px] whitespace-nowrap">{r.dobavilName || '—'}</Td>
-                  {canEdit && (
-                    <Td className="text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1">
-                        <button onClick={() => setEditing(r)} className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 transition-colors" title={t('edit')}>
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => { if (confirm(t('confirmDelete'))) del.mutate(r.id); }}
-                          className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 transition-colors"
-                          title={t('del')}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </Td>
-                  )}
-                </tr>
-              ))}
+              ) : rows.map((r) => {
+                const open = expandedId === r.id;
+                return (
+                  <Fragment key={r.id}>
+                    <tr className={cn('cursor-pointer transition-colors', open ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40')}
+                      onClick={() => setExpandedId(open ? null : r.id)}>
+                      <Td className="text-center">
+                        <ChevronDown className={cn('h-4 w-4 mx-auto transition-transform', open ? 'rotate-180 text-indigo-500' : 'text-slate-400')} />
+                      </Td>
+                      <Td className="font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.contractNumber}</Td>
+                      <Td className="max-w-[150px] truncate" title={r.manager || ''}>{r.manager || '—'}</Td>
+                      <Td>{r.branchName || '—'}</Td>
+                      <Td className="max-w-[160px] truncate" title={r.objectName || ''}>{r.objectName || '—'}</Td>
+                      <Td><KontrolyorBadge value={r.kontrolyor} lang={lang} /></Td>
+                      {canEdit && (
+                        <Td className="text-right whitespace-nowrap">
+                          <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            {r.kontrolyor === 'otkaz' && (
+                              <button onClick={() => correct.mutate(r.id)} disabled={correct.isPending}
+                                className="inline-flex items-center gap-1 px-2.5 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
+                                {correct.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />} {t('corrected')}
+                              </button>
+                            )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="w-8 h-8 rounded-lg grid place-items-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                  <MoreVertical className="h-4 w-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem onSelect={() => setEditing(r)} className="gap-2 cursor-pointer">
+                                  <Pencil className="h-4 w-4 text-indigo-500" /> {t('edit')}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => { if (confirm(t('confirmDelete'))) del.mutate(r.id); }} className="gap-2 cursor-pointer text-rose-600 focus:text-rose-600">
+                                  <Trash2 className="h-4 w-4" /> {t('del')}
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </Td>
+                      )}
+                    </tr>
+                    {open && (
+                      <tr className="bg-indigo-50/30 dark:bg-indigo-950/10">
+                        <td colSpan={cols} className="px-4 pb-4 pt-1">
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                            <DetailItem icon={<Calendar className="h-3.5 w-3.5" />} label={t('date')} value={fmtDate(r.data)} />
+                            <DetailItem icon={<FileText className="h-3.5 w-3.5" />} label={t('vidDogovora')} value={vidLabel(lang, r.vidDogovora)} />
+                            <DetailItem icon={<Coins className="h-3.5 w-3.5" />} label={t('shtrafy')} value={r.shtrafy != null ? `${fmtMoney(r.shtrafy)} UZS` : '—'} />
+                            <DetailItem icon={<User className="h-3.5 w-3.5" />} label={t('addedBy')} value={r.dobavilName || '—'} />
+                          </div>
+                          {r.prichinaOtkaza && (
+                            <div className="mt-2.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 ring-1 ring-rose-100 dark:ring-rose-900 px-3 py-2">
+                              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-rose-500 mb-0.5">
+                                <AlertTriangle className="h-3 w-3" /> {t('prichinaOtkaza')}
+                              </div>
+                              <div className="text-[13px] text-slate-700 dark:text-slate-300">{r.prichinaOtkaza}</div>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -161,6 +213,17 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
           onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['chek-list'] }); }}
         />
       )}
+    </div>
+  );
+}
+
+function DetailItem({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-white/70 dark:bg-slate-900/60 ring-1 ring-slate-200/70 dark:ring-slate-700 px-3 py-2">
+      <div className="flex items-center gap-1.5 text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500 mb-0.5">
+        {icon}{label}
+      </div>
+      <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={value}>{value}</div>
     </div>
   );
 }
