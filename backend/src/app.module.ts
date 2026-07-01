@@ -28,6 +28,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { XonpayModule } from './xonpay/xonpay.module';
 import { OplataKvModule } from './oplata-kv/oplata-kv.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
+import { ChekModule } from './chek/chek.module';
 
 @Module({
   imports: [
@@ -65,6 +66,7 @@ import { DeveloperApiModule } from './developer-api/developer-api.module';
     XonpayModule,
     OplataKvModule,
     DeveloperApiModule,
+    ChekModule,
   ],
 })
 export class AppModule {}

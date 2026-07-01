@@ -105,6 +105,51 @@ export class CrmService {
   }
 
   /**
+   * Chek sahifasi uchun — shartnoma bo'yicha menejer / sotuv ofisi / obyekt.
+   * Bu maydonlar FAQAT /order/index javobida keladi (created_by, branch),
+   * /order/show da yo'q. Shu sabab bu yerda /index ishlatiladi.
+   */
+  async getContractMeta(contract: string) {
+    if (!contract?.trim()) return { ok: false, error: 'contract kerak' };
+    const target = contract.trim();
+    const r = await this.call('/index', {
+      contract: target,
+      'per-page': 10,
+      is_trashed: 1,
+      trashed_status: 1,
+      with_trashed: 1,
+    });
+    if (!r.ok) return r;
+    const items: any[] = r.data?.data || [];
+    if (items.length === 0) return { ok: true, found: false };
+
+    // Aniq moslik (bo'shliq/tire farqlarini e'tiborsiz)
+    const norm = (s: any) => String(s || '').replace(/[\s\-_]/g, '').toUpperCase();
+    const it = items.find((x) => norm(x.contract) === norm(target)) || items[0];
+
+    const cb = it.created_by || {};
+    const managerName = [cb.last_name, cb.first_name, cb.second_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || null;
+    const object = typeof it.object === 'string'
+      ? it.object
+      : (it.object?.name || it.object?.uz || it.object?.ru || null);
+
+    return {
+      ok: true,
+      found: true,
+      contract: it.contract || target,
+      manager: managerName,
+      managerPhone: cb.phone != null ? String(cb.phone) : null,
+      branchName: cb.branch?.name || null,
+      object,
+      clientFullName: it.client_full_name || null,
+      apartmentNumber: it.number || null,
+    };
+  }
+
+  /**
    * MySQL'dan to'liq client ma'lumotlarini olish — telefon, pasport, manzil va h.k.
    * Agar baza ulanmasa yoki yozuv topilmasa — null qaytaradi.
    */

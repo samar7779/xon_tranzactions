@@ -57,6 +57,11 @@ export const PERMS = {
   API_KEYS_VIEW: 'api_keys:view',
   API_KEYS_MANAGE: 'api_keys:manage',
 
+  // Chek (alohida sahifa, 3 ta tab)
+  CHEK_BAZA: 'chek:baza',
+  CHEK_TARIX: 'chek:tarix',
+  CHEK_SOZLAMALAR: 'chek:sozlamalar',
+
   // Qo'shimcha
   CRM_VIEW: 'crm:view',
   CATEGORIES_VIEW: 'categories:view',

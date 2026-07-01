@@ -978,6 +978,45 @@ model ApiKey {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// CHEK DOG — alohida "Chek" sahifasi (shartnoma nazorati jurnali).
+// Baza tab'da shartnoma raqami kiritiladi, CRM'dan menejer/sotuv ofisi/
+// obyekt olib kelinadi; qolgan maydonlar (vid dogovora, kontrolyor,
+// jarima, sabab) qo'lda to'ldiriladi. Tarix tab'da ko'rish/tahrirlash.
+// tg_send — kelajakda Telegram xabari uchun (hozircha ishlatilmaydi).
+// ─────────────────────────────────────────────────────────────────
+model ChekDog {
+  id             String   @id @default(cuid())
+  contractNumber String   @map("contract_number") @db.VarChar(128)
+
+  // CRM (XonSaroy /order/index) dan avtomatik keladi
+  manager        String?  @db.VarChar(255)                        // created_by F.I.O. (menejer)
+  managerPhone   String?  @map("manager_phone") @db.VarChar(64)   // created_by.phone
+  branchName     String?  @map("branch_name") @db.VarChar(255)    // created_by.branch.name (Сотув офис)
+  objectName     String?  @map("object_name") @db.VarChar(255)    // object (obyekt/JK)
+
+  // Forma maydonlari
+  data           DateTime @db.Date                                // Дата — sana (default: today)
+  vidDogovora    String   @map("vid_dogovora") @db.VarChar(48)    // Вид договора (4 variant)
+  kontrolyor     String   @db.VarChar(16)                         // Контролёр: otkaz | prinyat
+  prichinaOtkaza String?  @map("prichina_otkaza") @db.Text        // Причина отказа
+  shtrafy        BigInt?                                          // Штрафы — suma (ixtiyoriy)
+
+  // Kim qo'shdi (foydalanuvchiga ko'rsatilmaydi, faqat DB'da)
+  dobavilId      String?  @map("dobavil_id")
+  dobavilName    String?  @map("dobavil_name") @db.VarChar(255)
+
+  // Kelajak uchun — Telegram xabari yuborildimi
+  tgSend         Boolean  @default(false) @map("tg_send")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([contractNumber])
+  @@map("chek_dog")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // API REQUEST LOG — har bir /api/v1/* so'rov audit yozuvi
 // IP, path, status, latency, query, response size. Hech qanday parol
 // yoki sezgir ma'lumot saqlanmaydi.
