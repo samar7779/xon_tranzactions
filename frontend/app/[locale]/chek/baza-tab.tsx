@@ -163,16 +163,26 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
 
   return (
     <div className="space-y-5 max-w-3xl mx-auto">
-      {/* ═══ Shartnoma qidiruv — glowing card ═══ */}
-      <div className="rounded-3xl bg-white dark:bg-slate-900 shadow-[0_10px_40px_-20px_rgba(79,70,229,0.35)] ring-1 ring-slate-200/70 dark:ring-slate-800 overflow-visible">
-        <div className="p-5">
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-bold text-slate-500 dark:text-slate-400 mb-2.5">
-            <FileText className="h-3.5 w-3.5 text-indigo-500" />
-            <span>{t('contractNumber')}</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-600" />
-            <span className="normal-case tracking-normal font-medium text-slate-400 flex items-center gap-1">
+      {/* ═══ HERO — gradient banner + illustration + search ═══ */}
+      <div className="relative rounded-[28px] overflow-visible bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 shadow-[0_30px_60px_-25px_rgba(124,58,237,0.7)]">
+        {/* Dekoratsiya (kesilgan qatlam) */}
+        <div className="absolute inset-0 rounded-[28px] overflow-hidden">
+          <img src="/chek-hero.svg" alt="" aria-hidden
+            className="absolute -right-4 top-1/2 -translate-y-1/2 h-[150%] max-w-none opacity-30 mix-blend-luminosity pointer-events-none select-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-indigo-800/50 via-violet-700/10 to-transparent" />
+          <div className="absolute -top-16 -left-12 w-56 h-56 rounded-full bg-white/15 blur-3xl" />
+          <div className="absolute inset-0 opacity-[0.07]"
+            style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
+        </div>
+
+        <div className="relative z-10 p-6 sm:p-7">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur ring-1 ring-white/25 text-white text-[10px] uppercase tracking-[0.18em] font-bold">
               <Sparkles className="h-3 w-3" /> XonSaroy CRM
             </span>
+          </div>
+          <div className="text-white/90 text-[11px] uppercase tracking-[0.18em] font-bold mb-2.5 flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" /> {t('contractNumber')}
           </div>
 
           <div className="relative" ref={searchRef}>
@@ -193,13 +203,13 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
                   onFocus={() => setFocused(true)}
                   onKeyDown={onKeyDown}
                   placeholder={t('contractPlaceholder')}
-                  className="relative pl-12 pr-4 h-13 text-base rounded-2xl font-mono bg-slate-50/70 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus-visible:ring-0 focus-visible:shadow-[0_0_0_3px_rgba(99,102,241,0.12)] focus-visible:border-indigo-300"
+                  className="relative pl-12 pr-4 text-base rounded-2xl font-mono bg-white dark:bg-slate-900 border-0 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 shadow-[0_10px_30px_-10px_rgba(0,0,0,0.4)] focus-visible:ring-0 focus-visible:shadow-[0_12px_35px_-8px_rgba(0,0,0,0.45)]"
                   style={{ height: 52 }}
                 />
               </div>
               {contract && !crmLoaded && (
                 <Button onClick={() => contract.trim() && lookup.mutate(contract.trim())} disabled={lookup.isPending}
-                  className="h-13 px-4 gap-1.5 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700" style={{ height: 52 }}>
+                  className="px-4 gap-1.5 rounded-2xl bg-white text-indigo-700 hover:bg-white/90 font-bold shadow-lg" style={{ height: 52 }}>
                   {lookup.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   {lookup.isPending ? t('loading') : t('load')}
                 </Button>
@@ -254,7 +264,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
           {/* CRM natijasi — premium chips */}
           {crmLoaded && (
             <div className="mt-4 animate-in fade-in slide-in-from-top-1 duration-300">
-              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-600 mb-2.5">
+              <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-emerald-100 mb-2.5">
                 <BadgeCheck className="h-3.5 w-3.5" /> {t('crmLoaded')}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -267,8 +277,8 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
         </div>
       </div>
 
-      {/* ═══ Forma ═══ */}
-      <div className="rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 shadow-sm p-5 space-y-5">
+      {/* ═══ Forma — glassmorphism ═══ */}
+      <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-6 space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Field label={t('date')} icon={<Calendar className="h-3.5 w-3.5 text-indigo-500" />}>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 rounded-xl" />
