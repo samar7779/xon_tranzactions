@@ -112,6 +112,25 @@ export class OplataKvController {
     return this.svc.byObjectDetail({ object, dateFrom, dateTo, mode });
   }
 
+  @Get('by-object-detail/export')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Obyekt drill-down — Excel eksport" })
+  async byObjectDetailExport(
+    @Res() res: Response,
+    @Query('object') object: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('mode') mode?: 'normal' | 'refund',
+  ) {
+    const { buffer, filename } = await this.svc.byObjectDetailXlsx({ object, dateFrom, dateTo, mode });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Get('by-contract')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Shartnoma bo'yicha to'lov tarixi (Akt Sverka)" })
