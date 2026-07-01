@@ -129,6 +129,13 @@ export class OplataKvController {
     return this.svc.contractBalance(contractNo);
   }
 
+  @Get('contract-suggest')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Shartnoma raqami avtoto\'ldirish (qisman yozganda mos keladiganlar)' })
+  contractSuggest(@Query('q') q: string) {
+    return this.svc.contractSuggest(q);
+  }
+
   @Post('perereboska')
   @RequirePermissions(PERMISSIONS.OPLATAKV_CREATE)
   @UseInterceptors(FileInterceptor('file'))
