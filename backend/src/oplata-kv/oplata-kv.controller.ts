@@ -100,6 +100,18 @@ export class OplataKvController {
     return this.svc.byObject({ dateFrom, dateTo, mode });
   }
 
+  @Get('by-object-detail')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "Obyekt bo'yicha to'lovlar drill-down (alohida qatorlar)" })
+  byObjectDetail(
+    @Query('object') object: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('mode') mode?: 'normal' | 'refund',
+  ) {
+    return this.svc.byObjectDetail({ object, dateFrom, dateTo, mode });
+  }
+
   @Get('by-contract')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Shartnoma bo'yicha to'lov tarixi (Akt Sverka)" })
