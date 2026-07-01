@@ -150,6 +150,42 @@ export class CrmService {
   }
 
   /**
+   * Chek Baza tab — jonli autocomplete. Shartnoma bo'yicha /index'dan slim
+   * ro'yxat: contract + mijoz + obyekt + menejer + sotuv ofisi (branch).
+   * Tanlanganda darrov to'ldirish uchun barcha kerakli maydonlar keladi.
+   */
+  async searchContracts(contract: string, perPage = 8) {
+    const q = contract?.trim();
+    if (!q) return { ok: true, items: [] };
+    const r = await this.call('/index', {
+      contract: q,
+      'per-page': perPage,
+      is_trashed: 1,
+      trashed_status: 1,
+      with_trashed: 1,
+    });
+    if (!r.ok) return r;
+    const items = (r.data?.data || []).map((it: any) => {
+      const cb = it.created_by || {};
+      const manager = [cb.last_name, cb.first_name, cb.second_name].filter(Boolean).join(' ').trim() || null;
+      const object = typeof it.object === 'string' ? it.object : (it.object?.name || null);
+      const status = it.status?.name?.uz || it.status?.name?.ru || it.status?.type || null;
+      return {
+        contract: it.contract,
+        clientFullName: it.client_full_name || null,
+        object,
+        apartmentNumber: it.number || null,
+        status,
+        isTrashed: !!(it.deleted_at || it.is_trashed || it.trashed),
+        manager,
+        managerPhone: cb.phone != null ? String(cb.phone) : null,
+        branchName: cb.branch?.name || null,
+      };
+    });
+    return { ok: true, items };
+  }
+
+  /**
    * MySQL'dan to'liq client ma'lumotlarini olish — telefon, pasport, manzil va h.k.
    * Agar baza ulanmasa yoki yozuv topilmasa — null qaytaradi.
    */

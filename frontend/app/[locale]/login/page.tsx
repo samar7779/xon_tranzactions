@@ -21,6 +21,17 @@ export default function LoginPage() {
   const router = useRouter();
   const { locale } = useParams<{ locale: string }>();
   const login = useAuth((s) => s.login);
+
+  // Login'dan keyin qayerga? ?next=/uz/chek bo'lsa — o'sha yerga, aks holda dashboard.
+  // Faqat ichki (nisbiy) yo'llar — ochiq redirect (//evil.com) oldini olamiz.
+  // window.location — client-only (useSearchParams Suspense talab qiladi, build'ni buzadi).
+  function nextDest(): string {
+    if (typeof window !== 'undefined') {
+      const raw = new URLSearchParams(window.location.search).get('next');
+      if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+    }
+    return `/${locale}/dashboard`;
+  }
   const token = useAuth((s) => s.token);
   const hasHydrated = useAuth((s) => s.hasHydrated);
 
@@ -57,7 +68,8 @@ export default function LoginPage() {
   };
 
   useEffect(() => {
-    if (hasHydrated && token) router.replace(`/${locale}/dashboard`);
+    if (hasHydrated && token) router.replace(nextDest());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasHydrated, token, router, locale]);
 
   useEffect(() => {
@@ -92,7 +104,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
       toast.success(t('welcome'));
-      router.replace(`/${locale}/dashboard`);
+      router.replace(nextDest());
     } catch (err: any) {
       const msg = err?.message || t('invalidCredentials');
       setErrorMsg(msg);
