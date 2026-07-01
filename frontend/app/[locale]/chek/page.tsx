@@ -61,9 +61,16 @@ function ChekInner() {
   }, [allowed, active]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900">
+    <div className="relative min-h-screen bg-gradient-to-br from-indigo-50 via-slate-50 to-violet-100 dark:from-slate-950 dark:via-slate-950 dark:to-indigo-950/60 overflow-hidden">
+      {/* Dekorativ rangli bloblar */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-32 -left-24 w-[420px] h-[420px] rounded-full bg-indigo-400/20 dark:bg-indigo-600/15 blur-[100px]" />
+        <div className="absolute top-1/3 -right-32 w-[480px] h-[480px] rounded-full bg-fuchsia-400/20 dark:bg-fuchsia-600/10 blur-[110px]" />
+        <div className="absolute -bottom-40 left-1/3 w-[420px] h-[420px] rounded-full bg-violet-400/15 dark:bg-violet-600/10 blur-[100px]" />
+      </div>
+
       {/* ═══ Header ═══ */}
-      <header className="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800">
+      <header className="relative z-20 sticky top-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-white/40 dark:border-slate-800/60 shadow-[0_1px_20px_-10px_rgba(79,70,229,0.3)]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
@@ -120,7 +127,7 @@ function ChekInner() {
       </header>
 
       {/* ═══ Content ═══ */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6">
         {allowed.length === 0 ? (
           <div className="mt-16 text-center">
             <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/40 grid place-items-center mx-auto mb-4">
@@ -144,7 +151,7 @@ function ChekInner() {
 function SozlamalarTab({ lang }: { lang: ChekLang }) {
   const t = makeT(lang);
   return (
-    <div className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-10 text-center">
+    <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-10 text-center">
       <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 grid place-items-center mx-auto mb-3">
         <Settings className="h-7 w-7 text-slate-400" />
       </div>
