@@ -510,8 +510,13 @@ export class OplataKvService {
   }) {
     const where: any = {};
 
-    // Obyekt filtri — '—' bo'lsa null/bo'sh obyektlar (byObject'dagi kabi)
-    if (!opts.object || opts.object === '—') {
+    // Obyekt filtri:
+    //   '__ALL__' → barcha obyektlar (filtr yo'q, JAMI drill-down uchun)
+    //   '—'/bo'sh → obyekti yo'q (null/bo'sh) qatorlar
+    //   aks holda → aniq obyekt
+    if (opts.object === '__ALL__') {
+      // filtr qo'shilmaydi
+    } else if (!opts.object || opts.object === '—') {
       where.OR = [{ object: null }, { object: '' }];
     } else {
       where.object = opts.object;
@@ -531,36 +536,49 @@ export class OplataKvService {
       where.txType = { contains: 'взнос', mode: 'insensitive' };
     }
 
-    const rows = await this.prisma.oplataKv.findMany({
-      where,
-      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
-      select: {
-        id: true,
-        contractNo: true,
-        date: true,
-        paymentAmount: true,
-        firstInstallment: true,
-        monthlyAmount: true,
-        paymentCategory: true,
-        txType: true,
-        client: true,
-        object: true,
-        purpose: true,
-        paymentMethod: true,
-      },
-      take: 3000,
-    });
-
-    const total = rows.reduce(
-      (acc, r) => ({
-        paymentAmount:    acc.paymentAmount    + Number(r.paymentAmount    ?? 0),
-        firstInstallment: acc.firstInstallment + Number(r.firstInstallment ?? 0),
-        monthlyAmount:    acc.monthlyAmount    + Number(r.monthlyAmount    ?? 0),
+    const ROW_CAP = 5000;
+    const [rows, agg] = await Promise.all([
+      this.prisma.oplataKv.findMany({
+        where,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        select: {
+          id: true,
+          contractNo: true,
+          date: true,
+          paymentAmount: true,
+          firstInstallment: true,
+          monthlyAmount: true,
+          paymentCategory: true,
+          txType: true,
+          client: true,
+          object: true,
+          purpose: true,
+          paymentMethod: true,
+        },
+        take: ROW_CAP,
       }),
-      { paymentAmount: 0, firstInstallment: 0, monthlyAmount: 0 },
-    );
+      // Jami — aggregate bilan (qatorlar cheklansa ham JAMI to'g'ri bo'ladi)
+      this.prisma.oplataKv.aggregate({
+        where,
+        _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+        _count: true,
+      }),
+    ]);
 
-    return { ok: true, object: opts.object, count: rows.length, rows, total };
+    const total = {
+      paymentAmount:    Number(agg._sum.paymentAmount    ?? 0),
+      firstInstallment: Number(agg._sum.firstInstallment ?? 0),
+      monthlyAmount:    Number(agg._sum.monthlyAmount    ?? 0),
+    };
+
+    return {
+      ok: true,
+      object: opts.object,
+      count: agg._count,
+      truncated: agg._count > rows.length,
+      rows,
+      total,
+    };
   }
 
   /** byObjectDetail drill-down'ni Excel (.xlsx) sifatida eksport qilish. */
@@ -571,27 +589,36 @@ export class OplataKvService {
     mode?: 'normal' | 'refund';
   }): Promise<{ buffer: Buffer; filename: string }> {
     const { rows, total } = await this.byObjectDetail(opts);
+    const isAll = opts.object === '__ALL__';
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Xon Tranzaksiyalar';
     wb.created = new Date();
     const ws = wb.addWorksheet('Объект');
 
-    ws.columns = [
-      { header: 'Дог №',       key: 'contractNo',       width: 16 },
-      { header: 'Дата',        key: 'date',             width: 12 },
+    const cols: Partial<ExcelJS.Column>[] = [
+      { header: 'Дог №', key: 'contractNo', width: 16 },
+      { header: 'Дата',  key: 'date',       width: 12 },
+    ];
+    if (isAll) cols.push({ header: 'Объект', key: 'object', width: 20 });
+    cols.push(
       { header: 'Тип',         key: 'txType',           width: 24 },
       { header: 'Клиент',      key: 'client',           width: 30 },
       { header: 'Оплата',      key: 'paymentCategory',  width: 14 },
       { header: 'Сумма',       key: 'paymentAmount',    width: 18 },
       { header: '1 взнос',     key: 'firstInstallment', width: 18 },
       { header: 'Ежемесячный', key: 'monthlyAmount',    width: 18 },
-    ];
+    );
+    ws.columns = cols;
 
     // Sarlavha ustidagi qator — obyekt nomi + davr
-    const label = `${opts.object || '—'}  ·  ${opts.dateFrom || '—'} → ${opts.dateTo || '—'}  ·  ${opts.mode === 'refund' ? 'Возврат' : 'Платежи'}`;
+    const objLabel = isAll
+      ? 'Все объекты'
+      : (!opts.object || opts.object === '—' ? 'Без объекта' : opts.object);
+    const label = `${objLabel}  ·  ${opts.dateFrom || '—'} → ${opts.dateTo || '—'}  ·  ${opts.mode === 'refund' ? 'Возврат' : 'Платежи'}`;
     ws.spliceRows(1, 0, [label]);
-    ws.mergeCells('A1:H1');
+    const lastColLetter = String.fromCharCode(64 + cols.length);
+    ws.mergeCells(`A1:${lastColLetter}1`);
     const titleCell = ws.getCell('A1');
     titleCell.font = { bold: true, size: 12 };
     titleCell.alignment = { horizontal: 'left', vertical: 'middle' };
@@ -626,6 +653,7 @@ export class OplataKvService {
       const row = ws.addRow({
         contractNo: it.contractNo || '',
         date,
+        object: it.object || '',
         txType: it.txType || '',
         client: it.client || '',
         paymentCategory: it.paymentCategory ? (categoryLabel[it.paymentCategory] || it.paymentCategory) : '',
@@ -659,7 +687,9 @@ export class OplataKvService {
 
     const arrayBuffer = await wb.xlsx.writeBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    const safeObj = (opts.object || 'obyekt').replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
+    const safeObj = isAll
+      ? 'barcha'
+      : (opts.object || 'obyekt').replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
     const ts = new Date().toISOString().slice(0, 10);
     return { buffer, filename: `obyekt-${safeObj}-${ts}.xlsx` };
   }
