@@ -100,6 +100,43 @@ export class ChekController {
     return this.svc.tgTest();
   }
 
+  // ─── Xon HR API config ───
+  @Get('hr-config')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Xon HR API sozlamalari (url, api_key, api_secret)' })
+  getHrConfig() {
+    return this.svc.getHrConfig();
+  }
+
+  @Patch('hr-config')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Xon HR API sozlamalarini saqlash' })
+  setHrConfig(@Body() body: any, @CurrentUser() user?: AuthUser) {
+    return this.svc.setHrConfig(body || {}, actorFrom(user).name || undefined);
+  }
+
+  @Post('hr-test')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Xon HR ulanishini tekshirish' })
+  hrTest() {
+    return this.svc.hrTest();
+  }
+
+  // ─── Baza — menejer username resolve / qidiruv ───
+  @Get('hr-resolve')
+  @RequirePermissions(PERMISSIONS.CHEK_BAZA)
+  @ApiOperation({ summary: 'Menejer ismi bo\'yicha HR\'dan telegram username topish' })
+  hrResolve(@Query('name') name: string) {
+    return this.svc.resolveManager(name);
+  }
+
+  @Get('hr-search')
+  @RequirePermissions(PERMISSIONS.CHEK_BAZA)
+  @ApiOperation({ summary: 'HR xodimlarini ism bo\'yicha qidirish (qo\'lda tanlash)' })
+  hrSearch(@Query('q') q: string) {
+    return this.svc.hrSearch(q);
+  }
+
   // ─── Tarix — qo'lda TG yuborish (force) ───
   @Post(':id/send-tg')
   @RequirePermissions(PERMISSIONS.CHEK_TARIX)
