@@ -78,11 +78,19 @@ function ChekInner() {
       </div>
 
       {/* ═══ Header — PRO ═══ */}
-      <header className="relative z-30 sticky top-0 bg-white/75 dark:bg-slate-900/75 backdrop-blur-2xl border-b border-white/50 dark:border-slate-800/70 shadow-[0_4px_30px_-12px_rgba(79,70,229,0.35)]">
-        {/* Yuqori gradient chiziq */}
-        <div className="h-0.5 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
+      <header className="relative z-30 sticky top-0 bg-gradient-to-r from-white/85 via-violet-50/70 to-indigo-50/80 dark:from-slate-900/85 dark:via-slate-900/80 dark:to-indigo-950/50 backdrop-blur-2xl border-b border-white/50 dark:border-slate-800/70 shadow-[0_4px_30px_-12px_rgba(79,70,229,0.35)]">
+        {/* Dekorativ fon */}
+        <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute -top-12 right-[22%] w-80 h-44 rounded-full bg-violet-400/20 dark:bg-violet-600/20 blur-3xl" />
+          <div className="absolute top-0 right-0 w-[28rem] h-full bg-fuchsia-300/15 dark:bg-fuchsia-700/10 blur-3xl" />
+          <div className="absolute inset-0 opacity-[0.045] dark:opacity-[0.07]"
+            style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #4f46e5 1px, transparent 0)', backgroundSize: '20px 20px' }} />
+        </div>
 
-        <div className="w-full px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-3">
+        {/* Yuqori gradient chiziq */}
+        <div className="relative h-0.5 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
+
+        <div className="relative w-full px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-3">
           {/* Branding */}
           <div className="flex items-center gap-3 min-w-0">
             <div className="relative shrink-0">
@@ -113,7 +121,7 @@ function ChekInner() {
 
         {/* Tab nav — pill segmented */}
         {allowed.length > 0 && (
-          <div className="w-full px-4 sm:px-6 lg:px-10 pb-2.5">
+          <div className="relative w-full px-4 sm:px-6 lg:px-10 pb-2.5">
             <nav className="inline-flex items-center gap-1 p-1 rounded-2xl bg-slate-100/80 dark:bg-slate-800/60 ring-1 ring-slate-200/70 dark:ring-slate-700">
               {allowed.map((tab) => (
                 <button
