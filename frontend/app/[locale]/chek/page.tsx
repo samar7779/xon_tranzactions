@@ -19,6 +19,7 @@ import {
 } from './i18n';
 import { BazaTab } from './baza-tab';
 import { TarixTab } from './tarix-tab';
+import { SozlamalarTab } from './sozlamalar-tab';
 
 const LS_LANG = 'chek.lang';
 
@@ -161,19 +162,6 @@ function ChekInner() {
           <SozlamalarTab lang={lang} />
         )}
       </main>
-    </div>
-  );
-}
-
-function SozlamalarTab({ lang }: { lang: ChekLang }) {
-  const t = makeT(lang);
-  return (
-    <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-10 text-center">
-      <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 grid place-items-center mx-auto mb-3">
-        <Settings className="h-7 w-7 text-slate-400" />
-      </div>
-      <div className="text-base font-bold text-slate-800 dark:text-slate-200">{t('settingsTitle')}</div>
-      <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('comingSoon')}</div>
     </div>
   );
 }

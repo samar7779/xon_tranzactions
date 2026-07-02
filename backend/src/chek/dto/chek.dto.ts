@@ -36,6 +36,10 @@ export class CreateChekDto {
   @IsOptional() @IsString() @MaxLength(255)
   objectName?: string;
 
+  @ApiPropertyOptional({ description: 'CRM holati (Сотилди va h.k.)' })
+  @IsOptional() @IsString() @MaxLength(128)
+  crmStatus?: string;
+
   @ApiProperty({ example: '2026-07-01', description: 'Дата (ISO — default: bugun)' })
   @IsDateString()
   data!: string;

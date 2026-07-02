@@ -993,6 +993,7 @@ model ChekDog {
   managerPhone   String?  @map("manager_phone") @db.VarChar(64)   // created_by.phone
   branchName     String?  @map("branch_name") @db.VarChar(255)    // created_by.branch.name (Сотув офис)
   objectName     String?  @map("object_name") @db.VarChar(255)    // object (obyekt/JK)
+  crmStatus      String?  @map("crm_status") @db.VarChar(128)     // CRM holati (Сотилди va h.k.) — TG xabar uchun
 
   // Forma maydonlari
   data           DateTime @db.Date                                // Дата — sana (default: today)
@@ -1005,8 +1006,9 @@ model ChekDog {
   dobavilId      String?  @map("dobavil_id")
   dobavilName    String?  @map("dobavil_name") @db.VarChar(255)
 
-  // Kelajak uchun — Telegram xabari yuborildimi
-  tgSend         Boolean  @default(false) @map("tg_send")
+  // Telegram xabari yuborildimi (cron faqat tgSend=false larni yuboradi)
+  tgSend         Boolean   @default(false) @map("tg_send")
+  tgSentAt       DateTime? @map("tg_sent_at")
 
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
