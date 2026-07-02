@@ -515,7 +515,17 @@ export default function DashboardPage() {
                     <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
                       <tr>
                         <td className="px-3 py-2.5">{t('objTotal')}</td>
-                        <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(objReport!.total.paymentAmount)}</td>
+                        <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">
+                          <button
+                            type="button"
+                            onClick={() => setObjDetail('__ALL__')}
+                            title={t('objDetailHint')}
+                            className="group inline-flex items-center gap-1.5 hover:underline decoration-dotted underline-offset-2 hover:text-emerald-800 dark:hover:text-emerald-300 transition-colors"
+                          >
+                            <Eye className="h-3 w-3 opacity-30 group-hover:opacity-100 transition-opacity" />
+                            {mask(objReport!.total.paymentAmount)}
+                          </button>
+                        </td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{objHidden.first ? '•••' : mask(objReport!.total.firstInstallment)}</td>
                         <td className="px-3 py-2.5 text-right tabular-nums">{objHidden.monthly ? '•••' : mask(objReport!.total.monthlyAmount)}</td>
                       </tr>
@@ -1424,6 +1434,7 @@ function ObjectDetailDialog({
 }) {
   const t = useTranslations('dashboard');
   const open = object !== null;
+  const isAll = object === '__ALL__';
 
   const { data, isLoading } = useQuery({
     queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode],
@@ -1434,7 +1445,7 @@ function ObjectDetailDialog({
       if (dateTo) p.set('dateTo', dateTo);
       p.set('mode', mode);
       return api.get<{
-        ok: boolean; object: string; count: number;
+        ok: boolean; object: string; count: number; truncated?: boolean;
         rows: ObjDetailRow[];
         total: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
       }>(`/oplata-kv/by-object-detail?${p}`);
@@ -1479,7 +1490,7 @@ function ObjectDetailDialog({
                 </div>
                 <div className="min-w-0">
                   <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('objDetailTitle')}</div>
-                  <div className="text-lg font-black tracking-tight truncate">{object === '—' ? t('objDetailNoObject') : object}</div>
+                  <div className="text-lg font-black tracking-tight truncate">{isAll ? t('objDetailAll') : object === '—' ? t('objDetailNoObject') : object}</div>
                 </div>
               </div>
             </DialogTitle>
@@ -1518,6 +1529,7 @@ function ObjectDetailDialog({
                 <tr>
                   <th className="text-left font-semibold px-3 py-2">Дог №</th>
                   <th className="text-left font-semibold px-3 py-2">Дата</th>
+                  {isAll && <th className="text-left font-semibold px-3 py-2">Объект</th>}
                   <th className="text-left font-semibold px-3 py-2">Тип</th>
                   <th className="text-left font-semibold px-3 py-2">Клиент</th>
                   <th className="text-left font-semibold px-3 py-2">Оплата</th>
@@ -1531,6 +1543,7 @@ function ObjectDetailDialog({
                   <tr key={r.id} className="hover:bg-violet-50/40 dark:hover:bg-violet-950/20 transition-colors">
                     <td className="px-3 py-1.5 font-mono font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">{r.contractNo}</td>
                     <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">{fmtDate(r.date)}</td>
+                    {isAll && <td className="px-3 py-1.5 text-violet-700 dark:text-violet-300 font-medium max-w-[160px] truncate" title={r.object || ''}>{r.object || '—'}</td>}
                     <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 max-w-[220px] truncate" title={r.txType || ''}>{r.txType || '—'}</td>
                     <td className="px-3 py-1.5 text-slate-600 dark:text-slate-300 max-w-[200px] truncate" title={r.client || ''}>{r.client || '—'}</td>
                     <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 whitespace-nowrap">{catLabel(r.paymentCategory)}</td>
@@ -1542,13 +1555,18 @@ function ObjectDetailDialog({
               </tbody>
               <tfoot className="sticky bottom-0 bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
                 <tr>
-                  <td className="px-3 py-2.5" colSpan={5}>{t('objTotal')}</td>
+                  <td className="px-3 py-2.5" colSpan={isAll ? 6 : 5}>{t('objTotal')}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{fmtNum(data!.total.paymentAmount)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data!.total.firstInstallment)}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(data!.total.monthlyAmount)}</td>
                 </tr>
               </tfoot>
             </table>
+          )}
+          {data?.truncated && (
+            <div className="px-4 py-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border-t border-amber-200 dark:border-amber-900">
+              {t('objDetailTruncated', { shown: data.rows.length, total: data.count })}
+            </div>
           )}
         </div>
       </DialogContent>
