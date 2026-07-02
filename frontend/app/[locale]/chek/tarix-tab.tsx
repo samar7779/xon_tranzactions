@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
   FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
-  Building2, Home, RotateCcw, FileSpreadsheet,
+  Building2, Home, RotateCcw, FileSpreadsheet, ArrowRight,
 } from 'lucide-react';
 import { api, apiDownload } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -301,34 +301,53 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
         />
       )}
 
-      {/* "To'g'rlandi" tasdiq modali */}
+      {/* "To'g'rlandi" tasdiq modali — premium */}
       {correcting && (
         <Dialog open onOpenChange={(o) => { if (!o) setCorrecting(null); }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <span className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center">
-                  <CheckCheck className="h-5 w-5 text-emerald-500" />
-                </span>
-                {t('corrected')}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="py-1">
-              <p className="text-sm text-slate-600 dark:text-slate-300">{t('confirmCorrect')}</p>
-              <div className="mt-3 flex items-center gap-2 flex-wrap text-[13px]">
-                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{correcting.contractNumber}</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"><X className="h-3 w-3" />{kontrolyorLabel(lang, 'otkaz')}</span>
-                <span className="text-slate-400">→</span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900"><Check className="h-3 w-3" />{kontrolyorLabel(lang, 'prinyat')}</span>
+          <DialogContent className="max-w-md p-0 overflow-hidden rounded-3xl border-0 [&>button]:text-white/80 [&>button]:hover:text-white [&>button]:z-20">
+            <DialogTitle className="sr-only">{t('corrected')}</DialogTitle>
+            {/* Gradient hero */}
+            <div className="relative bg-gradient-to-br from-emerald-500 via-emerald-500 to-teal-600 px-6 pt-8 pb-7 text-center overflow-hidden">
+              <div className="absolute -top-12 -right-10 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
+              <div className="absolute -bottom-14 -left-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
+              <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '18px 18px' }} />
+              <div className="relative mx-auto w-16 h-16 grid place-items-center">
+                <span className="absolute inset-0 rounded-2xl bg-white/25 animate-ping opacity-60" />
+                <div className="relative w-16 h-16 rounded-2xl bg-white/25 backdrop-blur grid place-items-center ring-1 ring-white/50 shadow-lg">
+                  <CheckCheck className="h-8 w-8 text-white" strokeWidth={2.4} />
+                </div>
+              </div>
+              <div className="relative mt-3.5 text-lg font-black text-white tracking-tight">{t('corrected')}</div>
+              <div className="relative text-[13px] text-white/90 mt-1 max-w-[280px] mx-auto leading-snug">{t('confirmCorrect')}</div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-200 dark:ring-slate-700 p-4">
+                <div className="text-center font-mono font-black text-[15px] text-slate-800 dark:text-slate-100 mb-3">{correcting.contractNumber}</div>
+                <div className="flex items-center justify-center gap-2.5">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 line-through decoration-rose-400">
+                    <X className="h-3.5 w-3.5" />{kontrolyorLabel(lang, 'otkaz')}
+                  </span>
+                  <span className="w-8 h-8 rounded-full bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center shadow-sm shrink-0">
+                    <ArrowRight className="h-4 w-4 text-emerald-500" />
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900">
+                    <Check className="h-3.5 w-3.5" />{kontrolyorLabel(lang, 'prinyat')}
+                  </span>
+                </div>
+              </div>
+
+              <div className="mt-5 flex gap-3">
+                <Button variant="outline" onClick={() => setCorrecting(null)} className="flex-1 h-11 rounded-xl gap-1.5 font-semibold">
+                  <X className="h-4 w-4" />{t('cancel')}
+                </Button>
+                <Button onClick={() => correct.mutate(correcting.id)} disabled={correct.isPending}
+                  className="flex-1 h-11 rounded-xl gap-1.5 font-bold bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-lg shadow-emerald-500/30">
+                  {correct.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}{t('confirm')}
+                </Button>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCorrecting(null)} className="gap-1.5"><X className="h-4 w-4" />{t('cancel')}</Button>
-              <Button onClick={() => correct.mutate(correcting.id)} disabled={correct.isPending}
-                className="gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700">
-                {correct.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}{t('confirm')}
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
