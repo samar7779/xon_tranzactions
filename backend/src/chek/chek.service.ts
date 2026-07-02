@@ -1,9 +1,38 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 import { CreateChekDto, UpdateChekDto } from './dto/chek.dto';
 
 type Actor = { id?: string | null; name?: string | null };
+
+// Excel eksport uchun 4 tilli yorliqlar (frontend i18n bilan mos)
+const EXPORT_LABELS: Record<string, any> = {
+  uz: {
+    sheet: 'Chek', date: 'Sana', contract: 'Shartnoma raqami', manager: 'Menejer', branch: 'Sotuv ofisi',
+    object: 'Obyekt', vid: 'Shartnoma turi', kontrolyor: 'Kontrolyor', shtrafy: 'Jarima', prichina: 'Rad etish sababi', dobavil: 'Qo\'shdi',
+    vidMap: { original: 'Original', ekzemplyar: 'Nusxa', original_fixed: 'Tuzatilgan original', ekzemplyar_fixed: 'Tuzatilgan nusxa' },
+    kontrolyorMap: { prinyat: 'Qabul qilindi', otkaz: 'Rad etildi' },
+  },
+  uzc: {
+    sheet: 'Чек', date: 'Сана', contract: 'Шартнома рақами', manager: 'Менежер', branch: 'Сотув офиси',
+    object: 'Обект', vid: 'Шартнома тури', kontrolyor: 'Контролёр', shtrafy: 'Жарима', prichina: 'Рад этиш сабаби', dobavil: 'Қўшди',
+    vidMap: { original: 'Оригинал', ekzemplyar: 'Нусха', original_fixed: 'Тузатилган оригинал', ekzemplyar_fixed: 'Тузатилган нусха' },
+    kontrolyorMap: { prinyat: 'Қабул қилинди', otkaz: 'Рад этилди' },
+  },
+  ru: {
+    sheet: 'Чек', date: 'Дата', contract: 'Номер договора', manager: 'Менеджер', branch: 'Сотув офис',
+    object: 'Объект', vid: 'Вид договора', kontrolyor: 'Контролёр', shtrafy: 'Штрафы', prichina: 'Причина отказа', dobavil: 'Добавил',
+    vidMap: { original: 'Оригинал', ekzemplyar: 'Экземпляр', original_fixed: 'Тугирланган Оригинал', ekzemplyar_fixed: 'Тугирланган Экземпляр' },
+    kontrolyorMap: { prinyat: 'Принят', otkaz: 'Отказ' },
+  },
+  en: {
+    sheet: 'Chek', date: 'Date', contract: 'Contract', manager: 'Manager', branch: 'Sales office',
+    object: 'Object', vid: 'Contract type', kontrolyor: 'Controller', shtrafy: 'Penalty', prichina: 'Rejection reason', dobavil: 'Added by',
+    vidMap: { original: 'Original', ekzemplyar: 'Copy', original_fixed: 'Corrected original', ekzemplyar_fixed: 'Corrected copy' },
+    kontrolyorMap: { prinyat: 'Accepted', otkaz: 'Rejected' },
+  },
+};
 
 /** BigInt → number (jarima summasi kichik — xavfsiz) va Date → ISO */
 function serialize(row: any) {
@@ -82,6 +111,68 @@ export class ChekService {
       perPage,
       items: rows.map(serialize),
     };
+  }
+
+  /** Filtrlangan ma'lumotni Excel (.xlsx) sifatida eksport */
+  async exportXlsx(filters: {
+    q?: string; manager?: string; branch?: string; object?: string;
+    kontrolyor?: string; dateFrom?: string; dateTo?: string; lang?: string;
+  }): Promise<{ buffer: Buffer; filename: string }> {
+    const where: any = {};
+    if (filters.q?.trim()) where.contractNumber = { contains: filters.q.trim(), mode: 'insensitive' };
+    if (filters.manager) where.manager = filters.manager;
+    if (filters.branch) where.branchName = filters.branch;
+    if (filters.object) where.objectName = filters.object;
+    if (filters.kontrolyor) where.kontrolyor = filters.kontrolyor;
+    if (filters.dateFrom || filters.dateTo) {
+      where.data = {};
+      if (filters.dateFrom) where.data.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.data.lte = new Date(filters.dateTo);
+    }
+
+    const items = await this.prisma.chekDog.findMany({ where, orderBy: { createdAt: 'desc' } });
+    const L = EXPORT_LABELS[filters.lang || 'ru'] || EXPORT_LABELS.ru;
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet(L.sheet);
+    ws.columns = [
+      { header: L.date, key: 'data', width: 12 },
+      { header: L.contract, key: 'contract', width: 18 },
+      { header: L.manager, key: 'manager', width: 26 },
+      { header: L.branch, key: 'branch', width: 18 },
+      { header: L.object, key: 'object', width: 24 },
+      { header: L.vid, key: 'vid', width: 20 },
+      { header: L.kontrolyor, key: 'kontrolyor', width: 16 },
+      { header: L.shtrafy, key: 'shtrafy', width: 14 },
+      { header: L.prichina, key: 'prichina', width: 30 },
+      { header: L.dobavil, key: 'dobavil', width: 26 },
+    ];
+    ws.getRow(1).font = { bold: true };
+    ws.getRow(1).alignment = { vertical: 'middle' };
+
+    for (const it of items) {
+      const raw = it.data instanceof Date ? it.data.toISOString().slice(0, 10) : String(it.data).slice(0, 10);
+      const [y, m, dd] = raw.split('-');
+      ws.addRow({
+        data: dd && m && y ? `${dd}.${m}.${y}` : raw,
+        contract: it.contractNumber,
+        manager: it.manager || '',
+        branch: it.branchName || '',
+        object: it.objectName || '',
+        vid: L.vidMap[it.vidDogovora] || it.vidDogovora,
+        kontrolyor: L.kontrolyorMap[it.kontrolyor] || it.kontrolyor,
+        shtrafy: it.shtrafy != null ? Number(it.shtrafy) : '',
+        prichina: it.prichinaOtkaza || '',
+        dobavil: it.dobavilName || '',
+      });
+    }
+
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const ts = new Date().toISOString().slice(0, 10);
+    return { buffer, filename: `chek_${ts}.xlsx` };
   }
 
   async getOne(id: string) {

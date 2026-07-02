@@ -6,9 +6,9 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
   FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
-  Building2, Home, RotateCcw,
+  Building2, Home, RotateCcw, FileSpreadsheet,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -105,6 +105,33 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
   const anyFilter = !!(fManager || fBranch || fObject || fKontrolyor || dateFrom || dateTo);
   function clearAll() { setFManager(''); setFBranch(''); setFObject(''); setFKontrolyor(''); setDateFrom(''); setDateTo(''); }
 
+  // Excel eksport — icon + loading/done animatsiya
+  const [exp, setExp] = useState<'idle' | 'loading' | 'done'>('idle');
+  async function doExport() {
+    if (exp === 'loading') return;
+    setExp('loading');
+    const p = new URLSearchParams();
+    if (debouncedQ) p.set('q', debouncedQ);
+    if (fManager) p.set('manager', fManager);
+    if (fBranch) p.set('branch', fBranch);
+    if (fObject) p.set('object', fObject);
+    if (fKontrolyor) p.set('kontrolyor', fKontrolyor);
+    if (dateFrom) p.set('dateFrom', dateFrom);
+    if (dateTo) p.set('dateTo', dateTo);
+    p.set('lang', lang);
+    try {
+      await apiDownload(`/chek/export?${p.toString()}`, 'chek.xlsx');
+      setExp('done');
+      setTimeout(() => setExp('idle'), 1600);
+    } catch (e: any) {
+      toast.error(e?.message || t('error'));
+      setExp('idle');
+    }
+  }
+
+  // "To'g'rlandi" tasdiq modali
+  const [correcting, setCorrecting] = useState<ChekRow | null>(null);
+
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/chek/${id}`),
     onSuccess: () => { toast.success(t('deleted')); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
@@ -114,7 +141,7 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
   // "To'g'rlandi" — rad etilgan yozuvni qabul qilingan holatiga o'tkazadi
   const correct = useMutation({
     mutationFn: (id: string) => api.patch(`/chek/${id}`, { kontrolyor: 'prinyat' }),
-    onSuccess: () => { toast.success(t('corrected')); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
+    onSuccess: () => { toast.success(t('corrected')); setCorrecting(null); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
     onError: (e: any) => toast.error(e?.message || t('error')),
   });
 
@@ -146,6 +173,17 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
 
         {/* Sana oralig'i filtri (icon) */}
         <DateFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} t={t} />
+
+        {/* Excel eksport (icon + loading/done animatsiya) */}
+        <button onClick={doExport} disabled={exp === 'loading'} title={t('exportExcel')}
+          className={cn('w-9 h-9 rounded-lg grid place-items-center ring-1 transition-all shrink-0',
+            exp === 'done'
+              ? 'bg-emerald-500 text-white ring-emerald-400 shadow-md shadow-emerald-500/30 scale-105'
+              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/40')}>
+          {exp === 'loading' ? <Loader2 className="h-4 w-4 animate-spin" />
+            : exp === 'done' ? <Check className="h-4 w-4 animate-in zoom-in duration-300" />
+              : <FileSpreadsheet className="h-4 w-4" />}
+        </button>
 
         {anyFilter && (
           <button onClick={clearAll} title={t('clearFilters')}
@@ -201,9 +239,9 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
                         <Td className="text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                             {r.kontrolyor === 'otkaz' && (
-                              <button onClick={() => correct.mutate(r.id)} disabled={correct.isPending}
+                              <button onClick={() => setCorrecting(r)}
                                 className="inline-flex items-center gap-1 px-2.5 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900 text-[11px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors">
-                                {correct.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCheck className="h-3.5 w-3.5" />} {t('corrected')}
+                                <CheckCheck className="h-3.5 w-3.5" /> {t('corrected')}
                               </button>
                             )}
                             <DropdownMenu>
@@ -261,6 +299,38 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ['chek-list'] }); }}
         />
+      )}
+
+      {/* "To'g'rlandi" tasdiq modali */}
+      {correcting && (
+        <Dialog open onOpenChange={(o) => { if (!o) setCorrecting(null); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <span className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center">
+                  <CheckCheck className="h-5 w-5 text-emerald-500" />
+                </span>
+                {t('corrected')}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-1">
+              <p className="text-sm text-slate-600 dark:text-slate-300">{t('confirmCorrect')}</p>
+              <div className="mt-3 flex items-center gap-2 flex-wrap text-[13px]">
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{correcting.contractNumber}</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900"><X className="h-3 w-3" />{kontrolyorLabel(lang, 'otkaz')}</span>
+                <span className="text-slate-400">→</span>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900"><Check className="h-3 w-3" />{kontrolyorLabel(lang, 'prinyat')}</span>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setCorrecting(null)} className="gap-1.5"><X className="h-4 w-4" />{t('cancel')}</Button>
+              <Button onClick={() => correct.mutate(correcting.id)} disabled={correct.isPending}
+                className="gap-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700">
+                {correct.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCheck className="h-4 w-4" />}{t('confirm')}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
