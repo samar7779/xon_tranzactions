@@ -1,6 +1,7 @@
 import {
-  Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards,
+  Body, Controller, Delete, Get, Param, Patch, Post, Query, Res, UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -62,6 +63,19 @@ export class ChekController {
       page: page ? Number(page) : undefined,
       perPage: perPage ? Number(perPage) : undefined,
     });
+  }
+
+  @Get('export')
+  @RequirePermissions(PERMISSIONS.CHEK_TARIX)
+  @ApiOperation({ summary: 'Filtrlangan ma\'lumotni Excel (.xlsx) sifatida yuklab olish' })
+  async exportXlsx(@Query() q: any, @Res() res: Response) {
+    const { buffer, filename } = await this.svc.exportXlsx(q);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 
   @Get(':id')

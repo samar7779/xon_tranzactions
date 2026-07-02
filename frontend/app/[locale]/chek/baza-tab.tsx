@@ -285,50 +285,50 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
         </div>
       </div>
 
-      {/* ═══ Forma — keng desktop layout (2 ustun) ═══ */}
+      {/* ═══ Forma — 2 ustunli balans (chap: shartnoma · o'ng: nazorat) ═══ */}
       <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
-          {/* Shartnoma turi */}
-          <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
-            <Select value={vidDogovora} onValueChange={setVidDogovora}>
-              <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
-              <SelectContent>
-                {VID_DOGOVORA_KEYS.map((k) => {
-                  const Ico = VID_ICONS[k];
-                  return (
-                    <SelectItem key={k} value={k}>
-                      <span className="flex items-center gap-2">
-                        <Ico className="h-4 w-4 text-violet-500" /> {vidLabel(lang, k)}
-                      </span>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </Field>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-10 gap-y-6">
+          {/* CHAP — Shartnoma ma'lumotlari */}
+          <div className="space-y-5">
+            <SectionCap icon={<FileText className="h-3.5 w-3.5" />} tone="violet" text={t('vidDogovora')} />
+            <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
+              <Select value={vidDogovora} onValueChange={setVidDogovora}>
+                <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
+                <SelectContent>
+                  {VID_DOGOVORA_KEYS.map((k) => {
+                    const Ico = VID_ICONS[k];
+                    return (
+                      <SelectItem key={k} value={k}>
+                        <span className="flex items-center gap-2">
+                          <Ico className="h-4 w-4 text-violet-500" /> {vidLabel(lang, k)}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+            </Field>
 
-          {/* Jarima */}
-          <Field label={t('shtrafy')} icon={<Coins className="h-3.5 w-3.5 text-amber-500" />} hint={t('shtrafyHint')}>
-            <div className="relative">
-              <Input type="number" inputMode="numeric" min={0} value={shtrafy} onChange={(e) => setShtrafy(e.target.value)} placeholder="0" className="h-12 rounded-xl tabular-nums pr-12" />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">UZS</span>
-            </div>
-          </Field>
-
-          {/* Kontrolyor — ikki ustunga cho'ziladi */}
-          <div className="lg:col-span-2">
-            <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
-              <div className="grid grid-cols-2 gap-4">
-                <KontrolyorBtn active={kontrolyor === 'prinyat'} tone="ok" label={t('kontrolyor_prinyat')} onClick={() => setKontrolyor('prinyat')} />
-                <KontrolyorBtn active={kontrolyor === 'otkaz'} tone="no" label={t('kontrolyor_otkaz')} onClick={() => setKontrolyor('otkaz')} />
+            <Field label={t('shtrafy')} icon={<Coins className="h-3.5 w-3.5 text-amber-500" />} hint={t('shtrafyHint')}>
+              <div className="relative">
+                <Input type="number" inputMode="numeric" min={0} value={shtrafy} onChange={(e) => setShtrafy(e.target.value)} placeholder="0" className="h-12 rounded-xl tabular-nums pr-12" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">UZS</span>
               </div>
             </Field>
           </div>
 
-          {/* Rad etish sababi — to'liq kenglik */}
-          <div className="lg:col-span-2">
+          {/* O'NG — Nazorat */}
+          <div className="space-y-5 lg:border-l lg:border-slate-100 dark:lg:border-slate-800 lg:pl-10">
+            <SectionCap icon={<Check className="h-3.5 w-3.5" />} tone="emerald" text={t('kontrolyor')} />
+            <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
+              <div className="grid grid-cols-2 gap-3">
+                <KontrolyorBtn active={kontrolyor === 'prinyat'} tone="ok" label={t('kontrolyor_prinyat')} onClick={() => setKontrolyor('prinyat')} />
+                <KontrolyorBtn active={kontrolyor === 'otkaz'} tone="no" label={t('kontrolyor_otkaz')} onClick={() => setKontrolyor('otkaz')} />
+              </div>
+            </Field>
+
             <Field label={t('prichinaOtkaza')} icon={<AlertTriangle className={cn('h-3.5 w-3.5', kontrolyor === 'otkaz' ? 'text-rose-500' : 'text-slate-400')} />}>
-              <textarea value={prichina} onChange={(e) => setPrichina(e.target.value)} placeholder={t('prichinaPlaceholder')} rows={2}
+              <textarea value={prichina} onChange={(e) => setPrichina(e.target.value)} placeholder={t('prichinaPlaceholder')} rows={4}
                 className={cn('w-full rounded-xl border bg-background px-3 py-2.5 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400/40 transition-all',
                   kontrolyor === 'otkaz' ? 'border-rose-300 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-950/20' : 'border-input')} />
             </Field>
@@ -348,27 +348,36 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
   );
 }
 
+function SectionCap({ icon, text, tone }: { icon: React.ReactNode; text: string; tone: 'violet' | 'emerald' }) {
+  const map = { violet: 'from-violet-500 to-purple-600', emerald: 'from-emerald-500 to-teal-600' } as const;
+  return (
+    <div className="flex items-center gap-2 pb-1 border-b border-slate-100 dark:border-slate-800">
+      <span className={cn('w-6 h-6 rounded-lg grid place-items-center text-white shrink-0 bg-gradient-to-br', map[tone])}>{icon}</span>
+      <span className="text-[12px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">{text}</span>
+    </div>
+  );
+}
+
 function KontrolyorBtn({ active, tone, label, onClick }: { active: boolean; tone: 'ok' | 'no'; label: string; onClick: () => void }) {
   const ok = tone === 'ok';
   return (
     <button type="button" onClick={onClick}
       className={cn(
-        'group relative flex flex-col items-center justify-center gap-2 h-24 rounded-2xl font-bold text-[13px] transition-all duration-200 overflow-hidden',
+        'group relative flex items-center gap-3 h-16 px-4 rounded-2xl font-bold text-[13px] transition-all duration-200 overflow-hidden',
         active
           ? ok
-            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-xl shadow-emerald-500/35 scale-[1.03] ring-2 ring-emerald-300/50'
-            : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-xl shadow-rose-500/35 scale-[1.03] ring-2 ring-rose-300/50'
+            ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-300/50'
+            : 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-lg shadow-rose-500/30 ring-2 ring-rose-300/50'
           : 'bg-white/60 dark:bg-slate-800/50 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-500 dark:text-slate-400 hover:ring-2 ' + (ok ? 'hover:ring-emerald-300 hover:text-emerald-600' : 'hover:ring-rose-300 hover:text-rose-600'),
       )}>
-      {/* Faol holatda yaltirash */}
       {active && <span className="absolute -inset-x-2 -top-8 h-16 bg-white/20 blur-2xl rounded-full" />}
       <span className={cn(
-        'relative grid place-items-center w-11 h-11 rounded-2xl transition-all duration-200',
-        active ? 'bg-white/25 backdrop-blur scale-105' : ok ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 group-hover:scale-105' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-500 group-hover:scale-105',
+        'relative grid place-items-center w-10 h-10 rounded-xl shrink-0 transition-all duration-200',
+        active ? 'bg-white/25 backdrop-blur' : ok ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-500 group-hover:scale-105' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-500 group-hover:scale-105',
       )}>
-        {ok ? <Check className="h-6 w-6" strokeWidth={2.6} /> : <X className="h-6 w-6" strokeWidth={2.6} />}
+        {ok ? <Check className="h-5 w-5" strokeWidth={2.6} /> : <X className="h-5 w-5" strokeWidth={2.6} />}
       </span>
-      <span className="relative">{label}</span>
+      <span className="relative text-left leading-tight">{label}</span>
     </button>
   );
 }
