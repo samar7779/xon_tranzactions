@@ -147,16 +147,26 @@ export class ChekService {
     return { ok: true, item: serialize(row) };
   }
 
-  /** Tarix tab — ro'yxat (qidiruv + paginatsiya) */
-  async list(opts: { q?: string; page?: number; perPage?: number }) {
+  /** Tarix tab — ro'yxat (server-side filtr + paginatsiya, 50/sahifa) */
+  async list(opts: {
+    q?: string; manager?: string; branch?: string; object?: string;
+    kontrolyor?: string; dateFrom?: string; dateTo?: string;
+    page?: number; perPage?: number;
+  }) {
     const page = Math.max(1, opts.page || 1);
     const perPage = Math.min(200, Math.max(1, opts.perPage || 50));
-    const q = opts.q?.trim();
 
-    // Faqat shartnoma raqami bo'yicha qidiruv
-    const where = q
-      ? { contractNumber: { contains: q, mode: 'insensitive' as const } }
-      : {};
+    const where: any = {};
+    if (opts.q?.trim()) where.contractNumber = { contains: opts.q.trim(), mode: 'insensitive' };
+    if (opts.manager) where.manager = opts.manager;
+    if (opts.branch) where.branchName = opts.branch;
+    if (opts.object) where.objectName = opts.object;
+    if (opts.kontrolyor) where.kontrolyor = opts.kontrolyor;
+    if (opts.dateFrom || opts.dateTo) {
+      where.data = {};
+      if (opts.dateFrom) where.data.gte = new Date(opts.dateFrom);
+      if (opts.dateTo) where.data.lte = new Date(opts.dateTo);
+    }
 
     const [rows, total] = await Promise.all([
       this.prisma.chekDog.findMany({
@@ -173,7 +183,23 @@ export class ChekService {
       total,
       page,
       perPage,
+      pages: Math.max(1, Math.ceil(total / perPage)),
       items: rows.map(serialize),
+    };
+  }
+
+  /** Filtr dropdownlari uchun distinct qiymatlar (barcha yozuvlardan) */
+  async filterValues() {
+    const [managers, branches, objects] = await Promise.all([
+      this.prisma.chekDog.findMany({ where: { manager: { not: null } }, select: { manager: true }, distinct: ['manager'], orderBy: { manager: 'asc' }, take: 500 }),
+      this.prisma.chekDog.findMany({ where: { branchName: { not: null } }, select: { branchName: true }, distinct: ['branchName'], orderBy: { branchName: 'asc' }, take: 500 }),
+      this.prisma.chekDog.findMany({ where: { objectName: { not: null } }, select: { objectName: true }, distinct: ['objectName'], orderBy: { objectName: 'asc' }, take: 500 }),
+    ]);
+    return {
+      ok: true,
+      managers: managers.map((m) => m.manager).filter(Boolean),
+      branches: branches.map((b) => b.branchName).filter(Boolean),
+      objects: objects.map((o) => o.objectName).filter(Boolean),
     };
   }
 
