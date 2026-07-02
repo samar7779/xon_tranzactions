@@ -34,7 +34,7 @@ export function SozlamalarTab({ lang }: { lang: ChekLang }) {
   }} />;
 
   return (
-    <div className="space-y-5">
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start max-w-6xl mx-auto">
       <TgSettings t={t} />
       <HrSettings t={t} />
     </div>
@@ -114,7 +114,7 @@ function TgSettings({ t }: { t: (k: string) => string }) {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-5">
+    <div>
       <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] overflow-hidden">
         {/* Hero */}
         <div className="relative bg-gradient-to-br from-sky-500 to-blue-600 px-6 py-6 overflow-hidden">
@@ -211,7 +211,7 @@ function HrSettings({ t }: { t: (k: string) => string }) {
   if (isLoading) return null;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div>
       <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] overflow-hidden">
         <div className="relative bg-gradient-to-br from-violet-500 to-fuchsia-600 px-6 py-6 overflow-hidden">
           <div className="absolute -top-10 -right-8 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
