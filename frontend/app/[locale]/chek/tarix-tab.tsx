@@ -122,8 +122,8 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
 
   return (
     <div className="space-y-4">
-      {/* Qidiruv + filtrlar */}
-      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_10px_30px_-20px_rgba(79,70,229,0.4)] p-3 flex items-center gap-2 flex-wrap">
+      {/* Qidiruv + filtrlar — z-30: dropdown'lar jadval ustida chiqishi uchun */}
+      <div className="relative z-30 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_10px_30px_-20px_rgba(79,70,229,0.4)] p-3 flex items-center gap-2 flex-wrap">
         {/* Kichik search — shartnoma raqami */}
         <div className="relative w-full sm:w-64">
           <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-sm">
@@ -160,8 +160,8 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
         </div>
       </div>
 
-      {/* Jadval */}
-      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] overflow-hidden">
+      {/* Jadval — z-10: filtr dropdown'laridan past */}
+      <div className="relative z-10 rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
