@@ -1,9 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Database, History, Settings, ShieldAlert, ClipboardCheck } from 'lucide-react';
+import { useRouter, useParams } from 'next/navigation';
+import {
+  Database, History, Settings, ShieldAlert, ClipboardCheck,
+  Globe, Moon, Sun, LogOut, ChevronDown, Check,
+} from 'lucide-react';
 import { AuthGuard } from '@/components/auth-guard';
 import { useAuth } from '@/lib/auth';
+import { useTheme } from '@/components/theme-provider';
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 import {
@@ -69,52 +77,53 @@ function ChekInner() {
         <div className="absolute -bottom-40 left-1/3 w-[420px] h-[420px] rounded-full bg-violet-400/15 dark:bg-violet-600/10 blur-[100px]" />
       </div>
 
-      {/* ═══ Header ═══ */}
-      <header className="relative z-20 sticky top-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-white/40 dark:border-slate-800/60 shadow-[0_1px_20px_-10px_rgba(79,70,229,0.3)]">
-        <div className="w-full px-4 sm:px-6 lg:px-10 py-3 flex items-center justify-between gap-3 flex-wrap">
+      {/* ═══ Header — PRO ═══ */}
+      <header className="relative z-30 sticky top-0 bg-white/75 dark:bg-slate-900/75 backdrop-blur-2xl border-b border-white/50 dark:border-slate-800/70 shadow-[0_4px_30px_-12px_rgba(79,70,229,0.35)]">
+        {/* Yuqori gradient chiziq */}
+        <div className="h-0.5 w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500" />
+
+        <div className="w-full px-4 sm:px-6 lg:px-10 h-16 flex items-center justify-between gap-3">
+          {/* Branding */}
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
-              <ClipboardCheck className="h-5 w-5" />
+            <div className="relative shrink-0">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-violet-500/40 ring-1 ring-white/40">
+                <ClipboardCheck className="h-[22px] w-[22px]" />
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900">
+                <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-70" />
+              </span>
             </div>
             <div className="min-w-0">
-              <div className="text-base font-black tracking-tight text-slate-900 dark:text-slate-100 truncate">{t('appTitle')}</div>
+              <div className="text-[15px] font-black tracking-tight text-slate-900 dark:text-slate-100 truncate flex items-center gap-2">
+                {t('appTitle')}
+                <span className="hidden sm:inline-flex text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white shadow-sm">Pro</span>
+              </div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{t('subtitle')}</div>
             </div>
           </div>
 
-          {/* Til tanlash */}
-          <div className="flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 p-1">
-            {CHEK_LANGS.map((l) => (
-              <button
-                key={l.code}
-                onClick={() => changeLang(l.code)}
-                className={cn(
-                  'px-2.5 py-1 rounded-full text-[12px] font-semibold transition-all',
-                  lang === l.code
-                    ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-300 shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
-                )}
-                title={l.label}
-              >
-                <span className="mr-1">{l.flag}</span>{l.label}
-              </button>
-            ))}
+          {/* Toolbar */}
+          <div className="flex items-center gap-1 sm:gap-1.5">
+            <ThemeToggle />
+            <LangSwitcher lang={lang} onChange={changeLang} />
+            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-0.5 hidden sm:block" />
+            <UserMenu lang={lang} />
           </div>
         </div>
 
-        {/* Tab nav */}
+        {/* Tab nav — pill segmented */}
         {allowed.length > 0 && (
-          <div className="w-full px-4 sm:px-6 lg:px-10">
-            <nav className="flex items-center gap-1 -mb-px">
+          <div className="w-full px-4 sm:px-6 lg:px-10 pb-2.5">
+            <nav className="inline-flex items-center gap-1 p-1 rounded-2xl bg-slate-100/80 dark:bg-slate-800/60 ring-1 ring-slate-200/70 dark:ring-slate-700">
               {allowed.map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setActive(tab.key)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-bold border-b-2 transition-colors',
+                    'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-[13px] font-bold transition-all',
                     active === tab.key
-                      ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300'
-                      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+                      ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm ring-1 ring-slate-200/70 dark:ring-slate-700'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
                   )}
                 >
                   {tab.icon}
@@ -158,5 +167,80 @@ function SozlamalarTab({ lang }: { lang: ChekLang }) {
       <div className="text-base font-bold text-slate-800 dark:text-slate-200">{t('settingsTitle')}</div>
       <div className="text-sm text-slate-500 dark:text-slate-400 mt-1">{t('comingSoon')}</div>
     </div>
+  );
+}
+
+// ───────────────────── Header pro elementlari ─────────────────────
+
+function ThemeToggle() {
+  const { theme, toggleTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  return (
+    <button
+      onClick={toggleTheme}
+      title="Theme"
+      className="w-9 h-9 rounded-xl grid place-items-center text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+    >
+      {mounted && theme === 'dark' ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />}
+    </button>
+  );
+}
+
+function LangSwitcher({ lang, onChange }: { lang: ChekLang; onChange: (l: ChekLang) => void }) {
+  const cur = CHEK_LANGS.find((l) => l.code === lang) || CHEK_LANGS[0];
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="inline-flex items-center gap-1.5 h-9 px-2.5 rounded-xl text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+          <Globe className="h-4 w-4 text-indigo-500" />
+          <span className="hidden sm:inline">{cur.label}</span>
+          <span className="sm:hidden">{cur.flag}</span>
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        {CHEK_LANGS.map((l) => (
+          <DropdownMenuItem key={l.code} onSelect={() => onChange(l.code)} className="gap-2 cursor-pointer">
+            <span>{l.flag}</span>
+            <span className="flex-1">{l.label}</span>
+            {l.code === lang && <Check className="h-4 w-4 text-indigo-500" />}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function UserMenu({ lang }: { lang: ChekLang }) {
+  const t = makeT(lang);
+  const user = useAuth((s) => s.user);
+  const logout = useAuth((s) => s.logout);
+  const router = useRouter();
+  const { locale } = useParams<{ locale: string }>();
+  const name = user?.fullName || user?.email || '—';
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+  function doLogout() {
+    logout();
+    router.replace(`/${locale}/login`);
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white font-bold text-sm grid place-items-center shadow-md shadow-violet-500/30 ring-1 ring-white/30 hover:scale-105 transition-transform">
+          {initial}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <div className="px-2 py-1.5">
+          <div className="text-[13px] font-bold text-slate-800 dark:text-slate-100 truncate">{user?.fullName || '—'}</div>
+          {user?.email && <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</div>}
+        </div>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={doLogout} className="gap-2 cursor-pointer text-rose-600 focus:text-rose-600">
+          <LogOut className="h-4 w-4" /> {t('logout')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
