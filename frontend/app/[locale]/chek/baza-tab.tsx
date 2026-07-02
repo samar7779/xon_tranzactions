@@ -318,7 +318,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
           {/* Kontrolyor — ikki ustunga cho'ziladi */}
           <div className="lg:col-span-2">
             <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
-              <div className="grid grid-cols-2 gap-4 max-w-xl">
+              <div className="grid grid-cols-2 gap-4">
                 <KontrolyorBtn active={kontrolyor === 'prinyat'} tone="ok" label={t('kontrolyor_prinyat')} onClick={() => setKontrolyor('prinyat')} />
                 <KontrolyorBtn active={kontrolyor === 'otkaz'} tone="no" label={t('kontrolyor_otkaz')} onClick={() => setKontrolyor('otkaz')} />
               </div>
