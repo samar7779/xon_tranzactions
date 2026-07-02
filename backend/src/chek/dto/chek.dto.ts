@@ -28,6 +28,10 @@ export class CreateChekDto {
   @IsOptional() @IsString() @MaxLength(64)
   managerPhone?: string;
 
+  @ApiPropertyOptional({ description: 'Menejer Telegram username (Xon HR)' })
+  @IsOptional() @IsString() @MaxLength(128)
+  managerTgUsername?: string;
+
   @ApiPropertyOptional({ description: 'Сотув офис (CRM branch)' })
   @IsOptional() @IsString() @MaxLength(255)
   branchName?: string;
@@ -73,6 +77,10 @@ export class UpdateChekDto {
   @ApiPropertyOptional()
   @IsOptional() @IsString() @MaxLength(64)
   managerPhone?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional() @IsString() @MaxLength(128)
+  managerTgUsername?: string;
 
   @ApiPropertyOptional()
   @IsOptional() @IsString() @MaxLength(255)

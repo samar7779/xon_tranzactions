@@ -991,6 +991,7 @@ model ChekDog {
   // CRM (XonSaroy /order/index) dan avtomatik keladi
   manager        String?  @db.VarChar(255)                        // created_by F.I.O. (menejer)
   managerPhone   String?  @map("manager_phone") @db.VarChar(64)   // created_by.phone
+  managerTgUsername String? @map("manager_tg_username") @db.VarChar(128) // Xon HR API'dan (@username)
   branchName     String?  @map("branch_name") @db.VarChar(255)    // created_by.branch.name (Сотув офис)
   objectName     String?  @map("object_name") @db.VarChar(255)    // object (obyekt/JK)
   crmStatus      String?  @map("crm_status") @db.VarChar(128)     // CRM holati (Сотилди va h.k.) — TG xabar uchun

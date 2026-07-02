@@ -22,6 +22,45 @@ export interface ChekTgConfig {
 const DEFAULT_TG: ChekTgConfig = { botToken: '', groupId: '', intervalMin: 5, fromHour: 9, toHour: 21, enabled: false };
 const TG_CONFIG_KEY = 'chek.tg.config';
 
+// ─── Xon HR API (menejer telegram username'ini topish) ───
+export interface ChekHrConfig { url: string; apiKey: string; apiSecret: string; }
+const DEFAULT_HR: ChekHrConfig = { url: 'https://hr.xonapps.uz/api/v1', apiKey: '', apiSecret: '' };
+const HR_CONFIG_KEY = 'chek.hr.config';
+
+// O'zbek kirill -> lotin (HR ismlari lotinda, CRM ismlari ko'pincha kirillda)
+const CYR_LAT: Record<string, string> = {
+  а: 'a', б: 'b', в: 'v', г: 'g', ғ: 'g', д: 'd', е: 'e', ё: 'yo', ж: 'j', з: 'z', и: 'i', й: 'y',
+  к: 'k', қ: 'q', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ў: 'o',
+  ф: 'f', х: 'x', ҳ: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sh', ъ: '', ы: 'i', ь: '', э: 'e', ю: 'yu', я: 'ya',
+};
+function translit(s: string): string {
+  let out = '';
+  for (const ch of (s || '').toLowerCase()) out += (CYR_LAT[ch] ?? ch);
+  return out;
+}
+function normName(s: string): string { return translit(s).replace(/[^a-z0-9]/g, ''); }
+function nameTokens(s: string): string[] { return translit(s).split(/[^a-z0-9]+/).filter((x) => x.length >= 2); }
+function tokenMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  return a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a));
+}
+function nameScore(crmName: string, hrName: string): number {
+  const ct = nameTokens(crmName), ht = nameTokens(hrName);
+  let score = 0; const used = new Set<number>();
+  for (const c of ct) {
+    for (let i = 0; i < ht.length; i++) {
+      if (used.has(i)) continue;
+      if (tokenMatch(c, ht[i])) { score++; used.add(i); break; }
+    }
+  }
+  return score;
+}
+function formatUsername(u: any): string | null {
+  const s = String(u ?? '').trim();
+  if (!s) return null;
+  return s.startsWith('@') ? s : '@' + s;
+}
+
 type Actor = { id?: string | null; name?: string | null };
 
 // Excel eksport uchun 4 tilli yorliqlar (frontend i18n bilan mos)
@@ -69,6 +108,7 @@ function serialize(row: any) {
 export class ChekService {
   private readonly log = new Logger(ChekService.name);
   private lastNotifyAt = 0;
+  private hrCache: { at: number; persons: any[] } | null = null;
 
   constructor(private prisma: PrismaService, private crm: CrmService) {}
 
@@ -91,6 +131,7 @@ export class ChekService {
         contractNumber: contract,
         manager: dto.manager || null,
         managerPhone: dto.managerPhone || null,
+        managerTgUsername: formatUsername(dto.managerTgUsername),
         branchName: dto.branchName || null,
         objectName: dto.objectName || null,
         crmStatus: dto.crmStatus || null,
@@ -212,6 +253,7 @@ export class ChekService {
     if (dto.contractNumber !== undefined) data.contractNumber = dto.contractNumber.trim();
     if (dto.manager !== undefined) data.manager = dto.manager || null;
     if (dto.managerPhone !== undefined) data.managerPhone = dto.managerPhone || null;
+    if (dto.managerTgUsername !== undefined) data.managerTgUsername = formatUsername(dto.managerTgUsername);
     if (dto.branchName !== undefined) data.branchName = dto.branchName || null;
     if (dto.objectName !== undefined) data.objectName = dto.objectName || null;
     if (dto.data !== undefined) data.data = new Date(dto.data);
@@ -274,12 +316,12 @@ export class ChekService {
       }).format(dt).replace(', ', ' ');
     } catch { when = dt.toISOString().slice(0, 16).replace('T', ' '); }
 
+    const mgr = `${row.manager || '—'}${row.managerTgUsername ? '  ' + row.managerTgUsername : ''}`;
     const lines = [
       '📣 Реестр Договоров',
       `📄 Договор №: ${row.contractNumber}`,
-      `👨‍💼 Менеджер: ${row.manager || '—'}`,
+      `👨‍💼 Менеджер: ${mgr}`,
       `🏢 Офис продаж: ${row.branchName || '—'}`,
-      `📌 Статус: ${row.crmStatus || '—'}`,
       `📑 Вид договора: ${vid}`,
       `🕵️ Контролёр: ${kontr}`,
     ];
@@ -324,6 +366,96 @@ export class ChekService {
     if (!cfg.botToken || !cfg.groupId) return { ok: false, error: 'Telegram sozlanmagan (token/guruh)' };
     const ok = await this.tgSendMessage(cfg.botToken, cfg.groupId, '✅ Реестр Договоров — тест хабари. Бот ишлаяпти.');
     return { ok, error: ok ? undefined : 'Yuborilmadi' };
+  }
+
+  // ───────────────────── Xon HR API ─────────────────────
+
+  async getHrConfig(): Promise<ChekHrConfig> {
+    const s = await this.prisma.setting.findUnique({ where: { key: HR_CONFIG_KEY } });
+    if (!s?.value) return { ...DEFAULT_HR };
+    try { return { ...DEFAULT_HR, ...JSON.parse(s.value) }; } catch { return { ...DEFAULT_HR }; }
+  }
+
+  async setHrConfig(cfg: Partial<ChekHrConfig>, by?: string): Promise<{ ok: true; config: ChekHrConfig }> {
+    const cur = await this.getHrConfig();
+    const next: ChekHrConfig = {
+      url: (cfg.url ?? cur.url).trim().replace(/\/+$/, ''),
+      apiKey: (cfg.apiKey ?? cur.apiKey).trim(),
+      apiSecret: (cfg.apiSecret ?? cur.apiSecret).trim(),
+    };
+    await this.prisma.setting.upsert({
+      where: { key: HR_CONFIG_KEY },
+      create: { key: HR_CONFIG_KEY, value: JSON.stringify(next), updatedBy: by || null },
+      update: { value: JSON.stringify(next), updatedBy: by || null },
+    });
+    this.hrCache = null; // config o'zgardi — keshni tozalaymiz
+    return { ok: true, config: next };
+  }
+
+  /** HR persons ro'yxati — keshlangan (10 daqiqa) */
+  private async fetchHrPersons(force = false): Promise<any[]> {
+    const now = Date.now();
+    if (!force && this.hrCache && now - this.hrCache.at < 10 * 60_000) return this.hrCache.persons;
+    const cfg = await this.getHrConfig();
+    if (!cfg.url || !cfg.apiKey || !cfg.apiSecret) return [];
+    const base = cfg.url.replace(/\/+$/, '');
+    const persons: any[] = [];
+    try {
+      for (let page = 1; page <= 20; page++) {
+        const res = await fetch(`${base}/persons?per_page=1000&page=${page}`, {
+          headers: { 'X-API-Key': cfg.apiKey, 'X-API-Secret': cfg.apiSecret },
+        });
+        if (!res.ok) { this.log.warn(`HR /persons ${res.status}`); break; }
+        const data: any = await res.json();
+        const items: any[] = data?.items || [];
+        persons.push(...items);
+        const total = Number(data?.total) || 0;
+        if (items.length < 1000 || (total && persons.length >= total)) break;
+      }
+      this.hrCache = { at: now, persons };
+      return persons;
+    } catch (e: any) {
+      this.log.warn(`HR persons fetch xato: ${e?.message}`);
+      return this.hrCache?.persons || [];
+    }
+  }
+
+  /** Menejer ismi bo'yicha HR'dan telegram username topish */
+  async resolveManager(name: string): Promise<{ ok: boolean; found: boolean; configured: boolean; tgUsername?: string | null; fullName?: string | null }> {
+    const cfg = await this.getHrConfig();
+    const configured = !!(cfg.url && cfg.apiKey && cfg.apiSecret);
+    if (!configured) return { ok: true, found: false, configured: false };
+    if (!name?.trim()) return { ok: true, found: false, configured };
+    const persons = await this.fetchHrPersons();
+    let best: any = null, bestScore = 0;
+    for (const p of persons) {
+      const sc = nameScore(name, p.full_name || '');
+      if (sc > bestScore) { bestScore = sc; best = p; }
+    }
+    if (best && bestScore >= 2) {
+      return { ok: true, found: true, configured, tgUsername: formatUsername(best.tg_username), fullName: best.full_name || null };
+    }
+    return { ok: true, found: false, configured };
+  }
+
+  /** Qo'lda tanlash uchun — HR'dan ism bo'yicha qidiruv */
+  async hrSearch(q: string): Promise<{ ok: boolean; configured: boolean; items: { fullName: string; tgUsername: string | null; empNo?: string }[] }> {
+    const cfg = await this.getHrConfig();
+    const configured = !!(cfg.url && cfg.apiKey && cfg.apiSecret);
+    if (!configured) return { ok: true, configured: false, items: [] };
+    const persons = await this.fetchHrPersons();
+    const nq = normName(q || '');
+    const list = (nq ? persons.filter((p) => normName(p.full_name || '').includes(nq)) : persons)
+      .slice(0, 30)
+      .map((p) => ({ fullName: p.full_name || '', tgUsername: formatUsername(p.tg_username), empNo: p.emp_no }));
+    return { ok: true, configured, items: list };
+  }
+
+  async hrTest(): Promise<{ ok: boolean; count?: number; error?: string }> {
+    const cfg = await this.getHrConfig();
+    if (!cfg.url || !cfg.apiKey || !cfg.apiSecret) return { ok: false, error: 'HR sozlanmagan (URL/kalit)' };
+    const persons = await this.fetchHrPersons(true);
+    return persons.length > 0 ? { ok: true, count: persons.length } : { ok: false, error: 'Ma\'lumot kelmadi (URL yoki kalitlarni tekshiring)' };
   }
 
   private inWindow(hour: number, from: number, to: number): boolean {

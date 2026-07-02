@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, User, Building2, Home, FileText,
   Check, X, AlertTriangle, Save, Phone, Coins, Sparkles, CornerDownLeft,
-  ChevronRight, BadgeCheck, Copy, FileCheck2, CopyCheck,
+  ChevronRight, BadgeCheck, Copy, FileCheck2, CopyCheck, AtSign, UserSearch,
 } from 'lucide-react';
 
 // Shartnoma turi ikonlari
@@ -61,6 +61,9 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
   const [clientName, setClientName] = useState('');
   const [crmStatus, setCrmStatus] = useState('');
   const [crmLoaded, setCrmLoaded] = useState(false);
+  // Menejer Telegram username (Xon HR)
+  const [tgUsername, setTgUsername] = useState('');
+  const [usernameFound, setUsernameFound] = useState<boolean | null>(null);
 
   const [date, setDate] = useState(todayISO());
   const [vidDogovora, setVidDogovora] = useState<string>('');
@@ -96,7 +99,18 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
 
   function resetCrm() {
     setManager(''); setManagerPhone(''); setBranchName(''); setObjectName(''); setClientName(''); setCrmStatus(''); setCrmLoaded(false);
+    setTgUsername(''); setUsernameFound(null);
   }
+
+  // HR'dan menejer telegram username'ini topish
+  const resolve = useMutation({
+    mutationFn: (name: string) => api.get<{ ok: boolean; found: boolean; configured: boolean; tgUsername?: string }>(`/chek/hr-resolve?name=${encodeURIComponent(name)}`, { timeout: 25_000 }),
+    onSuccess: (r) => {
+      if (r?.found && r.tgUsername) { setTgUsername(r.tgUsername); setUsernameFound(true); }
+      else { setTgUsername(''); setUsernameFound(false); }
+    },
+    onError: () => setUsernameFound(false),
+  });
 
   function pick(s: Suggestion) {
     setContract(s.contract);
@@ -109,6 +123,8 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
     setCrmLoaded(true);
     setFocused(false);
     setHighlight(-1);
+    setTgUsername(''); setUsernameFound(null);
+    if (s.manager) resolve.mutate(s.manager);
   }
 
   // Fallback — to'liq raqam yozib "Yuklash" bosilganda (yoki Enter tanlovsiz)
@@ -119,6 +135,8 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
         setManager(r.manager || ''); setManagerPhone(r.managerPhone || '');
         setBranchName(r.branchName || ''); setObjectName(r.object || '');
         setClientName(r.clientFullName || ''); setCrmStatus(r.status || ''); setCrmLoaded(true); setFocused(false);
+        setTgUsername(''); setUsernameFound(null);
+        if (r.manager) resolve.mutate(r.manager);
         toast.success(t('crmLoaded'));
       } else {
         toast.warning(t('crmNotFound'));
@@ -160,6 +178,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
       contractNumber: c,
       manager: manager || undefined,
       managerPhone: managerPhone || undefined,
+      managerTgUsername: tgUsername || undefined,
       branchName: branchName || undefined,
       objectName: objectName || undefined,
       crmStatus: crmStatus || undefined,
@@ -279,7 +298,12 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
                 <BadgeCheck className="h-3.5 w-3.5" /> {t('crmLoaded')}
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <CrmCard icon={<User className="h-4 w-4" />} label={t('manager')} value={manager} sub={managerPhone} subIcon={<Phone className="h-3 w-3" />} accent="indigo" />
+                <ManagerCard
+                  manager={manager} managerPhone={managerPhone}
+                  tgUsername={tgUsername} found={usernameFound} resolving={resolve.isPending}
+                  onSet={(u) => { setTgUsername(u); setUsernameFound(!!u); }}
+                  t={t}
+                />
                 <CrmCard icon={<Building2 className="h-4 w-4" />} label={t('salesOffice')} value={branchName} accent="violet" />
                 <CrmCard icon={<Home className="h-4 w-4" />} label={t('object')} value={objectName} sub={clientName} subIcon={<User className="h-3 w-3" />} accent="emerald" />
               </div>
@@ -415,6 +439,87 @@ function CrmCard({ icon, label, value, sub, subIcon, accent }: {
       </div>
       <div className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate" title={value}>{value || '—'}</div>
       {sub && <div className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1 truncate">{subIcon}{sub}</div>}
+    </div>
+  );
+}
+
+function ManagerCard({ manager, managerPhone, tgUsername, found, resolving, onSet, t }: {
+  manager: string; managerPhone: string; tgUsername: string; found: boolean | null; resolving: boolean;
+  onSet: (u: string) => void; t: (k: string) => string;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setPickerOpen(false); }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  return (
+    <div ref={ref} className="relative rounded-2xl border border-slate-200 dark:border-slate-700 p-3.5 bg-gradient-to-b from-white to-slate-50/50 dark:from-slate-900 dark:to-slate-800/30">
+      <button onClick={() => setPickerOpen((o) => !o)} title={t('pickEmployee')}
+        className={cn('absolute top-2.5 right-2.5 w-7 h-7 rounded-lg grid place-items-center transition-colors z-10',
+          found === false ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-600 ring-1 ring-amber-300 animate-pulse' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+        <UserSearch className="h-4 w-4" />
+      </button>
+
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="w-7 h-7 rounded-lg grid place-items-center text-white shrink-0 bg-gradient-to-br from-indigo-500 to-blue-600 shadow-md shadow-indigo-500/25"><User className="h-4 w-4" /></span>
+        <span className="text-[10px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">{t('manager')}</span>
+      </div>
+      <div className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate pr-7" title={manager}>{manager || '—'}</div>
+
+      <div className="mt-1 min-h-[18px]">
+        {resolving ? (
+          <span className="text-[11px] text-slate-400 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> …</span>
+        ) : tgUsername ? (
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-1 ring-sky-200 dark:ring-sky-900">
+            <AtSign className="h-3 w-3" />{tgUsername.replace(/^@/, '')}
+          </span>
+        ) : found === false ? (
+          <button onClick={() => setPickerOpen(true)} className="text-[11px] text-amber-600 dark:text-amber-400 font-medium inline-flex items-center gap-1">
+            <UserSearch className="h-3 w-3" /> {t('usernameNotFound')}
+          </button>
+        ) : managerPhone ? (
+          <span className="text-[11px] text-slate-500 flex items-center gap-1"><Phone className="h-3 w-3" />{managerPhone}</span>
+        ) : null}
+      </div>
+
+      {pickerOpen && <HrPicker t={t} initial={manager} onPick={(u) => { onSet(u); setPickerOpen(false); }} />}
+    </div>
+  );
+}
+
+function HrPicker({ t, onPick, initial }: { t: (k: string) => string; onPick: (u: string) => void; initial: string }) {
+  const [q, setQ] = useState(initial || '');
+  const [dq, setDq] = useState(initial || '');
+  useEffect(() => { const id = setTimeout(() => setDq(q.trim()), 250); return () => clearTimeout(id); }, [q]);
+  const { data, isFetching } = useQuery({
+    queryKey: ['chek-hr-search', dq],
+    queryFn: () => api.get<{ ok: boolean; items: { fullName: string; tgUsername: string | null; empNo?: string }[] }>(`/chek/hr-search?q=${encodeURIComponent(dq)}`, { timeout: 25_000 }),
+    staleTime: 30_000,
+  });
+  const items = data?.items || [];
+  return (
+    <div className="absolute z-40 left-3 right-3 top-full mt-1 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.4)] overflow-hidden">
+      <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} autoFocus placeholder={t('pickEmployee')} className="h-8 pl-8 text-[12px] rounded-lg" />
+        </div>
+      </div>
+      <div className="max-h-[240px] overflow-y-auto p-1">
+        {isFetching && items.length === 0 ? (
+          <div className="px-3 py-3 text-[12px] text-slate-400 flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</div>
+        ) : items.length === 0 ? (
+          <div className="px-3 py-4 text-[12px] text-slate-400 text-center">—</div>
+        ) : items.map((it, i) => (
+          <button key={i} onClick={() => it.tgUsername && onPick(it.tgUsername)} disabled={!it.tgUsername}
+            className={cn('w-full text-left px-2.5 py-1.5 rounded-lg text-[12px] flex items-center justify-between gap-2', it.tgUsername ? 'hover:bg-slate-50 dark:hover:bg-slate-800' : 'opacity-50 cursor-not-allowed')}>
+            <span className="truncate text-slate-700 dark:text-slate-300">{it.fullName}</span>
+            {it.tgUsername ? <span className="text-[11px] font-bold text-sky-600 shrink-0">{it.tgUsername}</span> : <span className="text-[10px] text-slate-400">—</span>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

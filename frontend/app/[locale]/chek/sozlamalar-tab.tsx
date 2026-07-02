@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Lock, Loader2, Send, Save, KeyRound, Bot, Users, Clock, Timer, Power, Eye, EyeOff, CheckCircle2,
+  Lock, Loader2, Send, Save, KeyRound, Bot, Users, Clock, Timer, Power, Eye, EyeOff,
+  Server, Link2, KeySquare,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -32,7 +33,12 @@ export function SozlamalarTab({ lang }: { lang: ChekLang }) {
     setUnlocked(true);
   }} />;
 
-  return <TgSettings t={t} />;
+  return (
+    <div className="space-y-5">
+      <TgSettings t={t} />
+      <HrSettings t={t} />
+    </div>
+  );
 }
 
 function PasswordGate({ t, onUnlock }: { t: (k: string) => string; onUnlock: () => void }) {
@@ -170,6 +176,80 @@ function TgSettings({ t }: { t: (k: string) => string }) {
               {test.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} {t('test')}
             </Button>
             <Button onClick={() => save.mutate(cfg)} disabled={save.isPending} className="flex-1 h-11 rounded-xl gap-1.5 font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700">
+              {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {t('save')}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface HrConfig { url: string; apiKey: string; apiSecret: string; }
+
+function HrSettings({ t }: { t: (k: string) => string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['chek-hr-config'],
+    queryFn: () => api.get<HrConfig>('/chek/hr-config'),
+    staleTime: 5_000,
+  });
+  const [cfg, setCfg] = useState<HrConfig>({ url: 'https://hr.xonapps.uz/api/v1', apiKey: '', apiSecret: '' });
+  const [showSecret, setShowSecret] = useState(false);
+  useEffect(() => { if (data) setCfg(data); }, [data]);
+
+  const save = useMutation({
+    mutationFn: (body: HrConfig) => api.patch('/chek/hr-config', body),
+    onSuccess: () => toast.success(t('saved')),
+    onError: (e: any) => toast.error(e?.message || t('error')),
+  });
+  const test = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; count?: number; error?: string }>('/chek/hr-test', {}),
+    onSuccess: (r: any) => r?.ok ? toast.success(`${t('testSent')} · ${r.count ?? 0}`) : toast.error(r?.error || t('error')),
+    onError: (e: any) => toast.error(e?.message || t('error')),
+  });
+
+  if (isLoading) return null;
+
+  return (
+    <div className="max-w-2xl mx-auto">
+      <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] overflow-hidden">
+        <div className="relative bg-gradient-to-br from-violet-500 to-fuchsia-600 px-6 py-6 overflow-hidden">
+          <div className="absolute -top-10 -right-8 w-40 h-40 rounded-full bg-white/15 blur-2xl" />
+          <div className="relative flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-white/25 backdrop-blur grid place-items-center ring-1 ring-white/40">
+              <Server className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <div className="text-white font-black text-lg">{t('hrTitle')}</div>
+              <div className="text-white/85 text-[12px]">{t('hrDesc')}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <SField icon={<Link2 className="h-3.5 w-3.5 text-violet-500" />} label={t('hrUrl')}>
+            <Input value={cfg.url} onChange={(e) => setCfg((c) => ({ ...c, url: e.target.value }))}
+              placeholder="https://hr.xonapps.uz/api/v1" className="h-11 rounded-xl font-mono text-[13px]" />
+          </SField>
+          <SField icon={<KeyRound className="h-3.5 w-3.5 text-violet-500" />} label={t('apiKey')}>
+            <Input value={cfg.apiKey} onChange={(e) => setCfg((c) => ({ ...c, apiKey: e.target.value }))}
+              placeholder="xs_key_..." className="h-11 rounded-xl font-mono text-[13px]" />
+          </SField>
+          <SField icon={<KeySquare className="h-3.5 w-3.5 text-violet-500" />} label={t('apiSecret')}>
+            <div className="relative">
+              <Input type={showSecret ? 'text' : 'password'} value={cfg.apiSecret} onChange={(e) => setCfg((c) => ({ ...c, apiSecret: e.target.value }))}
+                placeholder="xs_sec_..." className="h-11 rounded-xl font-mono text-[13px] pr-10" />
+              <button onClick={() => setShowSecret((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </SField>
+
+          <div className="flex gap-3 pt-1">
+            <Button variant="outline" onClick={() => test.mutate()} disabled={test.isPending || !cfg.url || !cfg.apiKey || !cfg.apiSecret} className="h-11 rounded-xl gap-1.5 font-semibold">
+              {test.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Server className="h-4 w-4" />} {t('test')}
+            </Button>
+            <Button onClick={() => save.mutate(cfg)} disabled={save.isPending} className="flex-1 h-11 rounded-xl gap-1.5 font-bold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700">
               {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {t('save')}
             </Button>
           </div>
