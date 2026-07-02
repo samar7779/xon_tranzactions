@@ -23,7 +23,7 @@ type Dict = Record<string, string>;
 
 const DICT: Record<ChekLang, Dict> = {
   uz: {
-    appTitle: 'Chek — shartnoma nazorati',
+    appTitle: 'Shartnoma nazorati',
     subtitle: 'XonSaroy CRM asosidagi nazorat jurnali',
     tab_baza: 'Baza',
     tab_tarix: 'Tarix',
@@ -83,7 +83,7 @@ const DICT: Record<ChekLang, Dict> = {
     error: 'Xatolik',
   },
   uzc: {
-    appTitle: 'Чек — шартнома назорати',
+    appTitle: 'Шартнома назорати',
     subtitle: 'XonSaroy CRM асосидаги назорат журнали',
     tab_baza: 'База',
     tab_tarix: 'Тарих',
@@ -137,7 +137,7 @@ const DICT: Record<ChekLang, Dict> = {
     error: 'Хатолик',
   },
   ru: {
-    appTitle: 'Чек — контроль договоров',
+    appTitle: 'Контроль договоров',
     subtitle: 'Журнал контроля на основе XonSaroy CRM',
     tab_baza: 'База',
     tab_tarix: 'История',
@@ -191,7 +191,7 @@ const DICT: Record<ChekLang, Dict> = {
     error: 'Ошибка',
   },
   en: {
-    appTitle: 'Chek — contract control',
+    appTitle: 'Contract control',
     subtitle: 'Control journal based on XonSaroy CRM',
     tab_baza: 'Base',
     tab_tarix: 'History',
