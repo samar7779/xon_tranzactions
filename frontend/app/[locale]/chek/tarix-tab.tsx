@@ -7,6 +7,7 @@ import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
   FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
   Building2, Home, RotateCcw, FileSpreadsheet, ArrowRight, Send, SendHorizontal,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { api, apiDownload } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -65,15 +66,6 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
     return () => clearTimeout(id);
   }, [q]);
 
-  const { data, isFetching } = useQuery({
-    queryKey: ['chek-list', debouncedQ],
-    queryFn: () => api.get<{ ok: boolean; total: number; items: ChekRow[] }>(
-      `/chek?q=${encodeURIComponent(debouncedQ)}&perPage=200`,
-    ),
-    staleTime: 10_000,
-  });
-
-  const allRows = data?.items || [];
   const [editing, setEditing] = useState<ChekRow | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
@@ -85,25 +77,47 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
-  const uniq = (arr: (string | null)[]) => Array.from(new Set(arr.filter(Boolean) as string[])).sort();
-  const managerOpts = uniq(allRows.map((r) => r.manager)).map((v) => ({ value: v, label: v }));
-  const branchOpts = uniq(allRows.map((r) => r.branchName)).map((v) => ({ value: v, label: v }));
-  const objectOpts = uniq(allRows.map((r) => r.objectName)).map((v) => ({ value: v, label: v }));
+  // Paginatsiya (server-side, 50/sahifa)
+  const PER = 50;
+  const [page, setPage] = useState(1);
+  // Filtr yoki qidiruv o'zgarsa — 1-sahifaga qaytamiz
+  useEffect(() => { setPage(1); }, [debouncedQ, fManager, fBranch, fObject, fKontrolyor, dateFrom, dateTo]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['chek-list', debouncedQ, fManager, fBranch, fObject, fKontrolyor, dateFrom, dateTo, page],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      if (debouncedQ) p.set('q', debouncedQ);
+      if (fManager) p.set('manager', fManager);
+      if (fBranch) p.set('branch', fBranch);
+      if (fObject) p.set('object', fObject);
+      if (fKontrolyor) p.set('kontrolyor', fKontrolyor);
+      if (dateFrom) p.set('dateFrom', dateFrom);
+      if (dateTo) p.set('dateTo', dateTo);
+      p.set('page', String(page));
+      p.set('perPage', String(PER));
+      return api.get<{ ok: boolean; total: number; page: number; pages: number; items: ChekRow[] }>(`/chek?${p.toString()}`);
+    },
+    staleTime: 10_000,
+  });
+
+  // Filtr dropdownlari — barcha yozuvlardan distinct qiymatlar
+  const { data: fv } = useQuery({
+    queryKey: ['chek-filter-values'],
+    queryFn: () => api.get<{ managers: string[]; branches: string[]; objects: string[] }>('/chek/filter-values'),
+    staleTime: 30_000,
+  });
+  const managerOpts = (fv?.managers || []).map((v) => ({ value: v, label: v }));
+  const branchOpts = (fv?.branches || []).map((v) => ({ value: v, label: v }));
+  const objectOpts = (fv?.objects || []).map((v) => ({ value: v, label: v }));
   const kontrolyorOpts = [
     { value: 'prinyat', label: kontrolyorLabel(lang, 'prinyat') },
     { value: 'otkaz', label: kontrolyorLabel(lang, 'otkaz') },
   ];
 
-  const rows = allRows.filter((r) => {
-    if (fManager && r.manager !== fManager) return false;
-    if (fBranch && r.branchName !== fBranch) return false;
-    if (fObject && r.objectName !== fObject) return false;
-    if (fKontrolyor && r.kontrolyor !== fKontrolyor) return false;
-    const d = String(r.data).slice(0, 10);
-    if (dateFrom && d < dateFrom) return false;
-    if (dateTo && d > dateTo) return false;
-    return true;
-  });
+  const rows = data?.items || [];
+  const total = data?.total ?? 0;
+  const pages = data?.pages ?? 1;
   const anyFilter = !!(fManager || fBranch || fObject || fKontrolyor || dateFrom || dateTo);
   function clearAll() { setFManager(''); setFBranch(''); setFObject(''); setFKontrolyor(''); setDateFrom(''); setDateTo(''); }
 
@@ -202,7 +216,7 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
         )}
 
         <div className="ml-auto text-[12px] text-slate-500 dark:text-slate-400 font-medium px-2">
-          {t('total')}: <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{rows.length}</span>
+          {t('total')}: <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{total}</span>
           {isFetching && <Loader2 className="inline h-3.5 w-3.5 animate-spin ml-2 text-slate-400" />}
         </div>
       </div>
@@ -315,6 +329,25 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
           </table>
         </div>
       </div>
+
+      {/* Paginatsiya (50/sahifa) */}
+      {pages > 1 && (
+        <div className="flex items-center justify-between gap-3 px-1">
+          <div className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
+            {t('page')} <span className="font-bold text-slate-700 dark:text-slate-200 tabular-nums">{page}</span> / {pages}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+              className="w-9 h-9 rounded-lg grid place-items-center ring-1 ring-slate-200 dark:ring-slate-700 bg-white/70 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page >= pages}
+              className="w-9 h-9 rounded-lg grid place-items-center ring-1 ring-slate-200 dark:ring-slate-700 bg-white/70 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {editing && (
         <EditDialog

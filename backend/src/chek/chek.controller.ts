@@ -52,17 +52,30 @@ export class ChekController {
   // ─── Tarix tab ───
   @Get()
   @RequirePermissions(PERMISSIONS.CHEK_TARIX)
-  @ApiOperation({ summary: 'Chek yozuvlari ro\'yxati (tarix)' })
+  @ApiOperation({ summary: 'Chek yozuvlari ro\'yxati (server-side filtr + paginatsiya)' })
   list(
     @Query('q') q?: string,
+    @Query('manager') manager?: string,
+    @Query('branch') branch?: string,
+    @Query('object') object?: string,
+    @Query('kontrolyor') kontrolyor?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ) {
     return this.svc.list({
-      q,
+      q, manager, branch, object, kontrolyor, dateFrom, dateTo,
       page: page ? Number(page) : undefined,
       perPage: perPage ? Number(perPage) : undefined,
     });
+  }
+
+  @Get('filter-values')
+  @RequirePermissions(PERMISSIONS.CHEK_TARIX)
+  @ApiOperation({ summary: 'Filtr dropdownlari uchun distinct qiymatlar' })
+  filterValues() {
+    return this.svc.filterValues();
   }
 
   @Get('export')
