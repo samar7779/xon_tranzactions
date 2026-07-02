@@ -1,11 +1,12 @@
 'use client';
 
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
   FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
+  Building2, Home, RotateCcw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -70,9 +71,39 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
     staleTime: 10_000,
   });
 
-  const rows = data?.items || [];
+  const allRows = data?.items || [];
   const [editing, setEditing] = useState<ChekRow | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Filtrlar
+  const [fManager, setFManager] = useState('');
+  const [fBranch, setFBranch] = useState('');
+  const [fObject, setFObject] = useState('');
+  const [fKontrolyor, setFKontrolyor] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+
+  const uniq = (arr: (string | null)[]) => Array.from(new Set(arr.filter(Boolean) as string[])).sort();
+  const managerOpts = uniq(allRows.map((r) => r.manager)).map((v) => ({ value: v, label: v }));
+  const branchOpts = uniq(allRows.map((r) => r.branchName)).map((v) => ({ value: v, label: v }));
+  const objectOpts = uniq(allRows.map((r) => r.objectName)).map((v) => ({ value: v, label: v }));
+  const kontrolyorOpts = [
+    { value: 'prinyat', label: kontrolyorLabel(lang, 'prinyat') },
+    { value: 'otkaz', label: kontrolyorLabel(lang, 'otkaz') },
+  ];
+
+  const rows = allRows.filter((r) => {
+    if (fManager && r.manager !== fManager) return false;
+    if (fBranch && r.branchName !== fBranch) return false;
+    if (fObject && r.objectName !== fObject) return false;
+    if (fKontrolyor && r.kontrolyor !== fKontrolyor) return false;
+    const d = String(r.data).slice(0, 10);
+    if (dateFrom && d < dateFrom) return false;
+    if (dateTo && d > dateTo) return false;
+    return true;
+  });
+  const anyFilter = !!(fManager || fBranch || fObject || fKontrolyor || dateFrom || dateTo);
+  function clearAll() { setFManager(''); setFBranch(''); setFObject(''); setFKontrolyor(''); setDateFrom(''); setDateTo(''); }
 
   const del = useMutation({
     mutationFn: (id: string) => api.delete(`/chek/${id}`),
@@ -91,22 +122,40 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
 
   return (
     <div className="space-y-4">
-      {/* Qidiruv — premium (faqat shartnoma raqami bo'yicha) */}
-      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_10px_30px_-20px_rgba(79,70,229,0.4)] p-3 flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[220px]">
-          <div className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-sm">
-            <Search className="h-3.5 w-3.5" />
+      {/* Qidiruv + filtrlar */}
+      <div className="rounded-2xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_10px_30px_-20px_rgba(79,70,229,0.4)] p-3 flex items-center gap-2 flex-wrap">
+        {/* Kichik search — shartnoma raqami */}
+        <div className="relative w-full sm:w-64">
+          <div className="absolute left-1.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center text-white shadow-sm">
+            <Search className="h-3 w-3" />
           </div>
           <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('search')}
-            className="pl-12 pr-9 h-11 rounded-xl bg-white/80 dark:bg-slate-900 border-0 ring-1 ring-slate-200 dark:ring-slate-700 font-mono focus-visible:ring-2 focus-visible:ring-indigo-400" />
+            className="pl-9 pr-8 h-9 rounded-lg bg-white/80 dark:bg-slate-900 border-0 ring-1 ring-slate-200 dark:ring-slate-700 font-mono text-[13px] focus-visible:ring-2 focus-visible:ring-indigo-400" />
           {q && (
-            <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full grid place-items-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-              <X className="h-3.5 w-3.5" />
+            <button onClick={() => setQ('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full grid place-items-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="h-3 w-3" />
             </button>
           )}
         </div>
-        <div className="text-[12px] text-slate-500 dark:text-slate-400 font-medium px-2">
-          {t('total')}: <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{data?.total ?? 0}</span>
+
+        {/* 4 ta qiymatli filtr */}
+        <FilterCombo icon={<User className="h-3.5 w-3.5" />} label={t('manager')} value={fManager} options={managerOpts} onChange={setFManager} searchAll={t('all')} />
+        <FilterCombo icon={<Building2 className="h-3.5 w-3.5" />} label={t('salesOffice')} value={fBranch} options={branchOpts} onChange={setFBranch} searchAll={t('all')} />
+        <FilterCombo icon={<Home className="h-3.5 w-3.5" />} label={t('object')} value={fObject} options={objectOpts} onChange={setFObject} searchAll={t('all')} />
+        <FilterCombo icon={<Check className="h-3.5 w-3.5" />} label={t('kontrolyor')} value={fKontrolyor} options={kontrolyorOpts} onChange={setFKontrolyor} searchAll={t('all')} searchable={false} />
+
+        {/* Sana oralig'i filtri (icon) */}
+        <DateFilter from={dateFrom} to={dateTo} setFrom={setDateFrom} setTo={setDateTo} t={t} />
+
+        {anyFilter && (
+          <button onClick={clearAll} title={t('clearFilters')}
+            className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-[12px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors">
+            <RotateCcw className="h-3.5 w-3.5" /> {t('clearFilters')}
+          </button>
+        )}
+
+        <div className="ml-auto text-[12px] text-slate-500 dark:text-slate-400 font-medium px-2">
+          {t('total')}: <span className="font-bold text-indigo-700 dark:text-indigo-300 tabular-nums">{rows.length}</span>
           {isFetching && <Loader2 className="inline h-3.5 w-3.5 animate-spin ml-2 text-slate-400" />}
         </div>
       </div>
@@ -224,6 +273,108 @@ function DetailItem({ icon, label, value }: { icon: React.ReactNode; label: stri
         {icon}{label}
       </div>
       <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={value}>{value}</div>
+    </div>
+  );
+}
+
+function FilterCombo({ icon, label, value, options, onChange, searchAll, searchable = true }: {
+  icon: React.ReactNode; label: string; value: string;
+  options: { value: string; label: string }[]; onChange: (v: string) => void;
+  searchAll: string; searchable?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  const cur = options.find((o) => o.value === value);
+  const filtered = q ? options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase())) : options;
+  const active = !!value;
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className={cn('inline-flex items-center gap-1.5 h-9 pl-2.5 pr-2 rounded-lg text-[12px] font-semibold transition-colors ring-1',
+          active ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800' : 'bg-white/70 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-slate-300')}>
+        <span className={active ? 'text-indigo-500' : 'text-slate-400'}>{icon}</span>
+        <span className="max-w-[120px] truncate">{cur ? cur.label : label}</span>
+        {active ? (
+          <span role="button" onClick={(e) => { e.stopPropagation(); onChange(''); setOpen(false); }}
+            className="w-4 h-4 rounded-full grid place-items-center hover:bg-indigo-100 dark:hover:bg-indigo-900">
+            <X className="h-3 w-3" />
+          </span>
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        )}
+      </button>
+      {open && (
+        <div className="absolute z-40 mt-1.5 left-0 w-56 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.4)] overflow-hidden">
+          {searchable && (
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <Input value={q} onChange={(e) => setQ(e.target.value)} autoFocus className="h-8 pl-8 text-[12px] rounded-lg" />
+              </div>
+            </div>
+          )}
+          <div className="max-h-[240px] overflow-y-auto p-1">
+            <button onClick={() => { onChange(''); setOpen(false); setQ(''); }}
+              className={cn('w-full text-left px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-2', !value ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300')}>
+              {searchAll}
+            </button>
+            {filtered.map((o) => (
+              <button key={o.value} onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}
+                className={cn('w-full text-left px-2.5 py-1.5 rounded-lg text-[12px] flex items-center gap-2', value === o.value ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300')}>
+                <span className="flex-1 truncate">{o.label}</span>
+                {value === o.value && <Check className="h-3.5 w-3.5" />}
+              </button>
+            ))}
+            {filtered.length === 0 && <div className="px-2.5 py-3 text-[12px] text-slate-400 text-center">—</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DateFilter({ from, to, setFrom, setTo, t }: {
+  from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void; t: (k: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onClick(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+  const active = !!(from || to);
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className={cn('inline-flex items-center gap-1.5 h-9 px-2.5 rounded-lg text-[12px] font-semibold transition-colors ring-1',
+          active ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-800' : 'bg-white/70 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-slate-300')}>
+        <Calendar className={cn('h-4 w-4', active ? 'text-indigo-500' : 'text-slate-400')} />
+        {active && <span className="tabular-nums">{from ? fmtDate(from) : '…'} – {to ? fmtDate(to) : '…'}</span>}
+      </button>
+      {open && (
+        <div className="absolute z-40 mt-1.5 right-0 w-64 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-[0_20px_50px_-20px_rgba(15,23,42,0.4)] p-3 space-y-2.5">
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1 block">{t('fromDate')}</label>
+            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 text-[12px] rounded-lg" />
+          </div>
+          <div>
+            <label className="text-[10px] uppercase tracking-wider font-bold text-slate-400 mb-1 block">{t('toDate')}</label>
+            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 text-[12px] rounded-lg" />
+          </div>
+          {active && (
+            <button onClick={() => { setFrom(''); setTo(''); }} className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 inline-flex items-center justify-center gap-1">
+              <X className="h-3.5 w-3.5" /> {t('clearFilters')}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
