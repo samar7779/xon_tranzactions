@@ -170,7 +170,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
   const canSave = !!contract.trim() && !!date && !!vidDogovora && !!kontrolyor && !create.isPending;
 
   return (
-    <div className="space-y-5 max-w-3xl mx-auto">
+    <div className="space-y-5">
       {/* ═══ HERO — gradient banner + illustration + search ═══ */}
       <div className="relative rounded-[28px] overflow-visible bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 shadow-[0_30px_60px_-25px_rgba(124,58,237,0.7)]">
         {/* Dekoratsiya (kesilgan qatlam) */}
@@ -285,51 +285,60 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
         </div>
       </div>
 
-      {/* ═══ Forma — glassmorphism ═══ */}
-      <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-6 space-y-5">
-        {/* Shartnoma turi — to'liq kenglik, iconli */}
-        <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
-          <Select value={vidDogovora} onValueChange={setVidDogovora}>
-            <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
-            <SelectContent>
-              {VID_DOGOVORA_KEYS.map((k) => {
-                const Ico = VID_ICONS[k];
-                return (
-                  <SelectItem key={k} value={k}>
-                    <span className="flex items-center gap-2">
-                      <Ico className="h-4 w-4 text-violet-500" /> {vidLabel(lang, k)}
-                    </span>
-                  </SelectItem>
-                );
-              })}
-            </SelectContent>
-          </Select>
-        </Field>
+      {/* ═══ Forma — keng desktop layout (2 ustun) ═══ */}
+      <div className="rounded-3xl bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl ring-1 ring-white/60 dark:ring-slate-800 shadow-[0_20px_50px_-25px_rgba(79,70,229,0.35)] p-6 lg:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-5">
+          {/* Shartnoma turi */}
+          <Field label={t('vidDogovora')} icon={<FileText className="h-3.5 w-3.5 text-violet-500" />} required>
+            <Select value={vidDogovora} onValueChange={setVidDogovora}>
+              <SelectTrigger className="h-12 rounded-xl"><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                {VID_DOGOVORA_KEYS.map((k) => {
+                  const Ico = VID_ICONS[k];
+                  return (
+                    <SelectItem key={k} value={k}>
+                      <span className="flex items-center gap-2">
+                        <Ico className="h-4 w-4 text-violet-500" /> {vidLabel(lang, k)}
+                      </span>
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
+          </Field>
 
-        <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
-          <div className="grid grid-cols-2 gap-3">
-            <KontrolyorBtn active={kontrolyor === 'prinyat'} tone="ok" label={t('kontrolyor_prinyat')} onClick={() => setKontrolyor('prinyat')} />
-            <KontrolyorBtn active={kontrolyor === 'otkaz'} tone="no" label={t('kontrolyor_otkaz')} onClick={() => setKontrolyor('otkaz')} />
+          {/* Jarima */}
+          <Field label={t('shtrafy')} icon={<Coins className="h-3.5 w-3.5 text-amber-500" />} hint={t('shtrafyHint')}>
+            <div className="relative">
+              <Input type="number" inputMode="numeric" min={0} value={shtrafy} onChange={(e) => setShtrafy(e.target.value)} placeholder="0" className="h-12 rounded-xl tabular-nums pr-12" />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">UZS</span>
+            </div>
+          </Field>
+
+          {/* Kontrolyor — ikki ustunga cho'ziladi */}
+          <div className="lg:col-span-2">
+            <Field label={t('kontrolyor')} icon={<Check className="h-3.5 w-3.5 text-emerald-500" />} required>
+              <div className="grid grid-cols-2 gap-4 max-w-xl">
+                <KontrolyorBtn active={kontrolyor === 'prinyat'} tone="ok" label={t('kontrolyor_prinyat')} onClick={() => setKontrolyor('prinyat')} />
+                <KontrolyorBtn active={kontrolyor === 'otkaz'} tone="no" label={t('kontrolyor_otkaz')} onClick={() => setKontrolyor('otkaz')} />
+              </div>
+            </Field>
           </div>
-        </Field>
 
-        <Field label={t('prichinaOtkaza')} icon={<AlertTriangle className={cn('h-3.5 w-3.5', kontrolyor === 'otkaz' ? 'text-rose-500' : 'text-slate-400')} />}>
-          <textarea value={prichina} onChange={(e) => setPrichina(e.target.value)} placeholder={t('prichinaPlaceholder')} rows={2}
-            className={cn('w-full rounded-xl border bg-background px-3 py-2.5 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400/40 transition-all',
-              kontrolyor === 'otkaz' ? 'border-rose-300 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-950/20' : 'border-input')} />
-        </Field>
-
-        <Field label={t('shtrafy')} icon={<Coins className="h-3.5 w-3.5 text-amber-500" />} hint={t('shtrafyHint')}>
-          <div className="relative max-w-xs">
-            <Input type="number" inputMode="numeric" min={0} value={shtrafy} onChange={(e) => setShtrafy(e.target.value)} placeholder="0" className="h-11 rounded-xl tabular-nums pr-12" />
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400">UZS</span>
+          {/* Rad etish sababi — to'liq kenglik */}
+          <div className="lg:col-span-2">
+            <Field label={t('prichinaOtkaza')} icon={<AlertTriangle className={cn('h-3.5 w-3.5', kontrolyor === 'otkaz' ? 'text-rose-500' : 'text-slate-400')} />}>
+              <textarea value={prichina} onChange={(e) => setPrichina(e.target.value)} placeholder={t('prichinaPlaceholder')} rows={2}
+                className={cn('w-full rounded-xl border bg-background px-3 py-2.5 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-indigo-400/40 transition-all',
+                  kontrolyor === 'otkaz' ? 'border-rose-300 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-950/20' : 'border-input')} />
+            </Field>
           </div>
-        </Field>
+        </div>
 
-        {/* Saqlash — to'liq kenglik; mobil'da pastda yopishib turadi */}
-        <div className="pt-1 sticky bottom-0 z-10 -mx-6 -mb-6 px-6 pt-3 pb-5 bg-gradient-to-t from-white/95 dark:from-slate-900/95 via-white/70 dark:via-slate-900/70 to-transparent backdrop-blur-sm sm:static sm:mx-0 sm:mb-0 sm:px-0 sm:pb-0 sm:bg-none sm:backdrop-blur-0">
-          <Button onClick={submit} disabled={!canSave} style={{ height: 52 }}
-            className="w-full gap-2 rounded-2xl text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none">
+        {/* Saqlash — o'ngga tekislangan */}
+        <div className="mt-7 flex justify-end border-t border-slate-100 dark:border-slate-800 pt-5">
+          <Button onClick={submit} disabled={!canSave} style={{ height: 48 }}
+            className="px-10 gap-2 rounded-2xl text-[15px] font-bold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 shadow-lg shadow-indigo-500/30 disabled:opacity-50 disabled:shadow-none">
             {create.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {create.isPending ? t('saving') : t('save')}
           </Button>
