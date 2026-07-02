@@ -71,7 +71,7 @@ function ChekInner() {
 
       {/* ═══ Header ═══ */}
       <header className="relative z-20 sticky top-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur-xl border-b border-white/40 dark:border-slate-800/60 shadow-[0_1px_20px_-10px_rgba(79,70,229,0.3)]">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-500 to-fuchsia-500 grid place-items-center text-white shadow-lg shadow-indigo-500/30 shrink-0">
               <ClipboardCheck className="h-5 w-5" />
@@ -104,7 +104,7 @@ function ChekInner() {
 
         {/* Tab nav */}
         {allowed.length > 0 && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6">
             <nav className="flex items-center gap-1 -mb-px">
               {allowed.map((tab) => (
                 <button
@@ -127,7 +127,7 @@ function ChekInner() {
       </header>
 
       {/* ═══ Content ═══ */}
-      <main className="relative z-10 max-w-6xl mx-auto px-4 sm:px-6 py-6">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 py-6">
         {allowed.length === 0 ? (
           <div className="mt-16 text-center">
             <div className="w-16 h-16 rounded-3xl bg-rose-50 dark:bg-rose-950/40 grid place-items-center mx-auto mb-4">
