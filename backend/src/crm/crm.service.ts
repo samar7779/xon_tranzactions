@@ -135,6 +135,8 @@ export class CrmService {
     const object = typeof it.object === 'string'
       ? it.object
       : (it.object?.name || it.object?.uz || it.object?.ru || null);
+    const status = it.status?.name?.uz || it.status?.name?.ru || it.status?.type
+      || it.virtual_status?.value?.name?.uz || it.virtual_status?.value?.name?.ru || null;
 
     return {
       ok: true,
@@ -144,6 +146,7 @@ export class CrmService {
       managerPhone: cb.phone != null ? String(cb.phone) : null,
       branchName: cb.branch?.name || null,
       object,
+      status,
       clientFullName: it.client_full_name || null,
       apartmentNumber: it.number || null,
     };

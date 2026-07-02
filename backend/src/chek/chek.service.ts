@@ -1,8 +1,26 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 import { CreateChekDto, UpdateChekDto } from './dto/chek.dto';
+
+// Telegram xabari uchun rus tilidagi yorliqlar (misolga mos)
+const TG_VID: Record<string, string> = {
+  original: 'Оригинал', ekzemplyar: 'Экземпляр',
+  original_fixed: 'Тугирланган Оригинал', ekzemplyar_fixed: 'Тугирланган Экземпляр',
+};
+
+export interface ChekTgConfig {
+  botToken: string;
+  groupId: string;
+  intervalMin: number;
+  fromHour: number;
+  toHour: number;
+  enabled: boolean;
+}
+const DEFAULT_TG: ChekTgConfig = { botToken: '', groupId: '', intervalMin: 5, fromHour: 9, toHour: 21, enabled: false };
+const TG_CONFIG_KEY = 'chek.tg.config';
 
 type Actor = { id?: string | null; name?: string | null };
 
@@ -43,11 +61,15 @@ function serialize(row: any) {
     data: row.data instanceof Date ? row.data.toISOString().slice(0, 10) : row.data,
     createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : row.createdAt,
     updatedAt: row.updatedAt instanceof Date ? row.updatedAt.toISOString() : row.updatedAt,
+    tgSentAt: row.tgSentAt instanceof Date ? row.tgSentAt.toISOString() : (row.tgSentAt ?? null),
   };
 }
 
 @Injectable()
 export class ChekService {
+  private readonly log = new Logger(ChekService.name);
+  private lastNotifyAt = 0;
+
   constructor(private prisma: PrismaService, private crm: CrmService) {}
 
   /** CRM'dan menejer / sotuv ofisi / obyekt (Baza tab — shartnoma kiritilganda) */
@@ -71,6 +93,7 @@ export class ChekService {
         managerPhone: dto.managerPhone || null,
         branchName: dto.branchName || null,
         objectName: dto.objectName || null,
+        crmStatus: dto.crmStatus || null,
         data: new Date(dto.data),
         vidDogovora: dto.vidDogovora,
         kontrolyor: dto.kontrolyor,
@@ -193,7 +216,11 @@ export class ChekService {
     if (dto.objectName !== undefined) data.objectName = dto.objectName || null;
     if (dto.data !== undefined) data.data = new Date(dto.data);
     if (dto.vidDogovora !== undefined) data.vidDogovora = dto.vidDogovora;
-    if (dto.kontrolyor !== undefined) data.kontrolyor = dto.kontrolyor;
+    if (dto.kontrolyor !== undefined) {
+      data.kontrolyor = dto.kontrolyor;
+      // Kontrolyor o'zgarsa (masalan otkaz -> prinyat, "To'g'rlandi") — qayta yuborilsin
+      if (dto.kontrolyor !== exists.kontrolyor) { data.tgSend = false; data.tgSentAt = null; }
+    }
     if (dto.prichinaOtkaza !== undefined) data.prichinaOtkaza = dto.prichinaOtkaza || null;
     if (dto.shtrafy !== undefined) data.shtrafy = dto.shtrafy != null ? BigInt(dto.shtrafy) : null;
     if (dto.tgSend !== undefined) data.tgSend = dto.tgSend;
@@ -207,5 +234,138 @@ export class ChekService {
     if (!exists) throw new NotFoundException('Topilmadi');
     await this.prisma.chekDog.delete({ where: { id } });
     return { ok: true };
+  }
+
+  // ───────────────────── Telegram ─────────────────────
+
+  async getTgConfig(): Promise<ChekTgConfig> {
+    const s = await this.prisma.setting.findUnique({ where: { key: TG_CONFIG_KEY } });
+    if (!s?.value) return { ...DEFAULT_TG };
+    try { return { ...DEFAULT_TG, ...JSON.parse(s.value) }; } catch { return { ...DEFAULT_TG }; }
+  }
+
+  async setTgConfig(cfg: Partial<ChekTgConfig>, by?: string): Promise<{ ok: true; config: ChekTgConfig }> {
+    const cur = await this.getTgConfig();
+    const next: ChekTgConfig = {
+      botToken: (cfg.botToken ?? cur.botToken).trim(),
+      groupId: String(cfg.groupId ?? cur.groupId).trim(),
+      intervalMin: Math.max(1, Number(cfg.intervalMin ?? cur.intervalMin) || 5),
+      fromHour: Math.min(23, Math.max(0, Number(cfg.fromHour ?? cur.fromHour) || 0)),
+      toHour: Math.min(24, Math.max(0, Number(cfg.toHour ?? cur.toHour) || 24)),
+      enabled: cfg.enabled ?? cur.enabled,
+    };
+    await this.prisma.setting.upsert({
+      where: { key: TG_CONFIG_KEY },
+      create: { key: TG_CONFIG_KEY, value: JSON.stringify(next), updatedBy: by || null },
+      update: { value: JSON.stringify(next), updatedBy: by || null },
+    });
+    return { ok: true, config: next };
+  }
+
+  private buildTgMessage(row: any): string {
+    const vid = TG_VID[row.vidDogovora] || row.vidDogovora || '—';
+    const kontr = row.kontrolyor === 'otkaz' ? '❌ Отказ' : '✅ Принят';
+    const dt = row.createdAt instanceof Date ? row.createdAt : new Date(row.createdAt);
+    let when = '';
+    try {
+      when = new Intl.DateTimeFormat('ru-RU', {
+        day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        hour12: false, timeZone: 'Asia/Tashkent',
+      }).format(dt).replace(', ', ' ');
+    } catch { when = dt.toISOString().slice(0, 16).replace('T', ' '); }
+
+    const lines = [
+      '📣 Реестр Договоров',
+      `📄 Договор №: ${row.contractNumber}`,
+      `👨‍💼 Менеджер: ${row.manager || '—'}`,
+      `🏢 Офис продаж: ${row.branchName || '—'}`,
+      `📌 Статус: ${row.crmStatus || '—'}`,
+      `📑 Вид договора: ${vid}`,
+      `🕵️ Контролёр: ${kontr}`,
+    ];
+    if (row.kontrolyor === 'otkaz' && row.prichinaOtkaza) lines.push(`⚠️ Причина: ${row.prichinaOtkaza}`);
+    lines.push(`🕒 ${when}`);
+    return lines.join('\n');
+  }
+
+  private async tgSendMessage(token: string, chatId: string, text: string): Promise<boolean> {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, disable_web_page_preview: true }),
+      });
+      if (!res.ok) {
+        const t = await res.text().catch(() => '');
+        this.log.warn(`Telegram sendMessage ${res.status}: ${t.slice(0, 200)}`);
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      this.log.warn(`Telegram sendMessage xato: ${e?.message}`);
+      return false;
+    }
+  }
+
+  /** Bitta yozuvni qo'lda yuborish — force=true bo'lsa tgSend holatiga qaramaydi */
+  async sendOne(id: string): Promise<{ ok: boolean; error?: string }> {
+    const cfg = await this.getTgConfig();
+    if (!cfg.botToken || !cfg.groupId) return { ok: false, error: 'Telegram sozlanmagan (token/guruh)' };
+    const row = await this.prisma.chekDog.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Topilmadi');
+    const ok = await this.tgSendMessage(cfg.botToken, cfg.groupId, this.buildTgMessage(row));
+    if (ok) await this.prisma.chekDog.update({ where: { id }, data: { tgSend: true, tgSentAt: new Date() } });
+    return { ok, error: ok ? undefined : 'Yuborilmadi' };
+  }
+
+  /** Test xabar — sozlamalarni tekshirish uchun */
+  async tgTest(): Promise<{ ok: boolean; error?: string }> {
+    const cfg = await this.getTgConfig();
+    if (!cfg.botToken || !cfg.groupId) return { ok: false, error: 'Telegram sozlanmagan (token/guruh)' };
+    const ok = await this.tgSendMessage(cfg.botToken, cfg.groupId, '✅ Реестр Договоров — тест хабари. Бот ишлаяпти.');
+    return { ok, error: ok ? undefined : 'Yuborilmadi' };
+  }
+
+  private inWindow(hour: number, from: number, to: number): boolean {
+    if (from === to) return true;                 // 24 soat
+    if (from < to) return hour >= from && hour < to;
+    return hour >= from || hour < to;             // tungi oralik
+  }
+
+  /** Har daqiqada tekshiradi; enabled + soat oynasi + interval bo'yicha yuboradi. */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async notifyCron() {
+    try {
+      const cfg = await this.getTgConfig();
+      if (!cfg.enabled || !cfg.botToken || !cfg.groupId) return;
+
+      const hourStr = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: 'Asia/Tashkent' }).format(new Date());
+      const hour = Number(hourStr);
+      if (!this.inWindow(hour, cfg.fromHour, cfg.toHour)) return;
+
+      const now = Date.now();
+      if (now - this.lastNotifyAt < cfg.intervalMin * 60_000) return;
+      this.lastNotifyAt = now;
+
+      // Faqat yuborilmagan (tgSend=false) yozuvlar
+      const rows = await this.prisma.chekDog.findMany({
+        where: { tgSend: false },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      });
+      if (rows.length === 0) return;
+
+      let sent = 0;
+      for (const row of rows) {
+        const ok = await this.tgSendMessage(cfg.botToken, cfg.groupId, this.buildTgMessage(row));
+        if (ok) {
+          await this.prisma.chekDog.update({ where: { id: row.id }, data: { tgSend: true, tgSentAt: new Date() } });
+          sent++;
+        }
+      }
+      if (sent > 0) this.log.log(`chek TG: ${sent} ta xabar yuborildi`);
+    } catch (e: any) {
+      this.log.warn(`chek notifyCron xato: ${e?.message}`);
+    }
   }
 }

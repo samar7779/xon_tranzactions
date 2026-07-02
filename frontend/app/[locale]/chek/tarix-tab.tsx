@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, Pencil, Trash2, Check, X, Save, Calendar,
   FileText, Coins, AlertTriangle, Inbox, MoreVertical, ChevronDown, CheckCheck, User,
-  Building2, Home, RotateCcw, FileSpreadsheet, ArrowRight,
+  Building2, Home, RotateCcw, FileSpreadsheet, ArrowRight, Send, SendHorizontal,
 } from 'lucide-react';
 import { api, apiDownload } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,8 @@ interface ChekRow {
   prichinaOtkaza: string | null;
   shtrafy: number | null;
   dobavilName: string | null;
+  tgSend: boolean;
+  tgSentAt: string | null;
   createdAt: string;
 }
 
@@ -145,7 +147,14 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
     onError: (e: any) => toast.error(e?.message || t('error')),
   });
 
-  const cols = canEdit ? 7 : 6; // chevron + contract + manager + branch + object + kontrolyor (+actions)
+  // Qo'lda TG yuborish (force — oldin yuborilgan bo'lsa ham qayta yuboradi)
+  const sendTg = useMutation({
+    mutationFn: (id: string) => api.post<{ ok: boolean; error?: string }>(`/chek/${id}/send-tg`, {}),
+    onSuccess: (r: any) => { r?.ok ? toast.success(t('sent')) : toast.error(r?.error || t('error')); qc.invalidateQueries({ queryKey: ['chek-list'] }); },
+    onError: (e: any) => toast.error(e?.message || t('error')),
+  });
+
+  const cols = canEdit ? 8 : 7; // chevron + contract + manager + branch + object + kontrolyor + yuborilgan (+actions)
 
   return (
     <div className="space-y-4">
@@ -210,6 +219,7 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
                 <Th>{t('salesOffice')}</Th>
                 <Th>{t('object')}</Th>
                 <Th>{t('kontrolyor')}</Th>
+                <Th>{t('sent')}</Th>
                 {canEdit && <Th className="text-right">{t('actions')}</Th>}
               </tr>
             </thead>
@@ -235,6 +245,17 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
                       <Td>{r.branchName || '—'}</Td>
                       <Td className="max-w-[160px] truncate" title={r.objectName || ''}>{r.objectName || '—'}</Td>
                       <Td><KontrolyorBadge value={r.kontrolyor} lang={lang} /></Td>
+                      <Td>
+                        {r.tgSend ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ring-1 ring-inset bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900" title={r.tgSentAt ? fmtDate(r.tgSentAt) : ''}>
+                            <Send className="h-3 w-3" />{t('sent')}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium text-slate-400 dark:text-slate-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-600" />{t('notSent')}
+                          </span>
+                        )}
+                      </Td>
                       {canEdit && (
                         <Td className="text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
@@ -250,9 +271,12 @@ export function TarixTab({ lang, canEdit }: { lang: ChekLang; canEdit?: boolean 
                                   <MoreVertical className="h-4 w-4" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem onSelect={() => setEditing(r)} className="gap-2 cursor-pointer">
                                   <Pencil className="h-4 w-4 text-indigo-500" /> {t('edit')}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onSelect={() => sendTg.mutate(r.id)} className="gap-2 cursor-pointer text-sky-600 focus:text-sky-600">
+                                  <SendHorizontal className="h-4 w-4" /> {t('sendTg')}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onSelect={() => { if (confirm(t('confirmDelete'))) del.mutate(r.id); }} className="gap-2 cursor-pointer text-rose-600 focus:text-rose-600">

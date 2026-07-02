@@ -78,6 +78,36 @@ export class ChekController {
     res.end(buffer);
   }
 
+  // ─── Sozlamalar tab — Telegram config ───
+  @Get('tg-config')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Telegram sozlamalari (bot token, guruh, interval, soat)' })
+  getTgConfig() {
+    return this.svc.getTgConfig();
+  }
+
+  @Patch('tg-config')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Telegram sozlamalarini saqlash' })
+  setTgConfig(@Body() body: any, @CurrentUser() user?: AuthUser) {
+    return this.svc.setTgConfig(body || {}, actorFrom(user).name || undefined);
+  }
+
+  @Post('tg-test')
+  @RequirePermissions(PERMISSIONS.CHEK_SOZLAMALAR)
+  @ApiOperation({ summary: 'Telegram test xabari yuborish' })
+  tgTest() {
+    return this.svc.tgTest();
+  }
+
+  // ─── Tarix — qo'lda TG yuborish (force) ───
+  @Post(':id/send-tg')
+  @RequirePermissions(PERMISSIONS.CHEK_TARIX)
+  @ApiOperation({ summary: 'Yozuvni Telegram\'ga qo\'lda yuborish (avval yuborilgan bo\'lsa ham)' })
+  sendTg(@Param('id') id: string) {
+    return this.svc.sendOne(id);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.CHEK_TARIX)
   getOne(@Param('id') id: string) {

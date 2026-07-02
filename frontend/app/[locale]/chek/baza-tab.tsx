@@ -59,6 +59,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
   const [branchName, setBranchName] = useState('');
   const [objectName, setObjectName] = useState('');
   const [clientName, setClientName] = useState('');
+  const [crmStatus, setCrmStatus] = useState('');
   const [crmLoaded, setCrmLoaded] = useState(false);
 
   const [date, setDate] = useState(todayISO());
@@ -94,7 +95,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
   const showDropdown = focused && !crmLoaded && debouncedQ.length >= 3;
 
   function resetCrm() {
-    setManager(''); setManagerPhone(''); setBranchName(''); setObjectName(''); setClientName(''); setCrmLoaded(false);
+    setManager(''); setManagerPhone(''); setBranchName(''); setObjectName(''); setClientName(''); setCrmStatus(''); setCrmLoaded(false);
   }
 
   function pick(s: Suggestion) {
@@ -104,6 +105,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
     setBranchName(s.branchName || '');
     setObjectName(s.object || '');
     setClientName(s.clientFullName || '');
+    setCrmStatus(s.status || '');
     setCrmLoaded(true);
     setFocused(false);
     setHighlight(-1);
@@ -116,7 +118,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
       if (r?.ok && r.found) {
         setManager(r.manager || ''); setManagerPhone(r.managerPhone || '');
         setBranchName(r.branchName || ''); setObjectName(r.object || '');
-        setClientName(r.clientFullName || ''); setCrmLoaded(true); setFocused(false);
+        setClientName(r.clientFullName || ''); setCrmStatus(r.status || ''); setCrmLoaded(true); setFocused(false);
         toast.success(t('crmLoaded'));
       } else {
         toast.warning(t('crmNotFound'));
@@ -160,6 +162,7 @@ export function BazaTab({ lang }: { lang: ChekLang }) {
       managerPhone: managerPhone || undefined,
       branchName: branchName || undefined,
       objectName: objectName || undefined,
+      crmStatus: crmStatus || undefined,
       data: date,
       vidDogovora, kontrolyor,
       prichinaOtkaza: prichina || undefined,
