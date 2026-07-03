@@ -893,9 +893,13 @@ export class OplataKvService {
             dateChanged && 'date',
             txTypeChanged && 'txType',
           ].filter(Boolean) as string[];
+          // client'ni faqat CRM egasi mavjud bo'lsa yangilaymiz (agregator nomiga
+          // downgrade qilmaslik uchun mavjud client saqlanadi)
+          const updateData: any = { ...baseData };
+          if (!crm?.customerName) delete updateData.client;
           toUpdate.push({
             id: existing.id,
-            data: baseData,
+            data: updateData,
             changedFields,
             historyNote: `Tranzaksiyadan yangilandi (txId: ${tx.id})`,
           });
@@ -1005,6 +1009,15 @@ export class OplataKvService {
           // KAMAYTIRILGAN limit (DB connection pool'ni saqlash uchun)
           // 20000 emas 3000 — boshqa requestlar 502 olmasin
           const fillR = await this.fillMissingObjects({ limit: 3000, actor: opts.actor });
+          // КЛИЕНТ nomlarini CRM shartnoma egasiga tuzatish (agregator nomi o'rniga).
+          // found=true lekin ismi yo'q shartnomalar uchun jonli so'rov (chegara 400) —
+          // bir necha sync ichida barcha tarixiy qatorlar tuzaladi, keyin konvergensiya.
+          try {
+            const clientR = await this.fixClientNamesFromCrm({ maxLive: 400 });
+            this.log.log(`bg client-fix: updated=${clientR.updated}/${clientR.processed} live=${clientR.liveFetched}`);
+          } catch (e: any) {
+            this.log.warn(`bg client-fix xato: ${e?.message}`);
+          }
           OplataKvService.bgPhase = 'split';
           const splitR = await this.splitInstallments({ limit: 3000, actor: opts.actor });
           OplataKvService.bgResult = {
@@ -1224,6 +1237,125 @@ export class OplataKvService {
       errors,
       duration,
     };
+  }
+
+  /** CRM detail objektidan mijoz (F.I.O.) ismini quradi. */
+  private extractCrmClientName(d: any): string | null {
+    if (!d) return null;
+    const c = d.client || {};
+    const f = (v: any): string => {
+      if (!v) return '';
+      if (typeof v === 'string') return v;
+      if (typeof v === 'object') return v.kirill || v.lotin || v.uz || v.ru || v.name || v.value || '';
+      return '';
+    };
+    const parts = [f(c.last_name), f(c.first_name), f(c.middle_name)].filter(Boolean);
+    if (parts.length > 0) return parts.join(' ').trim();
+    return c.full_name_kirill || c.full_name_lotin || c.full_name || c.name || c.fio || d.fio || null;
+  }
+
+  /**
+   * Tranzaksiya-manba qatorlarda КЛИЕНТ nomini CRM shartnoma egasi ismiga tuzatadi.
+   * To'lov agregatori nomi (masalan "XONSAROY PAYMENTS AJ") o'rniga CRM'dagi haqiqiy
+   * shartnoma egasi yoziladi.
+   *   - Cache-first: crmContract.customerName (tez, pure DB).
+   *   - Cache'da nom yo'q bo'lsa — jonli CRM so'rov (chegara bilan) + cache'ga yozib qo'yiladi.
+   * Cursor bilan barcha qatorlarni bir marta aylanadi (konvergensiya kafolatlangan).
+   */
+  async fixClientNamesFromCrm(opts: { maxRows?: number; maxLive?: number } = {}): Promise<{
+    ok: true; processed: number; updated: number; liveFetched: number; duration: number;
+  }> {
+    const startedAt = Date.now();
+    const maxRows = Math.min(opts.maxRows || 200000, 1000000);
+    const maxLive = opts.maxLive ?? 1500; // bir yugurishdagi jonli CRM so'rovlar chegarasi
+    const BATCH = 2000;
+    let processed = 0;
+    let updated = 0;
+    let liveFetched = 0;
+    let cursor: string | undefined;
+
+    while (processed < maxRows) {
+      const batch: Array<{ id: string; contractNo: string; client: string | null }> =
+        await this.prisma.oplataKv.findMany({
+          where: { sourceTxId: { not: null } },
+          select: { id: true, contractNo: true, client: true },
+          orderBy: { id: 'asc' },
+          take: BATCH,
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        });
+      if (batch.length === 0) break;
+      cursor = batch[batch.length - 1].id;
+      processed += batch.length;
+
+      // Shu batchdagi shartnomalar uchun CRM egasi ismini olamiz (cache'da nomi bor bo'lganlar)
+      const contractNos = Array.from(new Set(batch.map((r) => r.contractNo)));
+      const crm = await this.prisma.crmContract.findMany({
+        where: { contractNumber: { in: contractNos }, customerName: { not: null } },
+        select: { contractNumber: true, customerName: true },
+      });
+      const nameByContract = new Map(crm.map((c) => [c.contractNumber, c.customerName as string]));
+
+      // Cache'da nomi yo'q, lekin CRM'da TASDIQLANGAN (found=true) shartnomalar —
+      // jonli CRM so'rov (chegara bilan) + cache'ga yozib qo'yamiz. found=true bilan
+      // cheklash: XATO/tasdiqlanmagan shartnomalarni behuda so'ramaymiz + konvergensiya.
+      const missing = contractNos.filter((cn) => !nameByContract.has(cn));
+      if (missing.length > 0 && liveFetched < maxLive) {
+        const verifiedMissing = await this.prisma.crmContract.findMany({
+          where: { contractNumber: { in: missing }, found: true },
+          select: { contractNumber: true },
+        });
+        const toFetch = verifiedMissing.map((c) => c.contractNumber).slice(0, maxLive - liveFetched);
+        const CONC = 20;
+        for (let i = 0; i < toFetch.length; i += CONC) {
+          const slice = toFetch.slice(i, i + CONC);
+          await Promise.all(slice.map(async (cn) => {
+            try {
+              const resp: any = await this.crmService.show({ contract: cn });
+              if (resp?.ok && resp.detail) {
+                const name = this.extractCrmClientName(resp.detail);
+                if (name) {
+                  nameByContract.set(cn, name);
+                  const key = cn.trim().toUpperCase();
+                  await this.prisma.crmContract.upsert({
+                    where: { contractNumber: key },
+                    create: { contractNumber: key, customerName: name, found: true },
+                    update: { customerName: name },
+                  }).catch(() => { /* ignore */ });
+                }
+              }
+            } catch { /* CRM xato — o'tkazib yuboramiz */ }
+          }));
+          liveFetched += slice.length;
+        }
+      }
+
+      // client != CRM egasi bo'lganlarni CRM ismi bo'yicha guruhlab yangilaymiz
+      const idsByName = new Map<string, string[]>();
+      for (const r of batch) {
+        const crmName = nameByContract.get(r.contractNo);
+        if (crmName && (r.client || '') !== crmName) {
+          const arr = idsByName.get(crmName) || [];
+          arr.push(r.id);
+          idsByName.set(crmName, arr);
+        }
+      }
+      for (const [crmName, ids] of idsByName) {
+        for (let i = 0; i < ids.length; i += 500) {
+          const chunk = ids.slice(i, i + 500);
+          const res = await this.prisma.oplataKv.updateMany({
+            where: { id: { in: chunk } },
+            data: { client: crmName },
+          });
+          updated += res.count;
+        }
+      }
+
+      if (batch.length < BATCH) break;
+    }
+
+    const duration = Math.round((Date.now() - startedAt) / 1000);
+    this.log.log(`fixClientNamesFromCrm: processed=${processed} updated=${updated} liveFetched=${liveFetched} duration=${duration}s`);
+    return { ok: true, processed, updated, liveFetched, duration };
   }
 
   /**
