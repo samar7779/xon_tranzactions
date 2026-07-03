@@ -320,6 +320,13 @@ export class OplataKvController {
     return this.svc.fillMissingObjects({ limit: body?.limit, actor: actorFrom(user) });
   }
 
+  @Post('fix-client-names')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "КЛИЕНТ nomlarini CRM shartnoma egasi ismiga tuzatish (agregator o'rniga)" })
+  async fixClientNames() {
+    return this.svc.fixClientNamesFromCrm({});
+  }
+
   @Get('unsplit-contracts')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "CRM topilgan, lekin to'lovi split bo'lmagan shartnomalar (split kerak)" })
