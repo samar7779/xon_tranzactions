@@ -931,6 +931,28 @@ export class TransactionsService {
     const cpByInn = new Map(cpRows.map((c) => [c.inn, c.name]));
     const accByNo = new Map(accRows.map((a) => [a.accountNo, a.ownerName]));
 
+    // Shartnoma raqamlari uchun CRM verified holati — web bilan bir xil.
+    // Tasdiqlanmagan (unverified/XATO) shartnomalarda raqam o'rniga "XATO" yoziladi,
+    // shunda eksport web bilan mos keladi (tekshirilmagan raqam "haqiqiy" bo'lib ko'rinmaydi).
+    const exportContractNums = new Set<string>();
+    for (const tx of items as any[]) {
+      if (tx.contractNumber) exportContractNums.add(tx.contractNumber);
+    }
+    const exportCrm = exportContractNums.size > 0
+      ? await this.prisma.crmContract.findMany({
+          where: { contractNumber: { in: Array.from(exportContractNums) } },
+          select: { contractNumber: true, found: true },
+        })
+      : [];
+    const foundByContract = new Map(exportCrm.map((c) => [c.contractNumber, !!c.found]));
+
+    // Web'dagi kabi: manual/ariza → raqam, verified → raqam, unverified → "XATO"
+    const shartnomaCell = (tx: any): string => {
+      if (!tx.contractNumber) return '';
+      if (tx.isContractManual) return tx.contractNumber;
+      return foundByContract.get(tx.contractNumber) ? tx.contractNumber : 'XATO';
+    };
+
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Xon Tranzaksiyalar';
     wb.created = new Date();
@@ -989,6 +1011,7 @@ export class TransactionsService {
       }
       const time = it.operationTime ? it.operationTime.slice(0, 5) : '';
 
+      const shartnomaVal = shartnomaCell(it);
       const row = ws.addRow({
         bank: it.bank?.name || it.account?.bank?.name || '',
         accountNo: it.account?.accountNo || '',
@@ -999,7 +1022,7 @@ export class TransactionsService {
         direction: it.direction === 'IN' ? 'Kirim' : 'Chiqim',
         kontragent,
         kategoriya,
-        shartnoma: it.contractNumber || '',
+        shartnoma: shartnomaVal,
         amount: Number(it.amount),
         description: it.description || '',
         externalId: it.externalId || it.id,
@@ -1017,8 +1040,10 @@ export class TransactionsService {
       const timeCell = row.getCell('time');
       timeCell.numFmt = '@';
       timeCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      // Shartnoma — monospace ko'rinish uchun
-      if (it.contractNumber) {
+      // Shartnoma — verified/manual raqam monospace, XATO qizil bold
+      if (shartnomaVal === 'XATO') {
+        row.getCell('shartnoma').font = { size: 9, bold: true, color: { argb: 'FFBE123C' } };
+      } else if (shartnomaVal) {
         row.getCell('shartnoma').font = { name: 'Consolas', size: 9, bold: true };
       }
     }

@@ -377,56 +377,13 @@ export class OplataKvService {
     //   'manual' — isContractManual=true + attachment yo'q (sof qo'lda kiritilgan)
     //   null     — avto-extract yoki CRM verified
     // XATO logikasi: faqat manual va ariza emas bo'lgan unverified contractlar XATO bo'ladi.
-    const txSourceItems = items.filter((i) => i.sourceTxId);
-    const txContractNos = Array.from(new Set(txSourceItems.map((i) => i.contractNo)));
-    const sourceTxIds = Array.from(new Set(
-      txSourceItems.map((i) => i.sourceTxId).filter((x): x is string => !!x),
-    ));
-
-    let xatoSet = new Set<string>();
-    const sourceByTxId = new Map<string, 'manual' | 'ariza'>();
-
-    if (sourceTxIds.length > 0) {
-      // Tranzaksiyalardan isContractManual=true bo'lganlarni va attachment soni bilan olamiz
-      const tx = await this.prisma.transaction.findMany({
-        where: {
-          OR: [
-            { externalId: { in: sourceTxIds } },
-            { id: { in: sourceTxIds } },
-          ],
-          isContractManual: true,
-        },
-        select: {
-          id: true,
-          externalId: true,
-          _count: { select: { attachments: true } },
-        },
-      });
-      tx.forEach((t) => {
-        const src: 'manual' | 'ariza' = t._count.attachments > 0 ? 'ariza' : 'manual';
-        if (t.externalId) sourceByTxId.set(t.externalId, src);
-        sourceByTxId.set(t.id, src);
-      });
-    }
-
-    if (txContractNos.length > 0) {
-      const verified = await this.prisma.crmContract.findMany({
-        where: { contractNumber: { in: txContractNos } },
-        select: { contractNumber: true, found: true },
-      });
-      const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
-      xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
-    }
-
-    const itemsWithStatus = items.map((i) => {
-      const contractSource = i.sourceTxId ? (sourceByTxId.get(i.sourceTxId) || null) : null;
-      const xato = i.sourceTxId && xatoSet.has(i.contractNo) && !contractSource;
-      return {
-        ...i,
-        crmXato: !!xato,
-        contractSource,  // 'manual' | 'ariza' | null
-      };
-    });
+    // (Excel eksport bilan bir xil bo'lishi uchun umumiy helper — computeContractXato)
+    const { isXato, sourceOf } = await this.computeContractXato(items);
+    const itemsWithStatus = items.map((i) => ({
+      ...i,
+      crmXato: isXato(i),
+      contractSource: sourceOf(i),  // 'manual' | 'ariza' | null
+    }));
 
     return {
       ok: true,
@@ -2384,6 +2341,58 @@ export class OplataKvService {
     });
   }
 
+  /**
+   * Qatorlar uchun XATO holati + shartnoma manbasini (manual/ariza) hisoblaydi.
+   * list() va Excel eksport bir xil natija berishi uchun umumiy helper.
+   *   crmXato = tx-manbali (sourceTxId) + CRM'da tasdiqlanmagan (found≠true) + qo'lda/ariza emas
+   */
+  private async computeContractXato(
+    items: Array<{ sourceTxId: string | null; contractNo: string }>,
+  ): Promise<{
+    isXato: (it: { sourceTxId: string | null; contractNo: string }) => boolean;
+    sourceOf: (it: { sourceTxId: string | null }) => 'manual' | 'ariza' | null;
+  }> {
+    const txSourceItems = items.filter((i) => i.sourceTxId);
+    const txContractNos = Array.from(new Set(txSourceItems.map((i) => i.contractNo)));
+    const sourceTxIds = Array.from(new Set(
+      txSourceItems.map((i) => i.sourceTxId).filter((x): x is string => !!x),
+    ));
+
+    const sourceByTxId = new Map<string, 'manual' | 'ariza'>();
+    let xatoSet = new Set<string>();
+
+    if (sourceTxIds.length > 0) {
+      const tx = await this.prisma.transaction.findMany({
+        where: {
+          OR: [{ externalId: { in: sourceTxIds } }, { id: { in: sourceTxIds } }],
+          isContractManual: true,
+        },
+        select: { id: true, externalId: true, _count: { select: { attachments: true } } },
+      });
+      tx.forEach((t) => {
+        const src: 'manual' | 'ariza' = t._count.attachments > 0 ? 'ariza' : 'manual';
+        if (t.externalId) sourceByTxId.set(t.externalId, src);
+        sourceByTxId.set(t.id, src);
+      });
+    }
+
+    if (txContractNos.length > 0) {
+      const verified = await this.prisma.crmContract.findMany({
+        where: { contractNumber: { in: txContractNos } },
+        select: { contractNumber: true, found: true },
+      });
+      const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
+      xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
+    }
+
+    const sourceOf = (it: { sourceTxId: string | null }) =>
+      it.sourceTxId ? (sourceByTxId.get(it.sourceTxId) || null) : null;
+    const isXato = (it: { sourceTxId: string | null; contractNo: string }) =>
+      !!(it.sourceTxId && xatoSet.has(it.contractNo) && !sourceOf(it));
+
+    return { isXato, sourceOf };
+  }
+
   // ───────────────── DISTINCT (column filter popover) ─────────────────
   /**
    * Berilgan ustun uchun distinct qiymatlar.
@@ -2520,6 +2529,8 @@ export class OplataKvService {
 
   async exportXlsx(q: ListOplataKvDto): Promise<{ buffer: Buffer; filename: string }> {
     const items = await this.fetchAllForExport(q);
+    // XATO holati — web bilan bir xil (tasdiqlanmagan shartnoma raqami "XATO" bo'lib chiqadi)
+    const { isXato } = await this.computeContractXato(items);
 
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Xon Tranzaksiyalar';
@@ -2568,8 +2579,9 @@ export class OplataKvService {
         const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
         date = `${dd}.${mm}.${d.getUTCFullYear()}`;
       }
+      const xatoRow = isXato(it);
       const row = ws.addRow({
-        contractNo: it.contractNo || '',
+        contractNo: xatoRow ? 'XATO' : (it.contractNo || ''),
         date,
         paymentAmount:    it.paymentAmount    ? Number(it.paymentAmount)    : null,
         firstInstallment: it.firstInstallment ? Number(it.firstInstallment) : null,
@@ -2584,6 +2596,10 @@ export class OplataKvService {
         id: it.id,
       });
       row.font = { size: 9 };
+      // XATO — qizil bold (tekshirilmagan shartnoma raqamini ko'rsatmaymiz)
+      if (xatoRow) {
+        row.getCell('contractNo').font = { size: 9, bold: true, color: { argb: 'FFBE123C' } };
+      }
       row.getCell('paymentAmount').numFmt    = '#,##0.00';
       row.getCell('firstInstallment').numFmt = '#,##0.00';
       row.getCell('monthlyAmount').numFmt    = '#,##0.00';
