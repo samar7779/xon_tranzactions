@@ -101,6 +101,38 @@ export default function ApiExplorerPage() {
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
 
+  // ─── Bank proxy (forwarder) sozlamasi — web'dan tahrirlash ───
+  const qc = useQueryClient();
+  const { data: forwarder } = useQuery({
+    queryKey: ['bank-forwarder'],
+    queryFn: () => api.get<{ url: string | null; secret: string | null; source: 'db' | 'env' | 'none' }>('/api-explorer/forwarder'),
+  });
+  const [proxyOpen, setProxyOpen] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [proxySecret, setProxySecret] = useState('');
+  const [showProxySecret, setShowProxySecret] = useState(false);
+  const openProxyEdit = () => {
+    setProxyUrl(forwarder?.url || '');
+    setProxySecret(forwarder?.secret || '');
+    setProxyOpen(true);
+  };
+  const saveForwarderMut = useMutation({
+    mutationFn: () => api.patch<{ ok: boolean; error?: string }>('/api-explorer/forwarder', {
+      url: proxyUrl.trim(),
+      secret: proxySecret.trim(),
+    }),
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success(t('proxySaved'));
+        qc.invalidateQueries({ queryKey: ['bank-forwarder'] });
+        setProxyOpen(false);
+      } else {
+        toast.error(r.error || tc('error'));
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+  });
+
   const fullLogin = form.loginPrefix + form.login;
   // MFO 5 xonalik bo'lishi kerak — leading zero qo'shamiz (974 → 00974)
   const branchPadded = form.branch.padStart(5, '0');
@@ -299,6 +331,85 @@ export default function ApiExplorerPage() {
                 </div>
               </div>
               <Zap className={cn("h-5 w-5 shrink-0 transition-colors", useProxy ? "text-emerald-600 dark:text-emerald-400" : "text-slate-400 dark:text-slate-500")} />
+            </div>
+
+            {/* Proxy (forwarder) manzil sozlamasi — web'dan tahrirlash */}
+            <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50/60 dark:bg-slate-900 p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{t('proxySettingsTitle')}</span>
+                    <span className={cn(
+                      "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold",
+                      forwarder?.source === 'db'
+                        ? "bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300"
+                        : forwarder?.source === 'env'
+                          ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                          : "bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300",
+                    )}>
+                      {forwarder?.source === 'db' ? t('proxySourceDb') : forwarder?.source === 'env' ? t('proxySourceEnv') : t('proxySourceNone')}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 font-mono truncate">
+                    {forwarder?.url || t('proxyNotSet')}
+                  </div>
+                </div>
+                {!proxyOpen && (
+                  <Button type="button" variant="outline" size="sm" onClick={openProxyEdit} className="shrink-0">
+                    {t('proxyEditBtn')}
+                  </Button>
+                )}
+              </div>
+
+              {proxyOpen && (
+                <div className="mt-3 space-y-3 border-t border-slate-200 dark:border-slate-700 pt-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('proxyUrlLabel')}</Label>
+                    <Input
+                      value={proxyUrl}
+                      onChange={(e) => setProxyUrl(e.target.value)}
+                      placeholder="https://xonapp.uz/xt-forwarder.php"
+                      className="font-mono text-[12px]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('proxySecretLabel')}</Label>
+                    <div className="relative">
+                      <Input
+                        type={showProxySecret ? 'text' : 'password'}
+                        value={proxySecret}
+                        onChange={(e) => setProxySecret(e.target.value)}
+                        placeholder="xt_..."
+                        className="font-mono text-[12px] pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowProxySecret((s) => !s)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      >
+                        {showProxySecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-[10.5px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {t('proxyHint')}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => saveForwarderMut.mutate()}
+                      disabled={saveForwarderMut.isPending}
+                    >
+                      {saveForwarderMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      {tc('save')}
+                    </Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setProxyOpen(false)}>
+                      {tc('cancel')}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Form fields */}
