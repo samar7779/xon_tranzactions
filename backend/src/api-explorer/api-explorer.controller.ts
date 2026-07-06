@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, IsBoolean } from 'class-validator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -6,6 +6,8 @@ import { PermissionsGuard } from '../auth/guards/permissions.guard';
 import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { KapitalbankClient } from '../integrations/kapitalbank/kapitalbank.client';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 // dd.MM.yyyy ↔ Date helpers
 function formatDate(d: Date): string {
@@ -52,6 +54,12 @@ class GetAccDto {
   @IsOptional() @IsBoolean() useProxy?: boolean;
 }
 
+class ForwarderDto {
+  // Bo'sh string → sozlamani tozalash (env fallback'ga qaytish)
+  @IsOptional() @IsString() url?: string;
+  @IsOptional() @IsString() secret?: string;
+}
+
 /**
  * API Explorer — bank API'lardan keladigan TO'LIQ raw javobni qaytaradi.
  * Frontend'da JSON viewer ko'rsatish uchun.
@@ -64,7 +72,49 @@ class GetAccDto {
 @RequirePermissions(PERMISSIONS.CREDENTIALS_MANAGE)
 @Controller('api-explorer')
 export class ApiExplorerController {
-  constructor(private kb: KapitalbankClient) {}
+  constructor(
+    private kb: KapitalbankClient,
+    private prisma: PrismaService,
+  ) {}
+
+  /** Hozirgi bank proxy (forwarder) sozlamasi — URL, secret, manba (db/env/none) */
+  @Get('forwarder')
+  @ApiOperation({ summary: 'Bank proxy (forwarder) sozlamasi — joriy qiymat' })
+  async getForwarder() {
+    return this.kb.getEffectiveForwarder();
+  }
+
+  /** Bank proxy (forwarder) URL/secret'ni web'dan sozlash. Bo'sh qiymat → env'ga qaytish. */
+  @Patch('forwarder')
+  @ApiOperation({ summary: 'Bank proxy (forwarder) URL/secret sozlash' })
+  async setForwarder(@Body() body: ForwarderDto, @CurrentUser() user?: any) {
+    const by = user?.email || user?.fullName || user?.id || 'admin';
+
+    if (body.url !== undefined) {
+      const url = (body.url || '').trim();
+      if (url && !/^https?:\/\/.+/i.test(url)) {
+        return { ok: false, error: "URL http(s):// bilan boshlanishi kerak" };
+      }
+      await this.prisma.setting.upsert({
+        where: { key: 'bank.forwarderUrl' },
+        create: { key: 'bank.forwarderUrl', value: url || null, updatedBy: by },
+        update: { value: url || null, updatedBy: by },
+      });
+    }
+    if (body.secret !== undefined) {
+      const secret = (body.secret || '').trim();
+      await this.prisma.setting.upsert({
+        where: { key: 'bank.forwarderSecret' },
+        create: { key: 'bank.forwarderSecret', value: secret || null, updatedBy: by },
+        update: { value: secret || null, updatedBy: by },
+      });
+    }
+
+    // Klient keshini darhol tozalaymiz — yangi sozlama keyingi so'rovda ishlaydi
+    this.kb.invalidateForwarderCache();
+    const current = await this.kb.getEffectiveForwarder();
+    return { ok: true, ...current };
+  }
 
   /** APILogin tekshirish — clients/accounts ro'yxatini qaytaradi */
   @Post('kapitalbank/login')

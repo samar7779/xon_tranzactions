@@ -3,6 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import { PrismaService } from '../../common/prisma/prisma.service';
 import {
   KapitalbankResponse,
   KbDoc1CResult,
@@ -66,18 +67,27 @@ export class KapitalbankClient {
   private readonly logger = new Logger(KapitalbankClient.name);
   private readonly timeoutMs: number;
   private readonly proxyAgent?: HttpsProxyAgent<string>;
-  private readonly forwarderUrl?: string;
-  private readonly forwarderSecret?: string;
+  // env'dagi forwarder (fallback) — DB (Setting) sozlamasi ustunroq
+  private readonly envForwarderUrl?: string;
+  private readonly envForwarderSecret?: string;
+  // DB forwarder sozlamasi keshi (30s) — har so'rovda DB o'qimaslik uchun
+  private forwarderCache: { url?: string; secret?: string; at: number } | null = null;
+  private static readonly FORWARDER_TTL_MS = 30_000;
 
-  constructor(private http: HttpService, config: ConfigService) {
+  constructor(
+    private http: HttpService,
+    config: ConfigService,
+    private prisma: PrismaService,
+  ) {
     this.timeoutMs = Number(config.get<string>('KAPITALBANK_TIMEOUT_MS', '15000'));
 
     // PHP forwarder (cPanel shared hosting uchun) — bank.php fayl ahost'da turadi,
     // u bank API'ga so'rov uzatadi, bank ahost IP'sini ko'radi.
-    this.forwarderUrl = config.get<string>('BANK_FORWARDER_URL');
-    this.forwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
-    if (this.forwarderUrl) {
-      this.logger.log(`🔀 Bank PHP forwarder ulanish: ${this.forwarderUrl}`);
+    // env — fallback; asosiy manba web'dan tahrirlanadigan DB (Setting) sozlamasi.
+    this.envForwarderUrl = config.get<string>('BANK_FORWARDER_URL');
+    this.envForwarderSecret = config.get<string>('BANK_FORWARDER_SECRET');
+    if (this.envForwarderUrl) {
+      this.logger.log(`🔀 Bank PHP forwarder (env fallback): ${this.envForwarderUrl}`);
     }
 
     // HTTPS proxy (Tinyproxy VPS uchun) — fallback
@@ -86,6 +96,59 @@ export class KapitalbankClient {
       this.proxyAgent = new HttpsProxyAgent(proxyUrl);
       this.logger.log(`🔀 Bank API proxy: ${proxyUrl.replace(/:[^:@]+@/, ':***@')}`);
     }
+  }
+
+  /**
+   * Effektiv forwarder sozlamasi — DB (Setting: bank.forwarderUrl / bank.forwarderSecret)
+   * ustun, bo'lmasa env'dagi qiymat. 30 soniya keshlanadi (har so'rovda DB o'qimaslik uchun).
+   */
+  private async getForwarder(): Promise<{ url?: string; secret?: string }> {
+    const now = Date.now();
+    if (this.forwarderCache && now - this.forwarderCache.at < KapitalbankClient.FORWARDER_TTL_MS) {
+      return { url: this.forwarderCache.url, secret: this.forwarderCache.secret };
+    }
+    let url = this.envForwarderUrl;
+    let secret = this.envForwarderSecret;
+    try {
+      const rows = await this.prisma.setting.findMany({
+        where: { key: { in: ['bank.forwarderUrl', 'bank.forwarderSecret'] } },
+        select: { key: true, value: true },
+      });
+      for (const r of rows) {
+        if (r.key === 'bank.forwarderUrl' && r.value) url = r.value;
+        if (r.key === 'bank.forwarderSecret' && r.value) secret = r.value;
+      }
+    } catch (e: any) {
+      this.logger.warn(`forwarder sozlamasini DB'dan o'qishda xato: ${e?.message}`);
+    }
+    this.forwarderCache = { url, secret, at: now };
+    return { url, secret };
+  }
+
+  /** Sozlama web'dan yangilanganda keshni darhol tozalash uchun. */
+  invalidateForwarderCache() {
+    this.forwarderCache = null;
+  }
+
+  /** Web/admin uchun — hozirgi effektiv forwarder sozlamasi + manbasi (db/env/none). */
+  async getEffectiveForwarder(): Promise<{ url: string | null; secret: string | null; source: 'db' | 'env' | 'none' }> {
+    const rows = await this.prisma.setting.findMany({
+      where: { key: { in: ['bank.forwarderUrl', 'bank.forwarderSecret'] } },
+      select: { key: true, value: true },
+    });
+    const dbUrl = rows.find((r) => r.key === 'bank.forwarderUrl')?.value || null;
+    const dbSecret = rows.find((r) => r.key === 'bank.forwarderSecret')?.value || null;
+    if (dbUrl || dbSecret) {
+      return {
+        url: dbUrl || this.envForwarderUrl || null,
+        secret: dbSecret || this.envForwarderSecret || null,
+        source: 'db',
+      };
+    }
+    if (this.envForwarderUrl || this.envForwarderSecret) {
+      return { url: this.envForwarderUrl || null, secret: this.envForwarderSecret || null, source: 'env' };
+    }
+    return { url: null, secret: null, source: 'none' };
   }
 
   private basicHeader(login: string, password: string) {
@@ -119,10 +182,11 @@ export class KapitalbankClient {
     if (authHeader) headers['Authorization'] = authHeader;
     const bankName = this.bankNameFromUrl(url);
 
-    // Agar useProxy=true VA forwarder sozlangan bo'lsa — ahost orqali
-    if (useProxy && this.forwarderUrl && this.forwarderSecret) {
-      this.logger.debug(`→ ${bankName} via PHP forwarder (ahost)`);
-      return this.postViaForwarder<T>(url, body, headers, bankName);
+    // Agar useProxy=true VA forwarder sozlangan bo'lsa — forwarder (proxy) orqali
+    const fw = await this.getForwarder();
+    if (useProxy && fw.url && fw.secret) {
+      this.logger.debug(`→ ${bankName} via PHP forwarder`);
+      return this.postViaForwarder<T>(url, body, headers, bankName, fw);
     }
 
     // Aks holda — to'g'ridan-to'g'ri (yoki HTTPS proxy agent orqali)
@@ -161,11 +225,12 @@ export class KapitalbankClient {
     body: any,
     headers: Record<string, string>,
     bankName: string,
+    fw: { url?: string; secret?: string },
   ): Promise<KapitalbankResponse<T>> {
     try {
       const resp = await firstValueFrom(
         this.http.post(
-          this.forwarderUrl!,
+          fw.url!,
           {
             url: targetUrl,
             method: 'POST',
@@ -176,7 +241,7 @@ export class KapitalbankClient {
           {
             headers: {
               'Content-Type': 'application/json',
-              'X-Proxy-Secret': this.forwarderSecret!,
+              'X-Proxy-Secret': fw.secret!,
             },
             timeout: this.timeoutMs + 5000,
           },
@@ -298,8 +363,9 @@ export class KapitalbankClient {
     });
     const fullUrl = `${url}?${q.toString()}`;
 
-    if (params.useProxy && this.forwarderUrl && this.forwarderSecret) {
-      return this.getViaForwarder(fullUrl);
+    const fw = await this.getForwarder();
+    if (params.useProxy && fw.url && fw.secret) {
+      return this.getViaForwarder(fullUrl, fw);
     }
     try {
       const resp = await firstValueFrom(
@@ -318,11 +384,11 @@ export class KapitalbankClient {
     }
   }
 
-  private async getViaForwarder(targetUrl: string): Promise<any> {
+  private async getViaForwarder(targetUrl: string, fw: { url?: string; secret?: string }): Promise<any> {
     try {
       const resp = await firstValueFrom(
         this.http.post(
-          this.forwarderUrl!,
+          fw.url!,
           {
             url: targetUrl,
             method: 'GET',
@@ -333,7 +399,7 @@ export class KapitalbankClient {
           {
             headers: {
               'Content-Type': 'application/json',
-              'X-Proxy-Secret': this.forwarderSecret!,
+              'X-Proxy-Secret': fw.secret!,
             },
             timeout: this.timeoutMs + 5000,
           },
