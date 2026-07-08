@@ -180,6 +180,28 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   xatoOnly?: string;
 
+  // ─── Summa oraliq filtrlari (aniq summa = min=max qilib yuboriladi) ───
+  @ApiPropertyOptional({ description: 'Сумма оплаты — pastki chegara' })
+  @IsOptional() @Type(() => Number)
+  paymentAmountMin?: number;
+  @ApiPropertyOptional({ description: 'Сумма оплаты — yuqori chegara' })
+  @IsOptional() @Type(() => Number)
+  paymentAmountMax?: number;
+
+  @ApiPropertyOptional({ description: '1 взнос — pastki chegara' })
+  @IsOptional() @Type(() => Number)
+  firstInstallmentMin?: number;
+  @ApiPropertyOptional({ description: '1 взнос — yuqori chegara' })
+  @IsOptional() @Type(() => Number)
+  firstInstallmentMax?: number;
+
+  @ApiPropertyOptional({ description: 'ежемесячный — pastki chegara' })
+  @IsOptional() @Type(() => Number)
+  monthlyAmountMin?: number;
+  @ApiPropertyOptional({ description: 'ежемесячный — yuqori chegara' })
+  @IsOptional() @Type(() => Number)
+  monthlyAmountMax?: number;
+
   // ─── Distinct endpoint uchun (ListOplataKvDto qayta ishlatilgani uchun) ───
   @ApiPropertyOptional({ description: 'Distinct uchun ustun nomi (faqat /distinct endpoint)' })
   @IsOptional() @IsString()

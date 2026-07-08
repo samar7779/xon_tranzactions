@@ -213,6 +213,8 @@ export default function OplataKvPage() {
   const [columnFilterMode, setColumnFilterMode] = useState(false);
   const [columnFilters, setColumnFilters] = useState<Record<string, Set<string>>>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  // Summa filtrlari — paymentAmount / firstInstallment / monthlyAmount, har biri exact/range
+  const [amountFilters, setAmountFilters] = useState<Record<string, AmountFilterValue>>({});
 
   // localStorage'dan tiklash
   useEffect(() => {
@@ -335,6 +337,33 @@ export default function OplataKvPage() {
     }
   };
 
+  // Summa filtrlari → backend params (aniq summa = min=max)
+  const AMOUNT_PARAM: Record<string, { min: string; max: string }> = {
+    paymentAmount:    { min: 'paymentAmountMin',    max: 'paymentAmountMax' },
+    firstInstallment: { min: 'firstInstallmentMin', max: 'firstInstallmentMax' },
+    monthlyAmount:    { min: 'monthlyAmountMin',    max: 'monthlyAmountMax' },
+  };
+  const amtDigits = (s: string) => s.replace(/[^\d.]/g, '');
+  const applyAmountParams = (p: URLSearchParams) => {
+    for (const [field, val] of Object.entries(amountFilters)) {
+      const pm = AMOUNT_PARAM[field];
+      if (!pm || !val) continue;
+      if (val.mode === 'exact') {
+        const v = amtDigits(val.exact);
+        if (v) { p.set(pm.min, v); p.set(pm.max, v); }
+      } else {
+        const mn = amtDigits(val.min);
+        const mx = amtDigits(val.max);
+        if (mn) p.set(pm.min, mn);
+        if (mx) p.set(pm.max, mx);
+      }
+    }
+  };
+  const amountFiltersKey = JSON.stringify(amountFilters);
+  const amountActiveCount = Object.values(amountFilters).filter((v) =>
+    v && (v.mode === 'exact' ? amtDigits(v.exact) !== '' : (amtDigits(v.min) !== '' || amtDigits(v.max) !== '')),
+  ).length;
+
   const qs = useMemo(() => {
     const p = new URLSearchParams();
     p.set('page', String(page));
@@ -351,9 +380,10 @@ export default function OplataKvPage() {
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
     applyXatoToParams(p);
+    applyAmountParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, q, dateFrom, dateTo, columnFiltersKey]);
+  }, [page, perPage, q, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
 
   // Filter popoverga uzatish uchun — barcha AKTIV column filterlar (page'siz)
   const activeFilterParams = useMemo(() => {
@@ -366,9 +396,10 @@ export default function OplataKvPage() {
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
     applyXatoToParams(p);
+    applyAmountParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateFrom, dateTo, columnFiltersKey]);
+  }, [q, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
 
   // ─── Export — filter-aware (BARCHA filtrlar — column + xatoOnly) ───
   const qsForExport = useMemo(() => {
@@ -381,12 +412,14 @@ export default function OplataKvPage() {
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
     applyXatoToParams(p);
+    applyAmountParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateFrom, dateTo, columnFiltersKey]);
+  }, [q, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
 
-  // Aktiv column filterlar soni — badge uchun
-  const activeColumnFiltersCount = Object.values(columnFilters).filter((s) => s && s.size > 0).length;
+  // Aktiv column filterlar soni — badge uchun (summa filtrlari ham qo'shiladi)
+  const activeColumnFiltersCount =
+    Object.values(columnFilters).filter((s) => s && s.size > 0).length + amountActiveCount;
 
   const listQuery = useQuery({
     queryKey: ['oplata-kv', qs],
@@ -408,7 +441,7 @@ export default function OplataKvPage() {
 
   // Filtr o'zgarganda sahifani 1-ga qaytarish
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, perPage, columnFiltersKey]);
+  useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, perPage, columnFiltersKey, amountFiltersKey]);
 
   const items = listQuery.data?.items || [];
   const total = listQuery.data?.total || 0;
@@ -533,6 +566,7 @@ export default function OplataKvPage() {
                   setColumnFilterMode((v) => !v);
                   if (columnFilterMode) {
                     setColumnFilters({});
+                    setAmountFilters({});
                     setOpenFilterColumn(null);
                   }
                 }}
@@ -616,9 +650,18 @@ export default function OplataKvPage() {
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
                   <Th>Дата</Th>
-                  <Th align="right">Сумма оплаты</Th>
-                  <Th align="right">1 взнос</Th>
-                  <Th align="right">ежемесячный</Th>
+                  <AmountFilterTh label="Сумма оплаты" field="paymentAmount"
+                    filterMode={columnFilterMode} value={amountFilters['paymentAmount']}
+                    onApply={(v) => setAmountFilters((prev) => ({ ...prev, paymentAmount: v }))}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                  <AmountFilterTh label="1 взнос" field="firstInstallment"
+                    filterMode={columnFilterMode} value={amountFilters['firstInstallment']}
+                    onApply={(v) => setAmountFilters((prev) => ({ ...prev, firstInstallment: v }))}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
+                  <AmountFilterTh label="ежемесячный" field="monthlyAmount"
+                    filterMode={columnFilterMode} value={amountFilters['monthlyAmount']}
+                    onApply={(v) => setAmountFilters((prev) => ({ ...prev, monthlyAmount: v }))}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} />
                   <ColumnTh label="Оплата" column="paymentCategory"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
@@ -1141,6 +1184,204 @@ function ColumnFilterPopover({
         >
           {t('ready')}
         </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// AmountFilterTh — summa ustuni filtri (2 tab: aniq summa / summadan summagacha)
+// ─────────────────────────────────────────────────────────
+type AmountFilterValue = { mode: 'exact' | 'range'; exact: string; min: string; max: string };
+const EMPTY_AMOUNT: AmountFilterValue = { mode: 'exact', exact: '', min: '', max: '' };
+
+function AmountFilterTh({
+  label, field, filterMode, value, onApply, openFilterColumn, setOpenFilterColumn,
+}: {
+  label: string;
+  field: string;
+  filterMode: boolean;
+  value?: AmountFilterValue;
+  onApply: (v: AmountFilterValue) => void;
+  openFilterColumn: string | null;
+  setOpenFilterColumn: (c: string | null) => void;
+}) {
+  const t = useTranslations('oplatykv');
+  const val = value || EMPTY_AMOUNT;
+  const d = (s: string) => s.replace(/[^\d.]/g, '');
+  const active = val.mode === 'exact' ? d(val.exact) !== '' : (d(val.min) !== '' || d(val.max) !== '');
+  const isOpen = openFilterColumn === field;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+
+  const openPopover = () => {
+    if (btnRef.current) setAnchorRect(btnRef.current.getBoundingClientRect());
+    setOpenFilterColumn(field);
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const reposition = () => { if (btnRef.current) setAnchorRect(btnRef.current.getBoundingClientRect()); };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [isOpen]);
+
+  return (
+    <th className="px-3 py-2.5 font-semibold whitespace-nowrap text-right">
+      <div className="flex items-center gap-1 justify-end">
+        <span>{label}</span>
+        {filterMode && (
+          <button
+            ref={btnRef}
+            onClick={() => isOpen ? setOpenFilterColumn(null) : openPopover()}
+            className={cn(
+              'relative inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+              active
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                : 'text-slate-400 dark:text-slate-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-700 dark:hover:text-indigo-300',
+            )}
+            title={t('filterLabel')}
+          >
+            <FilterIcon className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {isOpen && anchorRect && (
+        <AmountFilterPopover
+          value={val}
+          anchorRect={anchorRect}
+          onApply={(v) => { onApply(v); setOpenFilterColumn(null); }}
+          onClose={() => setOpenFilterColumn(null)}
+        />
+      )}
+    </th>
+  );
+}
+
+function AmountFilterPopover({
+  value, anchorRect, onApply, onClose,
+}: {
+  value: AmountFilterValue;
+  anchorRect: DOMRect;
+  onApply: (v: AmountFilterValue) => void;
+  onClose: () => void;
+}) {
+  const t = useTranslations('oplatykv');
+  const tc = useTranslations('common');
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const [mode, setMode] = useState<'exact' | 'range'>(value.mode);
+  const [exact, setExact] = useState(value.exact);
+  const [min, setMin] = useState(value.min);
+  const [max, setMax] = useState(value.max);
+
+  const fmt = (s: string) => {
+    const d = s.replace(/\D/g, '');
+    return d ? Number(d).toLocaleString('ru-RU') : '';
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onClick = (e: MouseEvent) => {
+      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    const tm = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+      clearTimeout(tm);
+    };
+  }, [onClose]);
+
+  const popoverWidth = 300;
+  let left = anchorRect.right - popoverWidth;
+  let top = anchorRect.bottom + 6;
+  const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1024;
+  if (left < 8) left = 8;
+  if (left + popoverWidth > viewportW - 8) left = Math.max(8, viewportW - popoverWidth - 8);
+
+  const apply = () => onApply({ mode, exact, min, max });
+  const clear = () => { setExact(''); setMin(''); setMax(''); onApply({ mode, exact: '', min: '', max: '' }); };
+
+  return createPortal(
+    <div
+      ref={popoverRef}
+      className="z-[9999] bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-2xl p-2.5 text-slate-700 dark:text-slate-300 normal-case tracking-normal"
+      style={{ position: 'fixed', top, left, width: popoverWidth }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg mb-2.5">
+        <button
+          onClick={() => setMode('exact')}
+          className={cn('flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors',
+            mode === 'exact' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300')}
+        >
+          {t('amountExactTab')}
+        </button>
+        <button
+          onClick={() => setMode('range')}
+          className={cn('flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors',
+            mode === 'range' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300')}
+        >
+          {t('amountRangeTab')}
+        </button>
+      </div>
+
+      {mode === 'exact' ? (
+        <div className="space-y-1">
+          <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountExactLabel')}</label>
+          <Input
+            autoFocus inputMode="numeric"
+            value={fmt(exact)}
+            onChange={(e) => setExact(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+            placeholder="5 178 000"
+            className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountFromLabel')}</label>
+            <Input
+              autoFocus inputMode="numeric"
+              value={fmt(min)}
+              onChange={(e) => setMin(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+              placeholder="0"
+              className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountToLabel')}</label>
+            <Input
+              inputMode="numeric"
+              value={fmt(max)}
+              onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+              placeholder="∞"
+              className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-700 gap-2">
+        <button
+          onClick={clear}
+          className="text-slate-500 dark:text-slate-400 text-[11.5px] font-semibold hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-400 px-2 py-1 rounded-md transition-colors"
+        >
+          {tc('clear')}
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="text-[11.5px] text-slate-500 dark:text-slate-400 px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">{tc('cancel')}</button>
+          <button onClick={apply} className="text-[11.5px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1 rounded-md transition-colors">OK</button>
+        </div>
       </div>
     </div>,
     document.body,
