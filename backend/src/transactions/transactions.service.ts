@@ -1072,6 +1072,8 @@ export class TransactionsService {
     hisobNomi?: string;
     batchId?: string;
     sources?: string;
+    amountMin?: number;
+    amountMax?: number;
   } = {}) {
     // from/to → dateFrom/dateTo aliasi (buildWhere uchun)
     let where: any = this.buildWhere({

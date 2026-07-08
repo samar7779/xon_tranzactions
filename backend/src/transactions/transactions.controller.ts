@@ -108,11 +108,15 @@ export class TransactionsController {
     @Query('hisobNomi') hisobNomi?: string,
     @Query('batchId') batchId?: string,
     @Query('sources') sources?: string,
+    @Query('amountMin') amountMin?: string,
+    @Query('amountMax') amountMax?: string,
   ) {
     return this.svc.stats({
       from, to, categoryCode, bankId, accountId, direction, q,
       bankIds, accountIds, categoryIds, subcategoryIds, directions,
       contractStatuses, contractSources, hisobNomi, batchId, sources,
+      amountMin: amountMin != null && amountMin !== '' ? Number(amountMin) : undefined,
+      amountMax: amountMax != null && amountMax !== '' ? Number(amountMax) : undefined,
     });
   }
 

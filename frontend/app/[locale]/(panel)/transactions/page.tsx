@@ -173,6 +173,10 @@ export default function TransactionsPage() {
   // Manba filtri — bank sync / import / aloqa bank
   const [sources, setSources] = useState<Set<'SYNC' | 'IMPORT' | 'ALOQA_BANK'>>(new Set());
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  // Summa filtri — 'exact' (aniq summa) yoki 'range' (summadan summagacha)
+  const [amountFilter, setAmountFilter] = useState<{ mode: 'exact' | 'range'; exact: string; min: string; max: string }>(
+    { mode: 'exact', exact: '', min: '', max: '' },
+  );
 
   // ─── localStorage persistance — mount paytida o'qish ───
   useEffect(() => {
@@ -366,8 +370,14 @@ export default function TransactionsPage() {
     for (const k of Object.keys(columnFilters)) {
       if (columnFilters[k]?.size > 0) c++;
     }
+    // Summa filtri
+    const d = (s: string) => s.replace(/[^\d.]/g, '');
+    const amtActive = amountFilter.mode === 'exact'
+      ? d(amountFilter.exact) !== ''
+      : (d(amountFilter.min) !== '' || d(amountFilter.max) !== '');
+    if (amtActive) c++;
     return c;
-  }, [direction, bankId, dateFrom, dateTo, columnFilters, contractSources, sources]);
+  }, [direction, bankId, dateFrom, dateTo, columnFilters, contractSources, sources, amountFilter]);
 
   // Column filter -> URL param map (vergul bilan ajratilgan)
   const COLUMN_TO_PARAM: Record<string, string> = {
@@ -379,6 +389,26 @@ export default function TransactionsPage() {
     contractStatus: 'contractStatuses',
     hisobNomi: 'hisobNomi',
   };
+
+  // Summa filtri — faqat raqamlar (bo'shliq/formatni tozalaymiz), amountMin/amountMax param
+  const amountDigits = (s: string) => s.replace(/[^\d.]/g, '');
+  const amountActive = amountFilter.mode === 'exact'
+    ? amountDigits(amountFilter.exact) !== ''
+    : (amountDigits(amountFilter.min) !== '' || amountDigits(amountFilter.max) !== '');
+  const applyAmountParams = (p: URLSearchParams) => {
+    if (amountFilter.mode === 'exact') {
+      const v = amountDigits(amountFilter.exact);
+      if (v) { p.set('amountMin', v); p.set('amountMax', v); }
+    } else {
+      const mn = amountDigits(amountFilter.min);
+      const mx = amountDigits(amountFilter.max);
+      if (mn) p.set('amountMin', mn);
+      if (mx) p.set('amountMax', mx);
+    }
+  };
+  const amountKey = amountActive
+    ? `${amountFilter.mode}:${amountDigits(amountFilter.exact)}:${amountDigits(amountFilter.min)}:${amountDigits(amountFilter.max)}`
+    : '';
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
   if (q) params.set('q', q);
@@ -396,6 +426,8 @@ export default function TransactionsPage() {
   if (contractSources.size > 0) params.set('contractSources', Array.from(contractSources).join(','));
   // Manba (sync/import/aloqa)
   if (sources.size > 0) params.set('sources', Array.from(sources).join(','));
+  // Summa filtri
+  applyAmountParams(params);
 
   // columnFilters Set object — JSON serialization uchun array'ga aylantiramiz
   const columnFiltersKey = JSON.stringify(
@@ -417,13 +449,14 @@ export default function TransactionsPage() {
     }
     if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
     if (sources.size > 0) p.set('sources', Array.from(sources).join(','));
+    applyAmountParams(p);
     return p.toString();
   })();
 
   const contractSourcesKey = Array.from(contractSources).sort().join(',');
   const sourcesKey = Array.from(sources).sort().join(',');
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey],
+    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey, amountKey],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -434,7 +467,7 @@ export default function TransactionsPage() {
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
   const { data: stats } = useQuery({
-    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey],
+    queryKey: ['tx-stats', kpiMode, dateFrom, dateTo, bankId, direction, q, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey, amountKey],
     queryFn: () => {
       // Foydalanuvchi sana filtri qo'ygan bo'lsa — shu davr; aks holda 30 kun (yoki CLIENT uchun joriy oy)
       let fromStr: string;
@@ -468,6 +501,7 @@ export default function TransactionsPage() {
       }
       if (contractSources.size > 0) p.set('contractSources', Array.from(contractSources).join(','));
       if (sources.size > 0) p.set('sources', Array.from(sources).join(','));
+      applyAmountParams(p);
       return api.get<any>(`/transactions/stats?${p.toString()}`);
     },
   });
@@ -526,6 +560,7 @@ export default function TransactionsPage() {
       const set = columnFilters[col];
       if (set && set.size > 0) p.set(paramName, Array.from(set).join(','));
     }
+    applyAmountParams(p);
     try {
       toast.loading(t('excelPreparing'), { id: 'tx-export' });
       await apiDownload(`/transactions/export?${p}`, `tranzaksiyalar-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -588,6 +623,7 @@ export default function TransactionsPage() {
     setColumnFilters({});
     setContractSources(new Set());
     setSources(new Set());
+    setAmountFilter({ mode: 'exact', exact: '', min: '', max: '' });
     try {
       localStorage.removeItem('tx-column-filters-v1');
       localStorage.removeItem('tx-contract-sources-v1');
@@ -1093,7 +1129,14 @@ export default function TransactionsPage() {
                       <ColumnTh label={t('counterpartyHeader')} column="kontragent" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
                       <ColumnTh label={t('categoryHeader')} column="kategoriya" widthClass="w-40" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
                       <ColumnTh label={t('contractHeader')} column="contractStatus" widthClass="w-32" filterMode={columnFilterMode} columnFilters={columnFilters} setColumnFilters={setColumnFilters} openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn} activeFilterParams={activeFilterParams} alignRight />
-                      <th className="text-right px-4 py-3">{t('amountHeader')}</th>
+                      <AmountFilterTh
+                        label={t('amountHeader')}
+                        filterMode={columnFilterMode}
+                        value={amountFilter}
+                        onApply={(v) => { setAmountFilter(v); setPage(1); }}
+                        openFilterColumn={openFilterColumn}
+                        setOpenFilterColumn={setOpenFilterColumn}
+                      />
                       <th className="w-12"></th>
                     </tr>
                   </thead>
@@ -3388,6 +3431,187 @@ function ColumnFilterPopover({
         <Button size="sm" onClick={() => onApply(localByColumn)} className="h-7 text-[11px]">
           OK
         </Button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ═══ AMOUNT FILTER TH — summa ustuni filtri (2 tab: aniq summa / summadan summagacha)
+type AmountFilterValue = { mode: 'exact' | 'range'; exact: string; min: string; max: string };
+function AmountFilterTh({
+  label, filterMode, value, onApply, openFilterColumn, setOpenFilterColumn,
+}: {
+  label: string;
+  filterMode: boolean;
+  value: AmountFilterValue;
+  onApply: (v: AmountFilterValue) => void;
+  openFilterColumn: string | null;
+  setOpenFilterColumn: (col: string | null) => void;
+}) {
+  const tt = useTranslations('transactions');
+  const COL = '__amount__';
+  const isOpen = openFilterColumn === COL;
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const digits = (s: string) => s.replace(/[^\d.]/g, '');
+  const active = value.mode === 'exact'
+    ? digits(value.exact) !== ''
+    : (digits(value.min) !== '' || digits(value.max) !== '');
+  return (
+    <th className="text-right px-4 py-3">
+      <div className="flex items-center gap-1.5 justify-end">
+        <span>{label}</span>
+        {filterMode && (
+          <button
+            ref={btnRef}
+            onClick={() => setOpenFilterColumn(isOpen ? null : COL)}
+            className={cn(
+              'inline-flex items-center justify-center w-5 h-5 rounded transition-colors',
+              active
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-400 dark:text-slate-500 hover:text-indigo-700 dark:hover:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/30',
+            )}
+            title={tt('filterLabel')}
+          >
+            <FilterIcon className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {isOpen && (
+        <AmountFilterPopover
+          value={value}
+          triggerRef={btnRef}
+          onClose={() => setOpenFilterColumn(null)}
+          onApply={(v) => { onApply(v); setOpenFilterColumn(null); }}
+        />
+      )}
+    </th>
+  );
+}
+
+function AmountFilterPopover({
+  value, onClose, onApply, triggerRef,
+}: {
+  value: AmountFilterValue;
+  onClose: () => void;
+  onApply: (v: AmountFilterValue) => void;
+  triggerRef: React.RefObject<HTMLElement>;
+}) {
+  const tt = useTranslations('transactions');
+  const [mode, setMode] = useState<'exact' | 'range'>(value.mode);
+  const [exact, setExact] = useState(value.exact);
+  const [min, setMin] = useState(value.min);
+  const [max, setMax] = useState(value.max);
+
+  // 17247000 → "17 247 000" (ko'rsatish uchun)
+  const fmt = (s: string) => {
+    const d = s.replace(/\D/g, '');
+    return d ? Number(d).toLocaleString('ru-RU') : '';
+  };
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-amount-filter]')) onClose();
+    }
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 0);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', handler); };
+  }, [onClose]);
+
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!triggerRef.current) return;
+    function update() {
+      const el = triggerRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const w = 300;
+      setPos({ top: rect.bottom + 4, left: Math.max(8, rect.right - w) });
+    }
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+  }, [triggerRef]);
+
+  if (!pos) return null;
+
+  const apply = () => onApply({ mode, exact, min, max });
+  const clear = () => { setExact(''); setMin(''); setMax(''); onApply({ mode, exact: '', min: '', max: '' }); };
+
+  return createPortal(
+    <div
+      data-amount-filter
+      className="fixed z-[100] w-[300px] rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl normal-case tracking-normal font-normal"
+      style={{ top: pos.top, left: pos.left }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="p-3 space-y-3">
+        {/* Tab bar */}
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg">
+          <button
+            onClick={() => setMode('exact')}
+            className={cn('flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors',
+              mode === 'exact' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300')}
+          >
+            {tt('amountExactTab')}
+          </button>
+          <button
+            onClick={() => setMode('range')}
+            className={cn('flex-1 px-2 py-1 rounded-md text-[11px] font-semibold transition-colors',
+              mode === 'range' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300')}
+          >
+            {tt('amountRangeTab')}
+          </button>
+        </div>
+
+        {mode === 'exact' ? (
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{tt('amountExactLabel')}</label>
+            <Input
+              inputMode="numeric"
+              value={fmt(exact)}
+              onChange={(e) => setExact(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+              placeholder="17 247 000"
+              className="h-8 text-[12px] text-right tabular-nums font-mono"
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{tt('amountFromLabel')}</label>
+              <Input
+                inputMode="numeric"
+                value={fmt(min)}
+                onChange={(e) => setMin(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+                placeholder="0"
+                className="h-8 text-[12px] text-right tabular-nums font-mono"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{tt('amountToLabel')}</label>
+              <Input
+                inputMode="numeric"
+                value={fmt(max)}
+                onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
+                placeholder="∞"
+                className="h-8 text-[12px] text-right tabular-nums font-mono"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-slate-100 dark:border-slate-800">
+        <button onClick={clear} className="text-[11px] text-slate-500 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 font-medium">
+          {tt('clearLabel')}
+        </button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={onClose} className="h-7 text-[11px]">{tt('cancelShort')}</Button>
+          <Button size="sm" onClick={apply} className="h-7 text-[11px]">OK</Button>
+        </div>
       </div>
     </div>,
     document.body,
