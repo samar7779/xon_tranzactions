@@ -306,6 +306,18 @@ export class OplataKvService {
       }
     }
 
+    // ─── Summa oraliq filtrlari (aniq summa = min=max) ───
+    const applyAmountRange = (field: 'paymentAmount' | 'firstInstallment' | 'monthlyAmount', min?: number, max?: number) => {
+      if (min == null && max == null) return;
+      const cond: any = {};
+      if (min != null) cond.gte = min;
+      if (max != null) cond.lte = max;
+      (where as any)[field] = cond;
+    };
+    applyAmountRange('paymentAmount',    q.paymentAmountMin,    q.paymentAmountMax);
+    applyAmountRange('firstInstallment', q.firstInstallmentMin, q.firstInstallmentMax);
+    applyAmountRange('monthlyAmount',    q.monthlyAmountMin,    q.monthlyAmountMax);
+
     return where;
   }
 
