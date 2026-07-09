@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
+import { SyncProgressDialog } from '@/components/sync-progress-dialog';
 
 const Apartment3DDialog = dynamic(
   () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
@@ -441,18 +442,43 @@ export default function OplataKvPage() {
   });
 
   // "Hozir sync" — tranzaksiyalardan ОплатыКв'ga majburiy import (sozlangan min sanani hurmat qiladi)
+  // Admin panelidagi kabi progress modal ko'rsatiladi (sync + bg fill/split bosqichlari).
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncResult, setSyncResult] = useState<any>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [bgStatus, setBgStatus] = useState<any>(null);
   const syncNowMut = useMutation({
     mutationFn: () => api.post<{
-      ok: boolean; added: number; updated: number; skipped: number; total?: number;
+      ok: boolean; added: number; updated: number; skipped: number; total?: number; objectsBackground?: boolean;
     }>('/oplata-kv/sync-now', {}, { timeout: 120_000 }),
-    onMutate: () => { toast.loading(t('syncStarted'), { id: 'oplatykv-sync' }); },
+    onMutate: () => { setSyncResult(null); setSyncError(null); setBgStatus(null); setSyncModalOpen(true); },
     onSuccess: (r: any) => {
-      toast.success(t('syncDone', { added: r.added ?? 0, updated: r.updated ?? 0 }), { id: 'oplatykv-sync', duration: 6000 });
+      setSyncResult(r);
       qc.invalidateQueries({ queryKey: ['oplata-kv'] });
       qc.invalidateQueries({ queryKey: ['oplata-kv-last-sync'] });
     },
-    onError: (e: any) => { toast.error(e?.message || tc('error'), { id: 'oplatykv-sync' }); },
+    onError: (e: any) => { setSyncError(e?.message || tc('error')); },
   });
+
+  // BG status polling — sync tugagach obyekt/split orqada davom etadi
+  useEffect(() => {
+    if (!syncResult || !syncResult.objectsBackground) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const s: any = await api.get('/oplata-kv/bg-status');
+        if (cancelled) return;
+        setBgStatus(s);
+        if (s.running) setTimeout(poll, 5000);
+        else qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      } catch {
+        if (!cancelled) setTimeout(poll, 10000);
+      }
+    };
+    poll();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncResult]);
 
   // Filtr o'zgarganda sahifani 1-ga qaytarish
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -877,6 +903,16 @@ export default function OplataKvPage() {
         onClose={() => setAddChoiceOpen(false)}
         onPickManual={() => { setAddChoiceOpen(false); setCreateOpen(true); }}
         onPickPerereboska={() => { setAddChoiceOpen(false); setPerereboskaOpen(true); }}
+      />
+
+      {/* Hozir sync — progress modal (admin panelidagi kabi) */}
+      <SyncProgressDialog
+        open={syncModalOpen}
+        onClose={() => setSyncModalOpen(false)}
+        isPending={syncNowMut.isPending}
+        result={syncResult}
+        bgStatus={bgStatus}
+        error={syncError}
       />
 
       {/* Переброска form */}
