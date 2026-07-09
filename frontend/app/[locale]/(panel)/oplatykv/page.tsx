@@ -13,7 +13,7 @@ import {
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
-  PlusCircle, Paperclip, Wallet, Building2, Box, BarChart3,
+  PlusCircle, Paperclip, Wallet, Building2, Box, BarChart3, RefreshCw,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
@@ -148,6 +148,7 @@ export default function OplataKvPage() {
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
+  const canManage = !!user?.permissions?.includes(PERMS.OPLATAKV_MANAGE);
 
   // Filters — URL query + localStorage orqali persist qilinadi (refresh'da yo'qolmaydi)
   const [q, setQ] = useState(() => {
@@ -439,6 +440,20 @@ export default function OplataKvPage() {
     refetchInterval: 60_000, // har daqiqada yangilanadi
   });
 
+  // "Hozir sync" — tranzaksiyalardan ОплатыКв'ga majburiy import (sozlangan min sanani hurmat qiladi)
+  const syncNowMut = useMutation({
+    mutationFn: () => api.post<{
+      ok: boolean; added: number; updated: number; skipped: number; total?: number;
+    }>('/oplata-kv/sync-now', {}, { timeout: 120_000 }),
+    onMutate: () => { toast.loading(t('syncStarted'), { id: 'oplatykv-sync' }); },
+    onSuccess: (r: any) => {
+      toast.success(t('syncDone', { added: r.added ?? 0, updated: r.updated ?? 0 }), { id: 'oplatykv-sync', duration: 6000 });
+      qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      qc.invalidateQueries({ queryKey: ['oplata-kv-last-sync'] });
+    },
+    onError: (e: any) => { toast.error(e?.message || tc('error'), { id: 'oplatykv-sync' }); },
+  });
+
   // Filtr o'zgarganda sahifani 1-ga qaytarish
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPage(1); }, [q, dateFrom, dateTo, perPage, columnFiltersKey, amountFiltersKey]);
@@ -559,6 +574,18 @@ export default function OplataKvPage() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Hozir sync — tranzaksiyalardan majburiy import (faqat ikon) */}
+              {canManage && (
+                <button
+                  onClick={() => syncNowMut.mutate()}
+                  disabled={syncNowMut.isPending}
+                  className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 grid place-items-center transition-colors disabled:opacity-60"
+                  title={t('syncNow')}
+                >
+                  <RefreshCw className={cn('h-4 w-4', syncNowMut.isPending && 'animate-spin')} />
+                </button>
+              )}
 
               {/* Ustun filter rejimi toggle — faqat ikon */}
               <button

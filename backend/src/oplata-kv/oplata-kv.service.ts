@@ -739,6 +739,15 @@ export class OplataKvService {
    *
    * Dedup: sourceTxId (unique) orqali — mavjud bo'lsa update, bo'lmasa create.
    */
+  /**
+   * "Hozir sync" — sozlangan min sanani (getOplatyKvTxMinDate) hurmat qilib to'liq sync.
+   * ОплатыКв sahifasidagi tugma uchun (admin "HAMMASI" tugmasi bilan bir xil xatti-harakat).
+   */
+  async syncNowRespectingSettings(actor?: Actor) {
+    const minDate = await this.settings.getOplatyKvTxMinDate();
+    return this.syncFromTransactions({ minDate, actor });
+  }
+
   async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor; runInline?: boolean } = {}) {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;
