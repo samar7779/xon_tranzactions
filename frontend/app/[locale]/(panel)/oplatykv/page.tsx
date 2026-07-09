@@ -520,6 +520,19 @@ export default function OplataKvPage() {
                   </span>
                 </div>
               )}
+
+              {/* Hozir sync — "Sync:" vaqti yonida (bosilganda progress modal) */}
+              {canManage && (
+                <button
+                  onClick={() => syncNowMut.mutate()}
+                  disabled={syncNowMut.isPending}
+                  className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 grid place-items-center transition-colors disabled:opacity-60 shrink-0"
+                  title={t('syncNow')}
+                >
+                  <RefreshCw className={cn('h-4 w-4', syncNowMut.isPending && 'animate-spin')} />
+                </button>
+              )}
+
               <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500 z-10" />
                 <Input
@@ -600,18 +613,6 @@ export default function OplataKvPage() {
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              {/* Hozir sync — tranzaksiyalardan majburiy import (faqat ikon) */}
-              {canManage && (
-                <button
-                  onClick={() => syncNowMut.mutate()}
-                  disabled={syncNowMut.isPending}
-                  className="h-10 w-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 grid place-items-center transition-colors disabled:opacity-60"
-                  title={t('syncNow')}
-                >
-                  <RefreshCw className={cn('h-4 w-4', syncNowMut.isPending && 'animate-spin')} />
-                </button>
-              )}
 
               {/* Ustun filter rejimi toggle — faqat ikon */}
               <button
