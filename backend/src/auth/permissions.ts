@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   OPLATAKV_DELETE: 'oplatakv:delete',                           // O'chirish
   OPLATAKV_IMPORT: 'oplatakv:import',                           // Excel import
   OPLATAKV_SPLIT: 'oplatakv:split',                             // Split / Re-split (1-vznos vs oylik)
+  OPLATAKV_SYNC: 'oplatakv:sync',                               // Hozir sync — tranzaksiyalardan majburiy import
   OPLATAKV_MANAGE: 'oplatakv:manage',                           // Legacy (deprecated) — orqaga moslik
 
   // ─── SOZLASH ───
@@ -164,6 +165,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.OPLATAKV_DELETE, label: 'O\'chirish' },
           { value: PERMISSIONS.OPLATAKV_IMPORT, label: 'Excel\'dan import' },
           { value: PERMISSIONS.OPLATAKV_SPLIT, label: 'Split / Re-split (1-vznos vs oylik)' },
+          { value: PERMISSIONS.OPLATAKV_SYNC, label: 'Hozir sync (tranzaksiyalardan)' },
         ],
       },
     ],

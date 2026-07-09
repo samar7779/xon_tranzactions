@@ -280,7 +280,7 @@ export class OplataKvController {
   }
 
   @Post('sync-now')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SYNC)
   @ApiOperation({ summary: "Hozir sync — sozlangan min sanani hurmat qilib to'liq sync (ОплатыКв tugmasi)" })
   async syncNow(@CurrentUser() user?: AuthUser) {
     return this.svc.syncNowRespectingSettings(actorFrom(user));
