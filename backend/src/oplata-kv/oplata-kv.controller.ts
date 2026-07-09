@@ -279,6 +279,13 @@ export class OplataKvController {
     return this.svc.syncFromTransactions({ minDate, actor: actorFrom(user) });
   }
 
+  @Post('sync-now')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: "Hozir sync — sozlangan min sanani hurmat qilib to'liq sync (ОплатыКв tugmasi)" })
+  async syncNow(@CurrentUser() user?: AuthUser) {
+    return this.svc.syncNowRespectingSettings(actorFrom(user));
+  }
+
   @Get('last-sync-info')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Oxirgi tx-manba sync vaqti — UI'da ko'rsatish uchun" })
