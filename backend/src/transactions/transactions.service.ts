@@ -673,6 +673,64 @@ export class TransactionsService {
     return { ok: true, deleted: res.count, account: acc };
   }
 
+  /**
+   * To'lov ID (external_id / source_tx_id / ichki id / general_id) bo'yicha qidirish.
+   * Tozalash vositasi uchun — transaction yoki oplatakv jadvalida.
+   */
+  async findByPaymentId(paymentId: string, table: 'transaction' | 'oplatakv') {
+    const q = (paymentId || '').trim();
+    if (!q) return { ok: false, error: "ID bo'sh", rows: [], count: 0 };
+
+    if (table === 'oplatakv') {
+      const rows = await this.prisma.oplataKv.findMany({
+        where: { OR: [{ id: q }, { sourceTxId: q }, { sourceTxId: { contains: q } }] },
+        select: {
+          id: true, contractNo: true, date: true, paymentAmount: true,
+          firstInstallment: true, monthlyAmount: true, client: true, object: true,
+          txType: true, sourceTxId: true,
+        },
+        orderBy: { date: 'desc' },
+        take: 50,
+      });
+      return { ok: true, table, count: rows.length, rows };
+    }
+
+    const rows = await this.prisma.transaction.findMany({
+      where: { OR: [{ id: q }, { externalId: q }, { externalId: { contains: q } }, { bankGeneralId: q }] },
+      select: {
+        id: true, externalId: true, bankGeneralId: true, txnDate: true, amount: true,
+        direction: true, contractNumber: true, fromName: true, toName: true,
+      },
+      orderBy: { txnDate: 'desc' },
+      take: 50,
+    });
+    return { ok: true, table, count: rows.length, rows };
+  }
+
+  /**
+   * Tozalash vositasi — bitta yozuvni ICHKI id bo'yicha o'chirish (aniq, bittalab).
+   * transaction: bog'liq payment + attachment ham o'chadi.
+   */
+  async deleteRowById(id: string, table: 'transaction' | 'oplatakv') {
+    const rowId = (id || '').trim();
+    if (!rowId) return { ok: false, error: "id bo'sh", deleted: 0 };
+
+    if (table === 'oplatakv') {
+      const row = await this.prisma.oplataKv.findUnique({ where: { id: rowId }, select: { id: true } });
+      if (!row) return { ok: false, error: 'Yozuv topilmadi', deleted: 0 };
+      await this.prisma.oplataKv.delete({ where: { id: rowId } });
+      return { ok: true, deleted: 1, table };
+    }
+
+    const tx = await this.prisma.transaction.findUnique({ where: { id: rowId }, select: { id: true } });
+    if (!tx) return { ok: false, error: 'Tranzaksiya topilmadi', deleted: 0 };
+    // Bog'liq payment'lar (FK cascade yo'q) — avval o'chiramiz.
+    // Attachment'lar esa onDelete: Cascade — tranzaksiya o'chganda avtomatik ketadi.
+    await this.prisma.payment.deleteMany({ where: { transactionId: rowId } });
+    await this.prisma.transaction.delete({ where: { id: rowId } });
+    return { ok: true, deleted: 1, table };
+  }
+
   async findOne(idOrExternal: string) {
     // Ichki id yoki bank bergan kompozit externalId bo'yicha qidiramiz
     const tx: any = await this.prisma.transaction.findFirst({

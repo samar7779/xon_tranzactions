@@ -418,4 +418,26 @@ export class TransactionsController {
     }
     return this.svc.deleteByAccountNo(body.accountNo);
   }
+
+  // ─── Tozalash: to'lov ID (external_id) bo'yicha topish/o'chirish ───
+  @Get('find-by-payment-id')
+  @RequirePermissions(PERMISSIONS.CLEANUP_VIEW)
+  @ApiOperation({ summary: "To'lov ID (external_id / source_tx_id) bo'yicha topish (transaction|oplatakv)" })
+  findByPaymentId(
+    @Query('paymentId') paymentId: string,
+    @Query('table') table: 'transaction' | 'oplatakv',
+  ) {
+    const tbl = table === 'oplatakv' ? 'oplatakv' : 'transaction';
+    return this.svc.findByPaymentId(paymentId, tbl);
+  }
+
+  @Post('delete-row-by-id')
+  @RequirePermissions(PERMISSIONS.CLEANUP_RUN)
+  @ApiOperation({ summary: "Tozalash: bitta yozuvni ichki id bo'yicha o'chirish (confirm=id)" })
+  async deleteRowById(@Body() body: { id: string; table: 'transaction' | 'oplatakv'; confirm: string }) {
+    if (!body?.id) return { ok: false, error: 'id kerak' };
+    if (body?.confirm !== body?.id) return { ok: false, error: 'Tasdiq id ga teng emas' };
+    const tbl = body.table === 'oplatakv' ? 'oplatakv' : 'transaction';
+    return this.svc.deleteRowById(body.id, tbl);
+  }
 }
