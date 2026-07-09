@@ -6,7 +6,7 @@ import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Trash2, AlertTriangle, Loader2, Database, ShieldAlert, Info, ListChecks,
-  Building2, User, Wallet, Calendar, X, Receipt,
+  Building2, User, Wallet, Calendar, X, Receipt, Search,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 import { cn, formatDate, formatMoney } from '@/lib/utils';
 
 interface CountResp {
@@ -77,6 +78,40 @@ export default function CleanupPage() {
   });
 
   const canSubmit = accountNo.trim().length >= 20 && confirm.trim() === accountNo.trim();
+
+  // ─── To'lov ID (external_id) bo'yicha topish/o'chirish ───
+  const canRun = !!me?.permissions?.includes(PERMS.CLEANUP_RUN);
+  const [pid, setPid] = useState('');
+  const [pidTable, setPidTable] = useState<'transaction' | 'oplatakv'>('transaction');
+  const [pidRows, setPidRows] = useState<any[] | null>(null);
+  const [delRow, setDelRow] = useState<any | null>(null);
+
+  const findByIdMut = useMutation({
+    mutationFn: () => api.get<{ ok: boolean; table: string; count: number; rows: any[] }>(
+      `/transactions/find-by-payment-id?paymentId=${encodeURIComponent(pid.trim())}&table=${pidTable}`,
+    ),
+    onSuccess: (r) => {
+      setPidRows(r.rows || []);
+      if ((r.rows || []).length === 0) toast.message(t('idNoResults'));
+    },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+  });
+
+  const deleteRowMut = useMutation({
+    mutationFn: (row: any) => api.post<any>('/transactions/delete-row-by-id', { id: row.id, table: pidTable, confirm: row.id }),
+    onSuccess: (r: any) => {
+      if (r?.ok) {
+        toast.success(t('idDeleted'));
+        setPidRows((prev) => (prev ? prev.filter((x) => x.id !== delRow?.id) : prev));
+      } else {
+        toast.error(r?.error || tc('error'));
+      }
+      setDelRow(null);
+    },
+    onError: (e: any) => { toast.error(e?.message || tc('error')); setDelRow(null); },
+  });
+
+  const fmtNum = (n: any) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full">
@@ -263,7 +298,135 @@ export default function CleanupPage() {
             </Card>
           </div>
         </div>
+
+        {/* ═══ To'lov ID (external_id) bo'yicha topish / o'chirish ═══ */}
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <div className="h-1 bg-gradient-to-r from-indigo-500 to-violet-600" />
+          <CardContent className="p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 ring-1 ring-indigo-200 dark:ring-indigo-900 grid place-items-center shrink-0">
+                <Receipt className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[14px] font-bold text-slate-900 dark:text-slate-100">{t('idToolTitle')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">{t('idToolDesc')}</div>
+              </div>
+            </div>
+
+            {/* Jadval tanlash + ID + qidirish */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="inline-flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5 shrink-0">
+                <button
+                  onClick={() => { setPidTable('transaction'); setPidRows(null); }}
+                  className={cn('px-3 h-9 rounded-md text-[12px] font-semibold transition-colors',
+                    pidTable === 'transaction' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400')}
+                >
+                  {t('idTableTx')}
+                </button>
+                <button
+                  onClick={() => { setPidTable('oplatakv'); setPidRows(null); }}
+                  className={cn('px-3 h-9 rounded-md text-[12px] font-semibold transition-colors',
+                    pidTable === 'oplatakv' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400')}
+                >
+                  {t('idTableOplatakv')}
+                </button>
+              </div>
+              <div className="flex-1 min-w-[240px]">
+                <Input
+                  value={pid}
+                  onChange={(e) => setPid(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && pid.trim()) findByIdMut.mutate(); }}
+                  placeholder={t('idPlaceholder')}
+                  className="font-mono h-9 text-[12px]"
+                />
+              </div>
+              <Button
+                onClick={() => findByIdMut.mutate()}
+                disabled={!pid.trim() || findByIdMut.isPending}
+                className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+              >
+                {findByIdMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                {t('idSearchBtn')}
+              </Button>
+            </div>
+
+            {/* Natijalar */}
+            {pidRows && pidRows.length > 0 && (
+              <div className="overflow-x-auto rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left px-3 py-2">{t('idColDate')}</th>
+                      <th className="text-left px-3 py-2">{t('idColContract')}</th>
+                      <th className="text-right px-3 py-2">{t('idColAmount')}</th>
+                      <th className="text-left px-3 py-2">ID / external</th>
+                      {canRun && <th className="px-3 py-2 w-10"></th>}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {pidRows.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {(r.txnDate || r.date) ? new Date(r.txnDate || r.date).toLocaleDateString('ru-RU') : '—'}
+                        </td>
+                        <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-200">{r.contractNumber || r.contractNo || '—'}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-800 dark:text-slate-200">{fmtNum(r.amount ?? r.paymentAmount)}</td>
+                        <td className="px-3 py-2 font-mono text-[10.5px] text-slate-500 dark:text-slate-400 max-w-[300px] truncate" title={r.externalId || r.sourceTxId || r.id}>
+                          {r.externalId || r.sourceTxId || r.id}
+                        </td>
+                        {canRun && (
+                          <td className="px-3 py-2 text-right">
+                            <button
+                              onClick={() => setDelRow(r)}
+                              className="inline-flex items-center gap-1 px-2 h-7 rounded-md text-[11px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 ring-1 ring-rose-200 dark:ring-rose-900"
+                            >
+                              <Trash2 className="h-3 w-3" /> {tc('delete')}
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {pidRows && pidRows.length === 0 && (
+              <div className="text-[12px] text-slate-400 dark:text-slate-500 italic px-1">{t('idNoResults')}</div>
+            )}
+            {!canRun && (
+              <div className="text-[11px] text-amber-700 dark:text-amber-300">{t('idNoDeletePerm')}</div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* ─── ID bo'yicha o'chirish tasdig'i ─── */}
+      <Dialog open={!!delRow} onOpenChange={(o) => { if (!deleteRowMut.isPending && !o) setDelRow(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('idDeleteConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('idDeleteConfirmDesc')}</DialogDescription>
+          </DialogHeader>
+          {delRow && (
+            <div className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 text-[12px] space-y-1 bg-slate-50/60 dark:bg-slate-900/60">
+              <div className="font-bold">{pidTable === 'oplatakv' ? 'ОплатыКв' : 'Transaction'}</div>
+              <div className="font-mono text-[10.5px] break-all text-slate-500 dark:text-slate-400">{delRow.externalId || delRow.sourceTxId || delRow.id}</div>
+              <div>{t('idColAmount')}: <b>{fmtNum(delRow.amount ?? delRow.paymentAmount)}</b></div>
+            </div>
+          )}
+          <div className="flex justify-end gap-2 mt-1">
+            <Button variant="outline" onClick={() => setDelRow(null)} disabled={deleteRowMut.isPending}>{tc('cancel')}</Button>
+            <Button
+              onClick={() => delRow && deleteRowMut.mutate(delRow)}
+              disabled={deleteRowMut.isPending}
+              className="bg-rose-600 hover:bg-rose-700 text-white gap-2"
+            >
+              {deleteRowMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              {tc('delete')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Modern confirmation dialog ─── */}
       <Dialog open={confirmOpen} onOpenChange={(o) => { if (!mut.isPending) setConfirmOpen(o); }}>
