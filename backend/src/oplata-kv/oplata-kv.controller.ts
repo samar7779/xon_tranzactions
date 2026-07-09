@@ -427,14 +427,14 @@ export class OplataKvController {
   }
 
   @Post()
-  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_CREATE)
   @ApiOperation({ summary: 'Yangi qator qo\'shish' })
   create(@Body() body: CreateOplataKvDto, @CurrentUser() user?: AuthUser) {
     return this.svc.create(body, actorFrom(user));
   }
 
   @Patch(':id')
-  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @RequirePermissions(PERMISSIONS.OPLATAKV_EDIT)
   @ApiOperation({ summary: 'Qatorni tahrirlash (history\'ga avto yoziladi)' })
   update(
     @Param('id') id: string,
