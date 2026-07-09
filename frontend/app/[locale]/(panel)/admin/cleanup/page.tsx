@@ -91,8 +91,9 @@ export default function CleanupPage() {
       `/transactions/find-by-payment-id?paymentId=${encodeURIComponent(pid.trim())}&table=${pidTable}`,
     ),
     onSuccess: (r) => {
-      setPidRows(r.rows || []);
-      if ((r.rows || []).length === 0) toast.message(t('idNoResults'));
+      const rows = r?.rows || [];
+      setPidRows(rows);
+      if (rows.length === 0) toast.message(t('idNoResults'));
     },
     onError: (e: any) => toast.error(e?.message || tc('error')),
   });

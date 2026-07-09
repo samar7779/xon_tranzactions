@@ -392,6 +392,18 @@ export class TransactionsController {
     });
   }
 
+  // ─── Tozalash: to'lov ID bo'yicha topish — STATIC route, :id dan OLDIN bo'lishi SHART ───
+  @Get('find-by-payment-id')
+  @RequirePermissions(PERMISSIONS.CLEANUP_VIEW)
+  @ApiOperation({ summary: "To'lov ID (external_id / source_tx_id) bo'yicha topish (transaction|oplatakv)" })
+  findByPaymentId(
+    @Query('paymentId') paymentId: string,
+    @Query('table') table: 'transaction' | 'oplatakv',
+  ) {
+    const tbl = table === 'oplatakv' ? 'oplatakv' : 'transaction';
+    return this.svc.findByPaymentId(paymentId, tbl);
+  }
+
   @Get(':id')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Bitta tranzaksiya tafsilot' })
@@ -417,18 +429,6 @@ export class TransactionsController {
       return { ok: false, error: 'Tasdiq matni hisob raqamiga teng emas' };
     }
     return this.svc.deleteByAccountNo(body.accountNo);
-  }
-
-  // ─── Tozalash: to'lov ID (external_id) bo'yicha topish/o'chirish ───
-  @Get('find-by-payment-id')
-  @RequirePermissions(PERMISSIONS.CLEANUP_VIEW)
-  @ApiOperation({ summary: "To'lov ID (external_id / source_tx_id) bo'yicha topish (transaction|oplatakv)" })
-  findByPaymentId(
-    @Query('paymentId') paymentId: string,
-    @Query('table') table: 'transaction' | 'oplatakv',
-  ) {
-    const tbl = table === 'oplatakv' ? 'oplatakv' : 'transaction';
-    return this.svc.findByPaymentId(paymentId, tbl);
   }
 
   @Post('delete-row-by-id')
