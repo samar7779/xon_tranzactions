@@ -149,7 +149,8 @@ export default function OplataKvPage() {
   const canDelete = !!user?.permissions?.includes(PERMS.OPLATAKV_DELETE);
   const canImport = !!user?.permissions?.includes(PERMS.OPLATAKV_IMPORT);
   const canSplit = !!user?.permissions?.includes(PERMS.OPLATAKV_SPLIT);
-  const canManage = !!user?.permissions?.includes(PERMS.OPLATAKV_MANAGE);
+  // Sync tugmasi — alohida OPLATAKV_SYNC ruxsati (admin bo'lgani uchun emas — ruxsat berilsa)
+  const canSync = !!user?.permissions?.includes(PERMS.OPLATAKV_SYNC);
 
   // Filters — URL query + localStorage orqali persist qilinadi (refresh'da yo'qolmaydi)
   const [q, setQ] = useState(() => {
@@ -522,7 +523,7 @@ export default function OplataKvPage() {
               )}
 
               {/* Hozir sync — "Sync:" vaqti yonida (bosilganda progress modal) */}
-              {canManage && (
+              {canSync && (
                 <button
                   onClick={() => syncNowMut.mutate()}
                   disabled={syncNowMut.isPending}

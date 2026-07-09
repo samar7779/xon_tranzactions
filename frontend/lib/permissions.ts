@@ -22,6 +22,7 @@ export const PERMS = {
   OPLATAKV_DELETE: 'oplatakv:delete',
   OPLATAKV_IMPORT: 'oplatakv:import',
   OPLATAKV_SPLIT: 'oplatakv:split',                // Split / Re-split
+  OPLATAKV_SYNC: 'oplatakv:sync',                  // Hozir sync (tranzaksiyalardan)
   OPLATAKV_MANAGE: 'oplatakv:manage',              // legacy
 
   // Sozlash
