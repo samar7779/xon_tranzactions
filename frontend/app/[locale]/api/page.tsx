@@ -89,6 +89,7 @@ const ENDPOINTS: Endpoint[] = [
       { name: 'dateFrom', in: 'query', descKey: 'dateFrom', example: '' },
       { name: 'dateTo', in: 'query', descKey: 'dateTo', example: '' },
       { name: 'q', in: 'query', descKey: 'qOplata', example: '' },
+      { name: 'updatedSince', in: 'query', descKey: 'updatedSince', example: '2026-07-09T10:00:00Z' },
     ],
   },
   {
