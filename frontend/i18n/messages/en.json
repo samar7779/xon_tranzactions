@@ -2193,6 +2193,7 @@
       "txId": "Transaction ID",
       "contractNo": "Contract number",
       "qOplata": "Search by client, object or description",
+      "updatedSince": "Delta-sync: ISO time (e.g. 2026-07-09T10:00:00Z). Returns payments changed at/after this time, ordered by updatedAt",
       "okId": "OplataKv row ID",
       "qAccount": "Search by account number or owner",
       "idOrAccountNo": "ID (cuid) or account number (20 digits)",

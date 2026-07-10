@@ -2193,6 +2193,7 @@
       "txId": "Tranzaksiya ID",
       "contractNo": "Shartnoma raqami",
       "qOplata": "Mijoz, obyekt yoki izoh bo'yicha qidirish",
+      "updatedSince": "Delta-sync: ISO vaqt (masalan 2026-07-09T10:00:00Z). Shu vaqt va undan keyin o'zgargan to'lovlar updatedAt bo'yicha qaytariladi",
       "okId": "OplataKv qator ID",
       "qAccount": "Hisob raqami yoki egasi bo'yicha qidirish",
       "idOrAccountNo": "ID (cuid) yoki hisob raqami (20 raqam)",
