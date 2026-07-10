@@ -146,7 +146,13 @@ export class PublicApiController {
 
   @Get('oplata-kv')
   @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
-  @ApiOperation({ summary: 'Kvartira to\'lovlari ro\'yxati' })
+  @ApiOperation({
+    summary: 'Kvartira to\'lovlari ro\'yxati',
+    description: 'Faqat split qilingan (kategoriyalangan) to\'lovlar. ' +
+      'Delta-sync: updatedSince (ISO vaqt) berilsa — shu vaqt va undan keyin o\'zgargan (yangi split, ' +
+      'shartnoma tuzatilgan, ma\'lumot to\'ldirilgan) to\'lovlar updatedAt bo\'yicha o\'sish tartibida qaytariladi. ' +
+      'Iste\'molchi oxirgi ko\'rgan updatedAt ni saqlab, keyingi so\'rovda shuni beradi.',
+  })
   async listOplataKv(
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
@@ -154,6 +160,7 @@ export class PublicApiController {
     @Query('dateFrom') dateFrom?: string,
     @Query('dateTo') dateTo?: string,
     @Query('q') q?: string,
+    @Query('updatedSince') updatedSince?: string,
   ) {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
@@ -166,6 +173,15 @@ export class PublicApiController {
       if (dateFrom) where.date.gte = new Date(`${dateFrom}T00:00:00Z`);
       if (dateTo) where.date.lte = new Date(`${dateTo}T23:59:59.999Z`);
     }
+    // Delta-sync: shu vaqt va undan keyin o'zgargan (updatedAt) to'lovlar
+    let deltaMode = false;
+    if (updatedSince) {
+      const since = new Date(updatedSince);
+      if (!isNaN(since.getTime())) {
+        where.updatedAt = { gte: since };
+        deltaMode = true;
+      }
+    }
     if (q && q.trim()) {
       const t = q.trim();
       where.OR = [
@@ -175,11 +191,15 @@ export class PublicApiController {
         { purpose: { contains: t, mode: 'insensitive' } },
       ];
     }
+    // Delta rejimda updatedAt o'sish tartibida (iste'molchi oxirgi updatedAt ni kuzatadi)
+    const orderBy: any = deltaMode
+      ? [{ updatedAt: 'asc' }, { id: 'asc' }]
+      : [{ date: 'desc' }, { id: 'desc' }];
     const [total, items] = await Promise.all([
       this.prisma.oplataKv.count({ where }),
       this.prisma.oplataKv.findMany({
         where,
-        orderBy: [{ date: 'desc' }, { id: 'desc' }],
+        orderBy,
         skip: (pageN - 1) * perPageN,
         take: perPageN,
       }),
