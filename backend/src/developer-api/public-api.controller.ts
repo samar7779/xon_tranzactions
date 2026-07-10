@@ -157,7 +157,9 @@ export class PublicApiController {
   ) {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
-    const where: any = {};
+    // Faqat SPLIT qilingan (paymentCategory tayinlangan) to'lovlar beriladi.
+    // Split bo'lmagan qatorlar API'da ko'rinmaydi — split qilinganda avtomatik chiqadi.
+    const where: any = { paymentCategory: { not: null } };
     if (contractNo) where.contractNo = contractNo;
     if (dateFrom || dateTo) {
       where.date = {};
@@ -201,8 +203,10 @@ export class PublicApiController {
     const idTrimmed = (id || '').trim();
     if (!idTrimmed) throw new NotFoundException('ОплатыКв ID berilmagan');
 
+    // Split bo'lmagan (paymentCategory=null) qatorlar API'da berilmaydi — list bilan izchil.
     const row = await this.prisma.oplataKv.findFirst({
       where: {
+        paymentCategory: { not: null },
         OR: [
           { id: idTrimmed },
           { sourceTxId: idTrimmed },
@@ -210,7 +214,7 @@ export class PublicApiController {
       },
     });
     if (!row) throw new NotFoundException(
-      `ОплатыКв qatori topilmadi. Qidirilgan maydonlar: id (cuid), sourceTxId. Berilgan: "${idTrimmed.slice(0, 64)}"`,
+      `ОплатыКв qatori topilmadi yoki hali split qilinmagan. Qidirilgan maydonlar: id (cuid), sourceTxId. Berilgan: "${idTrimmed.slice(0, 64)}"`,
     );
     return { ok: true, item: this.oplataKvShape(row) };
   }
