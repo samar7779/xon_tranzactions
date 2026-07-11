@@ -1202,4 +1202,68 @@ export class TransactionsService {
 
     return { ok: true, count: items.length, items };
   }
+
+  /**
+   * CLIENT kategoriya + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya bilan).
+   * XATO = contractNumber bor, qo'lda (manual) emas, CRM'da found=true EMAS.
+   */
+  async clientXatoTransactions(page = 1, perPage = 50) {
+    const pageN = Math.max(1, Number(page) || 1);
+    const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
+
+    const clientCat = await this.prisma.category.findUnique({
+      where: { code: 'CLIENT' },
+      select: { id: true, name: true },
+    });
+    if (!clientCat) return { ok: true, total: 0, page: pageN, perPage: perPageN, items: [] };
+
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedList = verified.map((c) => c.contractNumber);
+
+    const where: any = {
+      categoryId: clientCat.id,
+      isContractManual: false,
+      AND: [
+        { contractNumber: { not: null } },
+        { contractNumber: { notIn: verifiedList } },
+      ],
+    };
+
+    const [total, items] = await Promise.all([
+      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.findMany({
+        where,
+        orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
+        skip: (pageN - 1) * perPageN,
+        take: perPageN,
+        select: {
+          id: true, externalId: true, txnDate: true, operationTime: true,
+          amount: true, currency: true, direction: true, contractNumber: true,
+          description: true,
+        },
+      }),
+    ]);
+
+    return {
+      ok: true,
+      total,
+      page: pageN,
+      perPage: perPageN,
+      items: items.map((it) => ({
+        id: it.id,
+        externalId: it.externalId,
+        txnDate: it.txnDate,
+        operationTime: it.operationTime,
+        amount: Number(it.amount),
+        currency: it.currency,
+        direction: it.direction,
+        contractNumber: it.contractNumber,
+        description: it.description,
+        counterparty: clientCat.name,
+      })),
+    };
+  }
 }

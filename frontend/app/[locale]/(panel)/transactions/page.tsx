@@ -157,6 +157,7 @@ export default function TransactionsPage() {
   const [idInspectorTrigger, setIdInspectorTrigger] = useState(0);
   const [vipiskaDebugOpen, setVipiskaDebugOpen] = useState(false);
   const [xatoModalOpen, setXatoModalOpen] = useState(false);
+  const [clientXatoOpen, setClientXatoOpen] = useState(false);
   const [todayStatsOpen, setTodayStatsOpen] = useState(false);
   const [extraToolsOpen, setExtraToolsOpen] = useState(false);
   const [idQuery, setIdQuery] = useState('');
@@ -836,6 +837,18 @@ export default function TransactionsPage() {
                   }
                 `}</style>
               </div>
+
+              {/* CLIENT + XATO shartnomali tranzaksiyalar — alohida ikon */}
+              <button
+                onClick={() => setClientXatoOpen(true)}
+                title={t('clientXatoTitle')}
+                className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 shrink-0"
+              >
+                <AlertCircle className="h-4 w-4" />
+              </button>
+
+              {/* CLIENT + XATO modal */}
+              <ClientXatoDialog open={clientXatoOpen} onClose={() => setClientXatoOpen(false)} />
 
               {/* SETTINGS — barcha qo'shimcha tools birlashtirilgan (ID, ID inspector, filter mode, ...) */}
               <DropdownMenu>
@@ -1888,6 +1901,101 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
               </Button>
             </div>
           </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══ CLIENT + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya) ═══
+function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useTranslations('transactions');
+  const [page, setPage] = useState(1);
+  const perPage = 50;
+
+  useEffect(() => { if (open) setPage(1); }, [open]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['client-xato', page],
+    queryFn: () => api.get<{
+      ok: boolean; total: number; page: number; perPage: number;
+      items: Array<{
+        id: string; externalId: string | null; txnDate: string; operationTime: string | null;
+        amount: number; currency: string; direction: string; contractNumber: string | null;
+        description: string | null; counterparty: string | null;
+      }>;
+    }>(`/transactions/client-xato?page=${page}&perPage=${perPage}`),
+    enabled: open,
+  });
+
+  const items = data?.items || [];
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; } };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3.5 text-white shrink-0">
+          <DialogTitle asChild>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <AlertCircle className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('clientXatoTitle')}</div>
+                <div className="text-lg font-black tracking-tight truncate">{t('clientXatoSubtitle')}</div>
+              </div>
+            </div>
+          </DialogTitle>
+          <div className="text-[11px] text-white/80 mt-2">{t('clientXatoCount', { n: total })}</div>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+          {isLoading ? (
+            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">…</div>
+          ) : items.length === 0 ? (
+            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('clientXatoEmpty')}</div>
+          ) : (
+            <table className="w-full text-[12px]">
+              <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                <tr>
+                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {t('dateTimeHeader')}</span></th>
+                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {t('counterpartyHeader')}</span></th>
+                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> {t('contractHeader')}</span></th>
+                  <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> {t('amountHeader')}</span></th>
+                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" /> {t('purposeHeader')}</span></th>
+                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Hash className="h-3 w-3" /> ID</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                {items.map((it) => (
+                  <tr key={it.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                      {fmtDate(it.txnDate)}{it.operationTime ? <span className="text-slate-400 dark:text-slate-500"> {it.operationTime.slice(0, 5)}</span> : null}
+                    </td>
+                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={it.counterparty || ''}>{it.counterparty || '—'}</td>
+                    <td className="px-3 py-2 font-mono font-semibold text-rose-700 dark:text-rose-300 whitespace-nowrap">{it.contractNumber || '—'}</td>
+                    <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                      {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
+                    </td>
+                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[340px] truncate" title={it.description || ''}>{it.description || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-[10px] text-slate-400 dark:text-slate-500 max-w-[220px] truncate" title={it.externalId || it.id}>{it.externalId || it.id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {totalPages > 1 && (
+          <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0">
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">{page} / {totalPages}</div>
+            <div className="flex items-center gap-1.5">
+              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronLeft className="h-4 w-4" /></button>
+              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
+            </div>
+          </div>
         )}
       </DialogContent>
     </Dialog>

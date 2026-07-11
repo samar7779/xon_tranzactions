@@ -127,6 +127,13 @@ export class TransactionsController {
     return this.svc.xatoContracts();
   }
 
+  @Get('client-xato')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @ApiOperation({ summary: 'CLIENT kategoriya + XATO shartnomali tranzaksiyalar (alohida, paginatsiya)' })
+  clientXato(@Query('page') page?: string, @Query('perPage') perPage?: string) {
+    return this.svc.clientXatoTransactions(Number(page) || 1, Number(perPage) || 50);
+  }
+
   @Get('daily')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob/kategoriya filtri bilan)' })
