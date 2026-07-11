@@ -21,7 +21,7 @@ import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
-import { PurposeInfoButton } from '@/components/purpose-modal';
+import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
 import { BankLogo } from '@/components/bank-logo';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -1910,10 +1910,24 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
 // ═══ CLIENT + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya) ═══
 function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTranslations('transactions');
+  const tc = useTranslations('common');
   const [page, setPage] = useState(1);
+  const [infoRow, setInfoRow] = useState<any | null>(null);
+  const [exporting, setExporting] = useState(false);
   const perPage = 50;
 
   useEffect(() => { if (open) setPage(1); }, [open]);
+
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      await apiDownload('/transactions/client-xato/export', `klient-xato-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (e: any) {
+      toast.error(e?.message || tc('error'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['client-xato', page],
@@ -1934,26 +1948,44 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; } };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
         <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3.5 text-white shrink-0">
-          <DialogTitle asChild>
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
-                <AlertCircle className="h-5 w-5" />
+          <div className="flex items-start justify-between gap-3">
+            <DialogTitle asChild>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                  <AlertCircle className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('clientXatoTitle')}</div>
+                  <div className="text-lg font-black tracking-tight truncate">{t('clientXatoSubtitle')}</div>
+                </div>
               </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('clientXatoTitle')}</div>
-                <div className="text-lg font-black tracking-tight truncate">{t('clientXatoSubtitle')}</div>
-              </div>
-            </div>
-          </DialogTitle>
-          <div className="text-[11px] text-white/80 mt-2">{t('clientXatoCount', { n: total })}</div>
+            </DialogTitle>
+            <button
+              onClick={exportExcel}
+              disabled={exporting || isLoading || total === 0}
+              className="shrink-0 mr-8 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Excel
+            </button>
+          </div>
+          <div className="text-[11px] text-white/80 mt-2 flex items-center gap-1.5">
+            {isLoading
+              ? <><Loader2 className="h-3 w-3 animate-spin" /> {tc('loading')}</>
+              : t('clientXatoCount', { n: total })}
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
           {isLoading ? (
-            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">…</div>
+            <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+              <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
+              <span className="text-[12px]">{tc('loading')}</span>
+            </div>
           ) : items.length === 0 ? (
             <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('clientXatoEmpty')}</div>
           ) : (
@@ -1979,8 +2011,24 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                     <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
                       {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                     </td>
-                    <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[340px] truncate" title={it.description || ''}>{it.description || '—'}</td>
-                    <td className="px-3 py-2 font-mono text-[10px] text-slate-400 dark:text-slate-500 max-w-[220px] truncate" title={it.externalId || it.id}>{it.externalId || it.id}</td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => setInfoRow(it)}
+                        title={it.description || ''}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-indigo-500 hover:to-violet-600 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => setInfoRow(it)}
+                        title={it.externalId || it.id}
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-slate-500 hover:to-slate-700 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
+                      >
+                        <Hash className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -1999,6 +2047,22 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         )}
       </DialogContent>
     </Dialog>
+
+    {/* IZOH / ID icon bosilganda — to'liq ma'lumot modali (purpose + externalId + shartnoma) */}
+    <PurposeModal
+      open={!!infoRow}
+      onClose={() => setInfoRow(null)}
+      data={infoRow ? {
+        purpose: infoRow.description ?? null,
+        externalId: infoRow.externalId || infoRow.id,
+        contractNumber: infoRow.contractNumber ?? null,
+        amount: infoRow.amount,
+        currency: infoRow.currency,
+        direction: infoRow.direction,
+        txnDate: infoRow.txnDate,
+      } : null}
+    />
+    </>
   );
 }
 

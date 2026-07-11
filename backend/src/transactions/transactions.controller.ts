@@ -134,6 +134,19 @@ export class TransactionsController {
     return this.svc.clientXatoTransactions(Number(page) || 1, Number(perPage) || 50);
   }
 
+  @Get('client-xato/export')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @ApiOperation({ summary: 'CLIENT + XATO shartnomali tranzaksiyalar — Excel eksport' })
+  async clientXatoExport(@Res() res: Response) {
+    const { buffer, filename } = await this.svc.clientXatoXlsx();
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Get('daily')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'Kunma-kun kirim/chiqim (diagramma uchun, bank/hisob/kategoriya filtri bilan)' })
