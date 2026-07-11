@@ -1950,7 +1950,12 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col">
+      <DialogContent
+        className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col"
+        onInteractOutside={(e) => { if (infoRow) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (infoRow) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (infoRow) e.preventDefault(); }}
+      >
         <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3.5 text-white shrink-0">
           <div className="flex items-start justify-between gap-3">
             <DialogTitle asChild>

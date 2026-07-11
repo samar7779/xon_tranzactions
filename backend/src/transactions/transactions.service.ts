@@ -1226,6 +1226,8 @@ export class TransactionsService {
     const where: any = {
       categoryId: clientCat.id,
       isContractManual: false,
+      // Import qilinganlar (Excel / Aloqa Bank) chiqarib tashlanadi — faqat bank-sync
+      source: { notIn: ['IMPORT', 'ALOQA_BANK'] as any },
       AND: [
         { contractNumber: { not: null } },
         { contractNumber: { notIn: verifiedList } },
@@ -1284,6 +1286,7 @@ export class TransactionsService {
           where: {
             categoryId: clientCat.id,
             isContractManual: false,
+            source: { notIn: ['IMPORT', 'ALOQA_BANK'] as any },
             AND: [
               { contractNumber: { not: null } },
               { contractNumber: { notIn: verifiedList } },
