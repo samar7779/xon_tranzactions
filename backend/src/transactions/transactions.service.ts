@@ -1266,4 +1266,87 @@ export class TransactionsService {
       })),
     };
   }
+
+  /** CLIENT + XATO shartnomali tranzaksiyalar — Excel (.xlsx) eksport. */
+  async clientXatoXlsx(): Promise<{ buffer: Buffer; filename: string }> {
+    const clientCat = await this.prisma.category.findUnique({
+      where: { code: 'CLIENT' },
+      select: { id: true, name: true },
+    });
+    const verified = await this.prisma.crmContract.findMany({
+      where: { found: true },
+      select: { contractNumber: true },
+    });
+    const verifiedList = verified.map((c) => c.contractNumber);
+
+    const rows = clientCat
+      ? await this.prisma.transaction.findMany({
+          where: {
+            categoryId: clientCat.id,
+            isContractManual: false,
+            AND: [
+              { contractNumber: { not: null } },
+              { contractNumber: { notIn: verifiedList } },
+            ],
+          },
+          orderBy: [{ txnDate: 'desc' }, { id: 'desc' }],
+          take: 50000,
+          select: {
+            id: true, externalId: true, txnDate: true, operationTime: true,
+            amount: true, currency: true, direction: true, contractNumber: true, description: true,
+          },
+        })
+      : [];
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Klient-XATO');
+    ws.columns = [
+      { header: 'Sana', key: 'date', width: 12 },
+      { header: 'Vaqt', key: 'time', width: 10 },
+      { header: 'Kontragent', key: 'kontragent', width: 24 },
+      { header: 'Shartnoma', key: 'contract', width: 18 },
+      { header: 'Summa', key: 'amount', width: 18 },
+      { header: 'Izoh', key: 'purpose', width: 60 },
+      { header: 'ID', key: 'id', width: 44 },
+    ];
+    const head = ws.getRow(1);
+    head.font = { bold: true, size: 10 };
+    head.height = 22;
+    head.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      c.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    for (const it of rows) {
+      let date = '';
+      if (it.txnDate) {
+        const d = new Date(it.txnDate);
+        const tz = new Date(d.getTime() + 5 * 60 * 60 * 1000);
+        date = `${String(tz.getUTCDate()).padStart(2, '0')}.${String(tz.getUTCMonth() + 1).padStart(2, '0')}.${tz.getUTCFullYear()}`;
+      }
+      const signed = it.direction === 'IN' ? Number(it.amount) : -Number(it.amount);
+      const row = ws.addRow({
+        date,
+        time: it.operationTime ? it.operationTime.slice(0, 5) : '',
+        kontragent: clientCat?.name || '',
+        contract: it.contractNumber || '',
+        amount: signed,
+        purpose: it.description || '',
+        id: it.externalId || it.id,
+      });
+      row.font = { size: 9 };
+      row.getCell('amount').numFmt = '#,##0.00';
+      row.getCell('date').numFmt = '@';
+      row.getCell('date').alignment = { horizontal: 'center' };
+      row.getCell('contract').font = { name: 'Consolas', size: 9, bold: true, color: { argb: 'FFBE123C' } };
+    }
+
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const ts = new Date().toISOString().slice(0, 10);
+    return { buffer, filename: `klient-xato-${ts}.xlsx` };
+  }
 }
