@@ -2007,7 +2007,11 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       {fmtDate(it.txnDate)}{it.operationTime ? <span className="text-slate-400 dark:text-slate-500"> {it.operationTime.slice(0, 5)}</span> : null}
                     </td>
                     <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={it.counterparty || ''}>{it.counterparty || '—'}</td>
-                    <td className="px-3 py-2 font-mono font-semibold text-rose-700 dark:text-rose-300 whitespace-nowrap">{it.contractNumber || '—'}</td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
+                        <AlertCircle className="h-3 w-3" /> {t('badgeError')}
+                      </span>
+                    </td>
                     <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
                       {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
                     </td>
@@ -2022,11 +2026,14 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                     </td>
                     <td className="px-3 py-2">
                       <button
-                        onClick={() => setInfoRow(it)}
+                        onClick={() => {
+                          navigator.clipboard.writeText(it.externalId || it.id);
+                          toast.success(t('idCopied'));
+                        }}
                         title={it.externalId || it.id}
                         className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-slate-500 hover:to-slate-700 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
                       >
-                        <Hash className="h-3.5 w-3.5" />
+                        <Copy className="h-3.5 w-3.5" />
                       </button>
                     </td>
                   </tr>

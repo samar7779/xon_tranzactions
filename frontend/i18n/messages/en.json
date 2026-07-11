@@ -530,6 +530,7 @@
     "clientXatoSubtitle": "Transactions with counterparty Client and an error (XATO) contract",
     "clientXatoCount": "{n} transactions",
     "clientXatoEmpty": "No Client + error-contract transactions found",
+    "idCopied": "ID copied",
     "perPage": "{n}/page",
     "ofTotal": "{n} transactions",
     "openDetail": "Details",

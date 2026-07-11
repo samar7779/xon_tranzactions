@@ -91,8 +91,10 @@ export function PurposeModal({
           animate={{ opacity: 1, backdropFilter: 'blur(8px)' }}
           exit={{ opacity: 0, backdropFilter: 'blur(0px)' }}
           transition={{ duration: 0.3 }}
-          // Backdrop: BOSGAN paytda yopilmaydi (overlay click yo'q)
-          className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/75 p-4"
+          // Backdrop: BOSGAN paytda yopilmaydi (overlay click yo'q).
+          // pointer-events-auto — boshqa Radix Dialog ichida ochilganda ham tugmalar bosilsin
+          // (Radix body'ga pointer-events:none qo'yadi, biz uni bu overlay uchun tiklaymiz).
+          className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-950/75 p-4 pointer-events-auto"
           aria-modal="true"
           role="dialog"
         >

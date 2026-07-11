@@ -530,6 +530,7 @@
     "clientXatoSubtitle": "Kontragent Klient, shartnoma XATO bo'lgan tranzaksiyalar",
     "clientXatoCount": "{n} ta tranzaksiya",
     "clientXatoEmpty": "Klient + XATO shartnomali tranzaksiya topilmadi",
+    "idCopied": "ID nusxalandi",
     "perPage": "{n}/sahifa",
     "ofTotal": "{n} ta tranzaksiya",
     "openDetail": "Tafsilot",
