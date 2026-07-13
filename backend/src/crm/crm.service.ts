@@ -629,12 +629,22 @@ export class CrmService {
       this.asText(apt0?.type) || null;
     const contractDoc = this.asText(detail?.contract_path_temp) || null;
 
+    // Debug — plan topilmasa, tuzatish uchun plan strukturasini (cheklangan) qaytaramiz
+    let debug: { orderApartments: number; plan: string | null } | undefined;
+    if (plans.length === 0) {
+      let planStr: string | null = null;
+      try {
+        planStr = plan0 && Object.keys(plan0).length ? JSON.stringify(plan0).slice(0, 4000) : null;
+      } catch { planStr = null; }
+      debug = { orderApartments: orderApts.length, plan: planStr };
+    }
+
     this.log.log(
       `contractMedia(${contract}): ${plans.length} ta planirovka topildi` +
       (plans.length ? '' : ' (apartment.plan.images bo\'sh yoki noimage)'),
     );
 
-    return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true };
+    return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true, ...(debug ? { debug } : {}) };
   }
 
   /**

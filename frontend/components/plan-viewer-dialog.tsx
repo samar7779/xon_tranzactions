@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, ZoomIn, ZoomOut, Maximize2, RotateCw, Download, Printer,
-  ChevronLeft, ChevronRight, Loader2, ImageOff, FileText, Building2,
+  ChevronLeft, ChevronRight, Loader2, ImageOff, FileText, Building2, Copy,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -29,6 +29,7 @@ type PlanMedia = {
   objectName: string | null;
   typeName: string | null;
   crmConnected: boolean;
+  debug?: { orderApartments: number; plan: string | null };
 };
 
 const MIN_SCALE = 0.25;
@@ -298,7 +299,7 @@ export function PlanViewerDialog({
                   <div className="text-[13px] text-slate-400">{t('planCrmErrorHint')}</div>
                 </div>
               ) : empty ? (
-                <div className="text-center px-8">
+                <div className="text-center px-8 max-w-2xl w-full">
                   <ImageOff className="h-12 w-12 text-slate-500 mx-auto mb-3" />
                   <div className="text-slate-200 font-semibold mb-1">{t('planNotFound')}</div>
                   <div className="text-[13px] text-slate-400 mb-4">{t('planNotFoundHint')}</div>
@@ -309,6 +310,30 @@ export function PlanViewerDialog({
                     >
                       <FileText className="h-4 w-4" /> {t('planDownloadDoc')}
                     </button>
+                  )}
+
+                  {/* Debug — plan strukturasi (URL topilmasa, tuzatish uchun) */}
+                  {data?.debug?.plan && (
+                    <div className="mt-6 text-left">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">🔧 Texnik ma'lumot</span>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard?.writeText(data.debug?.plan || '').then(
+                              () => toast.success(t('planDebugCopied')),
+                              () => toast.error(t('planDownloadError')),
+                            );
+                          }}
+                          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11.5px] font-semibold transition-colors"
+                        >
+                          <Copy className="h-3.5 w-3.5" /> {t('planDebugCopy')}
+                        </button>
+                      </div>
+                      <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 ring-1 ring-slate-800 p-3 text-[10.5px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all">
+                        {data.debug.plan}
+                      </pre>
+                      <div className="text-[10.5px] text-slate-500 mt-1.5">{t('planDebugHint')}</div>
+                    </div>
                   )}
                 </div>
               ) : currentUrl ? (
