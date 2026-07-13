@@ -30,7 +30,7 @@ const SETTINGS_KEY = 'export.sheets';
 
 // ОплатыКв → hujayra qiymati uchun mavjud maydonlar
 const FIELD_KEYS = new Set([
-  'contractNo', 'date', 'paymentAmount', 'firstInstallment', 'monthlyAmount',
+  'id', 'contractNo', 'date', 'paymentAmount', 'firstInstallment', 'monthlyAmount',
   'paymentCategory', 'object', 'client', 'txType', 'paymentMethod', 'purpose', 'note',
 ]);
 
@@ -244,7 +244,9 @@ export class GoogleExportService {
       case 'firstInstallment': return row.firstInstallment != null ? Number(row.firstInstallment) : '';
       case 'monthlyAmount':    return row.monthlyAmount    != null ? Number(row.monthlyAmount)    : '';
       case 'paymentCategory':  return row.paymentCategory ? (CATEGORY_LABEL[row.paymentCategory] || row.paymentCategory) : '';
-      case 'contractNo':       return row.contractNo || '';
+      // XATO — CRM'da tasdiqlanmagan shartnoma: raqam o'rniga "XATO" yoziladi
+      case 'contractNo':       return row.crmXato ? 'XATO' : (row.contractNo || '');
+      case 'id':               return row.id || '';
       case 'object':           return row.object || '';
       case 'client':           return row.client || '';
       case 'txType':           return row.txType || '';

@@ -755,11 +755,16 @@ export class OplataKvService {
     }
 
     const take = Math.min(Math.max(1, filter.limit || 100000), 200000);
-    return this.prisma.oplataKv.findMany({
+    const rows = await this.prisma.oplataKv.findMany({
       where,
       orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
       take,
     });
+    // XATO status — tranzaksiyadan kelgan, CRM'da tasdiqlanmagan (found≠true,
+    // manual/ariza emas) shartnomalar. List bilan bir xil mantiq. Eksportda
+    // bunday qatorlarda contractNo o'rniga "XATO" yoziladi.
+    const { isXato } = await this.computeContractXato(rows);
+    return rows.map((r) => ({ ...r, crmXato: isXato(r) }));
   }
 
   // ───────────────── FIND ONE ─────────────────

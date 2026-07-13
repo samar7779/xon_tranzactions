@@ -51,6 +51,7 @@ interface RunResult {
 
 // ОплатыКв → hujayra maydonlari
 const FIELDS: Array<{ value: string; label: string }> = [
+  { value: 'id',              label: 'ID (external)' },
   { value: 'contractNo',      label: 'Дог № (shartnoma)' },
   { value: 'date',            label: 'Дата (sana)' },
   { value: 'paymentAmount',   label: 'Сумма оплаты' },
