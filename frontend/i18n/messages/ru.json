@@ -1771,6 +1771,8 @@
     "selectContract": "Выберите договор",
     "selectContractHint": "Введите номер договора в поле выше или выберите из списка",
     "noPaymentsForContract": "По этому договору платежи не найдены",
+    "xatoExcluded": "{n} ошибочных исключено",
+    "xatoExcludedTitle": "Договор не подтверждён в CRM — платежи из транзакций (ошибочные) не показываются в истории",
     "totalShort": "Всего",
     "objectLabel": "Объект",
     "countSuffix": "шт",
