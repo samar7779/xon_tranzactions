@@ -8,6 +8,10 @@ const XONSAROY_CLIENT_BASE = process.env.XONSAROY_CLIENT_BASE || 'https://app-ap
 const XONSAROY_KEY = process.env.XONSAROY_API_KEY || 'G0C2kwSk3e3AnEZUMJhq067ZM5s9Wkuc';
 const XONSAROY_SECRET = process.env.XONSAROY_API_SECRET || 'w1qBTE76Y4PKsbLeLjd2gt8UDDSHYJl0';
 
+// Planirovka rasmlari shu S3 bucket'da (uploads/plans/...). CRM relative yo'l
+// bersa shu host qo'shiladi; presigned (X-Amz) bo'lsa o'zi to'liq keladi.
+const PLAN_S3_BASE = process.env.XONSAROY_S3_BASE || 'https://xny-buildit.s3.eu-central-1.amazonaws.com/';
+
 // XonSaroy MySQL (xonappuz_crm) — bot bilan bir xil baza.
 // To'liq client ma'lumotlari (telefon, pasport, manzil) shu yerdan keladi.
 // Agar ulanish iloji bo'lmasa, faqat API'dan keladigan F.I.O. ko'rsatiladi.
@@ -507,6 +511,131 @@ export class CrmService {
       return { ok: true, detail: null };
     }
     return { ok: true, detail };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //        PLANIROVKA — shartnoma rasm/hujjat (CRM media)
+  // ═══════════════════════════════════════════════════════════════
+
+  /** CRM'dan keladigan qiymat string yoki {uz,ru,...} obyekt bo'lishi mumkin — matnga keltiradi. */
+  private asText(v: any): string | null {
+    if (v == null) return null;
+    if (typeof v === 'string') return v.trim() || null;
+    if (typeof v === 'object') {
+      return (
+        (typeof v.uz === 'string' && v.uz) ||
+        (typeof v.ru === 'string' && v.ru) ||
+        (typeof v.en === 'string' && v.en) ||
+        (v.name ? this.asText(v.name) : null) ||
+        (v.value ? this.asText(v.value) : null) ||
+        null
+      );
+    }
+    return String(v);
+  }
+
+  /**
+   * Shartnoma bo'yicha planirovka rasm(lar)i va hujjat URL'ini qaytaradi.
+   *
+   * CRM /show detail ichidan `uploads/plans/...` yo'lini AVTOMATIK topadi —
+   * CRM field nomiga bog'liq emas (rekursiv qidiruv). Presigned (X-Amz)
+   * versiyani afzal ko'radi; relative bo'lsa S3 host qo'shadi.
+   */
+  async contractMedia(contractNo: string) {
+    const contract = (contractNo || '').trim();
+    if (!contract) return { ok: false, error: 'contract kerak' };
+
+    const res: any = await this.show({ contract }).catch(() => null);
+    const detail: any = res && res.detail !== undefined ? res.detail : null;
+    if (!detail) {
+      return {
+        ok: true, contract, plans: [] as string[], contractDoc: null,
+        apartmentNumber: null, objectName: null, typeName: null,
+        crmConnected: !!(res && res.ok),
+      };
+    }
+
+    // ── uploads/plans/... yo'llarini butun detail ichidan rekursiv yig'amiz ──
+    const byPath = new Map<string, string>(); // query'siz path -> to'liq url
+    const consider = (raw: string) => {
+      if (!raw || !/uploads\/plans\//i.test(raw)) return;
+      let url = raw.trim();
+      if (!/^https?:\/\//i.test(url)) url = PLAN_S3_BASE + url.replace(/^\/+/, '');
+      const key = url.split('?')[0];
+      const signed = /[?&]X-Amz/i.test(url);
+      const prev = byPath.get(key);
+      if (!prev) { byPath.set(key, url); return; }
+      // presigned (imzolangan) versiyani afzal ko'ramiz — bevosita yuklanadi
+      if (signed && !/[?&]X-Amz/i.test(prev)) byPath.set(key, url);
+    };
+    const walk = (v: any, depth: number) => {
+      if (v == null || depth > 8) return;
+      if (typeof v === 'string') { consider(v); return; }
+      if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+      if (typeof v === 'object') { for (const x of Object.values(v)) walk(x, depth + 1); }
+    };
+    walk(detail, 0);
+    const plans = [...byPath.values()];
+
+    // Label uchun meta
+    const apt0 = detail?.order_apartments?.[0] || {};
+    const aptObj = apt0?.apartment || {};
+    const objectName =
+      this.asText(aptObj?.block?.building?.object?.name) ||
+      this.asText(detail?.object) ||
+      this.asText(detail?.object_name) || null;
+    const apartmentNumber =
+      this.asText(apt0?.factual_apartment_number) ||
+      this.asText(aptObj?.number) ||
+      this.asText(detail?.apartment_number) || null;
+    const typeName = this.asText(aptObj?.type) || this.asText(apt0?.type) || null;
+    const contractDoc = this.asText(detail?.contract_path_temp) || null;
+
+    this.log.log(
+      `contractMedia(${contract}): ${plans.length} ta planirovka topildi` +
+      (plans.length ? '' : " (detail ichida uploads/plans yo'q)"),
+    );
+
+    return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true };
+  }
+
+  /**
+   * Planirovka rasmini backend orqali stream qilib beradi (yuklab olish uchun).
+   * S3 presigned URL'da CORS/expiry muammosini chetlab o'tadi.
+   * Xavfsizlik: faqat ishonchli S3 host (xny-buildit ... amazonaws.com).
+   */
+  async streamPlanImage(url: string, filename: string, res: any) {
+    let u: URL;
+    try { u = new URL(url); } catch { res.status(400).json({ ok: false, error: "URL noto'g'ri" }); return; }
+    const host = u.hostname.toLowerCase();
+    if (!host.endsWith('.amazonaws.com') || !/xny-buildit/i.test(url)) {
+      res.status(400).json({ ok: false, error: 'Ruxsat etilmagan manba' });
+      return;
+    }
+    const ctrl = new AbortController();
+    const tm = setTimeout(() => ctrl.abort(), 30_000);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal });
+      if (!r.ok) { res.status(502).json({ ok: false, error: `Rasm olinmadi (${r.status})` }); return; }
+      const ct = r.headers.get('content-type') || 'application/octet-stream';
+      const buf = Buffer.from(await r.arrayBuffer());
+      let safe = (filename || 'planirovka').replace(/[^\w.\- ]+/g, '_').trim() || 'planirovka';
+      if (!/\.[a-z0-9]{2,5}$/i.test(safe)) {
+        const ext = ct.includes('png') ? 'png'
+          : ct.includes('webp') ? 'webp'
+          : (ct.includes('jpeg') || ct.includes('jpg')) ? 'jpg'
+          : ct.includes('pdf') ? 'pdf' : 'img';
+        safe = `${safe}.${ext}`;
+      }
+      res.setHeader('Content-Type', ct);
+      res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+      res.setHeader('Content-Length', String(buf.length));
+      res.end(buf);
+    } catch (e: any) {
+      res.status(502).json({ ok: false, error: e?.message || 'Yuklab olishda xato' });
+    } finally {
+      clearTimeout(tm);
+    }
   }
 
 }
