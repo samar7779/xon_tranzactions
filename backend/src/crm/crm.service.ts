@@ -561,6 +561,7 @@ export class CrmService {
     //   • asl rasm plan.image (real) YOKI plan.images[].<url> da bo'ladi (S3 presigned)
     const byPath = new Map<string, string>(); // query'siz path -> to'liq url
     const DOC_EXT = /\.(docx?|pdf|xlsx?|pptx?|csv|zip|rar)(\?|$)/i;
+    const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp|tiff?)(\?|$)/i;
     const add = (raw: string) => {
       if (!raw) return;
       let url = String(raw).trim();
@@ -583,7 +584,8 @@ export class CrmService {
       if (v == null || depth > 6) return;
       if (typeof v === 'string') {
         if (/^https?:\/\//i.test(v)) { if (!DOC_EXT.test(v)) add(v); }
-        else if (/uploads\/plans\//i.test(v)) add(v);
+        // relative yo'l — slash bor (bare filename emas) + rasm kengaytmasi yoki plans yo'li
+        else if (/\//.test(v) && (IMG_EXT.test(v) || /uploads\/plans\//i.test(v))) add(v);
         return;
       }
       if (Array.isArray(v)) { for (const x of v) walkPlan(x, depth + 1); return; }
@@ -629,19 +631,37 @@ export class CrmService {
       this.asText(apt0?.type) || null;
     const contractDoc = this.asText(detail?.contract_path_temp) || null;
 
-    // Debug — plan topilmasa, tuzatish uchun plan strukturasini (cheklangan) qaytaramiz
-    let debug: { orderApartments: number; plan: string | null } | undefined;
+    // Debug — plan topilmasa, tuzatish uchun serverning /show javob strukturasini
+    // (cheklangan) qaytaramiz. Bu SERVER oladigan ma'lumot — browser'nikidan farq
+    // qilishi mumkin (masalan plan.images bo'sh kelishi).
+    let debug: {
+      orderApartments: number;
+      detailKeys: string;
+      hasApartment: boolean;
+      hasPlan: boolean;
+      plan: string | null;
+      orderApartment0: string | null;
+    } | undefined;
     if (plans.length === 0) {
-      let planStr: string | null = null;
-      try {
-        planStr = plan0 && Object.keys(plan0).length ? JSON.stringify(plan0).slice(0, 4000) : null;
-      } catch { planStr = null; }
-      debug = { orderApartments: orderApts.length, plan: planStr };
+      const cap = (v: any, n: number): string | null => {
+        try { return v && (typeof v === 'object' ? Object.keys(v).length : true) ? JSON.stringify(v).slice(0, n) : null; }
+        catch { return null; }
+      };
+      debug = {
+        orderApartments: orderApts.length,
+        detailKeys: Object.keys(detail || {}).join(', ').slice(0, 600),
+        hasApartment: !!aptObj && Object.keys(aptObj).length > 0,
+        hasPlan: !!plan0 && Object.keys(plan0).length > 0,
+        plan: cap(plan0, 3000),
+        orderApartment0: cap(orderApts[0], 3500),
+      };
     }
 
     this.log.log(
       `contractMedia(${contract}): ${plans.length} ta planirovka topildi` +
-      (plans.length ? '' : ' (apartment.plan.images bo\'sh yoki noimage)'),
+      (plans.length
+        ? ''
+        : ` (order_apartments=${orderApts.length}, hasPlan=${!!(plan0 && Object.keys(plan0).length)})`),
     );
 
     return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true, ...(debug ? { debug } : {}) };

@@ -29,7 +29,14 @@ type PlanMedia = {
   objectName: string | null;
   typeName: string | null;
   crmConnected: boolean;
-  debug?: { orderApartments: number; plan: string | null };
+  debug?: {
+    orderApartments: number;
+    detailKeys?: string;
+    hasApartment?: boolean;
+    hasPlan?: boolean;
+    plan: string | null;
+    orderApartment0?: string | null;
+  };
 };
 
 const MIN_SCALE = 0.25;
@@ -312,29 +319,41 @@ export function PlanViewerDialog({
                     </button>
                   )}
 
-                  {/* Debug — plan strukturasi (URL topilmasa, tuzatish uchun) */}
-                  {data?.debug?.plan && (
-                    <div className="mt-6 text-left">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">🔧 Texnik ma'lumot</span>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard?.writeText(data.debug?.plan || '').then(
-                              () => toast.success(t('planDebugCopied')),
-                              () => toast.error(t('planDownloadError')),
-                            );
-                          }}
-                          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11.5px] font-semibold transition-colors"
-                        >
-                          <Copy className="h-3.5 w-3.5" /> {t('planDebugCopy')}
-                        </button>
+                  {/* Debug — server /show strukturasi (URL topilmasa, tuzatish uchun) */}
+                  {data?.debug && (() => {
+                    const dbg = data.debug!;
+                    const debugText = [
+                      `contract: ${data.contract}`,
+                      `orderApartments: ${dbg.orderApartments}`,
+                      `hasApartment: ${dbg.hasApartment}`,
+                      `hasPlan: ${dbg.hasPlan}`,
+                      `detailKeys: ${dbg.detailKeys || ''}`,
+                      `--- order_apartment[0] ---`,
+                      dbg.orderApartment0 || dbg.plan || '(null)',
+                    ].join('\n');
+                    return (
+                      <div className="mt-6 text-left">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] uppercase tracking-wider font-bold text-slate-500">🔧 Texnik ma'lumot</span>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard?.writeText(debugText).then(
+                                () => toast.success(t('planDebugCopied')),
+                                () => toast.error(t('planDownloadError')),
+                              );
+                            }}
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-[11.5px] font-semibold transition-colors"
+                          >
+                            <Copy className="h-3.5 w-3.5" /> {t('planDebugCopy')}
+                          </button>
+                        </div>
+                        <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 ring-1 ring-slate-800 p-3 text-[10.5px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all">
+                          {debugText}
+                        </pre>
+                        <div className="text-[10.5px] text-slate-500 mt-1.5">{t('planDebugHint')}</div>
                       </div>
-                      <pre className="max-h-48 overflow-auto rounded-lg bg-slate-950 ring-1 ring-slate-800 p-3 text-[10.5px] leading-relaxed text-slate-300 whitespace-pre-wrap break-all">
-                        {data.debug.plan}
-                      </pre>
-                      <div className="text-[10.5px] text-slate-500 mt-1.5">{t('planDebugHint')}</div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               ) : currentUrl ? (
                 <>
