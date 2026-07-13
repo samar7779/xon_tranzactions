@@ -138,6 +138,25 @@ export class OplataKvController {
     return this.svc.findByContract(contractNo);
   }
 
+  // MUHIM: 'contract-plan' — '@Get(:id)' dan OLDIN turishi shart (route conflict).
+  @Get('contract-plan/download')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Planirovka rasmini yuklab olish (proxy)' })
+  contractPlanDownload(
+    @Query('url') url: string,
+    @Query('name') name: string,
+    @Res() res: Response,
+  ) {
+    return this.svc.streamPlanImage(url, name, res);
+  }
+
+  @Get('contract-plan')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Shartnoma planirovka rasm(lar)i va hujjati (CRM)' })
+  contractPlan(@Query('contractNo') contractNo: string) {
+    return this.svc.contractPlan(contractNo);
+  }
+
   @Get('crm-sverka')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'OplatyKv vs CRM (Transactions) sverka — bitta shartnoma uchun' })

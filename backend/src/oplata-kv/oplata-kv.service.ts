@@ -2482,16 +2482,6 @@ export class OplataKvService {
    * Bitta shartnoma bo'yicha barcha to'lovlar tarixi + jami summalar.
    * Akt sverka modal'i uchun.
    */
-  /** Shartnoma planirovka rasm(lar)i va hujjat URL'lari (CRM). */
-  contractPlan(contractNo: string) {
-    return this.crmService.contractMedia(contractNo);
-  }
-
-  /** Planirovka rasmini backend orqali yuklab beradi (proxy). */
-  streamPlanImage(url: string, filename: string, res: any) {
-    return this.crmService.streamPlanImage(url, filename, res);
-  }
-
   async findByContract(contractNo: string) {
     if (!contractNo || !contractNo.trim()) {
       return { ok: false, error: "contractNo bo'sh", items: [], sums: null, meta: null };

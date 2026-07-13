@@ -14,6 +14,7 @@ import {
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
   PlusCircle, Paperclip, Wallet, Building2, Box, BarChart3, RefreshCw,
+  Ruler, Sparkles,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
@@ -21,6 +22,10 @@ import { SyncProgressDialog } from '@/components/sync-progress-dialog';
 
 const Apartment3DDialog = dynamic(
   () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
+  { ssr: false },
+);
+const PlanViewerDialog = dynamic(
+  () => import('@/components/plan-viewer-dialog').then((m) => m.PlanViewerDialog),
   { ssr: false },
 );
 import {
@@ -1473,6 +1478,7 @@ function AktSverkaDialog({
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [crmMode, setCrmMode] = useState(false);
   const [view3DOpen, setView3DOpen] = useState(false);
+  const [planOpen, setPlanOpen] = useState(false);
   const [groupByYear, setGroupByYear] = useState(false);
 
   useEffect(() => {
@@ -1488,6 +1494,8 @@ function AktSverkaDialog({
       setSelectedContract(null);
       setSuggestOpen(false);
       setCrmMode(false);
+      setView3DOpen(false);
+      setPlanOpen(false);
     }
   }, [open]);
 
@@ -1587,6 +1595,7 @@ function AktSverkaDialog({
         className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col print:max-h-none print:overflow-visible print:max-w-full print:rounded-none print:shadow-none print:ring-0 print:border-0"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => { if (view3DOpen || planOpen) e.preventDefault(); }}
         aria-describedby="akt-sverka-description"
       >
         {/* Screen-reader uchun yashirin title + description (Radix a11y talab) */}
@@ -1870,6 +1879,21 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Planirovka — CRM'dagi real xonadon rejasi (shimmer effekti) */}
+            <button
+              onClick={() => setPlanOpen(true)}
+              disabled={!selectedContract}
+              title={t('planViewerBtnTitle')}
+              className="group relative h-9 px-3 rounded-lg text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed overflow-hidden shadow-md
+                         bg-gradient-to-br from-amber-500 via-orange-500 to-rose-500
+                         hover:shadow-lg hover:shadow-orange-500/40 hover:-translate-y-0.5 active:translate-y-0"
+            >
+              {/* Shine sweep */}
+              <span className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+              <Ruler className="h-3.5 w-3.5 relative" />
+              <span className="relative">{t('planViewerBtn')}</span>
+              <Sparkles className="h-3 w-3 relative text-amber-100 animate-pulse" />
+            </button>
             <button
               onClick={() => setView3DOpen(true)}
               disabled={!selectedContract}
@@ -1902,6 +1926,13 @@ function AktSverkaDialog({
         <Apartment3DDialog
           open={view3DOpen}
           onClose={() => setView3DOpen(false)}
+          contractNo={selectedContract}
+        />
+
+        {/* Planirovka (real xonadon rejasi) viewer */}
+        <PlanViewerDialog
+          open={planOpen}
+          onClose={() => setPlanOpen(false)}
           contractNo={selectedContract}
         />
       </DialogContent>
