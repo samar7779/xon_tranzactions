@@ -8,6 +8,7 @@ import {
   Play, Save, PlugZap, Copy, Check, ChevronDown, ChevronRight, ArrowRight,
   Columns3, CalendarDays, Filter as FilterIcon, Hash, Link2,
   Download, Database, FileText, FileJson, FileCode2, FileSpreadsheet,
+  KeyRound, Lock, Server,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -247,53 +248,84 @@ export default function AdminExportPage() {
       )}
 
       {/* ─── Credential / ulanish holati ─── */}
-      <Card className="border-0 shadow-soft">
-        <CardContent className="p-5 space-y-4">
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className={cn(
-              'inline-flex items-center gap-2 px-3 h-9 rounded-xl text-[12px] font-semibold ring-1',
-              creds?.available
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900'
-                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900',
-            )}>
-              {creds?.available
-                ? <><CheckCircle2 className="h-4 w-4" /> Service-account ulandi</>
-                : <><AlertTriangle className="h-4 w-4" /> Service-account topilmadi</>}
-            </div>
+      <Card className="border-0 shadow-soft overflow-hidden">
+        {/* Premium gradient header strip */}
+        <div className={cn(
+          'relative px-5 py-4 flex items-center gap-3.5 border-b bg-gradient-to-r',
+          creds?.available
+            ? 'border-emerald-100 dark:border-emerald-950 from-emerald-500/[0.09] via-teal-500/[0.04] to-transparent'
+            : 'border-rose-100 dark:border-rose-950 from-rose-500/[0.09] via-orange-500/[0.04] to-transparent',
+        )}>
+          <div className={cn(
+            'w-11 h-11 rounded-2xl grid place-items-center shadow-md shrink-0',
+            creds?.available
+              ? 'bg-gradient-to-br from-emerald-500 to-teal-600 shadow-emerald-500/30'
+              : 'bg-gradient-to-br from-rose-500 to-orange-600 shadow-rose-500/30',
+          )}>
+            <KeyRound className="h-5 w-5 text-white" />
+          </div>
 
-            {creds?.clientEmail && (
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[14px] font-bold text-slate-800 dark:text-slate-100">Google Service Account</span>
+              <span className={cn(
+                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1',
+                creds?.available
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-800'
+                  : 'bg-rose-50 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-800',
+              )}>
+                <span className={cn('w-1.5 h-1.5 rounded-full', creds?.available ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500')} />
+                {creds?.available ? 'Ulangan' : 'Ulanmagan'}
+              </span>
+            </div>
+            {creds?.clientEmail ? (
               <button
                 onClick={copyEmail}
                 title="Nusxalash — bu emailni Google jadvalga Редактор qilib qo'shing"
-                className="inline-flex items-center gap-2 px-3 h-9 rounded-xl bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-mono text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="mt-1 inline-flex items-center gap-1.5 max-w-full text-[11.5px] font-mono text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors group"
               >
-                {copiedEmail ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-                {creds.clientEmail}
+                <span className="truncate">{creds.clientEmail}</span>
+                {copiedEmail
+                  ? <Check className="h-3 w-3 text-emerald-600 shrink-0" />
+                  : <Copy className="h-3 w-3 shrink-0 opacity-60 group-hover:opacity-100" />}
               </button>
+            ) : (
+              <div className="mt-0.5 text-[11.5px] text-slate-400 dark:text-slate-500">Kalit kiritilmagan — pastda joylashtiring</div>
             )}
-
-            <Button
-              onClick={() => testMut.mutate()}
-              disabled={testMut.isPending || !creds?.available}
-              variant="outline"
-              className="h-9 gap-2 ml-auto text-[12px]"
-            >
-              {testMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-              Ulanishni tekshirish
-            </Button>
           </div>
+
+          <Button
+            onClick={() => testMut.mutate()}
+            disabled={testMut.isPending || !creds?.available}
+            variant="outline"
+            className="h-9 gap-2 text-[12px] shrink-0 bg-white/70 dark:bg-slate-900/70 backdrop-blur"
+          >
+            {testMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
+            Tekshirish
+          </Button>
+        </div>
+
+        <CardContent className="p-5 space-y-4">
 
           {/* Kalit manbasi + o'zgartirish/o'chirish */}
           {creds?.available && (
-            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
-              <span>Kalit manbasi: <b className="text-slate-700 dark:text-slate-300">{creds.source === 'db' ? 'App\'da saqlangan (shifrlangan 🔒)' : 'Server env'}</b></span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={cn(
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1',
+                creds.source === 'db'
+                  ? 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900'
+                  : 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 ring-sky-200 dark:ring-sky-900',
+              )}>
+                {creds.source === 'db' ? <Lock className="h-3 w-3" /> : <Server className="h-3 w-3" />}
+                {creds.source === 'db' ? 'App\'da shifrlangan' : 'Server env'}
+              </span>
               {canManage && (
-                <button onClick={() => setShowCredBox((v) => !v)} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+                <button onClick={() => setShowCredBox((v) => !v)} className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
                   {showCredBox ? 'yopish' : 'o\'zgartirish'}
                 </button>
               )}
               {canManage && creds.source === 'db' && (
-                <button onClick={() => clearCredMut.mutate()} disabled={clearCredMut.isPending} className="text-rose-600 dark:text-rose-400 hover:underline font-semibold">
+                <button onClick={() => clearCredMut.mutate()} disabled={clearCredMut.isPending} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline">
                   o'chirish
                 </button>
               )}
