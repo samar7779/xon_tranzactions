@@ -4,6 +4,7 @@ import { google } from 'googleapis';
 import * as fs from 'fs';
 import { SettingsService } from '../sync/settings.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { CryptoService } from '../common/crypto/crypto.service';
 
 // ─── Config tuzilishi ───────────────────────────────────────────────
 export interface SheetColumn {
@@ -55,36 +56,74 @@ export class GoogleExportService {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly oplataKv: OplataKvService,
+    private readonly crypto: CryptoService,
   ) {}
+
+  private readonly CRED_KEY = 'export.credentials';
 
   // ─── Credential (service-account) yuklash ─────────────────────────
   /**
-   * Service-account JSON'ni env'dan yuklaydi:
-   *   GOOGLE_SA_JSON     — to'liq JSON (bitta string)
-   *   GOOGLE_SA_KEYFILE  — serverdagi JSON fayl yo'li
+   * Credentialни topadi va manbasini qaytaradi.
+   * Ustuvorlik:
+   *   1. env GOOGLE_SA_JSON     — to'liq JSON string
+   *   2. env GOOGLE_SA_KEYFILE  — serverdagi JSON fayl yo'li
+   *   3. DB Setting (export.credentials) — UI orqali paste qilingan, AES-256-GCM shifrlangan
    * private_key ichidagi \n literal'lar real yangi qatorga aylantiriladi.
    */
-  private loadCredentials(): ServiceAccount | null {
+  private async resolveCreds(): Promise<{ creds: ServiceAccount | null; source: 'env' | 'db' | null }> {
     let raw = this.config.get<string>('GOOGLE_SA_JSON') || '';
+    let source: 'env' | 'db' | null = raw ? 'env' : null;
+
     if (!raw) {
       const keyfile = this.config.get<string>('GOOGLE_SA_KEYFILE');
       if (keyfile) {
-        try { raw = fs.readFileSync(keyfile, 'utf8'); } catch (e: any) {
-          this.log.warn(`GOOGLE_SA_KEYFILE o'qilmadi (${keyfile}): ${e?.message}`);
-          return null;
-        }
+        try { raw = fs.readFileSync(keyfile, 'utf8'); source = 'env'; }
+        catch (e: any) { this.log.warn(`GOOGLE_SA_KEYFILE o'qilmadi (${keyfile}): ${e?.message}`); }
       }
     }
-    if (!raw) return null;
+
+    if (!raw) {
+      const enc = await this.settings.get(this.CRED_KEY);
+      if (enc) {
+        try { raw = this.crypto.decrypt(enc); source = 'db'; }
+        catch (e: any) { this.log.warn(`export.credentials decrypt xato: ${e?.message}`); }
+      }
+    }
+
+    if (!raw) return { creds: null, source: null };
     try {
       const parsed = JSON.parse(raw);
-      if (!parsed?.client_email || !parsed?.private_key) return null;
+      if (!parsed?.client_email || !parsed?.private_key) return { creds: null, source: null };
       parsed.private_key = String(parsed.private_key).replace(/\\n/g, '\n');
-      return parsed as ServiceAccount;
+      return { creds: parsed as ServiceAccount, source };
     } catch (e: any) {
-      this.log.warn(`GOOGLE_SA_JSON parse xato: ${e?.message}`);
-      return null;
+      this.log.warn(`credential parse xato: ${e?.message}`);
+      return { creds: null, source: null };
     }
+  }
+
+  private async loadCredentials(): Promise<ServiceAccount | null> {
+    return (await this.resolveCreds()).creds;
+  }
+
+  /** UI orqali paste qilingan service-account JSON'ni tekshirib, shifrlab DB'ga saqlaydi. */
+  async saveCredentials(jsonRaw: string, updatedBy?: string) {
+    if (!jsonRaw || !jsonRaw.trim()) throw new BadRequestException('JSON bo\'sh');
+    let parsed: any;
+    try { parsed = JSON.parse(jsonRaw); }
+    catch { throw new BadRequestException('JSON noto\'g\'ri — faylni to\'liq nusxalaganingizni tekshiring'); }
+    if (!parsed?.client_email || !parsed?.private_key) {
+      throw new BadRequestException('Bu service-account fayli emas (client_email / private_key yo\'q)');
+    }
+    const enc = this.crypto.encrypt(JSON.stringify(parsed));
+    await this.settings.set(this.CRED_KEY, enc, updatedBy);
+    return { ok: true, clientEmail: parsed.client_email, projectId: parsed.project_id || null };
+  }
+
+  /** DB'dagi saqlangan credentialни o'chiradi. */
+  async clearCredentials(updatedBy?: string) {
+    await this.settings.set(this.CRED_KEY, null, updatedBy);
+    return { ok: true };
   }
 
   private makeSheetsClient(creds: ServiceAccount) {
@@ -120,7 +159,7 @@ export class GoogleExportService {
 
   /** Credential holati + saqlangan config (private key hech qachon qaytmaydi) */
   async getConfig() {
-    const creds = this.loadCredentials();
+    const { creds, source } = await this.resolveCreds();
     const sheets = await this.getRawConfig();
     return {
       ok: true,
@@ -128,6 +167,7 @@ export class GoogleExportService {
         available: !!creds,
         clientEmail: creds?.client_email || null,
         projectId: creds?.project_id || null,
+        source, // 'env' (server) | 'db' (UI paste) | null
       },
       sheets,
     };
@@ -221,7 +261,7 @@ export class GoogleExportService {
    * Har sheet uchun spreadsheet sarlavhasini o'qishga urinadi.
    */
   async testConnection() {
-    const creds = this.loadCredentials();
+    const creds = await this.loadCredentials();
     if (!creds) {
       return {
         ok: false,
@@ -267,7 +307,7 @@ export class GoogleExportService {
     const startedAt = Date.now();
     let step: 'auth' | 'validate' | 'clear' | 'fetch' | 'write' = 'auth';
     try {
-      const creds = this.loadCredentials();
+      const creds = await this.loadCredentials();
       if (!creds) {
         return {
           ok: false, step: 'auth',
