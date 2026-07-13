@@ -425,19 +425,8 @@ function SheetCard({
             value={sheet.name}
             onChange={(e) => onChange({ name: e.target.value })}
             disabled={!canManage}
-            className="text-[15px] font-bold text-slate-800 dark:text-slate-100 bg-transparent outline-none border-b border-transparent focus:border-indigo-400 disabled:border-transparent min-w-0 flex-none max-w-[220px]"
+            className="text-[15px] font-bold text-slate-800 dark:text-slate-100 bg-transparent outline-none border-b border-transparent focus:border-indigo-400 disabled:border-transparent min-w-0 flex-1"
           />
-          {!open && (
-            <button
-              onClick={() => setOpen(true)}
-              className="flex-1 min-w-0 flex items-center gap-2 text-left text-[11px] text-slate-400 dark:text-slate-500 truncate"
-              title="Ochish"
-            >
-              {sheet.tabName && <span className="truncate px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{sheet.tabName}</span>}
-              <span className="italic">bosib oching…</span>
-            </button>
-          )}
-          {open && <div className="flex-1" />}
           <button
             onClick={() => setOpen((o) => !o)}
             title={open ? 'Yopish' : 'Ochish'}
@@ -452,6 +441,18 @@ function SheetCard({
               className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
             >
               <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+          {/* Yopiq holatda ham Bajarish — bosilganda ochilib jarayonni ko'rsatadi */}
+          {!open && (
+            <button
+              onClick={() => { setOpen(true); runMut.mutate(); }}
+              disabled={disabledRun}
+              title="Bajarish"
+              className="h-8 px-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-[12px] font-semibold shrink-0 transition-colors"
+            >
+              {runMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Bajarish
             </button>
           )}
         </div>
