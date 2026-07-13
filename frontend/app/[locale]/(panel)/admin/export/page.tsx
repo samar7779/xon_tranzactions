@@ -369,6 +369,7 @@ function SheetCard({
   onRemove: () => void;
 }) {
   const [result, setResult] = useState<RunResult | null>(null);
+  const [open, setOpen] = useState(false); // kirganda yopiq tursin
 
   const runMut = useMutation({
     mutationFn: () => api.post<RunResult>('/google-export/run', { target: sheet }, { timeout: 300_000 }),
@@ -411,28 +412,51 @@ function SheetCard({
   return (
     <Card className="border-0 shadow-soft overflow-hidden">
       <CardContent className="p-5 space-y-4">
-        {/* Sarlavha qatori */}
+        {/* Sarlavha qatori — bosilganda ochilib/yopiladi */}
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center shrink-0">
+          <button
+            onClick={() => setOpen((o) => !o)}
+            title={open ? 'Yopish' : 'Ochish'}
+            className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center shrink-0 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
+          >
             <SheetIcon className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          </div>
+          </button>
           <input
             value={sheet.name}
             onChange={(e) => onChange({ name: e.target.value })}
             disabled={!canManage}
-            className="text-[15px] font-bold text-slate-800 dark:text-slate-100 bg-transparent outline-none border-b border-transparent focus:border-indigo-400 disabled:border-transparent flex-1 min-w-0"
+            className="text-[15px] font-bold text-slate-800 dark:text-slate-100 bg-transparent outline-none border-b border-transparent focus:border-indigo-400 disabled:border-transparent min-w-0 flex-none max-w-[220px]"
           />
+          {!open && (
+            <button
+              onClick={() => setOpen(true)}
+              className="flex-1 min-w-0 flex items-center gap-2 text-left text-[11px] text-slate-400 dark:text-slate-500 truncate"
+              title="Ochish"
+            >
+              {sheet.tabName && <span className="truncate px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">{sheet.tabName}</span>}
+              <span className="italic">bosib oching…</span>
+            </button>
+          )}
+          {open && <div className="flex-1" />}
+          <button
+            onClick={() => setOpen((o) => !o)}
+            title={open ? 'Yopish' : 'Ochish'}
+            className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors shrink-0"
+          >
+            {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
           {canManage && (
             <button
               onClick={onRemove}
               title="Bu sheetni o'chirish"
-              className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
+              className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
             >
               <Trash2 className="h-4 w-4" />
             </button>
           )}
         </div>
 
+        {open && (<>
         {/* Asosiy sozlamalar */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Field label="Spreadsheet ID (yoki link)" icon={<Link2 className="h-3.5 w-3.5" />}>
@@ -585,6 +609,7 @@ function SheetCard({
 
         {runMut.isPending && <RunningIndicator />}
         {result && <ResultView result={result} />}
+        </>)}
       </CardContent>
     </Card>
   );
