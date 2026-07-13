@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound, Code2 } from 'lucide-react';
+import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound, Code2, Sheet } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -18,6 +18,7 @@ const TABS = [
   { key: 'api-explorer',   tKey: 'apiExplorer',    icon: Zap,          perm: PERMS.API_EXPLORER_VIEW },
   { key: 'cleanup',        tKey: 'cleanup',        icon: Trash2,       perm: PERMS.CLEANUP_VIEW },
   { key: 'import',         tKey: 'import',         icon: Upload,       perm: PERMS.IMPORT_VIEW },
+  { key: 'export',         tKey: 'export',         icon: Sheet,        perm: PERMS.EXPORT_VIEW },
   { key: 'api-keys',       tKey: 'apiKeys',        icon: Code2,        perm: PERMS.API_KEYS_VIEW },
 ];
 

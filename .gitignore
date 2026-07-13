@@ -51,3 +51,9 @@ coverage/
 # tz/ — bank API yo'riqnomalari, lokal misol fayllar (sirlar bor)
 tz/*.py
 tz/*.txt
+
+# Google service-account credentials (private key — HECH QACHON commit qilinmasin)
+**/abc_sheets.json
+*service-account*.json
+*credentials*.json
+gcp-*.json

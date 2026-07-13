@@ -178,6 +178,8 @@ export const api = {
     apiFetch<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined, ...opts }),
   postForm: <T = any>(path: string, fd: FormData, opts?: { timeout?: number }) =>
     apiPostForm<T>(path, fd, opts),
+  put: <T = any>(path: string, body?: any, opts?: { timeout?: number }) =>
+    apiFetch<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined, ...opts }),
   patch: <T = any>(path: string, body?: any, opts?: { timeout?: number }) =>
     apiFetch<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined, ...opts }),
   delete: <T = any>(path: string, opts?: { timeout?: number }) =>

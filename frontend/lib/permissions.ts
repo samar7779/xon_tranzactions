@@ -52,6 +52,9 @@ export const PERMS = {
   CLEANUP_RUN: 'cleanup:run',
   IMPORT_VIEW: 'import:view',
   IMPORT_RUN: 'import:run',
+  EXPORT_VIEW: 'export:view',
+  EXPORT_RUN: 'export:run',
+  EXPORT_MANAGE: 'export:manage',
   SYSTEM_DEPLOY: 'system:deploy',
 
   // Developer API

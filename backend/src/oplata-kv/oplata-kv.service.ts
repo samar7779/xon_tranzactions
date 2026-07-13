@@ -721,6 +721,47 @@ export class OplataKvService {
     return { ok: true, count: items.length, items };
   }
 
+  // ───────────────── EXPORT UCHUN QATORLAR (Google Sheets) ─────────────────
+  /**
+   * Google Sheets eksporti uchun barcha mos qatorlarni qaytaradi (pagination'siz).
+   * Sana oralig'i + obyekt / kategoriya / tip filtrlari bilan.
+   *   dateFrom / dateTo — YYYY-MM-DD (dateTo o'sha kun oxirigacha qamraydi)
+   *   objects / categories / txTypes — bo'sh bo'lsa filtr qo'llanmaydi.
+   * Tartib: sana o'sish bo'yicha (eng eski tepada), keyin yaratilgan vaqt.
+   */
+  async getRowsForExport(filter: {
+    dateFrom?: string | null;
+    dateTo?: string | null;
+    objects?: string[] | null;
+    categories?: string[] | null;
+    txTypes?: string[] | null;
+    limit?: number;
+  }) {
+    const where: Prisma.OplataKvWhereInput = {};
+    if (filter.dateFrom || filter.dateTo) {
+      const range: any = {};
+      if (filter.dateFrom) range.gte = new Date(filter.dateFrom);
+      if (filter.dateTo)   range.lte = new Date(`${filter.dateTo}T23:59:59.999`);
+      where.date = range;
+    }
+    if (filter.objects && filter.objects.length > 0) {
+      where.object = { in: filter.objects };
+    }
+    if (filter.categories && filter.categories.length > 0) {
+      where.paymentCategory = { in: filter.categories as OplataKvCategory[] };
+    }
+    if (filter.txTypes && filter.txTypes.length > 0) {
+      where.txType = { in: filter.txTypes };
+    }
+
+    const take = Math.min(Math.max(1, filter.limit || 100000), 200000);
+    return this.prisma.oplataKv.findMany({
+      where,
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      take,
+    });
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });
@@ -2441,6 +2482,16 @@ export class OplataKvService {
    * Bitta shartnoma bo'yicha barcha to'lovlar tarixi + jami summalar.
    * Akt sverka modal'i uchun.
    */
+  /** Shartnoma planirovka rasm(lar)i va hujjat URL'lari (CRM). */
+  contractPlan(contractNo: string) {
+    return this.crmService.contractMedia(contractNo);
+  }
+
+  /** Planirovka rasmini backend orqali yuklab beradi (proxy). */
+  streamPlanImage(url: string, filename: string, res: any) {
+    return this.crmService.streamPlanImage(url, filename, res);
+  }
+
   async findByContract(contractNo: string) {
     if (!contractNo || !contractNo.trim()) {
       return { ok: false, error: "contractNo bo'sh", items: [], sums: null, meta: null };
