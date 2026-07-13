@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -36,6 +36,20 @@ export class GoogleExportController {
   @ApiOperation({ summary: 'Export konfiguratsiyasini saqlash (sheet ID, tab, mapping, filtr)' })
   saveConfig(@Body() body: SaveExportConfigDto, @CurrentUser() user?: AuthUser) {
     return this.svc.saveConfig(body?.sheets || [], actorLabel(user));
+  }
+
+  @Post('credentials')
+  @RequirePermissions(PERMISSIONS.EXPORT_MANAGE)
+  @ApiOperation({ summary: 'Service-account JSON\'ni (UI paste) shifrlab saqlash' })
+  saveCredentials(@Body() body: { json: string }, @CurrentUser() user?: AuthUser) {
+    return this.svc.saveCredentials(body?.json || '', actorLabel(user));
+  }
+
+  @Delete('credentials')
+  @RequirePermissions(PERMISSIONS.EXPORT_MANAGE)
+  @ApiOperation({ summary: 'Saqlangan service-account credentialни o\'chirish' })
+  clearCredentials(@CurrentUser() user?: AuthUser) {
+    return this.svc.clearCredentials(actorLabel(user));
   }
 
   @Post('test')

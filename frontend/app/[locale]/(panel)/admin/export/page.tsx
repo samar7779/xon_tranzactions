@@ -30,7 +30,7 @@ interface SheetTarget {
 }
 interface ConfigResp {
   ok: boolean;
-  credentials: { available: boolean; clientEmail: string | null; projectId: string | null };
+  credentials: { available: boolean; clientEmail: string | null; projectId: string | null; source?: 'env' | 'db' | null };
   sheets: SheetTarget[];
 }
 interface RunResult {
@@ -151,6 +151,28 @@ export default function AdminExportPage() {
     onError: (e: any) => toast.error(e?.message || 'Tekshirishda xato'),
   });
 
+  // ── Credential (UI paste) ──
+  const [credJson, setCredJson] = useState('');
+  const [showCredBox, setShowCredBox] = useState(false);
+  const saveCredMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; clientEmail: string }>('/google-export/credentials', { json: credJson }),
+    onSuccess: (r) => {
+      toast.success(`Kalit saqlandi: ${r.clientEmail}`);
+      setCredJson(''); setShowCredBox(false);
+      qc.invalidateQueries({ queryKey: ['google-export-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Kalit saqlanmadi'),
+  });
+  const clearCredMut = useMutation({
+    mutationFn: () => api.delete('/google-export/credentials'),
+    onSuccess: () => {
+      toast.success('Kalit o\'chirildi');
+      setTestResult(null);
+      qc.invalidateQueries({ queryKey: ['google-export-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'O\'chirilmadi'),
+  });
+
   const copyEmail = async () => {
     if (!creds?.clientEmail) return;
     try {
@@ -219,13 +241,55 @@ export default function AdminExportPage() {
             </Button>
           </div>
 
-          {!creds?.available && (
+          {/* Kalit manbasi + o'zgartirish/o'chirish */}
+          {creds?.available && (
+            <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
+              <span>Kalit manbasi: <b className="text-slate-700 dark:text-slate-300">{creds.source === 'db' ? 'App\'da saqlangan (shifrlangan 🔒)' : 'Server env'}</b></span>
+              {canManage && (
+                <button onClick={() => setShowCredBox((v) => !v)} className="text-indigo-600 dark:text-indigo-400 hover:underline font-semibold">
+                  {showCredBox ? 'yopish' : 'o\'zgartirish'}
+                </button>
+              )}
+              {canManage && creds.source === 'db' && (
+                <button onClick={() => clearCredMut.mutate()} disabled={clearCredMut.isPending} className="text-rose-600 dark:text-rose-400 hover:underline font-semibold">
+                  o'chirish
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* JSON paste — kalit yo'q bo'lsa yoki o'zgartirilayotgan bo'lsa */}
+          {canManage && (!creds?.available || showCredBox) && (
+            <div className="rounded-xl ring-1 ring-indigo-200 dark:ring-indigo-900 bg-indigo-50/40 dark:bg-indigo-950/30 p-3 space-y-2">
+              <div className="text-[12px] font-bold text-slate-800 dark:text-slate-100">Service-account JSON kalitini joylashtiring</div>
+              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                <b>abc_sheets.json</b> faylini bloknot/muharrirda oching → butun matnni belgilang (Ctrl+A) → nusxalang (Ctrl+C) → pastga qo'ying (Ctrl+V).
+              </div>
+              <textarea
+                value={credJson}
+                onChange={(e) => setCredJson(e.target.value)}
+                spellCheck={false}
+                placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n...",\n  "client_email": "...@....iam.gserviceaccount.com"\n}'}
+                className="w-full h-36 rounded-lg text-[11px] font-mono bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-2 outline-none focus:ring-indigo-400 resize-y"
+              />
+              <div className="flex items-center gap-2">
+                <Button onClick={() => saveCredMut.mutate()} disabled={saveCredMut.isPending || !credJson.trim()} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold">
+                  {saveCredMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Kalitni saqlash
+                </Button>
+                {showCredBox && (
+                  <Button variant="outline" onClick={() => { setShowCredBox(false); setCredJson(''); }} className="h-9 text-[12px]">Bekor</Button>
+                )}
+              </div>
+              <div className="text-[10.5px] text-slate-400 dark:text-slate-500">🔒 Kalit AES-256 bilan shifrlangan holda saqlanadi. Saqlagach darrov ishlaydi — restart shart emas.</div>
+            </div>
+          )}
+
+          {/* Ruxsat yo'q bo'lsa — ma'lumot */}
+          {!creds?.available && !canManage && (
             <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/40 px-4 py-3 text-[12px] text-amber-900 dark:text-amber-300 flex gap-2 items-start">
               <Info className="h-4 w-4 mt-0.5 shrink-0" />
-              <div>
-                Serverda <b>GOOGLE_SA_JSON</b> (yoki <b>GOOGLE_SA_KEYFILE</b>) env o'zgaruvchisi topilmadi.
-                Service-account JSON'ni serverga qo'shib, backend'ni qayta ishga tushiring.
-              </div>
+              <div>Service-account kaliti sozlanmagan. Buni sozlash uchun <b>export:manage</b> ruxsati kerak.</div>
             </div>
           )}
 
