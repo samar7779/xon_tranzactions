@@ -88,10 +88,11 @@ export const PERMISSIONS = {
   IMPORT_VIEW: 'import:view',
   IMPORT_RUN: 'import:run',
 
-  // Export (ОплатыКв → Google Sheets)
-  EXPORT_VIEW: 'export:view',       // Export bo'limini ko'rish (tab ko'rinishi)
-  EXPORT_RUN: 'export:run',         // Eksportni ishga tushirish (Bajarish tugmasi)
-  EXPORT_MANAGE: 'export:manage',   // Config (sheet ID, mapping, filtr) tahrirlash
+  // Export (ОплатыКв → Google Sheets + fayl yuklab olish)
+  EXPORT_VIEW: 'export:view',        // Export bo'limini ko'rish (tab ko'rinishi)
+  EXPORT_RUN: 'export:run',          // Eksportni ishga tushirish (Bajarish tugmasi)
+  EXPORT_MANAGE: 'export:manage',    // Config (sheet ID, mapping, filtr) tahrirlash
+  EXPORT_DOWNLOAD: 'export:download',// Ma'lumotni fayl (JSON/SQL/Excel...) sifatida yuklab olish
 
   // Tizim — deploy
   SYSTEM_DEPLOY: 'system:deploy',
@@ -272,6 +273,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.EXPORT_VIEW, label: 'Export bo\'limini ko\'rish' },
           { value: PERMISSIONS.EXPORT_RUN, label: 'Eksportni ishga tushirish (Bajarish)' },
           { value: PERMISSIONS.EXPORT_MANAGE, label: 'Sozlamalarni (sheet ID, mapping) tahrirlash' },
+          { value: PERMISSIONS.EXPORT_DOWNLOAD, label: 'Ma\'lumotni fayl (JSON/SQL/Excel...) yuklab olish' },
         ],
       },
       {
