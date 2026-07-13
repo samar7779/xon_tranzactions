@@ -555,45 +555,83 @@ export class CrmService {
       };
     }
 
-    // ── uploads/plans/... yo'llarini butun detail ichidan rekursiv yig'amiz ──
+    // ── Planirovka rasmlarini order_apartments[].apartment.plan ichidan yig'amiz ──
+    // CRM struktura: apartment.plan = { image, images[], drawing_image, drawing_images[] }
+    //   • plan.image ba'zan "noimage.jpeg" (placeholder) — chiqarib tashlaymiz
+    //   • asl rasm plan.image (real) YOKI plan.images[].<url> da bo'ladi (S3 presigned)
     const byPath = new Map<string, string>(); // query'siz path -> to'liq url
-    const consider = (raw: string) => {
-      if (!raw || !/uploads\/plans\//i.test(raw)) return;
-      let url = raw.trim();
-      if (!/^https?:\/\//i.test(url)) url = PLAN_S3_BASE + url.replace(/^\/+/, '');
+    const DOC_EXT = /\.(docx?|pdf|xlsx?|pptx?|csv|zip|rar)(\?|$)/i;
+    const add = (raw: string) => {
+      if (!raw) return;
+      let url = String(raw).trim();
+      if (!url || /noimage/i.test(url)) return; // placeholder — o'tkazamiz
+      if (/^https?:\/\//i.test(url)) {
+        if (DOC_EXT.test(url)) return; // docx/pdf — rasm emas
+      } else {
+        // relative — faqat plan yo'liga o'xshash bo'lsa S3 host qo'shamiz
+        url = PLAN_S3_BASE + url.replace(/^\/+/, '');
+      }
       const key = url.split('?')[0];
       const signed = /[?&]X-Amz/i.test(url);
       const prev = byPath.get(key);
       if (!prev) { byPath.set(key, url); return; }
-      // presigned (imzolangan) versiyani afzal ko'ramiz — bevosita yuklanadi
-      if (signed && !/[?&]X-Amz/i.test(prev)) byPath.set(key, url);
+      if (signed && !/[?&]X-Amz/i.test(prev)) byPath.set(key, url); // presigned afzal
     };
-    const walk = (v: any, depth: number) => {
-      if (v == null || depth > 8) return;
-      if (typeof v === 'string') { consider(v); return; }
-      if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
-      if (typeof v === 'object') { for (const x of Object.values(v)) walk(x, depth + 1); }
+    // plan obyekti doirasida: faqat http rasm URL yoki uploads/plans relative yo'l
+    // (name/id kabi maydonlar rasm sifatida olinmaydi)
+    const walkPlan = (v: any, depth: number) => {
+      if (v == null || depth > 6) return;
+      if (typeof v === 'string') {
+        if (/^https?:\/\//i.test(v)) { if (!DOC_EXT.test(v)) add(v); }
+        else if (/uploads\/plans\//i.test(v)) add(v);
+        return;
+      }
+      if (Array.isArray(v)) { for (const x of v) walkPlan(x, depth + 1); return; }
+      if (typeof v === 'object') { for (const x of Object.values(v)) walkPlan(x, depth + 1); }
     };
-    walk(detail, 0);
+
+    const orderApts: any[] = Array.isArray(detail?.order_apartments) ? detail.order_apartments : [];
+    for (const oa of orderApts) {
+      const plan = oa?.apartment?.plan ?? oa?.plan;
+      if (plan) walkPlan(plan, 0);
+    }
+
+    // Fallback: plan'da topilmasa — butun detail'dan uploads/plans/ yo'lini qidiramiz
+    if (byPath.size === 0) {
+      const walkAll = (v: any, depth: number) => {
+        if (v == null || depth > 8) return;
+        if (typeof v === 'string') { if (/uploads\/plans\//i.test(v)) add(v); return; }
+        if (Array.isArray(v)) { for (const x of v) walkAll(x, depth + 1); return; }
+        if (typeof v === 'object') { for (const x of Object.values(v)) walkAll(x, depth + 1); }
+      };
+      walkAll(detail, 0);
+    }
+
     const plans = [...byPath.values()];
 
     // Label uchun meta
-    const apt0 = detail?.order_apartments?.[0] || {};
+    const apt0 = orderApts[0] || {};
     const aptObj = apt0?.apartment || {};
+    const plan0 = aptObj?.plan || apt0?.plan || {};
     const objectName =
       this.asText(aptObj?.block?.building?.object?.name) ||
+      this.asText(apt0?.block?.name) ||
       this.asText(detail?.object) ||
       this.asText(detail?.object_name) || null;
     const apartmentNumber =
-      this.asText(apt0?.factual_apartment_number) ||
       this.asText(aptObj?.number) ||
+      this.asText(apt0?.number) ||
+      this.asText(apt0?.factual_apartment_number) ||
       this.asText(detail?.apartment_number) || null;
-    const typeName = this.asText(aptObj?.type) || this.asText(apt0?.type) || null;
+    const typeName =
+      this.asText(plan0?.name) ||
+      this.asText(aptObj?.type) ||
+      this.asText(apt0?.type) || null;
     const contractDoc = this.asText(detail?.contract_path_temp) || null;
 
     this.log.log(
       `contractMedia(${contract}): ${plans.length} ta planirovka topildi` +
-      (plans.length ? '' : " (detail ichida uploads/plans yo'q)"),
+      (plans.length ? '' : ' (apartment.plan.images bo\'sh yoki noimage)'),
     );
 
     return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true };
