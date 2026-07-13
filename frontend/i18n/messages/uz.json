@@ -1771,6 +1771,8 @@
     "selectContract": "Shartnoma tanlang",
     "selectContractHint": "Yuqoridagi maydonga shartnoma raqamini yozing yoki ro'yxatdan tanlang",
     "noPaymentsForContract": "Bu shartnoma bo'yicha to'lovlar topilmadi",
+    "xatoExcluded": "{n} ta XATO chiqarildi",
+    "xatoExcludedTitle": "Shartnoma CRM'da tasdiqlanmagani uchun tx-manba (XATO) to'lovlar tarixda ko'rsatilmaydi",
     "totalShort": "Jami",
     "objectLabel": "Obyekt",
     "countSuffix": "ta",

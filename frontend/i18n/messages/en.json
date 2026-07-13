@@ -1771,6 +1771,8 @@
     "selectContract": "Select a contract",
     "selectContractHint": "Enter the contract number in the field above or pick from the list",
     "noPaymentsForContract": "No payments found for this contract",
+    "xatoExcluded": "{n} error excluded",
+    "xatoExcludedTitle": "Contract not verified in CRM — transaction-sourced (error) payments are hidden from history",
     "totalShort": "Total",
     "objectLabel": "Object",
     "countSuffix": "pcs",

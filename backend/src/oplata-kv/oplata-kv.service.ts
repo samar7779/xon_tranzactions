@@ -2445,10 +2445,16 @@ export class OplataKvService {
     if (!contractNo || !contractNo.trim()) {
       return { ok: false, error: "contractNo bo'sh", items: [], sums: null, meta: null };
     }
-    const items = await this.prisma.oplataKv.findMany({
+    const rawItems = await this.prisma.oplataKv.findMany({
       where: { contractNo: contractNo.trim() },
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
     });
+    // Tasdiqlanmagan (XATO) to'lovlarni chiqarib tashlaymiz — shartnoma CRM'da
+    // tasdiqlanmagan bo'lsa, o'sha tx-manba to'lovlar Akt Sverka tarixida ko'rinmaydi.
+    const { isXato } = await this.computeContractXato(rawItems);
+    const items = rawItems.filter((it) => !isXato(it));
+    const excludedXato = rawItems.length - items.length;
+
     const sums = {
       paymentAmount:    items.reduce((s, i) => s + Number(i.paymentAmount    || 0), 0),
       firstInstallment: items.reduce((s, i) => s + Number(i.firstInstallment || 0), 0),
@@ -2467,6 +2473,7 @@ export class OplataKvService {
       ok: true,
       contractNo: contractNo.trim(),
       count: items.length,
+      excludedXato,
       items,
       sums,
       meta,

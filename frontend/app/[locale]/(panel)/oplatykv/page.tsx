@@ -1510,6 +1510,7 @@ function AktSverkaDialog({
       ok: boolean;
       contractNo: string;
       count: number;
+      excludedXato?: number;
       items: OplataKvItem[];
       sums: { paymentAmount: number; firstInstallment: number; monthlyAmount: number };
       meta: { client: string | null; object: string | null; paymentMethod: string | null; firstDate: string | null; lastDate: string | null } | null;
@@ -1748,6 +1749,14 @@ function AktSverkaDialog({
                   <span className="font-black text-slate-800 dark:text-slate-200 tabular-nums">{data.count}</span>
                   <span className="text-slate-400">{t('countSuffix')}</span>
                 </div>
+                {!!data.excludedXato && data.excludedXato > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900"
+                    title={t('xatoExcludedTitle')}
+                  >
+                    <AlertTriangle className="h-3 w-3" /> {t('xatoExcluded', { n: data.excludedXato })}
+                  </span>
+                )}
                 {data.meta?.object && (
                   <>
                     <span className="text-slate-300 dark:text-slate-600">·</span>
