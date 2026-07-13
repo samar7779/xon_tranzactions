@@ -1879,7 +1879,7 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Planirovka — CRM'dagi real xonadon rejasi (shimmer effekti) */}
+            {/* Planirovka — CRM'dagi real xonadon rejasi (uploads/plans), shimmer effekti */}
             <button
               onClick={() => setPlanOpen(true)}
               disabled={!selectedContract}
