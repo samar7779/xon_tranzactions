@@ -36,6 +36,7 @@ type PlanMedia = {
     hasPlan?: boolean;
     plan: string | null;
     orderApartment0?: string | null;
+    info?: string | null;
   };
 };
 
@@ -328,6 +329,8 @@ export function PlanViewerDialog({
                       `hasApartment: ${dbg.hasApartment}`,
                       `hasPlan: ${dbg.hasPlan}`,
                       `detailKeys: ${dbg.detailKeys || ''}`,
+                      `--- info ---`,
+                      dbg.info || '(null)',
                       `--- order_apartment[0] ---`,
                       dbg.orderApartment0 || dbg.plan || '(null)',
                     ].join('\n');
