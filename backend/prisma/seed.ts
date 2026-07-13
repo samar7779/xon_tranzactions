@@ -25,7 +25,7 @@ const ALL_PERMS = [
   'counterparties:view', 'counterparties:manage',
   'categories:view', 'categories:manage',
   'oplatakv:view', 'oplatakv:manage',
-  'export:view', 'export:run', 'export:manage',
+  'export:view', 'export:run', 'export:manage', 'export:download',
 ];
 
 async function main() {

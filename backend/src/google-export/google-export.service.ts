@@ -5,6 +5,8 @@ import * as fs from 'fs';
 import { SettingsService } from '../sync/settings.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { serialize, FORMATS, Dataset } from './data-formats';
 
 // ─── Config tuzilishi ───────────────────────────────────────────────
 export interface SheetColumn {
@@ -57,6 +59,7 @@ export class GoogleExportService {
     private readonly settings: SettingsService,
     private readonly oplataKv: OplataKvService,
     private readonly crypto: CryptoService,
+    private readonly prisma: PrismaService,
   ) {}
 
   private readonly CRED_KEY = 'export.credentials';
@@ -396,5 +399,105 @@ export class GoogleExportService {
         durationMs: Date.now() - startedAt,
       };
     }
+  }
+
+  // ─── FAYL YUKLAB OLISH (JSON/SQL/Excel/CSV/...) ────────────────────
+  /** Datasetni tanlangan formatga o'girib buffer + fayl nomi qaytaradi. */
+  async downloadData(
+    dataset: string,
+    format: string,
+  ): Promise<{ buffer: Buffer; filename: string; contentType: string }> {
+    const meta = FORMATS[format];
+    if (!meta) throw new BadRequestException(`Nomaʼlum format: ${format}`);
+    const ds = dataset === 'transactions'
+      ? await this.transactionsDataset()
+      : await this.oplatykvDataset();
+    const buffer = await serialize(format, ds);
+    const filename = `${ds.table}-${this.todayTashkent()}.${meta.ext}`;
+    return { buffer, filename, contentType: meta.mime };
+  }
+
+  private async oplatykvDataset(): Promise<Dataset> {
+    const rows = await this.oplataKv.getRowsForExport({});
+    const columns = [
+      { key: 'id',               header: 'ID' },
+      { key: 'contractNo',       header: 'Дог №' },
+      { key: 'date',             header: 'Дата' },
+      { key: 'paymentAmount',    header: 'Сумма оплаты' },
+      { key: 'firstInstallment', header: '1 взнос' },
+      { key: 'monthlyAmount',    header: 'ежемесячный' },
+      { key: 'paymentCategory',  header: 'Оплата' },
+      { key: 'object',           header: 'Объект' },
+      { key: 'client',           header: 'Клиент' },
+      { key: 'txType',           header: 'Тип' },
+      { key: 'paymentMethod',    header: 'Способ оплаты' },
+      { key: 'purpose',          header: 'Назначение' },
+      { key: 'note',             header: 'Примечание' },
+    ];
+    const mapped = rows.map((r: any) => ({
+      id: r.id,
+      contractNo: r.contractNo,
+      date: r.date,
+      paymentAmount:    r.paymentAmount    != null ? Number(r.paymentAmount)    : null,
+      firstInstallment: r.firstInstallment != null ? Number(r.firstInstallment) : null,
+      monthlyAmount:    r.monthlyAmount    != null ? Number(r.monthlyAmount)    : null,
+      paymentCategory: r.paymentCategory,
+      object: r.object,
+      client: r.client,
+      txType: r.txType,
+      paymentMethod: r.paymentMethod,
+      purpose: r.purpose,
+      note: r.note,
+    }));
+    return { table: 'oplaty_kv', columns, rows: mapped };
+  }
+
+  private async transactionsDataset(): Promise<Dataset> {
+    const txs = await this.prisma.transaction.findMany({
+      orderBy: { txnDate: 'desc' },
+      take: 100000,
+      select: {
+        externalId: true, txnDate: true, direction: true, amount: true, currency: true,
+        type: true, status: true, contractNumber: true,
+        fromName: true, fromInn: true, toName: true, toInn: true, description: true,
+        category: { select: { name: true } },
+        subcategory: { select: { name: true } },
+      },
+    });
+    const columns = [
+      { key: 'externalId',     header: 'ID' },
+      { key: 'txnDate',        header: 'Sana' },
+      { key: 'direction',      header: "Yo'nalish" },
+      { key: 'amount',         header: 'Summa' },
+      { key: 'currency',       header: 'Valyuta' },
+      { key: 'type',           header: 'Tur' },
+      { key: 'status',         header: 'Holat' },
+      { key: 'contractNumber', header: 'Shartnoma' },
+      { key: 'category',       header: 'Kategoriya' },
+      { key: 'subcategory',    header: 'Subkategoriya' },
+      { key: 'fromName',       header: 'Yuboruvchi' },
+      { key: 'fromInn',        header: 'Yub. INN' },
+      { key: 'toName',         header: 'Qabul qiluvchi' },
+      { key: 'toInn',          header: 'Qab. INN' },
+      { key: 'description',    header: 'Izoh' },
+    ];
+    const mapped = txs.map((t: any) => ({
+      externalId: t.externalId,
+      txnDate: t.txnDate,
+      direction: t.direction,
+      amount: t.amount != null ? Number(t.amount) : null,
+      currency: t.currency,
+      type: t.type,
+      status: t.status,
+      contractNumber: t.contractNumber,
+      category: t.category?.name ?? null,
+      subcategory: t.subcategory?.name ?? null,
+      fromName: t.fromName,
+      fromInn: t.fromInn,
+      toName: t.toName,
+      toInn: t.toInn,
+      description: t.description,
+    }));
+    return { table: 'transactions', columns, rows: mapped };
   }
 }

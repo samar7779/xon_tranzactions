@@ -7,11 +7,15 @@ import {
   Sheet as SheetIcon, Loader2, AlertTriangle, CheckCircle2, Info, Plus, Trash2,
   Play, Save, PlugZap, Copy, Check, ChevronDown, ChevronRight, ArrowRight,
   Columns3, CalendarDays, Filter as FilterIcon, Hash, Link2,
+  Download, Database, FileText, FileJson, FileCode2, FileSpreadsheet,
 } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
@@ -73,6 +77,24 @@ const CATEGORIES: Array<{ value: string; label: string }> = [
   { value: 'GENERAL', label: 'Общий' },
 ];
 
+// ─── Fayl yuklab olish: qaysi ma'lumot + qaysi format ───
+const DATASETS: Array<{ key: string; label: string }> = [
+  { key: 'oplatykv',     label: 'ОплатыКв (kvartira to\'lovlari)' },
+  { key: 'transactions', label: 'Transaksiyalar' },
+];
+const DL_FORMATS: Array<{ key: string; label: string; ext: string; icon: any }> = [
+  { key: 'json',         label: 'JSON',                ext: 'json', icon: FileJson },
+  { key: 'csv',          label: 'CSV',                 ext: 'csv',  icon: FileSpreadsheet },
+  { key: 'xlsx',         label: 'Excel',               ext: 'xlsx', icon: FileSpreadsheet },
+  { key: 'sql-mysql',    label: 'SQL · MariaDB/MySQL', ext: 'sql',  icon: Database },
+  { key: 'sql-postgres', label: 'SQL · PostgreSQL',    ext: 'sql',  icon: Database },
+  { key: 'txt',          label: 'TXT (bloknot)',       ext: 'txt',  icon: FileText },
+  { key: 'xml',          label: 'XML',                 ext: 'xml',  icon: FileCode2 },
+  { key: 'html',         label: 'HTML',                ext: 'html', icon: FileCode2 },
+  { key: 'md',           label: 'Markdown',            ext: 'md',   icon: FileText },
+  { key: 'yaml',         label: 'YAML',                ext: 'yaml', icon: FileCode2 },
+];
+
 const STEP_LABEL: Record<string, string> = {
   auth:     'Autentifikatsiya (service-account)',
   validate: 'Sozlamalarni tekshirish',
@@ -99,10 +121,27 @@ export default function AdminExportPage() {
   const user = useAuth((s) => s.user);
   const canManage = !!user?.permissions?.includes(PERMS.EXPORT_MANAGE);
   const canRun = !!user?.permissions?.includes(PERMS.EXPORT_RUN);
+  const canDownload = !!user?.permissions?.includes(PERMS.EXPORT_DOWNLOAD);
 
   const [sheets, setSheets] = useState<SheetTarget[]>([]);
   const [dirty, setDirty] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Fayl yuklab olish (JSON/SQL/Excel/...)
+  const [dlOpen, setDlOpen] = useState(false);
+  const [dlDataset, setDlDataset] = useState('oplatykv');
+  const [downloading, setDownloading] = useState<string | null>(null);
+  const doDownload = async (f: { key: string; ext: string; label: string }) => {
+    setDownloading(f.key);
+    try {
+      await apiDownload(`/google-export/download?dataset=${dlDataset}&format=${f.key}`, `${dlDataset}.${f.ext}`);
+      toast.success(`${f.label} yuklab olindi`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab olishda xato');
+    } finally {
+      setDownloading(null);
+    }
+  };
 
   const cfgQuery = useQuery({
     queryKey: ['google-export-config'],
@@ -194,16 +233,18 @@ export default function AdminExportPage() {
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
-      {/* ─── Sarlavha ─── */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-600 grid place-items-center shadow-md shadow-emerald-500/25">
-          <SheetIcon className="h-5 w-5 text-white" />
+      {/* ─── Yuklab olish ikonasi (sarlavha o'rniga) ─── */}
+      {canDownload && (
+        <div className="flex items-center justify-end">
+          <button
+            onClick={() => setDlOpen(true)}
+            title="Ma'lumotni yuklab olish (JSON, SQL, Excel, TXT...)"
+            className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white grid place-items-center shadow-md shadow-indigo-500/25 transition-colors"
+          >
+            <Download className="h-5 w-5" />
+          </button>
         </div>
-        <div>
-          <div className="text-lg font-bold text-slate-800 dark:text-slate-100">ОплатыКв → Google Sheets</div>
-          <div className="text-[12px] text-slate-500 dark:text-slate-400">Har bir jadval uchun alohida: ustunlarni tozalab, sana bo'yicha ma'lumotni yozadi</div>
-        </div>
-      </div>
+      )}
 
       {/* ─── Credential / ulanish holati ─── */}
       <Card className="border-0 shadow-soft">
@@ -351,6 +392,65 @@ export default function AdminExportPage() {
       )}
 
       <HelpSection clientEmail={creds?.clientEmail || null} />
+
+      {/* ─── Fayl yuklab olish dialogi ─── */}
+      <Dialog open={dlOpen} onOpenChange={setDlOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Download className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Ma'lumotni yuklab olish
+            </DialogTitle>
+            <DialogDescription className="text-[12px]">
+              Qaysi ma'lumot va qaysi formatda — formatni bosing, darrov yuklanadi.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Dataset tanlash */}
+          <div className="flex gap-2">
+            {DATASETS.map((d) => (
+              <button
+                key={d.key}
+                onClick={() => setDlDataset(d.key)}
+                className={cn(
+                  'flex-1 h-10 px-2 rounded-lg text-[12px] font-semibold ring-1 transition-colors',
+                  dlDataset === d.key
+                    ? 'bg-indigo-600 text-white ring-indigo-700'
+                    : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Format tanlash */}
+          <div className="grid grid-cols-2 gap-2">
+            {DL_FORMATS.map((f) => {
+              const Icon = f.icon;
+              const busy = downloading === f.key;
+              return (
+                <button
+                  key={f.key}
+                  onClick={() => doDownload(f)}
+                  disabled={!!downloading}
+                  className="flex items-center gap-2.5 h-12 px-3 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-300 dark:hover:ring-indigo-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/30 transition-colors disabled:opacity-50 text-left"
+                >
+                  {busy
+                    ? <Loader2 className="h-4 w-4 animate-spin text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    : <Icon className="h-4 w-4 text-indigo-600 dark:text-indigo-400 shrink-0" />}
+                  <div className="min-w-0">
+                    <div className="text-[12.5px] font-semibold text-slate-800 dark:text-slate-200 truncate">{f.label}</div>
+                    <div className="text-[10px] text-slate-400 dark:text-slate-500">.{f.ext}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
+            Barcha qatorlar eksport qilinadi. Katta hajmda biroz kutish bo'lishi mumkin.
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

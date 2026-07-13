@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -64,5 +65,25 @@ export class GoogleExportController {
   @ApiOperation({ summary: 'Bitta sheet uchun eksport (clear + yozish). To\'liq natija/xato qaytadi.' })
   run(@Body() body: RunExportDto) {
     return this.svc.run(body.target);
+  }
+
+  @Get('download')
+  @RequirePermissions(PERMISSIONS.EXPORT_DOWNLOAD)
+  @ApiOperation({ summary: "Ma'lumotni fayl sifatida yuklab olish (dataset + format)" })
+  async download(
+    @Query('dataset') dataset: string,
+    @Query('format') format: string,
+    @Res() res: Response,
+  ) {
+    const { buffer, filename, contentType } = await this.svc.downloadData(
+      dataset || 'oplatykv',
+      format || 'json',
+    );
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
   }
 }
