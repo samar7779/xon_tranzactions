@@ -545,13 +545,38 @@ export class CrmService {
     const contract = (contractNo || '').trim();
     if (!contract) return { ok: false, error: 'contract kerak' };
 
-    const res: any = await this.show({ contract }).catch(() => null);
-    const detail: any = res && res.detail !== undefined ? res.detail : null;
+    // Plan uchun TO'LIQ order kerak (order_apartments.apartment.plan).
+    // this.show() trashed paramlar bilan chaqiradi va ko'pincha to'lov-view
+    // qaytaradi (order_apartments yo'q). Shu sabab bir necha usulni sinaymiz:
+    //   1) TOZA /show (faqat contract)   2) /show (id bilan)   3) trashed show()
+    // order_apartments'li javobni afzal ko'ramiz.
+    const hasApts = (d: any) => !!(d && Array.isArray(d.order_apartments) && d.order_apartments.length);
+    const fetchShow = async (params: Record<string, any>): Promise<any> => {
+      try {
+        const r: any = await this.call('/show', params);
+        return r?.ok ? (r.data?.data || null) : null;
+      } catch { return null; }
+    };
+
+    let detail: any = await fetchShow({ contract });
+    // contract to'liq order bermasa, lekin id bo'lsa — id bilan qayta urinamiz
+    if (detail && !hasApts(detail) && (detail.id || detail.order_id)) {
+      const byId = await fetchShow({ id: detail.id || detail.order_id });
+      if (hasApts(byId)) detail = byId;
+    }
+    // hali order_apartments yo'q — trashed show() (deleted/cancelled uchun ham)
+    if (!hasApts(detail)) {
+      const res: any = await this.show({ contract }).catch(() => null);
+      const d2: any = res && res.detail !== undefined ? res.detail : null;
+      if (hasApts(d2)) detail = d2;
+      else if (!detail) detail = d2;
+    }
+
     if (!detail) {
       return {
         ok: true, contract, plans: [] as string[], contractDoc: null,
         apartmentNumber: null, objectName: null, typeName: null,
-        crmConnected: !!(res && res.ok),
+        crmConnected: false,
       };
     }
 
@@ -641,6 +666,7 @@ export class CrmService {
       hasPlan: boolean;
       plan: string | null;
       orderApartment0: string | null;
+      info: string | null;
     } | undefined;
     if (plans.length === 0) {
       const cap = (v: any, n: number): string | null => {
@@ -652,8 +678,9 @@ export class CrmService {
         detailKeys: Object.keys(detail || {}).join(', ').slice(0, 600),
         hasApartment: !!aptObj && Object.keys(aptObj).length > 0,
         hasPlan: !!plan0 && Object.keys(plan0).length > 0,
-        plan: cap(plan0, 3000),
-        orderApartment0: cap(orderApts[0], 3500),
+        plan: cap(plan0, 2800),
+        orderApartment0: cap(orderApts[0], 3000),
+        info: cap(detail?.info, 1500),
       };
     }
 
