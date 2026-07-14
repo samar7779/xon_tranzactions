@@ -726,16 +726,11 @@ export class GoogleExportService {
 
     const buffer = await this.buildAutsourcingXlsx(cols, rows);
     const filename = `autsoursing-${dateTo}.xlsx`;
-    const caption =
-      `📋 Autsoursing · ${dateTo}\n` +
-      (dateFrom ? `Davr: ${dateFrom} → ${dateTo}\n` : '') +
-      `Shartnomalar: ${clean.length} · Qatorlar: ${rows.length}` +
-      (notFound.length ? `\n⚠️ Topilmadi (${notFound.length}): ${notFound.slice(0, 20).join(', ')}` : '');
 
     try {
+      // Caption yo'q — faqat toza Excel fayl jo'natiladi (notFound app'da toast bilan ko'rinadi)
       const form = new FormData();
       form.append('chat_id', String(groupId));
-      form.append('caption', caption);
       form.append(
         'document',
         new Blob([new Uint8Array(buffer)], {
