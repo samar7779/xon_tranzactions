@@ -8,7 +8,7 @@ import {
   Play, Save, PlugZap, Copy, Check, ChevronDown, ChevronRight, ArrowRight,
   Columns3, CalendarDays, Filter as FilterIcon, Hash, Link2,
   Download, Database, FileText, FileJson, FileCode2, FileSpreadsheet,
-  KeyRound, Lock, Server,
+  KeyRound, Lock, Server, Send, Building2,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -123,7 +123,9 @@ export default function AdminExportPage() {
   const canManage = !!user?.permissions?.includes(PERMS.EXPORT_MANAGE);
   const canRun = !!user?.permissions?.includes(PERMS.EXPORT_RUN);
   const canDownload = !!user?.permissions?.includes(PERMS.EXPORT_DOWNLOAD);
+  const canAutsourcing = !!user?.permissions?.includes(PERMS.EXPORT_AUTSOURCING);
 
+  const [tab, setTab] = useState<'sheets' | 'autsourcing'>('sheets');
   const [sheets, setSheets] = useState<SheetTarget[]>([]);
   const [dirty, setDirty] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
@@ -234,18 +236,47 @@ export default function AdminExportPage() {
 
   return (
     <div className="flex-1 p-6 lg:p-8 w-full space-y-5">
-      {/* ─── Yuklab olish ikonasi (sarlavha o'rniga) ─── */}
-      {canDownload && (
-        <div className="flex items-center justify-end">
+      {/* ─── Sub-tab bar + yuklab olish ikonasi ─── */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800">
+          <button
+            onClick={() => setTab('sheets')}
+            className={cn(
+              'px-3.5 h-8 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition-colors',
+              tab === 'sheets'
+                ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+            )}
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" /> Google Sheets
+          </button>
+          {canAutsourcing && (
+            <button
+              onClick={() => setTab('autsourcing')}
+              className={cn(
+                'px-3.5 h-8 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition-colors',
+                tab === 'autsourcing'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <Send className="h-3.5 w-3.5" /> Autsoursing
+            </button>
+          )}
+        </div>
+        <div className="flex-1" />
+        {canDownload && (
           <button
             onClick={() => setDlOpen(true)}
             title="Ma'lumotni yuklab olish (JSON, SQL, Excel, TXT...)"
-            className="h-11 w-11 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white grid place-items-center shadow-md shadow-indigo-500/25 transition-colors"
+            className="h-10 w-10 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 text-white grid place-items-center shadow-md shadow-indigo-500/25 transition-colors"
           >
             <Download className="h-5 w-5" />
           </button>
-        </div>
-      )}
+        )}
+      </div>
+
+      {tab === 'sheets' && (<>
 
       {/* ─── Credential / ulanish holati ─── */}
       <Card className="border-0 shadow-soft overflow-hidden">
@@ -424,6 +455,10 @@ export default function AdminExportPage() {
       )}
 
       <HelpSection clientEmail={creds?.clientEmail || null} />
+      </>)}
+
+      {/* ─── Autsoursing tab ─── */}
+      {tab === 'autsourcing' && canAutsourcing && <AutsourcingTab canManage={canManage} />}
 
       {/* ─── Fayl yuklab olish dialogi ─── */}
       <Dialog open={dlOpen} onOpenChange={setDlOpen}>
@@ -854,6 +889,190 @@ function MiniStat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2">
       <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">{label}</div>
       <div className="text-[15px] font-bold tabular-nums text-slate-800 dark:text-slate-200 mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Autsoursing tab — shartnomalar Excel'ini Telegram guruhga
+// ═══════════════════════════════════════════════════════════════════════
+interface AutsConfig { ok: boolean; hasToken: boolean; tokenHint: string | null; groupId: string | null; columns: string[]; }
+
+function AutsourcingTab({ canManage }: { canManage: boolean }) {
+  const qc = useQueryClient();
+  const cfgQuery = useQuery({
+    queryKey: ['auts-config'],
+    queryFn: () => api.get<AutsConfig>('/google-export/autsourcing/config'),
+  });
+  const cfg = cfgQuery.data;
+
+  const [contracts, setContracts] = useState('');
+  const [selectedCols, setSelectedCols] = useState<string[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
+  const [botToken, setBotToken] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    if (!cfg || initialized) return;
+    setSelectedCols(cfg.columns?.length ? cfg.columns : ['contractNo', 'date', 'paymentAmount', 'client']);
+    setGroupId(cfg.groupId || '');
+    setInitialized(true);
+  }, [cfg, initialized]);
+
+  const parseContracts = (s: string) => s.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean);
+  const contractCount = parseContracts(contracts).length;
+  const configured = !!(cfg?.hasToken && cfg?.groupId);
+
+  const toggleCol = (key: string) =>
+    setSelectedCols((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+
+  const saveCfg = useMutation({
+    mutationFn: () => api.put('/google-export/autsourcing/config', {
+      botToken: botToken.trim() || undefined,
+      groupId: groupId.trim(),
+      columns: selectedCols,
+    }),
+    onSuccess: () => { toast.success('Sozlama saqlandi'); setBotToken(''); qc.invalidateQueries({ queryKey: ['auts-config'] }); },
+    onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
+  });
+
+  const sendMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; error?: string; contracts?: number; rows?: number; notFound?: string[] }>(
+      '/google-export/autsourcing/send',
+      { contracts: parseContracts(contracts), columns: selectedCols },
+      { timeout: 120_000 },
+    ),
+    onSuccess: (r) => {
+      if (r.ok) {
+        toast.success(`Guruhga jo'natildi: ${r.contracts} shartnoma · ${r.rows} qator`);
+        if (r.notFound?.length) toast(`⚠️ ${r.notFound.length} ta shartnoma topilmadi`, { icon: '⚠️' });
+      } else {
+        toast.error(r.error || 'Jo\'natilmadi');
+      }
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const sendDisabled = !configured || contractCount === 0 || selectedCols.length === 0 || sendMut.isPending;
+
+  return (
+    <div className="space-y-5">
+      {/* Sozlama holati */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <div className={cn(
+          'px-5 py-4 flex items-center gap-3 flex-wrap border-b bg-gradient-to-r',
+          configured
+            ? 'border-emerald-100 dark:border-emerald-950 from-emerald-500/[0.08] to-transparent'
+            : 'border-amber-100 dark:border-amber-950 from-amber-500/[0.08] to-transparent',
+        )}>
+          <div className={cn('w-10 h-10 rounded-xl grid place-items-center shadow-md shrink-0',
+            configured ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-amber-500 to-orange-600')}>
+            <Send className="h-5 w-5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100">Telegram guruhga jo'natish</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 flex-wrap mt-0.5">
+              {cfg?.groupId
+                ? <span className="inline-flex items-center gap-1"><Building2 className="h-3 w-3" /> Guruh: <b className="font-mono">{cfg.groupId}</b></span>
+                : <span className="text-amber-600 dark:text-amber-400">Guruh ID sozlanmagan</span>}
+              <span className="text-slate-300 dark:text-slate-600">·</span>
+              {cfg?.hasToken
+                ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><Lock className="h-3 w-3" /> Bot token bor {cfg.tokenHint}</span>
+                : <span className="text-amber-600 dark:text-amber-400">Bot token yo'q</span>}
+            </div>
+          </div>
+          {canManage && (
+            <Button onClick={() => setShowSettings((v) => !v)} variant="outline" className="h-9 gap-2 text-[12px] shrink-0">
+              <KeyRound className="h-4 w-4" /> Sozlama
+            </Button>
+          )}
+        </div>
+
+        {showSettings && canManage && (
+          <CardContent className="p-5 space-y-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Bot token {cfg?.hasToken && <span className="text-emerald-600">(o'rnatilgan — bo'sh qoldirsa o'zgarmaydi)</span>}</label>
+                <Input value={botToken} onChange={(e) => setBotToken(e.target.value)} type="password"
+                  placeholder="123456:ABC-..." className="h-9 rounded-lg font-mono text-[12px]" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Guruh ID</label>
+                <Input value={groupId} onChange={(e) => setGroupId(e.target.value)}
+                  placeholder="-1001234567890" className="h-9 rounded-lg font-mono text-[12px]" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => saveCfg.mutate()} disabled={saveCfg.isPending}
+                className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold">
+                {saveCfg.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
+              </Button>
+              <span className="text-[10.5px] text-slate-400">🔒 Bot token AES-256 bilan shifrlanadi.</span>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Asosiy — shartnomalar + ustunlar + jo'natish */}
+      <Card className="border-0 shadow-soft">
+        <CardContent className="p-5 space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <FileText className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Shartnoma raqamlari
+            </label>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">Har birini yangi qatorga yoki vergul/probel bilan ajrating.</div>
+            <textarea
+              value={contracts}
+              onChange={(e) => setContracts(e.target.value)}
+              spellCheck={false}
+              placeholder={'7331MSO26KK\n7332MSO26KK\n7333MSO26KK'}
+              className="w-full h-40 rounded-lg text-[12px] font-mono bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 p-2.5 outline-none focus:ring-indigo-400 resize-y"
+            />
+            <div className="text-[11px] text-slate-500 dark:text-slate-400">
+              <b className="text-slate-700 dark:text-slate-300 tabular-nums">{contractCount}</b> ta shartnoma
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <Columns3 className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Qaysi ustunlar Excel'ga
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {FIELDS.map((f) => {
+                const active = selectedCols.includes(f.value);
+                return (
+                  <button
+                    key={f.value}
+                    onClick={() => toggleCol(f.value)}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2.5 h-8 rounded-lg text-[11.5px] font-semibold ring-1 transition-colors',
+                      active
+                        ? 'bg-indigo-600 text-white ring-indigo-700'
+                        : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
+                    )}
+                  >
+                    {active ? <Check className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-1">
+            <Button
+              onClick={() => sendMut.mutate()}
+              disabled={sendDisabled}
+              className="h-11 px-5 gap-2 bg-gradient-to-br from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white text-[13px] font-semibold shadow-md shadow-indigo-500/25"
+            >
+              {sendMut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              {sendMut.isPending ? 'Jo\'natilmoqda…' : 'Guruhga jo\'natish'}
+            </Button>
+            {!configured && <span className="text-[11px] text-amber-600 dark:text-amber-400">Avval sozlamani to'ldiring (bot token + guruh)</span>}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

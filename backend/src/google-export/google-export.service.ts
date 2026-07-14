@@ -2,11 +2,12 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
 import * as fs from 'fs';
+import * as ExcelJS from 'exceljs';
 import { SettingsService } from '../sync/settings.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { serialize, FORMATS, Dataset } from './data-formats';
+import { serialize, FORMATS, Dataset, ExportColumn } from './data-formats';
 
 // ─── Config tuzilishi ───────────────────────────────────────────────
 export interface SheetColumn {
@@ -41,6 +42,23 @@ const CATEGORY_LABEL: Record<string, string> = {
   FIRST:   '1 взнос',
   GENERAL: 'Общий',
 };
+
+// ОплатыКв ustunlari (key → header) — data-export va Autsoursing ishlatadi
+const OPLATA_COLS: ExportColumn[] = [
+  { key: 'id',               header: 'ID' },
+  { key: 'contractNo',       header: 'Дог №' },
+  { key: 'date',             header: 'Дата' },
+  { key: 'paymentAmount',    header: 'Сумма оплаты' },
+  { key: 'firstInstallment', header: '1 взнос' },
+  { key: 'monthlyAmount',    header: 'ежемесячный' },
+  { key: 'paymentCategory',  header: 'Оплата' },
+  { key: 'object',           header: 'Объект' },
+  { key: 'client',           header: 'Клиент' },
+  { key: 'txType',           header: 'Тип' },
+  { key: 'paymentMethod',    header: 'Способ оплаты' },
+  { key: 'purpose',          header: 'Назначение' },
+  { key: 'note',             header: 'Примечание' },
+];
 
 const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
 
@@ -499,5 +517,161 @@ export class GoogleExportService {
       description: t.description,
     }));
     return { table: 'transactions', columns, rows: mapped };
+  }
+
+  // ═══ AUTSOURCING — shartnomalar Excel'ini Telegram guruhga ═══
+  private readonly AUTS_TOKEN = 'autsourcing.botToken';
+  private readonly AUTS_GROUP = 'autsourcing.groupId';
+  private readonly AUTS_COLS = 'autsourcing.columns';
+
+  /** Sozlama holati — bot token qaytmaydi (faqat oxirgi 4 belgi hint). */
+  async getAutsourcingConfig() {
+    const [encToken, groupId, cols] = await Promise.all([
+      this.settings.get(this.AUTS_TOKEN),
+      this.settings.get(this.AUTS_GROUP),
+      this.settings.get(this.AUTS_COLS),
+    ]);
+    let hasToken = false;
+    let tokenHint: string | null = null;
+    if (encToken) {
+      try {
+        const t = this.crypto.decrypt(encToken);
+        hasToken = !!t;
+        tokenHint = t ? `…${t.slice(-4)}` : null;
+      } catch { /* noto'g'ri shifr */ }
+    }
+    let columns: string[] = [];
+    if (cols) { try { columns = JSON.parse(cols); } catch { /* skip */ } }
+    return { ok: true, hasToken, tokenHint, groupId: groupId || null, columns };
+  }
+
+  async saveAutsourcingConfig(
+    body: { botToken?: string; groupId?: string; columns?: string[] },
+    updatedBy?: string,
+  ) {
+    if (body.botToken !== undefined && body.botToken.trim()) {
+      await this.settings.set(this.AUTS_TOKEN, this.crypto.encrypt(body.botToken.trim()), updatedBy);
+    }
+    if (body.groupId !== undefined) {
+      await this.settings.set(this.AUTS_GROUP, body.groupId.trim() || null, updatedBy);
+    }
+    if (body.columns !== undefined) {
+      await this.settings.set(this.AUTS_COLS, JSON.stringify(body.columns), updatedBy);
+    }
+    return this.getAutsourcingConfig();
+  }
+
+  private async getAutsourcingRaw(): Promise<{ token: string | null; groupId: string | null }> {
+    const [encToken, groupId] = await Promise.all([
+      this.settings.get(this.AUTS_TOKEN),
+      this.settings.get(this.AUTS_GROUP),
+    ]);
+    let token: string | null = null;
+    if (encToken) { try { token = this.crypto.decrypt(encToken); } catch { /* skip */ } }
+    return { token, groupId };
+  }
+
+  /** Tanlangan ustunlardan ОплатыКв qatorlari uchun Excel yasaydi. */
+  private async buildAutsourcingXlsx(cols: ExportColumn[], rows: any[]): Promise<Buffer> {
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    const ws = wb.addWorksheet('Autsoursing');
+    ws.columns = cols.map((c) => ({ header: c.header, key: c.key, width: 18 }));
+    const head = ws.getRow(1);
+    head.font = { bold: true };
+    head.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    for (const r of rows) {
+      const row: Record<string, any> = {};
+      for (const c of cols) {
+        let v: any = r[c.key];
+        if (c.key === 'date' && v) {
+          const d = new Date(v);
+          v = `${String(d.getUTCDate()).padStart(2, '0')}.${String(d.getUTCMonth() + 1).padStart(2, '0')}.${d.getUTCFullYear()}`;
+        } else if (c.key === 'paymentAmount' || c.key === 'firstInstallment' || c.key === 'monthlyAmount') {
+          v = v != null ? Number(v) : null;
+        } else if (c.key === 'paymentCategory') {
+          v = v ? (CATEGORY_LABEL[v] || v) : '';
+        }
+        row[c.key] = v ?? '';
+      }
+      const added = ws.addRow(row);
+      for (const k of ['paymentAmount', 'firstInstallment', 'monthlyAmount']) {
+        if (cols.some((c) => c.key === k)) added.getCell(k).numFmt = '#,##0.00';
+      }
+    }
+    const ab = await wb.xlsx.writeBuffer();
+    return Buffer.from(ab);
+  }
+
+  /**
+   * Shartnomalar bo'yicha ОплатыКв ma'lumotini (tanlangan ustunlar) Excel qilib
+   * sozlangan Telegram guruhga jo'natadi.
+   */
+  async sendAutsourcing(contracts: string[], columnKeys: string[]) {
+    const startedAt = Date.now();
+    const { token, groupId } = await this.getAutsourcingRaw();
+    if (!token || !groupId) {
+      return { ok: false, error: "Bot token yoki guruh ID sozlanmagan — sozlamalarni to'ldiring" };
+    }
+    const clean = Array.from(new Set((contracts || []).map((c) => String(c).trim()).filter(Boolean)));
+    if (clean.length === 0) return { ok: false, error: 'Shartnoma raqami kiritilmagan' };
+
+    const cols = OPLATA_COLS.filter((c) => (columnKeys || []).includes(c.key));
+    if (cols.length === 0) return { ok: false, error: 'Hech qanday ustun tanlanmagan' };
+
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { contractNo: { in: clean } },
+      orderBy: [{ contractNo: 'asc' }, { date: 'asc' }],
+      take: 100000,
+    });
+    if (rows.length === 0) {
+      return { ok: false, error: "Bu shartnomalar bo'yicha ОплатыКв'da ma'lumot topilmadi" };
+    }
+
+    const foundContracts = new Set(rows.map((r) => r.contractNo));
+    const notFound = clean.filter((c) => !foundContracts.has(c));
+
+    const buffer = await this.buildAutsourcingXlsx(cols, rows);
+    const filename = `autsoursing-${this.todayTashkent()}.xlsx`;
+    const caption =
+      `📋 Autsoursing · ${this.todayTashkent()}\n` +
+      `Shartnomalar: ${clean.length} · Qatorlar: ${rows.length}` +
+      (notFound.length ? `\n⚠️ Topilmadi (${notFound.length}): ${notFound.slice(0, 20).join(', ')}` : '');
+
+    try {
+      const form = new FormData();
+      form.append('chat_id', String(groupId));
+      form.append('caption', caption);
+      form.append(
+        'document',
+        new Blob([new Uint8Array(buffer)], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        filename,
+      );
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, {
+        method: 'POST',
+        body: form,
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!data?.ok) {
+        return { ok: false, error: `Telegram xato: ${data?.description || `HTTP ${res.status}`}` };
+      }
+      this.log.log(`Autsoursing jo'natildi: ${clean.length} shartnoma, ${rows.length} qator → ${groupId}`);
+      return {
+        ok: true,
+        contracts: clean.length,
+        rows: rows.length,
+        notFound,
+        filename,
+        durationMs: Date.now() - startedAt,
+      };
+    } catch (e: any) {
+      this.log.warn(`Autsoursing jo'natish xato: ${e?.message}`);
+      return { ok: false, error: e?.message || 'Telegram jo\'natishda xato' };
+    }
   }
 }

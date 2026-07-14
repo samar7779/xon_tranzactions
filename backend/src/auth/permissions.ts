@@ -93,6 +93,7 @@ export const PERMISSIONS = {
   EXPORT_RUN: 'export:run',          // Eksportni ishga tushirish (Bajarish tugmasi)
   EXPORT_MANAGE: 'export:manage',    // Config (sheet ID, mapping, filtr) tahrirlash
   EXPORT_DOWNLOAD: 'export:download',// Ma'lumotni fayl (JSON/SQL/Excel...) sifatida yuklab olish
+  EXPORT_AUTSOURCING: 'export:autsourcing', // Autsoursing sub-tab — shartnomalar Excel'ini Telegram guruhga
 
   // Tizim — deploy
   SYSTEM_DEPLOY: 'system:deploy',
@@ -274,6 +275,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.EXPORT_RUN, label: 'Eksportni ishga tushirish (Bajarish)' },
           { value: PERMISSIONS.EXPORT_MANAGE, label: 'Sozlamalarni (sheet ID, mapping) tahrirlash' },
           { value: PERMISSIONS.EXPORT_DOWNLOAD, label: 'Ma\'lumotni fayl (JSON/SQL/Excel...) yuklab olish' },
+          { value: PERMISSIONS.EXPORT_AUTSOURCING, label: 'Autsoursing — shartnomalar Excel\'ini Telegram guruhga' },
         ],
       },
       {
