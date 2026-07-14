@@ -99,7 +99,11 @@ export class GoogleExportController {
   @RequirePermissions(PERMISSIONS.EXPORT_AUTSOURCING)
   @ApiOperation({ summary: 'Autsoursing sozlamasi — bot token (shifrlanadi) + guruh ID + ustunlar' })
   autsSave(
-    @Body() body: { botToken?: string; groupId?: string; columns?: string[] },
+    @Body() body: {
+      botToken?: string; groupId?: string; columns?: string[];
+      contracts?: string[]; dateFrom?: string | null;
+      cronEnabled?: boolean; cronTime?: string;
+    },
     @CurrentUser() user?: AuthUser,
   ) {
     return this.svc.saveAutsourcingConfig(body || {}, actorLabel(user));
@@ -108,7 +112,7 @@ export class GoogleExportController {
   @Post('autsourcing/send')
   @RequirePermissions(PERMISSIONS.EXPORT_AUTSOURCING)
   @ApiOperation({ summary: "Shartnomalar Excel'ini Telegram guruhga jo'natish" })
-  autsSend(@Body() body: { contracts?: string[]; columns?: string[] }) {
-    return this.svc.sendAutsourcing(body?.contracts || [], body?.columns || []);
+  autsSend(@Body() body: { contracts?: string[]; columns?: string[]; dateFrom?: string | null }) {
+    return this.svc.sendAutsourcing(body?.contracts || [], body?.columns || [], body?.dateFrom || null);
   }
 }

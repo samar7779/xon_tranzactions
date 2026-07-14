@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { google } from 'googleapis';
 import * as fs from 'fs';
@@ -523,13 +524,21 @@ export class GoogleExportService {
   private readonly AUTS_TOKEN = 'autsourcing.botToken';
   private readonly AUTS_GROUP = 'autsourcing.groupId';
   private readonly AUTS_COLS = 'autsourcing.columns';
+  private readonly AUTS_CONTRACTS = 'autsourcing.contracts';
+  private readonly AUTS_DATEFROM = 'autsourcing.dateFrom';
+  private readonly AUTS_CRON_ON = 'autsourcing.cronEnabled';
+  private readonly AUTS_CRON_TIME = 'autsourcing.cronTime';
 
   /** Sozlama holati — bot token qaytmaydi (faqat oxirgi 4 belgi hint). */
   async getAutsourcingConfig() {
-    const [encToken, groupId, cols] = await Promise.all([
+    const [encToken, groupId, cols, contracts, dateFrom, cronOn, cronTime] = await Promise.all([
       this.settings.get(this.AUTS_TOKEN),
       this.settings.get(this.AUTS_GROUP),
       this.settings.get(this.AUTS_COLS),
+      this.settings.get(this.AUTS_CONTRACTS),
+      this.settings.get(this.AUTS_DATEFROM),
+      this.settings.get(this.AUTS_CRON_ON),
+      this.settings.get(this.AUTS_CRON_TIME),
     ]);
     let hasToken = false;
     let tokenHint: string | null = null;
@@ -540,13 +549,29 @@ export class GoogleExportService {
         tokenHint = t ? `…${t.slice(-4)}` : null;
       } catch { /* noto'g'ri shifr */ }
     }
-    let columns: string[] = [];
-    if (cols) { try { columns = JSON.parse(cols); } catch { /* skip */ } }
-    return { ok: true, hasToken, tokenHint, groupId: groupId || null, columns };
+    const parseArr = (s: string | null): string[] => {
+      if (!s) return [];
+      try { const a = JSON.parse(s); return Array.isArray(a) ? a : []; } catch { return []; }
+    };
+    return {
+      ok: true,
+      hasToken,
+      tokenHint,
+      groupId: groupId || null,
+      columns: parseArr(cols),
+      contracts: parseArr(contracts),
+      dateFrom: dateFrom || null,
+      cronEnabled: cronOn === '1',
+      cronTime: cronTime && /^\d{1,2}:\d{2}$/.test(cronTime) ? cronTime : '',
+    };
   }
 
   async saveAutsourcingConfig(
-    body: { botToken?: string; groupId?: string; columns?: string[] },
+    body: {
+      botToken?: string; groupId?: string; columns?: string[];
+      contracts?: string[]; dateFrom?: string | null;
+      cronEnabled?: boolean; cronTime?: string;
+    },
     updatedBy?: string,
   ) {
     if (body.botToken !== undefined && body.botToken.trim()) {
@@ -558,7 +583,61 @@ export class GoogleExportService {
     if (body.columns !== undefined) {
       await this.settings.set(this.AUTS_COLS, JSON.stringify(body.columns), updatedBy);
     }
+    if (body.contracts !== undefined) {
+      const clean = (body.contracts || []).map((c) => String(c).trim()).filter(Boolean);
+      await this.settings.set(this.AUTS_CONTRACTS, JSON.stringify(clean), updatedBy);
+    }
+    if (body.dateFrom !== undefined) {
+      await this.settings.set(this.AUTS_DATEFROM, body.dateFrom || null, updatedBy);
+    }
+    if (body.cronEnabled !== undefined) {
+      await this.settings.set(this.AUTS_CRON_ON, body.cronEnabled ? '1' : null, updatedBy);
+    }
+    if (body.cronTime !== undefined) {
+      const t = body.cronTime && /^\d{1,2}:\d{2}$/.test(body.cronTime) ? body.cronTime : null;
+      await this.settings.set(this.AUTS_CRON_TIME, t, updatedBy);
+    }
     return this.getAutsourcingConfig();
+  }
+
+  // Cron — kuniga 1 marta belgilangan soatda avto-jo'natish
+  private autsLastRunDay: number | null = null;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async autsourcingCronTick() {
+    try {
+      const [enabled, time] = await Promise.all([
+        this.settings.get(this.AUTS_CRON_ON),
+        this.settings.get(this.AUTS_CRON_TIME),
+      ]);
+      if (enabled !== '1' || !time || !/^\d{1,2}:\d{2}$/.test(time)) return;
+
+      const tash = new Date(Date.now() + 5 * 60 * 60 * 1000); // UTC+5
+      const hm = `${String(tash.getUTCHours()).padStart(2, '0')}:${String(tash.getUTCMinutes()).padStart(2, '0')}`;
+      const wantHm = time.length === 4 ? `0${time}` : time; // "8:00" → "08:00"
+      if (hm !== wantHm) return;
+
+      const day = tash.getUTCDate();
+      if (this.autsLastRunDay === day) return; // shu kun bajarildi
+      this.autsLastRunDay = day;
+
+      const [contractsRaw, columnsRaw, dateFrom] = await Promise.all([
+        this.settings.get(this.AUTS_CONTRACTS),
+        this.settings.get(this.AUTS_COLS),
+        this.settings.get(this.AUTS_DATEFROM),
+      ]);
+      const contracts: string[] = contractsRaw ? JSON.parse(contractsRaw) : [];
+      const columns: string[] = columnsRaw ? JSON.parse(columnsRaw) : [];
+      if (contracts.length === 0 || columns.length === 0) {
+        this.log.warn('Autsoursing cron: shartnoma yoki ustun saqlanmagan — o\'tkazildi');
+        return;
+      }
+      this.log.log(`Autsoursing cron ishga tushdi (${hm}) — ${contracts.length} shartnoma`);
+      const r = await this.sendAutsourcing(contracts, columns, dateFrom || null);
+      this.log.log(`Autsoursing cron natija: ${r.ok ? `OK ${r.rows} qator` : `XATO ${r.error}`}`);
+    } catch (e: any) {
+      this.log.warn(`Autsoursing cron xato: ${e?.message}`);
+    }
   }
 
   private async getAutsourcingRaw(): Promise<{ token: string | null; groupId: string | null }> {
@@ -610,7 +689,7 @@ export class GoogleExportService {
    * Shartnomalar bo'yicha ОплатыКв ma'lumotini (tanlangan ustunlar) Excel qilib
    * sozlangan Telegram guruhga jo'natadi.
    */
-  async sendAutsourcing(contracts: string[], columnKeys: string[]) {
+  async sendAutsourcing(contracts: string[], columnKeys: string[], dateFrom?: string | null) {
     const startedAt = Date.now();
     const { token, groupId } = await this.getAutsourcingRaw();
     if (!token || !groupId) {
@@ -622,22 +701,34 @@ export class GoogleExportService {
     const cols = OPLATA_COLS.filter((c) => (columnKeys || []).includes(c.key));
     if (cols.length === 0) return { ok: false, error: 'Hech qanday ustun tanlanmagan' };
 
+    const dateTo = this.todayTashkent();
+    const where: any = { contractNo: { in: clean } };
+    if (dateFrom) {
+      where.date = { gte: new Date(dateFrom), lte: new Date(`${dateTo}T23:59:59.999`) };
+    }
+
     const rows = await this.prisma.oplataKv.findMany({
-      where: { contractNo: { in: clean } },
+      where,
       orderBy: [{ contractNo: 'asc' }, { date: 'asc' }],
       take: 100000,
     });
     if (rows.length === 0) {
-      return { ok: false, error: "Bu shartnomalar bo'yicha ОплатыКв'da ma'lumot topilmadi" };
+      return {
+        ok: false,
+        error: dateFrom
+          ? `Bu shartnomalar bo'yicha ${dateFrom} → ${dateTo} oralig'ida ma'lumot topilmadi`
+          : "Bu shartnomalar bo'yicha ОплатыКв'da ma'lumot topilmadi",
+      };
     }
 
     const foundContracts = new Set(rows.map((r) => r.contractNo));
     const notFound = clean.filter((c) => !foundContracts.has(c));
 
     const buffer = await this.buildAutsourcingXlsx(cols, rows);
-    const filename = `autsoursing-${this.todayTashkent()}.xlsx`;
+    const filename = `autsoursing-${dateTo}.xlsx`;
     const caption =
-      `📋 Autsoursing · ${this.todayTashkent()}\n` +
+      `📋 Autsoursing · ${dateTo}\n` +
+      (dateFrom ? `Davr: ${dateFrom} → ${dateTo}\n` : '') +
       `Shartnomalar: ${clean.length} · Qatorlar: ${rows.length}` +
       (notFound.length ? `\n⚠️ Topilmadi (${notFound.length}): ${notFound.slice(0, 20).join(', ')}` : '');
 
