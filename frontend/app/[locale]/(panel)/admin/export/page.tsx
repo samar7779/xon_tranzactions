@@ -896,7 +896,11 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 // ═══════════════════════════════════════════════════════════════════════
 // Autsoursing tab — shartnomalar Excel'ini Telegram guruhga
 // ═══════════════════════════════════════════════════════════════════════
-interface AutsConfig { ok: boolean; hasToken: boolean; tokenHint: string | null; groupId: string | null; columns: string[]; }
+interface AutsConfig {
+  ok: boolean; hasToken: boolean; tokenHint: string | null; groupId: string | null;
+  columns: string[]; contracts: string[]; dateFrom: string | null;
+  cronEnabled: boolean; cronTime: string;
+}
 
 function AutsourcingTab({ canManage }: { canManage: boolean }) {
   const qc = useQueryClient();
@@ -911,12 +915,19 @@ function AutsourcingTab({ canManage }: { canManage: boolean }) {
   const [showSettings, setShowSettings] = useState(false);
   const [botToken, setBotToken] = useState('');
   const [groupId, setGroupId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [cronEnabled, setCronEnabled] = useState(false);
+  const [cronTime, setCronTime] = useState('09:00');
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (!cfg || initialized) return;
     setSelectedCols(cfg.columns?.length ? cfg.columns : ['contractNo', 'date', 'paymentAmount', 'client']);
     setGroupId(cfg.groupId || '');
+    setContracts((cfg.contracts || []).join('\n'));
+    setDateFrom(cfg.dateFrom || '');
+    setCronEnabled(!!cfg.cronEnabled);
+    setCronTime(cfg.cronTime || '09:00');
     setInitialized(true);
   }, [cfg, initialized]);
 
@@ -932,15 +943,19 @@ function AutsourcingTab({ canManage }: { canManage: boolean }) {
       botToken: botToken.trim() || undefined,
       groupId: groupId.trim(),
       columns: selectedCols,
+      contracts: parseContracts(contracts),
+      dateFrom: dateFrom || null,
+      cronEnabled,
+      cronTime,
     }),
-    onSuccess: () => { toast.success('Sozlama saqlandi'); setBotToken(''); qc.invalidateQueries({ queryKey: ['auts-config'] }); },
+    onSuccess: () => { toast.success('Saqlandi'); setBotToken(''); qc.invalidateQueries({ queryKey: ['auts-config'] }); },
     onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
   });
 
   const sendMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; error?: string; contracts?: number; rows?: number; notFound?: string[] }>(
       '/google-export/autsourcing/send',
-      { contracts: parseContracts(contracts), columns: selectedCols },
+      { contracts: parseContracts(contracts), columns: selectedCols, dateFrom: dateFrom || null },
       { timeout: 120_000 },
     ),
     onSuccess: (r) => {
@@ -1003,13 +1018,27 @@ function AutsourcingTab({ canManage }: { canManage: boolean }) {
                   placeholder="-1001234567890" className="h-9 rounded-lg font-mono text-[12px]" />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button onClick={() => saveCfg.mutate()} disabled={saveCfg.isPending}
-                className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold">
-                {saveCfg.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
-              </Button>
-              <span className="text-[10.5px] text-slate-400">🔒 Bot token AES-256 bilan shifrlanadi.</span>
+            {/* Cron — avtomatik jo'natish */}
+            <div className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-2.5">
+              <label className="flex items-center gap-2.5 cursor-pointer w-fit">
+                <button
+                  type="button"
+                  onClick={() => setCronEnabled((v) => !v)}
+                  className={cn('relative w-11 h-6 rounded-full transition-colors shrink-0', cronEnabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}
+                >
+                  <span className={cn('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', cronEnabled && 'translate-x-5')} />
+                </button>
+                <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Avtomatik jo'natish (har kuni)</span>
+              </label>
+              {cronEnabled && (
+                <div className="flex items-center gap-2 pl-1 flex-wrap">
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Soat (Toshkent):</span>
+                  <Input type="time" value={cronTime} onChange={(e) => setCronTime(e.target.value)} className="h-8 w-28 rounded-lg text-[12px]" />
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500">har kuni saqlangan shartnoma + ustunlar bilan avtomatik</span>
+                </div>
+              )}
             </div>
+            <div className="text-[10.5px] text-slate-400">🔒 Bot token AES-256 bilan shifrlanadi. O'zgarishlar pastdagi «Saqlash» bilan saqlanadi.</div>
           </CardContent>
         )}
       </Card>
@@ -1060,7 +1089,29 @@ function AutsourcingTab({ canManage }: { canManage: boolean }) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3 pt-1">
+          {/* Sana filtri — bundan → bugungacha */}
+          <div className="space-y-1.5">
+            <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+              <CalendarDays className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Sana (bundan → bugungacha)
+            </label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 w-44 rounded-lg text-[12px]" />
+              {dateFrom
+                ? <span className="text-[11px] text-slate-500 dark:text-slate-400">{dateFrom} → bugun</span>
+                : <span className="text-[11px] text-slate-400 dark:text-slate-500">bo'sh = barcha sanalar</span>}
+              {dateFrom && (
+                <button onClick={() => setDateFrom('')} className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 hover:underline">tozalash</button>
+              )}
+            </div>
+          </div>
+
+          {/* Saqlash + Jo'natish */}
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
+            {canManage && (
+              <Button onClick={() => saveCfg.mutate()} disabled={saveCfg.isPending} variant="outline" className="h-11 px-5 gap-2 text-[13px] font-semibold">
+                {saveCfg.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Saqlash
+              </Button>
+            )}
             <Button
               onClick={() => sendMut.mutate()}
               disabled={sendDisabled}
@@ -1069,7 +1120,7 @@ function AutsourcingTab({ canManage }: { canManage: boolean }) {
               {sendMut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
               {sendMut.isPending ? 'Jo\'natilmoqda…' : 'Guruhga jo\'natish'}
             </Button>
-            {!configured && <span className="text-[11px] text-amber-600 dark:text-amber-400">Avval sozlamani to'ldiring (bot token + guruh)</span>}
+            {!configured && <span className="text-[11px] text-amber-600 dark:text-amber-400">Avval sozlamani to'ldiring (🔑 bot token + guruh)</span>}
           </div>
         </CardContent>
       </Card>
