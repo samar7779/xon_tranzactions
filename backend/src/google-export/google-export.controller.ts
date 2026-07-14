@@ -86,4 +86,29 @@ export class GoogleExportController {
     });
     res.end(buffer);
   }
+
+  // ═══ AUTSOURCING ═══
+  @Get('autsourcing/config')
+  @RequirePermissions(PERMISSIONS.EXPORT_AUTSOURCING)
+  @ApiOperation({ summary: 'Autsoursing sozlama holati (bot token qaytmaydi)' })
+  autsConfig() {
+    return this.svc.getAutsourcingConfig();
+  }
+
+  @Put('autsourcing/config')
+  @RequirePermissions(PERMISSIONS.EXPORT_AUTSOURCING)
+  @ApiOperation({ summary: 'Autsoursing sozlamasi — bot token (shifrlanadi) + guruh ID + ustunlar' })
+  autsSave(
+    @Body() body: { botToken?: string; groupId?: string; columns?: string[] },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.saveAutsourcingConfig(body || {}, actorLabel(user));
+  }
+
+  @Post('autsourcing/send')
+  @RequirePermissions(PERMISSIONS.EXPORT_AUTSOURCING)
+  @ApiOperation({ summary: "Shartnomalar Excel'ini Telegram guruhga jo'natish" })
+  autsSend(@Body() body: { contracts?: string[]; columns?: string[] }) {
+    return this.svc.sendAutsourcing(body?.contracts || [], body?.columns || []);
+  }
 }

@@ -56,6 +56,7 @@ export const PERMS = {
   EXPORT_RUN: 'export:run',
   EXPORT_MANAGE: 'export:manage',
   EXPORT_DOWNLOAD: 'export:download',
+  EXPORT_AUTSOURCING: 'export:autsourcing',
   SYSTEM_DEPLOY: 'system:deploy',
 
   // Developer API
