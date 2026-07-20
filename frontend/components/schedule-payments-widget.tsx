@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ChevronDown, CalendarClock, RefreshCw, Loader2, CheckCircle2, AlertCircle,
+  ChevronDown, CalendarClock, RefreshCw, Loader2, CheckCircle2, AlertCircle, X, Database, BarChart3,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -15,8 +16,8 @@ import { toast } from 'sonner';
 /**
  * "Plan bo'yicha to'lov" dashboard widgeti.
  * Obyekt kesimida: tushishi kerak (kutilgan) vs tushgan vs qolgan.
- * Tepada tanlash: Boshlang'ich / Oylik / Hammasi + sana + CRM sync.
- * Manba: /schedule/by-object (ContractSchedule jadvali).
+ * Tepada: Boshlang'ich / Oylik / Hammasi + sana + CRM sync (progress modal).
+ * Chart (bar) + jadval. Manba: /schedule/by-object.
  */
 
 type Row = { object: string; expected: number; received: number; remaining: number; count: number };
@@ -49,6 +50,7 @@ export function SchedulePaymentsWidget() {
   const [range, setRange] = useState<'today' | '7d' | '30d' | 'custom'>('today');
   const [cFrom, setCFrom] = useState('');
   const [cTo, setCTo] = useState('');
+  const [syncModal, setSyncModal] = useState(false);
 
   const { from, to } = useMemo(() => {
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
@@ -74,16 +76,19 @@ export function SchedulePaymentsWidget() {
     queryKey: ['schedule-sync-status'],
     queryFn: () => api.get<SyncStatus>('/schedule/sync-status'),
     enabled: has(PERMS.SCHEDULE_VIEW),
-    refetchInterval: (q) => ((q.state.data as SyncStatus | undefined)?.running ? 2500 : false),
+    refetchInterval: (q) => ((q.state.data as SyncStatus | undefined)?.running ? 2000 : false),
   });
   const running = !!sync?.running;
 
-  const startSync = async () => {
+  const clickSync = async () => {
+    setSyncModal(true);
+    if (running) return; // allaqachon ishlayapti — modal ochamiz, qayta boshlamaymiz
     try {
       await api.post('/schedule/sync');
-      toast.success(t('schedSyncStarted'));
       qc.invalidateQueries({ queryKey: ['schedule-sync-status'] });
-    } catch (e: any) { toast.error(e?.message || 'Xato'); }
+    } catch (e: any) {
+      toast.error(e?.message || 'Xato');
+    }
   };
 
   const rows = data?.rows || [];
@@ -92,6 +97,7 @@ export function SchedulePaymentsWidget() {
   const pct = (r: Row) => (r.expected > 0 ? Math.min(100, (r.received / r.expected) * 100) : 0);
   const totalPct = total.expected > 0 ? Math.min(100, (total.received / total.expected) * 100) : 0;
   const lastSync = fmtDt(data?.lastSyncAt || sync?.lastSyncAt || null);
+  const syncPct = sync && sync.totalContracts > 0 ? Math.min(100, (sync.processed / sync.totalContracts) * 100) : 0;
 
   if (!has(PERMS.SCHEDULE_VIEW)) return null;
 
@@ -106,9 +112,13 @@ export function SchedulePaymentsWidget() {
           </div>
           <div className="text-[12px] font-bold text-slate-900 dark:text-slate-100 tracking-tight">{t('schedTitle')}</div>
           <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {from || '—'} → {to || '—'}</div>
+          {running && (
+            <span className="inline-flex items-center gap-1 px-1.5 h-5 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-[10px] font-bold">
+              <Loader2 className="h-2.5 w-2.5 animate-spin" /> {t('schedSyncing')}
+            </span>
+          )}
         </button>
         <div className="flex items-center gap-1.5 flex-wrap">
-          {/* Kind selector */}
           <div className="inline-flex rounded-md bg-slate-100 dark:bg-slate-800 p-0.5">
             {(['all', 'initial', 'monthly'] as const).map((k) => (
               <button key={k} type="button" onClick={() => setKind(k)}
@@ -123,11 +133,11 @@ export function SchedulePaymentsWidget() {
           <Rng active={range === '7d'} onClick={() => setRange('7d')}>{t('range7d')}</Rng>
           <Rng active={range === '30d'} onClick={() => setRange('30d')}>{t('range30d')}</Rng>
           <Rng active={range === 'custom'} onClick={() => setRange('custom')}>{t('rangeCustom')}</Rng>
-          {has(PERMS.SCHEDULE_SYNC) && (
-            <button type="button" onClick={startSync} disabled={running}
+          {(has(PERMS.SCHEDULE_SYNC) || running) && (
+            <button type="button" onClick={clickSync}
               title={t('schedSyncHint')}
               className={cn('inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors ml-0.5',
-                running ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 cursor-wait'
+                running ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                         : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm shadow-indigo-500/30')}>
               {running ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
               {running ? t('schedSyncing') : t('schedSync')}
@@ -138,7 +148,6 @@ export function SchedulePaymentsWidget() {
 
       {open && (
         <div className="p-3 space-y-3">
-          {/* Custom sana */}
           {range === 'custom' && (
             <div className="flex items-center gap-2 text-[12px]">
               <input type="date" value={cFrom} onChange={(e) => setCFrom(e.target.value)} className="px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800" />
@@ -150,10 +159,10 @@ export function SchedulePaymentsWidget() {
           {/* Sync holati */}
           <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 flex-wrap">
             {running ? (
-              <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold">
+              <button onClick={() => setSyncModal(true)} className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400 font-semibold hover:underline">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {t('schedProgress', { done: sync?.processed ?? 0, total: sync?.totalContracts ?? 0 })}
-              </span>
+              </button>
             ) : lastSync ? (
               <span className="inline-flex items-center gap-1.5">
                 <CheckCircle2 className="h-3 w-3 text-emerald-500" /> {t('schedLastSync')}: <span className="font-semibold text-slate-700 dark:text-slate-300">{lastSync}</span>
@@ -173,7 +182,6 @@ export function SchedulePaymentsWidget() {
             <Tile label="%" value={`${totalPct.toFixed(1)}%`} tone="indigo" />
           </div>
 
-          {/* Ro'yxat + bar */}
           {isLoading ? (
             <div className="py-8 text-center text-[12px] text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
           ) : rows.length === 0 ? (
@@ -181,50 +189,130 @@ export function SchedulePaymentsWidget() {
               {lastSync ? t('schedEmpty') : t('schedNeverHint')}
             </div>
           ) : (
-            <div className="overflow-x-auto rounded ring-1 ring-slate-200 dark:ring-slate-700">
-              <table className="w-full text-[12px]">
-                <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th className="text-left font-semibold px-3 py-2">{t('schedColObject')}</th>
-                    <th className="text-right font-semibold px-3 py-2">{t('schedExpected')}</th>
-                    <th className="text-right font-semibold px-3 py-2">{t('schedReceived')}</th>
-                    <th className="text-right font-semibold px-3 py-2">{t('schedRemaining')}</th>
-                    <th className="text-left font-semibold px-3 py-2 w-[30%]">%</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {rows.map((r) => (
-                    <tr key={r.object} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
-                      <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200 truncate max-w-[180px]">{r.object}</td>
-                      <td className="px-3 py-2 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">{mask(r.expected)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(r.received)}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">{mask(r.remaining)}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden ring-1 ring-slate-200/60 dark:ring-slate-700/60"
-                            style={{ maxWidth: `${Math.max(20, (r.expected / maxExpected) * 100)}%` }}>
-                            <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${pct(r)}%` }} />
-                          </div>
-                          <span className="text-[10.5px] tabular-nums text-slate-500 dark:text-slate-400 w-10 text-right">{pct(r).toFixed(0)}%</span>
-                        </div>
-                      </td>
+            <>
+              {/* ── CHART (bar) ── */}
+              <div className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 text-[10.5px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400 mb-1">
+                  <BarChart3 className="h-3.5 w-3.5" /> {t('schedChart')}
+                </div>
+                {rows.slice(0, 12).map((r) => (
+                  <div key={r.object} className="flex items-center gap-2 text-[11px]">
+                    <div className="w-24 sm:w-32 truncate text-slate-600 dark:text-slate-300 font-medium shrink-0" title={r.object}>{r.object}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="h-4 rounded bg-slate-100 dark:bg-slate-800 relative overflow-hidden ring-1 ring-slate-200/50 dark:ring-slate-700/50"
+                        style={{ width: `${Math.max(6, (r.expected / maxExpected) * 100)}%` }}>
+                        <div className="absolute inset-y-0 left-0 rounded bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${pct(r)}%` }} />
+                      </div>
+                    </div>
+                    <div className="w-32 shrink-0 text-right tabular-nums text-[10.5px]">
+                      <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{mask(r.received)}</span>
+                      <span className="text-slate-400"> / {mask(r.expected)}</span>
+                    </div>
+                  </div>
+                ))}
+                {rows.length > 12 && <div className="text-[10px] text-slate-400 text-center pt-1">+{rows.length - 12} obyekt (jadvalda)</div>}
+              </div>
+
+              {/* ── TABLE (aniq raqamlar) ── */}
+              <div className="overflow-x-auto rounded ring-1 ring-slate-200 dark:ring-slate-700">
+                <table className="w-full text-[12px]">
+                  <thead className="bg-slate-50 dark:bg-slate-800/60 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left font-semibold px-3 py-2">{t('schedColObject')}</th>
+                      <th className="text-right font-semibold px-3 py-2">{t('schedExpected')}</th>
+                      <th className="text-right font-semibold px-3 py-2">{t('schedReceived')}</th>
+                      <th className="text-right font-semibold px-3 py-2">{t('schedRemaining')}</th>
+                      <th className="text-right font-semibold px-3 py-2">%</th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
-                  <tr>
-                    <td className="px-3 py-2.5">{t('schedTotal')}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-sky-700 dark:text-sky-400">{mask(total.expected)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(total.received)}</td>
-                    <td className="px-3 py-2.5 text-right tabular-nums text-rose-600 dark:text-rose-400">{mask(total.remaining)}</td>
-                    <td className="px-3 py-2.5 text-[11px]">{totalPct.toFixed(1)}%</td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {rows.map((r) => (
+                      <tr key={r.object} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                        <td className="px-3 py-2 font-medium text-slate-800 dark:text-slate-200 truncate max-w-[200px]">{r.object}</td>
+                        <td className="px-3 py-2 text-right tabular-nums font-semibold text-sky-700 dark:text-sky-400">{mask(r.expected)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(r.received)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-rose-600 dark:text-rose-400">{mask(r.remaining)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-slate-500 dark:text-slate-400">{pct(r).toFixed(0)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-slate-100 dark:bg-slate-800 font-bold text-slate-900 dark:text-slate-100">
+                    <tr>
+                      <td className="px-3 py-2.5">{t('schedTotal')}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-sky-700 dark:text-sky-400">{mask(total.expected)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-emerald-700 dark:text-emerald-400">{mask(total.received)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-rose-600 dark:text-rose-400">{mask(total.remaining)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-[11px]">{totalPct.toFixed(1)}%</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       )}
+
+      {/* ── SYNC PROGRESS MODAL (hamma ko'radi — fonda davom etadi) ── */}
+      <AnimatePresence>
+        {syncModal && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/70 backdrop-blur-sm p-4"
+            onClick={() => setSyncModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.22 }}
+              className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2.5">
+                <div className={cn('w-9 h-9 rounded-xl grid place-items-center text-white shadow-sm',
+                  running ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600')}>
+                  {running ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{t('schedTitle')} · Sync</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{running ? t('schedSyncing') : t('schedSyncDone')}</div>
+                </div>
+                <button onClick={() => setSyncModal(false)} className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center text-slate-400"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                {/* Progress bar */}
+                <div>
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
+                    <span>{t('schedProgress', { done: sync?.processed ?? 0, total: sync?.totalContracts ?? 0 })}</span>
+                    <span className="tabular-nums">{syncPct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <motion.div className={cn('h-full rounded-full', running ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500')}
+                      animate={{ width: `${syncPct}%` }} transition={{ duration: 0.4 }} />
+                  </div>
+                </div>
+                {/* Stats */}
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
+                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedColObject')}</div>
+                    <div className="text-[15px] font-black tabular-nums text-slate-700 dark:text-slate-200">{sync?.processed ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
+                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedUpserted')}</div>
+                    <div className="text-[15px] font-black tabular-nums text-emerald-600 dark:text-emerald-400">{sync?.upserted ?? 0}</div>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
+                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedErrors')}</div>
+                    <div className={cn('text-[15px] font-black tabular-nums', (sync?.errors ?? 0) > 0 ? 'text-rose-500' : 'text-slate-400')}>{sync?.errors ?? 0}</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2.5">
+                  <Database className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-500" />
+                  <span>{t('schedSyncModalNote')}</span>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
