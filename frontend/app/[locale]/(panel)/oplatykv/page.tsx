@@ -13,7 +13,7 @@ import {
   Copy, Check, Download, FileSpreadsheet, FileJson, Printer,
   FileCheck2, ChevronDown, GitCompareArrows, ArrowLeft,
   CheckCircle2, AlertTriangle, Lock, Upload, ArrowRightLeft,
-  PlusCircle, Paperclip, Wallet, Building2, Box, BarChart3, RefreshCw,
+  PlusCircle, Paperclip, Wallet, Building2, BarChart3, RefreshCw,
   Ruler, Sparkles,
 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -21,10 +21,6 @@ import { PurposeInfoButton } from '@/components/purpose-modal';
 import { SyncProgressDialog } from '@/components/sync-progress-dialog';
 import { DateRangeCalendar } from '@/components/date-range-calendar';
 
-const Apartment3DDialog = dynamic(
-  () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
-  { ssr: false },
-);
 const PlanViewerDialog = dynamic(
   () => import('@/components/plan-viewer-dialog').then((m) => m.PlanViewerDialog),
   { ssr: false },
@@ -1462,7 +1458,6 @@ function AktSverkaDialog({
   const [selectedContract, setSelectedContract] = useState<string | null>(null);
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [crmMode, setCrmMode] = useState(false);
-  const [view3DOpen, setView3DOpen] = useState(false);
   const [planOpen, setPlanOpen] = useState(false);
   const [groupByYear, setGroupByYear] = useState(false);
 
@@ -1479,7 +1474,6 @@ function AktSverkaDialog({
       setSelectedContract(null);
       setSuggestOpen(false);
       setCrmMode(false);
-      setView3DOpen(false);
       setPlanOpen(false);
     }
   }, [open]);
@@ -1580,7 +1574,7 @@ function AktSverkaDialog({
         className="sm:max-w-4xl p-0 overflow-hidden gap-0 max-h-[90vh] flex flex-col print:max-h-none print:overflow-visible print:max-w-full print:rounded-none print:shadow-none print:ring-0 print:border-0"
         onInteractOutside={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
-        onEscapeKeyDown={(e) => { if (view3DOpen || planOpen) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (planOpen) e.preventDefault(); }}
         aria-describedby="akt-sverka-description"
       >
         {/* Screen-reader uchun yashirin title + description (Radix a11y talab) */}
@@ -1880,17 +1874,6 @@ function AktSverkaDialog({
               <Sparkles className="h-3 w-3 relative text-amber-100 animate-pulse" />
             </button>
             <button
-              onClick={() => setView3DOpen(true)}
-              disabled={!selectedContract}
-              title="3D ko'rinish — to'lov darajasini vizual ko'rsatish"
-              className="h-9 px-3 rounded-lg text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-md
-                         bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600
-                         hover:from-indigo-600 hover:via-violet-700 hover:to-fuchsia-700
-                         hover:shadow-lg hover:shadow-violet-500/30"
-            >
-              <Box className="h-3.5 w-3.5" /> 3D
-            </button>
-            <button
               onClick={() => window.print()}
               disabled={!selectedContract || !data || data.items.length === 0}
               className="h-9 px-3 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1906,13 +1889,6 @@ function AktSverkaDialog({
             </button>
           </div>
         </div>
-
-        {/* 3D Apartment view dialog */}
-        <Apartment3DDialog
-          open={view3DOpen}
-          onClose={() => setView3DOpen(false)}
-          contractNo={selectedContract}
-        />
 
         {/* Planirovka (real xonadon rejasi) viewer */}
         <PlanViewerDialog
