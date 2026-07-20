@@ -23,6 +23,7 @@ import { IdInspectorDialog } from '@/components/id-inspector-dialog';
 import { VipiskaDebugDialog } from '@/components/vipiska-debug-dialog';
 import { PurposeInfoButton, PurposeModal } from '@/components/purpose-modal';
 import { BankLogo } from '@/components/bank-logo';
+import { DateRangeCalendar } from '@/components/date-range-calendar';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -1091,21 +1092,17 @@ export default function TransactionsPage() {
                     {dateFrom || dateTo ? `${dateFrom || '...'} → ${dateTo || '...'}` : t('dateRange')}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="p-3 w-72">
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{tc('from')}</div>
-                      <Input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9" />
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-semibold">{tc('to')}</div>
-                      <Input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-9" />
-                    </div>
-                    <div className="flex gap-2 pt-1">
-                      <Button variant="outline" size="sm" className="flex-1" onClick={() => { setDateFrom(''); setDateTo(''); }}>{tc('reset')}</Button>
-                      <Button size="sm" className="flex-1" onClick={() => setFilterOpen(false)}>{t('apply')}</Button>
-                    </div>
-                  </div>
+                <DropdownMenuContent
+                  align="end"
+                  className="p-0 w-auto border-0 bg-transparent shadow-none"
+                  onCloseAutoFocus={(e) => e.preventDefault()}
+                >
+                  <DateRangeCalendar
+                    from={dateFrom}
+                    to={dateTo}
+                    onChange={(f, tt) => { setDateFrom(f); setDateTo(tt); setPage(1); }}
+                    onApply={() => setFilterOpen(false)}
+                  />
                 </DropdownMenuContent>
               </DropdownMenu>
 
