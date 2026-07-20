@@ -25,6 +25,8 @@ import {
   Dialog, DialogContent, DialogTitle,
 } from '@/components/ui/dialog';
 import { api, apiDownload } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
@@ -34,9 +36,23 @@ export default function DashboardPage() {
   const t = useTranslations('dashboard');
   const tc = useTranslations('common');
 
+  // ─── Ruxsatlar — har bo'lim alohida (ruxsat bo'lmasa ko'rinmaydi + ma'lumot yuklanmaydi) ───
+  const user = useAuth((s) => s.user);
+  const has = (p: string) => !!user?.permissions?.includes(p);
+  // Umumiy so'rovlar bir nechta bo'limga xizmat qiladi — kamida bittasi ruxsatli bo'lsa yuklanadi
+  const needAccounts = has(PERMS.DASHBOARD_KPI_BALANCE) || has(PERMS.DASHBOARD_KPI_ACCOUNTS)
+    || has(PERMS.DASHBOARD_KPI_BANKS) || has(PERMS.DASHBOARD_TOP_ACCOUNTS)
+    || has(PERMS.DASHBOARD_BANKS_BREAKDOWN) || has(PERMS.DASHBOARD_DAILY) || has(PERMS.DASHBOARD_CLIENT)
+    || has(PERMS.DASHBOARD_NET_FLOW);
+  const needStats = has(PERMS.DASHBOARD_KPI_INFLOW) || has(PERMS.DASHBOARD_KPI_OUTFLOW)
+    || has(PERMS.DASHBOARD_KPI_TXN) || has(PERMS.DASHBOARD_NET_FLOW);
+  const needBanks = has(PERMS.DASHBOARD_DAILY) || has(PERMS.DASHBOARD_CLIENT);
+  const needDaily = has(PERMS.DASHBOARD_DAILY) || has(PERMS.DASHBOARD_DAILY_BAR);
+
   const { data: accounts, isLoading: accLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+    enabled: needAccounts,
   });
   const { data: stats } = useQuery({
     queryKey: ['stats-30d'],
@@ -45,15 +61,18 @@ export default function DashboardPage() {
       from.setDate(from.getDate() - 30);
       return api.get<any>(`/transactions/stats?from=${from.toISOString().slice(0, 10)}`);
     },
+    enabled: needStats,
   });
   const { data: syncLogs } = useQuery({
     queryKey: ['sync-logs-dashboard'],
     queryFn: () => api.get<{ items: any[] }>('/sync/logs?limit=20'),
     refetchInterval: 30_000,
+    enabled: has(PERMS.DASHBOARD_SYNC_STATUS),
   });
   const { data: banks } = useQuery({
     queryKey: ['banks'],
     queryFn: () => api.get<{ items: any[] }>('/banks'),
+    enabled: needBanks,
   });
 
   // ─── Kunma-kun kirim/chiqim diagrammasi ───
@@ -84,7 +103,7 @@ export default function DashboardPage() {
   const { data: daily, isLoading: dailyLoading } = useQuery({
     queryKey: ['daily', chartFrom, chartTo, chartBankId, chartAccountId],
     queryFn: () => api.get<any>(`/transactions/daily?${chartParams}`),
-    enabled: range !== 'custom' || (!!customFrom && !!customTo),
+    enabled: needDaily && (range !== 'custom' || (!!customFrom && !!customTo)),
   });
 
   // ─── Obyektlar bo'yicha to'lovlar (ОплатыКв) — jadval hisoboti ───
@@ -114,7 +133,7 @@ export default function DashboardPage() {
       p.set('mode', objMode);
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
-    enabled: objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo),
+    enabled: has(PERMS.DASHBOARD_OBJECTS) && (objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo)),
   });
 
   // Ustunlarni yashirish (secret) — "1 взнос" / "ежемесячный"
@@ -228,7 +247,7 @@ export default function DashboardPage() {
   const { data: clientDaily, isLoading: clientLoading } = useQuery({
     queryKey: ['daily-client', cliFrom, cliTo, cliBankId, cliAccountId],
     queryFn: () => api.get<any>(`/transactions/daily?${cliParams}`),
-    enabled: cliRange !== 'custom' || (!!cliCustomFrom && !!cliCustomTo),
+    enabled: has(PERMS.DASHBOARD_CLIENT) && (cliRange !== 'custom' || (!!cliCustomFrom && !!cliCustomTo)),
   });
 
   // Tanlangan bankka tegishli hisoblar (klient filtri uchun)
@@ -310,7 +329,7 @@ export default function DashboardPage() {
       if (xonpayTo) p.set('dateTo', xonpayTo);
       return api.get<any>(`/xonpay/stats/daily?${p}`);
     },
-    enabled: xonpayRange !== 'custom' || (!!xonpayCustomFrom && !!xonpayCustomTo),
+    enabled: has(PERMS.DASHBOARD_XONPAY) && (xonpayRange !== 'custom' || (!!xonpayCustomFrom && !!xonpayCustomTo)),
   });
 
   // Chart uchun (matched=yashil, missing=qizil sof debitor)
@@ -390,17 +409,21 @@ export default function DashboardPage() {
 
       <div className="flex-1 px-3 sm:px-6 py-4 sm:py-5 space-y-4 w-full">
 
-        {/* ═══ KPI STRIP — Enterprise dense ═══ */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-          <DataTile label={t('totalBalance')} value={formatMoney(totalBalance).replace(' UZS', '')} unit="UZS" tone="primary" loading={accLoading} />
-          <DataTile label={t('accountsLabel')} value={String(totalAccounts)} />
-          <DataTile label={t('banksLabel')} value={String(banksCount)} />
-          <DataTile label={t('inflow30')} value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />
-          <DataTile label={t('outflow30')} value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />
-          <DataTile label={t('txn30')} value={String(txnCount)} />
-        </div>
+        {/* ═══ KPI STRIP — Enterprise dense (har karta alohida ruxsat) ═══ */}
+        {(has(PERMS.DASHBOARD_KPI_BALANCE) || has(PERMS.DASHBOARD_KPI_ACCOUNTS) || has(PERMS.DASHBOARD_KPI_BANKS)
+          || has(PERMS.DASHBOARD_KPI_INFLOW) || has(PERMS.DASHBOARD_KPI_OUTFLOW) || has(PERMS.DASHBOARD_KPI_TXN)) && (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+            {has(PERMS.DASHBOARD_KPI_BALANCE) && <DataTile label={t('totalBalance')} value={formatMoney(totalBalance).replace(' UZS', '')} unit="UZS" tone="primary" loading={accLoading} />}
+            {has(PERMS.DASHBOARD_KPI_ACCOUNTS) && <DataTile label={t('accountsLabel')} value={String(totalAccounts)} />}
+            {has(PERMS.DASHBOARD_KPI_BANKS) && <DataTile label={t('banksLabel')} value={String(banksCount)} />}
+            {has(PERMS.DASHBOARD_KPI_INFLOW) && <DataTile label={t('inflow30')} value={formatMoney(inSum).replace(' UZS', '')} unit="UZS" tone="success" />}
+            {has(PERMS.DASHBOARD_KPI_OUTFLOW) && <DataTile label={t('outflow30')} value={formatMoney(outSum).replace(' UZS', '')} unit="UZS" tone="danger" />}
+            {has(PERMS.DASHBOARD_KPI_TXN) && <DataTile label={t('txn30')} value={String(txnCount)} />}
+          </div>
+        )}
 
         {/* ═══ OBYEKTLAR BO'YICHA TO'LOVLAR (ОплатыКв) ═══ */}
+        {has(PERMS.DASHBOARD_OBJECTS) && (<>
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900">
             <button
@@ -545,8 +568,10 @@ export default function DashboardPage() {
           mode={objMode}
           onClose={() => setObjDetail(null)}
         />
+        </>)}
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
+        {has(PERMS.DASHBOARD_DAILY) && (
         <div ref={kunmaChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900">
@@ -705,8 +730,10 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* ═══ KUNMA-KUN USTUNLI GRAFIK — alohida karta ═══ */}
+        {has(PERMS.DASHBOARD_DAILY_BAR) && (
         <div ref={kunmaBarChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-900/60">
             <button
@@ -748,8 +775,10 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* ═══ KLIENT TO'LOVLARI — Клиент / Физ.Л / Юр.Л kategoriya bo'yicha ═══ */}
+        {has(PERMS.DASHBOARD_CLIENT) && (
         <div ref={clientChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           {/* Header + boshqaruv */}
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-indigo-50/60 dark:from-indigo-950/40 to-white dark:to-slate-900">
@@ -946,8 +975,10 @@ export default function DashboardPage() {
             </>
           )}
         </div>
+        )}
 
         {/* ═══ XONPAY DEBITOR — XonPay'da ro'yxatda lekin bankga kelmagan to'lovlar ═══ */}
+        {has(PERMS.DASHBOARD_XONPAY) && (
         <div ref={xonpayChartRef} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
           <div className="flex items-center justify-between gap-3 flex-wrap px-4 py-2.5 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-violet-50/60 dark:from-violet-950/40 to-white dark:to-slate-900">
             <button
@@ -1038,6 +1069,7 @@ export default function DashboardPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* ═══ MAIN GRID: 3 columns ═══ */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -1046,6 +1078,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-8 space-y-4">
 
             {/* Top accounts table */}
+            {has(PERMS.DASHBOARD_TOP_ACCOUNTS) && (
             <DataPanel
               title={t('topAccounts')}
               count={totalAccounts}
@@ -1112,6 +1145,7 @@ export default function DashboardPage() {
                 </div>
               )}
             </DataPanel>
+            )}
 
           </div>
 
@@ -1119,6 +1153,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-4 space-y-4">
 
             {/* Sync status */}
+            {has(PERMS.DASHBOARD_SYNC_STATUS) && (
             <DataPanel title={t('syncStatus')} subtitle={t('syncLast10')} collapsible>
               <div className="px-4 py-3 space-y-3">
                 {/* Big % */}
@@ -1151,8 +1186,10 @@ export default function DashboardPage() {
                 </div>
               </div>
             </DataPanel>
+            )}
 
             {/* Banks breakdown */}
+            {has(PERMS.DASHBOARD_BANKS_BREAKDOWN) && (
             <DataPanel title={t('banksBreakdown')} subtitle={t('banksCount', { n: byBank.length })} collapsible>
               {byBank.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">{t('noBanks')}</div>
@@ -1184,9 +1221,10 @@ export default function DashboardPage() {
                 </div>
               )}
             </DataPanel>
+            )}
 
             {/* Recent failures alerts */}
-            {syncStats.failed > 0 && (
+            {has(PERMS.DASHBOARD_SYNC_STATUS) && syncStats.failed > 0 && (
               <DataPanel title={t('attention')} subtitle={t('syncErrors', { n: syncStats.failed })} tone="warning">
                 <div className="divide-y divide-slate-100 dark:divide-slate-700">
                   {(syncLogs?.items || []).filter((l) => l.status === 'FAILED').slice(0, 3).map((l) => (
@@ -1208,6 +1246,7 @@ export default function DashboardPage() {
             )}
 
             {/* Net flow widget */}
+            {has(PERMS.DASHBOARD_NET_FLOW) && (
             <DataPanel title={t('netFlow30')} collapsible>
               <div className="px-4 py-3">
                 <div className={cn(
@@ -1229,6 +1268,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             </DataPanel>
+            )}
 
           </div>
         </div>
