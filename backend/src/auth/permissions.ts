@@ -180,6 +180,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.DASHBOARD_SYNC_STATUS, label: 'Sync holati' },
           { value: PERMISSIONS.DASHBOARD_BANKS_BREAKDOWN, label: 'Banklar bo\'yicha taqsimot' },
           { value: PERMISSIONS.DASHBOARD_NET_FLOW, label: 'Sof pul oqimi (30 kun)' },
+          { value: PERMISSIONS.SCHEDULE_VIEW, label: 'Plan bo\'yicha to\'lov (widget)' },
+          { value: PERMISSIONS.SCHEDULE_SYNC, label: 'Plan bo\'yicha to\'lov — CRM\'dan sync' },
         ],
       },
       {
@@ -210,8 +212,6 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.OPLATAKV_IMPORT, label: 'Excel\'dan import' },
           { value: PERMISSIONS.OPLATAKV_SPLIT, label: 'Split / Re-split (1-vznos vs oylik)' },
           { value: PERMISSIONS.OPLATAKV_SYNC, label: 'Hozir sync (tranzaksiyalardan)' },
-          { value: PERMISSIONS.SCHEDULE_VIEW, label: 'Plan bo\'yicha to\'lov (dashboard widget)' },
-          { value: PERMISSIONS.SCHEDULE_SYNC, label: 'To\'lov jadvalini CRM\'dan sync qilish' },
         ],
       },
     ],
