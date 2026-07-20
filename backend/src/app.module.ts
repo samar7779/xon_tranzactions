@@ -27,6 +27,7 @@ import { ImportModule } from './import/import.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { XonpayModule } from './xonpay/xonpay.module';
 import { OplataKvModule } from './oplata-kv/oplata-kv.module';
+import { PaymentScheduleModule } from './schedule/schedule.module';
 import { GoogleExportModule } from './google-export/google-export.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
 import { ChekModule } from './chek/chek.module';
@@ -66,6 +67,7 @@ import { ChekModule } from './chek/chek.module';
     AttachmentsModule,
     XonpayModule,
     OplataKvModule,
+    PaymentScheduleModule,
     GoogleExportModule,
     DeveloperApiModule,
     ChekModule,
