@@ -1741,6 +1741,8 @@
     "planViewerBtnTitle": "Xonadon rejasi — CRM'dagi real planirovka rasmi",
     "planViewerTitle": "Planirovka",
     "planViewerSubtitle": "Xonadon rejasi — CRM'dan",
+    "plan3dSubtitle": "Xonadon rejasi — 3D maket",
+    "plan3dHint": "Aylantirish: sichqoncha bilan suring · Zoom: g'ildirak",
     "planLoading": "Planirovka yuklanmoqda...",
     "planNotFound": "Planirovka topilmadi",
     "planNotFoundHint": "Bu shartnoma uchun CRM'da xonadon rejasi rasmi mavjud emas.",

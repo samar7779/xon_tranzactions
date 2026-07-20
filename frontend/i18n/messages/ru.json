@@ -1741,6 +1741,8 @@
     "planViewerBtnTitle": "План квартиры — реальное изображение планировки из CRM",
     "planViewerTitle": "Планировка",
     "planViewerSubtitle": "План квартиры — из CRM",
+    "plan3dSubtitle": "План квартиры — 3D макет",
+    "plan3dHint": "Вращение: тяните мышью · Зум: колесо",
     "planLoading": "Загрузка планировки...",
     "planNotFound": "Планировка не найдена",
     "planNotFoundHint": "Для этого договора в CRM нет изображения планировки квартиры.",

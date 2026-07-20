@@ -100,6 +100,28 @@ export async function apiDownload(path: string, fallbackName = 'download'): Prom
 }
 
 /**
+ * Faylni JWT bilan olib, object URL qaytaradi (blob:).
+ * WebGL tekstura / 3D uchun — cross-origin CORS muammosini chetlab o'tadi
+ * (blob: URL same-origin bo'ladi). Chaqiruvchi keyin URL.revokeObjectURL qiladi.
+ */
+export async function apiObjectUrl(path: string): Promise<string> {
+  const token = getToken();
+  const resp = await fetch(`${API_URL}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    const data = text ? safeJson(text) : null;
+    const err: ApiError = new Error(data?.message || data?.error?.message || resp.statusText);
+    err.status = resp.status;
+    err.data = data;
+    throw err;
+  }
+  const blob = await resp.blob();
+  return URL.createObjectURL(blob);
+}
+
+/**
  * POST + faylni yuklab olish (Excel). JSON body yuboriladi, javob blob.
  */
 export async function apiDownloadPost(path: string, body: any, fallbackName = 'download'): Promise<void> {
