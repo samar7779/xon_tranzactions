@@ -8,8 +8,23 @@
  */
 export const PERMISSIONS = {
   // ─── ASOSIY ───
-  // Dashboard
-  DASHBOARD_VIEW: 'dashboard:view',
+  // Dashboard (Bosh sahifa) — har bo'lim/karta alohida gate
+  DASHBOARD_VIEW: 'dashboard:view',                         // Sahifani ochish
+  DASHBOARD_KPI_BALANCE: 'dashboard:kpi_balance',           // Yuqori karta: Jami qoldiq
+  DASHBOARD_KPI_ACCOUNTS: 'dashboard:kpi_accounts',         // Yuqori karta: Hisoblar soni
+  DASHBOARD_KPI_BANKS: 'dashboard:kpi_banks',               // Yuqori karta: Banklar soni
+  DASHBOARD_KPI_INFLOW: 'dashboard:kpi_inflow',             // Yuqori karta: Kirim (30 kun)
+  DASHBOARD_KPI_OUTFLOW: 'dashboard:kpi_outflow',           // Yuqori karta: Chiqim (30 kun)
+  DASHBOARD_KPI_TXN: 'dashboard:kpi_txn',                   // Yuqori karta: Tranzaksiya (30 kun)
+  DASHBOARD_OBJECTS: 'dashboard:objects',                   // Obyektlar bo'yicha to'lovlar
+  DASHBOARD_DAILY: 'dashboard:daily',                       // Kunma-kun kirim/chiqim grafik
+  DASHBOARD_DAILY_BAR: 'dashboard:daily_bar',               // Kunma-kun ustunli grafik
+  DASHBOARD_CLIENT: 'dashboard:client',                     // Klient to'lovlari grafik
+  DASHBOARD_XONPAY: 'dashboard:xonpay',                     // Kutilayotgan to'lovlar (XonPay)
+  DASHBOARD_TOP_ACCOUNTS: 'dashboard:top_accounts',         // Eng katta hisoblar
+  DASHBOARD_SYNC_STATUS: 'dashboard:sync_status',           // Sync holati
+  DASHBOARD_BANKS_BREAKDOWN: 'dashboard:banks_breakdown',   // Banklar bo'yicha taqsimot
+  DASHBOARD_NET_FLOW: 'dashboard:net_flow',                 // Sof pul oqimi (30 kun)
 
   // Tranzaksiyalar — Tranzaksiyalar tab
   TRANSACTIONS_VIEW: 'transactions:view',
@@ -143,7 +158,25 @@ export const PERMISSION_TREE: PermModule[] = [
     pages: [
       {
         name: 'Bosh sahifa',
-        items: [{ value: PERMISSIONS.DASHBOARD_VIEW, label: 'Bosh sahifani ko\'rish' }],
+        description: 'Dashboard — har bo\'lim/karta alohida (ruxsat bo\'lmasa ko\'rinmaydi)',
+        items: [
+          { value: PERMISSIONS.DASHBOARD_VIEW, label: 'Bosh sahifani ochish' },
+          { value: PERMISSIONS.DASHBOARD_KPI_BALANCE, label: 'Karta: Jami qoldiq' },
+          { value: PERMISSIONS.DASHBOARD_KPI_ACCOUNTS, label: 'Karta: Hisoblar soni' },
+          { value: PERMISSIONS.DASHBOARD_KPI_BANKS, label: 'Karta: Banklar soni' },
+          { value: PERMISSIONS.DASHBOARD_KPI_INFLOW, label: 'Karta: Kirim (30 kun)' },
+          { value: PERMISSIONS.DASHBOARD_KPI_OUTFLOW, label: 'Karta: Chiqim (30 kun)' },
+          { value: PERMISSIONS.DASHBOARD_KPI_TXN, label: 'Karta: Tranzaksiya (30 kun)' },
+          { value: PERMISSIONS.DASHBOARD_OBJECTS, label: 'Obyektlar bo\'yicha to\'lovlar' },
+          { value: PERMISSIONS.DASHBOARD_DAILY, label: 'Kunma-kun kirim/chiqim (grafik)' },
+          { value: PERMISSIONS.DASHBOARD_DAILY_BAR, label: 'Kunma-kun ustunli grafik' },
+          { value: PERMISSIONS.DASHBOARD_CLIENT, label: 'Klient to\'lovlari' },
+          { value: PERMISSIONS.DASHBOARD_XONPAY, label: 'Kutilayotgan to\'lovlar (XonPay debitor)' },
+          { value: PERMISSIONS.DASHBOARD_TOP_ACCOUNTS, label: 'Eng katta hisoblar' },
+          { value: PERMISSIONS.DASHBOARD_SYNC_STATUS, label: 'Sync holati' },
+          { value: PERMISSIONS.DASHBOARD_BANKS_BREAKDOWN, label: 'Banklar bo\'yicha taqsimot' },
+          { value: PERMISSIONS.DASHBOARD_NET_FLOW, label: 'Sof pul oqimi (30 kun)' },
+        ],
       },
       {
         name: 'Tranzaksiyalar',
