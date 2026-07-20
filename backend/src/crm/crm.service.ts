@@ -537,161 +537,86 @@ export class CrmService {
   /**
    * Shartnoma bo'yicha planirovka rasm(lar)i va hujjat URL'ini qaytaradi.
    *
-   * CRM /show detail ichidan `uploads/plans/...` yo'lini AVTOMATIK topadi —
-   * CRM field nomiga bog'liq emas (rekursiv qidiruv). Presigned (X-Amz)
-   * versiyani afzal ko'radi; relative bo'lsa S3 host qo'shadi.
+   * Manba: CRM /order/INDEX javobidagi plan_images[] va plan_drawings[]
+   * (har biri { id, name, image=presigned S3 URL, path }). /show'da bu
+   * maydonlar yo'q. Presigned .image bevosita <img> da yuklanadi (~5 daqiqa amal qiladi).
    */
   async contractMedia(contractNo: string) {
     const contract = (contractNo || '').trim();
     if (!contract) return { ok: false, error: 'contract kerak' };
 
-    // Plan uchun TO'LIQ order kerak (order_apartments.apartment.plan).
-    // this.show() trashed paramlar bilan chaqiradi va ko'pincha to'lov-view
-    // qaytaradi (order_apartments yo'q). Shu sabab bir necha usulni sinaymiz:
-    //   1) TOZA /show (faqat contract)   2) /show (id bilan)   3) trashed show()
-    // order_apartments'li javobni afzal ko'ramiz.
-    const hasApts = (d: any) => !!(d && Array.isArray(d.order_apartments) && d.order_apartments.length);
-    const fetchShow = async (params: Record<string, any>): Promise<any> => {
-      try {
-        const r: any = await this.call('/show', params);
-        return r?.ok ? (r.data?.data || null) : null;
-      } catch { return null; }
-    };
+    // Planirovka rasmlari CRM /order/INDEX javobida keladi:
+    //   plan_images[]  = [{ id, name, image (presigned S3 URL), path }]
+    //   plan_drawings[] = [{ ... }]
+    // /show'da bu maydonlar YO'Q — shuning uchun /index ishlatamiz.
+    // is_trashed=1 — bekor/o'chirilgan shartnoma bo'lsa ham topamiz.
+    const r: any = await this.call('/index', {
+      contract,
+      'per-page': 20,
+      is_trashed: 1,
+      trashed_status: 1,
+      with_trashed: 1,
+    }).catch(() => null);
+    const items: any[] = r?.ok ? (r.data?.data || []) : [];
 
-    let detail: any = await fetchShow({ contract });
-    // contract to'liq order bermasa, lekin id bo'lsa — id bilan qayta urinamiz
-    if (detail && !hasApts(detail) && (detail.id || detail.order_id)) {
-      const byId = await fetchShow({ id: detail.id || detail.order_id });
-      if (hasApts(byId)) detail = byId;
-    }
-    // hali order_apartments yo'q — trashed show() (deleted/cancelled uchun ham)
-    if (!hasApts(detail)) {
-      const res: any = await this.show({ contract }).catch(() => null);
-      const d2: any = res && res.detail !== undefined ? res.detail : null;
-      if (hasApts(d2)) detail = d2;
-      else if (!detail) detail = d2;
-    }
+    const norm = (s: any) => String(s || '').replace(/[\s\-_]/g, '').toUpperCase();
+    const target = norm(contract);
+    const it = items.find((x) => norm(x.contract) === target) || items[0] || null;
 
-    if (!detail) {
+    if (!it) {
       return {
         ok: true, contract, plans: [] as string[], contractDoc: null,
         apartmentNumber: null, objectName: null, typeName: null,
-        crmConnected: false,
+        crmConnected: !!(r && r.ok),
       };
     }
 
-    // ── Planirovka rasmlarini order_apartments[].apartment.plan ichidan yig'amiz ──
-    // CRM struktura: apartment.plan = { image, images[], drawing_image, drawing_images[] }
-    //   • plan.image ba'zan "noimage.jpeg" (placeholder) — chiqarib tashlaymiz
-    //   • asl rasm plan.image (real) YOKI plan.images[].<url> da bo'ladi (S3 presigned)
-    const byPath = new Map<string, string>(); // query'siz path -> to'liq url
-    const DOC_EXT = /\.(docx?|pdf|xlsx?|pptx?|csv|zip|rar)(\?|$)/i;
-    const IMG_EXT = /\.(png|jpe?g|webp|gif|bmp|tiff?)(\?|$)/i;
-    const add = (raw: string) => {
-      if (!raw) return;
-      let url = String(raw).trim();
-      if (!url || /noimage/i.test(url)) return; // placeholder — o'tkazamiz
-      if (/^https?:\/\//i.test(url)) {
-        if (DOC_EXT.test(url)) return; // docx/pdf — rasm emas
-      } else {
-        // relative — faqat plan yo'liga o'xshash bo'lsa S3 host qo'shamiz
-        url = PLAN_S3_BASE + url.replace(/^\/+/, '');
+    // plan_images + plan_drawings dan rasm URL'larini yig'amiz (presigned .image afzal)
+    const byPath = new Map<string, string>();
+    const pushImgs = (arr: any) => {
+      if (!Array.isArray(arr)) return;
+      for (const im of arr) {
+        let url: string | null =
+          typeof im?.image === 'string' && im.image.trim() ? im.image.trim() : null;
+        if (!url && im?.path) url = PLAN_S3_BASE + String(im.path).replace(/^\/+/, '');
+        if (!url || /noimage/i.test(url)) continue;
+        const key = url.split('?')[0];
+        const signed = /[?&]X-Amz/i.test(url);
+        const prev = byPath.get(key);
+        if (!prev || (signed && !/[?&]X-Amz/i.test(prev))) byPath.set(key, url);
       }
-      const key = url.split('?')[0];
-      const signed = /[?&]X-Amz/i.test(url);
-      const prev = byPath.get(key);
-      if (!prev) { byPath.set(key, url); return; }
-      if (signed && !/[?&]X-Amz/i.test(prev)) byPath.set(key, url); // presigned afzal
     };
-    // plan obyekti doirasida: faqat http rasm URL yoki uploads/plans relative yo'l
-    // (name/id kabi maydonlar rasm sifatida olinmaydi)
-    const walkPlan = (v: any, depth: number) => {
-      if (v == null || depth > 6) return;
-      if (typeof v === 'string') {
-        if (/^https?:\/\//i.test(v)) { if (!DOC_EXT.test(v)) add(v); }
-        // relative yo'l — slash bor (bare filename emas) + rasm kengaytmasi yoki plans yo'li
-        else if (/\//.test(v) && (IMG_EXT.test(v) || /uploads\/plans\//i.test(v))) add(v);
-        return;
-      }
-      if (Array.isArray(v)) { for (const x of v) walkPlan(x, depth + 1); return; }
-      if (typeof v === 'object') { for (const x of Object.values(v)) walkPlan(x, depth + 1); }
-    };
-
-    const orderApts: any[] = Array.isArray(detail?.order_apartments) ? detail.order_apartments : [];
-    for (const oa of orderApts) {
-      const plan = oa?.apartment?.plan ?? oa?.plan;
-      if (plan) walkPlan(plan, 0);
-    }
-
-    // Fallback: plan'da topilmasa — butun detail'dan uploads/plans/ yo'lini qidiramiz
-    if (byPath.size === 0) {
-      const walkAll = (v: any, depth: number) => {
-        if (v == null || depth > 8) return;
-        if (typeof v === 'string') { if (/uploads\/plans\//i.test(v)) add(v); return; }
-        if (Array.isArray(v)) { for (const x of v) walkAll(x, depth + 1); return; }
-        if (typeof v === 'object') { for (const x of Object.values(v)) walkAll(x, depth + 1); }
-      };
-      walkAll(detail, 0);
-    }
-
+    pushImgs(it.plan_images);
+    pushImgs(it.plan_drawings);
     const plans = [...byPath.values()];
 
-    // Label uchun meta
-    const apt0 = orderApts[0] || {};
-    const aptObj = apt0?.apartment || {};
-    const plan0 = aptObj?.plan || apt0?.plan || {};
-    const objectName =
-      this.asText(aptObj?.block?.building?.object?.name) ||
-      this.asText(apt0?.block?.name) ||
-      this.asText(detail?.object) ||
-      this.asText(detail?.object_name) || null;
-    const apartmentNumber =
-      this.asText(aptObj?.number) ||
-      this.asText(apt0?.number) ||
-      this.asText(apt0?.factual_apartment_number) ||
-      this.asText(detail?.apartment_number) || null;
-    const typeName =
-      this.asText(plan0?.name) ||
-      this.asText(aptObj?.type) ||
-      this.asText(apt0?.type) || null;
-    const contractDoc = this.asText(detail?.contract_path_temp) || null;
+    const objectName = this.asText(it.object) || this.asText(it.object_name) || null;
+    const apartmentNumber = this.asText(it.number) || null;
+    const typeName: string | null = null;
+    const contractDoc = this.asText(it.contract_path_temp) || null;
 
-    // Debug — plan topilmasa, tuzatish uchun serverning /show javob strukturasini
-    // (cheklangan) qaytaramiz. Bu SERVER oladigan ma'lumot — browser'nikidan farq
-    // qilishi mumkin (masalan plan.images bo'sh kelishi).
-    let debug: {
-      orderApartments: number;
-      detailKeys: string;
-      hasApartment: boolean;
-      hasPlan: boolean;
-      plan: string | null;
-      orderApartment0: string | null;
-      info: string | null;
-    } | undefined;
+    this.log.log(`contractMedia(${contract}): ${plans.length} ta planirovka topildi (/index)`);
+
+    const out: any = {
+      ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true,
+    };
+    // Plan bo'sh bo'lsa — debug (frontend "topilmadi" ekranida ko'rsatiladi)
     if (plans.length === 0) {
-      const cap = (v: any, n: number): string | null => {
-        try { return v && (typeof v === 'object' ? Object.keys(v).length : true) ? JSON.stringify(v).slice(0, n) : null; }
-        catch { return null; }
-      };
-      debug = {
-        orderApartments: orderApts.length,
-        detailKeys: Object.keys(detail || {}).join(', ').slice(0, 600),
-        hasApartment: !!aptObj && Object.keys(aptObj).length > 0,
-        hasPlan: !!plan0 && Object.keys(plan0).length > 0,
-        plan: cap(plan0, 2800),
-        orderApartment0: cap(orderApts[0], 3000),
-        info: cap(detail?.info, 1500),
+      let planDump: string | null = null;
+      try {
+        planDump = JSON.stringify({ plan_images: it.plan_images, plan_drawings: it.plan_drawings }).slice(0, 2500);
+      } catch { planDump = null; }
+      out.debug = {
+        orderApartments: 0,
+        detailKeys: (() => { try { return Object.keys(it).join(', ').slice(0, 500); } catch { return ''; } })(),
+        hasApartment: false,
+        hasPlan: !!(Array.isArray(it.plan_images) && it.plan_images.length),
+        plan: planDump,
+        orderApartment0: null,
+        info: null,
       };
     }
-
-    this.log.log(
-      `contractMedia(${contract}): ${plans.length} ta planirovka topildi` +
-      (plans.length
-        ? ''
-        : ` (order_apartments=${orderApts.length}, hasPlan=${!!(plan0 && Object.keys(plan0).length)})`),
-    );
-
-    return { ok: true, contract, plans, contractDoc, apartmentNumber, objectName, typeName, crmConnected: true, ...(debug ? { debug } : {}) };
+    return out;
   }
 
   /**
