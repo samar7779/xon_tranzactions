@@ -28,6 +28,7 @@ import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney } from '@/lib/utils';
+import { SchedulePaymentsWidget } from '@/components/schedule-payments-widget';
 
 const BANK_COLORS = ['#3b82f6', '#10b981', '#a855f7', '#f59e0b', '#ec4899', '#06b6d4', '#ef4444', '#8b5cf6'];
 
@@ -569,6 +570,9 @@ export default function DashboardPage() {
           onClose={() => setObjDetail(null)}
         />
         </>)}
+
+        {/* ═══ PLAN BO'YICHA TO'LOV (CRM to'lov jadvali) ═══ */}
+        <SchedulePaymentsWidget />
 
         {/* ═══ KUNMA-KUN KIRIM/CHIQIM DIAGRAMMASI ═══ */}
         {has(PERMS.DASHBOARD_DAILY) && (

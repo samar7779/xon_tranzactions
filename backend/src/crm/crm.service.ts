@@ -658,4 +658,75 @@ export class CrmService {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  //        TO'LOV JADVALI (schedule) — "Plan bo'yicha to'lov" uchun
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Aktiv shartnomalar ro'yxati (CRM /order/index, paginatsiya).
+   * Trashed paramlar yo'q — bekor/o'chirilganlar chiqmaydi.
+   */
+  async listContractsPage(page = 1, perPage = 50): Promise<{
+    ok: boolean;
+    items: Array<{ contract: string; object: string | null; clientName: string | null; status: string | null; percentagePaid: number; archived: boolean; deleted: boolean }>;
+    totalPage: number;
+    totalItem: number;
+    current: number;
+    perPage: number;
+  }> {
+    const r = await this.call('/index', { page, 'per-page': perPage });
+    if (!r.ok) return { ok: false, items: [], totalPage: 0, totalItem: 0, current: page, perPage };
+    const items = ((r.data?.data as any[]) || []).map((it) => ({
+      contract: String(it.contract || '').trim(),
+      object: typeof it.object === 'string' ? it.object : (it.object?.name || this.asText(it.object) || null),
+      clientName: it.client_full_name || null,
+      status: it.status?.name?.uz || it.status?.name?.ru || it.status?.type || null,
+      percentagePaid: Number(it.percentage_paid || 0),
+      archived: !!it.archived,
+      deleted: !!it.deleted_at,
+    })).filter((x) => x.contract);
+    const pg = (r.data?.pagination as any) || {};
+    return {
+      ok: true,
+      items,
+      totalPage: Number(pg.totalPage || pg.total_page || 0),
+      totalItem: Number(pg.totalItem || pg.total_item || 0),
+      current: Number(pg.current || page),
+      perPage: Number(pg.perPage || pg.per_page || perPage),
+    };
+  }
+
+  /**
+   * Bitta shartnoma to'lov jadvali (grafik) — CRM /order/show'dan.
+   * initial.schedules[] + monthly.schedules[] → har installment.
+   */
+  async getContractSchedules(contract: string): Promise<{
+    ok: boolean;
+    status: string | null;
+    schedules: Array<{ scheduleId: string; dueDate: string; amount: number; amountPaid: number; remaining: number; kind: 'initial' | 'monthly' }>;
+  }> {
+    const c = (contract || '').trim();
+    if (!c) return { ok: false, status: null, schedules: [] };
+    const r = await this.call('/show', { contract: c });
+    const d: any = r.ok ? (r.data?.data || null) : null;
+    if (!d) return { ok: false, status: null, schedules: [] };
+
+    const out: Array<{ scheduleId: string; dueDate: string; amount: number; amountPaid: number; remaining: number; kind: 'initial' | 'monthly' }> = [];
+    const push = (arr: any, kind: 'initial' | 'monthly') => {
+      if (!Array.isArray(arr)) return;
+      for (const s of arr) {
+        const dp = s?.date_payment ? String(s.date_payment).slice(0, 10) : null;
+        if (s?.id == null || !dp) continue;
+        const amount = Number(s.amount || 0);
+        const paid = Number(s.amount_paid || 0);
+        const left = s.left != null ? Number(s.left) : amount - paid;
+        out.push({ scheduleId: String(s.id), dueDate: dp, amount, amountPaid: paid, remaining: left, kind });
+      }
+    };
+    push(d.initial?.schedules, 'initial');
+    push(d.monthly?.schedules, 'monthly');
+    const status = this.asText(d.status?.name) || this.asText(d.status?.type) || this.asText(d.virtual_status?.value?.name) || null;
+    return { ok: true, status, schedules: out };
+  }
+
 }

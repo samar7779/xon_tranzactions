@@ -916,6 +916,36 @@ model OplataKvObjectMapping {
   @@map("oplata_kv_object_mappings")
 }
 
+// ─────────────────────────────────────────────────────────────────
+// CONTRACT SCHEDULE — CRM to'lov jadvali (grafik) sinxronizatsiyasi
+// "Plan bo'yicha to'lov" dashboard widgeti uchun: qaysi kunda qaysi
+// shartnomadan qancha tushishi kerak (boshlang'ich/oylik) + qancha tushgan.
+// Manba: CRM /order/show → initial.schedules[] + monthly.schedules[]
+// Har bir installment = 1 qator. scheduleId (CRM) bo'yicha upsert.
+// ─────────────────────────────────────────────────────────────────
+model ContractSchedule {
+  id             String   @id @default(cuid())
+  scheduleId     String   @unique @map("schedule_id") @db.VarChar(40)  // CRM schedule.id — upsert kaliti
+  contractNo     String   @map("contract_no") @db.VarChar(128)
+  object         String?  @db.VarChar(255)                             // canonical obyekt (mapping bilan)
+  clientName     String?  @map("client_name") @db.VarChar(255)
+  dueDate        DateTime @map("due_date") @db.Date                    // muddat sanasi (date_payment)
+  amount         Decimal  @db.Decimal(18, 2)                           // to'lanishi kerak
+  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(18, 2)  // tushgan (CRM)
+  remaining      Decimal  @default(0) @db.Decimal(18, 2)               // qolgan (left)
+  kind           String   @db.VarChar(16)                              // 'initial' | 'monthly'
+  contractStatus String?  @map("contract_status") @db.VarChar(64)
+  syncedAt       DateTime @map("synced_at")
+
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@index([dueDate, kind])
+  @@index([object])
+  @@index([contractNo])
+  @@map("contract_schedules")
+}
+
 enum OplataKvCategory {
   MONTHLY   // ежемесячный
   FIRST     // 1 взнос

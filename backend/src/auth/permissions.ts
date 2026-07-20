@@ -55,6 +55,10 @@ export const PERMISSIONS = {
   OPLATAKV_SYNC: 'oplatakv:sync',                               // Hozir sync — tranzaksiyalardan majburiy import
   OPLATAKV_MANAGE: 'oplatakv:manage',                           // Legacy (deprecated) — orqaga moslik
 
+  // Plan bo'yicha to'lov (CRM to'lov jadvali — dashboard widget)
+  SCHEDULE_VIEW: 'schedule:view',                               // "Plan bo'yicha to'lov" widgetini ko'rish
+  SCHEDULE_SYNC: 'schedule:sync',                               // To'lov jadvalini CRM'dan sync qilish
+
   // ─── SOZLASH ───
   // Bank hisoblari
   ACCOUNTS_VIEW: 'accounts:view',
@@ -206,6 +210,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.OPLATAKV_IMPORT, label: 'Excel\'dan import' },
           { value: PERMISSIONS.OPLATAKV_SPLIT, label: 'Split / Re-split (1-vznos vs oylik)' },
           { value: PERMISSIONS.OPLATAKV_SYNC, label: 'Hozir sync (tranzaksiyalardan)' },
+          { value: PERMISSIONS.SCHEDULE_VIEW, label: 'Plan bo\'yicha to\'lov (dashboard widget)' },
+          { value: PERMISSIONS.SCHEDULE_SYNC, label: 'To\'lov jadvalini CRM\'dan sync qilish' },
         ],
       },
     ],
