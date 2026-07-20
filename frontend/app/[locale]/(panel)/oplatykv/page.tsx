@@ -19,6 +19,7 @@ import {
 import dynamic from 'next/dynamic';
 import { PurposeInfoButton } from '@/components/purpose-modal';
 import { SyncProgressDialog } from '@/components/sync-progress-dialog';
+import { DateRangeCalendar } from '@/components/date-range-calendar';
 
 const Apartment3DDialog = dynamic(
   () => import('@/components/apartment-3d-view').then((m) => m.Apartment3DDialog),
@@ -166,6 +167,7 @@ export default function OplataKvPage() {
   });
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(50);
 
@@ -570,7 +572,7 @@ export default function OplataKvPage() {
               </button>
 
               {/* Sana filtri — icon ichida (collapsed) */}
-              <DropdownMenu>
+              <DropdownMenu open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
                 <DropdownMenuTrigger asChild>
                   <button
                     className={cn(
@@ -589,34 +591,17 @@ export default function OplataKvPage() {
                     )}
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="p-3 w-[280px] space-y-2">
-                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">{t('dateRange')}</div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{t('rangeStart')}</label>
-                    <Input
-                      type="date"
-                      className="h-9 rounded-lg"
-                      value={dateFrom}
-                      onChange={(e) => setDateFrom(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">{t('rangeEnd')}</label>
-                    <Input
-                      type="date"
-                      className="h-9 rounded-lg"
-                      value={dateTo}
-                      onChange={(e) => setDateTo(e.target.value)}
-                    />
-                  </div>
-                  {(dateFrom || dateTo) && (
-                    <button
-                      className="w-full h-8 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
-                      onClick={() => { setDateFrom(''); setDateTo(''); }}
-                    >
-                      {tc('clear')}
-                    </button>
-                  )}
+                <DropdownMenuContent
+                  align="start"
+                  className="p-0 w-auto border-0 bg-transparent shadow-none"
+                  onCloseAutoFocus={(e) => e.preventDefault()}
+                >
+                  <DateRangeCalendar
+                    from={dateFrom}
+                    to={dateTo}
+                    onChange={(f, tt) => { setDateFrom(f); setDateTo(tt); }}
+                    onApply={() => setDateFilterOpen(false)}
+                  />
                 </DropdownMenuContent>
               </DropdownMenu>
 
