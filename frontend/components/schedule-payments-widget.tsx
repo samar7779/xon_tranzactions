@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, animate } from 'framer-motion';
 import {
   ChevronDown, CalendarClock, RefreshCw, Loader2, CheckCircle2, AlertCircle, X, Database, BarChart3,
+  Building2, FileCheck2, AlertTriangle,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -98,6 +99,13 @@ export function SchedulePaymentsWidget() {
   const totalPct = total.expected > 0 ? Math.min(100, (total.received / total.expected) * 100) : 0;
   const lastSync = fmtDt(data?.lastSyncAt || sync?.lastSyncAt || null);
   const syncPct = sync && sync.totalContracts > 0 ? Math.min(100, (sync.processed / sync.totalContracts) * 100) : 0;
+  const etaMin = useMemo(() => {
+    if (!running || !sync?.startedAt || (sync?.processed ?? 0) < 3 || !sync?.totalContracts) return null;
+    const elapsed = (Date.now() - new Date(sync.startedAt).getTime()) / 1000;
+    const rate = (sync.processed || 0) / Math.max(1, elapsed);
+    if (rate <= 0) return null;
+    return Math.max(1, Math.ceil(((sync.totalContracts - sync.processed) / rate) / 60));
+  }, [sync, running]);
 
   if (!has(PERMS.SCHEDULE_VIEW)) return null;
 
@@ -252,60 +260,71 @@ export function SchedulePaymentsWidget() {
         </div>
       )}
 
-      {/* ── SYNC PROGRESS MODAL (hamma ko'radi — fonda davom etadi) ── */}
+      {/* ── SYNC PROGRESS MODAL — premium (hamma ko'radi, fonda davom etadi) ── */}
       <AnimatePresence>
         {syncModal && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/70 backdrop-blur-sm p-4"
+            className="fixed inset-0 z-[200] grid place-items-center bg-slate-950/80 backdrop-blur-md p-4"
             onClick={() => setSyncModal(false)}
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 12 }}
-              transition={{ duration: 0.22 }}
-              className="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl overflow-hidden"
+              initial={{ opacity: 0, scale: 0.92, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.92, y: 16 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="relative w-full max-w-sm rounded-3xl overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 ring-1 ring-white/10 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2.5">
-                <div className={cn('w-9 h-9 rounded-xl grid place-items-center text-white shadow-sm',
-                  running ? 'bg-gradient-to-br from-amber-500 to-orange-600' : 'bg-gradient-to-br from-emerald-500 to-teal-600')}>
-                  {running ? <Loader2 className="h-5 w-5 animate-spin" /> : <CheckCircle2 className="h-5 w-5" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{t('schedTitle')} · Sync</div>
-                  <div className="text-[11px] text-slate-500 dark:text-slate-400">{running ? t('schedSyncing') : t('schedSyncDone')}</div>
-                </div>
-                <button onClick={() => setSyncModal(false)} className="w-8 h-8 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 grid place-items-center text-slate-400"><X className="h-4 w-4" /></button>
-              </div>
-              <div className="p-5 space-y-4">
-                {/* Progress bar */}
-                <div>
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1.5">
-                    <span>{t('schedProgress', { done: sync?.processed ?? 0, total: sync?.totalContracts ?? 0 })}</span>
-                    <span className="tabular-nums">{syncPct.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <motion.div className={cn('h-full rounded-full', running ? 'bg-gradient-to-r from-amber-500 to-orange-500' : 'bg-gradient-to-r from-emerald-500 to-teal-500')}
-                      animate={{ width: `${syncPct}%` }} transition={{ duration: 0.4 }} />
-                  </div>
-                </div>
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-2 text-center">
-                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
-                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedColObject')}</div>
-                    <div className="text-[15px] font-black tabular-nums text-slate-700 dark:text-slate-200">{sync?.processed ?? 0}</div>
-                  </div>
-                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
-                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedUpserted')}</div>
-                    <div className="text-[15px] font-black tabular-nums text-emerald-600 dark:text-emerald-400">{sync?.upserted ?? 0}</div>
-                  </div>
-                  <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 py-2">
-                    <div className="text-[9px] uppercase tracking-wider font-bold text-slate-400">{t('schedErrors')}</div>
-                    <div className={cn('text-[15px] font-black tabular-nums', (sync?.errors ?? 0) > 0 ? 'text-rose-500' : 'text-slate-400')}>{sync?.errors ?? 0}</div>
+              {/* Animatsion glow bloblar */}
+              <motion.div className="absolute -top-20 -left-16 w-56 h-56 rounded-full bg-indigo-600/30 blur-3xl pointer-events-none"
+                animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.15, 1] }} transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }} />
+              <motion.div className="absolute -bottom-24 -right-16 w-56 h-56 rounded-full bg-fuchsia-600/25 blur-3xl pointer-events-none"
+                animate={{ opacity: [0.2, 0.5, 0.2], scale: [1.1, 1, 1.1] }} transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }} />
+
+              <button onClick={() => setSyncModal(false)} className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 grid place-items-center text-slate-400 hover:text-white transition-colors"><X className="h-4 w-4" /></button>
+
+              <div className="relative px-7 pt-6 pb-6 text-center">
+                <div className="text-[10px] uppercase tracking-[0.22em] font-bold text-indigo-300/80">{t('schedTitle')}</div>
+                <div className="text-[15px] font-bold text-white mt-0.5">CRM Sync</div>
+
+                {/* Progress ring */}
+                <div className="relative w-[168px] h-[168px] mx-auto my-5">
+                  {running && (
+                    <motion.div className="absolute inset-1 rounded-full blur-md pointer-events-none"
+                      style={{ background: 'conic-gradient(from 0deg, transparent 0deg, rgba(168,85,247,0.55) 55deg, transparent 130deg)' }}
+                      animate={{ rotate: 360 }} transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }} />
+                  )}
+                  <ProgressRing pct={syncPct} />
+                  <div className="absolute inset-0 grid place-content-center place-items-center">
+                    <div className="text-[38px] font-black text-white tabular-nums leading-none flex items-baseline">
+                      <AnimatedNumber value={Math.round(syncPct)} /><span className="text-[20px] text-indigo-300 ml-0.5">%</span>
+                    </div>
+                    <div className={cn('text-[10px] uppercase tracking-widest font-bold mt-1.5 inline-flex items-center gap-1',
+                      running ? 'text-amber-300' : 'text-emerald-300')}>
+                      {running ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <CheckCircle2 className="h-2.5 w-2.5" />}
+                      {running ? t('schedSyncing') : t('schedSyncDone')}
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-start gap-2 text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/50 rounded-lg p-2.5">
-                  <Database className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-500" />
+
+                {/* X / Y + ETA */}
+                <div className="text-[13px] font-semibold text-slate-200 tabular-nums">
+                  <AnimatedNumber value={sync?.processed ?? 0} />
+                  <span className="text-slate-500"> / {mask(sync?.totalContracts ?? 0)} {t('schedContractsShort')}</span>
+                </div>
+                {etaMin != null && (
+                  <div className="text-[11px] text-slate-400 mt-0.5">{t('schedEta', { min: etaMin })}</div>
+                )}
+
+                {/* Stat cards */}
+                <div className="grid grid-cols-3 gap-2 mt-5">
+                  <MiniStat icon={Building2} label={t('schedContractsShort')} value={sync?.processed ?? 0} tone="slate" />
+                  <MiniStat icon={FileCheck2} label={t('schedUpserted')} value={sync?.upserted ?? 0} tone="emerald" />
+                  <MiniStat icon={AlertTriangle} label={t('schedErrors')} value={sync?.errors ?? 0} tone="rose" />
+                </div>
+
+                {/* Note */}
+                <div className="flex items-start gap-2 text-[10.5px] text-slate-400 bg-white/5 ring-1 ring-white/10 rounded-xl p-2.5 mt-4 text-left">
+                  <Database className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-400" />
                   <span>{t('schedSyncModalNote')}</span>
                 </div>
               </div>
@@ -338,6 +357,53 @@ function Tile({ label, value, tone }: { label: string; value: string; tone: stri
     <div className={cn('rounded-lg bg-gradient-to-br ring-1 px-3 py-2', TONE[tone] || TONE.indigo)}>
       <div className="text-[9.5px] uppercase tracking-wider font-bold opacity-70">{label}</div>
       <div className="text-[15px] font-black tabular-nums mt-0.5">{value}</div>
+    </div>
+  );
+}
+
+// Silliq sanаladigan raqam (0.7s tween)
+function AnimatedNumber({ value }: { value: number }) {
+  const mv = useMotionValue(value);
+  const [d, setD] = useState(value);
+  useEffect(() => {
+    const controls = animate(mv, value, { duration: 0.7, ease: 'easeOut', onUpdate: (v) => setD(v) });
+    return () => controls.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+  return <>{Math.round(d).toLocaleString('ru-RU')}</>;
+}
+
+// Gradientli aylanma progress ring (SVG)
+function ProgressRing({ pct }: { pct: number }) {
+  const R = 72;
+  const C = 2 * Math.PI * R;
+  const off = C - (Math.max(0, Math.min(100, pct)) / 100) * C;
+  return (
+    <svg viewBox="0 0 168 168" className="w-full h-full -rotate-90">
+      <defs>
+        <linearGradient id="schedRingGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#818cf8" />
+          <stop offset="50%" stopColor="#c084fc" />
+          <stop offset="100%" stopColor="#f472b6" />
+        </linearGradient>
+      </defs>
+      <circle cx="84" cy="84" r={R} fill="none" stroke="#ffffff" strokeOpacity="0.08" strokeWidth="11" />
+      <motion.circle
+        cx="84" cy="84" r={R} fill="none" stroke="url(#schedRingGrad)" strokeWidth="11" strokeLinecap="round"
+        strokeDasharray={C} initial={false} animate={{ strokeDashoffset: off }} transition={{ duration: 0.6, ease: 'easeOut' }}
+        style={{ filter: 'drop-shadow(0 0 6px rgba(168,85,247,0.55))' }}
+      />
+    </svg>
+  );
+}
+
+function MiniStat({ icon: Icon, label, value, tone }: { icon: any; label: string; value: number; tone: 'slate' | 'emerald' | 'rose' }) {
+  const c = tone === 'emerald' ? 'text-emerald-400' : tone === 'rose' ? 'text-rose-400' : 'text-slate-200';
+  return (
+    <div className="rounded-xl bg-white/5 ring-1 ring-white/10 px-2 py-2.5 backdrop-blur-sm">
+      <Icon className={cn('h-3.5 w-3.5 mx-auto mb-1', c)} />
+      <div className="text-[8px] uppercase tracking-wider font-bold text-slate-400">{label}</div>
+      <div className={cn('text-[16px] font-black tabular-nums leading-tight', c)}><AnimatedNumber value={value} /></div>
     </div>
   );
 }

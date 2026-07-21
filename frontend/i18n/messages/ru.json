@@ -425,6 +425,8 @@
     "schedNeverHint": "Нет данных — синхронизируйте из CRM (кнопка «Синх»)",
     "schedEmpty": "На этот период нет запланированных платежей",
     "schedProgress": "Синх: {done} / {total} договоров",
+    "schedContractsShort": "договоров",
+    "schedEta": "~{min} мин осталось",
     "schedChart": "График (по объектам)",
     "schedSyncDone": "Синхронизация завершена",
     "schedUpserted": "Записано",
