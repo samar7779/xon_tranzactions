@@ -100,6 +100,13 @@ export class OplataKvController {
     return this.svc.byObject({ dateFrom, dateTo, mode });
   }
 
+  @Get('daily-summary')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Kunlik xulosa — kun tushumi + solishtirish + trend + top obyekt' })
+  dailySummary(@Query('date') date?: string) {
+    return this.svc.dailySummary(date);
+  }
+
   @Get('by-object-detail')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Obyekt bo'yicha to'lovlar drill-down (alohida qatorlar)" })

@@ -55,10 +55,6 @@ export const PERMISSIONS = {
   OPLATAKV_SYNC: 'oplatakv:sync',                               // Hozir sync — tranzaksiyalardan majburiy import
   OPLATAKV_MANAGE: 'oplatakv:manage',                           // Legacy (deprecated) — orqaga moslik
 
-  // Plan bo'yicha to'lov (CRM to'lov jadvali — dashboard widget)
-  SCHEDULE_VIEW: 'schedule:view',                               // "Plan bo'yicha to'lov" widgetini ko'rish
-  SCHEDULE_SYNC: 'schedule:sync',                               // To'lov jadvalini CRM'dan sync qilish
-
   // ─── SOZLASH ───
   // Bank hisoblari
   ACCOUNTS_VIEW: 'accounts:view',
@@ -180,8 +176,6 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.DASHBOARD_SYNC_STATUS, label: 'Sync holati' },
           { value: PERMISSIONS.DASHBOARD_BANKS_BREAKDOWN, label: 'Banklar bo\'yicha taqsimot' },
           { value: PERMISSIONS.DASHBOARD_NET_FLOW, label: 'Sof pul oqimi (30 kun)' },
-          { value: PERMISSIONS.SCHEDULE_VIEW, label: 'Plan bo\'yicha to\'lov (widget)' },
-          { value: PERMISSIONS.SCHEDULE_SYNC, label: 'Plan bo\'yicha to\'lov — CRM\'dan sync' },
         ],
       },
       {

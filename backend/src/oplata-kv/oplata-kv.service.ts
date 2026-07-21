@@ -468,6 +468,69 @@ export class OplataKvService {
   }
 
   /**
+   * Kunlik xulosa — tanlangan kun uchun tushum + solishtirish:
+   *   kun, kecha, oy boshidan (MTD), o'tgan oyning shu davri + 14 kunlik trend
+   *   + top obyektlar. FAQAT oplata-kv'dan. "normal" filter (paymentAmount>0,
+   *   txType 'взнос') — "Obyektlar bo'yicha to'lovlar" bilan bir xil manba.
+   */
+  async dailySummary(dateStr?: string) {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const parsed = dateStr ? new Date(`${dateStr}T12:00:00`) : new Date();
+    const day = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    day.setHours(12, 0, 0, 0);
+    const shift = (offset: number) => { const d = new Date(day); d.setDate(d.getDate() + offset); return d; };
+
+    const baseWhere: any = { paymentAmount: { gt: 0 }, txType: { contains: 'взнос', mode: 'insensitive' } };
+    const sumRange = async (fromStr: string, toStr: string) => {
+      const a = await this.prisma.oplataKv.aggregate({
+        where: { ...baseWhere, date: { gte: new Date(fromStr), lte: new Date(`${toStr}T23:59:59.999`) } },
+        _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+        _count: true,
+      });
+      return {
+        total: Number(a._sum.paymentAmount || 0),
+        first: Number(a._sum.firstInstallment || 0),
+        monthly: Number(a._sum.monthlyAmount || 0),
+        count: a._count,
+      };
+    };
+
+    const dayKey = fmt(day);
+    const dayS = await sumRange(dayKey, dayKey);
+    const yKey = fmt(shift(-1));
+    const prevDayS = await sumRange(yKey, yKey);
+
+    const monthStart = new Date(day.getFullYear(), day.getMonth(), 1, 12);
+    const mtdS = await sumRange(fmt(monthStart), dayKey);
+    const prevMonthStart = new Date(day.getFullYear(), day.getMonth() - 1, 1, 12);
+    const prevMonthSame = new Date(day.getFullYear(), day.getMonth() - 1, day.getDate(), 12);
+    const prevMtdS = await sumRange(fmt(prevMonthStart), fmt(prevMonthSame));
+
+    // 14 kunlik trend (kun bo'yicha)
+    const seriesFrom = shift(-13);
+    const grp = await this.prisma.oplataKv.groupBy({
+      by: ['date'],
+      where: { ...baseWhere, date: { gte: new Date(fmt(seriesFrom)), lte: new Date(`${dayKey}T23:59:59.999`) } },
+      _sum: { paymentAmount: true },
+    });
+    const byDate = new Map<string, number>();
+    for (const g of grp) byDate.set(fmt(new Date(g.date as Date)), Number(g._sum.paymentAmount || 0));
+    const series: { date: string; total: number }[] = [];
+    for (let i = 13; i >= 0; i--) { const k = fmt(shift(-i)); series.push({ date: k, total: byDate.get(k) || 0 }); }
+
+    // Top obyektlar (o'sha kun)
+    const byObj = await this.byObject({ dateFrom: dayKey, dateTo: dayKey, mode: 'normal' });
+    const topObjects = ((byObj.rows as any[]) || [])
+      .filter((r) => r.paymentAmount > 0)
+      .sort((a, b) => b.paymentAmount - a.paymentAmount)
+      .slice(0, 6)
+      .map((r) => ({ object: r.object, amount: r.paymentAmount }));
+
+    return { ok: true, date: dayKey, day: dayS, prevDay: prevDayS, mtd: mtdS, prevMtd: prevMtdS, series, topObjects };
+  }
+
+  /**
    * byObject hisobotining bitta obyekt qatoriga drill-down —
    * o'sha summani tashkil qilgan alohida to'lovlar (aynan bir xil filter mantiqi).
    */

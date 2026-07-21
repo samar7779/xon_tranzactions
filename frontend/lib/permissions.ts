@@ -39,8 +39,6 @@ export const PERMS = {
   OPLATAKV_SPLIT: 'oplatakv:split',                // Split / Re-split
   OPLATAKV_SYNC: 'oplatakv:sync',                  // Hozir sync (tranzaksiyalardan)
   OPLATAKV_MANAGE: 'oplatakv:manage',              // legacy
-  SCHEDULE_VIEW: 'schedule:view',                  // Plan bo'yicha to'lov (dashboard widget)
-  SCHEDULE_SYNC: 'schedule:sync',                  // To'lov jadvalini CRM'dan sync qilish
 
   // Sozlash
   ACCOUNTS_VIEW: 'accounts:view',
