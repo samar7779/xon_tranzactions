@@ -734,9 +734,12 @@ export class CategorizationService {
     let verified = false;
     let customerName: string | null = null;
 
-    // CRM'da tekshirish — manual saqlashda majburiy
+    // CRM'da tekshirish — manual saqlashda majburiy.
+    // forceRefresh: eskirgan salbiy kesh (found=false, <4soat) tufayli CRM'da
+    // mavjud shartnoma "topilmadi" bo'lib qolmasligi uchun — foydalanuvchi qo'lda
+    // tanlaganda har doim CRM'dan yangi tekshiramiz (autocomplete /index bilan mos).
     if (newContract) {
-      const cached = await this.crmCache.lookup(newContract);
+      const cached = await this.crmCache.lookup(newContract, { forceRefresh: true });
       verified = !!cached?.found;
       customerName = cached?.customerName || null;
       if (!verified) {
