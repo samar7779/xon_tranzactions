@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
+import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 
 /**
  * "Plan bo'yicha to'lov" — CRM to'lov jadvalini (grafik) sinxronlaydi va
@@ -33,7 +34,11 @@ export class ScheduleService {
     totalContracts: 0, processed: 0, upserted: 0, errors: 0, lastError: null, actor: null,
   };
 
-  constructor(private prisma: PrismaService, private crm: CrmService) {}
+  constructor(
+    private prisma: PrismaService,
+    private crm: CrmService,
+    private oplata: OplataKvService,
+  ) {}
 
   async status() {
     let lastSyncAt: string | null = null;
@@ -156,31 +161,53 @@ export class ScheduleService {
     this.log.log(`Schedule sync tugadi: ${this.state.processed}/${contracts.length} shartnoma, ${this.state.upserted} installment, ${this.state.errors} xato`);
   }
 
-  /** Obyekt bo'yicha: tushishi kerak (amount) vs tushgan (amountPaid) vs qolgan (remaining). */
+  /**
+   * Obyekt bo'yicha:
+   *   TUSHISHI KERAK (expected) = CRM to'lov jadvali — shu oraliqda muddati kelgan
+   *                               installmentlar summasi (ContractSchedule).
+   *   TUSHGAN (received)        = bizning BANK ma'lumoti — shu oraliqda haqiqatan
+   *                               tushgan to'lovlar (oplata-kv). "Obyektlar bo'yicha
+   *                               to'lovlar" widgeti bilan AYNAN mos keladi.
+   *   QOLGAN = KERAK − TUSHGAN.
+   */
   async byObject(opts: { from: string; to: string; kind?: string }) {
+    const kind = opts.kind === 'initial' || opts.kind === 'monthly' ? opts.kind : 'all';
     const from = new Date(`${opts.from}T00:00:00`);
     const to = new Date(`${opts.to}T23:59:59`);
-    const where: any = { dueDate: { gte: from, lte: to } };
-    if (opts.kind === 'initial' || opts.kind === 'monthly') where.kind = opts.kind;
 
-    const grouped = await this.prisma.contractSchedule.groupBy({
-      by: ['object'],
-      where,
-      _sum: { amount: true, amountPaid: true, remaining: true },
-      _count: true,
+    // 1) TUSHISHI KERAK — CRM jadval (muddati shu oraliqda)
+    const schedWhere: any = { dueDate: { gte: from, lte: to } };
+    if (kind !== 'all') schedWhere.kind = kind;
+    const exp = await this.prisma.contractSchedule.groupBy({
+      by: ['object'], where: schedWhere, _sum: { amount: true }, _count: true,
     });
-    const rows = grouped.map((g) => ({
-      object: g.object || '—',
-      expected: Number(g._sum.amount || 0),
-      received: Number(g._sum.amountPaid || 0),
-      remaining: Number(g._sum.remaining || 0),
-      count: g._count,
-    })).sort((a, b) => b.expected - a.expected);
+    const expMap = new Map<string, { expected: number; count: number }>();
+    for (const g of exp) expMap.set(g.object || '—', { expected: Number(g._sum.amount || 0), count: g._count });
+
+    // 2) TUSHGAN — haqiqiy bank tushumi (oplata-kv, Obyektlar widgeti bilan bir manba)
+    const recv = await this.oplata.byObject({ dateFrom: opts.from, dateTo: opts.to, mode: 'normal' });
+    const recvMap = new Map<string, number>();
+    for (const r of ((recv?.rows as any[]) || [])) {
+      const v = kind === 'initial' ? Number(r.firstInstallment || 0)
+        : kind === 'monthly' ? Number(r.monthlyAmount || 0)
+        : Number(r.paymentAmount || 0);
+      recvMap.set(r.object || '—', v);
+    }
+
+    // 3) Obyektlarni birlashtiramiz
+    const objects = new Set<string>([...expMap.keys(), ...recvMap.keys()]);
+    const rows = [...objects].map((obj) => {
+      const expected = expMap.get(obj)?.expected || 0;
+      const received = recvMap.get(obj) || 0;
+      return { object: obj, expected, received, remaining: Math.max(0, expected - received), count: expMap.get(obj)?.count || 0 };
+    }).filter((r) => r.expected > 0 || r.received > 0)
+      .sort((a, b) => (b.expected - a.expected) || (b.received - a.received));
 
     const total = rows.reduce(
-      (t, r) => ({ expected: t.expected + r.expected, received: t.received + r.received, remaining: t.remaining + r.remaining, count: t.count + r.count }),
+      (t, r) => ({ expected: t.expected + r.expected, received: t.received + r.received, remaining: 0, count: t.count + r.count }),
       { expected: 0, received: 0, remaining: 0, count: 0 },
     );
+    total.remaining = Math.max(0, total.expected - total.received);
 
     let lastSyncAt: string | null = null;
     try {
@@ -188,6 +215,6 @@ export class ScheduleService {
       lastSyncAt = s?.value || null;
     } catch { /* ignore */ }
 
-    return { ok: true, from: opts.from, to: opts.to, kind: opts.kind || 'all', rows, total, lastSyncAt };
+    return { ok: true, from: opts.from, to: opts.to, kind, rows, total, lastSyncAt };
   }
 }
