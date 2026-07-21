@@ -425,6 +425,8 @@
     "schedNeverHint": "No data — sync from CRM ('Sync' button)",
     "schedEmpty": "No scheduled payments for this period",
     "schedProgress": "Sync: {done} / {total} contracts",
+    "schedContractsShort": "contracts",
+    "schedEta": "~{min} min left",
     "schedChart": "Chart (by object)",
     "schedSyncDone": "Sync finished",
     "schedUpserted": "Written",
