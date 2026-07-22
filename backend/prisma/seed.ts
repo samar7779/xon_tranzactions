@@ -143,6 +143,7 @@ const CATEGORY_TREE: CategoryNode[] = [
       { code: 'CLIENT_VOZVRAT',      name: 'Возврат взносов за кв.' },
       { code: 'CLIENT_SCHETCHIK',    name: 'За счетчик' },
       { code: 'CLIENT_PEREOFORM',    name: 'Переоформление (приход)' },
+      { code: 'CLIENT_VZNOS_IMENI',  name: 'Взнос от имени клиента' },
     ],
   },
   {
