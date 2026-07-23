@@ -77,16 +77,17 @@ export default function XatoListPage() {
       ) : !data ? (
         <div className="p-10 text-center text-slate-400 text-[13px]">Yuklanmoqda…</div>
       ) : (
-        <div className="p-3 space-y-3 max-w-2xl mx-auto">
+        <div className="p-3 sm:p-4 w-full">
           {/* Qidiruv */}
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Qidirish — shartnoma, klient, obyekt…"
-            className="w-full h-10 px-3 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-rose-400 text-[13px]"
+            className="w-full sm:max-w-lg h-10 px-3 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-rose-400 text-[13px]"
           />
-          <div className="text-[11px] text-slate-400 px-1">{rows.length} ta ko'rsatilmoqda</div>
+          <div className="text-[11px] text-slate-400 px-1 mt-2 mb-3">{rows.length} ta ko'rsatilmoqda</div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
           {rows.map((r) => (
             <div key={r.id} className="rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
@@ -105,6 +106,7 @@ export default function XatoListPage() {
               <div className="mt-1.5 font-mono text-[9.5px] text-slate-300 dark:text-slate-600 truncate">{r.id}</div>
             </div>
           ))}
+          </div>
 
           {rows.length === 0 && (
             <div className="p-8 text-center text-slate-400 text-[13px]">Topilmadi</div>
