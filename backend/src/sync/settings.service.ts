@@ -116,6 +116,47 @@ export class SettingsService {
   }
 
   /**
+   * "Счётчик → Ежемесячный" avto-rejim sozlamalari.
+   *   enabled     — avto yoqilgan
+   *   dateFrom    — shu sanadan (>=) qatorlar
+   *   dayStart/dayEnd — kunlik vaqt oralig'i (HH:MM)
+   *   intervalMin — har necha daqiqada
+   */
+  async getSchotchikAutoConfig(): Promise<{
+    enabled: boolean; dateFrom: string | null; dayStart: string; dayEnd: string; intervalMin: number;
+  }> {
+    const enabled = (await this.get('schotchik.auto')) === '1';
+    const dateFrom = await this.get('schotchik.dateFrom');
+    const dayStart = await this.getTimeStr('schotchik.dayStart', '08:00');
+    const dayEnd = await this.getTimeStr('schotchik.dayEnd', '22:00');
+    const iv = Number(await this.get('schotchik.intervalMin'));
+    return {
+      enabled,
+      dateFrom: (dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) ? dateFrom : null,
+      dayStart, dayEnd,
+      intervalMin: Number.isFinite(iv) && iv > 0 ? iv : 30,
+    };
+  }
+
+  async setSchotchikAutoConfig(
+    vals: { enabled?: boolean; dateFrom?: string | null; dayStart?: string; dayEnd?: string; intervalMin?: number },
+    updatedBy?: string,
+  ): Promise<void> {
+    const vt = (s?: string) => {
+      if (!s) return null;
+      if (!/^\d{1,2}:\d{2}$/.test(s)) throw new Error(`Noto'g'ri vaqt (HH:MM): ${s}`);
+      return s;
+    };
+    if (vals.enabled !== undefined) await this.set('schotchik.auto', vals.enabled ? '1' : null, updatedBy);
+    if (vals.dateFrom !== undefined) await this.set('schotchik.dateFrom', vals.dateFrom || null, updatedBy);
+    if (vals.dayStart !== undefined) await this.set('schotchik.dayStart', vt(vals.dayStart), updatedBy);
+    if (vals.dayEnd !== undefined) await this.set('schotchik.dayEnd', vt(vals.dayEnd), updatedBy);
+    if (vals.intervalMin !== undefined) {
+      await this.set('schotchik.intervalMin', String(Math.max(1, Math.min(1440, Math.floor(vals.intervalMin)))), updatedBy);
+    }
+  }
+
+  /**
    * Bulk sync rejasi — barcha hisoblar bo'yicha orqa sanaga sync'ni avtomatik
    * ravishda ishga tushirish.
    *   enabled       — yoqilgan/o'chirilgan

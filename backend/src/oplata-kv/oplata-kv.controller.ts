@@ -107,6 +107,32 @@ export class OplataKvController {
     return this.svc.dailySummary(date);
   }
 
+  @Post('schotchik-to-monthly')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
+  @ApiOperation({ summary: "Счётчик (Тип='За счетчик') to'lovlarini oylikka o'tkazish (sana>=dateFrom). dryRun default true." })
+  schotchikToMonthly(@Body() body: { dateFrom?: string; dryRun?: boolean }, @CurrentUser() u?: AuthUser) {
+    return this.svc.schotchikToMonthly({ dateFrom: body?.dateFrom, dryRun: body?.dryRun, actor: actorFrom(u) });
+  }
+
+  @Get('schotchik-config')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Счётчик→Ежемесячный avto-rejim sozlamalari' })
+  getSchotchikConfig() {
+    return this.svc.getSchotchikConfig();
+  }
+
+  @Post('schotchik-config')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
+  @ApiOperation({ summary: 'Счётчик→Ежемесячный avto-rejim sozlamalarini saqlash' })
+  async setSchotchikConfig(
+    @Body() body: { enabled?: boolean; dateFrom?: string | null; dayStart?: string; dayEnd?: string; intervalMin?: number },
+    @CurrentUser() u?: AuthUser,
+  ) {
+    const actor = actorFrom(u);
+    await this.svc.setSchotchikConfig(body || {}, actor?.name || undefined);
+    return this.svc.getSchotchikConfig();
+  }
+
   @Get('by-object-detail')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "Obyekt bo'yicha to'lovlar drill-down (alohida qatorlar)" })
