@@ -242,6 +242,22 @@ export default function OplataKvPage() {
     } catch { /* ignore */ }
   }, []);
 
+  // URL orqali kelgan filtr (Agent Telegram tugmasi): ?xatoOnly=1 (&object=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const p = new URLSearchParams(window.location.search);
+    const xato = p.get('xatoOnly');
+    const obj = p.get('object');
+    if (xato !== '1' && !obj) return;
+    setColumnFilterMode(true);
+    setColumnFilters((prev) => {
+      const next: Record<string, Set<string>> = { ...prev };
+      if (xato === '1') next['contractNo'] = new Set(['XATO']);
+      if (obj) next['object'] = new Set([obj]);
+      return next;
+    });
+  }, []);
+
   // localStorage'ga saqlash
   useEffect(() => {
     try {

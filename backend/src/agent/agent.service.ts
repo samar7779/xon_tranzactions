@@ -1,56 +1,50 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { ConfigService } from '@nestjs/config';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 
 /**
- * AI Agent (1-vazifa: XATO to'lov notifikatori).
+ * AI Agent (1-bosqich: XATO to'lov kunlik digest).
  *
- * CRM'da tasdiqlanmagan (XATO) to'lovlarni topib, sozlangan Telegram guruhga
- * tashlaydi — xodim ariza/shartnomani hal qilishi uchun. Takror jo'natmaslik
- * uchun har qator agentNotifiedAt bilan belgilanadi.
+ * Kuniga BIR marta (sozlangan vaqtda) sozlangan Telegram guruhga BITTA xabar:
+ * «N ta XATO to'lov» + inline tugma. Tugma bosilganda ОплатыКв sahifasi XATO
+ * filtri bilan ochiladi — barcha XATO to'lovlar ko'rinadi, xodim hal qiladi.
  *
- * Boshqaruv (Admin > Agent): bot token, guruh ID, qaysi sanadan, interval (daqiqa),
- * ish soatlari (HH:MM–HH:MM), bir martada nechta.
+ * Boshqaruv (Admin > Agent): bot token, guruh ID, qaysi sanadan, kunlik vaqt.
  */
 @Injectable()
 export class AgentService {
   private readonly log = new Logger(AgentService.name);
 
-  // Settings kalitlari
   private readonly K_ENABLED = 'agent.enabled';
   private readonly K_TOKEN = 'agent.botToken';
   private readonly K_GROUP = 'agent.groupId';
   private readonly K_DATEFROM = 'agent.dateFrom';
-  private readonly K_INTERVAL = 'agent.intervalMin';
-  private readonly K_WORK_START = 'agent.workStart';
-  private readonly K_WORK_END = 'agent.workEnd';
-  private readonly K_MAX = 'agent.maxPerRun';
-  private readonly K_LAST_RUN = 'agent.lastRunAt';
+  private readonly K_DAILY_TIME = 'agent.dailyTime';
   private readonly K_LAST_RESULT = 'agent.lastResult';
+
+  // Kuniga 1 marta guard — qaysi Tashkent kuni jo'natildi
+  private lastRunDay: number | null = null;
 
   constructor(
     private readonly settings: SettingsService,
     private readonly crypto: CryptoService,
     private readonly oplataKv: OplataKvService,
+    private readonly config: ConfigService,
   ) {}
 
   // ─── Sozlama ───────────────────────────────────────────────────────
   async getConfig() {
-    const [enc, groupId, enabled, dateFrom, interval, wStart, wEnd, maxPerRun, lastRunAt, lastResult] =
-      await Promise.all([
-        this.settings.get(this.K_TOKEN),
-        this.settings.get(this.K_GROUP),
-        this.settings.get(this.K_ENABLED),
-        this.settings.get(this.K_DATEFROM),
-        this.settings.get(this.K_INTERVAL),
-        this.settings.get(this.K_WORK_START),
-        this.settings.get(this.K_WORK_END),
-        this.settings.get(this.K_MAX),
-        this.settings.get(this.K_LAST_RUN),
-        this.settings.get(this.K_LAST_RESULT),
-      ]);
+    const [enc, groupId, enabled, dateFrom, dailyTime, lastResult] = await Promise.all([
+      this.settings.get(this.K_TOKEN),
+      this.settings.get(this.K_GROUP),
+      this.settings.get(this.K_ENABLED),
+      this.settings.get(this.K_DATEFROM),
+      this.settings.get(this.K_DAILY_TIME),
+      this.settings.get(this.K_LAST_RESULT),
+    ]);
     let hasToken = false;
     let tokenHint: string | null = null;
     if (enc) {
@@ -65,21 +59,14 @@ export class AgentService {
       tokenHint,
       groupId: groupId || null,
       dateFrom: dateFrom || null,
-      intervalMin: Number(interval) > 0 ? Number(interval) : 15,
-      workStart: this.validTime(wStart) || '09:00',
-      workEnd: this.validTime(wEnd) || '18:00',
-      maxPerRun: Number(maxPerRun) > 0 ? Number(maxPerRun) : 10,
-      lastRunAt: lastRunAt || null,
+      dailyTime: this.validTime(dailyTime) || '09:00',
       lastResult: lastResult || null,
       pendingCount,
     };
   }
 
   async saveConfig(
-    body: {
-      botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null;
-      intervalMin?: number; workStart?: string; workEnd?: string; maxPerRun?: number;
-    },
+    body: { botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string },
     updatedBy?: string,
   ) {
     if (body.botToken !== undefined && body.botToken.trim()) {
@@ -88,14 +75,7 @@ export class AgentService {
     if (body.groupId !== undefined) await this.settings.set(this.K_GROUP, body.groupId.trim() || null, updatedBy);
     if (body.enabled !== undefined) await this.settings.set(this.K_ENABLED, body.enabled ? '1' : null, updatedBy);
     if (body.dateFrom !== undefined) await this.settings.set(this.K_DATEFROM, body.dateFrom || null, updatedBy);
-    if (body.intervalMin !== undefined) {
-      await this.settings.set(this.K_INTERVAL, String(Math.max(1, Math.min(1440, Math.floor(body.intervalMin || 15)))), updatedBy);
-    }
-    if (body.workStart !== undefined) await this.settings.set(this.K_WORK_START, this.validTime(body.workStart), updatedBy);
-    if (body.workEnd !== undefined) await this.settings.set(this.K_WORK_END, this.validTime(body.workEnd), updatedBy);
-    if (body.maxPerRun !== undefined) {
-      await this.settings.set(this.K_MAX, String(Math.max(1, Math.min(50, Math.floor(body.maxPerRun || 10)))), updatedBy);
-    }
+    if (body.dailyTime !== undefined) await this.settings.set(this.K_DAILY_TIME, this.validTime(body.dailyTime), updatedBy);
     return this.getConfig();
   }
 
@@ -114,78 +94,63 @@ export class AgentService {
     return { token, groupId };
   }
 
-  // ─── Cron — har daqiqa tekshiradi ──────────────────────────────────
+  // ─── Cron — har daqiqa tekshiradi, kuniga 1 marta jo'natadi ────────
   @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
     try {
       const enabled = await this.settings.get(this.K_ENABLED);
       if (enabled !== '1') return;
 
-      // Ish soatlari (Toshkent, UTC+5)
-      const tash = new Date(Date.now() + 5 * 60 * 60 * 1000);
-      const nowMin = tash.getUTCHours() * 60 + tash.getUTCMinutes();
-      const wStart = this.toMin(this.validTime(await this.settings.get(this.K_WORK_START)) || '09:00');
-      const wEnd = this.toMin(this.validTime(await this.settings.get(this.K_WORK_END)) || '18:00');
-      if (!(nowMin >= wStart && nowMin < wEnd)) return;
+      const dailyTime = this.validTime(await this.settings.get(this.K_DAILY_TIME)) || '09:00';
+      const wantHm = dailyTime.length === 4 ? `0${dailyTime}` : dailyTime; // "9:00" → "09:00"
 
-      // Interval
-      const intervalMin = Number(await this.settings.get(this.K_INTERVAL)) || 15;
-      const lastRunStr = await this.settings.get(this.K_LAST_RUN);
-      if (lastRunStr) {
-        const elapsed = (Date.now() - new Date(lastRunStr).getTime()) / 60000;
-        if (elapsed < intervalMin) return;
-      }
-      await this.settings.set(this.K_LAST_RUN, new Date().toISOString(), 'agent-cron');
-      const r = await this.runOnce();
-      this.log.log(`Agent cron: posted=${r.posted ?? 0}${r.error ? ` xato=${r.error}` : ''}`);
+      const tash = new Date(Date.now() + 5 * 60 * 60 * 1000); // UTC+5
+      const hm = `${String(tash.getUTCHours()).padStart(2, '0')}:${String(tash.getUTCMinutes()).padStart(2, '0')}`;
+      if (hm !== wantHm) return;
+
+      const day = tash.getUTCDate();
+      if (this.lastRunDay === day) return; // shu kun jo'natilgan
+      this.lastRunDay = day;
+
+      const r = await this.runDigest();
+      this.log.log(`Agent kunlik digest (${hm}): ${r.ok ? `${r.count} ta XATO` : `xato ${r.error}`}`);
     } catch (e: any) {
       this.log.warn(`Agent cron xato: ${e?.message}`);
     }
   }
 
-  private toMin(hm: string): number {
-    const [h, m] = hm.split(':').map(Number);
-    return (h || 0) * 60 + (m || 0);
+  // ─── Kunlik digest jo'natish (cron yoki qo'lda) ────────────────────
+  async runDigest(): Promise<{ ok: boolean; count?: number; error?: string }> {
+    const { token, groupId } = await this.getRaw();
+    if (!token || !groupId) return { ok: false, error: 'Bot token yoki guruh ID sozlanmagan' };
+
+    const dateFrom = await this.settings.get(this.K_DATEFROM);
+    const count = await this.oplataKv.countXatoForAgent(dateFrom || null);
+
+    if (count === 0) {
+      await this.saveResult('0 ta XATO — xabar jo\'natilmadi (hammasi joyida)');
+      return { ok: true, count: 0 };
+    }
+
+    const button = {
+      inline_keyboard: [[{ text: "📋 Barcha XATO to'lovlarni ko'rish", url: this.xatoLink() }]],
+    };
+    const sent = await this.sendMessage(token, groupId, this.formatDigest(count), button);
+    if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
+
+    await this.saveResult(`${count} ta XATO — kunlik xabar jo'natildi`);
+    this.log.log(`Agent digest jo'natildi: ${count} ta XATO`);
+    return { ok: true, count };
   }
 
-  // ─── Bitta ishga tushirish (cron yoki qo'lda) ──────────────────────
-  async runOnce(opts?: { limit?: number }): Promise<{ ok: boolean; posted?: number; error?: string; pending?: number }> {
-    const startedAt = Date.now();
-    const { token, groupId } = await this.getRaw();
-    if (!token || !groupId) {
-      return { ok: false, error: "Bot token yoki guruh ID sozlanmagan" };
-    }
-    const dateFrom = await this.settings.get(this.K_DATEFROM);
-    const maxPerRun = opts?.limit || Number(await this.settings.get(this.K_MAX)) || 10;
+  // Qo'lda "Hozir ishga tushirish"
+  async runOnce() {
+    return this.runDigest();
+  }
 
-    const rows = await this.oplataKv.getXatoForAgent({ dateFrom: dateFrom || null, limit: maxPerRun });
-    if (rows.length === 0) {
-      await this.saveResult(`0 ta jo'natildi (kutayotgan yo'q)`);
-      return { ok: true, posted: 0 };
-    }
-
-    // Obyekt bo'yicha guruhlash — har obyekt uchun BITTA xabar (guruh chalkashmasin)
-    const byObject = new Map<string, any[]>();
-    for (const r of rows) {
-      const key = (r.object && String(r.object).trim()) || '— Obyektsiz —';
-      const arr = byObject.get(key) || [];
-      arr.push(r);
-      byObject.set(key, arr);
-    }
-
-    let postedObjects = 0;
-    const postedIds: string[] = [];
-    for (const [obj, list] of byObject) {
-      const sent = await this.sendMessage(token, groupId, this.formatObjectMessage(obj, list));
-      if (sent) { postedObjects++; postedIds.push(...list.map((r) => r.id)); }
-      else break; // Telegram xato — to'xtaymiz (belgilamaymiz, keyingi safar qayta urinadi)
-    }
-    if (postedIds.length) await this.oplataKv.markAgentNotified(postedIds);
-
-    const dur = Math.round((Date.now() - startedAt) / 1000);
-    await this.saveResult(`${postedObjects} ta obyekt · ${postedIds.length} ta XATO to'lov jo'natildi (${dur}s)`);
-    this.log.log(`Agent runOnce: ${postedObjects} obyekt / ${postedIds.length} to'lov jo'natildi`);
-    return { ok: true, posted: postedIds.length };
+  private xatoLink(): string {
+    const base = (this.config.get<string>('APP_URL') || 'https://transactions.xonapps.uz').replace(/\/+$/, '');
+    return `${base}/uz/oplatykv?xatoOnly=1`;
   }
 
   private async saveResult(text: string) {
@@ -194,47 +159,15 @@ export class AgentService {
   }
 
   // ─── Telegram xabar ────────────────────────────────────────────────
-  private esc(s: any): string {
-    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-  private fmtDate(d: any): string {
-    if (!d) return '—';
-    const dt = new Date(d);
-    if (isNaN(dt.getTime())) return '—';
-    return `${String(dt.getUTCDate()).padStart(2, '0')}.${String(dt.getUTCMonth() + 1).padStart(2, '0')}.${dt.getUTCFullYear()}`;
-  }
-  private fmtMoney(v: any): string {
-    if (v == null) return '—';
-    const n = Number(v);
-    if (!isFinite(n)) return '—';
-    return n.toLocaleString('ru-RU');
-  }
-
-  /** Bitta obyekt uchun — o'sha obyektning barcha XATO to'lovlari bitta xabarda. */
-  private formatObjectMessage(object: string, list: any[]): string {
-    const total = list.reduce((s, r) => s + Number(r.paymentAmount || 0), 0);
-    const MAX = 20;
-    const lines = list.slice(0, MAX).map((r) => {
-      const parts = [
-        this.fmtDate(r.date),
-        `<code>${this.esc(r.contractNo)}</code>`,
-        `<b>${this.fmtMoney(r.paymentAmount)}</b>`,
-      ];
-      if (r.client) parts.push(this.esc(String(r.client).slice(0, 40)));
-      return `• ${parts.join(' · ')}`;
-    });
-    const more = list.length > MAX ? `\n… va yana ${list.length - MAX} ta` : '';
+  private formatDigest(count: number): string {
     return (
-      `⚠️ <b>XATO to'lovlar — ariza/shartnoma kerak</b>\n` +
-      `🏠 Obyekt: <b>${this.esc(object)}</b> — ${list.length} ta\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      lines.join('\n') + more + `\n` +
-      `━━━━━━━━━━━━━━━━\n` +
-      `💰 Jami: <b>${this.fmtMoney(total)}</b>`
+      `⚠️ <b>XATO to'lovlar — ariza/shartnoma kerak</b>\n\n` +
+      `📊 Jami: <b>${count} ta</b> CRM'da tasdiqlanmagan to'lov\n\n` +
+      `👇 Ro'yxatni ko'rish va hal qilish uchun tugmani bosing.`
     );
   }
 
-  private async sendMessage(token: string, chatId: string, text: string): Promise<boolean> {
+  private async sendMessage(token: string, chatId: string, text: string, replyMarkup?: any): Promise<boolean> {
     try {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
@@ -244,6 +177,7 @@ export class AgentService {
           text,
           parse_mode: 'HTML',
           disable_web_page_preview: true,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
         }),
       });
       const data: any = await res.json().catch(() => ({}));
