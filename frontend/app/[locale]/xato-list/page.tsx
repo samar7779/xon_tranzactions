@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
+  Clock, Send,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -15,6 +16,7 @@ interface XatoRow {
   object: string | null;
   txType: string | null;
   purpose: string | null;
+  pending?: boolean;
 }
 interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string }
 
@@ -93,7 +95,8 @@ export default function XatoListPage() {
           });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d?.ok) throw new Error(d?.error || d?.message || 'Xatolik');
-      setData((prev) => prev ? { ...prev, count: Math.max(0, prev.count - 1), rows: prev.rows.filter((x) => x.id !== selected.id) } : prev);
+      // Ariza yuborildi — to'lov "kutilmoqda" bo'ldi (yo'qolmaydi, tasdiq kutadi)
+      setData((prev) => prev ? { ...prev, rows: prev.rows.map((x) => x.id === selected.id ? { ...x, pending: true } : x) } : prev);
       closeModal();
     } catch (e: any) {
       setAssignError(e?.message || 'Biriktirishda xato');
@@ -272,8 +275,8 @@ export default function XatoListPage() {
                 const isIn = (r.amount ?? 0) >= 0;
                 return (
                   <button key={r.id} onClick={() => setSelected(r)}
-                    className="group relative text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 p-4 pl-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 hover:ring-slate-300 dark:hover:ring-slate-700 transition-all duration-200 overflow-hidden">
-                    <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${isIn ? 'bg-gradient-to-b from-emerald-400 to-emerald-500' : 'bg-gradient-to-b from-rose-400 to-rose-500'}`} />
+                    className={`group relative text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 pl-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${r.pending ? 'ring-amber-300/80 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10' : 'ring-slate-200/70 dark:ring-slate-800 hover:ring-slate-300 dark:hover:ring-slate-700'}`}>
+                    <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${r.pending ? 'bg-gradient-to-b from-amber-400 to-amber-500' : isIn ? 'bg-gradient-to-b from-emerald-400 to-emerald-500' : 'bg-gradient-to-b from-rose-400 to-rose-500'}`} />
 
                     <div className="flex items-start justify-between gap-2">
                       <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-2 py-1 font-mono font-bold text-[12px] text-rose-700 dark:text-rose-300 ring-1 ring-rose-100 dark:ring-rose-900/50">
@@ -307,9 +310,15 @@ export default function XatoListPage() {
                       <div className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-2">{r.purpose}</div>
                     )}
 
-                    <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-rose-500/0 group-hover:text-rose-600 dark:group-hover:text-rose-300 transition-colors">
-                      <Link2 className="w-3.5 h-3.5" /> Shartnoma biriktirish →
-                    </div>
+                    {r.pending ? (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900/50">
+                        <Clock className="w-3.5 h-3.5" /> Tasdiq kutilmoqda
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-rose-500/0 group-hover:text-rose-600 dark:group-hover:text-rose-300 transition-colors">
+                        <Link2 className="w-3.5 h-3.5" /> Shartnoma biriktirish →
+                      </div>
+                    )}
                   </button>
                 );
               })}
@@ -362,6 +371,16 @@ export default function XatoListPage() {
                 {selected.purpose && <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-3">{selected.purpose}</div>}
               </div>
 
+              {selected.pending ? (
+                <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900/50 p-5 text-center">
+                  <div className="w-11 h-11 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-900/40 grid place-items-center mb-2">
+                    <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <div className="text-[13.5px] font-bold text-amber-800 dark:text-amber-200">Ariza yuborilgan — tasdiq kutilmoqda</div>
+                  <div className="text-[11.5px] text-amber-700/80 dark:text-amber-300/70 mt-1">Tasdiqlovchi xodim ko&apos;rib chiqib fayl bilan tasdiqlaydi.</div>
+                </div>
+              ) : (
+              <>
               {/* CRM qidiruv */}
               <div className="space-y-1.5">
                 <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">To&apos;g&apos;ri CRM shartnomasi</label>
@@ -410,9 +429,11 @@ export default function XatoListPage() {
 
               <button onClick={doAssign} disabled={!chosen || assigning}
                 className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[14px] shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2">
-                {assigning ? <><Loader2 className="w-4 h-4 animate-spin" /> Biriktirilmoqda…</> : <><Link2 className="w-4 h-4" /> Biriktir</>}
+                {assigning ? <><Loader2 className="w-4 h-4 animate-spin" /> Yuborilmoqda…</> : <><Send className="w-4 h-4" /> Ariza yuborish</>}
               </button>
-              <div className="text-[10.5px] text-slate-400 dark:text-slate-500 text-center">Faqat CRM&apos;da mavjud shartnomani biriktira olasiz. Biriktirilgach to&apos;lov ro&apos;yxatdan yo&apos;qoladi.</div>
+              <div className="text-[10.5px] text-slate-400 dark:text-slate-500 text-center">Ariza yuboriladi — tasdiqlovchi xodim fayl bilan tasdiqlagach to&apos;lov to&apos;g&apos;rlanadi.</div>
+              </>
+              )}
             </div>
           </div>
         </div>
