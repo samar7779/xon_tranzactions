@@ -69,11 +69,15 @@ export class AgentService {
       dailyTime: this.validTime(dailyTime) || '09:00',
       lastResult: lastResult || null,
       pendingCount,
+      whitelist: await this.getWhitelist(),
     };
   }
 
   async saveConfig(
-    body: { botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string },
+    body: {
+      botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
+      whitelist?: Array<{ id: string; name: string }>;
+    },
     updatedBy?: string,
   ) {
     if (body.botToken !== undefined && body.botToken.trim()) {
@@ -83,6 +87,7 @@ export class AgentService {
     if (body.enabled !== undefined) await this.settings.set(this.K_ENABLED, body.enabled ? '1' : null, updatedBy);
     if (body.dateFrom !== undefined) await this.settings.set(this.K_DATEFROM, body.dateFrom || null, updatedBy);
     if (body.dailyTime !== undefined) await this.settings.set(this.K_DAILY_TIME, this.validTime(body.dailyTime), updatedBy);
+    if (body.whitelist !== undefined) await this.setWhitelist(body.whitelist, updatedBy);
     return this.getConfig();
   }
 
@@ -139,8 +144,11 @@ export class AgentService {
       return { ok: true, count: 0 };
     }
 
+    // login_url — bosilganda Telegram sahifani foydalanuvchi identity (chat_id + hash)
+    // bilan ochadi. Domen BotFather /setdomain bilan ulangan bo'lishi kerak.
+    const base = (this.config.get<string>('APP_URL') || 'https://transactions.xonapps.uz').replace(/\/+$/, '');
     const button = {
-      inline_keyboard: [[{ text: '📋 Ro\'yxat', url: await this.xatoLink() }]],
+      inline_keyboard: [[{ text: '📋 Ro\'yxat', login_url: { url: `${base}/uz/xato-list` } }]],
     };
     const sent = await this.sendMessage(token, groupId, this.formatDigest(count), button);
     if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
@@ -171,14 +179,58 @@ export class AgentService {
     return t;
   }
 
+  // ─── Whitelist (chat_id + ism) — login_url auth uchun ─────────────
+  private readonly K_WHITELIST = 'agent.whitelist';
+
+  async getWhitelist(): Promise<Array<{ id: string; name: string }>> {
+    const raw = await this.settings.get(this.K_WHITELIST);
+    if (!raw) return [];
+    try { const a = JSON.parse(raw); return Array.isArray(a) ? a : []; } catch { return []; }
+  }
+  async setWhitelist(list: Array<{ id: string; name: string }>, updatedBy?: string) {
+    const clean = (list || [])
+      .map((x) => ({ id: String(x.id || '').replace(/\D/g, ''), name: String(x.name || '').slice(0, 60).trim() }))
+      .filter((x) => x.id);
+    await this.settings.set(this.K_WHITELIST, JSON.stringify(clean), updatedBy);
+    return clean;
+  }
+
+  // ─── Auth ──────────────────────────────────────────────────────────
   private async assertKey(key: string) {
     const token = await this.getListToken();
     if (!key || key !== token) throw new UnauthorizedException("Kalit noto'g'ri yoki eskirgan");
   }
 
-  /** Public: CRM shartnoma qidirish — biriktirish modali uchun (kalit bilan). */
-  async crmSearch(key: string, q: string) {
-    await this.assertKey(key);
+  /** Telegram login_url auth (Login Widget algoritmi): secret=SHA256(botToken), HMAC tekshiradi. */
+  private async validateTgAuth(params: Record<string, any>): Promise<{ userId: string; name: string } | null> {
+    const { token } = await this.getRaw();
+    if (!token || !params?.hash || !params?.id) return null;
+    const hash = String(params.hash);
+    const pairs = Object.keys(params)
+      .filter((k) => k !== 'hash' && params[k] != null && params[k] !== '')
+      .sort()
+      .map((k) => `${k}=${params[k]}`);
+    const secret = crypto.createHash('sha256').update(token).digest();
+    const computed = crypto.createHmac('sha256', secret).update(pairs.join('\n')).digest('hex');
+    if (computed !== hash) return null;
+    const authDate = Number(params.auth_date);
+    if (authDate && Date.now() / 1000 - authDate > 86400) return null; // 1 kundan eski emas
+    const name = [params.first_name, params.last_name].filter(Boolean).join(' ').trim() || String(params.username || params.id);
+    return { userId: String(params.id), name };
+  }
+
+  /** login_url params → hash tekshiruvi → whitelist → ruxsatli foydalanuvchi ismi. */
+  private async authorizeTg(auth: Record<string, any>): Promise<{ userId: string; name: string }> {
+    const v = await this.validateTgAuth(auth || {});
+    if (!v) throw new UnauthorizedException('Telegram tekshiruvi muvaffaqiyatsiz');
+    const wl = await this.getWhitelist();
+    const entry = wl.find((w) => w.id === v.userId);
+    if (!entry) throw new UnauthorizedException("Sizda ruxsat yo'q");
+    return { userId: v.userId, name: entry.name || v.name };
+  }
+
+  // ─── Ma'lumot yadrosi (auth'siz) ───────────────────────────────────
+  private async _crmSearch(q: string) {
     const query = (q || '').trim();
     if (query.length < 2) return { ok: true, items: [] };
     try {
@@ -189,25 +241,17 @@ export class AgentService {
     }
   }
 
-  /** Public: XATO to'lovga CRM shartnomani biriktirish — setContract CRM'da tekshiradi. */
-  async assignContract(key: string, oplataKvId: string, contractNo: string, actorName?: string) {
-    await this.assertKey(key);
+  private async _assign(oplataKvId: string, contractNo: string, actorName?: string) {
     const contract = (contractNo || '').trim();
     if (!oplataKvId || !contract) return { ok: false, error: "To'lov yoki shartnoma raqami yo'q" };
-
-    const row = await this.prisma.oplataKv.findUnique({
-      where: { id: oplataKvId },
-      select: { sourceTxId: true },
-    });
+    const row = await this.prisma.oplataKv.findUnique({ where: { id: oplataKvId }, select: { sourceTxId: true } });
     if (!row) return { ok: false, error: "To'lov topilmadi" };
     if (!row.sourceTxId) return { ok: false, error: "Bu to'lov tranzaksiyadan kelmagan — biriktirib bo'lmaydi" };
-
     const tx = await this.prisma.transaction.findFirst({
       where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
       select: { id: true },
     });
     if (!tx) return { ok: false, error: 'Manba tranzaksiya topilmadi' };
-
     try {
       const actor = `TG${actorName ? ':' + actorName.slice(0, 40) : ''}`;
       const res: any = await this.categorization.setContract(tx.id, contract, actor);
@@ -217,9 +261,7 @@ export class AgentService {
     }
   }
 
-  /** Public: maxfiy kalit bilan XATO to'lovlar ro'yxati (login talab qilmaydi). */
-  async getPublicXatoList(key: string) {
-    await this.assertKey(key);
+  private async _list() {
     const dateFrom = await this.settings.get(this.K_DATEFROM);
     const [rows, count] = await Promise.all([
       this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
@@ -229,16 +271,29 @@ export class AgentService {
       ok: true,
       count,
       rows: rows.map((r) => ({
-        id: r.id,
-        date: r.date,
-        contractNo: r.contractNo,
+        id: r.id, date: r.date, contractNo: r.contractNo,
         amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
-        client: r.client,
-        object: r.object,
-        txType: r.txType,
-        purpose: r.purpose,
+        client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
       })),
     };
+  }
+
+  // ─── Public: maxfiy kalit bilan (fallback/test) ────────────────────
+  async getPublicXatoList(key: string) { await this.assertKey(key); return this._list(); }
+  async crmSearch(key: string, q: string) { await this.assertKey(key); return this._crmSearch(q); }
+  async assignContract(key: string, oplataKvId: string, contractNo: string, actorName?: string) {
+    await this.assertKey(key); return this._assign(oplataKvId, contractNo, actorName);
+  }
+
+  // ─── Public: Telegram login_url (chat_id whitelist) ────────────────
+  async tgList(auth: Record<string, any>) {
+    const who = await this.authorizeTg(auth);
+    return { ...(await this._list()), me: who.name };
+  }
+  async tgCrmSearch(auth: Record<string, any>, q: string) { await this.authorizeTg(auth); return this._crmSearch(q); }
+  async tgAssign(auth: Record<string, any>, oplataKvId: string, contractNo: string) {
+    const who = await this.authorizeTg(auth);
+    return this._assign(oplataKvId, contractNo, who.name);
   }
 
   private async saveResult(text: string) {

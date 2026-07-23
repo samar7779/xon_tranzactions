@@ -34,6 +34,7 @@ export default function XatoListPage() {
   const [page, setPage] = useState(1);
   const perPage = 30;
   const [key, setKey] = useState('');
+  const [tgAuth, setTgAuth] = useState<Record<string, string> | null>(null);
 
   // Biriktirish modali
   const [selected, setSelected] = useState<XatoRow | null>(null);
@@ -54,21 +55,28 @@ export default function XatoListPage() {
     if (!selected || cq.trim().length < 2) { setCrmItems([]); return; }
     setCrmLoading(true);
     const t = setTimeout(() => {
-      fetch(`${API_URL}/agent/crm-search?key=${encodeURIComponent(key)}&q=${encodeURIComponent(cq.trim())}`)
-        .then((r) => r.json()).then((d) => setCrmItems(d?.items || [])).catch(() => setCrmItems([]))
+      const req = tgAuth
+        ? fetch(`${API_URL}/agent/tg/search`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth: tgAuth, q: cq.trim() }) })
+        : fetch(`${API_URL}/agent/crm-search?key=${encodeURIComponent(key)}&q=${encodeURIComponent(cq.trim())}`);
+      req.then((r) => r.json()).then((d) => setCrmItems(d?.items || [])).catch(() => setCrmItems([]))
         .finally(() => setCrmLoading(false));
     }, 350);
     return () => clearTimeout(t);
-  }, [cq, selected, key]);
+  }, [cq, selected, key, tgAuth]);
 
   const doAssign = async () => {
     if (!selected || !chosen) return;
     setAssigning(true); setAssignError('');
     try {
-      const res = await fetch(`${API_URL}/agent/assign`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, oplataKvId: selected.id, contractNo: chosen, name }),
-      });
+      const res = tgAuth
+        ? await fetch(`${API_URL}/agent/tg/assign`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ auth: tgAuth, oplataKvId: selected.id, contractNo: chosen }),
+          })
+        : await fetch(`${API_URL}/agent/assign`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, oplataKvId: selected.id, contractNo: chosen, name }),
+          });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d?.ok) throw new Error(d?.error || d?.message || 'Xatolik');
       setData((prev) => prev ? { ...prev, count: Math.max(0, prev.count - 1), rows: prev.rows.filter((x) => x.id !== selected.id) } : prev);
@@ -81,17 +89,32 @@ export default function XatoListPage() {
   };
 
   useEffect(() => {
-    const k = new URLSearchParams(window.location.search).get('key') || '';
-    if (!k) { setError("Kalit yo'q — noto'g'ri havola"); return; }
+    const parse = async (r: Response) => {
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.message || `Xatolik (${r.status})`);
+      return j as XatoResp;
+    };
+    const p = new URLSearchParams(window.location.search);
+    const id = p.get('id');
+    const hash = p.get('hash');
+    // Telegram login_url — auth paramlari bilan kelgan
+    if (id && hash) {
+      const auth: Record<string, string> = {};
+      for (const kk of ['id', 'first_name', 'last_name', 'username', 'photo_url', 'auth_date', 'hash']) {
+        const v = p.get(kk);
+        if (v != null) auth[kk] = v;
+      }
+      setTgAuth(auth);
+      fetch(`${API_URL}/agent/tg/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth }) })
+        .then(parse).then(setData).catch((e) => setError(e?.message || 'Xatolik'));
+      return;
+    }
+    // Kalit bilan (fallback/test)
+    const k = p.get('key') || '';
+    if (!k) { setError("Kirish ma'lumoti yo'q — noto'g'ri havola"); return; }
     setKey(k);
     fetch(`${API_URL}/agent/xato-list?key=${encodeURIComponent(k)}`)
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) throw new Error(j?.message || `Xatolik (${r.status})`);
-        return j as XatoResp;
-      })
-      .then(setData)
-      .catch((e) => setError(e?.message || 'Xatolik'));
+      .then(parse).then(setData).catch((e) => setError(e?.message || 'Xatolik'));
   }, []);
 
   const rows = (data?.rows || []).filter((r) => {
@@ -221,12 +244,14 @@ export default function XatoListPage() {
                 {chosen && <div className="text-[12px] text-emerald-600 dark:text-emerald-400 font-semibold">✓ Tanlandi: {chosen}</div>}
               </div>
 
-              {/* Ism */}
-              <div className="space-y-1.5">
-                <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Ismingiz (kim biriktirdi)</label>
-                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Masalan: Samar"
-                  className="w-full h-10 px-3 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 outline-none focus:ring-indigo-400 text-[13px]" />
-              </div>
+              {/* Ism — faqat kalit rejimda (Telegram'da ism o'zi ma'lum) */}
+              {!tgAuth && (
+                <div className="space-y-1.5">
+                  <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Ismingiz (kim biriktirdi)</label>
+                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Masalan: Samar"
+                    className="w-full h-10 px-3 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 outline-none focus:ring-indigo-400 text-[13px]" />
+                </div>
+              )}
 
               {assignError && <div className="text-[12px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 rounded-lg p-2.5">{assignError}</div>}
 
