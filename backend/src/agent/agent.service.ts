@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
@@ -133,7 +134,7 @@ export class AgentService {
     }
 
     const button = {
-      inline_keyboard: [[{ text: "📋 Barcha XATO to'lovlarni ko'rish", url: this.xatoLink() }]],
+      inline_keyboard: [[{ text: "📋 Barcha XATO to'lovlarni ko'rish", url: await this.xatoLink() }]],
     };
     const sent = await this.sendMessage(token, groupId, this.formatDigest(count), button);
     if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
@@ -148,9 +149,45 @@ export class AgentService {
     return this.runDigest();
   }
 
-  private xatoLink(): string {
+  private async xatoLink(): Promise<string> {
     const base = (this.config.get<string>('APP_URL') || 'https://transactions.xonapps.uz').replace(/\/+$/, '');
-    return `${base}/uz/oplatykv?xatoOnly=1`;
+    const token = await this.getListToken();
+    return `${base}/uz/xato-list?key=${token}`;
+  }
+
+  /** Maxfiy kalit — public XATO ro'yxati sahifasi uchun (yo'q bo'lsa generatsiya). */
+  private async getListToken(): Promise<string> {
+    let t = await this.settings.get('agent.listToken');
+    if (!t) {
+      t = crypto.randomBytes(24).toString('hex');
+      await this.settings.set('agent.listToken', t, 'agent');
+    }
+    return t;
+  }
+
+  /** Public: maxfiy kalit bilan XATO to'lovlar ro'yxati (login talab qilmaydi). */
+  async getPublicXatoList(key: string) {
+    const token = await this.getListToken();
+    if (!key || key !== token) throw new UnauthorizedException("Kalit noto'g'ri yoki eskirgan");
+    const dateFrom = await this.settings.get(this.K_DATEFROM);
+    const [rows, count] = await Promise.all([
+      this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
+      this.oplataKv.countXatoForAgent(dateFrom || null),
+    ]);
+    return {
+      ok: true,
+      count,
+      rows: rows.map((r) => ({
+        id: r.id,
+        date: r.date,
+        contractNo: r.contractNo,
+        amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
+        client: r.client,
+        object: r.object,
+        txType: r.txType,
+        purpose: r.purpose,
+      })),
+    };
   }
 
   private async saveResult(text: string) {
