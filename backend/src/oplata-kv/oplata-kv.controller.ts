@@ -72,8 +72,13 @@ export class OplataKvController {
   @Get('memorial-order')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Shartnoma bo\'yicha Мемориальный ордер (PDF) — barcha to\'lovlar' })
-  async memorialOrderPdf(@Query('contractNo') contractNo: string, @Res() res: Response) {
-    const { buffer, filename } = await this.memorialOrder.generatePdf(contractNo);
+  async memorialOrderPdf(
+    @Query('contractNo') contractNo: string,
+    @Query('bank') bank: string,
+    @Res() res: Response,
+  ) {
+    const fromBank = bank === '1' || bank === 'true';
+    const { buffer, filename } = await this.memorialOrder.generatePdf(contractNo, { fromBank });
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
