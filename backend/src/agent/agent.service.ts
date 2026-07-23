@@ -134,7 +134,7 @@ export class AgentService {
     }
 
     const button = {
-      inline_keyboard: [[{ text: "📋 Barcha XATO to'lovlarni ko'rish", url: await this.xatoLink() }]],
+      inline_keyboard: [[{ text: '📋 Ro\'yxat', url: await this.xatoLink() }]],
     };
     const sent = await this.sendMessage(token, groupId, this.formatDigest(count), button);
     if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
@@ -197,11 +197,7 @@ export class AgentService {
 
   // ─── Telegram xabar ────────────────────────────────────────────────
   private formatDigest(count: number): string {
-    return (
-      `⚠️ <b>XATO to'lovlar — ariza/shartnoma kerak</b>\n\n` +
-      `📊 Jami: <b>${count} ta</b> CRM'da tasdiqlanmagan to'lov\n\n` +
-      `👇 Ro'yxatni ko'rish va hal qilish uchun tugmani bosing.`
-    );
+    return `📊 <b>${count} ta</b> CRM'da tasdiqlanmagan to'lov`;
   }
 
   private async sendMessage(token: string, chatId: string, text: string, replyMarkup?: any): Promise<boolean> {
