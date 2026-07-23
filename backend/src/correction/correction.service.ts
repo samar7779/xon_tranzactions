@@ -1,0 +1,325 @@
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { CategorizationService } from '../categorization/categorization.service';
+import { AttachmentsService } from '../attachments/attachments.service';
+
+type Flow = 'all' | 'in' | 'out';
+
+/**
+ * XATO to'lovni to'g'rilash arizalari (2 bosqichli).
+ *
+ * Oqim: yuborish (pending) → tasdiqlovchi xodim to'g'rlaydi (shartnoma +
+ * kategoriya + ariza fayl) → approved. Hech narsa avtomat tasdiqlanmaydi.
+ */
+@Injectable()
+export class CorrectionService {
+  private readonly log = new Logger(CorrectionService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly categorization: CategorizationService,
+    private readonly attachments: AttachmentsService,
+  ) {}
+
+  // ─── Ariza yuborish (pending) ──────────────────────────────────────
+  async createRequest(input: {
+    oplataKvId?: string | null;
+    txId?: string | null;
+    proposedContractNo?: string | null;
+    note?: string | null;
+    source: 'telegram' | 'web' | 'app';
+    submittedByName: string;
+    submittedByChatId?: string | null;
+    submittedById?: string | null;
+  }): Promise<{ ok: true; id: string; alreadyPending?: boolean }> {
+    let txId = (input.txId || '').trim() || null;
+    let oplataKvId: string | null = input.oplataKvId || null;
+    let snap: Record<string, any> = {};
+
+    if (input.oplataKvId) {
+      const row = await this.prisma.oplataKv.findUnique({
+        where: { id: input.oplataKvId },
+        select: {
+          id: true, sourceTxId: true, contractNo: true, paymentAmount: true,
+          date: true, client: true, object: true, txType: true, purpose: true,
+        },
+      });
+      if (!row) throw new BadRequestException("To'lov topilmadi");
+      if (!row.sourceTxId) throw new BadRequestException("Bu to'lov tranzaksiyadan kelmagan — ariza yuborib bo'lmaydi");
+      const tx = await this.prisma.transaction.findFirst({
+        where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
+        select: { id: true },
+      });
+      if (!tx) throw new BadRequestException('Manba tranzaksiya topilmadi');
+      txId = tx.id;
+      snap = {
+        snapAmount: row.paymentAmount ?? null,
+        snapDate: row.date ?? null,
+        snapClient: row.client ?? null,
+        snapObject: row.object ?? null,
+        snapContractNo: row.contractNo ?? null,
+        snapTxType: row.txType ?? null,
+        snapPurpose: row.purpose ?? null,
+      };
+    } else if (txId) {
+      const tx = await this.prisma.transaction.findUnique({
+        where: { id: txId },
+        select: {
+          id: true, amount: true, direction: true, valueDate: true,
+          description: true, fromName: true, contractNumber: true, type: true,
+        },
+      });
+      if (!tx) throw new BadRequestException('Tranzaksiya topilmadi');
+      const signed = Number(tx.amount) * (tx.direction === 'OUT' ? -1 : 1);
+      snap = {
+        snapAmount: signed,
+        snapDate: tx.valueDate ?? null,
+        snapClient: tx.fromName ?? null,
+        snapObject: null,
+        snapContractNo: tx.contractNumber ?? null,
+        snapTxType: String(tx.type || '') || null,
+        snapPurpose: tx.description ?? null,
+      };
+    } else {
+      throw new BadRequestException("To'lov ko'rsatilmagan");
+    }
+
+    // Duplikat pending — bir to'lovga bir vaqtda bitta ariza
+    const existing = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: { txId: txId!, status: 'pending' },
+      select: { id: true },
+    });
+    if (existing) return { ok: true, id: existing.id, alreadyPending: true };
+
+    const contract = this.cleanContract(input.proposedContractNo);
+
+    const req = await this.prisma.xatoCorrectionRequest.create({
+      data: {
+        txId: txId!,
+        oplataKvId,
+        proposedContractNo: contract,
+        note: input.note?.slice(0, 2000) || null,
+        source: input.source,
+        submittedByName: (input.submittedByName || '?').slice(0, 190),
+        submittedByChatId: input.submittedByChatId?.slice(0, 64) || null,
+        submittedById: input.submittedById || null,
+        ...snap,
+      },
+      select: { id: true },
+    });
+    this.log.log(`Ariza yuborildi: ${req.id} · tx=${txId} · ${input.source} · ${input.submittedByName}`);
+    return { ok: true, id: req.id };
+  }
+
+  // ─── Badge uchun: qaysi txId'larda pending ariza bor ───────────────
+  async pendingTxIds(txIds: string[]): Promise<Set<string>> {
+    const ids = txIds.filter(Boolean);
+    if (!ids.length) return new Set();
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { status: 'pending', txId: { in: ids } },
+      select: { txId: true },
+    });
+    return new Set(rows.map((r) => r.txId));
+  }
+
+  // ─── Badge uchun: qaysi oplataKv'larda pending ariza bor (web ro'yxat) ─
+  async pendingOplataKvIds(ids: string[]): Promise<Set<string>> {
+    const list = ids.filter(Boolean);
+    if (!list.length) return new Set();
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { status: 'pending', oplataKvId: { in: list } },
+      select: { oplataKvId: true },
+    });
+    return new Set(rows.map((r) => r.oplataKvId!).filter(Boolean));
+  }
+
+  // ─── Kutilmoqda ro'yxati ───────────────────────────────────────────
+  async listPending(opts: { q?: string; page?: number; perPage?: number } = {}) {
+    const page = Math.max(1, opts.page || 1);
+    const perPage = Math.min(200, Math.max(1, opts.perPage || 50));
+    const where: any = { status: 'pending' };
+    this.applySearch(where, opts.q);
+    const [total, rows] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where }),
+      this.prisma.xatoCorrectionRequest.findMany({
+        where, orderBy: { submittedAt: 'desc' },
+        skip: (page - 1) * perPage, take: perPage,
+      }),
+    ]);
+    return { ok: true, total, page, perPage, rows: rows.map((r) => this.serialize(r)) };
+  }
+
+  // ─── Tasdiqlangan ro'yxati (audit + filtrlar) ──────────────────────
+  async listApproved(opts: {
+    q?: string; from?: string; to?: string; actor?: string; flow?: Flow;
+    page?: number; perPage?: number;
+  } = {}) {
+    const page = Math.max(1, opts.page || 1);
+    const perPage = Math.min(200, Math.max(1, opts.perPage || 50));
+    const where: any = { status: 'approved' };
+    this.applySearch(where, opts.q);
+
+    // Sana oralig'i (tasdiqlangan vaqt bo'yicha)
+    const reviewedAt: any = {};
+    if (opts.from) { const d = new Date(opts.from); if (!isNaN(d.getTime())) reviewedAt.gte = d; }
+    if (opts.to) { const d = new Date(opts.to); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); reviewedAt.lte = d; } }
+    if (reviewedAt.gte || reviewedAt.lte) where.reviewedAt = reviewedAt;
+
+    // Kim tasdiqladi
+    if (opts.actor?.trim()) where.reviewedByName = { contains: opts.actor.trim(), mode: 'insensitive' };
+
+    // Musbat / manfiy summa
+    if (opts.flow === 'in') where.snapAmount = { gte: 0 };
+    else if (opts.flow === 'out') where.snapAmount = { lt: 0 };
+
+    const [total, rows] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where }),
+      this.prisma.xatoCorrectionRequest.findMany({
+        where, orderBy: { reviewedAt: 'desc' },
+        skip: (page - 1) * perPage, take: perPage,
+      }),
+    ]);
+    return { ok: true, total, page, perPage, rows: rows.map((r) => this.serialize(r)) };
+  }
+
+  // ─── Tasdiqlash (fayl + shartnoma + kategoriya) ────────────────────
+  async approve(
+    id: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
+    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string },
+  ) {
+    const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id } });
+    if (!req) throw new NotFoundException('Ariza topilmadi');
+    if (req.status !== 'pending') throw new BadRequestException("Bu ariza allaqachon ko'rib chiqilgan");
+
+    const contract = this.cleanContract(opts.contractNo || req.proposedContractNo);
+    if (!contract) throw new BadRequestException('Shartnoma raqami kerak');
+    if (!file?.buffer) throw new BadRequestException('Ariza fayli majburiy');
+
+    const actorEmail = await this.actorEmail(opts.actorId);
+
+    // 1) Ariza faylini biriktirish
+    let attachmentId: string | null = null;
+    let attachmentName: string | null = null;
+    const up: any = await this.attachments.upload(req.txId, file, {
+      type: 'ariza', contractNumber: contract, uploadedBy: actorEmail,
+    });
+    attachmentId = up?.item?.id || null;
+    attachmentName = up?.item?.filename || null;
+
+    // 2) Shartnoma (qo'lda — XATO holatini yopadi)
+    await this.categorization.setContractManual(req.txId, contract, opts.actorId);
+
+    // 3) Kategoriya (ixtiyoriy)
+    let categoryName: string | null = null;
+    let subCategoryName: string | null = null;
+    if (opts.categoryId) {
+      await this.categorization.setManual(
+        req.txId,
+        { categoryId: opts.categoryId, subcategoryId: opts.subCategoryId || null },
+        opts.actorId,
+      );
+      const catIds = [opts.categoryId, opts.subCategoryId].filter(Boolean) as string[];
+      const cats = await this.prisma.category.findMany({ where: { id: { in: catIds } }, select: { id: true, name: true } });
+      categoryName = cats.find((c) => c.id === opts.categoryId)?.name || null;
+      subCategoryName = opts.subCategoryId ? (cats.find((c) => c.id === opts.subCategoryId)?.name || null) : null;
+    }
+
+    const updated = await this.prisma.xatoCorrectionRequest.update({
+      where: { id },
+      data: {
+        status: 'approved',
+        reviewedById: opts.actorId,
+        reviewedByName: actorEmail,
+        reviewedAt: new Date(),
+        appliedContractNo: contract,
+        categoryId: opts.categoryId || null, categoryName,
+        subCategoryId: opts.subCategoryId || null, subCategoryName,
+        attachmentId, attachmentName,
+      },
+    });
+    this.log.log(`Ariza tasdiqlandi: ${id} · tx=${req.txId} · ${contract} · ${actorEmail}`);
+    return { ok: true, item: this.serialize(updated) };
+  }
+
+  // ─── Rad etish ─────────────────────────────────────────────────────
+  async reject(id: string, reason: string, actorId: string) {
+    const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id }, select: { status: true } });
+    if (!req) throw new NotFoundException('Ariza topilmadi');
+    if (req.status !== 'pending') throw new BadRequestException("Bu ariza allaqachon ko'rib chiqilgan");
+    const actorEmail = await this.actorEmail(actorId);
+    const updated = await this.prisma.xatoCorrectionRequest.update({
+      where: { id },
+      data: {
+        status: 'rejected',
+        reviewedById: actorId, reviewedByName: actorEmail, reviewedAt: new Date(),
+        rejectReason: (reason || '').slice(0, 2000) || null,
+      },
+    });
+    return { ok: true, item: this.serialize(updated) };
+  }
+
+  async stats() {
+    const [pending, approved] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved' } }),
+    ]);
+    return { ok: true, pending, approved };
+  }
+
+  // ─── Yordamchilar ──────────────────────────────────────────────────
+  private cleanContract(v?: string | null): string | null {
+    if (!v) return null;
+    return v.replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase().slice(0, 128) || null;
+  }
+
+  private applySearch(where: any, q?: string) {
+    const s = (q || '').trim();
+    if (!s) return;
+    where.OR = [
+      { proposedContractNo: { contains: s, mode: 'insensitive' } },
+      { appliedContractNo: { contains: s, mode: 'insensitive' } },
+      { snapContractNo: { contains: s, mode: 'insensitive' } },
+      { snapClient: { contains: s, mode: 'insensitive' } },
+      { snapObject: { contains: s, mode: 'insensitive' } },
+      { submittedByName: { contains: s, mode: 'insensitive' } },
+      { reviewedByName: { contains: s, mode: 'insensitive' } },
+    ];
+  }
+
+  private async actorEmail(actorId?: string | null): Promise<string | null> {
+    if (!actorId) return null;
+    const u = await this.prisma.adminUser.findUnique({ where: { id: actorId }, select: { email: true } });
+    return u?.email || null;
+  }
+
+  private serialize(r: any) {
+    return {
+      id: r.id,
+      txId: r.txId,
+      oplataKvId: r.oplataKvId,
+      status: r.status,
+      source: r.source,
+      proposedContractNo: r.proposedContractNo,
+      note: r.note,
+      submittedByName: r.submittedByName,
+      submittedAt: r.submittedAt,
+      reviewedByName: r.reviewedByName,
+      reviewedAt: r.reviewedAt,
+      rejectReason: r.rejectReason,
+      appliedContractNo: r.appliedContractNo,
+      categoryName: r.categoryName,
+      subCategoryName: r.subCategoryName,
+      attachmentId: r.attachmentId,
+      attachmentName: r.attachmentName,
+      // snapshot (ko'rsatish uchun)
+      amount: r.snapAmount != null ? Number(r.snapAmount) : null,
+      date: r.snapDate,
+      client: r.snapClient,
+      object: r.snapObject,
+      contractNo: r.snapContractNo,
+      txType: r.snapTxType,
+      purpose: r.snapPurpose,
+    };
+  }
+}

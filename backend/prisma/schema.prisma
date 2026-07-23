@@ -221,6 +221,62 @@ model TransactionAttachment {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// XATO CORRECTION REQUEST — XATO to'lovni to'g'rilash arizasi.
+// Oqim: yuborish (pending) → tasdiqlovchi xodim to'g'rlaydi (shartnoma +
+// kategoriya + ariza fayl) → approved. Hech narsa avtomat tasdiqlanmaydi.
+// ─────────────────────────────────────────────────────────────────
+model XatoCorrectionRequest {
+  id                 String    @id @default(cuid())
+  txId               String    @map("tx_id") @db.VarChar(64)            // Transaction.id
+  oplataKvId         String?   @map("oplata_kv_id") @db.VarChar(255)    // OplataKv.id (agar web/telegram'dan)
+
+  // Yuborilgan taklif
+  proposedContractNo String?   @map("proposed_contract_no") @db.VarChar(128)
+  note               String?   @db.Text
+
+  status             String    @default("pending") @db.VarChar(16)      // pending | approved | rejected
+
+  // Kim yubordi
+  source             String    @default("telegram") @db.VarChar(16)     // telegram | web | app
+  submittedByName    String    @map("submitted_by_name") @db.VarChar(190)
+  submittedByChatId  String?   @map("submitted_by_chat_id") @db.VarChar(64)
+  submittedById      String?   @map("submitted_by_id") @db.VarChar(64)  // AdminUser.id (app)
+  submittedAt        DateTime  @default(now()) @map("submitted_at")
+
+  // Tasdiqlash / rad etish
+  reviewedById       String?   @map("reviewed_by_id") @db.VarChar(64)
+  reviewedByName     String?   @map("reviewed_by_name") @db.VarChar(190)
+  reviewedAt         DateTime? @map("reviewed_at")
+  rejectReason       String?   @map("reject_reason") @db.Text
+
+  // Qo'llanilgan natija (approved bo'lganda)
+  appliedContractNo  String?   @map("applied_contract_no") @db.VarChar(128)
+  categoryId         String?   @map("category_id") @db.VarChar(64)
+  categoryName       String?   @map("category_name") @db.VarChar(190)
+  subCategoryId      String?   @map("sub_category_id") @db.VarChar(64)
+  subCategoryName    String?   @map("sub_category_name") @db.VarChar(190)
+  attachmentId       String?   @map("attachment_id") @db.VarChar(64)
+  attachmentName     String?   @map("attachment_name") @db.VarChar(255)
+
+  // Ko'rsatish uchun snapshot (yuborilgan paytdagi holat)
+  snapAmount         Decimal?  @map("snap_amount") @db.Decimal(15, 2)
+  snapDate           DateTime? @map("snap_date")
+  snapClient         String?   @map("snap_client") @db.VarChar(300)
+  snapObject         String?   @map("snap_object") @db.VarChar(300)
+  snapContractNo     String?   @map("snap_contract_no") @db.VarChar(64)
+  snapTxType         String?   @map("snap_tx_type") @db.VarChar(64)
+  snapPurpose        String?   @map("snap_purpose") @db.Text
+
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([txId])
+  @@index([submittedAt])
+  @@map("xato_correction_requests")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // IMPORT BATCH — har bir Excel import sessiyasi alohida yozuv
 // Tarix, yuklab olish (re-export), o'chirish uchun
 // ─────────────────────────────────────────────────────────────────

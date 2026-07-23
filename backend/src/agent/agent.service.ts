@@ -8,6 +8,7 @@ import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { CrmService } from '../crm/crm.service';
+import { CorrectionService } from '../correction/correction.service';
 
 /**
  * AI Agent (1-bosqich: XATO to'lov kunlik digest).
@@ -40,6 +41,7 @@ export class AgentService {
     private readonly prisma: PrismaService,
     private readonly categorization: CategorizationService,
     private readonly crm: CrmService,
+    private readonly correction: CorrectionService,
   ) {}
 
   // ─── Sozlama ───────────────────────────────────────────────────────
@@ -253,23 +255,28 @@ export class AgentService {
     }
   }
 
-  private async _assign(oplataKvId: string, contractNo: string, actorName?: string) {
+  /**
+   * Ariza yuborish — DARROV tasdiqlanmaydi. Tasdiqlovchi xodim keyin
+   * ko'rib fayl + kategoriya bilan tasdiqlaydi (2 bosqichli oqim).
+   */
+  private async _submit(
+    oplataKvId: string, contractNo: string,
+    actorName?: string, chatId?: string,
+    source: 'telegram' | 'web' = 'telegram',
+  ) {
     const contract = (contractNo || '').trim();
     if (!oplataKvId || !contract) return { ok: false, error: "To'lov yoki shartnoma raqami yo'q" };
-    const row = await this.prisma.oplataKv.findUnique({ where: { id: oplataKvId }, select: { sourceTxId: true } });
-    if (!row) return { ok: false, error: "To'lov topilmadi" };
-    if (!row.sourceTxId) return { ok: false, error: "Bu to'lov tranzaksiyadan kelmagan — biriktirib bo'lmaydi" };
-    const tx = await this.prisma.transaction.findFirst({
-      where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
-      select: { id: true },
-    });
-    if (!tx) return { ok: false, error: 'Manba tranzaksiya topilmadi' };
     try {
-      const actor = `TG${actorName ? ':' + actorName.slice(0, 40) : ''}`;
-      const res: any = await this.categorization.setContract(tx.id, contract, actor);
-      return { ok: true, verified: !!res?.verified, customerName: res?.customerName || null };
+      const res = await this.correction.createRequest({
+        oplataKvId,
+        proposedContractNo: contract,
+        source,
+        submittedByName: actorName || 'Telegram',
+        submittedByChatId: chatId || null,
+      });
+      return { ok: true, id: res.id, alreadyPending: !!res.alreadyPending, pending: true };
     } catch (e: any) {
-      return { ok: false, error: e?.message || 'Biriktirishda xato' };
+      return { ok: false, error: e?.message || 'Ariza yuborishda xato' };
     }
   }
 
@@ -279,6 +286,7 @@ export class AgentService {
       this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
       this.oplataKv.countXatoForAgent(dateFrom || null),
     ]);
+    const pendingSet = await this.correction.pendingOplataKvIds(rows.map((r) => r.id));
     return {
       ok: true,
       count,
@@ -286,6 +294,7 @@ export class AgentService {
         id: r.id, date: r.date, contractNo: r.contractNo,
         amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
         client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
+        pending: pendingSet.has(r.id),
       })),
     };
   }
@@ -294,7 +303,7 @@ export class AgentService {
   async getPublicXatoList(key: string) { await this.assertKey(key); return this._list(); }
   async crmSearch(key: string, q: string) { await this.assertKey(key); return this._crmSearch(q); }
   async assignContract(key: string, oplataKvId: string, contractNo: string, actorName?: string) {
-    await this.assertKey(key); return this._assign(oplataKvId, contractNo, actorName);
+    await this.assertKey(key); return this._submit(oplataKvId, contractNo, actorName, undefined, 'web');
   }
 
   // ─── Public: Telegram login_url (chat_id whitelist) ────────────────
@@ -305,7 +314,7 @@ export class AgentService {
   async tgCrmSearch(auth: Record<string, any>, q: string) { await this.authorizeTg(auth); return this._crmSearch(q); }
   async tgAssign(auth: Record<string, any>, oplataKvId: string, contractNo: string) {
     const who = await this.authorizeTg(auth);
-    return this._assign(oplataKvId, contractNo, who.name);
+    return this._submit(oplataKvId, contractNo, who.name, who.userId, 'telegram');
   }
 
   private async saveResult(text: string) {
