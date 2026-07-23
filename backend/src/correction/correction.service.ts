@@ -242,6 +242,31 @@ export class CorrectionService {
     return { ok: true, item: this.serialize(updated) };
   }
 
+  /**
+   * To'g'ridan-to'g'ri to'g'rilash (raw XATO ro'yxatidan) — ariza yaratadi va
+   * darhol tasdiqlaydi. Natija Tasdiqlangan ro'yxatida ko'rinadi.
+   */
+  async directCorrect(
+    txId: string,
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
+    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorEmail?: string | null },
+  ) {
+    if (!txId) throw new BadRequestException("To'lov ko'rsatilmagan");
+    const created = await this.createRequest({
+      txId,
+      proposedContractNo: opts.contractNo || null,
+      source: 'app',
+      submittedByName: opts.actorEmail || 'app',
+      submittedById: opts.actorId,
+    });
+    return this.approve(created.id, file, {
+      contractNo: opts.contractNo || null,
+      categoryId: opts.categoryId || null,
+      subCategoryId: opts.subCategoryId || null,
+      actorId: opts.actorId,
+    });
+  }
+
   // ─── Rad etish ─────────────────────────────────────────────────────
   async reject(id: string, reason: string, actorId: string) {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id }, select: { status: true } });
