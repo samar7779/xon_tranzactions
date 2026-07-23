@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send,
+  Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send, Users, Plus,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
+interface WlEntry { id: string; name: string }
 interface AgentConfig {
   ok: boolean;
   enabled: boolean;
@@ -24,6 +25,7 @@ interface AgentConfig {
   dailyTime: string;
   lastResult: string | null;
   pendingCount: number;
+  whitelist: WlEntry[];
 }
 
 export default function AdminAgentPage() {
@@ -42,6 +44,7 @@ export default function AdminAgentPage() {
   const [groupId, setGroupId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dailyTime, setDailyTime] = useState('09:00');
+  const [whitelist, setWhitelist] = useState<WlEntry[]>([]);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -49,8 +52,18 @@ export default function AdminAgentPage() {
     setGroupId(cfg.groupId || '');
     setDateFrom(cfg.dateFrom || '');
     setDailyTime(cfg.dailyTime || '09:00');
+    setWhitelist(cfg.whitelist || []);
     setInitialized(true);
   }, [cfg, initialized]);
+
+  const wlSave = useMutation({
+    mutationFn: (list: WlEntry[]) => api.put('/agent/config', { whitelist: list }),
+    onSuccess: () => { toast.success('Saqlandi'); qc.invalidateQueries({ queryKey: ['agent-config'] }); },
+    onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
+  });
+  const addWl = () => setWhitelist((p) => [...p, { id: '', name: '' }]);
+  const setWl = (i: number, patch: Partial<WlEntry>) => setWhitelist((p) => p.map((w, j) => (j === i ? { ...w, ...patch } : w)));
+  const rmWl = (i: number) => setWhitelist((p) => p.filter((_, j) => j !== i));
 
   const saveMut = useMutation({
     mutationFn: (patch: Partial<AgentConfig> & { botToken?: string }) => api.put('/agent/config', patch),
@@ -183,6 +196,36 @@ export default function AdminAgentPage() {
               </Button>
               {!configured && <span className="text-[11px] text-amber-600 dark:text-amber-400">Avval bot token + guruh ID</span>}
               <span className="text-[10.5px] text-slate-400 ml-auto">🔒 Bot token AES-256 bilan shifrlanadi</span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── Ruxsat berilganlar (chat_id whitelist) ─── */}
+      {canManage && (
+        <Card className="border-0 shadow-soft">
+          <CardContent className="p-5 space-y-3">
+            <div className="text-[13px] font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <Users className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Ruxsat berilganlar (chat_id)
+            </div>
+            <div className="text-[11.5px] text-slate-500 dark:text-slate-400">
+              Faqat shu chat_id&apos;lar «Ro&apos;yxat»ni ocha oladi (qolganlar uchun ma&apos;lumot ko&apos;rinmaydi). chat_id&apos;ni bilish: xodim Telegram&apos;da <b>@userinfobot</b> ga <b>/start</b> yozadi → «Id» raqami.
+            </div>
+            <div className="space-y-2">
+              {whitelist.length === 0 && <div className="text-[12px] text-slate-400 dark:text-slate-500">Hali hech kim qo&apos;shilmagan</div>}
+              {whitelist.map((w, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input value={w.id} onChange={(e) => setWl(i, { id: e.target.value.replace(/\D/g, '') })} placeholder="chat_id (123456789)" className="h-9 rounded-lg font-mono text-[12px] w-48" />
+                  <Input value={w.name} onChange={(e) => setWl(i, { name: e.target.value })} placeholder="Ism" className="h-9 rounded-lg text-[12px] flex-1" />
+                  <button onClick={() => rmWl(i)} className="w-9 h-9 grid place-items-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 shrink-0">✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button onClick={addWl} variant="outline" className="h-9 gap-1.5 text-[12px]"><Plus className="h-4 w-4" /> Qo&apos;shish</Button>
+              <Button onClick={() => wlSave.mutate(whitelist)} disabled={wlSave.isPending} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-semibold ml-auto">
+                {wlSave.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Ro&apos;yxatni saqlash
+              </Button>
             </div>
           </CardContent>
         </Card>

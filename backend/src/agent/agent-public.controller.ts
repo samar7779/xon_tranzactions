@@ -28,4 +28,23 @@ export class AgentPublicController {
   assign(@Body() body: { key?: string; oplataKvId?: string; contractNo?: string; name?: string }) {
     return this.svc.assignContract(body?.key || '', body?.oplataKvId || '', body?.contractNo || '', body?.name);
   }
+
+  // ─── Telegram login_url (chat_id whitelist) ───
+  @Post('tg/list')
+  @ApiOperation({ summary: 'Telegram auth bilan XATO ro\'yxati (whitelist)' })
+  tgList(@Body() body: { auth?: Record<string, any> }) {
+    return this.svc.tgList(body?.auth || {});
+  }
+
+  @Post('tg/search')
+  @ApiOperation({ summary: 'Telegram auth bilan CRM qidirish' })
+  tgSearch(@Body() body: { auth?: Record<string, any>; q?: string }) {
+    return this.svc.tgCrmSearch(body?.auth || {}, body?.q || '');
+  }
+
+  @Post('tg/assign')
+  @ApiOperation({ summary: 'Telegram auth bilan shartnoma biriktirish' })
+  tgAssign(@Body() body: { auth?: Record<string, any>; oplataKvId?: string; contractNo?: string }) {
+    return this.svc.tgAssign(body?.auth || {}, body?.oplataKvId || '', body?.contractNo || '');
+  }
 }
