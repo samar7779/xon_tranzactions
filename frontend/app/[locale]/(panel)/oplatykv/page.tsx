@@ -1556,6 +1556,23 @@ function AktSverkaDialog({
     }
   };
 
+  // Мемориальный ордер (PDF) — shartnomaning barcha to'lovlari uchun bank hujjati
+  const [memOrderLoading, setMemOrderLoading] = useState(false);
+  const downloadMemorialOrder = async () => {
+    if (!selectedContract) return;
+    setMemOrderLoading(true);
+    try {
+      await apiDownload(
+        `/oplata-kv/memorial-order?contractNo=${encodeURIComponent(selectedContract)}`,
+        `mem-order-${selectedContract}.pdf`,
+      );
+    } catch (e: any) {
+      toast.error(e?.message || 'PDF yuklab bo\'lmadi');
+    } finally {
+      setMemOrderLoading(false);
+    }
+  };
+
   const data = contractQuery.data;
 
   return (
@@ -1874,6 +1891,18 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Мем. ордер — shartnomaning barcha to'lovlari uchun bank memorial ordeni (PDF) */}
+            <button
+              onClick={downloadMemorialOrder}
+              disabled={!selectedContract || !data || data.items.length === 0 || memOrderLoading}
+              title="Мемориальный ордер (PDF) — barcha to'lovlar"
+              className="h-9 px-3 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[12px] shadow-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {memOrderLoading
+                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                : <FileText className="h-3.5 w-3.5" />}
+              Мем. ордер
+            </button>
             {/* Planirovka — CRM'dagi real xonadon rejasi (uploads/plans), shimmer effekti */}
             <button
               onClick={() => setPlanOpen(true)}

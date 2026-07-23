@@ -11,6 +11,7 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { OplataKvService } from './oplata-kv.service';
+import { MemorialOrderService } from './memorial-order/memorial-order.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -43,7 +44,10 @@ function fixFileName(name?: string): string | undefined {
 @UseGuards(JwtAuthGuard, PermissionsGuard)
 @Controller('oplata-kv')
 export class OplataKvController {
-  constructor(private readonly svc: OplataKvService) {}
+  constructor(
+    private readonly svc: OplataKvService,
+    private readonly memorialOrder: MemorialOrderService,
+  ) {}
 
   @Get()
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
@@ -59,6 +63,19 @@ export class OplataKvController {
     const { buffer, filename } = await this.svc.exportXlsx(q);
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
+  @Get('memorial-order')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Shartnoma bo\'yicha Мемориальный ордер (PDF) — barcha to\'lovlar' })
+  async memorialOrderPdf(@Query('contractNo') contractNo: string, @Res() res: Response) {
+    const { buffer, filename } = await this.memorialOrder.generatePdf(contractNo);
+    res.set({
+      'Content-Type': 'application/pdf',
       'Content-Disposition': `attachment; filename="${filename}"`,
       'Content-Length': String(buffer.length),
     });
