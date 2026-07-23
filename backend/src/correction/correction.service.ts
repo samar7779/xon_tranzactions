@@ -133,6 +133,17 @@ export class CorrectionService {
     return new Set(rows.map((r) => r.oplataKvId!).filter(Boolean));
   }
 
+  // ─── Badge uchun: qaysi oplataKv'larda rad etilgan ariza bor ───────
+  async rejectedOplataKvIds(ids: string[]): Promise<Set<string>> {
+    const list = ids.filter(Boolean);
+    if (!list.length) return new Set();
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { status: 'rejected', oplataKvId: { in: list } },
+      select: { oplataKvId: true },
+    });
+    return new Set(rows.map((r) => r.oplataKvId!).filter(Boolean));
+  }
+
   // ─── Kutilmoqda ro'yxati ───────────────────────────────────────────
   async listPending(opts: { q?: string; page?: number; perPage?: number } = {}) {
     const page = Math.max(1, opts.page || 1);

@@ -2521,26 +2521,34 @@ function ApprovalModal({
   const amountPositive = (prefill.amount ?? 0) >= 0;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
-      <DialogContent className="sm:max-w-[560px] w-[95vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col z-[320]">
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-[300] bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-150"
+        onClick={() => { if (!busy) onClose(); }}
+      />
+      {/* Yon panel (side drawer) — o'ngdan chiqadi */}
+      <div className="fixed inset-y-0 right-0 z-[310] w-full sm:max-w-[520px] bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
         {/* Header */}
-        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 py-4 text-white shrink-0">
-          <DialogTitle asChild>
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
-                <Wrench className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">XATO shartnomani to'g'rilash</div>
-                <div className="text-lg font-black tracking-tight truncate">
-                  {mode === 'approve' ? 'Arizani tasdiqlash' : "To'g'ridan-to'g'ri to'g'rilash"}
-                </div>
-              </div>
+        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 py-4 text-white shrink-0 flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+            <Wrench className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">XATO shartnomani to'g'rilash</div>
+            <div className="text-lg font-black tracking-tight truncate">
+              {mode === 'approve' ? 'Arizani tasdiqlash' : "To'g'ridan-to'g'ri to'g'rilash"}
             </div>
-          </DialogTitle>
+          </div>
+          <button
+            onClick={() => { if (!busy) onClose(); }}
+            className="w-8 h-8 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/50 dark:bg-slate-900">
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
           {/* To'lov xulosasi kartochkasi */}
           <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
             <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
@@ -2686,15 +2694,15 @@ function ApprovalModal({
                   type="button"
                   onClick={() => fileRef.current?.click()}
                   className={cn(
-                    'w-full flex items-center gap-2.5 h-10 px-3 rounded-lg ring-1 border-dashed transition-all text-[12px]',
+                    'w-full flex flex-col items-center justify-center gap-1.5 py-5 px-3 rounded-xl border-2 border-dashed transition-all text-[12px]',
                     file
-                      ? 'ring-emerald-300 dark:ring-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
-                      : 'ring-slate-300 dark:ring-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:ring-rose-300',
+                      ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
+                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-rose-400 hover:bg-rose-50/40 dark:hover:bg-rose-950/10',
                   )}
                 >
-                  {file ? <FileIcon className="h-4 w-4 shrink-0" /> : <UploadIcon className="h-4 w-4 shrink-0" />}
-                  <span className="truncate flex-1 text-left">{file ? file.name : 'Fayl tanlang (PDF, DOC, JPG, PNG — max 25MB)'}</span>
-                  {file && <span className="text-[10px] text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)}MB</span>}
+                  {file ? <FileIcon className="h-6 w-6" /> : <UploadIcon className="h-6 w-6" />}
+                  <span className="truncate max-w-full font-semibold">{file ? file.name : 'Ariza faylini tanlang'}</span>
+                  <span className="text-[10px] text-slate-400">{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : 'PDF, DOC, JPG, PNG — max 25MB'}</span>
                 </button>
               </div>
             </>
@@ -2726,8 +2734,8 @@ function ApprovalModal({
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </>
   );
 }
 
