@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound, Code2, FileSpreadsheet } from 'lucide-react';
+import { Users, ShieldCheck, History, Zap, Trash2, Briefcase, Upload, KeyRound, Code2, FileSpreadsheet, Bot } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -20,6 +20,7 @@ const TABS = [
   { key: 'import',         tKey: 'import',         icon: Upload,       perm: PERMS.IMPORT_VIEW },
   { key: 'export',         tKey: 'export',         icon: FileSpreadsheet, perm: PERMS.EXPORT_VIEW },
   { key: 'api-keys',       tKey: 'apiKeys',        icon: Code2,        perm: PERMS.API_KEYS_VIEW },
+  { key: 'agent',          tKey: 'agent',          icon: Bot,          perm: PERMS.AGENT_VIEW },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

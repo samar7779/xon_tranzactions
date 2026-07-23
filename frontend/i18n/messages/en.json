@@ -200,7 +200,8 @@
       "cleanup": "Cleanup",
       "import": "Import",
       "export": "Export",
-      "apiKeys": "Developer API"
+      "apiKeys": "Developer API",
+      "agent": "Agent"
     }
   },
   "adminLogin": {

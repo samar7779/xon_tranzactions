@@ -964,6 +964,46 @@ export class OplataKvService {
     return rows.map((r) => ({ ...r, crmXato: isXato(r) }));
   }
 
+  // ───────────────── AGENT: XATO to'lovlar (Telegram notifikatori) ─────────────────
+  /**
+   * Agent uchun XATO to'lovlar — CRM'da tasdiqlanmagan + hali guruhga jo'natilmagan
+   * (agentNotifiedAt=null), dateFrom'dan boshlab. Eng eski birinchi.
+   */
+  async getXatoForAgent(opts: { dateFrom?: string | null; limit?: number }) {
+    const xatoFilter = await this.buildXatoFilter();
+    const where: Prisma.OplataKvWhereInput = {
+      ...(xatoFilter as Prisma.OplataKvWhereInput),
+      agentNotifiedAt: null,
+    };
+    if (opts.dateFrom) where.date = { gte: new Date(opts.dateFrom) };
+    const take = Math.min(Math.max(1, opts.limit || 20), 100);
+    return this.prisma.oplataKv.findMany({
+      where,
+      orderBy: [{ date: 'asc' }, { createdAt: 'asc' }],
+      take,
+    });
+  }
+
+  /** Agent guruhga jo'natgan qatorlarni belgilaydi (qayta jo'natmaslik uchun). */
+  async markAgentNotified(ids: string[]) {
+    if (!ids.length) return { count: 0 };
+    return this.prisma.oplataKv.updateMany({
+      where: { id: { in: ids } },
+      data: { agentNotifiedAt: new Date() },
+    });
+  }
+
+  /** Kutayotgan (hali jo'natilmagan) XATO to'lovlar soni — agent status uchun. */
+  async countXatoForAgent(dateFrom?: string | null) {
+    const xatoFilter = await this.buildXatoFilter();
+    const where: Prisma.OplataKvWhereInput = {
+      ...(xatoFilter as Prisma.OplataKvWhereInput),
+      agentNotifiedAt: null,
+    };
+    if (dateFrom) where.date = { gte: new Date(dateFrom) };
+    return this.prisma.oplataKv.count({ where });
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });

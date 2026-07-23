@@ -117,6 +117,10 @@ export const PERMISSIONS = {
   API_KEYS_VIEW: 'api_keys:view',                                // Kalitlar ro'yxati + loglar
   API_KEYS_MANAGE: 'api_keys:manage',                            // Yaratish, tahrirlash, o'chirish
 
+  // AI Agent (XATO to'lov notifikatori — Telegram guruhga)
+  AGENT_VIEW: 'agent:view',                                      // Agent bo'limini ko'rish (holat)
+  AGENT_MANAGE: 'agent:manage',                                  // Agent sozlamalari + qo'lda ishga tushirish
+
   // ─── CHEK (alohida sahifa, 3 ta tab) ───
   CHEK_BAZA: 'chek:baza',           // Baza tab — ma'lumot qo'shish
   CHEK_TARIX: 'chek:tarix',         // Tarix tab — ko'rish + tahrirlash
@@ -323,6 +327,14 @@ export const PERMISSION_TREE: PermModule[] = [
         items: [
           { value: PERMISSIONS.API_KEYS_VIEW, label: 'API kalitlar va loglarni ko\'rish' },
           { value: PERMISSIONS.API_KEYS_MANAGE, label: 'API kalit yaratish / tahrirlash / o\'chirish' },
+        ],
+      },
+      {
+        name: 'AI Agent',
+        description: 'XATO to\'lovlarni Telegram guruhga tashlaydigan agent',
+        items: [
+          { value: PERMISSIONS.AGENT_VIEW, label: 'Agent bo\'limini ko\'rish (holat)' },
+          { value: PERMISSIONS.AGENT_MANAGE, label: 'Agent sozlamalari + ishga tushirish' },
         ],
       },
     ],

@@ -78,6 +78,10 @@ export const PERMS = {
   API_KEYS_VIEW: 'api_keys:view',
   API_KEYS_MANAGE: 'api_keys:manage',
 
+  // AI Agent
+  AGENT_VIEW: 'agent:view',
+  AGENT_MANAGE: 'agent:manage',
+
   // Chek (alohida sahifa, 3 ta tab)
   CHEK_BAZA: 'chek:baza',
   CHEK_TARIX: 'chek:tarix',

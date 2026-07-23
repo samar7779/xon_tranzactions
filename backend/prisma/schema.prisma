@@ -888,6 +888,10 @@ model OplataKv {
   // Manba (МАНБА) ustunida "Qo'lda" badge ko'rsatish uchun.
   wasManuallyEdited    Boolean  @default(false) @map("was_manually_edited")
 
+  // Agent (XATO to'lov notifikatori) — Telegram guruhga jo'natilgan vaqt.
+  // NULL = hali jo'natilmagan; qayta-qayta jo'natmaslik (dedupe) uchun.
+  agentNotifiedAt      DateTime? @map("agent_notified_at")
+
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
 
