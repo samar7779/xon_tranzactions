@@ -16,6 +16,7 @@ import {
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
   RefreshCw, Landmark, Ban, Gauge, Scissors,
+  Clock, Send, XCircle,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -1904,17 +1905,87 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
   );
 }
 
-// ═══ CLIENT + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya) ═══
+// ═══ CLIENT + XATO — 2 bosqichli TO'G'RILASH workflow (3 tab) ═══════════════
+// Row shape'lari
+type CorrectionRow = {
+  id: string; txId: string; oplataKvId: string | null; status: string; source: string | null;
+  proposedContractNo: string | null; note: string | null;
+  submittedByName: string | null; submittedAt: string | null;
+  reviewedByName: string | null; reviewedAt: string | null; rejectReason: string | null;
+  appliedContractNo: string | null; categoryName: string | null; subCategoryName: string | null;
+  attachmentId: string | null; attachmentName: string | null;
+  amount: number | null; date: string | null; client: string | null; object: string | null;
+  contractNo: string | null; txType: string | null; purpose: string | null;
+};
+
+type ApprovalPrefill = {
+  contractNo: string; client: string; amount: number | null;
+  date: string | null; purpose: string | null; object: string | null;
+};
+
+// Yuboruvchi manba ikonasi
+function SourceIcon({ source }: { source: string | null }) {
+  if (source === 'telegram') return <Send className="h-3 w-3 text-sky-500" />;
+  if (source === 'app') return <Gauge className="h-3 w-3 text-violet-500" />;
+  return <Landmark className="h-3 w-3 text-slate-400" />;
+}
+
 function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
-  const [page, setPage] = useState(1);
+  const qc = useQueryClient();
+
+  const [tab, setTab] = useState<'pending' | 'approved' | 'raw'>('pending');
+
+  // ── Raw (Barcha XATO) — mavjud tab holati ──
+  const [rawPage, setRawPage] = useState(1);
   const [infoRow, setInfoRow] = useState<any | null>(null);
   const [exporting, setExporting] = useState(false);
   const perPage = 50;
 
-  useEffect(() => { if (open) setPage(1); }, [open]);
+  // ── Pending tab ──
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingQ, setPendingQ] = useState('');
 
+  // ── Approved tab ──
+  const [approvedPage, setApprovedPage] = useState(1);
+  const [approvedQ, setApprovedQ] = useState('');
+  const [apFrom, setApFrom] = useState('');
+  const [apTo, setApTo] = useState('');
+  const [apActor, setApActor] = useState('');
+  const [apFlow, setApFlow] = useState<'all' | 'in' | 'out'>('all');
+
+  // ── ApprovalModal holati ──
+  const [approval, setApproval] = useState<{
+    mode: 'approve' | 'direct'; requestId?: string; txId?: string; prefill: ApprovalPrefill;
+  } | null>(null);
+
+  useEffect(() => {
+    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); }
+  }, [open]);
+  useEffect(() => { setPendingPage(1); }, [pendingQ]);
+  useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow]);
+
+  const invalidateAll = () => {
+    qc.invalidateQueries({ queryKey: ['correction-stats'] });
+    qc.invalidateQueries({ queryKey: ['correction-pending'] });
+    qc.invalidateQueries({ queryKey: ['correction-approved'] });
+    qc.invalidateQueries({ queryKey: ['client-xato'] });
+    // Tasdiqlangach to'lov XATO'dan chiqadi — asosiy jadval/oplatakv ham yangilansin
+    qc.invalidateQueries({ queryKey: ['transactions'] });
+    qc.invalidateQueries({ queryKey: ['tx-stats'] });
+    qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+  };
+
+  // ── Stats (badge'lar uchun) ──
+  const statsQuery = useQuery({
+    queryKey: ['correction-stats'],
+    queryFn: () => api.get<{ ok: boolean; pending: number; approved: number }>('/correction/stats'),
+    enabled: open,
+  });
+  const stats = statsQuery.data;
+
+  // ── Excel export (faqat raw tab uchun) ──
   const exportExcel = async () => {
     setExporting(true);
     try {
@@ -1926,8 +1997,27 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
     }
   };
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['client-xato', page],
+  // ── Pending query ──
+  const pendingQuery = useQuery({
+    queryKey: ['correction-pending', pendingPage, pendingQ],
+    queryFn: () => api.get<{ ok: boolean; total: number; page: number; perPage: number; rows: CorrectionRow[] }>(
+      `/correction/pending?q=${encodeURIComponent(pendingQ)}&page=${pendingPage}&perPage=${perPage}`,
+    ),
+    enabled: open && tab === 'pending',
+  });
+
+  // ── Approved query ──
+  const approvedQuery = useQuery({
+    queryKey: ['correction-approved', approvedPage, approvedQ, apFrom, apTo, apActor, apFlow],
+    queryFn: () => api.get<{ ok: boolean; total: number; page: number; perPage: number; rows: CorrectionRow[] }>(
+      `/correction/approved?q=${encodeURIComponent(approvedQ)}&from=${apFrom}&to=${apTo}&actor=${encodeURIComponent(apActor)}&flow=${apFlow}&page=${approvedPage}&perPage=${perPage}`,
+    ),
+    enabled: open && tab === 'approved',
+  });
+
+  // ── Raw (Barcha XATO) query ──
+  const rawQuery = useQuery({
+    queryKey: ['client-xato', rawPage],
     queryFn: () => api.get<{
       ok: boolean; total: number; page: number; perPage: number;
       items: Array<{
@@ -1935,25 +2025,79 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         amount: number; currency: string; direction: string; contractNumber: string | null;
         description: string | null; counterparty: string | null;
       }>;
-    }>(`/transactions/client-xato?page=${page}&perPage=${perPage}`),
-    enabled: open,
+    }>(`/transactions/client-xato?page=${rawPage}&perPage=${perPage}`),
+    enabled: open && tab === 'raw',
   });
 
-  const items = data?.items || [];
-  const total = data?.total || 0;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; } };
+  const fmtDate = (d: string | null | undefined) => {
+    if (!d) return '—';
+    try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; }
+  };
+
+  // Signed money — formatMoney o'zi absolyut oladi, sign+rang biz qo'yamiz
+  const SignedMoney = ({ amount }: { amount: number | null }) => {
+    if (amount == null) return <span className="text-slate-400">—</span>;
+    const positive = amount >= 0;
+    return (
+      <span className={cn('tabular-nums font-bold whitespace-nowrap', positive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+        {positive ? '+' : '−'}{formatMoney(Math.abs(amount))}
+      </span>
+    );
+  };
+
+  // Pagination komponenti (umumiy)
+  const Pager = ({ page, total, onPrev, onNext }: { page: number; total: number; onPrev: () => void; onNext: () => void }) => {
+    const totalPages = Math.max(1, Math.ceil(total / perPage));
+    if (totalPages <= 1) return null;
+    return (
+      <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0">
+        <div className="text-[11px] text-slate-500 dark:text-slate-400">{page} / {totalPages} · {total}</div>
+        <div className="flex items-center gap-1.5">
+          <button onClick={onPrev} disabled={page <= 1} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronLeft className="h-4 w-4" /></button>
+          <button onClick={onNext} disabled={page >= totalPages} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
+        </div>
+      </div>
+    );
+  };
+
+  const pendingRows = pendingQuery.data?.rows || [];
+  const approvedRows = approvedQuery.data?.rows || [];
+  const rawItems = rawQuery.data?.items || [];
+  const rawTotal = rawQuery.data?.total || 0;
+
+  const TabBtn = ({ id, icon, label, count }: { id: typeof tab; icon: React.ReactNode; label: string; count?: number }) => (
+    <button
+      onClick={() => setTab(id)}
+      className={cn(
+        'inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold transition-all',
+        tab === id
+          ? 'bg-white text-rose-700 shadow-sm'
+          : 'text-white/80 hover:bg-white/10',
+      )}
+    >
+      {icon}
+      <span>{label}</span>
+      {count != null && count > 0 && (
+        <span className={cn(
+          'ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold tabular-nums',
+          tab === id ? 'bg-rose-600 text-white' : 'bg-white/25 text-white',
+        )}>
+          {count}
+        </span>
+      )}
+    </button>
+  );
 
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col"
-        onInteractOutside={(e) => { if (infoRow) e.preventDefault(); }}
-        onPointerDownOutside={(e) => { if (infoRow) e.preventDefault(); }}
-        onEscapeKeyDown={(e) => { if (infoRow) e.preventDefault(); }}
+        onInteractOutside={(e) => { if (infoRow || approval) e.preventDefault(); }}
+        onPointerDownOutside={(e) => { if (infoRow || approval) e.preventDefault(); }}
+        onEscapeKeyDown={(e) => { if (infoRow || approval) e.preventDefault(); }}
       >
-        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3.5 text-white shrink-0">
+        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3 text-white shrink-0">
           <div className="flex items-start justify-between gap-3">
             <DialogTitle asChild>
               <div className="flex items-center gap-2.5 min-w-0">
@@ -1966,93 +2110,282 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                 </div>
               </div>
             </DialogTitle>
-            <button
-              onClick={exportExcel}
-              disabled={exporting || isLoading || total === 0}
-              className="shrink-0 mr-8 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-              Excel
-            </button>
+            {tab === 'raw' && (
+              <button
+                onClick={exportExcel}
+                disabled={exporting || rawQuery.isLoading || rawTotal === 0}
+                className="shrink-0 mr-8 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Excel
+              </button>
+            )}
           </div>
-          <div className="text-[11px] text-white/80 mt-2 flex items-center gap-1.5">
-            {isLoading
-              ? <><Loader2 className="h-3 w-3 animate-spin" /> {tc('loading')}</>
-              : t('clientXatoCount', { n: total })}
+
+          {/* Tab bar — segmented pill */}
+          <div className="mt-3 flex items-center gap-1.5 p-1 rounded-xl bg-white/10 w-fit">
+            <TabBtn id="pending" icon={<Clock className="h-3.5 w-3.5" />} label="Kutilmoqda" count={stats?.pending} />
+            <TabBtn id="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Tasdiqlangan" count={stats?.approved} />
+            <TabBtn id="raw" icon={<AlertCircle className="h-3.5 w-3.5" />} label="Barcha XATO" />
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
-          {isLoading ? (
-            <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
-              <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
-              <span className="text-[12px]">{tc('loading')}</span>
+        {/* ═══ TAB: KUTILMOQDA ═══ */}
+        {tab === 'pending' && (
+          <>
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <Input value={pendingQ} onChange={(e) => setPendingQ(e.target.value)} placeholder="Qidirish (klient, shartnoma, izoh)…" className="pl-9 h-9 text-[12px]" />
+              </div>
             </div>
-          ) : items.length === 0 ? (
-            <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('clientXatoEmpty')}</div>
-          ) : (
-            <table className="w-full text-[12px]">
-              <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                <tr>
-                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {t('dateTimeHeader')}</span></th>
-                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {t('counterpartyHeader')}</span></th>
-                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> {t('contractHeader')}</span></th>
-                  <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> {t('amountHeader')}</span></th>
-                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" /> {t('purposeHeader')}</span></th>
-                  <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Hash className="h-3 w-3" /> ID</span></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                {items.map((it) => (
-                  <tr key={it.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
-                    <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
-                      {fmtDate(it.txnDate)}{it.operationTime ? <span className="text-slate-400 dark:text-slate-500"> {it.operationTime.slice(0, 5)}</span> : null}
-                    </td>
-                    <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={it.counterparty || ''}>{it.counterparty || '—'}</td>
-                    <td className="px-3 py-2">
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
-                        <AlertCircle className="h-3 w-3" /> {t('badgeError')}
-                      </span>
-                    </td>
-                    <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-                      {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => setInfoRow(it)}
-                        title={it.description || ''}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-indigo-500 hover:to-violet-600 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(it.externalId || it.id);
-                          toast.success(t('idCopied'));
-                        }}
-                        title={it.externalId || it.id}
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-slate-500 hover:to-slate-700 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+            <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+              {pendingQuery.isLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+                  <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
+                  <span className="text-[12px]">{tc('loading')}</span>
+                </div>
+              ) : pendingRows.length === 0 ? (
+                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">Kutilayotgan arizalar yo'q</div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Sana</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> Klient</span></th>
+                      <th className="text-left px-3 py-2">Obyekt</th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span></th>
+                      <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
+                      <th className="text-left px-3 py-2">Kim yubordi</th>
+                      <th className="text-left px-3 py-2">Izoh</th>
+                      <th className="text-right px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {pendingRows.map((r) => (
+                      <tr key={r.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmtDate(r.date)}</td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={r.client || ''}>{r.client || '—'}</td>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title={r.object || ''}>{r.object || '—'}</td>
+                        <td className="px-3 py-2">
+                          {r.proposedContractNo ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900" title={r.proposedContractNo}>
+                              <Wand2 className="h-3 w-3" /> {r.proposedContractNo}
+                            </span>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right"><SignedMoney amount={r.amount} /></td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-1.5 text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={r.submittedByName || ''}>
+                            <SourceIcon source={r.source} />
+                            <span className="truncate">{r.submittedByName || '—'}</span>
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => setApproval({
+                              mode: 'approve', requestId: r.id,
+                              prefill: { contractNo: r.proposedContractNo || r.contractNo || '', client: r.client || '', amount: r.amount, date: r.date, purpose: r.purpose, object: r.object },
+                            })}
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[11px] font-semibold transition-all shadow-sm"
+                          >
+                            <Wrench className="h-3 w-3" /> To'g'rilash
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <Pager page={pendingPage} total={pendingQuery.data?.total || 0} onPrev={() => setPendingPage((p) => Math.max(1, p - 1))} onNext={() => setPendingPage((p) => p + 1)} />
+          </>
+        )}
 
-        {totalPages > 1 && (
-          <div className="px-4 py-2.5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0">
-            <div className="text-[11px] text-slate-500 dark:text-slate-400">{page} / {totalPages}</div>
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronLeft className="h-4 w-4" /></button>
-              <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
+        {/* ═══ TAB: TASDIQLANGAN ═══ */}
+        {tab === 'approved' && (
+          <>
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 space-y-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-[180px] max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                  <Input value={approvedQ} onChange={(e) => setApprovedQ(e.target.value)} placeholder="Qidirish…" className="pl-9 h-9 text-[12px]" />
+                </div>
+                {/* Flow segmented control */}
+                <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                  {([['all', 'Hammasi'], ['in', 'Kirim'], ['out', 'Chiqim']] as const).map(([v, lbl]) => (
+                    <button
+                      key={v}
+                      onClick={() => setApFlow(v)}
+                      className={cn(
+                        'h-7 px-2.5 rounded-md text-[11px] font-semibold transition-all',
+                        apFlow === v
+                          ? (v === 'in' ? 'bg-emerald-600 text-white shadow-sm' : v === 'out' ? 'bg-rose-600 text-white shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm')
+                          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                      )}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 dark:text-slate-400">
+                <FilterIcon className="h-3.5 w-3.5" />
+                <input type="date" value={apFrom} onChange={(e) => setApFrom(e.target.value)} className="h-8 px-2 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 text-[12px] text-slate-700 dark:text-slate-200" />
+                <span>—</span>
+                <input type="date" value={apTo} onChange={(e) => setApTo(e.target.value)} className="h-8 px-2 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 text-[12px] text-slate-700 dark:text-slate-200" />
+                <Input value={apActor} onChange={(e) => setApActor(e.target.value)} placeholder="Kim tasdiqladi…" className="h-8 w-40 text-[12px]" />
+              </div>
             </div>
-          </div>
+            <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+              {approvedQuery.isLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+                  <Loader2 className="h-7 w-7 animate-spin text-emerald-500" />
+                  <span className="text-[12px]">{tc('loading')}</span>
+                </div>
+              ) : approvedRows.length === 0 ? (
+                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">Tasdiqlangan arizalar yo'q</div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Sana</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> Klient</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Tag className="h-3 w-3" /> Kategoriya</span></th>
+                      <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
+                      <th className="text-left px-3 py-2">Kim tasdiqladi</th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Paperclip className="h-3 w-3" /> Ariza</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {approvedRows.map((r) => (
+                      <tr key={r.id} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmtDate(r.reviewedAt)}</td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={r.client || ''}>{r.client || '—'}</td>
+                        <td className="px-3 py-2">
+                          {r.appliedContractNo ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900" title={r.appliedContractNo}>
+                              <Check className="h-3 w-3" /> {r.appliedContractNo}
+                            </span>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={[r.categoryName, r.subCategoryName].filter(Boolean).join(' / ')}>
+                          {r.categoryName ? (
+                            <span>{r.categoryName}{r.subCategoryName ? <span className="text-slate-400 dark:text-slate-500"> / {r.subCategoryName}</span> : null}</span>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right"><SignedMoney amount={r.amount} /></td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={r.reviewedByName || ''}>{r.reviewedByName || '—'}</td>
+                        <td className="px-3 py-2">
+                          {r.attachmentId ? (
+                            <button
+                              onClick={() => apiDownload(`/transactions/${r.txId}/attachments/${r.attachmentId}/download`, r.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                              title={r.attachmentName || ''}
+                              className="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 text-[11px] font-medium transition-all max-w-[150px]"
+                            >
+                              <Download className="h-3 w-3 shrink-0" />
+                              <span className="truncate">{r.attachmentName || 'Yuklab olish'}</span>
+                            </button>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <Pager page={approvedPage} total={approvedQuery.data?.total || 0} onPrev={() => setApprovedPage((p) => Math.max(1, p - 1))} onNext={() => setApprovedPage((p) => p + 1)} />
+          </>
+        )}
+
+        {/* ═══ TAB: BARCHA XATO (mavjud raw jadval) ═══ */}
+        {tab === 'raw' && (
+          <>
+            <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+              {rawQuery.isLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+                  <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
+                  <span className="text-[12px]">{tc('loading')}</span>
+                </div>
+              ) : rawItems.length === 0 ? (
+                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{t('clientXatoEmpty')}</div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> {t('dateTimeHeader')}</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> {t('counterpartyHeader')}</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> {t('contractHeader')}</span></th>
+                      <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> {t('amountHeader')}</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileText className="h-3 w-3" /> {t('purposeHeader')}</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Hash className="h-3 w-3" /> ID</span></th>
+                      <th className="text-right px-3 py-2"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {rawItems.map((it) => (
+                      <tr key={it.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
+                          {fmtDate(it.txnDate)}{it.operationTime ? <span className="text-slate-400 dark:text-slate-500"> {it.operationTime.slice(0, 5)}</span> : null}
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={it.counterparty || ''}>{it.counterparty || '—'}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
+                            <AlertCircle className="h-3 w-3" /> {t('badgeError')}
+                          </span>
+                        </td>
+                        <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                          {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => setInfoRow(it)}
+                            title={it.description || ''}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-indigo-500 hover:to-violet-600 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                        <td className="px-3 py-2">
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(it.externalId || it.id);
+                              toast.success(t('idCopied'));
+                            }}
+                            title={it.externalId || it.id}
+                            className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-gradient-to-br hover:from-slate-500 hover:to-slate-700 text-slate-600 dark:text-slate-300 hover:text-white transition-all shadow-sm"
+                          >
+                            <Copy className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => setApproval({
+                              mode: 'direct', txId: it.id,
+                              prefill: {
+                                contractNo: it.contractNumber || '',
+                                client: it.counterparty || '',
+                                amount: it.direction === 'IN' ? Math.abs(it.amount) : -Math.abs(it.amount),
+                                date: it.txnDate,
+                                purpose: it.description,
+                                object: null,
+                              },
+                            })}
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[11px] font-semibold transition-all shadow-sm"
+                          >
+                            <Wrench className="h-3 w-3" /> To'g'rilash
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <Pager page={rawPage} total={rawTotal} onPrev={() => setRawPage((p) => Math.max(1, p - 1))} onNext={() => setRawPage((p) => p + 1)} />
+          </>
         )}
       </DialogContent>
     </Dialog>
@@ -2071,7 +2404,330 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         txnDate: infoRow.txnDate,
       } : null}
     />
+
+    {/* TO'G'RILASH modali — approve yoki direct */}
+    <ApprovalModal
+      open={!!approval}
+      onClose={() => setApproval(null)}
+      mode={approval?.mode || 'approve'}
+      requestId={approval?.requestId}
+      txId={approval?.txId}
+      prefill={approval?.prefill || { contractNo: '', client: '', amount: null, date: null, purpose: null, object: null }}
+      onDone={invalidateAll}
+    />
     </>
+  );
+}
+
+// ═══ TO'G'RILASHNI TASDIQLASH modali (nested Dialog) ════════════════════════
+function ApprovalModal({
+  open, onClose, mode, requestId, txId, prefill, onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  mode: 'approve' | 'direct';
+  requestId?: string;
+  txId?: string;
+  prefill: ApprovalPrefill;
+  onDone: () => void;
+}) {
+  const tc = useTranslations('common');
+  const [contractNo, setContractNo] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [subCategoryId, setSubCategoryId] = useState<string | null>(null);
+  const [rejectMode, setRejectMode] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Kategoriyalar daraxti — mavjud manba ('/categorization/categories')
+  const categoriesQuery = useQuery({
+    queryKey: ['categories-tree'],
+    queryFn: () => api.get<{ ok: boolean; items: any[] }>('/categorization/categories'),
+    staleTime: 5 * 60 * 1000,
+    enabled: open,
+  });
+  const tree = categoriesQuery.data?.items || [];
+
+  useEffect(() => {
+    if (open) {
+      setContractNo(prefill.contractNo || '');
+      setFile(null);
+      setCategoryId(null);
+      setSubCategoryId(null);
+      setRejectMode(false);
+      setRejectReason('');
+      setBusy(false);
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!open) return null;
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 25 * 1024 * 1024) {
+      toast.error('Fayl hajmi 25MB dan oshmasligi kerak');
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    setFile(f);
+  };
+
+  const canSubmit = !!file && contractNo.trim().length > 0 && !busy;
+
+  const submit = async () => {
+    if (!canSubmit || !file) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('contractNo', contractNo.trim());
+      if (categoryId) fd.append('categoryId', categoryId);
+      if (subCategoryId) fd.append('subCategoryId', subCategoryId);
+      if (mode === 'approve') {
+        if (!requestId) throw new Error('requestId yo\'q');
+        await api.postForm(`/correction/${requestId}/approve`, fd, { timeout: 60000 });
+      } else {
+        if (!txId) throw new Error('txId yo\'q');
+        fd.append('txId', txId);
+        await api.postForm('/correction/direct', fd, { timeout: 60000 });
+      }
+      toast.success('Tasdiqlandi va biriktirildi');
+      onDone();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || tc('error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReject = async () => {
+    if (!requestId || !rejectReason.trim()) { toast.error('Sabab kiriting'); return; }
+    setBusy(true);
+    try {
+      await api.post(`/correction/${requestId}/reject`, { reason: rejectReason.trim() });
+      toast.success('Rad etildi');
+      onDone();
+      onClose();
+    } catch (e: any) {
+      toast.error(e?.message || tc('error'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const amountPositive = (prefill.amount ?? 0) >= 0;
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v && !busy) onClose(); }}>
+      <DialogContent className="sm:max-w-[560px] w-[95vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col z-[320]">
+        {/* Header */}
+        <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 py-4 text-white shrink-0">
+          <DialogTitle asChild>
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <Wrench className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">XATO shartnomani to'g'rilash</div>
+                <div className="text-lg font-black tracking-tight truncate">
+                  {mode === 'approve' ? 'Arizani tasdiqlash' : "To'g'ridan-to'g'ri to'g'rilash"}
+                </div>
+              </div>
+            </div>
+          </DialogTitle>
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4 bg-slate-50/50 dark:bg-slate-900">
+          {/* To'lov xulosasi kartochkasi */}
+          <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+            <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
+              To'lov ma'lumoti
+            </div>
+            <div className="p-4 grid grid-cols-2 gap-y-2.5 gap-x-4 text-[12px]">
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Klient</div>
+                <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={prefill.client}>{prefill.client || '—'}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Summa</div>
+                <div className={cn('font-bold tabular-nums', amountPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                  {prefill.amount == null ? '—' : <>{amountPositive ? '+' : '−'}{formatMoney(Math.abs(prefill.amount))}</>}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Sana</div>
+                <div className="font-medium text-slate-700 dark:text-slate-300">{prefill.date ? (() => { try { return new Date(prefill.date).toLocaleDateString('ru-RU'); } catch { return prefill.date; } })() : '—'}</div>
+              </div>
+              {prefill.object && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Obyekt</div>
+                  <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={prefill.object}>{prefill.object}</div>
+                </div>
+              )}
+              {prefill.purpose && (
+                <div className="col-span-2">
+                  <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Maqsad</div>
+                  <div className="text-slate-600 dark:text-slate-400 text-[11.5px] leading-snug line-clamp-3">{prefill.purpose}</div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {rejectMode ? (
+            /* Rad etish rejimi */
+            <div className="rounded-xl ring-1 ring-rose-200 dark:ring-rose-900 bg-rose-50/50 dark:bg-rose-950/20 p-4 space-y-3">
+              <div className="text-[12px] font-semibold text-rose-700 dark:text-rose-300 flex items-center gap-1.5">
+                <XCircle className="h-4 w-4" /> Arizani rad etish
+              </div>
+              <textarea
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Rad etish sababi…"
+                rows={3}
+                className="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-[12px] text-slate-700 dark:text-slate-200 resize-none focus:outline-none focus:ring-2 focus:ring-rose-400"
+              />
+              <div className="flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setRejectMode(false)} disabled={busy}>Bekor qilish</Button>
+                <Button size="sm" onClick={doReject} disabled={busy || !rejectReason.trim()} className="bg-rose-600 hover:bg-rose-500">
+                  {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><XCircle className="h-3.5 w-3.5 mr-1" /> Rad etish</>}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Kategoriya picker */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <Tag className="h-3.5 w-3.5" /> Kategoriya (ixtiyoriy)
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {categoriesQuery.isLoading && <span className="text-[11px] text-slate-400"><Loader2 className="h-3.5 w-3.5 animate-spin inline" /></span>}
+                  {tree.map((cat: any) => {
+                    const active = categoryId === cat.id;
+                    const color = cat.color || '#64748b';
+                    return (
+                      <button
+                        key={cat.id}
+                        onClick={() => { setCategoryId(active ? null : cat.id); setSubCategoryId(null); }}
+                        className={cn(
+                          'inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold ring-1 transition-all',
+                          active
+                            ? 'text-white shadow-sm'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-slate-300',
+                        )}
+                        style={active ? { backgroundColor: color, borderColor: color } : {}}
+                      >
+                        {cat.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* Subkategoriyalar */}
+                {(() => {
+                  const cat = tree.find((c: any) => c.id === categoryId);
+                  const children = cat?.children || [];
+                  if (!cat || children.length === 0) return null;
+                  const color = cat.color || '#64748b';
+                  return (
+                    <div className="flex flex-wrap gap-1.5 mt-2 pl-3 border-l-2" style={{ borderColor: `${color}55` }}>
+                      {children.map((s: any) => {
+                        const active = subCategoryId === s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            onClick={() => setSubCategoryId(active ? null : s.id)}
+                            className={cn(
+                              'inline-flex items-center gap-1 h-6 px-2 rounded-full text-[10.5px] font-medium ring-1 transition-all',
+                              active
+                                ? 'text-white shadow-sm'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700 hover:ring-slate-300',
+                            )}
+                            style={active ? { backgroundColor: color, borderColor: color } : {}}
+                          >
+                            ↳ {s.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Shartnoma raqami */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <FileSignature className="h-3.5 w-3.5" /> Shartnoma raqami <span className="text-rose-500">*</span>
+                </label>
+                <Input
+                  value={contractNo}
+                  onChange={(e) => setContractNo(e.target.value)}
+                  placeholder="Masalan: 12345"
+                  className="h-9 text-[12px]"
+                />
+              </div>
+
+              {/* Ariza fayli */}
+              <div>
+                <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
+                  <Paperclip className="h-3.5 w-3.5" /> Ariza fayli <span className="text-rose-500">*majburiy</span>
+                </label>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                  onChange={onPickFile}
+                  className="hidden"
+                  id="approval-file-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  className={cn(
+                    'w-full flex items-center gap-2.5 h-10 px-3 rounded-lg ring-1 border-dashed transition-all text-[12px]',
+                    file
+                      ? 'ring-emerald-300 dark:ring-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
+                      : 'ring-slate-300 dark:ring-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:ring-rose-300',
+                  )}
+                >
+                  {file ? <FileIcon className="h-4 w-4 shrink-0" /> : <UploadIcon className="h-4 w-4 shrink-0" />}
+                  <span className="truncate flex-1 text-left">{file ? file.name : 'Fayl tanlang (PDF, DOC, JPG, PNG — max 25MB)'}</span>
+                  {file && <span className="text-[10px] text-slate-400 shrink-0">{(file.size / 1024 / 1024).toFixed(1)}MB</span>}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!rejectMode && (
+          <div className="px-5 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-3 shrink-0">
+            {mode === 'approve' ? (
+              <button
+                onClick={() => setRejectMode(true)}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors disabled:opacity-40"
+              >
+                <Ban className="h-3.5 w-3.5" /> Rad etish
+              </button>
+            ) : <span />}
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={onClose} disabled={busy}>{tc('cancel')}</Button>
+              <button
+                onClick={submit}
+                disabled={!canSubmit}
+                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[12px] font-bold transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                Tasdiqlash va biriktirish
+              </button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
