@@ -20,6 +20,7 @@ interface AgentConfig {
   enabled: boolean;
   hasToken: boolean;
   tokenHint: string | null;
+  botUsername: string | null;
   groupId: string | null;
   dateFrom: string | null;
   dailyTime: string;
@@ -152,7 +153,7 @@ export default function AdminAgentPage() {
         <CardContent className="p-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatTile label="Kutayotgan XATO" value={String(cfg?.pendingCount ?? 0)} tone={((cfg?.pendingCount ?? 0) > 0) ? 'amber' : 'emerald'} />
-            <StatTile label="Bot" value={cfg?.hasToken ? `bor ${cfg.tokenHint || ''}` : "yo'q"} tone={cfg?.hasToken ? 'emerald' : 'rose'} />
+            <StatTile label="Bot" value={cfg?.hasToken ? (cfg.botUsername || `bor ${cfg.tokenHint || ''}`) : "yo'q"} tone={cfg?.hasToken ? 'emerald' : 'rose'} mono={!!cfg?.botUsername} />
             <StatTile label="Guruh" value={cfg?.groupId || "yo'q"} tone={cfg?.groupId ? 'emerald' : 'rose'} mono />
             <StatTile label="Kunlik vaqt" value={cfg?.dailyTime || '09:00'} tone="slate" />
           </div>
