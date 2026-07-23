@@ -286,7 +286,11 @@ export class AgentService {
       this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
       this.oplataKv.countXatoForAgent(dateFrom || null),
     ]);
-    const pendingSet = await this.correction.pendingOplataKvIds(rows.map((r) => r.id));
+    const ids = rows.map((r) => r.id);
+    const [pendingSet, rejectedSet] = await Promise.all([
+      this.correction.pendingOplataKvIds(ids),
+      this.correction.rejectedOplataKvIds(ids),
+    ]);
     return {
       ok: true,
       count,
@@ -295,6 +299,7 @@ export class AgentService {
         amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
         client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
         pending: pendingSet.has(r.id),
+        rejected: !pendingSet.has(r.id) && rejectedSet.has(r.id),
       })),
     };
   }

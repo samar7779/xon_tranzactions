@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
-  Clock, Send,
+  Clock, Send, RotateCcw,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -17,6 +17,7 @@ interface XatoRow {
   txType: string | null;
   purpose: string | null;
   pending?: boolean;
+  rejected?: boolean;
 }
 interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string }
 
@@ -314,6 +315,10 @@ export default function XatoListPage() {
                       <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900/50">
                         <Clock className="w-3.5 h-3.5" /> Tasdiq kutilmoqda
                       </div>
+                    ) : r.rejected ? (
+                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900/50">
+                        <RotateCcw className="w-3.5 h-3.5" /> Rad etilgan — qayta yuboring
+                      </div>
                     ) : (
                       <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-rose-500/0 group-hover:text-rose-600 dark:group-hover:text-rose-300 transition-colors">
                         <Link2 className="w-3.5 h-3.5" /> Shartnoma biriktirish →
@@ -381,6 +386,11 @@ export default function XatoListPage() {
                 </div>
               ) : (
               <>
+              {selected.rejected && (
+                <div className="flex items-start gap-2 rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900/50 p-3 text-[11.5px] text-rose-700 dark:text-rose-300">
+                  <RotateCcw className="w-4 h-4 shrink-0 mt-0.5" /> <span>Oldingi ariza <b>rad etilgan</b>. To&apos;g&apos;ri shartnomani tanlab qayta yuboring.</span>
+                </div>
+              )}
               {/* CRM qidiruv */}
               <div className="space-y-1.5">
                 <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">To&apos;g&apos;ri CRM shartnomasi</label>
