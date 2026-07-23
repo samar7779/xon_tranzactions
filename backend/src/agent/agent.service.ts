@@ -164,19 +164,28 @@ export class AgentService {
       return { ok: true, posted: 0 };
     }
 
-    let posted = 0;
-    const postedIds: string[] = [];
+    // Obyekt bo'yicha guruhlash — har obyekt uchun BITTA xabar (guruh chalkashmasin)
+    const byObject = new Map<string, any[]>();
     for (const r of rows) {
-      const sent = await this.sendMessage(token, groupId, this.formatMessage(r));
-      if (sent) { posted++; postedIds.push(r.id); }
-      else break; // Telegram xato — to'xtaymiz, belgilamaymiz (keyingi safar qayta urinadi)
+      const key = (r.object && String(r.object).trim()) || '— Obyektsiz —';
+      const arr = byObject.get(key) || [];
+      arr.push(r);
+      byObject.set(key, arr);
+    }
+
+    let postedObjects = 0;
+    const postedIds: string[] = [];
+    for (const [obj, list] of byObject) {
+      const sent = await this.sendMessage(token, groupId, this.formatObjectMessage(obj, list));
+      if (sent) { postedObjects++; postedIds.push(...list.map((r) => r.id)); }
+      else break; // Telegram xato — to'xtaymiz (belgilamaymiz, keyingi safar qayta urinadi)
     }
     if (postedIds.length) await this.oplataKv.markAgentNotified(postedIds);
 
     const dur = Math.round((Date.now() - startedAt) / 1000);
-    await this.saveResult(`${posted} ta XATO to'lov jo'natildi (${dur}s)`);
-    this.log.log(`Agent runOnce: ${posted}/${rows.length} jo'natildi`);
-    return { ok: true, posted };
+    await this.saveResult(`${postedObjects} ta obyekt · ${postedIds.length} ta XATO to'lov jo'natildi (${dur}s)`);
+    this.log.log(`Agent runOnce: ${postedObjects} obyekt / ${postedIds.length} to'lov jo'natildi`);
+    return { ok: true, posted: postedIds.length };
   }
 
   private async saveResult(text: string) {
@@ -201,16 +210,27 @@ export class AgentService {
     return n.toLocaleString('ru-RU');
   }
 
-  private formatMessage(r: any): string {
+  /** Bitta obyekt uchun — o'sha obyektning barcha XATO to'lovlari bitta xabarda. */
+  private formatObjectMessage(object: string, list: any[]): string {
+    const total = list.reduce((s, r) => s + Number(r.paymentAmount || 0), 0);
+    const MAX = 20;
+    const lines = list.slice(0, MAX).map((r) => {
+      const parts = [
+        this.fmtDate(r.date),
+        `<code>${this.esc(r.contractNo)}</code>`,
+        `<b>${this.fmtMoney(r.paymentAmount)}</b>`,
+      ];
+      if (r.client) parts.push(this.esc(String(r.client).slice(0, 40)));
+      return `• ${parts.join(' · ')}`;
+    });
+    const more = list.length > MAX ? `\n… va yana ${list.length - MAX} ta` : '';
     return (
-      `⚠️ <b>XATO to'lov — ariza/shartnoma kerak</b>\n` +
-      `📅 Sana: <b>${this.fmtDate(r.date)}</b>\n` +
-      `💰 Summa: <b>${this.fmtMoney(r.paymentAmount)}</b>\n` +
-      `📄 Shartnoma: <code>${this.esc(r.contractNo)}</code> (CRM'da tasdiqlanmagan)\n` +
-      (r.client ? `👤 Klient: ${this.esc(r.client)}\n` : '') +
-      (r.object ? `🏠 Obyekt: ${this.esc(r.object)}\n` : '') +
-      (r.purpose ? `📝 Izoh: ${this.esc(String(r.purpose).slice(0, 200))}\n` : '') +
-      `🆔 <code>${this.esc(r.id)}</code>`
+      `⚠️ <b>XATO to'lovlar — ariza/shartnoma kerak</b>\n` +
+      `🏠 Obyekt: <b>${this.esc(object)}</b> — ${list.length} ta\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      lines.join('\n') + more + `\n` +
+      `━━━━━━━━━━━━━━━━\n` +
+      `💰 Jami: <b>${this.fmtMoney(total)}</b>`
     );
   }
 
