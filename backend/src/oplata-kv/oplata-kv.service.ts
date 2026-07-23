@@ -442,7 +442,7 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund' } = {}) {
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean } = {}) {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
@@ -458,7 +458,16 @@ export class OplataKvService {
       // Oddiy: 0 dan katta summalar + "взнос" qatnashgan tiplar
       // (masalan "взнос от имени клиента", "Взносы за автостоянку")
       where.paymentAmount = { gt: 0 };
-      where.txType = { contains: 'взнос', mode: 'insensitive' };
+      if (opts.includeSchotchik) {
+        // Toggle yoqilsa — "За счетчик" (счётчик) to'lovlarni ham qo'shamiz
+        where.OR = [
+          { txType: { contains: 'взнос', mode: 'insensitive' } },
+          { txType: { contains: 'счетчик', mode: 'insensitive' } },
+          { txType: { contains: 'счётчик', mode: 'insensitive' } },
+        ];
+      } else {
+        where.txType = { contains: 'взнос', mode: 'insensitive' };
+      }
     }
 
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
@@ -647,6 +656,7 @@ export class OplataKvService {
     dateFrom?: string;
     dateTo?: string;
     mode?: 'normal' | 'refund';
+    includeSchotchik?: boolean;
   }) {
     const where: any = {};
 
@@ -673,7 +683,22 @@ export class OplataKvService {
       where.txType = { startsWith: 'возврат', mode: 'insensitive' };
     } else {
       where.paymentAmount = { gt: 0 };
-      where.txType = { contains: 'взнос', mode: 'insensitive' };
+      if (opts.includeSchotchik) {
+        // object filtri where.OR ni band qilishi mumkin — shuning uchun
+        // txType shartini AND ichiga qo'yamiz (взнос YOKI счётчик)
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { txType: { contains: 'взнос', mode: 'insensitive' } },
+              { txType: { contains: 'счетчик', mode: 'insensitive' } },
+              { txType: { contains: 'счётчик', mode: 'insensitive' } },
+            ],
+          },
+        ];
+      } else {
+        where.txType = { contains: 'взнос', mode: 'insensitive' };
+      }
     }
 
     const ROW_CAP = 5000;
@@ -727,6 +752,7 @@ export class OplataKvService {
     dateFrom?: string;
     dateTo?: string;
     mode?: 'normal' | 'refund';
+    includeSchotchik?: boolean;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const { rows, total } = await this.byObjectDetail(opts);
     const isAll = opts.object === '__ALL__';
