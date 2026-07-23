@@ -5863,12 +5863,14 @@ function SchotchikBackfillDialog({
   const qc = useQueryClient();
   const [stage, setStage] = useState<'preview' | 'applying' | 'done'>('preview');
   const [result, setResult] = useState<SchotchikResult | null>(null);
+  const [authed, setAuthed] = useState(false);           // parol (7779) kiritilganmi
+  const [tab, setTab] = useState<'backfill' | 'monthly'>('backfill');
 
   // Dry-run query — modal ochilgach avtomatik chaqiriladi
   const dryRunQuery = useQuery({
     queryKey: ['schotchik-backfill-dryrun'],
     queryFn: () => api.post<SchotchikResult>('/categorization/backfill-schotchik', { dryRun: true }),
-    enabled: open && stage === 'preview',
+    enabled: open && authed && tab === 'backfill' && stage === 'preview',
     refetchOnWindowFocus: false,
     staleTime: 0,
   });
@@ -5894,6 +5896,8 @@ function SchotchikBackfillDialog({
       setTimeout(() => {
         setStage('preview');
         setResult(null);
+        setAuthed(false);
+        setTab('backfill');
       }, 300);
     }
   }, [open]);
@@ -5920,6 +5924,21 @@ function SchotchikBackfillDialog({
           </div>
         </div>
 
+        {/* Parol gate (7779) — kirish uchun */}
+        {!authed ? (
+          <SchotchikPasswordGate onOk={() => setAuthed(true)} />
+        ) : (
+        <>
+          {/* Sub-tablar */}
+          <div className="px-6 pt-3 flex items-center gap-1.5 border-b border-slate-100 dark:border-slate-800">
+            <SchotchikTabBtn active={tab === 'backfill'} onClick={() => setTab('backfill')}>Qayta tasniflash</SchotchikTabBtn>
+            <SchotchikTabBtn active={tab === 'monthly'} onClick={() => setTab('monthly')}>Счётчик → Ежемесячный</SchotchikTabBtn>
+          </div>
+
+          {tab === 'monthly' ? (
+            <SchotchikMonthlyPanel onClose={() => onOpenChange(false)} />
+          ) : (
+          <>
         {/* Body */}
         <div className="px-6 py-5 space-y-4">
           {dryRunQuery.isLoading && (
@@ -6096,8 +6115,189 @@ function SchotchikBackfillDialog({
             </Button>
           )}
         </DialogFooter>
+          </>
+          )}
+        </>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ─── Parol gate (7779) ───
+function SchotchikPasswordGate({ onOk }: { onOk: () => void }) {
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState(false);
+  const submit = () => {
+    if (pw.trim() === '7779') { onOk(); }
+    else { setErr(true); setTimeout(() => setErr(false), 600); }
+  };
+  return (
+    <div className="px-6 py-10">
+      <div className="max-w-xs mx-auto text-center">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 grid place-items-center mx-auto mb-3 shadow-md">
+          <Lock className="h-5 w-5 text-white" />
+        </div>
+        <div className="text-[13px] font-bold text-slate-800 dark:text-slate-100 mb-1">Parol kiriting</div>
+        <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mb-4">Bu bo'limga kirish uchun parol talab qilinadi</div>
+        <input
+          type="password" value={pw} autoFocus
+          onChange={(e) => setPw(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+          placeholder="••••"
+          className={cn('w-full h-11 text-center text-lg tracking-[0.3em] rounded-xl border bg-white dark:bg-slate-800 outline-none transition-all',
+            err ? 'border-rose-400 ring-2 ring-rose-300 animate-shake' : 'border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-cyan-400')}
+        />
+        {err && <div className="text-[11px] text-rose-500 mt-1.5">Parol xato</div>}
+        <button onClick={submit}
+          className="mt-4 w-full h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-[13px] shadow-md transition-all">
+          Kirish
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SchotchikTabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button onClick={onClick}
+      className={cn('px-3 py-2 text-[12.5px] font-semibold border-b-2 -mb-px transition-colors',
+        active ? 'border-cyan-500 text-cyan-600 dark:text-cyan-400' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200')}>
+      {children}
+    </button>
+  );
+}
+
+// ─── Счётчик → Ежемесячный (ОплатыКв split override) ───
+type SchToMonthly = {
+  ok: boolean; dryRun: boolean; dateFrom: string; total: number; needsUpdate: number; updated: number;
+  samples: Array<{ contractNo: string; date: string; amount: number; object: string | null; client: string | null }>;
+};
+type SchConfig = { enabled: boolean; dateFrom: string | null; dayStart: string; dayEnd: string; intervalMin: number };
+
+function SchotchikMonthlyPanel({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient();
+  const [dateFrom, setDateFrom] = useState('');
+  const [preview, setPreview] = useState<SchToMonthly | null>(null);
+  const [cfg, setCfg] = useState<SchConfig>({ enabled: false, dateFrom: null, dayStart: '08:00', dayEnd: '22:00', intervalMin: 30 });
+
+  useQuery({
+    queryKey: ['schotchik-config'],
+    queryFn: async () => {
+      const c = await api.get<SchConfig>('/oplata-kv/schotchik-config');
+      setCfg(c);
+      if (c.dateFrom) setDateFrom((d) => d || c.dateFrom || '');
+      return c;
+    },
+    refetchOnWindowFocus: false,
+  });
+
+  const dryMut = useMutation({
+    mutationFn: () => api.post<SchToMonthly>('/oplata-kv/schotchik-to-monthly', { dateFrom: dateFrom || undefined, dryRun: true }),
+    onSuccess: (r) => setPreview(r),
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const applyMut = useMutation({
+    mutationFn: () => api.post<SchToMonthly>('/oplata-kv/schotchik-to-monthly', { dateFrom: dateFrom || undefined, dryRun: false }),
+    onSuccess: (r) => { setPreview(r); toast.success(`${r.updated} qator oylikka o'tkazildi`); qc.invalidateQueries({ queryKey: ['transactions'] }); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const saveCfgMut = useMutation({
+    mutationFn: () => api.post<SchConfig>('/oplata-kv/schotchik-config', { ...cfg, dateFrom: dateFrom || cfg.dateFrom }),
+    onSuccess: (c) => { setCfg(c); toast.success('Avto-rejim saqlandi'); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  return (
+    <div className="px-6 py-5 space-y-4">
+      <div className="rounded-lg bg-cyan-50 dark:bg-cyan-950/30 ring-1 ring-cyan-200 dark:ring-cyan-900 p-3 text-[12px] text-cyan-900 dark:text-cyan-200">
+        <strong>Тип = «За счетчик»</strong> to'lovlarini (tanlangan sanadan ≥) <strong>oylikka</strong> o'tkazadi:
+        Сумма оплаты → Ежемесячный, Оплата → Ежемесячный. Faqat ОплатыКв o'zgaradi (tranzaksiya tegilmaydi).
+      </div>
+
+      <div className="flex items-end gap-2 flex-wrap">
+        <div>
+          <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Sanadan (≥)</label>
+          <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPreview(null); }}
+            className="h-9 px-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px]" />
+        </div>
+        <button onClick={() => dryMut.mutate()} disabled={dryMut.isPending}
+          className="h-9 px-4 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-[12.5px] inline-flex items-center gap-1.5">
+          {dryMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Tekshirish
+        </button>
+      </div>
+
+      {preview && (
+        <>
+          <div className="grid grid-cols-3 gap-2.5">
+            <BackfillStatCard label="Jami «За счетчик»" value={preview.total} color="indigo" />
+            <BackfillStatCard label={preview.dryRun ? 'Yangilash kerak' : 'Yangilandi'} value={preview.dryRun ? preview.needsUpdate : preview.updated} color="amber" highlight />
+            <BackfillStatCard label="Namuna" value={preview.samples.length} color="violet" />
+          </div>
+          {preview.samples.length > 0 && (
+            <div className="space-y-1.5 max-h-52 overflow-y-auto">
+              {preview.samples.map((s, i) => (
+                <div key={i} className="rounded-md bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 px-3 py-1.5 flex items-center justify-between text-[11.5px] gap-2">
+                  <span className="font-mono text-slate-500 shrink-0">{s.date}</span>
+                  <span className="truncate flex-1 text-slate-600 dark:text-slate-300">{s.object || '—'} · {s.contractNo}</span>
+                  <span className="font-bold tabular-nums text-emerald-700 dark:text-emerald-400 shrink-0">{Math.round(s.amount).toLocaleString('ru-RU')}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {preview.dryRun && preview.needsUpdate > 0 && (
+            <button onClick={() => applyMut.mutate()} disabled={applyMut.isPending}
+              className="w-full h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-600 hover:from-cyan-600 hover:to-blue-700 text-white font-semibold text-[13px] inline-flex items-center justify-center gap-1.5 shadow-md">
+              {applyMut.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Bajarilmoqda...</> : <><CheckCircle2 className="h-4 w-4" /> Qo'llash ({preview.needsUpdate} ta)</>}
+            </button>
+          )}
+          {!preview.dryRun && (
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-2.5 text-[12px] text-center text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 mx-auto mb-1" /> {preview.updated} qator oylikka o'tkazildi
+            </div>
+          )}
+          {preview.dryRun && preview.needsUpdate === 0 && (
+            <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-2.5 text-[12px] text-center text-emerald-800 dark:text-emerald-300">
+              <CheckCircle2 className="h-4 w-4 mx-auto mb-1" /> Hammasi allaqachon oylikda
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Avto-rejim */}
+      <div className="rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-[12px] font-bold text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Avtomatik rejim</div>
+          <button onClick={() => setCfg((c) => ({ ...c, enabled: !c.enabled }))}
+            className={cn('relative w-11 h-6 rounded-full transition-colors', cfg.enabled ? 'bg-cyan-500' : 'bg-slate-300 dark:bg-slate-600')}>
+            <span className={cn('absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform', cfg.enabled && 'translate-x-5')} />
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Kundan</label>
+            <input type="time" value={cfg.dayStart} onChange={(e) => setCfg((c) => ({ ...c, dayStart: e.target.value }))} className="w-full h-8 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px]" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Kungacha</label>
+            <input type="time" value={cfg.dayEnd} onChange={(e) => setCfg((c) => ({ ...c, dayEnd: e.target.value }))} className="w-full h-8 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px]" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-slate-400 mb-1">Har (daq)</label>
+            <input type="number" min={1} value={cfg.intervalMin} onChange={(e) => setCfg((c) => ({ ...c, intervalMin: Number(e.target.value) || 30 }))} className="w-full h-8 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px]" />
+          </div>
+        </div>
+        <div className="text-[10.5px] text-slate-400">Sana ≥ <strong>{dateFrom || cfg.dateFrom || '—'}</strong> (yuqoridagi sana). Belgilangan vaqt oralig'ida har {cfg.intervalMin} daqiqada avtomatik ishlaydi.</div>
+        <button onClick={() => saveCfgMut.mutate()} disabled={saveCfgMut.isPending}
+          className="w-full h-9 rounded-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white font-semibold text-[12.5px] inline-flex items-center justify-center gap-1.5">
+          {saveCfgMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Avto-rejimni saqlash
+        </button>
+      </div>
+
+      <div className="flex justify-end pt-1">
+        <Button variant="outline" onClick={onClose}>Yopish</Button>
+      </div>
+    </div>
   );
 }
 

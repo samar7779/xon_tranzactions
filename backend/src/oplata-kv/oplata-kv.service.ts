@@ -178,6 +178,33 @@ export class OplataKvService {
     }
   }
 
+  // "Счётчик → Ежемесячный" avto-rejim — sozlangan vaqt oralig'ida har intervalMin daqiqada
+  private lastSchotchikAt: Date | null = null;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async schotchikAutoTick() {
+    try {
+      const cfg = await this.settings.getSchotchikAutoConfig();
+      if (!cfg.enabled) return;
+      const { hour, minute } = this.getTashkentHourMinute();
+      if (!this.isInRange(hour, minute, cfg.dayStart, cfg.dayEnd)) return;
+      const now = new Date();
+      if (this.lastSchotchikAt) {
+        const elapsedMin = (now.getTime() - this.lastSchotchikAt.getTime()) / 60000;
+        if (elapsedMin < cfg.intervalMin) return;
+      }
+      this.lastSchotchikAt = now;
+      const r = await this.schotchikToMonthly({
+        dateFrom: cfg.dateFrom || undefined,
+        dryRun: false,
+        actor: { id: null, name: 'cron · schotchik' },
+      });
+      if (r.updated > 0) this.log.log(`Schotchik auto: ${r.updated} qator oylikka o'tkazildi`);
+    } catch (e: any) {
+      this.log.warn(`Schotchik auto-tick xato: ${e?.message}`);
+    }
+  }
+
   // ─── Preview cache (in-memory) ───────────────────────────
   // Foydalanuvchi katta Excel yuklasa → avval tekshiramiz va cache'da turamiz.
   // Foydalanuvchi tasdiqlasa → cache'dan o'qib bazaga qo'shamiz.
@@ -528,6 +555,87 @@ export class OplataKvService {
       .map((r) => ({ object: r.object, amount: r.paymentAmount }));
 
     return { ok: true, date: dayKey, day: dayS, prevDay: prevDayS, mtd: mtdS, prevMtd: prevMtdS, series, topObjects };
+  }
+
+  /**
+   * "Счётчик → Ежемесячный" — Тип (txType) = 'За счетчик' bo'lgan ОплатыКв qatorlarni
+   * (sana >= dateFrom) OYLIKKA majburlaydi:
+   *   monthlyAmount = paymentAmount (Сумма оплаты → ежемесячный),
+   *   firstInstallment = null,
+   *   paymentCategory = MONTHLY (Оплата = ежемесячный).
+   * FAQAT ОплатыКв o'zgaradi (tranzaksiyaga tegilmaydi — u allaqachon 'За счетчик').
+   * dryRun=true (default) — faqat nechta topilishini ko'rsatadi, o'zgartirmaydi.
+   */
+  async schotchikToMonthly(opts: { dateFrom?: string; dryRun?: boolean; actor?: Actor } = {}) {
+    const dryRun = opts.dryRun !== false;
+    const from = opts.dateFrom ? new Date(opts.dateFrom) : new Date('2024-01-01');
+    const fromStr = from.toISOString().slice(0, 10);
+
+    const total = await this.prisma.oplataKv.count({
+      where: { txType: 'За счетчик', date: { gte: from } },
+    });
+
+    // Yangilanishi kerak (hali oylik emas) — apply bilan bir xil shart
+    const needRows: Array<{ n: number }> = await this.prisma.$queryRaw`
+      SELECT COUNT(*)::int AS n FROM oplata_kv
+      WHERE tx_type = 'За счетчик' AND date >= ${from} AND payment_amount IS NOT NULL
+        AND (payment_category IS DISTINCT FROM 'MONTHLY'::"OplataKvCategory"
+             OR first_installment IS NOT NULL
+             OR monthly_amount IS DISTINCT FROM payment_amount)
+    `;
+    const needsUpdate = Number(needRows?.[0]?.n || 0);
+
+    const sampleRows = await this.prisma.oplataKv.findMany({
+      where: {
+        txType: 'За счетчик', date: { gte: from }, paymentAmount: { not: null },
+        OR: [
+          { paymentCategory: null },
+          { paymentCategory: { not: OplataKvCategory.MONTHLY } },
+          { firstInstallment: { not: null } },
+        ],
+      },
+      orderBy: { date: 'desc' }, take: 6,
+      select: { contractNo: true, date: true, paymentAmount: true, object: true, client: true },
+    });
+    const samples = sampleRows.map((s) => ({
+      contractNo: s.contractNo,
+      date: s.date.toISOString().slice(0, 10),
+      amount: Number(s.paymentAmount || 0),
+      object: s.object,
+      client: s.client,
+    }));
+
+    if (dryRun || needsUpdate === 0) {
+      return { ok: true, dryRun, dateFrom: fromStr, total, needsUpdate, updated: 0, samples };
+    }
+
+    // APPLY — column-to-column (monthly_amount = payment_amount) — raw SQL (Prisma updateMany qila olmaydi)
+    const updated: number = await this.prisma.$executeRaw`
+      UPDATE oplata_kv
+      SET monthly_amount = payment_amount,
+          first_installment = NULL,
+          payment_category = 'MONTHLY'::"OplataKvCategory",
+          updated_at = NOW()
+      WHERE tx_type = 'За счетчик' AND date >= ${from} AND payment_amount IS NOT NULL
+        AND (payment_category IS DISTINCT FROM 'MONTHLY'::"OplataKvCategory"
+             OR first_installment IS NOT NULL
+             OR monthly_amount IS DISTINCT FROM payment_amount)
+    `;
+    this.log.log(`schotchikToMonthly APPLY: ${updated} qator oylikka o'tkazildi (dateFrom=${fromStr}, actor=${opts.actor?.name || '-'})`);
+    return { ok: true, dryRun: false, dateFrom: fromStr, total, needsUpdate, updated: Number(updated), samples };
+  }
+
+  /** "Счётчик → Ежемесячный" avto-rejim sozlamalarini o'qish. */
+  getSchotchikConfig() {
+    return this.settings.getSchotchikAutoConfig();
+  }
+
+  /** "Счётчик → Ежемесячный" avto-rejim sozlamalarini saqlash. */
+  setSchotchikConfig(
+    vals: { enabled?: boolean; dateFrom?: string | null; dayStart?: string; dayEnd?: string; intervalMin?: number },
+    updatedBy?: string,
+  ) {
+    return this.settings.setSchotchikAutoConfig(vals, updatedBy);
   }
 
   /**
