@@ -1004,6 +1004,23 @@ export class OplataKvService {
     return this.prisma.oplataKv.count({ where });
   }
 
+  /** XATO qatorlar ro'yxati — Agent mini web (public list) uchun. Eng yangi birinchi. */
+  async getXatoRows(opts: { dateFrom?: string | null; limit?: number }) {
+    const xatoFilter = await this.buildXatoFilter();
+    const where: Prisma.OplataKvWhereInput = { ...(xatoFilter as Prisma.OplataKvWhereInput) };
+    if (opts.dateFrom) where.date = { gte: new Date(opts.dateFrom) };
+    const take = Math.min(Math.max(1, opts.limit || 1000), 2000);
+    return this.prisma.oplataKv.findMany({
+      where,
+      orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+      take,
+      select: {
+        id: true, date: true, contractNo: true, paymentAmount: true,
+        client: true, object: true, txType: true, purpose: true,
+      },
+    });
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });
