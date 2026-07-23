@@ -4,9 +4,11 @@ import { AgentPublicController } from './agent-public.controller';
 import { AgentService } from './agent.service';
 import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
 import { SyncModule } from '../sync/sync.module';
+import { CategorizationModule } from '../categorization/categorization.module';
+import { CrmModule } from '../crm/crm.module';
 
 @Module({
-  imports: [OplataKvModule, SyncModule],
+  imports: [OplataKvModule, SyncModule, CategorizationModule, CrmModule],
   controllers: [AgentController, AgentPublicController],
   providers: [AgentService],
   exports: [AgentService],

@@ -5,6 +5,9 @@ import * as crypto from 'crypto';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { CategorizationService } from '../categorization/categorization.service';
+import { CrmService } from '../crm/crm.service';
 
 /**
  * AI Agent (1-bosqich: XATO to'lov kunlik digest).
@@ -34,6 +37,9 @@ export class AgentService {
     private readonly crypto: CryptoService,
     private readonly oplataKv: OplataKvService,
     private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+    private readonly categorization: CategorizationService,
+    private readonly crm: CrmService,
   ) {}
 
   // ─── Sozlama ───────────────────────────────────────────────────────
@@ -165,10 +171,55 @@ export class AgentService {
     return t;
   }
 
-  /** Public: maxfiy kalit bilan XATO to'lovlar ro'yxati (login talab qilmaydi). */
-  async getPublicXatoList(key: string) {
+  private async assertKey(key: string) {
     const token = await this.getListToken();
     if (!key || key !== token) throw new UnauthorizedException("Kalit noto'g'ri yoki eskirgan");
+  }
+
+  /** Public: CRM shartnoma qidirish — biriktirish modali uchun (kalit bilan). */
+  async crmSearch(key: string, q: string) {
+    await this.assertKey(key);
+    const query = (q || '').trim();
+    if (query.length < 2) return { ok: true, items: [] };
+    try {
+      const r: any = await this.crm.searchContracts(query, 8);
+      return { ok: true, items: r?.items || [] };
+    } catch (e: any) {
+      return { ok: false, items: [], error: e?.message };
+    }
+  }
+
+  /** Public: XATO to'lovga CRM shartnomani biriktirish — setContract CRM'da tekshiradi. */
+  async assignContract(key: string, oplataKvId: string, contractNo: string, actorName?: string) {
+    await this.assertKey(key);
+    const contract = (contractNo || '').trim();
+    if (!oplataKvId || !contract) return { ok: false, error: "To'lov yoki shartnoma raqami yo'q" };
+
+    const row = await this.prisma.oplataKv.findUnique({
+      where: { id: oplataKvId },
+      select: { sourceTxId: true },
+    });
+    if (!row) return { ok: false, error: "To'lov topilmadi" };
+    if (!row.sourceTxId) return { ok: false, error: "Bu to'lov tranzaksiyadan kelmagan — biriktirib bo'lmaydi" };
+
+    const tx = await this.prisma.transaction.findFirst({
+      where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
+      select: { id: true },
+    });
+    if (!tx) return { ok: false, error: 'Manba tranzaksiya topilmadi' };
+
+    try {
+      const actor = `TG${actorName ? ':' + actorName.slice(0, 40) : ''}`;
+      const res: any = await this.categorization.setContract(tx.id, contract, actor);
+      return { ok: true, verified: !!res?.verified, customerName: res?.customerName || null };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'Biriktirishda xato' };
+    }
+  }
+
+  /** Public: maxfiy kalit bilan XATO to'lovlar ro'yxati (login talab qilmaydi). */
+  async getPublicXatoList(key: string) {
+    await this.assertKey(key);
     const dateFrom = await this.settings.get(this.K_DATEFROM);
     const [rows, count] = await Promise.all([
       this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
