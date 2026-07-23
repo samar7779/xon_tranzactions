@@ -95,4 +95,25 @@ export class CorrectionController {
   reject(@Param('id') id: string, @Body() body: { reason?: string }, @CurrentUser('id') userId: string) {
     return this.svc.reject(id, body?.reason || '', userId);
   }
+
+  @Post('direct')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: "To'g'ridan-to'g'ri to'g'rilash (raw XATO'dan) — yaratadi + tasdiqlaydi" })
+  async direct(
+    @UploadedFile() file: any,
+    @Body() body: { txId?: string; contractNo?: string; categoryId?: string; subCategoryId?: string },
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email?: string,
+  ) {
+    if (!body?.txId) throw new BadRequestException("To'lov ko'rsatilmagan");
+    if (!file?.buffer) throw new BadRequestException('Ariza fayli majburiy');
+    return this.svc.directCorrect(body.txId, file, {
+      contractNo: body?.contractNo || null,
+      categoryId: body?.categoryId || null,
+      subCategoryId: body?.subCategoryId || null,
+      actorId: userId,
+      actorEmail: email || null,
+    });
+  }
 }
