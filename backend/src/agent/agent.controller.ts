@@ -31,11 +31,10 @@ export class AgentController {
 
   @Put('config')
   @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
-  @ApiOperation({ summary: 'Agent sozlamasi — bot token, guruh, sana, interval, ish soati' })
+  @ApiOperation({ summary: 'Agent sozlamasi — bot token, guruh, sana, kunlik vaqt' })
   saveConfig(
     @Body() body: {
-      botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null;
-      intervalMin?: number; workStart?: string; workEnd?: string; maxPerRun?: number;
+      botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
     },
     @CurrentUser() user?: AuthUser,
   ) {
@@ -44,8 +43,8 @@ export class AgentController {
 
   @Post('run')
   @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
-  @ApiOperation({ summary: "Agentni hozir ishga tushirish (XATO to'lovlarni guruhga)" })
-  run(@Body() body: { limit?: number }) {
-    return this.svc.runOnce({ limit: body?.limit });
+  @ApiOperation({ summary: "Agentni hozir ishga tushirish (kunlik digest'ni jo'natish)" })
+  run() {
+    return this.svc.runOnce();
   }
 }

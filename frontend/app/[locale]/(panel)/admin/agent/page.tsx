@@ -4,8 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Bot, Loader2, Save, Play, AlertTriangle, CheckCircle2, Lock,
-  CalendarDays, Clock, Hash, KeyRound, Building2, Info, Send,
+  Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -22,11 +21,7 @@ interface AgentConfig {
   tokenHint: string | null;
   groupId: string | null;
   dateFrom: string | null;
-  intervalMin: number;
-  workStart: string;
-  workEnd: string;
-  maxPerRun: number;
-  lastRunAt: string | null;
+  dailyTime: string;
   lastResult: string | null;
   pendingCount: number;
 }
@@ -46,20 +41,14 @@ export default function AdminAgentPage() {
   const [botToken, setBotToken] = useState('');
   const [groupId, setGroupId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
-  const [intervalMin, setIntervalMin] = useState(15);
-  const [workStart, setWorkStart] = useState('09:00');
-  const [workEnd, setWorkEnd] = useState('18:00');
-  const [maxPerRun, setMaxPerRun] = useState(10);
+  const [dailyTime, setDailyTime] = useState('09:00');
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     if (!cfg || initialized) return;
     setGroupId(cfg.groupId || '');
     setDateFrom(cfg.dateFrom || '');
-    setIntervalMin(cfg.intervalMin || 15);
-    setWorkStart(cfg.workStart || '09:00');
-    setWorkEnd(cfg.workEnd || '18:00');
-    setMaxPerRun(cfg.maxPerRun || 10);
+    setDailyTime(cfg.dailyTime || '09:00');
     setInitialized(true);
   }, [cfg, initialized]);
 
@@ -71,7 +60,7 @@ export default function AdminAgentPage() {
 
   const saveConfig = () => {
     saveMut.mutate(
-      { botToken: botToken.trim() || undefined, groupId, dateFrom: dateFrom || null, intervalMin, workStart, workEnd, maxPerRun } as any,
+      { botToken: botToken.trim() || undefined, groupId, dateFrom: dateFrom || null, dailyTime } as any,
       { onSuccess: () => { toast.success('Saqlandi'); setBotToken(''); qc.invalidateQueries({ queryKey: ['agent-config'] }); } },
     );
   };
@@ -83,9 +72,9 @@ export default function AdminAgentPage() {
   };
 
   const runMut = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; posted?: number; error?: string }>('/agent/run', {}, { timeout: 120_000 }),
+    mutationFn: () => api.post<{ ok: boolean; count?: number; error?: string }>('/agent/run', {}, { timeout: 120_000 }),
     onSuccess: (r) => {
-      if (r.ok) toast.success(`Ishga tushdi — ${r.posted ?? 0} ta to'lov jo'natildi`);
+      if (r.ok) toast.success(r.count ? `Jo'natildi — ${r.count} ta XATO` : "XATO yo'q — xabar jo'natilmadi");
       else toast.error(r.error || 'Ishga tushmadi');
       qc.invalidateQueries({ queryKey: ['agent-config'] });
     },
@@ -120,7 +109,7 @@ export default function AdminAgentPage() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[15px] font-bold text-slate-800 dark:text-slate-100">AI Agent — XATO to'lov notifikatori</span>
+              <span className="text-[15px] font-bold text-slate-800 dark:text-slate-100">AI Agent — XATO to'lov digest</span>
               <span className={cn(
                 'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1',
                 cfg?.enabled
@@ -132,7 +121,7 @@ export default function AdminAgentPage() {
               </span>
             </div>
             <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
-              CRM'da tasdiqlanmagan (XATO) to'lovlarni Telegram guruhga tashlaydi — xodim ariza/shartnomani hal qilishi uchun.
+              Kuniga bir marta Telegram guruhga bitta xabar: nechta XATO to'lov borligini aytadi + tugma bilan ro'yxatga olib boradi.
             </div>
           </div>
           {canManage && (
@@ -147,17 +136,16 @@ export default function AdminAgentPage() {
           )}
         </div>
 
-        {/* Holat qatorlari */}
         <CardContent className="p-5">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatTile label="Kutayotgan XATO" value={String(cfg?.pendingCount ?? 0)} tone={((cfg?.pendingCount ?? 0) > 0) ? 'amber' : 'slate'} />
+            <StatTile label="Kutayotgan XATO" value={String(cfg?.pendingCount ?? 0)} tone={((cfg?.pendingCount ?? 0) > 0) ? 'amber' : 'emerald'} />
             <StatTile label="Bot" value={cfg?.hasToken ? `bor ${cfg.tokenHint || ''}` : "yo'q"} tone={cfg?.hasToken ? 'emerald' : 'rose'} />
             <StatTile label="Guruh" value={cfg?.groupId || "yo'q"} tone={cfg?.groupId ? 'emerald' : 'rose'} mono />
-            <StatTile label="Interval / soat" value={`${cfg?.intervalMin}m · ${cfg?.workStart}–${cfg?.workEnd}`} tone="slate" />
+            <StatTile label="Kunlik vaqt" value={cfg?.dailyTime || '09:00'} tone="slate" />
           </div>
           {cfg?.lastResult && (
             <div className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Info className="h-3.5 w-3.5" /> Oxirgi ishga tushish: {cfg.lastResult}
+              <Info className="h-3.5 w-3.5" /> Oxirgi: {cfg.lastResult}
             </div>
           )}
         </CardContent>
@@ -178,21 +166,11 @@ export default function AdminAgentPage() {
               <Field label="Guruh chat ID" icon={<Building2 className="h-3.5 w-3.5" />}>
                 <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="-1001234567890" className="h-9 rounded-lg font-mono text-[12px]" />
               </Field>
-              <Field label="Qaysi sanadan XATO olsin" icon={<CalendarDays className="h-3.5 w-3.5" />}>
+              <Field label="Qaysi sanadan XATO hisoblasin" icon={<CalendarDays className="h-3.5 w-3.5" />}>
                 <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="h-9 rounded-lg text-[12px]" />
               </Field>
-              <Field label="Bir martada nechta (max)" icon={<Hash className="h-3.5 w-3.5" />}>
-                <Input type="number" min={1} max={50} value={maxPerRun} onChange={(e) => setMaxPerRun(Number(e.target.value) || 10)} className="h-9 rounded-lg text-[12px] w-32" />
-              </Field>
-              <Field label="Interval (daqiqa)" icon={<Clock className="h-3.5 w-3.5" />}>
-                <Input type="number" min={1} value={intervalMin} onChange={(e) => setIntervalMin(Number(e.target.value) || 15)} className="h-9 rounded-lg text-[12px] w-32" />
-              </Field>
-              <Field label="Ish soatlari (Toshkent)" icon={<Clock className="h-3.5 w-3.5" />}>
-                <div className="flex items-center gap-2">
-                  <Input type="time" value={workStart} onChange={(e) => setWorkStart(e.target.value)} className="h-9 rounded-lg text-[12px] w-28" />
-                  <span className="text-slate-400">–</span>
-                  <Input type="time" value={workEnd} onChange={(e) => setWorkEnd(e.target.value)} className="h-9 rounded-lg text-[12px] w-28" />
-                </div>
+              <Field label="Kunlik vaqt (Toshkent)" icon={<Clock className="h-3.5 w-3.5" />}>
+                <Input type="time" value={dailyTime} onChange={(e) => setDailyTime(e.target.value)} className="h-9 rounded-lg text-[12px] w-32" />
               </Field>
             </div>
 
@@ -201,7 +179,7 @@ export default function AdminAgentPage() {
                 {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
               </Button>
               <Button onClick={() => runMut.mutate()} disabled={runMut.isPending || !configured} variant="outline" className="h-10 gap-2 text-[13px] font-semibold">
-                {runMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Hozir ishga tushirish
+                {runMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Hozir jo'natish (sinov)
               </Button>
               {!configured && <span className="text-[11px] text-amber-600 dark:text-amber-400">Avval bot token + guruh ID</span>}
               <span className="text-[10.5px] text-slate-400 ml-auto">🔒 Bot token AES-256 bilan shifrlanadi</span>
@@ -214,10 +192,11 @@ export default function AdminAgentPage() {
       <Card className="border-0 shadow-soft">
         <CardContent className="p-5 text-[12px] text-slate-600 dark:text-slate-300 space-y-1.5">
           <div className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 mb-1"><Send className="h-4 w-4 text-indigo-600 dark:text-indigo-400" /> Agent hozir nima qiladi</div>
-          <div>• Har <b>{cfg?.intervalMin} daqiqada</b> (faqat <b>{cfg?.workStart}–{cfg?.workEnd}</b> orasida) CRM'da tasdiqlanmagan (XATO) yangi to'lovlarni topadi.</div>
-          <div>• Har birini sozlangan <b>Telegram guruhga</b> tashlaydi (shartnoma, summa, klient, ID bilan).</div>
-          <div>• Bitta to'lovni <b>faqat bir marta</b> jo'natadi (takrorlamaydi).</div>
-          <div className="text-slate-400 dark:text-slate-500 pt-1">Keyingi bosqichlar: agent shartnomani o'zi taxmin qiladi, xodim arizani yuklaydi, agent tekshirib to'g'rlaydi.</div>
+          <div>• Har kuni <b>{cfg?.dailyTime}</b> da (Toshkent) sozlangan <b>Telegram guruhga bitta xabar</b> jo'natadi.</div>
+          <div>• Xabarda: nechta <b>XATO to'lov</b> (CRM'da tasdiqlanmagan) borligi + <b>«Barcha XATO to'lovlarni ko'rish»</b> tugmasi.</div>
+          <div>• Tugma bosilganda — <b>ОплатыКв</b> sahifasi XATO filtri bilan ochiladi (barcha XATO to'lovlar). Xodim o'sha yerda shartnoma tanlaydi + ariza yuklaydi.</div>
+          <div>• XATO bo'lmasa — xabar jo'natilmaydi.</div>
+          <div className="text-slate-400 dark:text-slate-500 pt-1">Keyingi bosqich: tugma Telegram ichida mini web ochadi (faqat guruh a'zolari), agent shartnomani o'zi taxmin qiladi.</div>
         </CardContent>
       </Card>
     </div>
