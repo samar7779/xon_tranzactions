@@ -144,13 +144,19 @@ export class AgentService {
       return { ok: true, count: 0 };
     }
 
-    // login_url — bosilganda Telegram sahifani foydalanuvchi identity (chat_id + hash)
-    // bilan ochadi. Domen BotFather /setdomain bilan ulangan bo'lishi kerak.
     const base = (this.config.get<string>('APP_URL') || 'https://transactions.xonapps.uz').replace(/\/+$/, '');
-    const button = {
-      inline_keyboard: [[{ text: '📋 Ro\'yxat', login_url: { url: `${base}/uz/xato-list` } }]],
-    };
-    const sent = await this.sendMessage(token, groupId, this.formatDigest(count), button);
+    const text = this.formatDigest(count);
+
+    // 1) login_url (chat_id auth) — BotFather /setdomain ulangan bo'lsa ishlaydi.
+    const loginBtn = { inline_keyboard: [[{ text: '📋 Ro\'yxat', login_url: { url: `${base}/uz/xato-list` } }]] };
+    let sent = await this.sendMessage(token, groupId, text, loginBtn);
+
+    // 2) Fallback — login_url qabul qilinmasa (domen ulanmagan yoki guruh cheklovi),
+    //    maxfiy kalit havolasi bilan jo'natamiz (agent ishlashda davom etadi).
+    if (!sent) {
+      const keyBtn = { inline_keyboard: [[{ text: '📋 Ro\'yxat', url: await this.xatoLink() }]] };
+      sent = await this.sendMessage(token, groupId, text, keyBtn);
+    }
     if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
 
     await this.saveResult(`${count} ta XATO — kunlik xabar jo'natildi`);
