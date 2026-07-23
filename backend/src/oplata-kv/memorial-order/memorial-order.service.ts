@@ -77,9 +77,43 @@ export class MemorialOrderService {
       txMap.set(t.id, t);
     }
 
+    // 2b. sourceTxId bilan bog'lanmagan qatorlar uchun — DB'dagi bank tranzaksiyasini
+    //     shartnoma raqami bo'yicha topib, summa + sana yaqinligi bilan moslaymiz.
+    //     (Eski/qo'lda import qilingan to'lovlar sourceTxId'siz bo'ladi.)
+    const rowMatch = new Map<string, (typeof txs)[number]>(); // oplataKv.id -> tx
+    const unlinked = rows.filter((r) => !(r.sourceTxId && txMap.has(r.sourceTxId)));
+    if (unlinked.length) {
+      const linkedIds = txs.map((t) => t.id);
+      const candidates = await this.prisma.transaction.findMany({
+        where: {
+          contractNumber: cn,
+          ...(linkedIds.length ? { id: { notIn: linkedIds } } : {}),
+        },
+        orderBy: { txnDate: 'asc' },
+      });
+      const used = new Set<string>();
+      for (const r of unlinked) {
+        const amt = Number(r.paymentAmount ?? 0);
+        const rd = (r.date as Date).getTime();
+        let best: (typeof candidates)[number] | undefined;
+        let bestScore = Infinity;
+        for (const c of candidates) {
+          if (used.has(c.id)) continue;
+          const camt = Number(c.amount);
+          const amtDiff = Math.abs(camt - amt);
+          // Summa (deyarli) teng bo'lishi shart — bank hujjati aynan shu to'lov
+          if (amtDiff > Math.max(1, camt * 0.0001)) continue;
+          const dateDiff = Math.abs(c.txnDate.getTime() - rd) / 86_400_000; // kun
+          const score = amtDiff * 1000 + dateDiff;
+          if (score < bestScore) { bestScore = score; best = c; }
+        }
+        if (best) { used.add(best.id); rowMatch.set(r.id, best); }
+      }
+    }
+
     // 3. Bloklar
     const blocks: OrderBlock[] = rows.map((r) => {
-      const tx = r.sourceTxId ? txMap.get(r.sourceTxId) : undefined;
+      const tx = (r.sourceTxId ? txMap.get(r.sourceTxId) : undefined) || rowMatch.get(r.id);
       const amount = tx ? Number(tx.amount) : Number(r.paymentAmount ?? 0);
       return {
         date: (tx?.txnDate ?? r.date) as Date,
