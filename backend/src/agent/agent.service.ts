@@ -54,9 +54,14 @@ export class AgentService {
     ]);
     let hasToken = false;
     let tokenHint: string | null = null;
+    let botUsername: string | null = null;
     if (enc) {
-      try { const t = this.crypto.decrypt(enc); hasToken = !!t; tokenHint = t ? `…${t.slice(-4)}` : null; }
-      catch { /* skip */ }
+      try {
+        const t = this.crypto.decrypt(enc);
+        hasToken = !!t;
+        tokenHint = t ? `…${t.slice(-4)}` : null;
+        if (t) { const me = await this.getMe(t); botUsername = me?.username ? `@${me.username}` : null; }
+      } catch { /* skip */ }
     }
     const pendingCount = await this.oplataKv.countXatoForAgent(dateFrom || null);
     return {
@@ -64,6 +69,7 @@ export class AgentService {
       enabled: enabled === '1',
       hasToken,
       tokenHint,
+      botUsername,
       groupId: groupId || null,
       dateFrom: dateFrom || null,
       dailyTime: this.validTime(dailyTime) || '09:00',
@@ -310,6 +316,15 @@ export class AgentService {
   // ─── Telegram xabar ────────────────────────────────────────────────
   private formatDigest(count: number): string {
     return `📊 <b>${count} ta</b> CRM'da tasdiqlanmagan to'lov`;
+  }
+
+  private async getMe(token: string): Promise<{ id: number; username: string } | null> {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+      const data: any = await res.json().catch(() => ({}));
+      if (!data?.ok || !data?.result) return null;
+      return { id: data.result.id, username: data.result.username };
+    } catch { return null; }
   }
 
   private async sendMessage(token: string, chatId: string, text: string, replyMarkup?: any): Promise<boolean> {
