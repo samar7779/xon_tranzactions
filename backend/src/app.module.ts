@@ -31,6 +31,7 @@ import { GoogleExportModule } from './google-export/google-export.module';
 import { AgentModule } from './agent/agent.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
 import { ChekModule } from './chek/chek.module';
+import { CorrectionModule } from './correction/correction.module';
 
 @Module({
   imports: [
@@ -71,6 +72,7 @@ import { ChekModule } from './chek/chek.module';
     AgentModule,
     DeveloperApiModule,
     ChekModule,
+    CorrectionModule,
   ],
 })
 export class AppModule {}

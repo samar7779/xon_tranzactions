@@ -7,5 +7,6 @@ import { AttachmentsService } from './attachments.service';
   imports: [HttpModule],
   controllers: [AttachmentsController],
   providers: [AttachmentsService],
+  exports: [AttachmentsService],
 })
 export class AttachmentsModule {}
