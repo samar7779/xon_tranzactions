@@ -3,6 +3,9 @@ import * as path from 'path';
 import * as fs from 'fs';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { CryptoService } from '../../common/crypto/crypto.service';
+import { KapitalbankClient } from '../../integrations/kapitalbank/kapitalbank.client';
+import { KbDoc1CItem } from '../../integrations/kapitalbank/types';
 import { amountToWordsRu } from './ru-words';
 import { mfoToBankName } from './mfo-banks';
 
@@ -31,7 +34,11 @@ export class MemorialOrderService {
   private readonly log = new Logger(MemorialOrderService.name);
   private _fontDir: string | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private crypto: CryptoService,
+    private kb: KapitalbankClient,
+  ) {}
 
   /** Roboto shriftlari joylashgan papkani topadi (dev: src/, prod: dist/ — ikkalasidan ham backend/assets/fonts) */
   private fontDir(): string {
@@ -54,7 +61,10 @@ export class MemorialOrderService {
   }
 
   /** Shartnoma bo'yicha barcha to'lovlar uchun Мемориальный ордер PDF */
-  async generatePdf(contractNo: string): Promise<{ buffer: Buffer; filename: string }> {
+  async generatePdf(
+    contractNo: string,
+    opts: { fromBank?: boolean } = {},
+  ): Promise<{ buffer: Buffer; filename: string }> {
     const cn = (contractNo || '').trim();
     if (!cn) throw new NotFoundException('Shartnoma raqami kerak');
 
@@ -133,9 +143,139 @@ export class MemorialOrderService {
       };
     });
 
+    // 4. (ixtiyoriy) Bankdan to'ldirish — DB'da yo'q/to'liqsiz bloklarni
+    //    bankdan (getDoc1C) real ma'lumot bilan to'ldiramiz. FAQAT O'QISH —
+    //    hech narsa DB'ga yozilmaydi.
+    if (opts.fromBank) {
+      try {
+        await this.fillFromBank(cn, rows, blocks);
+      } catch (e: any) {
+        this.log.warn(`Bankdan to'ldirish xatosi: ${e?.message}`);
+      }
+    }
+
     const buffer = await this.renderPdf(cn, blocks);
     const safe = cn.replace(/[^\wа-яёА-ЯЁa-zA-Z0-9-]+/g, '_').slice(0, 40);
     return { buffer, filename: `mem-order-${safe}.pdf` };
+  }
+
+  // ─────────────────────── Bankdan to'ldirish (read-only) ───────────────────────
+
+  /**
+   * To'liqsiz bloklarni (to'lovchi hisob/MFO yo'q) bankdan getDoc1C orqali
+   * to'ldiradi. Sync-yoqilgan hisoblar × kerakli sanalar bo'yicha bankdan
+   * o'qiydi, shartnoma № + summa bo'yicha mos to'lovni topadi.
+   * FAQAT O'QISH — DB'ga hech narsa yozilmaydi.
+   */
+  private async fillFromBank(contractNo: string, rows: any[], blocks: OrderBlock[]) {
+    // To'liqsiz (to'lovchi hisob ham, MFO ham yo'q) bloklar indeksi
+    const need = blocks
+      .map((b, i) => (!b.fromAccount && !b.fromMfo ? i : -1))
+      .filter((i) => i >= 0);
+    if (!need.length) return;
+
+    const accounts = await this.prisma.bankAccount.findMany({
+      where: { syncEnabled: true },
+      include: { credential: { include: { bank: true } } },
+    });
+    if (!accounts.length) return;
+
+    // Kerakli noyob sanalar (dd.MM.yyyy)
+    const dates = new Set<string>();
+    for (const i of need) {
+      const d = this.toApiDate(rows[i].date as Date);
+      if (d) dates.add(d);
+    }
+    if (!dates.size) return;
+
+    // getDoc1C — har (hisob, sana) uchun, cheklangan
+    const MAX_CALLS = 30;
+    let calls = 0;
+    const pool: KbDoc1CItem[] = [];
+    for (const acc of accounts) {
+      const cred: any = (acc as any).credential;
+      const bank = cred?.bank;
+      if (!bank?.apiBaseUrl || !cred?.passwordEnc) continue;
+      let password: string;
+      try { password = this.crypto.decrypt(cred.passwordEnc); } catch { continue; }
+      const login = (cred.loginPrefix || '') + cred.loginName;
+      for (const date of dates) {
+        if (calls >= MAX_CALLS) break;
+        calls++;
+        try {
+          const result = await this.kb.getDoc1C({
+            baseUrl: bank.apiBaseUrl,
+            login,
+            password,
+            branch: acc.branch,
+            account: acc.accountNo,
+            date,
+            useProxy: cred.useProxy === true,
+          });
+          for (const it of result?.content || []) pool.push(it);
+        } catch (e: any) {
+          this.log.warn(`getDoc1C ${acc.accountNo} ${date}: ${e?.message}`);
+        }
+      }
+      if (calls >= MAX_CALLS) break;
+    }
+    if (!pool.length) return;
+
+    // Mos to'lovni topish: summa (deyarli) teng + shartnoma № purpose ichida
+    const norm = (s?: string) => (s || '').toUpperCase().replace(/[^A-ZА-Я0-9]/gi, '');
+    const cnNorm = norm(contractNo);
+    for (const i of need) {
+      const amt = Number(rows[i].paymentAmount ?? blocks[i].amount ?? 0);
+      let best: KbDoc1CItem | undefined;
+      let bestScore = Infinity;
+      for (const it of pool) {
+        const iamt = Number(it.amount ?? 0) / 100;
+        const amtDiff = Math.abs(iamt - amt);
+        if (amtDiff > Math.max(1, iamt * 0.0001)) continue;
+        const hasContract = norm(it.purpose).includes(cnNorm);
+        const score = (hasContract ? 0 : 1_000_000) + amtDiff;
+        if (score < bestScore) { bestScore = score; best = it; }
+      }
+      // Faqat shartnoma № mos kelsa to'ldiramiz (noto'g'ri to'lovni oldini olish)
+      if (best && norm(best.purpose).includes(cnNorm)) {
+        blocks[i] = this.blockFromBankItem(best);
+      }
+    }
+  }
+
+  private blockFromBankItem(it: KbDoc1CItem): OrderBlock {
+    return {
+      date: this.parseApiDate(it.ddate) || new Date(),
+      docNumber: it.num || '',
+      id: it.general_id || it.b2_id || '',
+      fromName: it.name_dt || '',
+      fromAccount: it.acc_dt || '',
+      fromInn: it.inn_dt || '',
+      fromMfo: it.mfo_dt || '',
+      toName: it.name_ct || '',
+      toAccount: it.acc_ct || '',
+      toInn: it.inn_ct || '',
+      toMfo: it.mfo_ct || '',
+      amount: Number(it.amount ?? 0) / 100,
+      description: it.purpose || '',
+      hasTx: true,
+    };
+  }
+
+  /** Date -> dd.MM.yyyy (bank API formati, UTC) */
+  private toApiDate(d: Date): string | null {
+    if (!(d instanceof Date) || isNaN(d.getTime())) return null;
+    const dd = String(d.getUTCDate()).padStart(2, '0');
+    const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+    return `${dd}.${mm}.${d.getUTCFullYear()}`;
+  }
+
+  /** dd.MM.yyyy -> Date (UTC) */
+  private parseApiDate(s?: string): Date | null {
+    if (!s) return null;
+    const m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!m) return null;
+    return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
   }
 
   // ─────────────────────────── PDF ───────────────────────────

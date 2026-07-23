@@ -1561,13 +1561,16 @@ function AktSverkaDialog({
   const downloadMemorialOrder = async () => {
     if (!selectedContract) return;
     setMemOrderLoading(true);
+    // Bankdan to'liq ma'lumot olinadi (DB'da yo'q/to'liqsiz to'lovlar uchun) — biroz sekin
+    const tid = toast.loading('Мем. ордер tayyorlanmoqda — bankdan to\'liq ma\'lumot olinmoqda...');
     try {
       await apiDownload(
-        `/oplata-kv/memorial-order?contractNo=${encodeURIComponent(selectedContract)}`,
+        `/oplata-kv/memorial-order?contractNo=${encodeURIComponent(selectedContract)}&bank=1`,
         `mem-order-${selectedContract}.pdf`,
       );
+      toast.success('Мем. ордер yuklab olindi', { id: tid });
     } catch (e: any) {
-      toast.error(e?.message || 'PDF yuklab bo\'lmadi');
+      toast.error(e?.message || 'PDF yuklab bo\'lmadi', { id: tid });
     } finally {
       setMemOrderLoading(false);
     }
