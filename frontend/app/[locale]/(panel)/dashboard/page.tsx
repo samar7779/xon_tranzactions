@@ -445,6 +445,7 @@ export default function DashboardPage() {
               {/* "За счетчик" toggle — hisobga счётчик to'lovlarni ham qo'shadi */}
               <button
                 type="button"
+                aria-pressed={objInclSchotchik}
                 onClick={() => setObjInclSchotchik((v) => !v)}
                 title={objInclSchotchik ? 'За счетчик qo\'shilgan — bosib chiqarish' : 'За счетчик to\'lovlarni ham hisobga qo\'shish'}
                 className={cn(
