@@ -11,7 +11,7 @@ import {
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
   Search, Download, ChevronDown, Settings2, Database,
-  Coins, RotateCcw, EyeOff, Pin,
+  Coins, RotateCcw, EyeOff, Pin, Gauge,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -110,6 +110,7 @@ export default function DashboardPage() {
   // ─── Obyektlar bo'yicha to'lovlar (ОплатыКв) — jadval hisoboti ───
   const [objOpen, setObjOpen] = useState(true);
   const [objMode, setObjMode] = useState<'normal' | 'refund'>('normal');
+  const [objInclSchotchik, setObjInclSchotchik] = useState(false);  // "За счетчик" ni hisobga qo'shish
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
   const [objCustomFrom, setObjCustomFrom] = useState('');
   const [objCustomTo, setObjCustomTo] = useState('');
@@ -126,12 +127,13 @@ export default function DashboardPage() {
 
   interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
   const { data: objReport, isLoading: objLoading } = useQuery({
-    queryKey: ['oplata-by-object', objFrom, objTo, objMode],
+    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik],
     queryFn: () => {
       const p = new URLSearchParams();
       if (objFrom) p.set('dateFrom', objFrom);
       if (objTo) p.set('dateTo', objTo);
       p.set('mode', objMode);
+      if (objInclSchotchik) p.set('includeSchotchik', '1');
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
     enabled: has(PERMS.DASHBOARD_OBJECTS) && (objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo)),
@@ -440,6 +442,20 @@ export default function DashboardPage() {
               <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {objFrom || '—'} → {objTo || '—'}</div>
             </button>
             <div className="flex items-center gap-1.5 flex-wrap">
+              {/* "За счетчик" toggle — hisobga счётчик to'lovlarni ham qo'shadi */}
+              <button
+                type="button"
+                onClick={() => setObjInclSchotchik((v) => !v)}
+                title={objInclSchotchik ? 'За счетчик qo\'shilgan — bosib chiqarish' : 'За счетчик to\'lovlarni ham hisobga qo\'shish'}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
+                  objInclSchotchik
+                    ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/30'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 hover:text-cyan-600 dark:hover:text-cyan-300',
+                )}
+              >
+                <Gauge className="h-3 w-3" /> За счетчик
+              </button>
               {/* Возврат toggle — 0 dan kichik (refund) summalar */}
               <button
                 type="button"
@@ -567,6 +583,7 @@ export default function DashboardPage() {
           dateFrom={objFrom}
           dateTo={objTo}
           mode={objMode}
+          includeSchotchik={objInclSchotchik}
           onClose={() => setObjDetail(null)}
         />
         </>)}
@@ -1468,12 +1485,13 @@ interface ObjDetailRow {
 }
 
 function ObjectDetailDialog({
-  object, dateFrom, dateTo, mode, onClose,
+  object, dateFrom, dateTo, mode, includeSchotchik, onClose,
 }: {
   object: string | null;
   dateFrom: string;
   dateTo: string;
   mode: 'normal' | 'refund';
+  includeSchotchik: boolean;
   onClose: () => void;
 }) {
   const t = useTranslations('dashboard');
@@ -1481,13 +1499,14 @@ function ObjectDetailDialog({
   const isAll = object === '__ALL__';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode],
+    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('object', object || '');
       if (dateFrom) p.set('dateFrom', dateFrom);
       if (dateTo) p.set('dateTo', dateTo);
       p.set('mode', mode);
+      if (includeSchotchik) p.set('includeSchotchik', '1');
       return api.get<{
         ok: boolean; object: string; count: number; truncated?: boolean;
         rows: ObjDetailRow[];
@@ -1507,6 +1526,7 @@ function ObjectDetailDialog({
       if (dateFrom) p.set('dateFrom', dateFrom);
       if (dateTo) p.set('dateTo', dateTo);
       p.set('mode', mode);
+      if (includeSchotchik) p.set('includeSchotchik', '1');
       const safe = (object === '—' ? 'obyektsiz' : object).replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
       await apiDownload(`/oplata-kv/by-object-detail/export?${p.toString()}`, `obyekt-${safe}.xlsx`);
     } catch {
