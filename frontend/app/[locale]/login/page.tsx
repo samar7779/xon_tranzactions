@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
-  Loader2, Eye, EyeOff, AlertCircle, X, LogIn, ShieldCheck, Send, Check,
+  Loader2, Eye, EyeOff, AlertCircle, X, LogIn, ShieldCheck, Send, Check, XCircle,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
@@ -698,7 +698,7 @@ function ChatBubble({ msg }: {
             ? 'bg-emerald-500/15 border border-emerald-400/45 text-emerald-100'
             : 'bg-cyan-500/[0.08] border border-cyan-400/25 text-cyan-50',
         )}>
-          {msg.error && <span className="font-bold mr-1 text-rose-300">✗</span>}
+          {msg.error && <XCircle className="inline h-4 w-4 mr-1 -mt-0.5 text-rose-300" />}
           {msg.ok && <Check className="inline h-4 w-4 mr-1 -mt-0.5 text-emerald-300" />}
           {msg.text}
         </div>
