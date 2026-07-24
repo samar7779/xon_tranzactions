@@ -1,6 +1,13 @@
-import { Body, Controller, Get, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AgentService } from './agent.service';
+
+function parseAuth(raw?: string): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch { return {}; }
+}
 
 /**
  * Public — login talab qilmaydi. Maxfiy kalit (?key=...) bilan himoyalangan.
@@ -46,5 +53,20 @@ export class AgentPublicController {
   @ApiOperation({ summary: 'Telegram auth bilan shartnoma biriktirish' })
   tgAssign(@Body() body: { auth?: Record<string, any>; oplataKvId?: string; contractNo?: string }) {
     return this.svc.tgAssign(body?.auth || {}, body?.oplataKvId || '', body?.contractNo || '');
+  }
+
+  // ─── Ariza + majburiy fayl bilan yuborish (multipart) ───
+  @Post('tg/submit')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Telegram auth bilan ariza + fayl yuborish' })
+  tgSubmit(@UploadedFile() file: any, @Body() body: { auth?: string; oplataKvId?: string; contractNo?: string }) {
+    return this.svc.tgSubmitFile(parseAuth(body?.auth), body?.oplataKvId || '', body?.contractNo || '', file);
+  }
+
+  @Post('submit')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Maxfiy kalit bilan ariza + fayl yuborish' })
+  submit(@UploadedFile() file: any, @Body() body: { key?: string; oplataKvId?: string; contractNo?: string }) {
+    return this.svc.submitFile(body?.key || '', body?.oplataKvId || '', body?.contractNo || '', file);
   }
 }

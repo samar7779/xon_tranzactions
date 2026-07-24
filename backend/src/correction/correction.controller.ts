@@ -96,6 +96,14 @@ export class CorrectionController {
     return this.svc.reject(id, body?.reason || '', userId);
   }
 
+  @Post('hide')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: "To'lovni XATO ro'yxatidan yashirish / qaytarish" })
+  hide(@Body() body: { txId?: string; hidden?: boolean }, @CurrentUser('id') userId: string) {
+    if (!body?.txId) throw new BadRequestException("To'lov ko'rsatilmagan");
+    return this.svc.setHidden(body.txId, body?.hidden !== false, userId);
+  }
+
   @Post('direct')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @UseInterceptors(FileInterceptor('file'))

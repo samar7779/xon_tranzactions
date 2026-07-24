@@ -1207,7 +1207,7 @@ export class TransactionsService {
    * CLIENT kategoriya + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya bilan).
    * XATO = contractNumber bor, qo'lda (manual) emas, CRM'da found=true EMAS.
    */
-  async clientXatoTransactions(page = 1, perPage = 50) {
+  async clientXatoTransactions(page = 1, perPage = 50, q?: string) {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
 
@@ -1234,6 +1234,19 @@ export class TransactionsService {
       ],
     };
 
+    // ID / shartnoma / izoh bo'yicha qidiruv
+    const search = (q || '').trim();
+    if (search) {
+      (where.AND as any[]).push({
+        OR: [
+          { id: search },
+          { externalId: { contains: search, mode: 'insensitive' } },
+          { contractNumber: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+        ],
+      });
+    }
+
     const [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),
       this.prisma.transaction.findMany({
@@ -1244,7 +1257,7 @@ export class TransactionsService {
         select: {
           id: true, externalId: true, txnDate: true, operationTime: true,
           amount: true, currency: true, direction: true, contractNumber: true,
-          description: true,
+          description: true, xatoHidden: true,
         },
       }),
     ]);
@@ -1265,6 +1278,7 @@ export class TransactionsService {
         contractNumber: it.contractNumber,
         description: it.description,
         counterparty: clientCat.name,
+        xatoHidden: it.xatoHidden,
       })),
     };
   }
