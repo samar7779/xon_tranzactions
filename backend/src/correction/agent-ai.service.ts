@@ -25,7 +25,9 @@ export class AgentAiService {
   private readonly K_AI_KEY = 'agent.aiKey';
   private readonly K_AI_MODEL = 'agent.aiModel';
   private readonly K_AI_ENABLED = 'agent.aiEnabled';
+  private readonly K_AI_INTERVAL = 'agent.aiIntervalMin';
   private readonly DEFAULT_MODEL = 'claude-sonnet-4-6';
+  private lastRunMs = 0;
 
   // Ustma-ust ishlamaslik uchun (bir vaqtda bitta tsikl)
   private running = false;
@@ -41,15 +43,18 @@ export class AgentAiService {
    * kutayotgan (agentState=null) ariza bo'lsa Claude'ni chaqiradi. Aks holda
    * hech narsa qilmaydi (rasxod yo'q). `running` lock ustma-ust ishlamaydi.
    */
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE)
   async tick() {
     if (this.running) return;
     try {
       if (!(await this.isEnabled())) return;
+      const intervalMin = await this.getIntervalMin();
+      if (Date.now() - this.lastRunMs < intervalMin * 60_000) return; // interval hali o'tmagan
+      this.lastRunMs = Date.now();
       const pending = await this.prisma.xatoCorrectionRequest.count({
         where: { status: 'pending', agentState: null, attachmentId: { not: null } },
       });
-      if (pending === 0) return; // ariza yo'q — Claude chaqirilmaydi
+      if (pending === 0) return; // ariza yo'q — Claude chaqirilmaydi (rasxod 0)
       if (!(await this.getApiKey())) return; // kalit yo'q
       this.running = true;
       this.log.log(`AI agent tsikl boshlandi — ${pending} ta ariza`);
@@ -59,6 +64,11 @@ export class AgentAiService {
     } finally {
       this.running = false;
     }
+  }
+
+  async getIntervalMin(): Promise<number> {
+    const v = Number(await this.setting(this.K_AI_INTERVAL));
+    return v >= 1 && v <= 1440 ? Math.round(v) : 5;
   }
 
   // ─── Sozlama ───────────────────────────────────────────────────────
@@ -233,7 +243,8 @@ export class AgentAiService {
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'rejected', reviewedByType: 'agent' } }),
     ]);
     return {
-      ok: true, enabled, hasKey: !!apiKey, running: this.running, model: await this.getModel(),
+      ok: true, enabled, hasKey: !!apiKey, running: this.running,
+      model: await this.getModel(), intervalMin: await this.getIntervalMin(),
       counts: { pending, processing, needsReview, agentApproved, agentRejected },
     };
   }
