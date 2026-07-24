@@ -24,7 +24,8 @@ interface XatoRow {
     attachmentId: string | null; attachmentName: string | null;
   } | null;
 }
-interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string }
+interface ArizaStat { name: string; total: number; pending: number; approved: number; rejected: number }
+interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string; arizaStats?: ArizaStat[] }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -233,7 +234,7 @@ export default function XatoListPage() {
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
-        <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-12 text-white">
+        <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-6 text-white">
           <div className="flex items-center gap-3">
             {photo ? (
               <img src={photo} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/40 shadow-md"
@@ -258,6 +259,37 @@ export default function XatoListPage() {
               <div className="text-[9.5px] uppercase tracking-wider text-white/70 mt-1">jami xato</div>
             </div>
           </div>
+
+          {/* Stat/filtr kartalar — header ichida (glass) */}
+          <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+            <HeaderStat label="Yuklangan" value={data ? String(allRows.length) : '—'} hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />} active={flow === 'all'} onClick={() => setFlow('all')} />
+            <HeaderStat label="Kirim" value={data ? String(stats.inC) : '—'} hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />} active={flow === 'in'} onClick={() => setFlow(flow === 'in' ? 'all' : 'in')} />
+            <HeaderStat label="Chiqim" value={data ? String(stats.outC) : '—'} hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />} active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
+            <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
+          </div>
+
+          {/* Ariza statistikasi — kim qancha/qanday yubordi */}
+          {data?.arizaStats && data.arizaStats.length > 0 && (
+            <div className="mt-3.5">
+              <div className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-1.5">Arizalar — kim yubordi</div>
+              <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+                {data.arizaStats.map((s) => (
+                  <div key={s.name} className="shrink-0 flex items-center gap-2 rounded-xl bg-white/10 backdrop-blur ring-1 ring-white/20 pl-2 pr-3 py-1.5">
+                    <div className="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[11px] font-bold shrink-0">{(s.name || '?').slice(0, 1).toUpperCase()}</div>
+                    <div className="leading-tight">
+                      <div className="text-[11.5px] font-bold text-white whitespace-nowrap">{s.name || '—'}</div>
+                      <div className="text-[9.5px] whitespace-nowrap tabular-nums flex items-center gap-1.5 mt-0.5">
+                        <span className="text-white/60">Jami {s.total}</span>
+                        {s.pending > 0 && <span className="text-amber-200">⏳ {s.pending}</span>}
+                        {s.approved > 0 && <span className="text-emerald-200">✓ {s.approved}</span>}
+                        {s.rejected > 0 && <span className="text-rose-200">✗ {s.rejected}</span>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -272,26 +304,10 @@ export default function XatoListPage() {
           </div>
         </div>
       ) : (
-        <div className="mx-auto max-w-[1600px] px-3 sm:px-6 -mt-8 relative z-10 pb-10">
-
-          {/* ═══ Stat + filter cards ═══ */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
-            <StatCard tone="slate" label="Yuklangan" value={data ? String(allRows.length) : '—'}
-              hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />}
-              active={flow === 'all'} onClick={() => setFlow('all')} />
-            <StatCard tone="emerald" label="Kirim" value={data ? String(stats.inC) : '—'}
-              hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />}
-              active={flow === 'in'} onClick={() => setFlow(flow === 'in' ? 'all' : 'in')} />
-            <StatCard tone="rose" label="Chiqim" value={data ? String(stats.outC) : '—'}
-              hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />}
-              active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
-            <StatCard tone="amber" label="Jarayonda" value={data ? String(stats.pendingC) : '—'}
-              hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />}
-              active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
-          </div>
+        <div className="mx-auto max-w-[1600px] px-3 sm:px-6 mt-4 relative z-10 pb-10">
 
           {/* ═══ Sticky search bar ═══ */}
-          <div className="sticky top-2 z-20 mt-3">
+          <div className="sticky top-2 z-20">
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
               <input
@@ -580,32 +596,19 @@ function InfoField({ label, value, valueClass, mono, multiline, copyable, breakA
   );
 }
 
-/* ─── Stat/filter card ─── */
-function StatCard({ tone, label, value, hint, icon, active, onClick }: {
-  tone: 'slate' | 'emerald' | 'rose' | 'amber'; label: string; value: string; hint: string;
-  icon: ReactNode; active: boolean; onClick: () => void;
+/* ─── Header stat/filtr karta (glass — binafsha header ustida) ─── */
+function HeaderStat({ label, value, hint, icon, active, onClick }: {
+  label: string; value: string; hint: string; icon: ReactNode; active: boolean; onClick: () => void;
 }) {
-  const tones: Record<string, string> = {
-    slate: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800',
-    emerald: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
-    rose: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
-    amber: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
-  };
-  const ring: Record<string, string> = {
-    slate: 'ring-slate-400 dark:ring-slate-500',
-    emerald: 'ring-emerald-400',
-    rose: 'ring-rose-400',
-    amber: 'ring-amber-400',
-  };
   return (
     <button onClick={onClick}
-      className={`text-left rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur ring-1 p-3 shadow-sm transition-all hover:shadow-md ${active ? `ring-2 ${ring[tone]}` : 'ring-slate-200/70 dark:ring-slate-800'}`}>
-      <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{label}</span>
-        <span className={`w-6 h-6 rounded-lg grid place-items-center ${tones[tone]}`}>{icon}</span>
+      className={`text-left rounded-2xl backdrop-blur-md ring-1 px-3.5 py-2.5 transition-all ${active ? 'bg-white/25 ring-white/50 shadow-lg' : 'bg-white/10 ring-white/20 hover:bg-white/15'}`}>
+      <div className="flex items-center justify-between text-white">
+        <span className="text-[9.5px] uppercase tracking-wider text-white/60 font-semibold">{label}</span>
+        <span className="text-white/50">{icon}</span>
       </div>
-      <div className="text-[20px] font-black tabular-nums text-slate-800 dark:text-slate-100 mt-0.5">{value}</div>
-      <div className="text-[10.5px] text-slate-400 truncate">{hint}</div>
+      <div className="text-[20px] sm:text-[22px] font-black tabular-nums text-white mt-0.5 leading-none">{value}</div>
+      <div className="text-[9.5px] text-white/50 truncate mt-1">{hint}</div>
     </button>
   );
 }
