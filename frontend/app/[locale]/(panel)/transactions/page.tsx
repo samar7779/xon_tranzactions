@@ -16,7 +16,7 @@ import {
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
   RefreshCw, Landmark, Ban, Gauge, Scissors,
-  Clock, Send, XCircle,
+  Clock, Send, XCircle, FileWarning,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -466,6 +466,12 @@ export default function TransactionsPage() {
     queryKey: ['banks'],
     queryFn: () => api.get<{ items: any[] }>('/banks'),
   });
+  // Klient-XATO to'g'rilash — kutilayotgan arizalar soni (toolbar badge uchun)
+  const { data: correctionStats } = useQuery({
+    queryKey: ['correction-stats'],
+    queryFn: () => api.get<{ ok: boolean; pending: number; approved: number }>('/correction/stats'),
+    refetchInterval: 30000,
+  });
   // KPI toggle: 'all' (oxirgi 30 kun) yoki 'CLIENT' (shu oy — debitorka)
   const [kpiMode, setKpiMode] = useState<'all' | 'CLIENT'>('all');
 
@@ -844,9 +850,14 @@ export default function TransactionsPage() {
               <button
                 onClick={() => setClientXatoOpen(true)}
                 title={t('clientXatoTitle')}
-                className="inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 shrink-0"
+                className="relative inline-flex items-center justify-center w-10 h-10 rounded-xl transition-all bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/30 text-rose-600 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900 shrink-0"
               >
-                <AlertCircle className="h-4 w-4" />
+                <FileWarning className="h-4 w-4" />
+                {(correctionStats?.pending ?? 0) > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[10px] font-bold grid place-items-center tabular-nums shadow-sm ring-2 ring-white dark:ring-slate-900">
+                    {correctionStats!.pending}
+                  </span>
+                )}
               </button>
 
               {/* CLIENT + XATO modal */}
@@ -1939,6 +1950,8 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   // ── Raw (Barcha XATO) — mavjud tab holati ──
   const [rawPage, setRawPage] = useState(1);
+  const [rawQ, setRawQ] = useState('');
+  const [rawQDebounced, setRawQDebounced] = useState('');
   const [infoRow, setInfoRow] = useState<any | null>(null);
   const [exporting, setExporting] = useState(false);
   const perPage = 50;
@@ -1961,10 +1974,15 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   } | null>(null);
 
   useEffect(() => {
-    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); }
+    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRawQ(''); setRawQDebounced(''); }
   }, [open]);
   useEffect(() => { setPendingPage(1); }, [pendingQ]);
   useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow]);
+  // Barcha XATO qidiruvi — debounce (~300ms) + sahifani reset
+  useEffect(() => {
+    const id = setTimeout(() => { setRawQDebounced(rawQ); setRawPage(1); }, 300);
+    return () => clearTimeout(id);
+  }, [rawQ]);
 
   const invalidateAll = () => {
     qc.invalidateQueries({ queryKey: ['correction-stats'] });
@@ -2017,16 +2035,31 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   // ── Raw (Barcha XATO) query ──
   const rawQuery = useQuery({
-    queryKey: ['client-xato', rawPage],
+    queryKey: ['client-xato', rawPage, rawQDebounced],
     queryFn: () => api.get<{
       ok: boolean; total: number; page: number; perPage: number;
       items: Array<{
         id: string; externalId: string | null; txnDate: string; operationTime: string | null;
         amount: number; currency: string; direction: string; contractNumber: string | null;
-        description: string | null; counterparty: string | null;
+        description: string | null; counterparty: string | null; xatoHidden: boolean;
       }>;
-    }>(`/transactions/client-xato?page=${rawPage}&perPage=${perPage}`),
+    }>(`/transactions/client-xato?page=${rawPage}&perPage=${perPage}&q=${encodeURIComponent(rawQDebounced)}`),
     enabled: open && tab === 'raw',
+  });
+
+  // ── Ro'yxatdan yashirish / qaytarish ──
+  const hidingId = useRef<string | null>(null);
+  const hideMut = useMutation({
+    mutationFn: ({ txId, hidden }: { txId: string; hidden: boolean }) =>
+      api.post<{ ok: boolean; hidden: boolean }>('/correction/hide', { txId, hidden }),
+    onMutate: (v) => { hidingId.current = v.txId; },
+    onSuccess: (_res, v) => {
+      toast.success(v.hidden ? "Ro'yxatdan yashirildi" : 'Qaytarildi');
+      qc.invalidateQueries({ queryKey: ['client-xato'] });
+      qc.invalidateQueries({ queryKey: ['correction-stats'] });
+    },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+    onSettled: () => { hidingId.current = null; },
   });
 
   const fmtDate = (d: string | null | undefined) => {
@@ -2088,38 +2121,47 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
     </button>
   );
 
+  if (!open) return null;
+
   return (
     <>
-    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent
-        className="sm:max-w-[1200px] w-[97vw] p-0 overflow-hidden gap-0 max-h-[92vh] flex flex-col"
-        onInteractOutside={(e) => { if (infoRow || approval) e.preventDefault(); }}
-        onPointerDownOutside={(e) => { if (infoRow || approval) e.preventDefault(); }}
-        onEscapeKeyDown={(e) => { if (infoRow || approval) e.preventDefault(); }}
-      >
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 z-[200] bg-slate-950/50 backdrop-blur-sm animate-in fade-in duration-150"
+        onClick={() => { if (!infoRow && !approval) onClose(); }}
+      />
+      {/* Yon panel (side drawer) — o'ngdan chiqadi. z-[210] < ApprovalModal (z-[300]/[310]) */}
+      <div className="fixed inset-y-0 right-0 z-[210] w-full sm:max-w-[1100px] bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
         <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3 text-white shrink-0">
           <div className="flex items-start justify-between gap-3">
-            <DialogTitle asChild>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('clientXatoTitle')}</div>
-                  <div className="text-lg font-black tracking-tight truncate">{t('clientXatoSubtitle')}</div>
-                </div>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <FileWarning className="h-5 w-5" />
               </div>
-            </DialogTitle>
-            {tab === 'raw' && (
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">{t('clientXatoTitle')}</div>
+                <div className="text-lg font-black tracking-tight truncate">{t('clientXatoSubtitle')}</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {tab === 'raw' && (
+                <button
+                  onClick={exportExcel}
+                  disabled={exporting || rawQuery.isLoading || rawTotal === 0}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  Excel
+                </button>
+              )}
               <button
-                onClick={exportExcel}
-                disabled={exporting || rawQuery.isLoading || rawTotal === 0}
-                className="shrink-0 mr-8 inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={onClose}
+                title="Yopish"
+                className="w-8 h-8 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
               >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                Excel
+                <X className="h-4 w-4" />
               </button>
-            )}
+            </div>
           </div>
 
           {/* Tab bar — segmented pill */}
@@ -2303,6 +2345,12 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         {/* ═══ TAB: BARCHA XATO (mavjud raw jadval) ═══ */}
         {tab === 'raw' && (
           <>
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
+              <div className="relative max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <Input value={rawQ} onChange={(e) => setRawQ(e.target.value)} placeholder="ID, shartnoma yoki izoh bo'yicha qidirish…" className="pl-9 h-9 text-[12px]" />
+              </div>
+            </div>
             <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
               {rawQuery.isLoading ? (
                 <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
@@ -2326,15 +2374,22 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                     {rawItems.map((it) => (
-                      <tr key={it.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                      <tr key={it.id} className={cn('hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors', it.xatoHidden && 'opacity-60')}>
                         <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">
                           {fmtDate(it.txnDate)}{it.operationTime ? <span className="text-slate-400 dark:text-slate-500"> {it.operationTime.slice(0, 5)}</span> : null}
                         </td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[180px] truncate" title={it.counterparty || ''}>{it.counterparty || '—'}</td>
                         <td className="px-3 py-2">
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
-                            <AlertCircle className="h-3 w-3" /> {t('badgeError')}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900">
+                              <AlertCircle className="h-3 w-3" /> {t('badgeError')}
+                            </span>
+                            {it.xatoHidden && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
+                                <EyeOff className="h-3 w-3" /> yashirilgan
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className={cn('px-3 py-2 text-right tabular-nums font-bold whitespace-nowrap', it.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
                           {it.direction === 'IN' ? '+' : '−'}{formatMoney(it.amount, it.currency)}
@@ -2361,6 +2416,22 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           </button>
                         </td>
                         <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            onClick={() => hideMut.mutate({ txId: it.id, hidden: !it.xatoHidden })}
+                            disabled={hideMut.isPending && hidingId.current === it.id}
+                            title={it.xatoHidden ? "Ro'yxatga qaytarish" : "Ro'yxatdan yashirish"}
+                            className={cn(
+                              'inline-flex items-center justify-center w-7 h-7 rounded-lg transition-all shadow-sm disabled:opacity-50',
+                              it.xatoHidden
+                                ? 'bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-500 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-300'
+                                : 'bg-slate-100 dark:bg-slate-800 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-slate-600 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-300',
+                            )}
+                          >
+                            {hideMut.isPending && hidingId.current === it.id
+                              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              : it.xatoHidden ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+                          </button>
                           <button
                             onClick={() => setApproval({
                               mode: 'direct', txId: it.id,
@@ -2377,6 +2448,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           >
                             <Wrench className="h-3 w-3" /> To'g'rilash
                           </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2387,8 +2459,14 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
             <Pager page={rawPage} total={rawTotal} onPrev={() => setRawPage((p) => Math.max(1, p - 1))} onNext={() => setRawPage((p) => p + 1)} />
           </>
         )}
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer — Yopish */}
+        <div className="px-4 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
+          <Button variant="outline" size="sm" onClick={onClose}>
+            <X className="h-3.5 w-3.5 mr-1" /> Yopish
+          </Button>
+        </div>
+      </div>
 
     {/* IZOH / ID icon bosilganda — to'liq ma'lumot modali (purpose + externalId + shartnoma) */}
     <PurposeModal

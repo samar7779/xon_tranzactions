@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
-  Clock, Send, RotateCcw,
+  Clock, Send, RotateCcw, Copy, Paperclip, Upload, FileCheck2,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -41,7 +41,7 @@ function fmtCompact(v: number): string {
   return String(v);
 }
 
-type Flow = 'all' | 'in' | 'out';
+type Flow = 'all' | 'in' | 'out' | 'pending';
 
 export default function XatoListPage() {
   const [data, setData] = useState<XatoResp | null>(null);
@@ -59,13 +59,25 @@ export default function XatoListPage() {
   const [crmItems, setCrmItems] = useState<any[]>([]);
   const [crmLoading, setCrmLoading] = useState(false);
   const [chosen, setChosen] = useState('');
-  const [name, setName] = useState('');
+  const [arizaFile, setArizaFile] = useState<File | null>(null);
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] || null;
+    if (f && f.size > 25 * 1024 * 1024) {
+      setAssignError('Fayl hajmi 25MB dan oshmasligi kerak');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+    setArizaFile(f);
+    setAssignError('');
+  };
 
   useEffect(() => { setPage(1); }, [q, flow]);
 
-  const closeModal = () => { setSelected(null); setCq(''); setCrmItems([]); setChosen(''); setAssignError(''); };
+  const closeModal = () => { setSelected(null); setCq(''); setCrmItems([]); setChosen(''); setArizaFile(null); setAssignError(''); };
 
   // CRM shartnoma qidirish (modal ochiq bo'lsa, debounce)
   useEffect(() => {
@@ -82,25 +94,24 @@ export default function XatoListPage() {
   }, [cq, selected, key, tgAuth]);
 
   const doAssign = async () => {
-    if (!selected || !chosen) return;
+    if (!selected || !chosen || !arizaFile) return;
     setAssigning(true); setAssignError('');
     try {
-      const res = tgAuth
-        ? await fetch(`${API_URL}/agent/tg/assign`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ auth: tgAuth, oplataKvId: selected.id, contractNo: chosen }),
-          })
-        : await fetch(`${API_URL}/agent/assign`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, oplataKvId: selected.id, contractNo: chosen, name }),
-          });
+      const fd = new FormData();
+      fd.append('oplataKvId', selected.id);
+      fd.append('contractNo', chosen);
+      fd.append('file', arizaFile);
+      let url: string;
+      if (tgAuth) { fd.append('auth', JSON.stringify(tgAuth)); url = `${API_URL}/agent/tg/submit`; }
+      else { fd.append('key', key); url = `${API_URL}/agent/submit`; }
+      const res = await fetch(url, { method: 'POST', body: fd });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d?.ok) throw new Error(d?.error || d?.message || 'Xatolik');
       // Ariza yuborildi — to'lov "kutilmoqda" bo'ldi (yo'qolmaydi, tasdiq kutadi)
       setData((prev) => prev ? { ...prev, rows: prev.rows.map((x) => x.id === selected.id ? { ...x, pending: true } : x) } : prev);
       closeModal();
     } catch (e: any) {
-      setAssignError(e?.message || 'Biriktirishda xato');
+      setAssignError(e?.message || 'Yuborishda xato');
     } finally {
       setAssigning(false);
     }
@@ -137,18 +148,20 @@ export default function XatoListPage() {
 
   const allRows = data?.rows || [];
   const stats = useMemo(() => {
-    let inC = 0, outC = 0, inSum = 0, outSum = 0;
+    let inC = 0, outC = 0, inSum = 0, outSum = 0, pendingC = 0;
     for (const r of allRows) {
       const a = r.amount ?? 0;
       if (a < 0) { outC++; outSum += a; } else { inC++; inSum += a; }
+      if (r.pending) pendingC++;
     }
-    return { inC, outC, inSum, outSum };
+    return { inC, outC, inSum, outSum, pendingC };
   }, [allRows]);
 
   const rows = allRows.filter((r) => {
     const a = r.amount ?? 0;
     if (flow === 'in' && a < 0) return false;
     if (flow === 'out' && a >= 0) return false;
+    if (flow === 'pending' && !r.pending) return false;
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
@@ -166,13 +179,13 @@ export default function XatoListPage() {
   const photo = tgAuth?.photo_url || '';
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(120%_60%_at_50%_0%,#fff1f0_0%,#f8fafc_38%,#f1f5f9_100%)] dark:bg-[radial-gradient(120%_60%_at_50%_0%,#2a0d0d_0%,#020617_45%)] text-slate-800 dark:text-slate-100">
+    <div className="min-h-screen bg-[radial-gradient(120%_60%_at_50%_0%,#f5f3ff_0%,#f8fafc_38%,#f1f5f9_100%)] dark:bg-[radial-gradient(120%_60%_at_50%_0%,#1e1b4b_0%,#020617_45%)] text-slate-800 dark:text-slate-100">
 
       {/* ═══ Hero header ═══ */}
       <header className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-rose-600 via-red-600 to-orange-500" />
-        <div className="absolute -top-24 -right-10 w-80 h-80 rounded-full bg-orange-300/30 blur-3xl" />
-        <div className="absolute -bottom-28 -left-10 w-80 h-80 rounded-full bg-rose-400/30 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-600" />
+        <div className="absolute -top-24 -right-10 w-80 h-80 rounded-full bg-fuchsia-400/30 blur-3xl" />
+        <div className="absolute -bottom-28 -left-10 w-80 h-80 rounded-full bg-indigo-400/30 blur-3xl" />
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
@@ -232,11 +245,9 @@ export default function XatoListPage() {
             <StatCard tone="rose" label="Chiqim" value={data ? String(stats.outC) : '—'}
               hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />}
               active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
-            <div className="rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur ring-1 ring-slate-200/70 dark:ring-slate-800 p-3 flex flex-col justify-center shadow-sm">
-              <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Ko&apos;rinmoqda</div>
-              <div className="text-[20px] font-black tabular-nums text-slate-800 dark:text-slate-100 mt-0.5">{rows.length}</div>
-              <div className="text-[10.5px] text-slate-400">sahifa {safePage}/{totalPages}</div>
-            </div>
+            <StatCard tone="amber" label="Jarayonda" value={data ? String(stats.pendingC) : '—'}
+              hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />}
+              active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
           </div>
 
           {/* ═══ Sticky search bar ═══ */}
@@ -247,7 +258,7 @@ export default function XatoListPage() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Shartnoma, klient, obyekt yoki izoh bo'yicha qidirish…"
-                className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-rose-400 text-[13.5px] transition"
+                className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
               />
               {q && (
                 <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
@@ -256,6 +267,10 @@ export default function XatoListPage() {
               )}
             </div>
           </div>
+
+          {data && rows.length > 0 && (
+            <div className="mt-2 px-1 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{rows.length} ta · sahifa {safePage}/{totalPages}</div>
+          )}
 
           {/* ═══ Grid ═══ */}
           {!data ? (
@@ -332,18 +347,33 @@ export default function XatoListPage() {
 
           {/* ═══ Pagination ═══ */}
           {data && totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 mt-6">
+            <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
+              <button onClick={() => setPage(1)} disabled={safePage <= 1}
+                className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">« 1</button>
               <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
-                className="h-10 w-10 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-rose-300 transition">
+                className="h-9 w-9 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <div className="h-10 px-4 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[13px] font-bold tabular-nums shadow-sm">
-                {safePage} <span className="text-slate-300 mx-1">/</span> {totalPages}
-              </div>
+              {(() => {
+                const nums: (number | string)[] = [];
+                const start = Math.max(1, safePage - 1);
+                const end = Math.min(totalPages, safePage + 1);
+                if (start > 1) nums.push('…l');
+                for (let i = start; i <= end; i++) nums.push(i);
+                if (end < totalPages) nums.push('…r');
+                return nums.map((n, i) => typeof n === 'number' ? (
+                  <button key={i} onClick={() => setPage(n)}
+                    className={`h-9 min-w-[36px] px-2.5 grid place-items-center rounded-xl text-[13px] font-bold tabular-nums shadow-sm ring-1 transition ${n === safePage ? 'bg-violet-600 text-white ring-violet-600' : 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>{n}</button>
+                ) : (
+                  <span key={i} className="px-1 text-slate-400 select-none">…</span>
+                ));
+              })()}
               <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
-                className="h-10 w-10 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-rose-300 transition">
+                className="h-9 w-9 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">
                 <ChevronRight className="w-4 h-4" />
               </button>
+              <button onClick={() => setPage(totalPages)} disabled={safePage >= totalPages}
+                className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">{totalPages} »</button>
             </div>
           )}
         </div>
@@ -364,16 +394,21 @@ export default function XatoListPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* To'lov ma'lumoti */}
+              {/* To'lov ma'lumoti — alohida maydonlar */}
               <div className="relative rounded-2xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-100 dark:ring-slate-800 p-4 overflow-hidden">
                 <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${((selected.amount ?? 0) < 0) ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono font-bold text-[13px] text-rose-600 dark:text-rose-300">{selected.contractNo}</span>
-                  <span className={`font-extrabold tabular-nums text-[14px] ${((selected.amount ?? 0) < 0) ? 'text-rose-600' : 'text-emerald-600 dark:text-emerald-400'}`}>{fmtMoney(selected.amount)}</span>
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-2 py-1 font-mono font-bold text-[12px] text-rose-700 dark:text-rose-300 ring-1 ring-rose-100 dark:ring-rose-900/50">{selected.contractNo}</span>
+                  {selected.txType && <span className="text-[10.5px] text-slate-400 truncate max-w-[45%]">{selected.txType}</span>}
                 </div>
-                <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1">{fmtDate(selected.date)}{selected.object ? ` · 🏠 ${selected.object}` : ''}{selected.txType ? ` · ${selected.txType}` : ''}</div>
-                {selected.client && <div className="text-[12.5px] font-medium text-slate-700 dark:text-slate-300 mt-1">👤 {selected.client}</div>}
-                {selected.purpose && <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-3">{selected.purpose}</div>}
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                  <InfoField label="Sana" value={fmtDate(selected.date)} />
+                  <InfoField label="Summa" value={fmtMoney(selected.amount)} valueClass={((selected.amount ?? 0) < 0) ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} />
+                  {selected.client && <div className="col-span-2"><InfoField label="Klient" value={selected.client} /></div>}
+                  {selected.object && <div className="col-span-2"><InfoField label="Obyekt" value={selected.object} /></div>}
+                  {selected.purpose && <div className="col-span-2"><InfoField label="Maqsad (izoh)" value={selected.purpose} multiline /></div>}
+                  <div className="col-span-2"><InfoField label="ID" value={selected.id} mono copyable /></div>
+                </div>
               </div>
 
               {selected.pending ? (
@@ -422,14 +457,19 @@ export default function XatoListPage() {
                 )}
               </div>
 
-              {/* Ism — faqat kalit rejimda (Telegram'da ism o'zi ma'lum) */}
-              {!tgAuth && (
-                <div className="space-y-1.5">
-                  <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">Ismingiz (kim biriktirdi)</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Masalan: Samar"
-                    className="w-full h-11 px-3 rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-900 outline-none focus:ring-2 focus:ring-indigo-400 text-[13px] transition" />
-                </div>
-              )}
+              {/* Ariza fayli — MAJBURIY */}
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                  <Paperclip className="w-3.5 h-3.5" /> Ariza fayli <span className="text-rose-500">*majburiy</span>
+                </label>
+                <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={onPickFile} className="hidden" />
+                <button type="button" onClick={() => fileInputRef.current?.click()}
+                  className={`w-full flex flex-col items-center justify-center gap-1.5 py-5 px-3 rounded-xl border-2 border-dashed transition-all text-[12px] ${arizaFile ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300' : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-violet-400 hover:bg-violet-50/40 dark:hover:bg-violet-950/10'}`}>
+                  {arizaFile ? <FileCheck2 className="w-6 h-6" /> : <Upload className="w-6 h-6" />}
+                  <span className="truncate max-w-full font-semibold">{arizaFile ? arizaFile.name : 'Ariza faylini tanlang'}</span>
+                  <span className="text-[10px] text-slate-400">{arizaFile ? `${(arizaFile.size / 1024 / 1024).toFixed(1)} MB` : 'PDF, DOC, JPG, PNG — max 25MB'}</span>
+                </button>
+              </div>
 
               {assignError && (
                 <div className="flex items-start gap-2 text-[12px] text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 rounded-xl p-3">
@@ -437,11 +477,11 @@ export default function XatoListPage() {
                 </div>
               )}
 
-              <button onClick={doAssign} disabled={!chosen || assigning}
-                className="w-full h-12 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[14px] shadow-lg shadow-indigo-600/25 transition-all flex items-center justify-center gap-2">
+              <button onClick={doAssign} disabled={!chosen || !arizaFile || assigning}
+                className="w-full h-12 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[14px] shadow-lg shadow-violet-600/25 transition-all flex items-center justify-center gap-2">
                 {assigning ? <><Loader2 className="w-4 h-4 animate-spin" /> Yuborilmoqda…</> : <><Send className="w-4 h-4" /> Ariza yuborish</>}
               </button>
-              <div className="text-[10.5px] text-slate-400 dark:text-slate-500 text-center">Ariza yuboriladi — tasdiqlovchi xodim fayl bilan tasdiqlagach to&apos;lov to&apos;g&apos;rlanadi.</div>
+              <div className="text-[10.5px] text-slate-400 dark:text-slate-500 text-center">Shartnoma + ariza fayli bilan yuboriladi — tasdiqlovchi xodim tasdiqlagach to&apos;lov to&apos;g&apos;rlanadi.</div>
               </>
               )}
             </div>
@@ -452,20 +492,41 @@ export default function XatoListPage() {
   );
 }
 
+/* ─── Info maydoni (modal) ─── */
+function InfoField({ label, value, valueClass, mono, multiline, copyable }: {
+  label: string; value: string; valueClass?: string; mono?: boolean; multiline?: boolean; copyable?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">{label}</div>
+      <div className={`flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 ${mono ? 'font-mono text-[11px]' : 'text-[12.5px]'} ${valueClass || ''}`}>
+        <span className={multiline ? 'font-normal text-[11.5px] leading-snug line-clamp-4 text-slate-600 dark:text-slate-300' : 'truncate'}>{value}</span>
+        {copyable && (
+          <button onClick={() => navigator.clipboard?.writeText(value)} className="shrink-0 text-slate-400 hover:text-violet-500 transition-colors" title="Nusxa olish">
+            <Copy className="w-3 h-3" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Stat/filter card ─── */
 function StatCard({ tone, label, value, hint, icon, active, onClick }: {
-  tone: 'slate' | 'emerald' | 'rose'; label: string; value: string; hint: string;
+  tone: 'slate' | 'emerald' | 'rose' | 'amber'; label: string; value: string; hint: string;
   icon: ReactNode; active: boolean; onClick: () => void;
 }) {
   const tones: Record<string, string> = {
     slate: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800',
     emerald: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40',
     rose: 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40',
+    amber: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40',
   };
   const ring: Record<string, string> = {
     slate: 'ring-slate-400 dark:ring-slate-500',
     emerald: 'ring-emerald-400',
     rose: 'ring-rose-400',
+    amber: 'ring-amber-400',
   };
   return (
     <button onClick={onClick}
