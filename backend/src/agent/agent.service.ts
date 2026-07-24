@@ -280,6 +280,26 @@ export class AgentService {
     }
   }
 
+  /** Ariza yuborish + majburiy ariza fayli bilan (web/telegram modal). */
+  private async _submitWithFile(
+    oplataKvId: string, contractNo: string, file: any,
+    actorName?: string, chatId?: string,
+    source: 'telegram' | 'web' = 'telegram',
+  ) {
+    const contract = (contractNo || '').trim();
+    if (!oplataKvId || !contract) return { ok: false, error: "To'lov yoki shartnoma raqami yo'q" };
+    if (!file?.buffer) return { ok: false, error: 'Ariza fayli majburiy' };
+    try {
+      const res = await this.correction.createRequestWithFile({
+        oplataKvId, proposedContractNo: contract, source,
+        submittedByName: actorName || 'Telegram', submittedByChatId: chatId || null,
+      }, file);
+      return { ok: true, id: res.id, alreadyPending: !!res.alreadyPending, pending: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || 'Ariza yuborishda xato' };
+    }
+  }
+
   private async _list() {
     const dateFrom = await this.settings.get(this.K_DATEFROM);
     const [rows, count] = await Promise.all([
@@ -320,6 +340,16 @@ export class AgentService {
   async tgAssign(auth: Record<string, any>, oplataKvId: string, contractNo: string) {
     const who = await this.authorizeTg(auth);
     return this._submit(oplataKvId, contractNo, who.name, who.userId, 'telegram');
+  }
+
+  // ─── Public: ariza + fayl bilan yuborish (majburiy fayl) ───────────
+  async tgSubmitFile(auth: Record<string, any>, oplataKvId: string, contractNo: string, file: any) {
+    const who = await this.authorizeTg(auth);
+    return this._submitWithFile(oplataKvId, contractNo, file, who.name, who.userId, 'telegram');
+  }
+  async submitFile(key: string, oplataKvId: string, contractNo: string, file: any) {
+    await this.assertKey(key);
+    return this._submitWithFile(oplataKvId, contractNo, file, undefined, undefined, 'web');
   }
 
   private async saveResult(text: string) {

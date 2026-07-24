@@ -360,8 +360,9 @@ export class OplataKvService {
     });
     const verifiedNos = verified.map((c) => c.contractNumber);
 
+    // Manual (qo'lda kiritilgan) YOKI XATO ro'yxatidan yashirilgan — ikkovi ham chiqmaydi
     const manualTx = await this.prisma.transaction.findMany({
-      where: { isContractManual: true },
+      where: { OR: [{ isContractManual: true }, { xatoHidden: true }] },
       select: { id: true, externalId: true },
     });
     const manualIds: string[] = [];

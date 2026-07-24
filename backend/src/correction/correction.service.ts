@@ -32,8 +32,70 @@ export class CorrectionService {
     submittedByChatId?: string | null;
     submittedById?: string | null;
   }): Promise<{ ok: true; id: string; alreadyPending?: boolean }> {
+    return this.persistRequest(input, undefined);
+  }
+
+  /** Ariza yuborish + ariza faylini biriktirish (web/telegram — fayl majburiy). */
+  async createRequestWithFile(
+    input: Parameters<CorrectionService['createRequest']>[0],
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
+  ): Promise<{ ok: true; id: string; alreadyPending?: boolean }> {
+    if (!file?.buffer) throw new BadRequestException('Ariza fayli majburiy');
+    return this.persistRequest(input, file);
+  }
+
+  /** Tx'ni aniqlaydi, snapshot yig'adi, (ixtiyoriy) fayl biriktiradi, arizani yaratadi. */
+  private async persistRequest(
+    input: Parameters<CorrectionService['createRequest']>[0],
+    file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
+  ): Promise<{ ok: true; id: string; alreadyPending?: boolean }> {
+    const { txId, oplataKvId, snap } = await this.resolveTx(input);
+
+    // Duplikat pending — bir to'lovga bir vaqtda bitta ariza
+    const existing = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: { txId, status: 'pending' },
+      select: { id: true },
+    });
+    if (existing) return { ok: true, id: existing.id, alreadyPending: true };
+
+    const contract = this.cleanContract(input.proposedContractNo);
+
+    // Fayl bo'lsa — tranzaksiyaga biriktiramiz
+    let attachmentId: string | null = null;
+    let attachmentName: string | null = null;
+    if (file?.buffer) {
+      const up: any = await this.attachments.upload(txId, file, {
+        type: 'ariza', contractNumber: contract, uploadedBy: input.submittedByName,
+      });
+      attachmentId = up?.item?.id || null;
+      attachmentName = up?.item?.filename || null;
+    }
+
+    const req = await this.prisma.xatoCorrectionRequest.create({
+      data: {
+        txId,
+        oplataKvId,
+        proposedContractNo: contract,
+        note: input.note?.slice(0, 2000) || null,
+        source: input.source,
+        submittedByName: (input.submittedByName || '?').slice(0, 190),
+        submittedByChatId: input.submittedByChatId?.slice(0, 64) || null,
+        submittedById: input.submittedById || null,
+        attachmentId, attachmentName,
+        ...snap,
+      },
+      select: { id: true },
+    });
+    this.log.log(`Ariza yuborildi: ${req.id} · tx=${txId} · ${input.source} · ${input.submittedByName}${attachmentId ? ' · fayl bilan' : ''}`);
+    return { ok: true, id: req.id };
+  }
+
+  /** oplataKvId yoki txId → txId + snapshot (ko'rsatish uchun). */
+  private async resolveTx(input: { oplataKvId?: string | null; txId?: string | null }): Promise<{
+    txId: string; oplataKvId: string | null; snap: Record<string, any>;
+  }> {
     let txId = (input.txId || '').trim() || null;
-    let oplataKvId: string | null = input.oplataKvId || null;
+    const oplataKvId: string | null = input.oplataKvId || null;
     let snap: Record<string, any> = {};
 
     if (input.oplataKvId) {
@@ -83,32 +145,7 @@ export class CorrectionService {
     } else {
       throw new BadRequestException("To'lov ko'rsatilmagan");
     }
-
-    // Duplikat pending — bir to'lovga bir vaqtda bitta ariza
-    const existing = await this.prisma.xatoCorrectionRequest.findFirst({
-      where: { txId: txId!, status: 'pending' },
-      select: { id: true },
-    });
-    if (existing) return { ok: true, id: existing.id, alreadyPending: true };
-
-    const contract = this.cleanContract(input.proposedContractNo);
-
-    const req = await this.prisma.xatoCorrectionRequest.create({
-      data: {
-        txId: txId!,
-        oplataKvId,
-        proposedContractNo: contract,
-        note: input.note?.slice(0, 2000) || null,
-        source: input.source,
-        submittedByName: (input.submittedByName || '?').slice(0, 190),
-        submittedByChatId: input.submittedByChatId?.slice(0, 64) || null,
-        submittedById: input.submittedById || null,
-        ...snap,
-      },
-      select: { id: true },
-    });
-    this.log.log(`Ariza yuborildi: ${req.id} · tx=${txId} · ${input.source} · ${input.submittedByName}`);
-    return { ok: true, id: req.id };
+    return { txId: txId!, oplataKvId, snap };
   }
 
   // ─── Badge uchun: qaysi txId'larda pending ariza bor ───────────────
@@ -205,18 +242,21 @@ export class CorrectionService {
 
     const contract = this.cleanContract(opts.contractNo || req.proposedContractNo);
     if (!contract) throw new BadRequestException('Shartnoma raqami kerak');
-    if (!file?.buffer) throw new BadRequestException('Ariza fayli majburiy');
+    if (!file?.buffer && !req.attachmentId) throw new BadRequestException('Ariza fayli majburiy');
 
     const actorEmail = await this.actorEmail(opts.actorId);
 
-    // 1) Ariza faylini biriktirish
-    let attachmentId: string | null = null;
-    let attachmentName: string | null = null;
-    const up: any = await this.attachments.upload(req.txId, file, {
-      type: 'ariza', contractNumber: contract, uploadedBy: actorEmail,
-    });
-    attachmentId = up?.item?.id || null;
-    attachmentName = up?.item?.filename || null;
+    // 1) Ariza fayli — yangi yuklangan bo'lsa biriktiramiz, aks holda web'da
+    //    yuborilgan mavjud faylni saqlaymiz
+    let attachmentId: string | null = req.attachmentId || null;
+    let attachmentName: string | null = req.attachmentName || null;
+    if (file?.buffer) {
+      const up: any = await this.attachments.upload(req.txId, file, {
+        type: 'ariza', contractNumber: contract, uploadedBy: actorEmail,
+      });
+      attachmentId = up?.item?.id || null;
+      attachmentName = up?.item?.filename || null;
+    }
 
     // 2) Shartnoma (qo'lda — XATO holatini yopadi)
     await this.categorization.setContractManual(req.txId, contract, opts.actorId);
@@ -301,6 +341,24 @@ export class CorrectionService {
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved' } }),
     ]);
     return { ok: true, pending, approved };
+  }
+
+  // ─── XATO ro'yxatidan yashirish / qaytarish ────────────────────────
+  async setHidden(txId: string, hidden: boolean, actorId: string) {
+    const tx = await this.prisma.transaction.findUnique({ where: { id: txId }, select: { id: true } });
+    if (!tx) throw new NotFoundException('Tranzaksiya topilmadi');
+    await this.prisma.transaction.update({ where: { id: txId }, data: { xatoHidden: hidden } });
+    const actorEmail = await this.actorEmail(actorId);
+    try {
+      await this.prisma.transactionCategoryHistory.create({
+        data: {
+          txId, action: 'xato-hide', actorId, actorName: actorEmail,
+          reason: hidden ? "XATO ro'yxatidan yashirildi" : "XATO ro'yxatiga qaytarildi",
+        },
+      });
+    } catch { /* skip */ }
+    this.log.log(`XATO ${hidden ? 'yashirildi' : 'qaytarildi'}: tx=${txId} · ${actorEmail}`);
+    return { ok: true, hidden };
   }
 
   // ─── Yordamchilar ──────────────────────────────────────────────────
