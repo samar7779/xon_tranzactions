@@ -174,7 +174,7 @@ export function AccountDrilldown({
 
   return (
     <div
-      className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-stretch justify-end"
+      className="fixed inset-0 z-50 bg-slate-900/60 flex items-stretch justify-end"
       onClick={onClose}
     >
       <div
@@ -1106,7 +1106,7 @@ function BulkResultModal({
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-md grid place-items-center px-4"
+      className="fixed inset-0 z-[200] bg-slate-900/90 grid place-items-center px-4"
       onClick={onClose}
     >
       <div
@@ -1298,7 +1298,7 @@ function FixDateResultModal({
   const failed = result.results.filter(r => !r.updated && r.error);
 
   const modalContent = (
-    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4"
       onClick={onClose}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}>
@@ -1395,7 +1395,7 @@ function FixDateConfirmModal({
   const t = useTranslations('drilldown');
   const tc = useTranslations('common');
   const modalContent = (
-    <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4"
+    <div className="fixed inset-0 z-[100] bg-slate-900/70 flex items-center justify-center p-4"
       onClick={onCancel}>
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
         onClick={(e) => e.stopPropagation()}>
