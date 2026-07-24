@@ -308,50 +308,55 @@ export default function XatoListPage() {
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
         <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-6 text-white">
-          <div className="flex items-center gap-3">
-            {photo ? (
-              <img src={photo} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/40 shadow-md"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
-            ) : (
-              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur grid place-items-center ring-2 ring-white/25">
-                <AlertTriangle className="w-5 h-5" />
+          {/* Top bar: title (chap) · tab (o'rta) · hisob (o'ng) */}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-3 min-w-0">
+              {photo ? (
+                <img src={photo} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/40 shadow-md"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur grid place-items-center ring-2 ring-white/25">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-[18px] sm:text-[20px] font-extrabold leading-none tracking-tight">XATO to&apos;lovlar</h1>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli
+                  </span>
+                </div>
+                {who && <div className="text-[11.5px] text-white/70 mt-1 truncate">Salom, {who} 👋</div>}
               </div>
-            )}
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-[18px] sm:text-[20px] font-extrabold leading-none tracking-tight">XATO to&apos;lovlar</h1>
-                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli
-                </span>
-              </div>
-              {who && <div className="text-[11.5px] text-white/70 mt-1 truncate">Salom, {who} 👋</div>}
             </div>
 
-            <div className="ml-auto text-right leading-none">
+            {/* Tab — o'rtada (segment) */}
+            <div className="mx-auto flex items-center gap-1 rounded-2xl bg-white/10 ring-1 ring-white/20 p-1 backdrop-blur shrink-0">
+              <button onClick={() => setMainTab('xato')}
+                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
+                <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
+              </button>
+              <button onClick={() => setMainTab('arizalar')}
+                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
+                <ListChecks className="w-4 h-4" /> Arizalar
+              </button>
+            </div>
+
+            <div className="text-right leading-none shrink-0">
               <div className="text-[26px] sm:text-[30px] font-black tabular-nums">{data ? data.count : '—'}</div>
               <div className="text-[9.5px] uppercase tracking-wider text-white/70 mt-1">jami xato</div>
             </div>
           </div>
 
-          {/* Stat/filtr kartalar — header ichida (glass) */}
-          <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-            <HeaderStat label="Yuklangan" value={data ? String(allRows.length) : '—'} hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />} active={flow === 'all'} onClick={() => setFlow('all')} />
-            <HeaderStat label="Kirim" value={data ? String(stats.inC) : '—'} hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />} active={flow === 'in'} onClick={() => setFlow(flow === 'in' ? 'all' : 'in')} />
-            <HeaderStat label="Chiqim" value={data ? String(stats.outC) : '—'} hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />} active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
-            <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
-          </div>
-
-          {/* ═══ Asosiy tab bar — header ichida (glass) ═══ */}
-          <div className="mt-4 flex items-center gap-1.5">
-            <button onClick={() => setMainTab('xato')}
-              className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-white text-violet-700 shadow-md' : 'bg-white/10 text-white ring-1 ring-white/25 hover:bg-white/20'}`}>
-              <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
-            </button>
-            <button onClick={() => setMainTab('arizalar')}
-              className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-white text-violet-700 shadow-md' : 'bg-white/10 text-white ring-1 ring-white/25 hover:bg-white/20'}`}>
-              <ListChecks className="w-4 h-4" /> Arizalar
-            </button>
-          </div>
+          {/* Stat/filtr kartalar — faqat XATO tabida (glass) */}
+          {mainTab === 'xato' && (
+            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+              <HeaderStat label="Yuklangan" value={data ? String(allRows.length) : '—'} hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />} active={flow === 'all'} onClick={() => setFlow('all')} />
+              <HeaderStat label="Kirim" value={data ? String(stats.inC) : '—'} hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />} active={flow === 'in'} onClick={() => setFlow(flow === 'in' ? 'all' : 'in')} />
+              <HeaderStat label="Chiqim" value={data ? String(stats.outC) : '—'} hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />} active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
+              <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
+            </div>
+          )}
         </div>
       </header>
 
