@@ -286,12 +286,14 @@ export class CorrectionService {
 
   // ─── Barcha arizalar ro'yxati (status + shartnoma qidiruv) — audit ─
   async listArizalar(opts: {
-    status?: 'all' | 'pending' | 'approved' | 'rejected'; q?: string; page?: number; perPage?: number;
+    status?: 'all' | 'pending' | 'approved' | 'rejected'; q?: string; submitter?: string;
+    page?: number; perPage?: number;
   } = {}) {
     const page = Math.max(1, opts.page || 1);
     const perPage = Math.min(100, Math.max(1, opts.perPage || 30));
     const where: any = {};
     if (opts.status && opts.status !== 'all') where.status = opts.status;
+    if (opts.submitter?.trim()) where.submittedByName = opts.submitter.trim();
     this.applySearch(where, opts.q);
     const [total, rows] = await Promise.all([
       this.prisma.xatoCorrectionRequest.count({ where }),

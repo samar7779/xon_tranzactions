@@ -373,11 +373,11 @@ export class AgentService {
   }
 
   // ─── Public: arizalar ro'yxati (audit sub-tab) ─────────────────────
-  async tgArizaList(auth: Record<string, any>, opts: { status?: any; q?: string; page?: number }) {
+  async tgArizaList(auth: Record<string, any>, opts: { status?: any; q?: string; submitter?: string; page?: number }) {
     await this.authorizeTg(auth);
     return this.correction.listArizalar(opts);
   }
-  async arizaList(key: string, opts: { status?: any; q?: string; page?: number }) {
+  async arizaList(key: string, opts: { status?: any; q?: string; submitter?: string; page?: number }) {
     await this.assertKey(key);
     return this.correction.listArizalar(opts);
   }
