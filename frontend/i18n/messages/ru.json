@@ -388,6 +388,9 @@
     "pressEscToClose": "чтобы закрыть",
     "showPassword": "Показать",
     "hidePassword": "Скрыть",
+    "enterLogin": "Введите логин",
+    "enterPassword": "Введите пароль",
+    "retrying": "Перезапуск...",
     "systemOnline": "СИСТЕМА · ONLINE",
     "tashkent": "ТАШКЕНТ"
   },

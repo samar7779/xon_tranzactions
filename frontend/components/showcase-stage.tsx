@@ -661,8 +661,8 @@ function DashboardScanBack({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) { setVisible([]); return; }
     const timers: ReturnType<typeof setTimeout>[] = [];
-    // 5 ta matn, 2.5s davomida tarqatib chiqaramiz
-    const delays = [700, 1000, 1300, 1600, 2000];
+    // 5 ta matn, tez ketma-ketlikda (~1.1s) — ACCESS GRANTED tez chiqsin
+    const delays = [120, 340, 560, 780, 1050];
     lines.forEach((_, i) => {
       timers.push(setTimeout(() => setVisible((v) => [...v, i]), delays[i]));
     });

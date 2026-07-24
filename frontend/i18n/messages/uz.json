@@ -388,6 +388,9 @@
     "pressEscToClose": "yopish uchun bosing",
     "showPassword": "Ko'rsatish",
     "hidePassword": "Yashirish",
+    "enterLogin": "Loginingizni kiriting",
+    "enterPassword": "Parolingizni kiriting",
+    "retrying": "Boshidan urinilmoqda...",
     "systemOnline": "TIZIM · ONLINE",
     "tashkent": "TOSHKENT"
   },

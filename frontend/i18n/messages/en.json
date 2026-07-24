@@ -388,6 +388,9 @@
     "pressEscToClose": "to close",
     "showPassword": "Show",
     "hidePassword": "Hide",
+    "enterLogin": "Enter your login",
+    "enterPassword": "Enter your password",
+    "retrying": "Restarting...",
     "systemOnline": "SYS · ONLINE",
     "tashkent": "TASHKENT"
   },
