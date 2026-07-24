@@ -320,7 +320,7 @@ export class CorrectionService {
   async approve(
     id: string,
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
-    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string },
+    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorType?: 'user' | 'agent' },
   ) {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id } });
     if (!req) throw new NotFoundException('Ariza topilmadi');
@@ -330,7 +330,8 @@ export class CorrectionService {
     if (!contract) throw new BadRequestException('Shartnoma raqami kerak');
     if (!file?.buffer && !req.attachmentId) throw new BadRequestException('Ariza fayli majburiy');
 
-    const actorEmail = await this.actorEmail(opts.actorId);
+    const isAgent = opts.actorType === 'agent';
+    const actorEmail = isAgent ? '🤖 AI Agent' : await this.actorEmail(opts.actorId);
 
     // 1) Ariza fayli — yangi yuklangan bo'lsa biriktiramiz, aks holda web'da
     //    yuborilgan mavjud faylni saqlaymiz
@@ -366,8 +367,9 @@ export class CorrectionService {
       where: { id },
       data: {
         status: 'approved',
-        reviewedById: opts.actorId,
+        reviewedById: isAgent ? null : opts.actorId,
         reviewedByName: actorEmail,
+        reviewedByType: opts.actorType || 'user',
         reviewedAt: new Date(),
         appliedContractNo: contract,
         categoryId: opts.categoryId || null, categoryName,
@@ -411,16 +413,18 @@ export class CorrectionService {
   }
 
   // ─── Rad etish ─────────────────────────────────────────────────────
-  async reject(id: string, reason: string, actorId: string) {
+  async reject(id: string, reason: string, actorId: string, actorType?: 'user' | 'agent') {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id }, select: { status: true } });
     if (!req) throw new NotFoundException('Ariza topilmadi');
     if (req.status !== 'pending') throw new BadRequestException("Bu ariza allaqachon ko'rib chiqilgan");
-    const actorEmail = await this.actorEmail(actorId);
+    const isAgent = actorType === 'agent';
+    const actorEmail = isAgent ? '🤖 AI Agent' : await this.actorEmail(actorId);
     const updated = await this.prisma.xatoCorrectionRequest.update({
       where: { id },
       data: {
         status: 'rejected',
-        reviewedById: actorId, reviewedByName: actorEmail, reviewedAt: new Date(),
+        reviewedById: isAgent ? null : actorId, reviewedByName: actorEmail, reviewedByType: actorType || 'user',
+        reviewedAt: new Date(),
         rejectReason: (reason || '').slice(0, 2000) || null,
       },
     });
@@ -513,8 +517,11 @@ export class CorrectionService {
       submittedByName: r.submittedByName,
       submittedAt: r.submittedAt,
       reviewedByName: r.reviewedByName,
+      reviewedByType: r.reviewedByType,
       reviewedAt: r.reviewedAt,
       rejectReason: r.rejectReason,
+      agentState: r.agentState,
+      agentReason: r.agentReason,
       appliedContractNo: r.appliedContractNo,
       categoryName: r.categoryName,
       subCategoryName: r.subCategoryName,

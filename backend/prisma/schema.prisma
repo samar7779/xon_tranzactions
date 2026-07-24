@@ -248,8 +248,14 @@ model XatoCorrectionRequest {
   // Tasdiqlash / rad etish
   reviewedById       String?   @map("reviewed_by_id") @db.VarChar(64)
   reviewedByName     String?   @map("reviewed_by_name") @db.VarChar(190)
+  reviewedByType     String?   @map("reviewed_by_type") @db.VarChar(10)  // 'agent' | 'user'
   reviewedAt         DateTime? @map("reviewed_at")
   rejectReason       String?   @map("reject_reason") @db.Text
+
+  // AI Agent
+  agentState         String?   @map("agent_state") @db.VarChar(16)  // 'processing' | 'needs_review' | 'done'
+  agentReason        String?   @map("agent_reason") @db.Text          // agent qarori izohi
+  agentAt            DateTime? @map("agent_at")
 
   // Qo'llanilgan natija (approved bo'lganda)
   appliedContractNo  String?   @map("applied_contract_no") @db.VarChar(128)
