@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
-  Loader2, ArrowRight, Eye, EyeOff, AlertCircle, X, LogIn, ShieldCheck,
+  Loader2, Eye, EyeOff, AlertCircle, X, LogIn, ShieldCheck, Send, Check,
 } from 'lucide-react';
 
 import { useAuth } from '@/lib/auth';
@@ -38,13 +38,21 @@ export default function LoginPage() {
   const [open, setOpen] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
-  const [capsOn, setCapsOn] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clock, setClock] = useState('00:00:00');
-  // Suhbat uslubidagi bosqichli login: login -> parol -> tekshirish -> (xato -> boshidan)
-  const [step, setStep] = useState<'login' | 'password' | 'checking' | 'error'>('login');
+
+  // ── Chat (messenger) uslubidagi login ──
+  // Bot login so'raydi -> user yuboradi -> bot parol so'raydi -> user yuboradi ->
+  // tizim tekshiradi -> xato bo'lsa bot ogohlantirib boshidan so'raydi.
+  type ChatMsg = { id: number; role: 'bot' | 'user'; text: string; secret?: boolean; ok?: boolean; error?: boolean };
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [botTyping, setBotTyping] = useState(false);
+  const [input, setInput] = useState('');
+  const [step, setStep] = useState<'login' | 'password' | 'checking' | 'done'>('login');
+  const msgId = useRef(0);
+  const emailRef = useRef('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
   // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
@@ -68,14 +76,41 @@ export default function LoginPage() {
     setOpen(false);
     setScanning(false);
     setStep('login');
-    setPassword('');
-    setErrorMsg(null);
+    setMessages([]);
+    setInput('');
+    setShowPwd(false);
   };
 
-  // Panel ochilganda — boshidan (login bosqichi)
+  // ── Chat yordamchilari ──
+  const pushBot = (text: string, delay = 650, extra: Partial<ChatMsg> = {}) => {
+    setBotTyping(true);
+    window.setTimeout(() => {
+      setBotTyping(false);
+      setMessages((m) => [...m, { id: ++msgId.current, role: 'bot', text, ...extra }]);
+    }, delay);
+  };
+  const pushUser = (text: string, secret = false) => {
+    setMessages((m) => [...m, { id: ++msgId.current, role: 'user', text, secret }]);
+  };
+
+  // Panel ochilganda — chatni boshidan boshlaymiz (bot salomlashadi + login so'raydi)
   useEffect(() => {
-    if (open) { setStep('login'); setErrorMsg(null); }
+    if (!open) return;
+    setMessages([]);
+    setInput('');
+    setEmail('');
+    emailRef.current = '';
+    setShowPwd(false);
+    setStep('login');
+    pushBot(t('chatGreeting'), 450);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Yangi xabar / typing — pastga scroll + composer'ga fokus
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+    if (!botTyping && step !== 'checking' && step !== 'done') inputRef.current?.focus();
+  }, [messages, botTyping, step]);
 
   useEffect(() => {
     if (hasHydrated && token) router.replace(nextDest());
@@ -107,42 +142,51 @@ export default function LoginPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // 1-bosqich: login (email) yuborildi -> parol bosqichiga
-  function submitLogin(e: React.FormEvent) {
+  // Composer'dan yuborish — bosqichga qarab login yoki parolni qabul qiladi
+  function onSend(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
-    setErrorMsg(null);
-    setStep('password');
+    const v = input.trim();
+    if (!v || botTyping || step === 'checking' || step === 'done') return;
+
+    if (step === 'login') {
+      setEmail(v);
+      emailRef.current = v;
+      pushUser(v);
+      setInput('');
+      setStep('password');
+      setShowPwd(false);
+      pushBot(t('chatAskPassword'), 700);
+    } else if (step === 'password') {
+      const pwd = v;
+      pushUser(pwd, true);       // secret — maskalanadi, ko'z bilan ochiladi
+      setInput('');
+      setStep('checking');
+      pushBot(`${t('processing')}...`, 400);
+      runCheckChat(pwd);
+    }
   }
 
-  // 2-bosqich: parol yuborildi -> tekshirish
-  function submitPassword(e: React.FormEvent) {
-    e.preventDefault();
-    if (!password) return;
-    runCheck();
-  }
-
-  // 3-bosqich: tizim tekshiradi. Xato bo'lsa "ХАТО" + boshidan (login+parol qayta)
-  async function runCheck() {
-    setErrorMsg(null);
-    setStep('checking');
+  // Tizim tekshiradi — muvaffaqiyat: kirish. Xato: bot ogohlantirib boshidan so'raydi.
+  async function runCheckChat(pwd: string) {
     try {
-      await login(email, password);
-      toast.success(t('welcome'));
-      router.replace(nextDest());
+      await login(emailRef.current, pwd);
+      vibrate([40, 40, 120]);
+      setStep('done');
+      pushBot(t('accessGranted'), 500, { ok: true });
+      setTimeout(() => { toast.success(t('welcome')); router.replace(nextDest()); }, 700);
     } catch (err: any) {
       const msg = err?.message || t('invalidCredentials');
-      setErrorMsg(msg);
       toast.error(msg);
-      setStep('error');
       vibrate([60, 40, 60, 40, 120]);
-      // "ХАТО" ko'rsatib, boshidan login so'raydi (parol tozalanadi, email qoladi)
-      setTimeout(() => {
-        setPassword('');
+      pushBot(`ХАТО — ${msg}`, 550, { error: true });
+      // Boshidan: login+parol qayta so'raladi
+      window.setTimeout(() => {
+        setEmail('');
+        emailRef.current = '';
         setShowPwd(false);
-        setErrorMsg(null);
         setStep('login');
-      }, 2200);
+        pushBot(t('chatRetry'), 500);
+      }, 1400);
     }
   }
 
@@ -283,109 +327,59 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* ══ Suhbat uslubidagi terminal login (bosqichma-bosqich) ══ */}
-          <div className="relative flex-1 flex flex-col">
-            {/* Bajarilgan bosqichlar — echo (login, keyin parol) */}
-            <div className="space-y-2.5">
-              {step !== 'login' && (
-                <EchoLine label={t('emailLabel')} value={email} />
-              )}
-              {(step === 'checking' || step === 'error') && (
-                <EchoLine
-                  label={t('passwordLabel')}
-                  value={showPwd ? password : '•'.repeat(Math.min(password.length, 14) || 4)}
-                  secret
-                  showing={showPwd}
-                  onToggle={() => setShowPwd((s) => !s)}
+          {/* ══ Chat (messenger) uslubidagi login ══ */}
+          <div className="relative flex-1 flex flex-col min-h-0">
+            {/* Xabarlar oqimi (bot chapda, foydalanuvchi o'ngda) */}
+            <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 space-y-3 py-1">
+              {messages.map((m) => <ChatBubble key={m.id} msg={m} />)}
+              {botTyping && <TypingBubble />}
+            </div>
+
+            {/* Composer — pastdagi yozish qatori */}
+            <form onSubmit={onSend} className="relative mt-3 shrink-0">
+              <div className="relative flex items-center gap-1 rounded-xl border border-cyan-400/25 bg-cyan-500/[0.05]
+                              focus-within:border-cyan-400/60 focus-within:bg-cyan-500/[0.08]
+                              focus-within:shadow-[0_0_25px_-8px_rgba(34,211,238,0.6)] transition-all px-2">
+                <input
+                  ref={inputRef}
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  type={step === 'password' && !showPwd ? 'password' : 'text'}
+                  autoComplete={step === 'login' ? 'email' : 'current-password'}
+                  disabled={botTyping || step === 'checking' || step === 'done'}
+                  placeholder={
+                    step === 'login' ? t('enterLogin')
+                    : step === 'password' ? t('enterPassword')
+                    : '...'
+                  }
+                  className="flex-1 min-w-0 h-12 bg-transparent px-2 text-[14px] font-mono tracking-wider text-cyan-50
+                             placeholder:text-cyan-400/30 focus:outline-none disabled:opacity-50"
                 />
-              )}
-            </div>
-
-            {/* Faol bosqich */}
-            <div className="mt-3 flex-1">
-              {/* 1) LOGIN */}
-              {step === 'login' && (
-                <form onSubmit={submitLogin} className="space-y-4" noValidate key="s-login">
-                  <PromptLine text={t('enterLogin')} />
-                  <div style={{ animation: 'login-stagger 0.4s both' }}>
-                    <HudField
-                      id="email" label={t('emailLabel')} type="email" value={email}
-                      onChange={(v) => { setEmail(v); setErrorMsg(null); }}
-                      autoFocus placeholder="admin@xon.local"
-                    />
-                  </div>
-                  <StepButton label={t('submit')} />
-                </form>
-              )}
-
-              {/* 2) PAROL */}
-              {step === 'password' && (
-                <form onSubmit={submitPassword} className="space-y-4" noValidate key="s-pwd">
-                  <PromptLine text={t('enterPassword')} />
-                  <div style={{ animation: 'login-stagger 0.4s both' }}>
-                    <HudField
-                      id="password" label={t('passwordLabel')}
-                      type={showPwd ? 'text' : 'password'} value={password}
-                      onChange={(v) => { setPassword(v); setErrorMsg(null); }}
-                      onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                      autoFocus placeholder="••••••••"
-                      right={
-                        <button
-                          type="button" onClick={() => setShowPwd((s) => !s)}
-                          className="text-cyan-400/50 hover:text-cyan-300 transition" tabIndex={-1}
-                          aria-label={showPwd ? t('hidePassword') : t('showPassword')}
-                        >
-                          {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                        </button>
-                      }
-                    />
-                  </div>
-                  {capsOn && (
-                    <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
-                      <AlertCircle className="h-3 w-3" /> {t('capsLockOn')}
-                    </div>
-                  )}
-                  <StepButton label={t('submit')} />
+                {step === 'password' && (
                   <button
-                    type="button"
-                    onClick={() => { setStep('login'); setErrorMsg(null); }}
-                    className="text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 hover:text-cyan-300 font-mono transition"
+                    type="button" tabIndex={-1} onClick={() => setShowPwd((s) => !s)}
+                    aria-label={showPwd ? t('hidePassword') : t('showPassword')}
+                    className="text-cyan-400/50 hover:text-cyan-300 transition p-1.5 shrink-0"
                   >
-                    ‹ {t('emailLabel')}
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
-                </form>
-              )}
-
-              {/* 3) TEKSHIRILMOQDA */}
-              {step === 'checking' && (
-                <div className="flex items-center gap-3 px-1 py-4 font-mono text-cyan-200">
-                  <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
-                  <span className="text-[12px] tracking-[0.28em] uppercase animate-pulse">{t('processing')}...</span>
-                </div>
-              )}
-
-              {/* 4) ХАТО — boshidan */}
-              {step === 'error' && (
-                <div className="login-shake space-y-2.5">
-                  <div className="flex items-start gap-2.5 px-3 py-3 border border-rose-400/50 bg-rose-500/10
-                                  rounded-sm shadow-[0_0_28px_-5px_rgba(244,63,94,0.6)]">
-                    <AlertCircle className="h-5 w-5 flex-shrink-0 text-rose-400 mt-0.5" />
-                    <div>
-                      <div className="text-[13px] font-bold tracking-[0.3em] uppercase text-rose-300">ХАТО</div>
-                      <div className="text-[11px] tracking-wider mt-1 text-rose-200">{errorMsg}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[9px] tracking-[0.25em] uppercase text-cyan-400/50 font-mono">
-                    <Loader2 className="h-3 w-3 animate-spin" /> {t('retrying')}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ESC hint */}
-            <div className="text-center mt-4 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
-              <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> {t('pressEscToClose')}
-            </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={!input.trim() || botTyping || step === 'checking' || step === 'done'}
+                  aria-label={t('submit')}
+                  className="h-9 w-9 my-1.5 rounded-lg grid place-items-center shrink-0
+                             bg-gradient-to-br from-cyan-500/50 to-cyan-400/30 border border-cyan-400/60 text-cyan-50
+                             hover:from-cyan-400/70 hover:shadow-[0_0_22px_-4px_rgba(34,211,238,1)]
+                             active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="text-center mt-2.5 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
+                <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> {t('pressEscToClose')}
+              </div>
+            </form>
           </div>
 
           {/* Status liniya */}
@@ -643,114 +637,71 @@ function MobileLoginShowcase({ scanning = false }: { scanning?: boolean } = {}) 
   );
 }
 
-function HudField(props: {
-  id: string;
-  label: string;
-  type: string;
-  value: string;
-  onChange: (v: string) => void;
-  onKeyEvent?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  autoFocus?: boolean;
-  placeholder?: string;
-  right?: React.ReactNode;
+/** Chat xabar pufakchasi — bot (chapda) yoki foydalanuvchi (o'ngda) */
+function ChatBubble({ msg }: {
+  msg: { role: 'bot' | 'user'; text: string; secret?: boolean; ok?: boolean; error?: boolean };
 }) {
-  return (
-    <div className="space-y-1.5">
-      <label htmlFor={props.id} className="block text-[10px] tracking-[0.3em] uppercase text-cyan-400/70 font-mono">
-        » {props.label}
-      </label>
-      <div className="relative group">
-        <span className="absolute -top-px -left-px w-2 h-2 border-l border-t border-cyan-400/60 group-focus-within:border-cyan-300" />
-        <span className="absolute -top-px -right-px w-2 h-2 border-r border-t border-cyan-400/60 group-focus-within:border-cyan-300" />
-        <span className="absolute -bottom-px -left-px w-2 h-2 border-l border-b border-cyan-400/60 group-focus-within:border-cyan-300" />
-        <span className="absolute -bottom-px -right-px w-2 h-2 border-r border-b border-cyan-400/60 group-focus-within:border-cyan-300" />
+  const [reveal, setReveal] = useState(false);
 
-        <input
-          id={props.id}
-          type={props.type}
-          value={props.value}
-          onChange={(e) => props.onChange(e.target.value)}
-          onKeyUp={props.onKeyEvent}
-          onKeyDown={props.onKeyEvent}
-          autoFocus={props.autoFocus}
-          autoComplete={props.id === 'email' ? 'email' : 'current-password'}
-          required
-          placeholder={props.placeholder}
-          className="w-full h-11 px-3 pr-10 text-[14px] font-mono tracking-wider
-                     bg-cyan-500/[0.04] border border-cyan-400/20
-                     text-cyan-50 placeholder:text-cyan-400/25
-                     focus:outline-none focus:border-cyan-400/60 focus:bg-cyan-500/[0.08]
-                     focus:shadow-[inset_0_0_15px_-5px_rgba(34,211,238,0.4)]
-                     transition-all rounded-sm"
-        />
-        {props.right && (
-          <div className="absolute right-3 top-1/2 -translate-y-1/2">{props.right}</div>
+  if (msg.role === 'bot') {
+    return (
+      <div className="flex items-end gap-2 animate-[login-stagger_0.3s_both]">
+        <div className="w-7 h-7 rounded-full grid place-items-center shrink-0
+                        bg-cyan-500/15 ring-1 ring-cyan-400/40 text-cyan-200">
+          <ShieldCheck className="h-3.5 w-3.5" />
+        </div>
+        <div className={cn(
+          'max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-bl-md text-[13px] leading-snug',
+          msg.error
+            ? 'bg-rose-500/15 border border-rose-400/45 text-rose-100 shadow-[0_0_22px_-8px_rgba(244,63,94,0.7)]'
+            : msg.ok
+            ? 'bg-emerald-500/15 border border-emerald-400/45 text-emerald-100'
+            : 'bg-cyan-500/[0.08] border border-cyan-400/25 text-cyan-50',
+        )}>
+          {msg.error && <span className="font-bold mr-1 text-rose-300">✗</span>}
+          {msg.ok && <Check className="inline h-4 w-4 mr-1 -mt-0.5 text-emerald-300" />}
+          {msg.text}
+        </div>
+      </div>
+    );
+  }
+
+  // Foydalanuvchi — o'ngda. Secret bo'lsa maskalanadi + ko'z bilan ochiladi.
+  const display = msg.secret
+    ? (reveal ? msg.text : '•'.repeat(Math.min(msg.text.length, 16)))
+    : msg.text;
+  return (
+    <div className="flex items-end justify-end gap-2 animate-[login-stagger_0.3s_both]">
+      <div className="max-w-[80%] px-3.5 py-2.5 rounded-2xl rounded-br-md text-[13px] leading-snug
+                      font-mono tracking-wide flex items-center gap-2
+                      bg-gradient-to-br from-amber-400/25 to-amber-500/15 border border-amber-300/40 text-amber-50">
+        <span className="truncate">{display}</span>
+        {msg.secret && (
+          <button
+            type="button" tabIndex={-1} onClick={() => setReveal((r) => !r)}
+            className="text-amber-200/60 hover:text-amber-100 transition shrink-0"
+          >
+            {reveal ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+          </button>
         )}
       </div>
     </div>
   );
 }
 
-/** Bajarilgan bosqich — echo qatori (terminal uslubida, tasdiq belgisi bilan) */
-function EchoLine({ label, value, secret, showing, onToggle }: {
-  label: string;
-  value: string;
-  secret?: boolean;
-  showing?: boolean;
-  onToggle?: () => void;
-}) {
+/** Bot yozayotgani — uch nuqta animatsiyasi */
+function TypingBubble() {
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2 rounded-sm bg-cyan-500/[0.05] border border-cyan-400/15
-                    animate-[login-stagger_0.35s_both]">
-      <span className="text-[9px] tracking-[0.25em] uppercase text-cyan-400/60 shrink-0 font-mono">{label}</span>
-      <span className="flex-1 truncate text-[13px] text-cyan-100 font-mono tracking-wider">{value || '—'}</span>
-      {secret && onToggle && (
-        <button
-          type="button" onClick={onToggle} tabIndex={-1}
-          className="text-cyan-400/50 hover:text-cyan-300 transition shrink-0"
-        >
-          {showing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-        </button>
-      )}
-      <span className="text-emerald-400 text-[13px] shrink-0 leading-none">✓</span>
+    <div className="flex items-end gap-2 animate-[login-stagger_0.3s_both]">
+      <div className="w-7 h-7 rounded-full grid place-items-center shrink-0
+                      bg-cyan-500/15 ring-1 ring-cyan-400/40 text-cyan-200">
+        <ShieldCheck className="h-3.5 w-3.5" />
+      </div>
+      <div className="px-4 py-3 rounded-2xl rounded-bl-md bg-cyan-500/[0.08] border border-cyan-400/25 flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-1.5 h-1.5 rounded-full bg-cyan-300/80 animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
     </div>
-  );
-}
-
-/** Tizim so'rovi — "» matn" + miltillovchi kursor */
-function PromptLine({ text }: { text: string }) {
-  return (
-    <div className="flex items-center gap-2 text-[11px] tracking-[0.12em] text-cyan-300/90 font-mono">
-      <span className="text-cyan-400">»</span>
-      <span>{text}</span>
-      <span className="inline-block w-1.5 h-3.5 bg-cyan-400 animate-pulse align-middle" />
-    </div>
-  );
-}
-
-/** Bosqich yuborish tugmasi (HUD uslubidagi cyan tugma) */
-function StepButton({ label }: { label: string }) {
-  return (
-    <button
-      type="submit"
-      className="relative w-full h-12 group overflow-hidden rounded-sm
-                 bg-gradient-to-r from-cyan-500/30 via-cyan-400/50 to-cyan-500/30
-                 border border-cyan-400/70
-                 text-cyan-50 font-semibold tracking-[0.28em] uppercase text-[12px]
-                 shadow-[0_0_35px_-5px_rgba(34,211,238,0.6),inset_0_0_20px_-10px_rgba(34,211,238,0.5)]
-                 hover:bg-cyan-400/40 hover:shadow-[0_0_50px_-5px_rgba(34,211,238,1)]
-                 hover:border-cyan-200 active:scale-[0.99]
-                 transition-all duration-200 flex items-center justify-center gap-3"
-    >
-      <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                       bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent
-                       transition-transform duration-1000 ease-out" />
-      <span className="absolute top-0 left-0 w-2 h-2 border-l border-t border-cyan-200" />
-      <span className="absolute top-0 right-0 w-2 h-2 border-r border-t border-cyan-200" />
-      <span className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-cyan-200" />
-      <span className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-cyan-200" />
-      <span className="relative">{label}</span>
-      <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
-    </button>
   );
 }
