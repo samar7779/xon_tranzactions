@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Res, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
 import { AgentService } from './agent.service';
 
 function parseAuth(raw?: string): Record<string, any> {
@@ -68,5 +69,28 @@ export class AgentPublicController {
   @ApiOperation({ summary: 'Maxfiy kalit bilan ariza + fayl yuborish' })
   submit(@UploadedFile() file: any, @Body() body: { key?: string; oplataKvId?: string; contractNo?: string }) {
     return this.svc.submitFile(body?.key || '', body?.oplataKvId || '', body?.contractNo || '', file);
+  }
+
+  // ─── Ariza faylini ko'rish (pending modal) ───
+  @Post('tg/file')
+  @ApiOperation({ summary: 'Telegram auth bilan ariza faylini ochish' })
+  async tgFile(@Body() body: { auth?: string; attachmentId?: string }, @Res() res: Response) {
+    const { stream, att } = await this.svc.tgFile(parseAuth(body?.auth), body?.attachmentId || '');
+    res.set({
+      'Content-Type': att.mimeType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(att.filename)}`,
+    });
+    stream.pipe(res);
+  }
+
+  @Post('file')
+  @ApiOperation({ summary: 'Maxfiy kalit bilan ariza faylini ochish' })
+  async file(@Body() body: { key?: string; attachmentId?: string }, @Res() res: Response) {
+    const { stream, att } = await this.svc.keyFile(body?.key || '', body?.attachmentId || '');
+    res.set({
+      'Content-Type': att.mimeType || 'application/octet-stream',
+      'Content-Disposition': `inline; filename*=UTF-8''${encodeURIComponent(att.filename)}`,
+    });
+    stream.pipe(res);
   }
 }

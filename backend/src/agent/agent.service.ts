@@ -307,20 +307,30 @@ export class AgentService {
       this.oplataKv.countXatoForAgent(dateFrom || null),
     ]);
     const ids = rows.map((r) => r.id);
-    const [pendingSet, rejectedSet] = await Promise.all([
-      this.correction.pendingOplataKvIds(ids),
+    const [pendingMap, rejectedSet] = await Promise.all([
+      this.correction.pendingInfoByOplataKvId(ids),
       this.correction.rejectedOplataKvIds(ids),
     ]);
     return {
       ok: true,
       count,
-      rows: rows.map((r) => ({
-        id: r.id, date: r.date, contractNo: r.contractNo,
-        amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
-        client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
-        pending: pendingSet.has(r.id),
-        rejected: !pendingSet.has(r.id) && rejectedSet.has(r.id),
-      })),
+      rows: rows.map((r) => {
+        const p = pendingMap.get(r.id);
+        return {
+          id: r.id, date: r.date, contractNo: r.contractNo,
+          amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
+          client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
+          pending: !!p,
+          rejected: !p && rejectedSet.has(r.id),
+          pendingInfo: p ? {
+            by: p.by,
+            at: p.at,
+            contractNo: p.contractNo,
+            attachmentId: p.attachmentId,
+            attachmentName: p.attachmentName,
+          } : null,
+        };
+      }),
     };
   }
 
@@ -350,6 +360,16 @@ export class AgentService {
   async submitFile(key: string, oplataKvId: string, contractNo: string, file: any) {
     await this.assertKey(key);
     return this._submitWithFile(oplataKvId, contractNo, file, undefined, undefined, 'web');
+  }
+
+  // ─── Public: ariza faylini ko'rish (pending modal) ─────────────────
+  async tgFile(auth: Record<string, any>, attachmentId: string) {
+    await this.authorizeTg(auth);
+    return this.correction.getArizaFile(attachmentId);
+  }
+  async keyFile(key: string, attachmentId: string) {
+    await this.assertKey(key);
+    return this.correction.getArizaFile(attachmentId);
   }
 
   private async saveResult(text: string) {

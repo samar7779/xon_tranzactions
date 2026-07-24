@@ -64,8 +64,10 @@ export class CorrectionService {
     let attachmentId: string | null = null;
     let attachmentName: string | null = null;
     if (file?.buffer) {
+      // notify:false — ariza YUBORILGANDA Telegram'ga xabar YUBORMAYMIZ.
+      // Xabar faqat TASDIQLANGANDA keladi (approve).
       const up: any = await this.attachments.upload(txId, file, {
-        type: 'ariza', contractNumber: contract, uploadedBy: input.submittedByName,
+        type: 'ariza', contractNumber: contract, uploadedBy: input.submittedByName, notify: false,
       });
       attachmentId = up?.item?.id || null;
       attachmentName = up?.item?.filename || null;
@@ -168,6 +170,41 @@ export class CorrectionService {
       select: { oplataKvId: true },
     });
     return new Set(rows.map((r) => r.oplataKvId!).filter(Boolean));
+  }
+
+  // ─── Web pending modal uchun: to'liq ariza ma'lumoti ───────────────
+  async pendingInfoByOplataKvId(ids: string[]): Promise<Map<string, {
+    by: string; at: Date; contractNo: string | null; attachmentId: string | null; attachmentName: string | null;
+  }>> {
+    const list = ids.filter(Boolean);
+    const map = new Map<string, any>();
+    if (!list.length) return map;
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { status: 'pending', oplataKvId: { in: list } },
+      select: {
+        oplataKvId: true, submittedByName: true, submittedAt: true,
+        proposedContractNo: true, attachmentId: true, attachmentName: true,
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+    for (const r of rows) {
+      if (r.oplataKvId && !map.has(r.oplataKvId)) {
+        map.set(r.oplataKvId, {
+          by: r.submittedByName, at: r.submittedAt, contractNo: r.proposedContractNo,
+          attachmentId: r.attachmentId, attachmentName: r.attachmentName,
+        });
+      }
+    }
+    return map;
+  }
+
+  /** Ariza faylini olish (faqat correction'ga bog'langan bo'lsa — public sahifa uchun). */
+  async getArizaFile(attachmentId: string) {
+    const req = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: { attachmentId }, select: { txId: true },
+    });
+    if (!req) throw new NotFoundException('Fayl topilmadi');
+    return this.attachments.getFile(req.txId, attachmentId);
   }
 
   // ─── Badge uchun: qaysi oplataKv'larda rad etilgan ariza bor ───────
@@ -289,6 +326,12 @@ export class CorrectionService {
         attachmentId, attachmentName,
       },
     });
+    // Tasdiqlangach Telegram'ga xabar (fayl bilan) — fire-and-forget
+    if (attachmentId) {
+      this.attachments.notifyApproved(attachmentId, actorEmail || undefined)
+        .catch((e: any) => this.log.warn(`notifyApproved xato: ${e?.message}`));
+    }
+
     this.log.log(`Ariza tasdiqlandi: ${id} · tx=${req.txId} · ${contract} · ${actorEmail}`);
     return { ok: true, item: this.serialize(updated) };
   }
