@@ -86,14 +86,14 @@ export class AgentPublicController {
   // ─── Arizalar ro'yxati (audit sub-tab) ───
   @Post('tg/arizalar')
   @ApiOperation({ summary: 'Telegram auth bilan arizalar ro\'yxati (audit)' })
-  tgArizalar(@Body() body: { auth?: string; status?: string; q?: string; submitter?: string; page?: number }) {
-    return this.svc.tgArizaList(parseAuth(body?.auth), { status: body?.status, q: body?.q, submitter: body?.submitter, page: body?.page });
+  tgArizalar(@Body() body: { auth?: string; status?: string; q?: string; submitter?: string; actorType?: string; page?: number }) {
+    return this.svc.tgArizaList(parseAuth(body?.auth), { status: body?.status, q: body?.q, submitter: body?.submitter, actorType: body?.actorType, page: body?.page });
   }
 
   @Post('arizalar')
   @ApiOperation({ summary: 'Maxfiy kalit bilan arizalar ro\'yxati (audit)' })
-  arizalar(@Body() body: { key?: string; status?: string; q?: string; submitter?: string; page?: number }) {
-    return this.svc.arizaList(body?.key || '', { status: body?.status, q: body?.q, submitter: body?.submitter, page: body?.page });
+  arizalar(@Body() body: { key?: string; status?: string; q?: string; submitter?: string; actorType?: string; page?: number }) {
+    return this.svc.arizaList(body?.key || '', { status: body?.status, q: body?.q, submitter: body?.submitter, actorType: body?.actorType, page: body?.page });
   }
 
   @Post('file')

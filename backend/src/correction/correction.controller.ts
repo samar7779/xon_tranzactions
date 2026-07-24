@@ -45,10 +45,26 @@ export class CorrectionController {
     @Query('to') to?: string,
     @Query('actor') actor?: string,
     @Query('flow') flow?: 'all' | 'in' | 'out',
+    @Query('actorType') actorType?: 'agent' | 'user',
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
   ) {
-    return this.svc.listApproved({ q, from, to, actor, flow, page: Number(page) || 1, perPage: Number(perPage) || 50 });
+    return this.svc.listApproved({ q, from, to, actor, flow, actorType, page: Number(page) || 1, perPage: Number(perPage) || 50 });
+  }
+
+  @Get('rejected')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
+  @ApiOperation({ summary: 'Rad etilgan arizalar (kim/nima uchun + filtrlar)' })
+  rejected(
+    @Query('q') q?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('actor') actor?: string,
+    @Query('actorType') actorType?: 'agent' | 'user',
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+  ) {
+    return this.svc.listApproved({ q, from, to, actor, actorType, status: 'rejected', page: Number(page) || 1, perPage: Number(perPage) || 50 });
   }
 
   @Post()
