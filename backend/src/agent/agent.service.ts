@@ -9,6 +9,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { CrmService } from '../crm/crm.service';
 import { CorrectionService } from '../correction/correction.service';
+import { AgentAiService } from '../correction/agent-ai.service';
 
 /**
  * AI Agent (1-bosqich: XATO to'lov kunlik digest).
@@ -42,7 +43,12 @@ export class AgentService {
     private readonly categorization: CategorizationService,
     private readonly crm: CrmService,
     private readonly correction: CorrectionService,
+    private readonly agentAi: AgentAiService,
   ) {}
+
+  private readonly K_AI_KEY = 'agent.aiKey';
+  private readonly K_AI_MODEL = 'agent.aiModel';
+  private readonly K_AI_ENABLED = 'agent.aiEnabled';
 
   // ─── Sozlama ───────────────────────────────────────────────────────
   async getConfig() {
@@ -66,6 +72,14 @@ export class AgentService {
       } catch { /* skip */ }
     }
     const pendingCount = await this.oplataKv.countXatoForAgent(dateFrom || null);
+    // AI Agent config
+    const [aiEnc, aiModel, aiEnabled] = await Promise.all([
+      this.settings.get(this.K_AI_KEY),
+      this.settings.get(this.K_AI_MODEL),
+      this.settings.get(this.K_AI_ENABLED),
+    ]);
+    let hasAiKey = false; let aiKeyHint: string | null = null;
+    if (aiEnc) { try { const k = this.crypto.decrypt(aiEnc); hasAiKey = !!k; aiKeyHint = k ? `…${k.slice(-4)}` : null; } catch { /* skip */ } }
     return {
       ok: true,
       enabled: enabled === '1',
@@ -78,6 +92,11 @@ export class AgentService {
       lastResult: lastResult || null,
       pendingCount,
       whitelist: await this.getWhitelist(),
+      // AI
+      aiEnabled: aiEnabled === '1',
+      hasAiKey,
+      aiKeyHint,
+      aiModel: aiModel || 'claude-sonnet-4-6',
     };
   }
 
@@ -85,6 +104,7 @@ export class AgentService {
     body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
       whitelist?: Array<{ id: string; name: string }>;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean;
     },
     updatedBy?: string,
   ) {
@@ -96,7 +116,18 @@ export class AgentService {
     if (body.dateFrom !== undefined) await this.settings.set(this.K_DATEFROM, body.dateFrom || null, updatedBy);
     if (body.dailyTime !== undefined) await this.settings.set(this.K_DAILY_TIME, this.validTime(body.dailyTime), updatedBy);
     if (body.whitelist !== undefined) await this.setWhitelist(body.whitelist, updatedBy);
+    // AI
+    if (body.aiKey !== undefined && body.aiKey.trim()) {
+      await this.settings.set(this.K_AI_KEY, this.crypto.encrypt(body.aiKey.trim()), updatedBy);
+    }
+    if (body.aiModel !== undefined) await this.settings.set(this.K_AI_MODEL, body.aiModel.trim() || null, updatedBy);
+    if (body.aiEnabled !== undefined) await this.settings.set(this.K_AI_ENABLED, body.aiEnabled ? '1' : null, updatedBy);
     return this.getConfig();
+  }
+
+  /** Kutilayotgan arizalarni AI agent bilan ishlash (qo'lda ishga tushirish). */
+  async runAiAgent(limit = 20) {
+    return this.agentAi.processPending(limit);
   }
 
   private validTime(s?: string | null): string | null {
@@ -294,6 +325,12 @@ export class AgentService {
         oplataKvId, proposedContractNo: contract, source,
         submittedByName: actorName || 'Telegram', submittedByChatId: chatId || null,
       }, file);
+      // AI Agent yoqilgan bo'lsa — yangi arizani darrov o'zi ko'rib chiqadi
+      if (!res.alreadyPending) {
+        this.agentAi.isEnabled().then((on) => {
+          if (on) this.agentAi.processRequest(res.id).catch((e: any) => this.log.warn(`AI agent xato: ${e?.message}`));
+        }).catch(() => {});
+      }
       return { ok: true, id: res.id, alreadyPending: !!res.alreadyPending, pending: true };
     } catch (e: any) {
       return { ok: false, error: e?.message || 'Ariza yuborishda xato' };

@@ -35,6 +35,7 @@ export class AgentController {
   saveConfig(
     @Body() body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean;
     },
     @CurrentUser() user?: AuthUser,
   ) {
@@ -46,5 +47,12 @@ export class AgentController {
   @ApiOperation({ summary: "Agentni hozir ishga tushirish (kunlik digest'ni jo'natish)" })
   run() {
     return this.svc.runOnce();
+  }
+
+  @Post('ai/run')
+  @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
+  @ApiOperation({ summary: 'AI agentni kutilayotgan arizalarga ishga tushirish' })
+  aiRun(@Body() body: { limit?: number }) {
+    return this.svc.runAiAgent(Number(body?.limit) || 20);
   }
 }
