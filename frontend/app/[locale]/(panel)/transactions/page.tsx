@@ -16,7 +16,7 @@ import {
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
   RefreshCw, Landmark, Ban, Gauge, Scissors,
-  Clock, Send, XCircle, FileWarning,
+  Clock, Send, XCircle, FileWarning, Bot,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -1927,6 +1927,11 @@ type CorrectionRow = {
   attachmentId: string | null; attachmentName: string | null;
   amount: number | null; date: string | null; client: string | null; object: string | null;
   contractNo: string | null; txType: string | null; purpose: string | null;
+  // AI agent maydonlari
+  agentState?: 'processing' | 'needs_review' | 'done' | null;
+  agentReason?: string | null;
+  reviewedByType?: 'agent' | 'user' | null;
+  snapClient?: string | null;
 };
 
 type ApprovalPrefill = {
@@ -1946,7 +1951,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const tc = useTranslations('common');
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<'pending' | 'approved' | 'raw'>('pending');
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected' | 'raw'>('pending');
 
   // ── Raw (Barcha XATO) — mavjud tab holati ──
   const [rawPage, setRawPage] = useState(1);
@@ -1968,6 +1973,12 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const [apTo, setApTo] = useState('');
   const [apActor, setApActor] = useState('');
   const [apFlow, setApFlow] = useState<'all' | 'in' | 'out'>('all');
+  const [apActorType, setApActorType] = useState<'' | 'agent' | 'user'>('');
+
+  // ── Rejected (Rad etilgan) tab ──
+  const [rejectedPage, setRejectedPage] = useState(1);
+  const [rejectedQ, setRejectedQ] = useState('');
+  const [rjActorType, setRjActorType] = useState<'' | 'agent' | 'user'>('');
 
   // ── ApprovalModal holati ──
   const [approval, setApproval] = useState<{
@@ -1977,10 +1988,11 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   } | null>(null);
 
   useEffect(() => {
-    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRawQ(''); setRawQDebounced(''); setRawHidden('active'); }
+    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRejectedPage(1); setRawQ(''); setRawQDebounced(''); setRawHidden('active'); }
   }, [open]);
   useEffect(() => { setPendingPage(1); }, [pendingQ]);
-  useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow]);
+  useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow, apActorType]);
+  useEffect(() => { setRejectedPage(1); }, [rejectedQ, rjActorType]);
   useEffect(() => { setRawPage(1); }, [rawHidden]);
   // Barcha XATO qidiruvi — debounce (~300ms) + sahifani reset
   useEffect(() => {
@@ -2030,11 +2042,20 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   // ── Approved query ──
   const approvedQuery = useQuery({
-    queryKey: ['correction-approved', approvedPage, approvedQ, apFrom, apTo, apActor, apFlow],
+    queryKey: ['correction-approved', approvedPage, approvedQ, apFrom, apTo, apActor, apFlow, apActorType],
     queryFn: () => api.get<{ ok: boolean; total: number; page: number; perPage: number; rows: CorrectionRow[] }>(
-      `/correction/approved?q=${encodeURIComponent(approvedQ)}&from=${apFrom}&to=${apTo}&actor=${encodeURIComponent(apActor)}&flow=${apFlow}&page=${approvedPage}&perPage=${perPage}`,
+      `/correction/approved?q=${encodeURIComponent(approvedQ)}&from=${apFrom}&to=${apTo}&actor=${encodeURIComponent(apActor)}&flow=${apFlow}${apActorType ? `&actorType=${apActorType}` : ''}&page=${approvedPage}&perPage=${perPage}`,
     ),
     enabled: open && tab === 'approved',
+  });
+
+  // ── Rejected (Rad etilgan) query ──
+  const rejectedQuery = useQuery({
+    queryKey: ['correction-rejected', rejectedPage, rejectedQ, rjActorType],
+    queryFn: () => api.get<{ ok: boolean; total: number; page: number; perPage: number; rows: CorrectionRow[] }>(
+      `/correction/rejected?q=${encodeURIComponent(rejectedQ)}${rjActorType ? `&actorType=${rjActorType}` : ''}&page=${rejectedPage}&perPage=${perPage}`,
+    ),
+    enabled: open && tab === 'rejected',
   });
 
   // ── Raw (Barcha XATO) query ──
@@ -2131,8 +2152,68 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   const pendingRows = pendingQuery.data?.rows || [];
   const approvedRows = approvedQuery.data?.rows || [];
+  const rejectedRows = rejectedQuery.data?.rows || [];
   const rawItems = rawQuery.data?.items || [];
   const rawTotal = rawQuery.data?.total || 0;
+
+  // AI agent holati chipi (Kutilmoqda qatorlari uchun)
+  const AgentStateChip = ({ state, reason }: { state?: 'processing' | 'needs_review' | 'done' | null; reason?: string | null }) => {
+    if (state === 'processing') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900 animate-pulse whitespace-nowrap">
+          <Bot className="h-3 w-3" /> Agent ishlamoqda
+        </span>
+      );
+    }
+    if (state === 'needs_review') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 whitespace-nowrap" title={reason || ''}>
+          <Eye className="h-3 w-3" /> Ko'rib chiqish kerak
+        </span>
+      );
+    }
+    return null;
+  };
+
+  // Kim bajardi — agent / xodim badge (Tasdiqlangan/Rad etilgan qatorlari uchun)
+  const ActorBadge = ({ type }: { type?: 'agent' | 'user' | null }) => {
+    if (type === 'agent') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900 whitespace-nowrap">
+          <Bot className="h-3 w-3" /> Agent
+        </span>
+      );
+    }
+    if (type === 'user') {
+      return (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 whitespace-nowrap">
+          <Briefcase className="h-3 w-3" /> Xodim
+        </span>
+      );
+    }
+    return null;
+  };
+
+  // Actor turi bo'yicha segmented filtr (Tasdiqlangan/Rad etilgan)
+  const ActorTypeFilter = ({ value, onChange }: { value: '' | 'agent' | 'user'; onChange: (v: '' | 'agent' | 'user') => void }) => (
+    <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+      {([['', 'Hammasi'], ['agent', 'Agent'], ['user', 'Xodim']] as const).map(([v, lbl]) => (
+        <button
+          key={v || 'all'}
+          onClick={() => onChange(v)}
+          className={cn(
+            'inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-all',
+            value === v
+              ? (v === 'agent' ? 'bg-violet-600 text-white shadow-sm' : v === 'user' ? 'bg-slate-700 text-white shadow-sm dark:bg-slate-600' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm')
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+          )}
+        >
+          {v === 'agent' ? <Bot className="h-3 w-3" /> : v === 'user' ? <Briefcase className="h-3 w-3" /> : null}
+          {lbl}
+        </button>
+      ))}
+    </div>
+  );
 
   const TabBtn = ({ id, icon, label, count }: { id: typeof tab; icon: React.ReactNode; label: string; count?: number }) => (
     <button
@@ -2204,6 +2285,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
           <div className="mt-3 flex items-center gap-1.5 p-1 rounded-xl bg-white/10 w-fit">
             <TabBtn id="pending" icon={<Clock className="h-3.5 w-3.5" />} label="Kutilmoqda" count={stats?.pending} />
             <TabBtn id="approved" icon={<CheckCircle2 className="h-3.5 w-3.5" />} label="Tasdiqlangan" count={stats?.approved} />
+            <TabBtn id="rejected" icon={<XCircle className="h-3.5 w-3.5" />} label="Rad etilgan" />
             <TabBtn id="raw" icon={<AlertCircle className="h-3.5 w-3.5" />} label="Barcha XATO" />
           </div>
         </div>
@@ -2236,6 +2318,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
                       <th className="text-left px-3 py-2">Kim yubordi</th>
                       <th className="text-left px-3 py-2">Izoh</th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Bot className="h-3 w-3" /> Agent</span></th>
                       <th className="text-right px-3 py-2"></th>
                     </tr>
                   </thead>
@@ -2260,6 +2343,16 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           </span>
                         </td>
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
+                        <td className="px-3 py-2 max-w-[190px]">
+                          {(r.agentState === 'processing' || r.agentState === 'needs_review') ? (
+                            <div className="flex flex-col gap-0.5">
+                              <AgentStateChip state={r.agentState} reason={r.agentReason} />
+                              {r.agentState === 'needs_review' && r.agentReason ? (
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight line-clamp-2" title={r.agentReason}>{r.agentReason}</span>
+                              ) : null}
+                            </div>
+                          ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex items-center gap-1.5 justify-end">
                           <button
@@ -2322,6 +2415,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                     </button>
                   ))}
                 </div>
+                <ActorTypeFilter value={apActorType} onChange={setApActorType} />
               </div>
               <div className="flex items-center gap-2 flex-wrap text-[11px] text-slate-500 dark:text-slate-400">
                 <FilterIcon className="h-3.5 w-3.5" />
@@ -2370,7 +2464,12 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           ) : <span className="text-slate-400">—</span>}
                         </td>
                         <td className="px-3 py-2 text-right"><SignedMoney amount={r.amount} /></td>
-                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={r.reviewedByName || ''}>{r.reviewedByName || '—'}</td>
+                        <td className="px-3 py-2 max-w-[170px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-slate-600 dark:text-slate-300 truncate" title={r.reviewedByName || ''}>{r.reviewedByName || '—'}</span>
+                            <ActorBadge type={r.reviewedByType} />
+                          </div>
+                        </td>
                         <td className="px-3 py-2">
                           {r.attachmentId ? (
                             <div className="inline-flex items-center gap-1">
@@ -2399,6 +2498,68 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
               )}
             </div>
             <Pager page={approvedPage} total={approvedQuery.data?.total || 0} onPrev={() => setApprovedPage((p) => Math.max(1, p - 1))} onNext={() => setApprovedPage((p) => p + 1)} />
+          </>
+        )}
+
+        {/* ═══ TAB: RAD ETILGAN ═══ */}
+        {tab === 'rejected' && (
+          <>
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[180px] max-w-sm">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
+                <Input value={rejectedQ} onChange={(e) => setRejectedQ(e.target.value)} placeholder="Qidirish…" className="pl-9 h-9 text-[12px]" />
+              </div>
+              <ActorTypeFilter value={rjActorType} onChange={setRjActorType} />
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
+              {rejectedQuery.isLoading ? (
+                <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-400 dark:text-slate-500">
+                  <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
+                  <span className="text-[12px]">{tc('loading')}</span>
+                </div>
+              ) : rejectedRows.length === 0 ? (
+                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">Rad etilgan arizalar yo'q</div>
+              ) : (
+                <table className="w-full text-[12px]">
+                  <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    <tr>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Calendar className="h-3 w-3" /> Sana</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3" /> Klient</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> Shartnoma</span></th>
+                      <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
+                      <th className="text-left px-3 py-2">Kim rad etdi</th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><XCircle className="h-3 w-3" /> Sabab</span></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                    {rejectedRows.map((r) => (
+                      <tr key={r.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmtDate(r.reviewedAt)}</td>
+                        <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={r.snapClient || r.client || ''}>{r.snapClient || r.client || '—'}</td>
+                        <td className="px-3 py-2">
+                          {(r.appliedContractNo || r.proposedContractNo) ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700" title={r.appliedContractNo || r.proposedContractNo || ''}>
+                              <FileSignature className="h-3 w-3" /> {r.appliedContractNo || r.proposedContractNo}
+                            </span>
+                          ) : <span className="text-slate-400">—</span>}
+                        </td>
+                        <td className="px-3 py-2 text-right"><SignedMoney amount={r.amount} /></td>
+                        <td className="px-3 py-2 max-w-[170px]">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-slate-600 dark:text-slate-300 truncate" title={r.reviewedByName || ''}>{r.reviewedByName || '—'}</span>
+                            <ActorBadge type={r.reviewedByType} />
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 max-w-[240px]">
+                          <span className="text-rose-600 dark:text-rose-400 text-[11.5px] leading-snug line-clamp-2" title={r.rejectReason || ''}>{r.rejectReason || '—'}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <Pager page={rejectedPage} total={rejectedQuery.data?.total || 0} onPrev={() => setRejectedPage((p) => Math.max(1, p - 1))} onNext={() => setRejectedPage((p) => p + 1)} />
           </>
         )}
 

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send, Users, Plus,
+  Sparkles, BrainCircuit, CheckCircle2, XCircle, UserCog,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,14 @@ interface AgentConfig {
   lastResult: string | null;
   pendingCount: number;
   whitelist: WlEntry[];
+  aiEnabled: boolean;
+  hasAiKey: boolean;
+  aiKeyHint: string | null;
+  aiModel: string;
 }
+
+interface AiRunResult { id: string; ok: boolean; decision?: 'approve' | 'reject' | 'human'; reason?: string; error?: string }
+interface AiRunResponse { ok: boolean; processed: number; results: AiRunResult[] }
 
 export default function AdminAgentPage() {
   const qc = useQueryClient();
@@ -46,6 +54,9 @@ export default function AdminAgentPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dailyTime, setDailyTime] = useState('09:00');
   const [whitelist, setWhitelist] = useState<WlEntry[]>([]);
+  const [aiKey, setAiKey] = useState('');
+  const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
@@ -54,6 +65,8 @@ export default function AdminAgentPage() {
     setDateFrom(cfg.dateFrom || '');
     setDailyTime(cfg.dailyTime || '09:00');
     setWhitelist(cfg.whitelist || []);
+    setAiModel(cfg.aiModel || 'claude-sonnet-4-6');
+    setAiEnabled(!!cfg.aiEnabled);
     setInitialized(true);
   }, [cfg, initialized]);
 
@@ -90,6 +103,32 @@ export default function AdminAgentPage() {
     onSuccess: (r) => {
       if (r.ok) toast.success(r.count ? `Jo'natildi — ${r.count} ta XATO` : "XATO yo'q — xabar jo'natilmadi");
       else toast.error(r.error || 'Ishga tushmadi');
+      qc.invalidateQueries({ queryKey: ['agent-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const aiSaveMut = useMutation({
+    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled }),
+    onSuccess: () => {
+      toast.success('Saqlandi');
+      setAiKey('');
+      qc.invalidateQueries({ queryKey: ['agent-config'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
+  });
+
+  const [aiRunSummary, setAiRunSummary] = useState<{ approve: number; reject: number; human: number; error: number } | null>(null);
+  const aiRunMut = useMutation({
+    mutationFn: () => api.post<AiRunResponse>('/agent/ai/run', { limit: 20 }, { timeout: 120_000 }),
+    onSuccess: (data) => {
+      const results = data.results || [];
+      const approve = results.filter((r) => r.ok && r.decision === 'approve').length;
+      const reject = results.filter((r) => r.ok && r.decision === 'reject').length;
+      const human = results.filter((r) => r.ok && r.decision === 'human').length;
+      const error = results.filter((r) => !r.ok || r.error).length;
+      setAiRunSummary({ approve, reject, human, error });
+      toast.success(`${data.processed} ta ariza ko'rib chiqildi`);
       qc.invalidateQueries({ queryKey: ['agent-config'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
@@ -228,6 +267,108 @@ export default function AdminAgentPage() {
                 {wlSave.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Ro&apos;yxatni saqlash
               </Button>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ─── 🤖 AI Agent ─── */}
+      {canManage && (
+        <Card className="border-0 shadow-soft overflow-hidden">
+          <div className={cn(
+            'px-5 py-4 flex items-center gap-3.5 border-b bg-gradient-to-r',
+            aiEnabled
+              ? 'border-violet-100 dark:border-violet-950 from-violet-500/[0.10] via-fuchsia-500/[0.04] to-transparent'
+              : 'border-slate-100 dark:border-slate-800 from-slate-500/[0.06] to-transparent',
+          )}>
+            <div className={cn(
+              'w-11 h-11 rounded-2xl grid place-items-center shadow-md shrink-0',
+              aiEnabled ? 'bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-violet-500/30' : 'bg-gradient-to-br from-slate-400 to-slate-600',
+            )}>
+              <BrainCircuit className="h-5 w-5 text-white" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[15px] font-bold text-slate-800 dark:text-slate-100">🤖 AI Agent</span>
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1',
+                  aiEnabled
+                    ? 'bg-violet-50 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-800'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700',
+                )}>
+                  <span className={cn('w-1.5 h-1.5 rounded-full', aiEnabled ? 'bg-violet-500 animate-pulse' : 'bg-slate-400')} />
+                  {aiEnabled ? 'Yoqilgan' : "O'chirilgan"}
+                </span>
+              </div>
+              <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
+                AI Agent yangi arizalarni avtomat tekshiradi: ariza faylini o&apos;qiydi, obyekt mosligini tekshiradi (boshqa obyektga o&apos;tkazib bo&apos;lmaydi), maqsadga qarab kategoriya tanlaydi — so&apos;ng tasdiqlaydi, rad etadi yoki xodimga qoldiradi.
+              </div>
+            </div>
+            <button
+              onClick={() => setAiEnabled((v) => !v)}
+              title={aiEnabled ? "O'chirish" : 'Yoqish'}
+              className={cn('relative w-12 h-7 rounded-full transition-colors shrink-0', aiEnabled ? 'bg-violet-500' : 'bg-slate-300 dark:bg-slate-600')}
+            >
+              <span className={cn('absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform', aiEnabled && 'translate-x-5')} />
+            </button>
+          </div>
+
+          <CardContent className="p-5 space-y-4">
+            {/* Holat chiplar */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <StatTile label="AI holati" value={aiEnabled ? 'Yoqilgan' : "O'chirilgan"} tone={aiEnabled ? 'emerald' : 'slate'} />
+              <StatTile label="AI kalit" value={cfg?.hasAiKey ? `bor ${cfg.aiKeyHint || ''}` : "yo'q"} tone={cfg?.hasAiKey ? 'emerald' : 'rose'} mono={!!cfg?.hasAiKey} />
+              <StatTile label="Model" value={cfg?.aiModel || 'claude-sonnet-4-6'} tone="slate" mono />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="AI kalit" icon={<Lock className="h-3.5 w-3.5" />}>
+                <Input
+                  value={aiKey}
+                  onChange={(e) => setAiKey(e.target.value)}
+                  type="password"
+                  placeholder={cfg?.hasAiKey ? `Saqlangan ${cfg.aiKeyHint || ''}` : 'sk-ant-api03-…'}
+                  className="h-9 rounded-lg font-mono text-[12px]"
+                />
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Anthropic API kaliti (shifrlab saqlanadi)</div>
+              </Field>
+              <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
+                <Input
+                  value={aiModel}
+                  onChange={(e) => setAiModel(e.target.value)}
+                  placeholder="claude-sonnet-4-6"
+                  className="h-9 rounded-lg font-mono text-[12px]"
+                />
+              </Field>
+            </div>
+
+            <div className="flex items-center gap-3 flex-wrap pt-1">
+              <Button onClick={() => aiSaveMut.mutate()} disabled={aiSaveMut.isPending} className="h-10 gap-2 bg-violet-600 hover:bg-violet-700 text-white text-[13px] font-semibold">
+                {aiSaveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
+              </Button>
+              <Button onClick={() => aiRunMut.mutate()} disabled={aiRunMut.isPending} variant="outline" className="h-10 gap-2 text-[13px] font-semibold">
+                {aiRunMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />} Kutilayotgan arizalarni tekshirish
+              </Button>
+              <span className="text-[10.5px] text-slate-400 ml-auto">🔒 AI kalit AES-256 bilan shifrlanadi</span>
+            </div>
+
+            {aiRunSummary && (
+              <div className="flex items-center gap-2 flex-wrap pt-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Tasdiqlandi: {aiRunSummary.approve}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900">
+                  <XCircle className="h-3.5 w-3.5" /> Rad etildi: {aiRunSummary.reject}
+                </span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900">
+                  <UserCog className="h-3.5 w-3.5" /> Xodimga: {aiRunSummary.human}
+                </span>
+                {aiRunSummary.error > 0 && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold ring-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700">
+                    <Info className="h-3.5 w-3.5" /> Xato: {aiRunSummary.error}
+                  </span>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
