@@ -58,7 +58,7 @@ export class AttachmentsService {
   async upload(
     txId: string,
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
-    opts: { type?: string; contractNumber?: string | null; notes?: string | null; uploadedBy?: string | null } = {},
+    opts: { type?: string; contractNumber?: string | null; notes?: string | null; uploadedBy?: string | null; notify?: boolean } = {},
   ) {
     if (!file?.buffer) throw new BadRequestException('Fayl yuborilmadi');
     if (file.size === 0) throw new BadRequestException("Bo'sh fayl");
@@ -116,18 +116,37 @@ export class AttachmentsService {
       this.log.warn(`Attachment history xato: ${e?.message}`);
     }
 
-    // Telegram xabar (file ham bilan) — sinxron, natijani qaytarish uchun
-    const tg = await this.notifyTelegram('uploaded', {
-      attachment: { ...att, storagePath: diskPath },
-      transaction: tx,
-      filePath: diskPath,
-    });
+    // Telegram xabar (file ham bilan) — opts.notify=false bo'lsa yubormaymiz
+    // (masalan ariza YUBORILGANDA emas, faqat TASDIQLANGANDA xabar kerak).
+    const tg = opts.notify === false
+      ? { ok: false, skipped: true }
+      : await this.notifyTelegram('uploaded', {
+          attachment: { ...att, storagePath: diskPath },
+          transaction: tx,
+          filePath: diskPath,
+        });
 
     return {
       ok: true,
       item: { ...att, storagePath: diskPath },
       telegram: tg,
     };
+  }
+
+  /** Ariza TASDIQLANGANDA Telegram'ga xabar (fayl bilan). */
+  async notifyApproved(attId: string, actorName?: string) {
+    const att = await this.prisma.transactionAttachment.findUnique({
+      where: { id: attId },
+      include: { transaction: { select: { id: true, contractNumber: true, externalId: true } } },
+    });
+    if (!att) return { ok: false, error: 'Attachment topilmadi' };
+    let fileBuffer: Buffer | null = null;
+    try { fileBuffer = await fs.readFile(att.storagePath); } catch { /* fayl yo'q */ }
+    return this.notifyTelegram('approved', {
+      attachment: { ...att, uploadedBy: actorName || att.uploadedBy },
+      transaction: att.transaction,
+      fileBuffer,
+    });
   }
 
   /** Faylni o'qish — download uchun stream */
@@ -197,7 +216,7 @@ export class AttachmentsService {
   }
 
   /** Telegram notification — uploaded va deleted ikkalasida ham fayl yuboriladi */
-  private async notifyTelegram(action: 'uploaded' | 'deleted', payload: {
+  private async notifyTelegram(action: 'uploaded' | 'deleted' | 'approved', payload: {
     attachment: any;
     transaction: { id: string; contractNumber: string | null; externalId: string | null };
     deletedBy?: string;
@@ -213,9 +232,9 @@ export class AttachmentsService {
     try {
       const a = payload.attachment;
       const t = payload.transaction;
-      const icon = action === 'uploaded' ? '📎' : '🗑️';
-      const verb = action === 'uploaded' ? 'biriktirildi' : 'o\'chirildi';
-      const actor = action === 'uploaded' ? a.uploadedBy : (payload.deletedBy || '?');
+      const icon = action === 'uploaded' ? '📎' : action === 'approved' ? '✅' : '🗑️';
+      const verb = action === 'uploaded' ? 'biriktirildi' : action === 'approved' ? 'tasdiqlandi' : 'o\'chirildi';
+      const actor = action === 'deleted' ? (payload.deletedBy || '?') : a.uploadedBy;
       const sizeKb = (a.fileSize / 1024).toFixed(1);
       const date = new Date().toLocaleString('uz-UZ', {
         timeZone: 'Asia/Tashkent',
