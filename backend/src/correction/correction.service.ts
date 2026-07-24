@@ -284,6 +284,36 @@ export class CorrectionService {
     return { ok: true, total, page, perPage, rows: rows.map((r) => this.serialize(r)) };
   }
 
+  // ─── Barcha arizalar ro'yxati (status + shartnoma qidiruv) — audit ─
+  async listArizalar(opts: {
+    status?: 'all' | 'pending' | 'approved' | 'rejected'; q?: string; page?: number; perPage?: number;
+  } = {}) {
+    const page = Math.max(1, opts.page || 1);
+    const perPage = Math.min(100, Math.max(1, opts.perPage || 30));
+    const where: any = {};
+    if (opts.status && opts.status !== 'all') where.status = opts.status;
+    this.applySearch(where, opts.q);
+    const [total, rows] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where }),
+      this.prisma.xatoCorrectionRequest.findMany({
+        where, orderBy: { submittedAt: 'desc' },
+        skip: (page - 1) * perPage, take: perPage,
+      }),
+    ]);
+    // Holat bo'yicha umumiy sonlar (filtr chiplari uchun)
+    const [tAll, tPending, tApproved, tRejected] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count(),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'rejected' } }),
+    ]);
+    return {
+      ok: true, total, page, perPage,
+      counts: { all: tAll, pending: tPending, approved: tApproved, rejected: tRejected },
+      rows: rows.map((r) => this.serialize(r)),
+    };
+  }
+
   // ─── Tasdiqlash (fayl + shartnoma + kategoriya) ────────────────────
   async approve(
     id: string,

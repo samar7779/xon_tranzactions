@@ -83,6 +83,19 @@ export class AgentPublicController {
     stream.pipe(res);
   }
 
+  // ─── Arizalar ro'yxati (audit sub-tab) ───
+  @Post('tg/arizalar')
+  @ApiOperation({ summary: 'Telegram auth bilan arizalar ro\'yxati (audit)' })
+  tgArizalar(@Body() body: { auth?: string; status?: string; q?: string; page?: number }) {
+    return this.svc.tgArizaList(parseAuth(body?.auth), { status: body?.status, q: body?.q, page: body?.page });
+  }
+
+  @Post('arizalar')
+  @ApiOperation({ summary: 'Maxfiy kalit bilan arizalar ro\'yxati (audit)' })
+  arizalar(@Body() body: { key?: string; status?: string; q?: string; page?: number }) {
+    return this.svc.arizaList(body?.key || '', { status: body?.status, q: body?.q, page: body?.page });
+  }
+
   @Post('file')
   @ApiOperation({ summary: 'Maxfiy kalit bilan ariza faylini ochish' })
   async file(@Body() body: { key?: string; attachmentId?: string }, @Res() res: Response) {
