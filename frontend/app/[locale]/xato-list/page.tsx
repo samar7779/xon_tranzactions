@@ -179,6 +179,7 @@ export default function XatoListPage() {
     if (!tgAuth && !key) return;
     const iv = setInterval(() => {
       if (selectedRef.current) return; // modal ochiq — tegmaymiz
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return; // tab ko'rinmasa — tejaymiz
       const req = tgAuth
         ? fetch(`${API_URL}/agent/tg/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth: tgAuth }) })
         : fetch(`${API_URL}/agent/xato-list?key=${encodeURIComponent(key)}`);
@@ -206,6 +207,7 @@ export default function XatoListPage() {
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
+      r.id?.toLowerCase().includes(s) ||
       r.contractNo?.toLowerCase().includes(s) ||
       r.client?.toLowerCase().includes(s) ||
       r.object?.toLowerCase().includes(s) ||
@@ -301,7 +303,7 @@ export default function XatoListPage() {
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="Shartnoma, klient, obyekt yoki izoh bo'yicha qidirish…"
+                placeholder="ID, shartnoma raqami, klient yoki izoh bo'yicha qidirish…"
                 className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
               />
               {q && (
