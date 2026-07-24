@@ -40,7 +40,7 @@ import {
 import { Sparkline } from '@/components/sparkline';
 import { Skeleton } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
-import { api, apiDownload } from '@/lib/api';
+import { api, apiDownload, apiObjectUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatDateTime, formatMoney, formatDate } from '@/lib/utils';
@@ -1952,6 +1952,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const [rawPage, setRawPage] = useState(1);
   const [rawQ, setRawQ] = useState('');
   const [rawQDebounced, setRawQDebounced] = useState('');
+  const [rawHidden, setRawHidden] = useState<'active' | 'hidden' | 'all'>('active');
   const [infoRow, setInfoRow] = useState<any | null>(null);
   const [exporting, setExporting] = useState(false);
   const perPage = 50;
@@ -1976,10 +1977,11 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   } | null>(null);
 
   useEffect(() => {
-    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRawQ(''); setRawQDebounced(''); }
+    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRawQ(''); setRawQDebounced(''); setRawHidden('active'); }
   }, [open]);
   useEffect(() => { setPendingPage(1); }, [pendingQ]);
   useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow]);
+  useEffect(() => { setRawPage(1); }, [rawHidden]);
   // Barcha XATO qidiruvi — debounce (~300ms) + sahifani reset
   useEffect(() => {
     const id = setTimeout(() => { setRawQDebounced(rawQ); setRawPage(1); }, 300);
@@ -2037,7 +2039,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   // ── Raw (Barcha XATO) query ──
   const rawQuery = useQuery({
-    queryKey: ['client-xato', rawPage, rawQDebounced],
+    queryKey: ['client-xato', rawPage, rawQDebounced, rawHidden],
     queryFn: () => api.get<{
       ok: boolean; total: number; page: number; perPage: number;
       items: Array<{
@@ -2045,7 +2047,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         amount: number; currency: string; direction: string; contractNumber: string | null;
         description: string | null; counterparty: string | null; xatoHidden: boolean;
       }>;
-    }>(`/transactions/client-xato?page=${rawPage}&perPage=${perPage}&q=${encodeURIComponent(rawQDebounced)}`),
+    }>(`/transactions/client-xato?page=${rawPage}&perPage=${perPage}&q=${encodeURIComponent(rawQDebounced)}&hidden=${rawHidden}`),
     enabled: open && tab === 'raw',
   });
 
@@ -2088,6 +2090,17 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const fmtDate = (d: string | null | undefined) => {
     if (!d) return '—';
     try { return new Date(d).toLocaleDateString('ru-RU'); } catch { return d; }
+  };
+
+  // Ariza faylini yangi tabda inline ko'rish (yuklab olmasdan)
+  const viewAttachment = async (txId: string, attId: string) => {
+    try {
+      const url = await apiObjectUrl(`/transactions/${txId}/attachments/${attId}/download`);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e: any) {
+      toast.error(e?.message || tc('error'));
+    }
   };
 
   // Signed money — formatMoney o'zi absolyut oladi, sign+rang biz qo'yamiz
@@ -2360,14 +2373,23 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[150px] truncate" title={r.reviewedByName || ''}>{r.reviewedByName || '—'}</td>
                         <td className="px-3 py-2">
                           {r.attachmentId ? (
-                            <button
-                              onClick={() => apiDownload(`/transactions/${r.txId}/attachments/${r.attachmentId}/download`, r.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
-                              title={r.attachmentName || ''}
-                              className="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 text-[11px] font-medium transition-all max-w-[150px]"
-                            >
-                              <Download className="h-3 w-3 shrink-0" />
-                              <span className="truncate">{r.attachmentName || 'Yuklab olish'}</span>
-                            </button>
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => viewAttachment(r.txId, r.attachmentId!)}
+                                title={`Ko'rish: ${r.attachmentName || ''}`}
+                                className="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 text-[11px] font-medium transition-all max-w-[150px]"
+                              >
+                                <Eye className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{r.attachmentName || 'Ko\'rish'}</span>
+                              </button>
+                              <button
+                                onClick={() => apiDownload(`/transactions/${r.txId}/attachments/${r.attachmentId}/download`, r.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                                title="Yuklab olish"
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-all shrink-0"
+                              >
+                                <Download className="h-3 w-3" />
+                              </button>
+                            </div>
                           ) : <span className="text-slate-400">—</span>}
                         </td>
                       </tr>
@@ -2383,10 +2405,27 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         {/* ═══ TAB: BARCHA XATO (mavjud raw jadval) ═══ */}
         {tab === 'raw' && (
           <>
-            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-              <div className="relative max-w-sm">
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[180px] max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input value={rawQ} onChange={(e) => setRawQ(e.target.value)} placeholder="ID, shartnoma yoki izoh bo'yicha qidirish…" className="pl-9 h-9 text-[12px]" />
+              </div>
+              {/* Yashirilganlik filtri */}
+              <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                {([['active', 'Ko\'rinadigan'], ['hidden', 'Yashirilgan'], ['all', 'Barchasi']] as const).map(([v, lbl]) => (
+                  <button
+                    key={v}
+                    onClick={() => setRawHidden(v)}
+                    className={cn(
+                      'h-7 px-2.5 rounded-md text-[11px] font-semibold transition-all',
+                      rawHidden === v
+                        ? 'bg-rose-600 text-white shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                    )}
+                  >
+                    {lbl}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
@@ -2815,13 +2854,32 @@ function ApprovalModal({
                       <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400">Biriktirilgan fayl</div>
                       <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={existingAttachmentName || ''}>{existingAttachmentName || 'Ariza'}</div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => txId && existingAttachmentId && apiDownload(`/transactions/${txId}/attachments/${existingAttachmentId}/download`, existingAttachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
-                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors shrink-0"
-                    >
-                      <Download className="h-3.5 w-3.5" /> Ko'rish / Yuklab olish
-                    </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!txId || !existingAttachmentId) return;
+                          try {
+                            const url = await apiObjectUrl(`/transactions/${txId}/attachments/${existingAttachmentId}/download`);
+                            window.open(url, '_blank');
+                            setTimeout(() => URL.revokeObjectURL(url), 60000);
+                          } catch (e: any) {
+                            toast.error(e?.message || tc('error'));
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Ko'rish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => txId && existingAttachmentId && apiDownload(`/transactions/${txId}/attachments/${existingAttachmentId}/download`, existingAttachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                        title="Yuklab olish"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg ring-1 ring-emerald-300 dark:ring-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                 )}
 
