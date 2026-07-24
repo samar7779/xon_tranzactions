@@ -1022,6 +1022,31 @@ export class OplataKvService {
     });
   }
 
+  /**
+   * Agent web ro'yxati: XATO qatorlar + count'ni BITTA buildXatoFilter bilan
+   * (ilgari getXatoRows + countXatoForAgent alohida 2 marta qurardi — sekin edi).
+   */
+  async getXatoListForAgent(opts: { dateFrom?: string | null; limit?: number }) {
+    const xatoFilter = await this.buildXatoFilter();
+    const dateWhere = opts.dateFrom ? { date: { gte: new Date(opts.dateFrom) } } : {};
+    const rowsWhere: Prisma.OplataKvWhereInput = { ...(xatoFilter as Prisma.OplataKvWhereInput), ...dateWhere };
+    const countWhere: Prisma.OplataKvWhereInput = { ...(xatoFilter as Prisma.OplataKvWhereInput), ...dateWhere, agentNotifiedAt: null };
+    const take = Math.min(Math.max(1, opts.limit || 1000), 2000);
+    const [rows, count] = await Promise.all([
+      this.prisma.oplataKv.findMany({
+        where: rowsWhere,
+        orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+        take,
+        select: {
+          id: true, date: true, contractNo: true, paymentAmount: true,
+          client: true, object: true, txType: true, purpose: true,
+        },
+      }),
+      this.prisma.oplataKv.count({ where: countWhere }),
+    ]);
+    return { rows, count };
+  }
+
   // ───────────────── FIND ONE ─────────────────
   async findOne(id: string) {
     const row = await this.prisma.oplataKv.findUnique({ where: { id } });

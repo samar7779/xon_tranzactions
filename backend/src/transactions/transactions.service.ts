@@ -1207,7 +1207,7 @@ export class TransactionsService {
    * CLIENT kategoriya + XATO shartnomali tranzaksiyalar (alohida yozuvlar, paginatsiya bilan).
    * XATO = contractNumber bor, qo'lda (manual) emas, CRM'da found=true EMAS.
    */
-  async clientXatoTransactions(page = 1, perPage = 50, q?: string) {
+  async clientXatoTransactions(page = 1, perPage = 50, q?: string, hidden: 'all' | 'active' | 'hidden' = 'active') {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
 
@@ -1246,6 +1246,10 @@ export class TransactionsService {
         ],
       });
     }
+
+    // Yashirilgan filtri: active=ko'rinadiganlar, hidden=yashirilganlar, all=barchasi
+    if (hidden === 'active') where.xatoHidden = { not: true };
+    else if (hidden === 'hidden') where.xatoHidden = true;
 
     const [total, items] = await Promise.all([
       this.prisma.transaction.count({ where }),

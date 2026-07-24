@@ -302,10 +302,8 @@ export class AgentService {
 
   private async _list() {
     const dateFrom = await this.settings.get(this.K_DATEFROM);
-    const [rows, count] = await Promise.all([
-      this.oplataKv.getXatoRows({ dateFrom: dateFrom || null, limit: 2000 }),
-      this.oplataKv.countXatoForAgent(dateFrom || null),
-    ]);
+    // buildXatoFilter BITTA marta (tez) — count + rows birga
+    const { rows, count } = await this.oplataKv.getXatoListForAgent({ dateFrom: dateFrom || null, limit: 2000 });
     const ids = rows.map((r) => r.id);
     const [pendingMap, rejectedSet] = await Promise.all([
       this.correction.pendingInfoByOplataKvId(ids),

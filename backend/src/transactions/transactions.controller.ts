@@ -130,8 +130,13 @@ export class TransactionsController {
   @Get('client-xato')
   @RequirePermissions(PERMISSIONS.TRANSACTIONS_VIEW)
   @ApiOperation({ summary: 'CLIENT kategoriya + XATO shartnomali tranzaksiyalar (alohida, paginatsiya)' })
-  clientXato(@Query('page') page?: string, @Query('perPage') perPage?: string, @Query('q') q?: string) {
-    return this.svc.clientXatoTransactions(Number(page) || 1, Number(perPage) || 50, q);
+  clientXato(
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+    @Query('q') q?: string,
+    @Query('hidden') hidden?: 'all' | 'active' | 'hidden',
+  ) {
+    return this.svc.clientXatoTransactions(Number(page) || 1, Number(perPage) || 50, q, hidden || 'active');
   }
 
   @Get('client-xato/export')
