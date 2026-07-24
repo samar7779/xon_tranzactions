@@ -18,6 +18,10 @@ interface XatoRow {
   purpose: string | null;
   pending?: boolean;
   rejected?: boolean;
+  pendingInfo?: {
+    by: string; at: string; contractNo: string | null;
+    attachmentId: string | null; attachmentName: string | null;
+  } | null;
 }
 interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string }
 
@@ -32,6 +36,14 @@ function fmtDate(iso: string | null): string {
 function fmtMoney(v: number | null): string {
   if (v == null) return '—';
   return v.toLocaleString('ru-RU');
+}
+function fmtDateTime(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  const dd = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+  const hh = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${dd} ${hh}`;
 }
 function fmtCompact(v: number): string {
   const a = Math.abs(v);
@@ -80,6 +92,20 @@ export default function XatoListPage() {
   useEffect(() => { setPage(1); }, [q, flow]);
 
   const closeModal = () => { setSelected(null); setCq(''); setCrmItems([]); setChosen(''); setArizaFile(null); setAssignError(''); };
+
+  // Biriktirilgan ariza faylini yangi oynada ochish
+  const viewFile = async (attachmentId: string) => {
+    try {
+      const url = tgAuth ? `${API_URL}/agent/tg/file` : `${API_URL}/agent/file`;
+      const body = tgAuth ? { auth: tgAuth, attachmentId } : { key, attachmentId };
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      window.open(objUrl, '_blank');
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch { setAssignError("Faylni ochib bo'lmadi"); }
+  };
 
   // CRM shartnoma qidirish (modal ochiq bo'lsa, debounce)
   useEffect(() => {
@@ -430,12 +456,34 @@ export default function XatoListPage() {
               </div>
 
               {selected.pending ? (
-                <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900/50 p-5 text-center">
-                  <div className="w-11 h-11 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-900/40 grid place-items-center mb-2">
-                    <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900/50 p-4 space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 dark:bg-amber-900/40 grid place-items-center shrink-0">
+                      <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold text-amber-800 dark:text-amber-200">Ariza yuborilgan — tasdiq kutilmoqda</div>
+                      <div className="text-[11px] text-amber-700/80 dark:text-amber-300/70">Tasdiqlovchi xodim ko&apos;rib chiqib tasdiqlaydi.</div>
+                    </div>
                   </div>
-                  <div className="text-[13.5px] font-bold text-amber-800 dark:text-amber-200">Ariza yuborilgan — tasdiq kutilmoqda</div>
-                  <div className="text-[11.5px] text-amber-700/80 dark:text-amber-300/70 mt-1">Tasdiqlovchi xodim ko&apos;rib chiqib fayl bilan tasdiqlaydi.</div>
+                  {selected.pendingInfo && (
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 pt-2 border-t border-amber-200/60 dark:border-amber-900/40">
+                      <InfoField label="Kim yubordi" value={selected.pendingInfo.by || '—'} />
+                      <InfoField label="Qachon" value={fmtDateTime(selected.pendingInfo.at)} />
+                      <div className="col-span-2"><InfoField label="Taklif qilingan shartnoma" value={selected.pendingInfo.contractNo || '—'} mono /></div>
+                      {selected.pendingInfo.attachmentId && (
+                        <div className="col-span-2">
+                          <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">Biriktirilgan ariza fayli</div>
+                          <button onClick={() => viewFile(selected.pendingInfo!.attachmentId!)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-amber-200 dark:ring-amber-900/50 px-3 py-2 text-[12px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-100/50 dark:hover:bg-amber-950/40 transition-colors max-w-full">
+                            <Paperclip className="w-4 h-4 shrink-0" />
+                            <span className="truncate">{selected.pendingInfo.attachmentName || 'Fayl'}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">ko&apos;rish ↗</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
               <>
