@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import * as fs from 'fs/promises';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
@@ -26,11 +27,39 @@ export class AgentAiService {
   private readonly K_AI_ENABLED = 'agent.aiEnabled';
   private readonly DEFAULT_MODEL = 'claude-sonnet-4-6';
 
+  // Ustma-ust ishlamaslik uchun (bir vaqtda bitta tsikl)
+  private running = false;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly correction: CorrectionService,
   ) {}
+
+  /**
+   * Har 5 daqiqada tekshiradi. TEJAMKOR: faqat agent yoqilgan + kalit bor +
+   * kutayotgan (agentState=null) ariza bo'lsa Claude'ni chaqiradi. Aks holda
+   * hech narsa qilmaydi (rasxod yo'q). `running` lock ustma-ust ishlamaydi.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async tick() {
+    if (this.running) return;
+    try {
+      if (!(await this.isEnabled())) return;
+      const pending = await this.prisma.xatoCorrectionRequest.count({
+        where: { status: 'pending', agentState: null, attachmentId: { not: null } },
+      });
+      if (pending === 0) return; // ariza yo'q — Claude chaqirilmaydi
+      if (!(await this.getApiKey())) return; // kalit yo'q
+      this.running = true;
+      this.log.log(`AI agent tsikl boshlandi — ${pending} ta ariza`);
+      await this.processPending(10);
+    } catch (e: any) {
+      this.log.warn(`AI agent tsikl xatosi: ${e?.message}`);
+    } finally {
+      this.running = false;
+    }
+  }
 
   // ─── Sozlama ───────────────────────────────────────────────────────
   private async setting(key: string): Promise<string | null> {
@@ -62,14 +91,18 @@ export class AgentAiService {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id: requestId } });
     if (!req) return { ok: false, error: 'Ariza topilmadi' };
     if (req.status !== 'pending') return { ok: false, error: 'Ariza allaqachon ko\'rib chiqilgan' };
+    if (req.agentState) return { ok: false, error: 'Agent allaqachon ishlagan/ishlamoqda' };
 
     const apiKey = await this.getApiKey();
     if (!apiKey) return { ok: false, error: 'AI kalit sozlanmagan' };
 
-    // Belgilaymiz: agent ishlamoqda
-    await this.prisma.xatoCorrectionRequest.update({
-      where: { id: requestId }, data: { agentState: 'processing', agentAt: new Date() },
+    // Atomik "claim" — ikki jarayon (cron + submit trigger) bir arizani
+    // ustma-ust ishlamasin. Faqat agentState=null bo'lsa egallaydi.
+    const claimed = await this.prisma.xatoCorrectionRequest.updateMany({
+      where: { id: requestId, status: 'pending', agentState: null },
+      data: { agentState: 'processing', agentAt: new Date() },
     });
+    if (claimed.count === 0) return { ok: false, error: 'Boshqa jarayon ishlamoqda' };
 
     try {
       // 1) Ariza faylini o'qish
@@ -186,6 +219,45 @@ export class AgentAiService {
       results.push({ id: p.id, ...(await this.processRequest(p.id)) });
     }
     return { ok: true, processed: results.length, results };
+  }
+
+  /** Agent boshqaruvi uchun holat (dashboard). */
+  async status() {
+    const [enabled, apiKey, pending, processing, needsReview, agentApproved, agentRejected] = await Promise.all([
+      this.isEnabled(),
+      this.getApiKey(),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: null, attachmentId: { not: null } } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { agentState: 'processing' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: 'needs_review' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved', reviewedByType: 'agent' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'rejected', reviewedByType: 'agent' } }),
+    ]);
+    return {
+      ok: true, enabled, hasKey: !!apiKey, running: this.running, model: await this.getModel(),
+      counts: { pending, processing, needsReview, agentApproved, agentRejected },
+    };
+  }
+
+  /** Agent oxirgi qarorlari (faoliyat lentasi). */
+  async recent(limit = 15) {
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { agentAt: { not: null } },
+      orderBy: { agentAt: 'desc' },
+      take: Math.min(50, Math.max(1, limit)),
+      select: {
+        id: true, status: true, agentState: true, agentReason: true, agentAt: true,
+        proposedContractNo: true, snapClient: true, snapAmount: true, reviewedByType: true,
+      },
+    });
+    return {
+      ok: true,
+      rows: rows.map((r) => ({
+        id: r.id, status: r.status, agentState: r.agentState, agentReason: r.agentReason,
+        agentAt: r.agentAt, contractNo: r.proposedContractNo, client: r.snapClient,
+        amount: r.snapAmount != null ? Number(r.snapAmount) : null,
+        byAgent: r.reviewedByType === 'agent',
+      })),
+    };
   }
 
   // ─── Claude Messages API (tool_use bilan structured output) ────────

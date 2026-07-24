@@ -55,4 +55,18 @@ export class AgentController {
   aiRun(@Body() body: { limit?: number }) {
     return this.svc.runAiAgent(Number(body?.limit) || 20);
   }
+
+  @Get('ai/status')
+  @RequirePermissions(PERMISSIONS.AGENT_VIEW)
+  @ApiOperation({ summary: 'AI agent holati (dashboard)' })
+  aiStatus() {
+    return this.svc.aiStatus();
+  }
+
+  @Get('ai/recent')
+  @RequirePermissions(PERMISSIONS.AGENT_VIEW)
+  @ApiOperation({ summary: 'AI agent oxirgi qarorlari (faoliyat)' })
+  aiRecent() {
+    return this.svc.aiRecent(15);
+  }
 }
