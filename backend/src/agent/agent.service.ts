@@ -129,6 +129,8 @@ export class AgentService {
   async runAiAgent(limit = 20) {
     return this.agentAi.processPending(limit);
   }
+  async aiStatus() { return this.agentAi.status(); }
+  async aiRecent(limit = 15) { return this.agentAi.recent(limit); }
 
   private validTime(s?: string | null): string | null {
     if (!s) return null;
