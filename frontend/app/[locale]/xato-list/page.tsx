@@ -63,6 +63,8 @@ export default function XatoListPage() {
   const [assigning, setAssigning] = useState(false);
   const [assignError, setAssignError] = useState('');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedRef = useRef<XatoRow | null>(null);
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
 
   const onPickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] || null;
@@ -146,6 +148,19 @@ export default function XatoListPage() {
       .then(parse).then(setData).catch((e) => setError(e?.message || 'Xatolik'));
   }, []);
 
+  // ─── Real vaqt: har 45s da jonli yangilash (modal ochiq bo'lmasa) ───
+  useEffect(() => {
+    if (!tgAuth && !key) return;
+    const iv = setInterval(() => {
+      if (selectedRef.current) return; // modal ochiq — tegmaymiz
+      const req = tgAuth
+        ? fetch(`${API_URL}/agent/tg/list`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auth: tgAuth }) })
+        : fetch(`${API_URL}/agent/xato-list?key=${encodeURIComponent(key)}`);
+      req.then((r) => r.ok ? r.json() : null).then((j) => { if (j?.ok) setData(j as XatoResp); }).catch(() => {});
+    }, 45000);
+    return () => clearInterval(iv);
+  }, [tgAuth, key]);
+
   const allRows = data?.rows || [];
   const stats = useMemo(() => {
     let inC = 0, outC = 0, inSum = 0, outSum = 0, pendingC = 0;
@@ -215,8 +230,11 @@ export default function XatoListPage() {
               </div>
             </div>
           </div>
-          <div className="mt-2 text-[12px] text-white/75 max-w-xl">
-            CRM&apos;da tasdiqlanmagan to&apos;lovlar — to&apos;g&apos;ri shartnomani biriktiring, ro&apos;yxatdan yo&apos;qoladi.
+          <div className="mt-2 flex items-center gap-2 text-[12px] text-white/75 max-w-2xl flex-wrap">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2 py-0.5 text-[10.5px] font-semibold text-white">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli · 45s
+            </span>
+            <span>CRM&apos;da tasdiqlanmagan to&apos;lovlar — to&apos;g&apos;ri shartnomani biriktiring, ro&apos;yxatdan yo&apos;qoladi.</span>
           </div>
         </div>
       </header>
@@ -382,7 +400,7 @@ export default function XatoListPage() {
       {/* ═══ Biriktirish modali ═══ */}
       {selected && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in duration-150" onClick={closeModal}>
-          <div className="bg-white dark:bg-slate-900 w-full sm:max-w-lg sm:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto shadow-2xl ring-1 ring-slate-200/50 dark:ring-slate-800 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white dark:bg-slate-900 w-full sm:max-w-2xl sm:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto shadow-2xl ring-1 ring-slate-200/50 dark:ring-slate-800 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 z-10">
               <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 grid place-items-center">
                 <Link2 className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
@@ -407,7 +425,7 @@ export default function XatoListPage() {
                   {selected.client && <div className="col-span-2"><InfoField label="Klient" value={selected.client} /></div>}
                   {selected.object && <div className="col-span-2"><InfoField label="Obyekt" value={selected.object} /></div>}
                   {selected.purpose && <div className="col-span-2"><InfoField label="Maqsad (izoh)" value={selected.purpose} multiline /></div>}
-                  <div className="col-span-2"><InfoField label="ID" value={selected.id} mono copyable /></div>
+                  <div className="col-span-2"><InfoField label="ID" value={selected.id} mono copyable breakAll /></div>
                 </div>
               </div>
 
@@ -493,16 +511,20 @@ export default function XatoListPage() {
 }
 
 /* ─── Info maydoni (modal) ─── */
-function InfoField({ label, value, valueClass, mono, multiline, copyable }: {
-  label: string; value: string; valueClass?: string; mono?: boolean; multiline?: boolean; copyable?: boolean;
+function InfoField({ label, value, valueClass, mono, multiline, copyable, breakAll }: {
+  label: string; value: string; valueClass?: string; mono?: boolean; multiline?: boolean; copyable?: boolean; breakAll?: boolean;
 }) {
   return (
     <div className="min-w-0">
       <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">{label}</div>
-      <div className={`flex items-center gap-1.5 font-semibold text-slate-800 dark:text-slate-200 ${mono ? 'font-mono text-[11px]' : 'text-[12.5px]'} ${valueClass || ''}`}>
-        <span className={multiline ? 'font-normal text-[11.5px] leading-snug line-clamp-4 text-slate-600 dark:text-slate-300' : 'truncate'}>{value}</span>
+      <div className={`flex items-start gap-1.5 font-semibold text-slate-800 dark:text-slate-200 ${mono ? 'font-mono text-[11px]' : 'text-[12.5px]'} ${valueClass || ''}`}>
+        <span className={
+          multiline ? 'font-normal text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words'
+          : breakAll ? 'break-all leading-relaxed'
+          : 'truncate'
+        }>{value}</span>
         {copyable && (
-          <button onClick={() => navigator.clipboard?.writeText(value)} className="shrink-0 text-slate-400 hover:text-violet-500 transition-colors" title="Nusxa olish">
+          <button onClick={() => navigator.clipboard?.writeText(value)} className="shrink-0 mt-0.5 text-slate-400 hover:text-violet-500 transition-colors" title="Nusxa olish">
             <Copy className="w-3 h-3" />
           </button>
         )}
