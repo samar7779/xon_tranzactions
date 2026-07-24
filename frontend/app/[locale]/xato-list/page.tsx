@@ -6,6 +6,7 @@ import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
   Clock, Send, RotateCcw, Copy, Paperclip, Upload, FileCheck2, FileText, XCircle, ListChecks,
+  Users, ChevronDown,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -107,8 +108,10 @@ export default function XatoListPage() {
   const [arizaData, setArizaData] = useState<ArizaResp | null>(null);
   const [arizaStatus, setArizaStatus] = useState<ArizaStatus>('all');
   const [arizaQ, setArizaQ] = useState('');
+  const [arizaSubmitter, setArizaSubmitter] = useState<string>(''); // '' = Hammasi (xodimlar)
   const [arizaPage, setArizaPage] = useState(1);
   const [arizaLoading, setArizaLoading] = useState(false);
+  const [arizaSel, setArizaSel] = useState<ArizaRow | null>(null);
   const arizaPerPage = 30;
 
   // Biriktirish modali
@@ -138,7 +141,7 @@ export default function XatoListPage() {
   useEffect(() => { setPage(1); }, [q, flow]);
 
   // Ariza filtri/qidiruvi o'zgarganda — sahifani 1-ga qaytar
-  useEffect(() => { setArizaPage(1); }, [arizaStatus, arizaQ]);
+  useEffect(() => { setArizaPage(1); }, [arizaStatus, arizaQ, arizaSubmitter]);
 
   // Arizalar ro'yxatini olish (tab faol bo'lganda; qidiruvda 350ms debounce)
   useEffect(() => {
@@ -148,8 +151,8 @@ export default function XatoListPage() {
       setArizaLoading(true);
       const url = tgAuth ? `${API_URL}/agent/tg/arizalar` : `${API_URL}/agent/arizalar`;
       const body = tgAuth
-        ? { auth: tgAuth, status: arizaStatus, q: arizaQ.trim(), page: arizaPage }
-        : { key, status: arizaStatus, q: arizaQ.trim(), page: arizaPage };
+        ? { auth: tgAuth, status: arizaStatus, q: arizaQ.trim(), submitter: arizaSubmitter, page: arizaPage }
+        : { key, status: arizaStatus, q: arizaQ.trim(), submitter: arizaSubmitter, page: arizaPage };
       fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
         .then((r) => r.ok ? r.json() : null)
         .then((d) => { if (d?.ok) setArizaData(d as ArizaResp); })
@@ -161,7 +164,7 @@ export default function XatoListPage() {
       return () => clearTimeout(t);
     }
     run();
-  }, [mainTab, arizaStatus, arizaQ, arizaPage, tgAuth, key]);
+  }, [mainTab, arizaStatus, arizaQ, arizaSubmitter, arizaPage, tgAuth, key]);
 
   const closeModal = () => { setSelected(null); setCq(''); setCrmItems([]); setChosen(''); setArizaFile(null); setAssignError(''); };
 
@@ -338,28 +341,17 @@ export default function XatoListPage() {
             <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
           </div>
 
-          {/* Ariza statistikasi — kim qancha/qanday yubordi */}
-          {data?.arizaStats && data.arizaStats.length > 0 && (
-            <div className="mt-3.5">
-              <div className="text-[10px] uppercase tracking-wider text-white/50 font-semibold mb-1.5">Arizalar — kim yubordi</div>
-              <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
-                {data.arizaStats.map((s) => (
-                  <div key={s.name} className="shrink-0 flex items-center gap-2 rounded-xl bg-white/10 backdrop-blur ring-1 ring-white/20 pl-2 pr-3 py-1.5">
-                    <div className="w-7 h-7 rounded-full bg-white/20 grid place-items-center text-[11px] font-bold shrink-0">{(s.name || '?').slice(0, 1).toUpperCase()}</div>
-                    <div className="leading-tight">
-                      <div className="text-[11.5px] font-bold text-white whitespace-nowrap">{s.name || '—'}</div>
-                      <div className="text-[9.5px] whitespace-nowrap tabular-nums flex items-center gap-1.5 mt-0.5">
-                        <span className="text-white/60">Jami {s.total}</span>
-                        {s.pending > 0 && <span className="text-amber-200">⏳ {s.pending}</span>}
-                        {s.approved > 0 && <span className="text-emerald-200">✓ {s.approved}</span>}
-                        {s.rejected > 0 && <span className="text-rose-200">✗ {s.rejected}</span>}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* ═══ Asosiy tab bar — header ichida (glass) ═══ */}
+          <div className="mt-4 flex items-center gap-1.5">
+            <button onClick={() => setMainTab('xato')}
+              className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-white text-violet-700 shadow-md' : 'bg-white/10 text-white ring-1 ring-white/25 hover:bg-white/20'}`}>
+              <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
+            </button>
+            <button onClick={() => setMainTab('arizalar')}
+              className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-white text-violet-700 shadow-md' : 'bg-white/10 text-white ring-1 ring-white/25 hover:bg-white/20'}`}>
+              <ListChecks className="w-4 h-4" /> Arizalar
+            </button>
+          </div>
         </div>
       </header>
 
@@ -375,20 +367,6 @@ export default function XatoListPage() {
         </div>
       ) : (
         <div className="mx-auto max-w-[1600px] px-3 sm:px-6 mt-4 relative z-10 pb-10">
-
-          {/* ═══ Asosiy tab bar (segmented) ═══ */}
-          <div className="mb-3 flex justify-center">
-            <div className="inline-flex items-center gap-1 rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 p-1 shadow-lg shadow-slate-900/5">
-              <button onClick={() => setMainTab('xato')}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-violet-600 text-white shadow-md shadow-violet-600/25' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
-              </button>
-              <button onClick={() => setMainTab('arizalar')}
-                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-violet-600 text-white shadow-md shadow-violet-600/25' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
-                <ListChecks className="w-4 h-4" /> Arizalar
-              </button>
-            </div>
-          </div>
 
           {mainTab === 'xato' && (
           <>
@@ -533,10 +511,14 @@ export default function XatoListPage() {
               setStatus={setArizaStatus}
               q={arizaQ}
               setQ={setArizaQ}
+              submitter={arizaSubmitter}
+              setSubmitter={setArizaSubmitter}
+              submitters={data?.arizaStats || []}
               page={arizaPage}
               setPage={setArizaPage}
               perPage={arizaPerPage}
               viewFile={viewFile}
+              onSelect={setArizaSel}
             />
           )}
         </div>
@@ -673,6 +655,11 @@ export default function XatoListPage() {
           </div>
         </div>
       )}
+
+      {/* ═══ Ariza detali modali (audit) ═══ */}
+      {arizaSel && (
+        <ArizaDetailModal r={arizaSel} onClose={() => setArizaSel(null)} viewFile={viewFile} />
+      )}
     </div>
   );
 }
@@ -733,17 +720,21 @@ function SkeletonCard() {
 }
 
 /* ═══════════ Arizalar ko'rinishi (audit) ═══════════ */
-function ArizalarView({ data, loading, status, setStatus, q, setQ, page, setPage, perPage, viewFile }: {
+function ArizalarView({ data, loading, status, setStatus, q, setQ, submitter, setSubmitter, submitters, page, setPage, perPage, viewFile, onSelect }: {
   data: ArizaResp | null;
   loading: boolean;
   status: ArizaStatus;
   setStatus: (s: ArizaStatus) => void;
   q: string;
   setQ: (s: string) => void;
+  submitter: string;
+  setSubmitter: (s: string) => void;
+  submitters: ArizaStat[];
   page: number;
   setPage: (p: number) => void;
   perPage: number;
   viewFile: (attachmentId: string) => void;
+  onSelect: (r: ArizaRow) => void;
 }) {
   const counts = data?.counts || { all: 0, pending: 0, approved: 0, rejected: 0 };
   const rows = data?.rows || [];
@@ -751,28 +742,50 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, page, setPage
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const safePage = Math.min(page, totalPages);
 
-  const filters: { key: ArizaStatus; label: string; count: number }[] = [
-    { key: 'all', label: 'Hammasi', count: counts.all },
-    { key: 'pending', label: '⏳ Kutilmoqda', count: counts.pending },
-    { key: 'approved', label: '✓ Tasdiqlangan', count: counts.approved },
-    { key: 'rejected', label: '✗ Rad etilgan', count: counts.rejected },
+  const filters: { key: ArizaStatus; label: string; count: number; icon: ReactNode }[] = [
+    { key: 'all', label: 'Hammasi', count: counts.all, icon: <ListChecks className="w-3.5 h-3.5" /> },
+    { key: 'pending', label: 'Kutilmoqda', count: counts.pending, icon: <Clock className="w-3.5 h-3.5" /> },
+    { key: 'approved', label: 'Tasdiqlangan', count: counts.approved, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+    { key: 'rejected', label: 'Rad etilgan', count: counts.rejected, icon: <XCircle className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <div>
       {/* ── Status filtri (segmented) ── */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+      <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
         {filters.map((f) => {
           const active = status === f.key;
           return (
             <button key={f.key} onClick={() => setStatus(f.key)}
               className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-[12px] font-bold transition-all ring-1 ${active ? 'bg-violet-600 text-white ring-violet-600 shadow-md shadow-violet-600/25' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>
+              {f.icon}
               <span>{f.label}</span>
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10.5px] tabular-nums font-black ${active ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{f.count}</span>
             </button>
           );
         })}
       </div>
+
+      {/* ── Xodim ("Kim yubordi") filtri ── */}
+      {submitters.length > 0 && (
+        <div className="flex items-center gap-2 mb-3">
+          <div className="inline-flex items-center gap-1.5 shrink-0 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
+            <Users className="w-4 h-4 text-slate-400" /> Kim yubordi:
+          </div>
+          <div className="relative">
+            <select
+              value={submitter}
+              onChange={(e) => setSubmitter(e.target.value)}
+              className="h-9 pl-3 pr-8 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition">
+              <option value="">Hammasi (xodimlar)</option>
+              {submitters.map((s) => (
+                <option key={s.name} value={s.name}>{s.name || '—'} ({s.total})</option>
+              ))}
+            </select>
+            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          </div>
+        </div>
+      )}
 
       {/* ── Qidiruv ── */}
       <div className="sticky top-2 z-20">
@@ -811,7 +824,7 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, page, setPage
         </div>
       ) : (
         <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          {rows.map((r) => <ArizaCard key={r.id} r={r} viewFile={viewFile} />)}
+          {rows.map((r) => <ArizaCard key={r.id} r={r} viewFile={viewFile} onSelect={onSelect} />)}
         </div>
       )}
 
@@ -851,16 +864,17 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, page, setPage
 }
 
 /* ─── Bitta ariza kartasi ─── */
-function ArizaCard({ r, viewFile }: { r: ArizaRow; viewFile: (attachmentId: string) => void }) {
+function ArizaCard({ r, viewFile, onSelect }: { r: ArizaRow; viewFile: (attachmentId: string) => void; onSelect: (r: ArizaRow) => void }) {
   const isIn = (r.amount ?? 0) >= 0;
   const contractNo = r.appliedContractNo || r.proposedContractNo;
   const ringClass =
-    r.status === 'pending' ? 'ring-amber-300 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10'
-    : r.status === 'approved' ? 'ring-emerald-200 dark:ring-emerald-900/60'
-    : 'ring-rose-200 dark:ring-rose-900/60';
+    r.status === 'pending' ? 'ring-amber-300 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10 hover:ring-amber-400'
+    : r.status === 'approved' ? 'ring-emerald-200 dark:ring-emerald-900/60 hover:ring-emerald-400'
+    : 'ring-rose-200 dark:ring-rose-900/60 hover:ring-rose-400';
 
   return (
-    <div className={`text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 flex flex-col shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${ringClass}`}>
+    <button type="button" onClick={() => onSelect(r)}
+      className={`group text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 flex flex-col shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_30px_-12px_rgba(76,29,149,0.25)] hover:-translate-y-0.5 transition-all duration-200 ${ringClass}`}>
       {/* Yuqori qator: shartnoma chip + status badge */}
       <div className="flex items-start justify-between gap-2">
         {contractNo ? (
@@ -931,15 +945,17 @@ function ArizaCard({ r, viewFile }: { r: ArizaRow; viewFile: (attachmentId: stri
       {/* Biriktirilgan fayl */}
       {r.attachmentId && (
         <div className="mt-2.5">
-          <button onClick={() => viewFile(r.attachmentId!)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-full">
+          <span role="button" tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); viewFile(r.attachmentId!); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); viewFile(r.attachmentId!); } }}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-full cursor-pointer">
             <Paperclip className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{r.attachmentName || 'Fayl'}</span>
             <span className="text-[10px] text-slate-400 shrink-0">· Ko&apos;rish ↗</span>
-          </button>
+          </span>
         </div>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -961,5 +977,101 @@ function ArizaBadge({ status }: { status: ArizaRow['status'] }) {
     <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900/50 shrink-0">
       <XCircle className="w-3 h-3" /> Rad etilgan
     </span>
+  );
+}
+
+/* ═══════════ Ariza detali modali (audit) ═══════════ */
+function ArizaDetailModal({ r, onClose, viewFile }: {
+  r: ArizaRow; onClose: () => void; viewFile: (attachmentId: string) => void;
+}) {
+  const isIn = (r.amount ?? 0) >= 0;
+  const contractNo = r.appliedContractNo || r.proposedContractNo;
+  const accentColor = r.status === 'pending' ? 'bg-amber-400' : r.status === 'approved' ? 'bg-emerald-400' : 'bg-rose-400';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-in fade-in duration-150" onClick={onClose}>
+      <div className="bg-white dark:bg-slate-900 w-full sm:max-w-2xl sm:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto shadow-2xl ring-1 ring-slate-200/50 dark:ring-slate-800 animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+        {/* Sarlavha */}
+        <div className="sticky top-0 bg-white/90 dark:bg-slate-900/90 backdrop-blur px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2 z-10">
+          <div className="w-8 h-8 rounded-xl bg-violet-50 dark:bg-violet-950/50 grid place-items-center">
+            <FileText className="w-4 h-4 text-violet-600 dark:text-violet-400" />
+          </div>
+          <div className="font-bold text-[15px] text-slate-800 dark:text-slate-100">Ariza tafsilotlari</div>
+          <div className="ml-auto flex items-center gap-2">
+            <ArizaBadge status={r.status} />
+            <button onClick={onClose} className="w-8 h-8 grid place-items-center rounded-xl text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* To'lov ma'lumoti */}
+          <div className="relative rounded-2xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-100 dark:ring-slate-800 p-4 overflow-hidden">
+            <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${accentColor}`} />
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+              <InfoField label="Klient" value={r.client || '—'} />
+              <InfoField label="Summa" value={r.amount != null ? `${isIn ? '+' : '−'}${fmtMoney(Math.abs(r.amount))}` : '—'} valueClass={isIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'} />
+              <InfoField label="Sana" value={fmtDate(r.date)} />
+              <InfoField label="Shartnoma" value={contractNo || '—'} mono />
+              {r.object && <div className="col-span-2"><InfoField label="Obyekt" value={r.object} /></div>}
+              {r.txType && <div className="col-span-2"><InfoField label="Tur" value={r.txType} /></div>}
+              {(r.categoryName || r.subCategoryName) && (
+                <div className="col-span-2"><InfoField label="Kategoriya" value={`${r.categoryName || '—'}${r.subCategoryName ? ` / ${r.subCategoryName}` : ''}`} /></div>
+              )}
+              {r.purpose && <div className="col-span-2"><InfoField label="Maqsad (izoh)" value={r.purpose} multiline /></div>}
+            </div>
+          </div>
+
+          {/* Audit — kim yubordi / kim ko'rib chiqdi */}
+          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+              <InfoField label="Kim yubordi" value={r.submittedByName || '—'} />
+              <InfoField label="Yuborilgan vaqt" value={fmtDateTime(r.submittedAt)} />
+              {(r.reviewedByName || r.reviewedAt) && (
+                <>
+                  <InfoField label={r.status === 'approved' ? 'Kim tasdiqladi' : r.status === 'rejected' ? 'Kim rad etdi' : "Kim ko'rib chiqdi"} value={r.reviewedByName || '—'} valueClass={r.status === 'approved' ? 'text-emerald-600 dark:text-emerald-400' : r.status === 'rejected' ? 'text-rose-600 dark:text-rose-400' : ''} />
+                  <InfoField label="Ko'rib chiqilgan vaqt" value={fmtDateTime(r.reviewedAt)} />
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Rad sababi */}
+          {r.status === 'rejected' && r.rejectReason && (
+            <div className="flex items-start gap-2 rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900/50 p-3">
+              <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-500" />
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-wider text-rose-500/80 dark:text-rose-400/70 mb-0.5">Rad sababi</div>
+                <div className="text-[12.5px] font-semibold text-rose-700 dark:text-rose-300 whitespace-pre-wrap break-words">{r.rejectReason}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Izoh (note) */}
+          {r.note && (
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-100 dark:ring-slate-800 p-3">
+              <InfoField label="Izoh" value={r.note} multiline />
+            </div>
+          )}
+
+          {/* Tranzaksiya ID + fayl */}
+          <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 ring-1 ring-slate-100 dark:ring-slate-800 p-4 space-y-3">
+            <InfoField label="Tranzaksiya ID" value={r.txId || '—'} mono copyable breakAll />
+            {r.attachmentId && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">Ariza fayli</div>
+                <button onClick={() => viewFile(r.attachmentId!)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-3 py-2 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-full">
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{r.attachmentName || 'Fayl'}</span>
+                  <span className="text-[10px] text-slate-400 shrink-0">Ko&apos;rish ↗</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
