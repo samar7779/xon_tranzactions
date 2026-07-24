@@ -1932,6 +1932,8 @@ type CorrectionRow = {
   agentReason?: string | null;
   reviewedByType?: 'agent' | 'user' | null;
   snapClient?: string | null;
+  snapObject?: string | null;
+  snapPurpose?: string | null;
 };
 
 type ApprovalPrefill = {
@@ -1959,6 +1961,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const [rawQDebounced, setRawQDebounced] = useState('');
   const [rawHidden, setRawHidden] = useState<'active' | 'hidden' | 'all'>('active');
   const [infoRow, setInfoRow] = useState<any | null>(null);
+  const [agentInfo, setAgentInfo] = useState<CorrectionRow | null>(null);
   const [exporting, setExporting] = useState(false);
   const perPage = 50;
 
@@ -2345,12 +2348,20 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
                         <td className="px-3 py-2 max-w-[190px]">
                           {(r.agentState === 'processing' || r.agentState === 'needs_review') ? (
-                            <div className="flex flex-col gap-0.5">
-                              <AgentStateChip state={r.agentState} reason={r.agentReason} />
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setAgentInfo(r); }}
+                              title="Agent qarorini ko'rish"
+                              className="flex flex-col items-start gap-0.5 text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group"
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                <AgentStateChip state={r.agentState} reason={r.agentReason} />
+                                <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400" />
+                              </span>
                               {r.agentState === 'needs_review' && r.agentReason ? (
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight line-clamp-2" title={r.agentReason}>{r.agentReason}</span>
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight line-clamp-2">{r.agentReason}</span>
                               ) : null}
-                            </div>
+                            </button>
                           ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -2733,6 +2744,111 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
       prefill={approval?.prefill || { contractNo: '', client: '', amount: null, date: null, purpose: null, object: null }}
       onDone={invalidateAll}
     />
+
+    {/* AGENT QARORI — to'liq izoh modali (drawer ustida) */}
+    {agentInfo && (
+      <>
+        <div
+          className="fixed inset-0 z-[320] bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
+          onClick={() => setAgentInfo(null)}
+        />
+        <div className="fixed inset-0 z-[330] flex items-center justify-center p-4 pointer-events-none">
+          <div className="pointer-events-auto w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden animate-in zoom-in-95 fade-in duration-150">
+            {/* Header */}
+            <div className={cn(
+              'px-5 py-4 text-white shrink-0 flex items-center gap-2.5',
+              agentInfo.agentState === 'processing'
+                ? 'bg-gradient-to-br from-violet-600 to-indigo-600'
+                : 'bg-gradient-to-br from-amber-500 to-orange-600',
+            )}>
+              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                <Bot className="h-5 w-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">AI agent</div>
+                <div className="text-lg font-black tracking-tight truncate">Agent qarori</div>
+              </div>
+              <button
+                onClick={() => setAgentInfo(null)}
+                className="w-8 h-8 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+              {/* Holat badge */}
+              <div>
+                {agentInfo.agentState === 'processing' ? (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900 animate-pulse">
+                    <Bot className="h-3.5 w-3.5" /> Agent ishlamoqda
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900">
+                    <Eye className="h-3.5 w-3.5" /> Ko'rib chiqish kerak
+                  </span>
+                )}
+              </div>
+
+              {/* To'liq izoh */}
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-slate-50/70 dark:bg-slate-900 overflow-hidden">
+                <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
+                  Agent izohi
+                </div>
+                <div className="p-4 text-[12.5px] leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                  {agentInfo.agentReason || <span className="text-slate-400">Izoh yo'q</span>}
+                </div>
+              </div>
+
+              {/* To'lov konteksti */}
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+                <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
+                  To'lov ma'lumoti
+                </div>
+                <div className="p-4 grid grid-cols-2 gap-y-2.5 gap-x-4 text-[12px]">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Klient</div>
+                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={agentInfo.snapClient || agentInfo.client || ''}>{agentInfo.snapClient || agentInfo.client || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Summa</div>
+                    <div className={cn('font-bold tabular-nums', (agentInfo.amount ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                      {agentInfo.amount == null ? '—' : <>{(agentInfo.amount ?? 0) >= 0 ? '+' : '−'}{formatMoney(Math.abs(agentInfo.amount))}</>}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Obyekt</div>
+                    <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={agentInfo.snapObject || agentInfo.object || ''}>{agentInfo.snapObject || agentInfo.object || '—'}</div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Shartnoma (taklif)</div>
+                    <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={agentInfo.proposedContractNo || ''}>{agentInfo.proposedContractNo || '—'}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Maqsad / izoh</div>
+                    <div className="text-slate-600 dark:text-slate-400 text-[11.5px] leading-snug">{agentInfo.snapPurpose || agentInfo.purpose || '—'}</div>
+                  </div>
+                  <div className="col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Kim yubordi</div>
+                    <div className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
+                      <SourceIcon source={agentInfo.source} />
+                      <span className="truncate">{agentInfo.submittedByName || '—'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setAgentInfo(null)}>
+                <X className="h-3.5 w-3.5 mr-1" /> Yopish
+              </Button>
+            </div>
+          </div>
+        </div>
+      </>
+    )}
     </>
   );
 }
