@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
-  Clock, Send, RotateCcw, Copy, Paperclip, Upload, FileCheck2,
+  Clock, Send, RotateCcw, Copy, Paperclip, Upload, FileCheck2, FileText, XCircle, ListChecks,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -26,6 +26,41 @@ interface XatoRow {
 }
 interface ArizaStat { name: string; total: number; pending: number; approved: number; rejected: number }
 interface XatoResp { ok: boolean; count: number; rows: XatoRow[]; me?: string; arizaStats?: ArizaStat[] }
+
+interface ArizaRow {
+  id: string;
+  txId: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  source: string | null;
+  proposedContractNo: string | null;
+  appliedContractNo: string | null;
+  note: string | null;
+  submittedByName: string | null;
+  submittedAt: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  rejectReason: string | null;
+  categoryName: string | null;
+  subCategoryName: string | null;
+  attachmentId: string | null;
+  attachmentName: string | null;
+  amount: number | null;
+  date: string | null;
+  client: string | null;
+  object: string | null;
+  contractNo: string | null;
+  txType: string | null;
+  purpose: string | null;
+}
+type ArizaStatus = 'all' | 'pending' | 'approved' | 'rejected';
+interface ArizaResp {
+  ok: boolean;
+  total: number;
+  page: number;
+  perPage: number;
+  counts: { all: number; pending: number; approved: number; rejected: number };
+  rows: ArizaRow[];
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -67,6 +102,15 @@ export default function XatoListPage() {
   const [key, setKey] = useState('');
   const [tgAuth, setTgAuth] = useState<Record<string, string> | null>(null);
 
+  // ─── Asosiy tab: XATO to'lovlar | Arizalar ───
+  const [mainTab, setMainTab] = useState<'xato' | 'arizalar'>('xato');
+  const [arizaData, setArizaData] = useState<ArizaResp | null>(null);
+  const [arizaStatus, setArizaStatus] = useState<ArizaStatus>('all');
+  const [arizaQ, setArizaQ] = useState('');
+  const [arizaPage, setArizaPage] = useState(1);
+  const [arizaLoading, setArizaLoading] = useState(false);
+  const arizaPerPage = 30;
+
   // Biriktirish modali
   const [selected, setSelected] = useState<XatoRow | null>(null);
   const [cq, setCq] = useState('');
@@ -92,6 +136,32 @@ export default function XatoListPage() {
   };
 
   useEffect(() => { setPage(1); }, [q, flow]);
+
+  // Ariza filtri/qidiruvi o'zgarganda — sahifani 1-ga qaytar
+  useEffect(() => { setArizaPage(1); }, [arizaStatus, arizaQ]);
+
+  // Arizalar ro'yxatini olish (tab faol bo'lganda; qidiruvda 350ms debounce)
+  useEffect(() => {
+    if (mainTab !== 'arizalar') return;
+    if (!tgAuth && !key) return;
+    const run = () => {
+      setArizaLoading(true);
+      const url = tgAuth ? `${API_URL}/agent/tg/arizalar` : `${API_URL}/agent/arizalar`;
+      const body = tgAuth
+        ? { auth: tgAuth, status: arizaStatus, q: arizaQ.trim(), page: arizaPage }
+        : { key, status: arizaStatus, q: arizaQ.trim(), page: arizaPage };
+      fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => { if (d?.ok) setArizaData(d as ArizaResp); })
+        .catch(() => {})
+        .finally(() => setArizaLoading(false));
+    };
+    if (arizaQ.trim()) {
+      const t = setTimeout(run, 350);
+      return () => clearTimeout(t);
+    }
+    run();
+  }, [mainTab, arizaStatus, arizaQ, arizaPage, tgAuth, key]);
 
   const closeModal = () => { setSelected(null); setCq(''); setCrmItems([]); setChosen(''); setArizaFile(null); setAssignError(''); };
 
@@ -306,6 +376,22 @@ export default function XatoListPage() {
       ) : (
         <div className="mx-auto max-w-[1600px] px-3 sm:px-6 mt-4 relative z-10 pb-10">
 
+          {/* ═══ Asosiy tab bar (segmented) ═══ */}
+          <div className="mb-3 flex justify-center">
+            <div className="inline-flex items-center gap-1 rounded-2xl bg-white/80 dark:bg-slate-900/70 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 p-1 shadow-lg shadow-slate-900/5">
+              <button onClick={() => setMainTab('xato')}
+                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-violet-600 text-white shadow-md shadow-violet-600/25' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
+              </button>
+              <button onClick={() => setMainTab('arizalar')}
+                className={`inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-violet-600 text-white shadow-md shadow-violet-600/25' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                <ListChecks className="w-4 h-4" /> Arizalar
+              </button>
+            </div>
+          </div>
+
+          {mainTab === 'xato' && (
+          <>
           {/* ═══ Sticky search bar ═══ */}
           <div className="sticky top-2 z-20">
             <div className="relative">
@@ -434,6 +520,24 @@ export default function XatoListPage() {
               <button onClick={() => setPage(totalPages)} disabled={safePage >= totalPages}
                 className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">{totalPages} »</button>
             </div>
+          )}
+          </>
+          )}
+
+          {/* ═══════════ ARIZALAR (correction-requests audit) ═══════════ */}
+          {mainTab === 'arizalar' && (
+            <ArizalarView
+              data={arizaData}
+              loading={arizaLoading}
+              status={arizaStatus}
+              setStatus={setArizaStatus}
+              q={arizaQ}
+              setQ={setArizaQ}
+              page={arizaPage}
+              setPage={setArizaPage}
+              perPage={arizaPerPage}
+              viewFile={viewFile}
+            />
           )}
         </div>
       )}
@@ -625,5 +729,237 @@ function SkeletonCard() {
       <div className="h-3 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-2.5" />
       <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-2.5" />
     </div>
+  );
+}
+
+/* ═══════════ Arizalar ko'rinishi (audit) ═══════════ */
+function ArizalarView({ data, loading, status, setStatus, q, setQ, page, setPage, perPage, viewFile }: {
+  data: ArizaResp | null;
+  loading: boolean;
+  status: ArizaStatus;
+  setStatus: (s: ArizaStatus) => void;
+  q: string;
+  setQ: (s: string) => void;
+  page: number;
+  setPage: (p: number) => void;
+  perPage: number;
+  viewFile: (attachmentId: string) => void;
+}) {
+  const counts = data?.counts || { all: 0, pending: 0, approved: 0, rejected: 0 };
+  const rows = data?.rows || [];
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+
+  const filters: { key: ArizaStatus; label: string; count: number }[] = [
+    { key: 'all', label: 'Hammasi', count: counts.all },
+    { key: 'pending', label: '⏳ Kutilmoqda', count: counts.pending },
+    { key: 'approved', label: '✓ Tasdiqlangan', count: counts.approved },
+    { key: 'rejected', label: '✗ Rad etilgan', count: counts.rejected },
+  ];
+
+  return (
+    <div>
+      {/* ── Status filtri (segmented) ── */}
+      <div className="flex flex-wrap items-center gap-1.5 mb-3">
+        {filters.map((f) => {
+          const active = status === f.key;
+          return (
+            <button key={f.key} onClick={() => setStatus(f.key)}
+              className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-[12px] font-bold transition-all ring-1 ${active ? 'bg-violet-600 text-white ring-violet-600 shadow-md shadow-violet-600/25' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>
+              <span>{f.label}</span>
+              <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10.5px] tabular-nums font-black ${active ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{f.count}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Qidiruv ── */}
+      <div className="sticky top-2 z-20">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Shartnoma raqami yoki klient bo'yicha qidirish…"
+            className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
+          />
+          {q && (
+            <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {data && total > 0 && (
+        <div className="mt-2 px-1 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">{total} ta · sahifa {safePage}/{totalPages}</div>
+      )}
+
+      {/* ── Ro'yxat ── */}
+      {loading && !data ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4">
+          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+        </div>
+      ) : rows.length === 0 ? (
+        <div className="mt-16 text-center">
+          <div className="w-16 h-16 mx-auto rounded-3xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 grid place-items-center shadow-sm mb-3">
+            <FileText className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+          </div>
+          <div className="text-[14px] font-semibold text-slate-500 dark:text-slate-300">Ariza topilmadi</div>
+          <div className="text-[12px] text-slate-400 mt-0.5">Filtr yoki qidiruvni o&apos;zgartiring</div>
+        </div>
+      ) : (
+        <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3 mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
+          {rows.map((r) => <ArizaCard key={r.id} r={r} viewFile={viewFile} />)}
+        </div>
+      )}
+
+      {/* ── Pagination ── */}
+      {data && totalPages > 1 && (
+        <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
+          <button onClick={() => setPage(1)} disabled={safePage <= 1}
+            className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">« 1</button>
+          <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1}
+            className="h-9 w-9 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          {(() => {
+            const nums: (number | string)[] = [];
+            const start = Math.max(1, safePage - 1);
+            const end = Math.min(totalPages, safePage + 1);
+            if (start > 1) nums.push('…l');
+            for (let i = start; i <= end; i++) nums.push(i);
+            if (end < totalPages) nums.push('…r');
+            return nums.map((n, i) => typeof n === 'number' ? (
+              <button key={i} onClick={() => setPage(n)}
+                className={`h-9 min-w-[36px] px-2.5 grid place-items-center rounded-xl text-[13px] font-bold tabular-nums shadow-sm ring-1 transition ${n === safePage ? 'bg-violet-600 text-white ring-violet-600' : 'bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>{n}</button>
+            ) : (
+              <span key={i} className="px-1 text-slate-400 select-none">…</span>
+            ));
+          })()}
+          <button onClick={() => setPage(Math.min(totalPages, safePage + 1))} disabled={safePage >= totalPages}
+            className="h-9 w-9 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">
+            <ChevronRight className="w-4 h-4" />
+          </button>
+          <button onClick={() => setPage(totalPages)} disabled={safePage >= totalPages}
+            className="h-9 px-3 grid place-items-center rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold shadow-sm disabled:opacity-40 hover:ring-violet-300 transition">{totalPages} »</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Bitta ariza kartasi ─── */
+function ArizaCard({ r, viewFile }: { r: ArizaRow; viewFile: (attachmentId: string) => void }) {
+  const isIn = (r.amount ?? 0) >= 0;
+  const contractNo = r.appliedContractNo || r.proposedContractNo;
+  const ringClass =
+    r.status === 'pending' ? 'ring-amber-300 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10'
+    : r.status === 'approved' ? 'ring-emerald-200 dark:ring-emerald-900/60'
+    : 'ring-rose-200 dark:ring-rose-900/60';
+
+  return (
+    <div className={`text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 flex flex-col shadow-[0_1px_2px_rgba(15,23,42,0.04)] ${ringClass}`}>
+      {/* Yuqori qator: shartnoma chip + status badge */}
+      <div className="flex items-start justify-between gap-2">
+        {contractNo ? (
+          <span className="inline-flex items-center gap-1.5 min-w-0 font-mono font-bold text-[12px] text-slate-700 dark:text-slate-200">
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIn ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+            <span className="truncate">{contractNo}</span>
+          </span>
+        ) : <span />}
+        <ArizaBadge status={r.status} />
+      </div>
+
+      {/* Klient + summa */}
+      <div className="mt-2.5 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-1.5 min-w-0 text-[13px] font-bold text-slate-800 dark:text-slate-100">
+          <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <span className="truncate">{r.client || '—'}</span>
+        </div>
+        {r.amount != null && (
+          <div className={`text-[14px] font-black tabular-nums leading-none shrink-0 ${isIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            {isIn ? '+' : '−'}{fmtMoney(Math.abs(r.amount))}
+          </div>
+        )}
+      </div>
+
+      {/* Sana · obyekt · tur */}
+      <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[10.5px] text-slate-400 dark:text-slate-500">
+        <span className="tabular-nums">{fmtDate(r.date)}</span>
+        {r.object && <><span>·</span><span className="inline-flex items-center gap-0.5"><Building2 className="w-3 h-3" />{r.object}</span></>}
+        {r.txType && <><span>·</span><span className="truncate max-w-[45%]">{r.txType}</span></>}
+      </div>
+
+      {/* Maqsad */}
+      {r.purpose && (
+        <div className="mt-1.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-2">{r.purpose}</div>
+      )}
+
+      {/* Audit ma'lumotlari */}
+      <div className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-1">
+        <div className="flex items-start gap-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+          <Send className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
+          <span>Kim yubordi: <b className="text-slate-700 dark:text-slate-200">{r.submittedByName || '—'}</b> · <span className="tabular-nums text-slate-400">{fmtDateTime(r.submittedAt)}</span></span>
+        </div>
+
+        {(r.reviewedByName || r.reviewedAt) && (
+          <div className="flex items-start gap-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+            {r.status === 'approved'
+              ? <CheckCircle2 className="w-3 h-3 shrink-0 mt-0.5 text-emerald-500" />
+              : <XCircle className="w-3 h-3 shrink-0 mt-0.5 text-rose-500" />}
+            <span>{r.status === 'approved' ? 'Kim tasdiqladi' : 'Kim rad etdi'}: <b className="text-slate-700 dark:text-slate-200">{r.reviewedByName || '—'}</b> · <span className="tabular-nums text-slate-400">{fmtDateTime(r.reviewedAt)}</span></span>
+          </div>
+        )}
+
+        {r.status === 'approved' && r.categoryName && (
+          <div className="flex items-start gap-1.5 text-[10.5px] text-slate-500 dark:text-slate-400">
+            <Layers className="w-3 h-3 shrink-0 mt-0.5 text-slate-400" />
+            <span>Kategoriya: <b className="text-slate-700 dark:text-slate-200">{r.categoryName}{r.subCategoryName ? ` / ${r.subCategoryName}` : ''}</b></span>
+          </div>
+        )}
+
+        {r.status === 'rejected' && r.rejectReason && (
+          <div className="flex items-start gap-1.5 text-[10.5px] text-rose-600 dark:text-rose-400 font-medium">
+            <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+            <span>{r.rejectReason}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Biriktirilgan fayl */}
+      {r.attachmentId && (
+        <div className="mt-2.5">
+          <button onClick={() => viewFile(r.attachmentId!)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 ring-1 ring-slate-200 dark:ring-slate-700 px-2.5 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-600 dark:hover:text-violet-400 transition-colors max-w-full">
+            <Paperclip className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate">{r.attachmentName || 'Fayl'}</span>
+            <span className="text-[10px] text-slate-400 shrink-0">· Ko&apos;rish ↗</span>
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Ariza status badge ─── */
+function ArizaBadge({ status }: { status: ArizaRow['status'] }) {
+  if (status === 'pending')
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900/50 shrink-0">
+        <Clock className="w-3 h-3" /> Kutilmoqda
+      </span>
+    );
+  if (status === 'approved')
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-900/50 shrink-0">
+        <CheckCircle2 className="w-3 h-3" /> Tasdiqlangan
+      </span>
+    );
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 text-[10px] font-bold text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900/50 shrink-0">
+      <XCircle className="w-3 h-3" /> Rad etilgan
+    </span>
   );
 }
