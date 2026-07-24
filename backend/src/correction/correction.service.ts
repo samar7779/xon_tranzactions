@@ -254,21 +254,24 @@ export class CorrectionService {
   // ─── Tasdiqlangan ro'yxati (audit + filtrlar) ──────────────────────
   async listApproved(opts: {
     q?: string; from?: string; to?: string; actor?: string; flow?: Flow;
+    actorType?: 'agent' | 'user'; status?: 'approved' | 'rejected';
     page?: number; perPage?: number;
   } = {}) {
     const page = Math.max(1, opts.page || 1);
     const perPage = Math.min(200, Math.max(1, opts.perPage || 50));
-    const where: any = { status: 'approved' };
+    const where: any = { status: opts.status || 'approved' };
     this.applySearch(where, opts.q);
 
-    // Sana oralig'i (tasdiqlangan vaqt bo'yicha)
+    // Sana oralig'i (ko'rib chiqilgan vaqt bo'yicha)
     const reviewedAt: any = {};
     if (opts.from) { const d = new Date(opts.from); if (!isNaN(d.getTime())) reviewedAt.gte = d; }
     if (opts.to) { const d = new Date(opts.to); if (!isNaN(d.getTime())) { d.setHours(23, 59, 59, 999); reviewedAt.lte = d; } }
     if (reviewedAt.gte || reviewedAt.lte) where.reviewedAt = reviewedAt;
 
-    // Kim tasdiqladi
+    // Kim ko'rib chiqdi (ism)
     if (opts.actor?.trim()) where.reviewedByName = { contains: opts.actor.trim(), mode: 'insensitive' };
+    // Kim qildi — agent yoki xodim
+    if (opts.actorType) where.reviewedByType = opts.actorType;
 
     // Musbat / manfiy summa
     if (opts.flow === 'in') where.snapAmount = { gte: 0 };
@@ -287,13 +290,14 @@ export class CorrectionService {
   // ─── Barcha arizalar ro'yxati (status + shartnoma qidiruv) — audit ─
   async listArizalar(opts: {
     status?: 'all' | 'pending' | 'approved' | 'rejected'; q?: string; submitter?: string;
-    page?: number; perPage?: number;
+    actorType?: 'agent' | 'user'; page?: number; perPage?: number;
   } = {}) {
     const page = Math.max(1, opts.page || 1);
     const perPage = Math.min(100, Math.max(1, opts.perPage || 30));
     const where: any = {};
     if (opts.status && opts.status !== 'all') where.status = opts.status;
     if (opts.submitter?.trim()) where.submittedByName = opts.submitter.trim();
+    if (opts.actorType) where.reviewedByType = opts.actorType;
     this.applySearch(where, opts.q);
     const [total, rows] = await Promise.all([
       this.prisma.xatoCorrectionRequest.count({ where }),
