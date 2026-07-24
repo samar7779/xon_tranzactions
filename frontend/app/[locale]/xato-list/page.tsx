@@ -232,37 +232,30 @@ export default function XatoListPage() {
         <div className="absolute inset-0 opacity-[0.07]"
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
-        <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-14 text-white">
+        <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-12 text-white">
           <div className="flex items-center gap-3">
             {photo ? (
-              <img src={photo} alt="" className="w-11 h-11 rounded-2xl object-cover ring-2 ring-white/40 shadow-lg"
+              <img src={photo} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/40 shadow-md"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
             ) : (
-              <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur grid place-items-center ring-2 ring-white/25 shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-white/15 backdrop-blur grid place-items-center ring-2 ring-white/25">
                 <AlertTriangle className="w-5 h-5" />
               </div>
             )}
             <div className="min-w-0">
-              {who ? (
-                <div className="text-[12px] text-white/75 leading-tight truncate">Assalomu alaykum, <b className="text-white">{who}</b> 👋</div>
-              ) : (
-                <div className="text-[12px] text-white/75 leading-tight">Xush kelibsiz 👋</div>
-              )}
-              <div className="text-[19px] sm:text-[22px] font-extrabold leading-tight tracking-tight">XATO to&apos;lovlar</div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-[18px] sm:text-[20px] font-extrabold leading-none tracking-tight">XATO to&apos;lovlar</h1>
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli
+                </span>
+              </div>
+              {who && <div className="text-[11.5px] text-white/70 mt-1 truncate">Salom, {who} 👋</div>}
             </div>
 
-            <div className="ml-auto flex items-center gap-1.5 rounded-2xl bg-white/12 backdrop-blur-md ring-1 ring-white/25 px-3.5 py-2 shadow-lg">
-              <div className="text-right leading-none">
-                <div className="text-[24px] sm:text-[28px] font-black tabular-nums">{data ? data.count : '—'}</div>
-                <div className="text-[9.5px] uppercase tracking-wider text-white/70 mt-0.5">jami xato</div>
-              </div>
+            <div className="ml-auto text-right leading-none">
+              <div className="text-[26px] sm:text-[30px] font-black tabular-nums">{data ? data.count : '—'}</div>
+              <div className="text-[9.5px] uppercase tracking-wider text-white/70 mt-1">jami xato</div>
             </div>
-          </div>
-          <div className="mt-2 flex items-center gap-2 text-[12px] text-white/75 max-w-2xl flex-wrap">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2 py-0.5 text-[10.5px] font-semibold text-white">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli · 45s
-            </span>
-            <span>CRM&apos;da tasdiqlanmagan to&apos;lovlar — to&apos;g&apos;ri shartnomani biriktiring, ro&apos;yxatdan yo&apos;qoladi.</span>
           </div>
         </div>
       </header>
@@ -337,54 +330,57 @@ export default function XatoListPage() {
                 const isIn = (r.amount ?? 0) >= 0;
                 return (
                   <button key={r.id} onClick={() => setSelected(r)}
-                    className={`group relative text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 pl-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)] hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-200 overflow-hidden ${r.pending ? 'ring-amber-300/80 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10' : 'ring-slate-200/70 dark:ring-slate-800 hover:ring-slate-300 dark:hover:ring-slate-700'}`}>
-                    <span className={`absolute left-0 top-0 bottom-0 w-1.5 ${r.pending ? 'bg-gradient-to-b from-amber-400 to-amber-500' : isIn ? 'bg-gradient-to-b from-emerald-400 to-emerald-500' : 'bg-gradient-to-b from-rose-400 to-rose-500'}`} />
-
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="inline-flex items-center gap-1 rounded-lg bg-rose-50 dark:bg-rose-950/40 px-2 py-1 font-mono font-bold text-[12px] text-rose-700 dark:text-rose-300 ring-1 ring-rose-100 dark:ring-rose-900/50">
-                        {r.contractNo}
+                    className={`group text-left rounded-2xl bg-white dark:bg-slate-900 ring-1 p-4 flex flex-col min-h-[150px] shadow-[0_1px_2px_rgba(15,23,42,0.04)] hover:shadow-[0_10px_30px_-12px_rgba(76,29,149,0.25)] hover:-translate-y-0.5 transition-all duration-200 ${r.pending ? 'ring-amber-300 dark:ring-amber-800 bg-amber-50/40 dark:bg-amber-950/10' : r.rejected ? 'ring-rose-200 dark:ring-rose-900/60' : 'ring-slate-200/70 dark:ring-slate-800 hover:ring-violet-300 dark:hover:ring-violet-800'}`}>
+                    {/* Shartnoma + summa */}
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 min-w-0 font-mono font-bold text-[12px] text-slate-700 dark:text-slate-200">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isIn ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                        <span className="truncate">{r.contractNo}</span>
                       </span>
-                      <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] font-extrabold tabular-nums ${isIn ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'}`}>
-                        {isIn ? <ArrowDownLeft className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />}
-                        {fmtMoney(r.amount)}
-                      </span>
+                      <div className="text-right shrink-0">
+                        <div className={`text-[15px] font-black tabular-nums leading-none ${isIn ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                          {isIn ? '+' : ''}{fmtMoney(r.amount)}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-wider text-slate-400 mt-1">{isIn ? 'kirim' : 'chiqim'}</div>
+                      </div>
                     </div>
 
-                    <div className="mt-2 flex items-center gap-2 flex-wrap text-[11px] text-slate-500 dark:text-slate-400">
-                      <span className="tabular-nums font-medium">{fmtDate(r.date)}</span>
-                      {r.object && (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5">
-                          <Building2 className="w-3 h-3" />{r.object}
-                        </span>
-                      )}
-                      {r.txType && (
-                        <span className="inline-flex items-center rounded-md bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5">{r.txType}</span>
-                      )}
-                    </div>
-
+                    {/* Klient — asosiy */}
                     {r.client && (
-                      <div className="mt-2 flex items-center gap-1.5 text-[12.5px] font-semibold text-slate-700 dark:text-slate-200">
+                      <div className="mt-2.5 flex items-center gap-1.5 text-[13px] font-bold text-slate-800 dark:text-slate-100">
                         <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                         <span className="truncate">{r.client}</span>
                       </div>
                     )}
+
+                    {/* Sana · obyekt · tur */}
+                    <div className="mt-1.5 flex items-center gap-1.5 flex-wrap text-[10.5px] text-slate-400 dark:text-slate-500">
+                      <span className="tabular-nums">{fmtDate(r.date)}</span>
+                      {r.object && <><span>·</span><span className="inline-flex items-center gap-0.5"><Building2 className="w-3 h-3" />{r.object}</span></>}
+                      {r.txType && <><span>·</span><span className="truncate max-w-[45%]">{r.txType}</span></>}
+                    </div>
+
+                    {/* Maqsad */}
                     {r.purpose && (
-                      <div className="mt-1 text-[11.5px] leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-2">{r.purpose}</div>
+                      <div className="mt-1.5 text-[11px] leading-relaxed text-slate-500 dark:text-slate-400 line-clamp-2">{r.purpose}</div>
                     )}
 
-                    {r.pending ? (
-                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/50 px-2 py-1 text-[11px] font-bold text-amber-700 dark:text-amber-300 ring-1 ring-amber-200 dark:ring-amber-900/50">
-                        <Clock className="w-3.5 h-3.5" /> Tasdiq kutilmoqda
-                      </div>
-                    ) : r.rejected ? (
-                      <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-rose-100 dark:bg-rose-950/50 px-2 py-1 text-[11px] font-bold text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-900/50">
-                        <RotateCcw className="w-3.5 h-3.5" /> Rad etilgan — qayta yuboring
-                      </div>
-                    ) : (
-                      <div className="mt-3 flex items-center gap-1 text-[11px] font-semibold text-rose-500/0 group-hover:text-rose-600 dark:group-hover:text-rose-300 transition-colors">
-                        <Link2 className="w-3.5 h-3.5" /> Shartnoma biriktirish →
-                      </div>
-                    )}
+                    {/* Holat / CTA — pastda */}
+                    <div className="mt-auto pt-2.5">
+                      {r.pending ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-amber-600 dark:text-amber-400">
+                          <Clock className="w-3.5 h-3.5" /> Tasdiq kutilmoqda
+                        </span>
+                      ) : r.rejected ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold text-rose-600 dark:text-rose-400">
+                          <RotateCcw className="w-3.5 h-3.5" /> Rad etilgan — qayta yuboring
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-slate-300 dark:text-slate-600 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                          <Link2 className="w-3.5 h-3.5" /> Shartnoma biriktirish →
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
@@ -616,15 +612,14 @@ function StatCard({ tone, label, value, hint, icon, active, onClick }: {
 /* ─── Skeleton ─── */
 function SkeletonCard() {
   return (
-    <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 p-4 pl-5 relative overflow-hidden">
-      <span className="absolute left-0 top-0 bottom-0 w-1.5 bg-slate-200 dark:bg-slate-800" />
+    <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200/70 dark:ring-slate-800 p-4 min-h-[150px]">
       <div className="flex items-center justify-between">
-        <div className="h-6 w-24 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
-        <div className="h-6 w-20 rounded-lg bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        <div className="h-4 w-24 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+        <div className="h-5 w-20 rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
       </div>
-      <div className="h-3 w-40 rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-3" />
-      <div className="h-3.5 w-32 rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-3" />
-      <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-2" />
+      <div className="h-4 w-36 rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-3.5" />
+      <div className="h-3 w-28 rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-2.5" />
+      <div className="h-3 w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse mt-2.5" />
     </div>
   );
 }
