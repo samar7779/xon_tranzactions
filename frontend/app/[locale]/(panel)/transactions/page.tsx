@@ -2598,6 +2598,7 @@ function ApprovalModal({
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showReplace, setShowReplace] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   // Kategoriyalar daraxti — mavjud manba ('/categorization/categories')
@@ -2618,6 +2619,7 @@ function ApprovalModal({
       setRejectMode(false);
       setRejectReason('');
       setBusy(false);
+      setShowReplace(false);
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2841,7 +2843,7 @@ function ApprovalModal({
               <div>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
                   <Paperclip className="h-3.5 w-3.5" />
-                  {hasExisting ? 'Ariza faylini almashtirish (ixtiyoriy)' : <>Ariza fayli <span className="text-rose-500">*majburiy</span></>}
+                  {hasExisting ? 'Ariza fayli' : <>Ariza fayli <span className="text-rose-500">*majburiy</span></>}
                 </label>
 
                 {/* Yuboruvchi biriktirgan mavjud fayl */}
@@ -2891,20 +2893,30 @@ function ApprovalModal({
                   className="hidden"
                   id="approval-file-input"
                 />
-                <button
-                  type="button"
-                  onClick={() => fileRef.current?.click()}
-                  className={cn(
-                    'w-full flex flex-col items-center justify-center gap-1.5 py-5 px-3 rounded-xl border-2 border-dashed transition-all text-[12px]',
-                    file
-                      ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
-                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-rose-400 hover:bg-rose-50/40 dark:hover:bg-rose-950/10',
-                  )}
-                >
-                  {file ? <FileIcon className="h-6 w-6" /> : <UploadIcon className="h-6 w-6" />}
-                  <span className="truncate max-w-full font-semibold">{file ? file.name : (hasExisting ? 'Boshqa fayl tanlash' : 'Ariza faylini tanlang')}</span>
-                  <span className="text-[10px] text-slate-400">{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : 'PDF, DOC, JPG, PNG — max 25MB'}</span>
-                </button>
+                {(hasExisting && !showReplace && !file) ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowReplace(true)}
+                    className="text-[11px] font-medium text-slate-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors"
+                  >
+                    + Boshqa fayl bilan almashtirish
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className={cn(
+                      'w-full flex flex-col items-center justify-center gap-1.5 py-5 px-3 rounded-xl border-2 border-dashed transition-all text-[12px]',
+                      file
+                        ? 'border-emerald-300 dark:border-emerald-800 bg-emerald-50/60 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300'
+                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 hover:border-rose-400 hover:bg-rose-50/40 dark:hover:bg-rose-950/10',
+                    )}
+                  >
+                    {file ? <FileIcon className="h-6 w-6" /> : <UploadIcon className="h-6 w-6" />}
+                    <span className="truncate max-w-full font-semibold">{file ? file.name : (hasExisting ? 'Yangi fayl tanlang' : 'Ariza faylini tanlang')}</span>
+                    <span className="text-[10px] text-slate-400">{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : 'PDF, DOC, JPG, PNG — max 25MB'}</span>
+                  </button>
+                )}
               </div>
             </>
           )}
