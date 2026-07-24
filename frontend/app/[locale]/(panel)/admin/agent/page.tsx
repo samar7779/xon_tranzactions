@@ -32,13 +32,14 @@ interface AgentConfig {
   hasAiKey: boolean;
   aiKeyHint: string | null;
   aiModel: string;
+  aiIntervalMin: number;
 }
 
 interface AiRunResult { id: string; ok: boolean; decision?: 'approve' | 'reject' | 'human'; reason?: string; error?: string }
 interface AiRunResponse { ok: boolean; processed: number; results: AiRunResult[] }
 
 interface AiStatusCounts { pending: number; processing: number; needsReview: number; agentApproved: number; agentRejected: number }
-interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; counts: AiStatusCounts }
+interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; intervalMin: number; counts: AiStatusCounts }
 
 interface AiRecentRow {
   id: string;
@@ -86,6 +87,7 @@ export default function AdminAgentPage() {
   const [aiKey, setAiKey] = useState('');
   const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
   const [aiEnabled, setAiEnabled] = useState(false);
+  const [aiIntervalMin, setAiIntervalMin] = useState('5');
   const [digestOpen, setDigestOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
 
@@ -97,6 +99,7 @@ export default function AdminAgentPage() {
     setWhitelist(cfg.whitelist || []);
     setAiModel(cfg.aiModel || 'claude-sonnet-4-6');
     setAiEnabled(!!cfg.aiEnabled);
+    setAiIntervalMin(String(cfg.aiIntervalMin || 5));
     setInitialized(true);
   }, [cfg, initialized]);
 
@@ -139,11 +142,12 @@ export default function AdminAgentPage() {
   });
 
   const aiSaveMut = useMutation({
-    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled }),
+    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled, aiIntervalMin: Number(aiIntervalMin) || 5 }),
     onSuccess: () => {
       toast.success('Saqlandi');
       setAiKey('');
       qc.invalidateQueries({ queryKey: ['agent-config'] });
+      qc.invalidateQueries({ queryKey: ['agent-ai-status'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
   });
@@ -215,6 +219,9 @@ export default function AdminAgentPage() {
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-400" /> Kutmoqda
                   </span>
                 )}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700">
+                  ⏱ har {aiStatus?.intervalMin ?? cfg?.aiIntervalMin ?? 5} daq
+                </span>
               </div>
               <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
                 AI Agent yangi arizalarni avtomat tekshiradi: ariza faylini o&apos;qiydi, obyekt mosligini tekshiradi (boshqa obyektga o&apos;tkazib bo&apos;lmaydi), maqsadga qarab kategoriya tanlaydi — so&apos;ng tasdiqlaydi, rad etadi yoki xodimga qoldiradi.
@@ -236,7 +243,7 @@ export default function AdminAgentPage() {
                 <Cpu className="h-3.5 w-3.5" /> {aiStatus?.model || cfg?.aiModel || 'claude-sonnet-4-6'}
               </span>
               <span className="text-slate-500 dark:text-slate-400">
-                🔄 Har 5 daqiqada avtomat tekshiradi — faqat kutilayotgan ariza bo&apos;lsa (rasxod tejaladi). Ishlangan ariza qayta ishlanmaydi.
+                {`🔄 Har ${aiStatus?.intervalMin ?? cfg?.aiIntervalMin ?? 5} daqiqada avtomat tekshiradi — faqat kutilayotgan ariza bo'lsa (rasxod tejaladi). Ishlangan ariza qayta ishlanmaydi.`}
               </span>
             </div>
 
@@ -254,7 +261,7 @@ export default function AdminAgentPage() {
               <StatTile label="Agent rad etdi" value={String(aiStatus?.counts.agentRejected ?? 0)} tone="rose" />
             </div>
 
-            {/* Sozlama: kalit + model */}
+            {/* Sozlama: kalit + model + oraliq */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="AI kalit" icon={<Lock className="h-3.5 w-3.5" />}>
                 <Input
@@ -266,14 +273,27 @@ export default function AdminAgentPage() {
                 />
                 <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Anthropic API kaliti (shifrlab saqlanadi)</div>
               </Field>
-              <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
-                <Input
-                  value={aiModel}
-                  onChange={(e) => setAiModel(e.target.value)}
-                  placeholder="claude-sonnet-4-6"
-                  className="h-9 rounded-lg font-mono text-[12px]"
-                />
-              </Field>
+              <div className="grid grid-cols-[1fr_auto] gap-3">
+                <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
+                  <Input
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    placeholder="claude-sonnet-4-6"
+                    className="h-9 rounded-lg font-mono text-[12px]"
+                  />
+                </Field>
+                <Field label="Tekshirish oralig'i (daqiqa)" icon={<Clock className="h-3.5 w-3.5" />}>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={aiIntervalMin}
+                    onChange={(e) => setAiIntervalMin(e.target.value)}
+                    placeholder="5"
+                    className="h-9 rounded-lg font-mono text-[12px] w-28"
+                  />
+                </Field>
+              </div>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap pt-1">
