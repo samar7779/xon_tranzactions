@@ -305,13 +305,15 @@ export class AgentService {
     // buildXatoFilter BITTA marta (tez) — count + rows birga
     const { rows, count } = await this.oplataKv.getXatoListForAgent({ dateFrom: dateFrom || null, limit: 2000 });
     const ids = rows.map((r) => r.id);
-    const [pendingMap, rejectedSet] = await Promise.all([
+    const [pendingMap, rejectedSet, arizaStats] = await Promise.all([
       this.correction.pendingInfoByOplataKvId(ids),
       this.correction.rejectedOplataKvIds(ids),
+      this.correction.submitterStats(),
     ]);
     return {
       ok: true,
       count,
+      arizaStats,
       rows: rows.map((r) => {
         const p = pendingMap.get(r.id);
         return {
