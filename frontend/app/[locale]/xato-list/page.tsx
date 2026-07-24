@@ -1,4 +1,5 @@
 'use client';
+// XATO to'lovlar — public sahifa (Telegram login_url / kalit)
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
