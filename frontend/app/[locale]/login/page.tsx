@@ -49,6 +49,8 @@ export default function LoginPage() {
   const [botTyping, setBotTyping] = useState(false);
   const [input, setInput] = useState('');
   const [step, setStep] = useState<'login' | 'password' | 'checking' | 'done'>('login');
+  // Fon effekti: xato -> qizil chaqnash, muvaffaqiyat -> yashil chaqnash
+  const [flash, setFlash] = useState<'error' | 'success' | null>(null);
   const msgId = useRef(0);
   const emailRef = useRef('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -172,12 +174,15 @@ export default function LoginPage() {
       await login(emailRef.current, pwd);
       vibrate([40, 40, 120]);
       setStep('done');
+      setFlash('success');
       pushBot(t('accessGranted'), 500, { ok: true });
       setTimeout(() => { toast.success(t('welcome')); router.replace(nextDest()); }, 700);
     } catch (err: any) {
       const msg = err?.message || t('invalidCredentials');
       toast.error(msg);
       vibrate([60, 40, 60, 40, 120]);
+      setFlash('error');
+      window.setTimeout(() => setFlash(null), 1300);
       pushBot(`ХАТО — ${msg}`, 550, { error: true });
       // Boshidan: login+parol qayta so'raladi
       window.setTimeout(() => {
@@ -250,7 +255,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right-side slide-in login panel — telefonda to'liq ekran */}
-      <div className={`fixed top-0 right-0 h-full w-full sm:w-[460px] sm:max-w-[92vw] z-50
+      <div className={`fixed top-0 right-0 h-full w-full sm:w-[540px] sm:max-w-[94vw] z-50
                        transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]
                        ${open ? 'translate-x-0' : 'translate-x-full'}`}>
 
@@ -273,6 +278,17 @@ export default function LoginPage() {
                  maskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 30%, transparent 80%)',
                  WebkitMaskImage: 'radial-gradient(ellipse 80% 60% at 50% 50%, #000 30%, transparent 80%)',
                }} />
+
+          {/* Fon flash effekti — xato (qizil) / muvaffaqiyat (yashil-cyan) */}
+          {flash && (
+            <div
+              key={flash}
+              className={cn(
+                'absolute inset-0 z-0 pointer-events-none',
+                flash === 'error' ? 'login-flash-error' : 'login-flash-success',
+              )}
+            />
+          )}
 
           {/* Top scan beam — yuqoridan pastga sirpanadi */}
           <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent
@@ -419,6 +435,30 @@ export default function LoginPage() {
         }
         :global(.login-shake) {
           animation: login-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
+        /* Fon flash — xato (qizil) */
+        :global(.login-flash-error) {
+          background: radial-gradient(ellipse 110% 85% at 50% 42%, rgba(244,63,94,0.42) 0%, rgba(244,63,94,0.14) 42%, transparent 74%);
+          box-shadow: inset 0 0 90px -20px rgba(244,63,94,0.6);
+          animation: login-flash-e 1.3s ease-out both;
+        }
+        /* Fon flash — muvaffaqiyat (yashil + cyan) */
+        :global(.login-flash-success) {
+          background: radial-gradient(ellipse 110% 85% at 50% 42%, rgba(16,185,129,0.45) 0%, rgba(34,211,238,0.18) 46%, transparent 76%);
+          box-shadow: inset 0 0 100px -20px rgba(16,185,129,0.6);
+          animation: login-flash-s 1.2s ease-out both;
+        }
+        @keyframes login-flash-e {
+          0% { opacity: 0; }
+          15% { opacity: 1; }
+          35% { opacity: 0.35; }
+          58% { opacity: 0.95; }
+          100% { opacity: 0; }
+        }
+        @keyframes login-flash-s {
+          0% { opacity: 0; transform: scale(1.08); }
+          28% { opacity: 1; transform: scale(1); }
+          100% { opacity: 0.6; transform: scale(1); }
         }
       `}</style>
 
