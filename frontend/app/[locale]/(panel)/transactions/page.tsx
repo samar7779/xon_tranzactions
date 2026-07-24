@@ -1970,7 +1970,9 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
   // ── ApprovalModal holati ──
   const [approval, setApproval] = useState<{
-    mode: 'approve' | 'direct'; requestId?: string; txId?: string; prefill: ApprovalPrefill;
+    mode: 'approve' | 'direct'; requestId?: string; txId?: string;
+    existingAttachmentId?: string; existingAttachmentName?: string;
+    prefill: ApprovalPrefill;
   } | null>(null);
 
   useEffect(() => {
@@ -2061,6 +2063,27 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
     onError: (e: any) => toast.error(e?.message || tc('error')),
     onSettled: () => { hidingId.current = null; },
   });
+
+  // ── Kutilayotgan arizani to'g'ridan-to'g'ri rad etish (drawer'siz) ──
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const rejectMut = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      api.post<{ ok: boolean }>(`/correction/${id}/reject`, { reason }),
+    onMutate: (v) => { setRejectingId(v.id); },
+    onSuccess: () => {
+      toast.success('Rad etildi');
+      qc.invalidateQueries({ queryKey: ['correction-pending'] });
+      qc.invalidateQueries({ queryKey: ['correction-stats'] });
+    },
+    onError: (e: any) => toast.error(e?.message || tc('error')),
+    onSettled: () => { setRejectingId(null); },
+  });
+  const handleReject = (id: string) => {
+    if (rejectMut.isPending) return;
+    const reason = window.prompt('Rad etish sababi:');
+    if (!reason || !reason.trim()) return;
+    rejectMut.mutate({ id, reason: reason.trim() });
+  };
 
   const fmtDate = (d: string | null | undefined) => {
     if (!d) return '—';
@@ -2225,15 +2248,30 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         </td>
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
                         <td className="px-3 py-2 text-right">
+                          <div className="inline-flex items-center gap-1.5 justify-end">
+                          <button
+                            onClick={() => handleReject(r.id)}
+                            disabled={rejectMut.isPending && rejectingId === r.id}
+                            title="Arizani rad etish"
+                            className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold text-rose-600 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50"
+                          >
+                            {rejectMut.isPending && rejectingId === r.id
+                              ? <Loader2 className="h-3 w-3 animate-spin" />
+                              : <Ban className="h-3 w-3" />}
+                            Rad etish
+                          </button>
                           <button
                             onClick={() => setApproval({
-                              mode: 'approve', requestId: r.id,
+                              mode: 'approve', requestId: r.id, txId: r.txId,
+                              existingAttachmentId: r.attachmentId || undefined,
+                              existingAttachmentName: r.attachmentName || undefined,
                               prefill: { contractNo: r.proposedContractNo || r.contractNo || '', client: r.client || '', amount: r.amount, date: r.date, purpose: r.purpose, object: r.object },
                             })}
                             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[11px] font-semibold transition-all shadow-sm"
                           >
                             <Wrench className="h-3 w-3" /> To'g'rilash
                           </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -2490,6 +2528,8 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
       mode={approval?.mode || 'approve'}
       requestId={approval?.requestId}
       txId={approval?.txId}
+      existingAttachmentId={approval?.existingAttachmentId}
+      existingAttachmentName={approval?.existingAttachmentName}
       prefill={approval?.prefill || { contractNo: '', client: '', amount: null, date: null, purpose: null, object: null }}
       onDone={invalidateAll}
     />
@@ -2499,13 +2539,15 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
 
 // ═══ TO'G'RILASHNI TASDIQLASH modali (nested Dialog) ════════════════════════
 function ApprovalModal({
-  open, onClose, mode, requestId, txId, prefill, onDone,
+  open, onClose, mode, requestId, txId, existingAttachmentId, existingAttachmentName, prefill, onDone,
 }: {
   open: boolean;
   onClose: () => void;
   mode: 'approve' | 'direct';
   requestId?: string;
   txId?: string;
+  existingAttachmentId?: string;
+  existingAttachmentName?: string;
   prefill: ApprovalPrefill;
   onDone: () => void;
 }) {
@@ -2552,14 +2594,15 @@ function ApprovalModal({
     setFile(f);
   };
 
-  const canSubmit = !!file && contractNo.trim().length > 0 && !busy;
+  const hasExisting = !!existingAttachmentId;
+  const canSubmit = contractNo.trim().length > 0 && (!!file || hasExisting) && !busy;
 
   const submit = async () => {
-    if (!canSubmit || !file) return;
+    if (!canSubmit) return;
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append('file', file);
+      if (file) fd.append('file', file);
       fd.append('contractNo', contractNo.trim());
       if (categoryId) fd.append('categoryId', categoryId);
       if (subCategoryId) fd.append('subCategoryId', subCategoryId);
@@ -2758,8 +2801,30 @@ function ApprovalModal({
               {/* Ariza fayli */}
               <div>
                 <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5 flex items-center gap-1.5">
-                  <Paperclip className="h-3.5 w-3.5" /> Ariza fayli <span className="text-rose-500">*majburiy</span>
+                  <Paperclip className="h-3.5 w-3.5" />
+                  {hasExisting ? 'Ariza faylini almashtirish (ixtiyoriy)' : <>Ariza fayli <span className="text-rose-500">*majburiy</span></>}
                 </label>
+
+                {/* Yuboruvchi biriktirgan mavjud fayl */}
+                {hasExisting && (
+                  <div className="mb-2 flex items-center gap-2.5 rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
+                      <Paperclip className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400">Biriktirilgan fayl</div>
+                      <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={existingAttachmentName || ''}>{existingAttachmentName || 'Ariza'}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => txId && existingAttachmentId && apiDownload(`/transactions/${txId}/attachments/${existingAttachmentId}/download`, existingAttachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors shrink-0"
+                    >
+                      <Download className="h-3.5 w-3.5" /> Ko'rish / Yuklab olish
+                    </button>
+                  </div>
+                )}
+
                 <input
                   ref={fileRef}
                   type="file"
@@ -2779,7 +2844,7 @@ function ApprovalModal({
                   )}
                 >
                   {file ? <FileIcon className="h-6 w-6" /> : <UploadIcon className="h-6 w-6" />}
-                  <span className="truncate max-w-full font-semibold">{file ? file.name : 'Ariza faylini tanlang'}</span>
+                  <span className="truncate max-w-full font-semibold">{file ? file.name : (hasExisting ? 'Boshqa fayl tanlash' : 'Ariza faylini tanlang')}</span>
                   <span className="text-[10px] text-slate-400">{file ? `${(file.size / 1024 / 1024).toFixed(1)} MB` : 'PDF, DOC, JPG, PNG — max 25MB'}</span>
                 </button>
               </div>
