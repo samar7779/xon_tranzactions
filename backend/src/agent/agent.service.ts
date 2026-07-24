@@ -372,6 +372,16 @@ export class AgentService {
     return this.correction.getArizaFile(attachmentId);
   }
 
+  // ─── Public: arizalar ro'yxati (audit sub-tab) ─────────────────────
+  async tgArizaList(auth: Record<string, any>, opts: { status?: any; q?: string; page?: number }) {
+    await this.authorizeTg(auth);
+    return this.correction.listArizalar(opts);
+  }
+  async arizaList(key: string, opts: { status?: any; q?: string; page?: number }) {
+    await this.assertKey(key);
+    return this.correction.listArizalar(opts);
+  }
+
   private async saveResult(text: string) {
     try { await this.settings.set(this.K_LAST_RESULT, `${new Date().toISOString()} · ${text}`, 'agent'); }
     catch { /* skip */ }
