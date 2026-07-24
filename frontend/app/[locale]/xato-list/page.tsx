@@ -308,9 +308,10 @@ export default function XatoListPage() {
           style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, #fff 1px, transparent 0)', backgroundSize: '22px 22px' }} />
 
         <div className="relative mx-auto max-w-[1600px] px-4 sm:px-6 pt-5 pb-6 text-white">
-          {/* Top bar: title (chap) · tab (o'rta) · hisob (o'ng) */}
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
+          {/* Header — bitta qator: title (chap) · kartalar (o'rta) · tab (o'ng) */}
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap xl:flex-nowrap">
+            {/* Title — chap burchak */}
+            <div className="flex items-center gap-2.5 shrink-0 order-1">
               {photo ? (
                 <img src={photo} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white/40 shadow-md"
                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
@@ -321,42 +322,35 @@ export default function XatoListPage() {
               )}
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h1 className="text-[18px] sm:text-[20px] font-extrabold leading-none tracking-tight">XATO to&apos;lovlar</h1>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider">
+                  <h1 className="text-[17px] sm:text-[19px] font-extrabold leading-none tracking-tight">XATO to&apos;lovlar</h1>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-1.5 py-0.5 text-[8.5px] font-semibold uppercase tracking-wider">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" /> Jonli
                   </span>
                 </div>
-                {who && <div className="text-[11.5px] text-white/70 mt-1 truncate">Salom, {who} 👋</div>}
+                {who && <div className="text-[11px] text-white/70 mt-1 truncate">Salom, {who} 👋</div>}
               </div>
             </div>
 
-            {/* Tab — o'rtada (segment) */}
-            <div className="mx-auto flex items-center gap-1 rounded-2xl bg-white/10 ring-1 ring-white/20 p-1 backdrop-blur shrink-0">
+            {/* Stat kartalar — o'rtada */}
+            <div className="order-3 xl:order-2 w-full xl:flex-1 grid grid-cols-2 lg:grid-cols-4 gap-2 min-w-0">
+              <HeaderStat label="Yuklangan" value={data ? String(allRows.length) : '—'} hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />} active={mainTab === 'xato' && flow === 'all'} onClick={() => { setMainTab('xato'); setFlow('all'); }} />
+              <HeaderStat label="Kirim" value={data ? String(stats.inC) : '—'} hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />} active={mainTab === 'xato' && flow === 'in'} onClick={() => { setMainTab('xato'); setFlow('in'); }} />
+              <HeaderStat label="Chiqim" value={data ? String(stats.outC) : '—'} hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />} active={mainTab === 'xato' && flow === 'out'} onClick={() => { setMainTab('xato'); setFlow('out'); }} />
+              <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={mainTab === 'xato' && flow === 'pending'} onClick={() => { setMainTab('xato'); setFlow('pending'); }} />
+            </div>
+
+            {/* Tab — o'ng burchak (segment) */}
+            <div className="order-2 xl:order-3 ml-auto xl:ml-0 flex items-center gap-1 rounded-2xl bg-white/10 ring-1 ring-white/20 p-1 backdrop-blur shrink-0">
               <button onClick={() => setMainTab('xato')}
-                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'xato' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
-                <AlertTriangle className="w-4 h-4" /> XATO to&apos;lovlar
+                className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-[12px] font-bold transition-all ${mainTab === 'xato' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
+                <AlertTriangle className="w-4 h-4" /> <span className="hidden sm:inline">XATO to&apos;lovlar</span><span className="sm:hidden">XATO</span>
               </button>
               <button onClick={() => setMainTab('arizalar')}
-                className={`inline-flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[12.5px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
+                className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-xl text-[12px] font-bold transition-all ${mainTab === 'arizalar' ? 'bg-white text-violet-700 shadow' : 'text-white/80 hover:bg-white/10'}`}>
                 <ListChecks className="w-4 h-4" /> Arizalar
               </button>
             </div>
-
-            <div className="text-right leading-none shrink-0">
-              <div className="text-[26px] sm:text-[30px] font-black tabular-nums">{data ? data.count : '—'}</div>
-              <div className="text-[9.5px] uppercase tracking-wider text-white/70 mt-1">jami xato</div>
-            </div>
           </div>
-
-          {/* Stat/filtr kartalar — faqat XATO tabida (glass) */}
-          {mainTab === 'xato' && (
-            <div className="mt-4 grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-              <HeaderStat label="Yuklangan" value={data ? String(allRows.length) : '—'} hint={data ? `${data.count} ta jami` : ''} icon={<Layers className="w-4 h-4" />} active={flow === 'all'} onClick={() => setFlow('all')} />
-              <HeaderStat label="Kirim" value={data ? String(stats.inC) : '—'} hint={data ? fmtCompact(stats.inSum) : ''} icon={<ArrowDownLeft className="w-4 h-4" />} active={flow === 'in'} onClick={() => setFlow(flow === 'in' ? 'all' : 'in')} />
-              <HeaderStat label="Chiqim" value={data ? String(stats.outC) : '—'} hint={data ? fmtCompact(stats.outSum) : ''} icon={<ArrowUpRight className="w-4 h-4" />} active={flow === 'out'} onClick={() => setFlow(flow === 'out' ? 'all' : 'out')} />
-              <HeaderStat label="Jarayonda" value={data ? String(stats.pendingC) : '—'} hint={data ? 'tasdiq kutilmoqda' : ''} icon={<Clock className="w-4 h-4" />} active={flow === 'pending'} onClick={() => setFlow(flow === 'pending' ? 'all' : 'pending')} />
-            </div>
-          )}
         </div>
       </header>
 
@@ -756,54 +750,41 @@ function ArizalarView({ data, loading, status, setStatus, q, setQ, submitter, se
 
   return (
     <div>
-      {/* ── Status filtri (segmented) ── */}
-      <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
+      {/* ── Filtrlar + qidiruv — bitta qator ── */}
+      <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2">
         {filters.map((f) => {
           const active = status === f.key;
           return (
             <button key={f.key} onClick={() => setStatus(f.key)}
-              className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-[12px] font-bold transition-all ring-1 ${active ? 'bg-violet-600 text-white ring-violet-600 shadow-md shadow-violet-600/25' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>
+              className={`inline-flex items-center gap-1.5 h-11 px-3 rounded-xl text-[12px] font-bold transition-all ring-1 shrink-0 ${active ? 'bg-violet-600 text-white ring-violet-600 shadow-md shadow-violet-600/25' : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:ring-violet-300'}`}>
               {f.icon}
-              <span>{f.label}</span>
+              <span className="hidden sm:inline">{f.label}</span>
               <span className={`inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10.5px] tabular-nums font-black ${active ? 'bg-white/25 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'}`}>{f.count}</span>
             </button>
           );
         })}
-      </div>
 
-      {/* ── Xodim ("Kim yubordi") filtri ── */}
-      {submitters.length > 0 && (
-        <div className="flex items-center gap-2 mb-3">
-          <div className="inline-flex items-center gap-1.5 shrink-0 text-[11.5px] font-semibold text-slate-500 dark:text-slate-400">
-            <Users className="w-4 h-4 text-slate-400" /> Kim yubordi:
-          </div>
-          <div className="relative">
-            <select
-              value={submitter}
-              onChange={(e) => setSubmitter(e.target.value)}
-              className="h-9 pl-3 pr-8 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition">
-              <option value="">Hammasi (xodimlar)</option>
-              {submitters.map((s) => (
-                <option key={s.name} value={s.name}>{s.name || '—'} ({s.total})</option>
-              ))}
+        {/* Xodim (Kim yubordi) */}
+        {submitters.length > 0 && (
+          <div className="relative shrink-0">
+            <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <select value={submitter} onChange={(e) => setSubmitter(e.target.value)}
+              className="h-11 pl-8 pr-8 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] font-semibold text-slate-700 dark:text-slate-200 outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition">
+              <option value="">Barcha xodimlar</option>
+              {submitters.map((s) => (<option key={s.name} value={s.name}>{s.name || '—'} ({s.total})</option>))}
             </select>
             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* ── Qidiruv ── */}
-      <div className="sticky top-2 z-20">
-        <div className="relative">
+        {/* Qidiruv — qolgan joyni egallaydi */}
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Shartnoma raqami yoki klient bo'yicha qidirish…"
-            className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
-          />
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Shartnoma raqami yoki klient…"
+            className="w-full h-11 pl-10 pr-9 rounded-xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-sm outline-none focus:ring-2 focus:ring-violet-400 text-[13px] transition" />
           {q && (
-            <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+            <button onClick={() => setQ('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
               <X className="w-4 h-4" />
             </button>
           )}
