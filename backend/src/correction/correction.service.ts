@@ -403,6 +403,28 @@ export class CorrectionService {
     return { ok: true, pending, approved };
   }
 
+  /** Kim qancha va qanday holatda ariza yuborgan — header statistikasi. */
+  async submitterStats(): Promise<Array<{
+    name: string; total: number; pending: number; approved: number; rejected: number;
+  }>> {
+    const rows = await this.prisma.xatoCorrectionRequest.groupBy({
+      by: ['submittedByName', 'status'],
+      _count: { _all: true },
+    });
+    const map = new Map<string, { name: string; total: number; pending: number; approved: number; rejected: number }>();
+    for (const r of rows) {
+      const name = r.submittedByName || '?';
+      if (!map.has(name)) map.set(name, { name, total: 0, pending: 0, approved: 0, rejected: 0 });
+      const e = map.get(name)!;
+      const c = r._count._all;
+      e.total += c;
+      if (r.status === 'pending') e.pending += c;
+      else if (r.status === 'approved') e.approved += c;
+      else if (r.status === 'rejected') e.rejected += c;
+    }
+    return [...map.values()].sort((a, b) => b.total - a.total);
+  }
+
   // ─── XATO ro'yxatidan yashirish / qaytarish ────────────────────────
   async setHidden(txId: string, hidden: boolean, actorId: string) {
     const tx = await this.prisma.transaction.findUnique({ where: { id: txId }, select: { id: true } });
