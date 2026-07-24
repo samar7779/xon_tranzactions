@@ -303,6 +303,9 @@ export class MemorialOrderService {
         }
 
         const todayStr = this.fmtDate(new Date());
+        // Ma'lumoti to'liq bo'lmagan to'lovlar (bank tranzaksiyasi yo'q yoki hisob bo'sh)
+        const incomplete = blocks.filter((b) => !b.hasTx || !b.fromAccount);
+        this.drawSummary(doc, contractNo, blocks, incomplete, todayStr);
         blocks.forEach((b, i) => this.drawBlock(doc, b, i, contractNo, todayStr));
 
         doc.end();
@@ -316,14 +319,14 @@ export class MemorialOrderService {
     const left = doc.page.margins.left;
     const right = doc.page.width - doc.page.margins.right;
     const bottom = doc.page.height - doc.page.margins.bottom;
-    const labelW = 168;
+    const labelW = 160;
     const valueX = left + labelW;
-    const col2X = left + 330;
+    const col2X = left + 320;
 
-    // Sahifada joy yetmasa — yangi sahifa (blok taxminan 320px)
+    // Sahifaga 3 order sig'ishi uchun ixcham (~235px). Joy yetmasa — yangi sahifa.
     if (idx > 0) {
-      if (doc.y + 320 > bottom) doc.addPage();
-      else doc.y += 10;
+      if (doc.y + 235 > bottom) doc.addPage();
+      else doc.y += 7;
     }
 
     // ── Sarlavha ──
@@ -354,9 +357,9 @@ export class MemorialOrderService {
     this.field(doc, left, labelW, valueX, right, 'Сумма прописью', amountToWordsRu(b.amount));
     this.field(doc, left, labelW, valueX, right, 'Детали платежа', b.description || '—');
 
-    if (!b.hasTx) {
-      doc.font('R').fontSize(7.5).fillColor('#b45309')
-        .text('(!) Bank tranzaksiyasi bog\'lanmagan — ma\'lumot to\'liq emas', left, doc.y + 1, { width: right - left });
+    if (!b.hasTx || !b.fromAccount) {
+      doc.font('R').fontSize(6.5).fillColor('#b45309')
+        .text('(!) Ma\'lumot to\'liq emas — bank tafsilotlari topilmadi', left, doc.y + 1, { width: right - left });
       doc.fillColor('#000');
     }
 
@@ -383,30 +386,68 @@ export class MemorialOrderService {
   }
 
   /** Bitta label/value qatori — value o'ralganda balandlik hisobga olinadi */
-  private field(doc: Doc, left: number, labelW: number, valueX: number, right: number, label: string, value: string, bold = false) {
+  private field(doc: Doc, left: number, labelW: number, valueX: number, right: number, label: string, value: string, bold = false, maxH = 0) {
     const y0 = doc.y;
-    doc.font('R').fontSize(8.5).fillColor('#555').text(label, left, y0, { width: labelW - 6 });
+    doc.font('R').fontSize(7).fillColor('#555').text(label, left, y0, { width: labelW - 6 });
     const yLabel = doc.y;
-    doc.font(bold ? 'B' : 'R').fontSize(9.5).fillColor('#000').text(value || '—', valueX, y0, { width: right - valueX });
+    const vOpts: any = { width: right - valueX };
+    if (maxH) { vOpts.height = maxH; vOpts.ellipsis = true; }
+    doc.font(bold ? 'B' : 'R').fontSize(8.5).fillColor('#000').text(value || '—', valueX, y0, vOpts);
     const yValue = doc.y;
-    doc.y = Math.max(yLabel, yValue) + 2.5;
+    doc.y = Math.max(yLabel, yValue) + 1.5;
   }
 
   /** Ikki ustunli qator: chapda label1/value1, o'ngda label2/value2 (ИНН, Код banka kabi) */
-  private field2(doc: Doc, left: number, labelW: number, valueX: number, col2X: number, right: number, label1: string, value1: string, label2: string, value2: string) {
+  private field2(doc: Doc, left: number, labelW: number, valueX: number, col2X: number, right: number, label1: string, value1: string, label2: string, value2: string, maxH = 0) {
     const y0 = doc.y;
-    doc.font('R').fontSize(8.5).fillColor('#555').text(label1, left, y0, { width: labelW - 6 });
+    doc.font('R').fontSize(7).fillColor('#555').text(label1, left, y0, { width: labelW - 6 });
     const yl1 = doc.y;
-    doc.font('R').fontSize(9.5).fillColor('#000').text(value1 || '—', valueX, y0, { width: col2X - valueX - 8 });
+    const v1Opts: any = { width: col2X - valueX - 8 };
+    if (maxH) { v1Opts.height = maxH; v1Opts.ellipsis = true; }
+    doc.font('R').fontSize(8.5).fillColor('#000').text(value1 || '—', valueX, y0, v1Opts);
     const yv1 = doc.y;
     let yMax = Math.max(yl1, yv1);
     if (label2) {
-      doc.font('R').fontSize(8.5).fillColor('#555').text(label2, col2X, y0, { width: 60 });
+      doc.font('R').fontSize(7).fillColor('#555').text(label2, col2X, y0, { width: 60 });
       const yl2 = doc.y;
-      doc.font('R').fontSize(9.5).fillColor('#000').text(value2 || '—', col2X + 62, y0, { width: right - (col2X + 62) });
+      doc.font('R').fontSize(8.5).fillColor('#000').text(value2 || '—', col2X + 62, y0, { width: right - (col2X + 62) });
       yMax = Math.max(yMax, yl2, doc.y);
     }
-    doc.y = yMax + 2.5;
+    doc.y = yMax + 1.5;
+  }
+
+  /** Boshdagi umumiy ro'yxat — jami/to'liq/ma'lumoti yo'q + qaysi to'lovlar (sana) */
+  private drawSummary(doc: Doc, contractNo: string, blocks: OrderBlock[], incomplete: OrderBlock[], todayStr: string) {
+    const left = doc.page.margins.left;
+    const right = doc.page.width - doc.page.margins.right;
+
+    doc.font('B').fontSize(14).fillColor('#0f172a').text('МЕМОРИАЛЬНЫЙ ОРДЕР', left, doc.y);
+    doc.font('R').fontSize(9).fillColor('#475569')
+      .text(`Договор № ${contractNo}    ·    Изг. ${todayStr}`, left, doc.y + 1);
+    doc.y += 8;
+
+    const total = blocks.length;
+    const ok = total - incomplete.length;
+    doc.font('R').fontSize(10).fillColor('#0f172a');
+    doc.text(`Всего платежей: ${total}        Полные данные: ${ok}        Без данных: ${incomplete.length}`, left, doc.y);
+    doc.y += 5;
+
+    if (incomplete.length) {
+      doc.font('B').fontSize(9).fillColor('#b45309')
+        .text(`Платежи без полных банковских данных (${incomplete.length}):`, left, doc.y);
+      doc.y += 2;
+      doc.font('R').fontSize(8.5).fillColor('#7c2d12');
+      incomplete.forEach((b, i) => {
+        doc.text(`${i + 1}.   ${this.fmtDate(b.date)}   —   ${this.fmtMoney(b.amount)} сум`, left + 10, doc.y + 1);
+        doc.y += 1;
+      });
+      doc.fillColor('#000');
+    }
+
+    doc.y += 8;
+    doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(1).strokeColor('#94a3b8').stroke();
+    doc.strokeColor('#000');
+    doc.y += 8;
   }
 
   private fmtDate(d: Date): string {
