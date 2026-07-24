@@ -41,9 +41,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [showPwd, setShowPwd] = useState(false);
   const [capsOn, setCapsOn] = useState(false);
-  const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [clock, setClock] = useState('00:00:00');
+  // Suhbat uslubidagi bosqichli login: login -> parol -> tekshirish -> (xato -> boshidan)
+  const [step, setStep] = useState<'login' | 'password' | 'checking' | 'error'>('login');
 
   // KIRISH bosilganda — avval 2.5s scan animatsiyasi, keyin login paneli ochiladi.
   // Dashboard scan holatida QOLADI — login yopilgandagina qaytadi.
@@ -54,18 +55,27 @@ export default function LoginPage() {
   //   80ms buzz (click) · 220 pauza · 130 buzz (~0.3s scan) ·
   //   ~1.57s pauza · 60·50·60·50·160 (~2.0s success / ACCESS GRANTED)
   const handleKirish = () => {
-    vibrate([80, 220, 130, 1570, 60, 50, 60, 50, 160]);
+    vibrate([80, 180, 120, 700, 60, 50, 60, 50, 140]);
     setScanning(true);
+    // ACCESS GRANTED ~1.1s da chiqadi — panel darrov keyin ochiladi (tezlashtirildi)
     setTimeout(() => {
       setOpen(true);
-    }, 2500);
+    }, 1400);
   };
 
   // Login yopilganda — dashboard scan'dan dashboard'ga qaytadi (flip back)
   const handleCloseLogin = () => {
     setOpen(false);
     setScanning(false);
+    setStep('login');
+    setPassword('');
+    setErrorMsg(null);
   };
+
+  // Panel ochilganda — boshidan (login bosqichi)
+  useEffect(() => {
+    if (open) { setStep('login'); setErrorMsg(null); }
+  }, [open]);
 
   useEffect(() => {
     if (hasHydrated && token) router.replace(nextDest());
@@ -97,10 +107,25 @@ export default function LoginPage() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  async function onSubmit(e: React.FormEvent) {
+  // 1-bosqich: login (email) yuborildi -> parol bosqichiga
+  function submitLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (!email.trim()) return;
     setErrorMsg(null);
-    setBusy(true);
+    setStep('password');
+  }
+
+  // 2-bosqich: parol yuborildi -> tekshirish
+  function submitPassword(e: React.FormEvent) {
+    e.preventDefault();
+    if (!password) return;
+    runCheck();
+  }
+
+  // 3-bosqich: tizim tekshiradi. Xato bo'lsa "ХАТО" + boshidan (login+parol qayta)
+  async function runCheck() {
+    setErrorMsg(null);
+    setStep('checking');
     try {
       await login(email, password);
       toast.success(t('welcome'));
@@ -109,8 +134,15 @@ export default function LoginPage() {
       const msg = err?.message || t('invalidCredentials');
       setErrorMsg(msg);
       toast.error(msg);
-    } finally {
-      setBusy(false);
+      setStep('error');
+      vibrate([60, 40, 60, 40, 120]);
+      // "ХАТО" ko'rsatib, boshidan login so'raydi (parol tozalanadi, email qoladi)
+      setTimeout(() => {
+        setPassword('');
+        setShowPwd(false);
+        setErrorMsg(null);
+        setStep('login');
+      }, 2200);
     }
   }
 
@@ -214,16 +246,22 @@ export default function LoginPage() {
           {/* Title glow halo */}
           <div className="absolute top-12 left-1/2 -translate-x-1/2 w-64 h-32 bg-cyan-400/15 blur-3xl pointer-events-none rounded-full" />
 
-          {/* Close button */}
-          <button
-            onClick={handleCloseLogin}
-            className="absolute top-5 right-5 z-10 w-9 h-9 rounded-full grid place-items-center
-                       bg-white/5 ring-1 ring-white/10 text-cyan-200/70
-                       hover:bg-rose-500/20 hover:ring-rose-400/40 hover:text-rose-200
-                       hover:rotate-90
-                       transition-all duration-300">
-            <X className="h-4 w-4" />
-          </button>
+          {/* Top bar — til almashtirish + yopish (X'dan oldin til tugmasi) */}
+          <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+            <div className="border border-cyan-400/25 rounded-full p-0.5 bg-cyan-500/5 backdrop-blur">
+              <LanguageSwitcher />
+            </div>
+            <button
+              onClick={handleCloseLogin}
+              aria-label="close"
+              className="w-9 h-9 rounded-full grid place-items-center
+                         bg-white/5 ring-1 ring-white/10 text-cyan-200/70
+                         hover:bg-rose-500/20 hover:ring-rose-400/40 hover:text-rose-200
+                         hover:rotate-90
+                         transition-all duration-300">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
           {/* Sarlavha */}
           <div className="relative mt-4 sm:mt-6 mb-6 sm:mb-8" style={{ animation: open ? 'login-stagger 0.6s 0.15s both' : 'none' }}>
@@ -245,102 +283,110 @@ export default function LoginPage() {
             </div>
           </div>
 
-          {/* Form */}
-          <form onSubmit={onSubmit} className="relative space-y-5 flex-1" noValidate>
-            <div style={{ animation: open ? 'login-stagger 0.6s 0.25s both' : 'none' }}>
-              <HudField
-                id="email"
-                label={t('emailLabel')}
-                type="email"
-                value={email}
-                onChange={(v) => { setEmail(v); setErrorMsg(null); }}
-                autoFocus={open}
-                placeholder="admin@xon.local"
-              />
+          {/* ══ Suhbat uslubidagi terminal login (bosqichma-bosqich) ══ */}
+          <div className="relative flex-1 flex flex-col">
+            {/* Bajarilgan bosqichlar — echo (login, keyin parol) */}
+            <div className="space-y-2.5">
+              {step !== 'login' && (
+                <EchoLine label={t('emailLabel')} value={email} />
+              )}
+              {(step === 'checking' || step === 'error') && (
+                <EchoLine
+                  label={t('passwordLabel')}
+                  value={showPwd ? password : '•'.repeat(Math.min(password.length, 14) || 4)}
+                  secret
+                  showing={showPwd}
+                  onToggle={() => setShowPwd((s) => !s)}
+                />
+              )}
             </div>
 
-            <div style={{ animation: open ? 'login-stagger 0.6s 0.35s both' : 'none' }}>
-              <HudField
-                id="password"
-                label={t('passwordLabel')}
-                type={showPwd ? 'text' : 'password'}
-                value={password}
-                onChange={(v) => { setPassword(v); setErrorMsg(null); }}
-                onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
-                placeholder="••••••••"
-                right={
+            {/* Faol bosqich */}
+            <div className="mt-3 flex-1">
+              {/* 1) LOGIN */}
+              {step === 'login' && (
+                <form onSubmit={submitLogin} className="space-y-4" noValidate key="s-login">
+                  <PromptLine text={t('enterLogin')} />
+                  <div style={{ animation: 'login-stagger 0.4s both' }}>
+                    <HudField
+                      id="email" label={t('emailLabel')} type="email" value={email}
+                      onChange={(v) => { setEmail(v); setErrorMsg(null); }}
+                      autoFocus placeholder="admin@xon.local"
+                    />
+                  </div>
+                  <StepButton label={t('submit')} />
+                </form>
+              )}
+
+              {/* 2) PAROL */}
+              {step === 'password' && (
+                <form onSubmit={submitPassword} className="space-y-4" noValidate key="s-pwd">
+                  <PromptLine text={t('enterPassword')} />
+                  <div style={{ animation: 'login-stagger 0.4s both' }}>
+                    <HudField
+                      id="password" label={t('passwordLabel')}
+                      type={showPwd ? 'text' : 'password'} value={password}
+                      onChange={(v) => { setPassword(v); setErrorMsg(null); }}
+                      onKeyEvent={(e) => setCapsOn(e.getModifierState && e.getModifierState('CapsLock'))}
+                      autoFocus placeholder="••••••••"
+                      right={
+                        <button
+                          type="button" onClick={() => setShowPwd((s) => !s)}
+                          className="text-cyan-400/50 hover:text-cyan-300 transition" tabIndex={-1}
+                          aria-label={showPwd ? t('hidePassword') : t('showPassword')}
+                        >
+                          {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      }
+                    />
+                  </div>
+                  {capsOn && (
+                    <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
+                      <AlertCircle className="h-3 w-3" /> {t('capsLockOn')}
+                    </div>
+                  )}
+                  <StepButton label={t('submit')} />
                   <button
                     type="button"
-                    onClick={() => setShowPwd((s) => !s)}
-                    className="text-cyan-400/50 hover:text-cyan-300 transition"
-                    tabIndex={-1}
-                    aria-label={showPwd ? t('hidePassword') : t('showPassword')}
+                    onClick={() => { setStep('login'); setErrorMsg(null); }}
+                    className="text-[9px] tracking-[0.25em] uppercase text-cyan-400/40 hover:text-cyan-300 font-mono transition"
                   >
-                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    ‹ {t('emailLabel')}
                   </button>
-                }
-              />
+                </form>
+              )}
+
+              {/* 3) TEKSHIRILMOQDA */}
+              {step === 'checking' && (
+                <div className="flex items-center gap-3 px-1 py-4 font-mono text-cyan-200">
+                  <Loader2 className="h-4 w-4 animate-spin text-cyan-300" />
+                  <span className="text-[12px] tracking-[0.28em] uppercase animate-pulse">{t('processing')}...</span>
+                </div>
+              )}
+
+              {/* 4) ХАТО — boshidan */}
+              {step === 'error' && (
+                <div className="login-shake space-y-2.5">
+                  <div className="flex items-start gap-2.5 px-3 py-3 border border-rose-400/50 bg-rose-500/10
+                                  rounded-sm shadow-[0_0_28px_-5px_rgba(244,63,94,0.6)]">
+                    <AlertCircle className="h-5 w-5 flex-shrink-0 text-rose-400 mt-0.5" />
+                    <div>
+                      <div className="text-[13px] font-bold tracking-[0.3em] uppercase text-rose-300">ХАТО</div>
+                      <div className="text-[11px] tracking-wider mt-1 text-rose-200">{errorMsg}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[9px] tracking-[0.25em] uppercase text-cyan-400/50 font-mono">
+                    <Loader2 className="h-3 w-3 animate-spin" /> {t('retrying')}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {capsOn && (
-              <div className="text-[10px] text-amber-300 tracking-[0.2em] uppercase flex items-center gap-1 font-mono">
-                <AlertCircle className="h-3 w-3" />
-                {t('capsLockOn')}
-              </div>
-            )}
-
-            {errorMsg && (
-              <div className="flex items-start gap-2 px-3 py-2 border border-rose-400/40 bg-rose-500/10
-                              text-[12px] text-rose-200 rounded-sm
-                              shadow-[0_0_20px_-5px_rgba(244,63,94,0.5)]">
-                <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <span className="tracking-wider">{errorMsg}</span>
-              </div>
-            )}
-
-            <div style={{ animation: open ? 'login-stagger 0.6s 0.45s both' : 'none' }}>
-              <button
-                type="submit"
-                disabled={busy}
-                className="relative w-full h-13 mt-4 group overflow-hidden rounded-sm
-                           bg-gradient-to-r from-cyan-500/30 via-cyan-400/50 to-cyan-500/30
-                           border border-cyan-400/70
-                           text-cyan-50 font-semibold tracking-[0.28em] uppercase text-[12px]
-                           shadow-[0_0_35px_-5px_rgba(34,211,238,0.6),inset_0_0_20px_-10px_rgba(34,211,238,0.5)]
-                           hover:bg-cyan-400/40 hover:shadow-[0_0_50px_-5px_rgba(34,211,238,1)]
-                           hover:border-cyan-200
-                           active:scale-[0.99]
-                           disabled:opacity-60
-                           transition-all duration-200
-                           flex items-center justify-center gap-3 h-12"
-              >
-                <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
-                                 bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent
-                                 transition-transform duration-1000 ease-out" />
-                {/* Corner accents on button */}
-                <span className="absolute top-0 left-0 w-2 h-2 border-l border-t border-cyan-200" />
-                <span className="absolute top-0 right-0 w-2 h-2 border-r border-t border-cyan-200" />
-                <span className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-cyan-200" />
-                <span className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-cyan-200" />
-                {busy ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span className="relative">{t('processing')}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="relative">{t('submit')}</span>
-                    <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
-                  </>
-                )}
-              </button>
-
-              {/* ESC hint */}
-              <div className="text-center mt-3 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
-                <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> {t('pressEscToClose')}
-              </div>
+            {/* ESC hint */}
+            <div className="text-center mt-4 text-[9px] tracking-[0.3em] uppercase text-cyan-400/40 font-mono">
+              <kbd className="px-1.5 py-0.5 bg-cyan-500/10 border border-cyan-400/30 rounded">ESC</kbd> {t('pressEscToClose')}
             </div>
-          </form>
+          </div>
 
           {/* Status liniya */}
           <div className="relative mt-6 pt-4 border-t border-cyan-400/15 flex items-center justify-between
@@ -369,6 +415,17 @@ export default function LoginPage() {
         :global(.login-scan-v) {
           animation: login-scan-v 5s linear infinite;
         }
+        @keyframes login-shake {
+          0%, 100% { transform: translateX(0); }
+          15% { transform: translateX(-8px); }
+          30% { transform: translateX(7px); }
+          45% { transform: translateX(-5px); }
+          60% { transform: translateX(4px); }
+          75% { transform: translateX(-2px); }
+        }
+        :global(.login-shake) {
+          animation: login-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+        }
       `}</style>
 
     </div>
@@ -391,7 +448,7 @@ function MobileScanOverlay() {
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     lines.forEach((_, i) => {
-      timers.push(setTimeout(() => setVisible((v) => [...v, i]), 500 + i * 200));
+      timers.push(setTimeout(() => setVisible((v) => [...v, i]), 150 + i * 130));
     });
     return () => timers.forEach(clearTimeout);
   }, []);
@@ -403,7 +460,7 @@ function MobileScanOverlay() {
       {/* Vertical scan chiziq */}
       <div className="absolute inset-x-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent
                       shadow-[0_0_30px_rgba(34,211,238,0.95)]"
-           style={{ animation: 'mob-scan-sweep 1.6s linear forwards' }} />
+           style={{ animation: 'mob-scan-sweep 1s linear forwards' }} />
       {/* Markaz */}
       <div className="absolute inset-0 grid place-items-center px-6">
         <div className="text-center space-y-4">
@@ -631,5 +688,69 @@ function HudField(props: {
         )}
       </div>
     </div>
+  );
+}
+
+/** Bajarilgan bosqich — echo qatori (terminal uslubida, tasdiq belgisi bilan) */
+function EchoLine({ label, value, secret, showing, onToggle }: {
+  label: string;
+  value: string;
+  secret?: boolean;
+  showing?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 px-3 py-2 rounded-sm bg-cyan-500/[0.05] border border-cyan-400/15
+                    animate-[login-stagger_0.35s_both]">
+      <span className="text-[9px] tracking-[0.25em] uppercase text-cyan-400/60 shrink-0 font-mono">{label}</span>
+      <span className="flex-1 truncate text-[13px] text-cyan-100 font-mono tracking-wider">{value || '—'}</span>
+      {secret && onToggle && (
+        <button
+          type="button" onClick={onToggle} tabIndex={-1}
+          className="text-cyan-400/50 hover:text-cyan-300 transition shrink-0"
+        >
+          {showing ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+        </button>
+      )}
+      <span className="text-emerald-400 text-[13px] shrink-0 leading-none">✓</span>
+    </div>
+  );
+}
+
+/** Tizim so'rovi — "» matn" + miltillovchi kursor */
+function PromptLine({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-2 text-[11px] tracking-[0.12em] text-cyan-300/90 font-mono">
+      <span className="text-cyan-400">»</span>
+      <span>{text}</span>
+      <span className="inline-block w-1.5 h-3.5 bg-cyan-400 animate-pulse align-middle" />
+    </div>
+  );
+}
+
+/** Bosqich yuborish tugmasi (HUD uslubidagi cyan tugma) */
+function StepButton({ label }: { label: string }) {
+  return (
+    <button
+      type="submit"
+      className="relative w-full h-12 group overflow-hidden rounded-sm
+                 bg-gradient-to-r from-cyan-500/30 via-cyan-400/50 to-cyan-500/30
+                 border border-cyan-400/70
+                 text-cyan-50 font-semibold tracking-[0.28em] uppercase text-[12px]
+                 shadow-[0_0_35px_-5px_rgba(34,211,238,0.6),inset_0_0_20px_-10px_rgba(34,211,238,0.5)]
+                 hover:bg-cyan-400/40 hover:shadow-[0_0_50px_-5px_rgba(34,211,238,1)]
+                 hover:border-cyan-200 active:scale-[0.99]
+                 transition-all duration-200 flex items-center justify-center gap-3"
+    >
+      <span className="absolute inset-0 -translate-x-full group-hover:translate-x-full
+                       bg-gradient-to-r from-transparent via-cyan-200/50 to-transparent
+                       transition-transform duration-1000 ease-out" />
+      <span className="absolute top-0 left-0 w-2 h-2 border-l border-t border-cyan-200" />
+      <span className="absolute top-0 right-0 w-2 h-2 border-r border-t border-cyan-200" />
+      <span className="absolute bottom-0 left-0 w-2 h-2 border-l border-b border-cyan-200" />
+      <span className="absolute bottom-0 right-0 w-2 h-2 border-r border-b border-cyan-200" />
+      <span className="relative">{label}</span>
+      <ArrowRight className="relative h-4 w-4 transition-transform group-hover:translate-x-1" />
+    </button>
   );
 }
