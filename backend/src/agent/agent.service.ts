@@ -73,10 +73,11 @@ export class AgentService {
     }
     const pendingCount = await this.oplataKv.countXatoForAgent(dateFrom || null);
     // AI Agent config
-    const [aiEnc, aiModel, aiEnabled] = await Promise.all([
+    const [aiEnc, aiModel, aiEnabled, aiInterval] = await Promise.all([
       this.settings.get(this.K_AI_KEY),
       this.settings.get(this.K_AI_MODEL),
       this.settings.get(this.K_AI_ENABLED),
+      this.settings.get('agent.aiIntervalMin'),
     ]);
     let hasAiKey = false; let aiKeyHint: string | null = null;
     if (aiEnc) { try { const k = this.crypto.decrypt(aiEnc); hasAiKey = !!k; aiKeyHint = k ? `…${k.slice(-4)}` : null; } catch { /* skip */ } }
@@ -97,6 +98,7 @@ export class AgentService {
       hasAiKey,
       aiKeyHint,
       aiModel: aiModel || 'claude-sonnet-4-6',
+      aiIntervalMin: Number(aiInterval) >= 1 ? Number(aiInterval) : 5,
     };
   }
 
@@ -104,7 +106,7 @@ export class AgentService {
     body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
       whitelist?: Array<{ id: string; name: string }>;
-      aiKey?: string; aiModel?: string; aiEnabled?: boolean;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number;
     },
     updatedBy?: string,
   ) {
@@ -122,6 +124,10 @@ export class AgentService {
     }
     if (body.aiModel !== undefined) await this.settings.set(this.K_AI_MODEL, body.aiModel.trim() || null, updatedBy);
     if (body.aiEnabled !== undefined) await this.settings.set(this.K_AI_ENABLED, body.aiEnabled ? '1' : null, updatedBy);
+    if (body.aiIntervalMin !== undefined) {
+      const n = Number(body.aiIntervalMin);
+      await this.settings.set('agent.aiIntervalMin', n >= 1 && n <= 1440 ? String(Math.round(n)) : null, updatedBy);
+    }
     return this.getConfig();
   }
 

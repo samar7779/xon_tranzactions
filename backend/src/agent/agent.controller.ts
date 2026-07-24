@@ -35,7 +35,7 @@ export class AgentController {
   saveConfig(
     @Body() body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
-      aiKey?: string; aiModel?: string; aiEnabled?: boolean;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number;
     },
     @CurrentUser() user?: AuthUser,
   ) {
