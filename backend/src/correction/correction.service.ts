@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { AttachmentsService } from '../attachments/attachments.service';
+import { CrmService } from '../crm/crm.service';
 
 type Flow = 'all' | 'in' | 'out';
 
@@ -19,6 +20,7 @@ export class CorrectionService {
     private readonly prisma: PrismaService,
     private readonly categorization: CategorizationService,
     private readonly attachments: AttachmentsService,
+    private readonly crm: CrmService,
   ) {}
 
   // ─── Ariza yuborish (pending) ──────────────────────────────────────
@@ -59,6 +61,21 @@ export class CorrectionService {
     if (existing) return { ok: true, id: existing.id, alreadyPending: true };
 
     const contract = this.cleanContract(input.proposedContractNo);
+
+    // Taklif qilingan shartnoma CRM'da bo'lsa — OBYEKT va klientni undan olamiz
+    // (Kutilmoqda ro'yxatida to'g'ri obyekt ko'rinishi uchun).
+    if (contract) {
+      try {
+        const r: any = await this.crm.searchContracts(contract, 3);
+        const items: any[] = r?.items || [];
+        const match = items.find((it) => String(it.contract || it.contractNumber || '').toUpperCase() === contract) || items[0];
+        if (match) {
+          if (match.object) snap.snapObject = match.object;
+          const cl = match.clientFullName || match.client_full_name || match.customerName || match.client;
+          if (cl) snap.snapClient = cl;
+        }
+      } catch { /* CRM xato — snapshot o'zgarmaydi */ }
+    }
 
     // Fayl bo'lsa — tranzaksiyaga biriktiramiz
     let attachmentId: string | null = null;

@@ -80,7 +80,7 @@ export class CorrectionController {
     @Body() body: { contractNo?: string; categoryId?: string; subCategoryId?: string },
     @CurrentUser('id') userId: string,
   ) {
-    if (!file?.buffer) throw new BadRequestException('Ariza fayli majburiy');
+    // Fayl majburiyligini SERVIS tekshiradi (mavjud ariza fayli bo'lsa qayta talab qilmaydi)
     return this.svc.approve(id, file, {
       contractNo: body?.contractNo || null,
       categoryId: body?.categoryId || null,
