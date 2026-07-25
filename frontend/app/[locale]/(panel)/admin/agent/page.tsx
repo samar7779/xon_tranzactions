@@ -35,13 +35,15 @@ interface AgentConfig {
   aiModel: string;
   aiIntervalMin: number;
   aiName: string | null;
+  aiFromHour: number;
+  aiToHour: number;
 }
 
 interface AiRunResult { id: string; ok: boolean; decision?: 'approve' | 'reject' | 'human'; reason?: string; error?: string }
 interface AiRunResponse { ok: boolean; processed: number; results: AiRunResult[] }
 
 interface AiStatusCounts { pending: number; processing: number; needsReview: number; agentApproved: number; agentRejected: number }
-interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; intervalMin: number; name: string; counts: AiStatusCounts }
+interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; intervalMin: number; name: string; fromHour: number; toHour: number; counts: AiStatusCounts }
 
 interface AiActivityRow {
   id: string;
@@ -88,6 +90,8 @@ export default function AdminAgentPage() {
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiIntervalMin, setAiIntervalMin] = useState('5');
   const [aiName, setAiName] = useState('AI Agent');
+  const [aiFromHour, setAiFromHour] = useState('0');
+  const [aiToHour, setAiToHour] = useState('24');
   const [editKey, setEditKey] = useState(false);
   const [aiOpen, setAiOpen] = useState(true);
   const [digestOpen, setDigestOpen] = useState(false);
@@ -116,6 +120,8 @@ export default function AdminAgentPage() {
     setAiEnabled(!!cfg.aiEnabled);
     setAiIntervalMin(String(cfg.aiIntervalMin || 5));
     setAiName(cfg.aiName || 'AI Agent');
+    setAiFromHour(String(cfg.aiFromHour ?? 0));
+    setAiToHour(String(cfg.aiToHour ?? 24));
     setInitialized(true);
   }, [cfg, initialized]);
 
@@ -164,7 +170,15 @@ export default function AdminAgentPage() {
   });
 
   const aiSaveMut = useMutation({
-    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled, aiIntervalMin: Number(aiIntervalMin) || 5, aiName: aiName.trim() || 'AI Agent' }),
+    mutationFn: () => api.put('/agent/config', {
+      aiKey: aiKey.trim() || undefined,
+      aiModel,
+      aiEnabled,
+      aiIntervalMin: Number(aiIntervalMin) || 5,
+      aiName: aiName.trim() || 'AI Agent',
+      aiFromHour: Math.min(24, Math.max(0, Number(aiFromHour) || 0)),
+      aiToHour: Math.min(24, Math.max(0, Number(aiToHour) === 0 ? 24 : (Number(aiToHour) || 24))),
+    }),
     onSuccess: () => {
       toast.success('Saqlandi');
       setAiKey('');
@@ -310,6 +324,16 @@ export default function AdminAgentPage() {
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700">
                   ⏱ har {aiStatus?.intervalMin ?? cfg?.aiIntervalMin ?? 5} daq
                 </span>
+                {(() => {
+                  const fh = aiStatus?.fromHour ?? cfg?.aiFromHour ?? 0;
+                  const th = aiStatus?.toHour ?? cfg?.aiToHour ?? 24;
+                  const always = fh === 0 && th === 24;
+                  return (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9.5px] font-bold uppercase tracking-wide ring-1 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700">
+                      🕘 {always ? 'doim' : `${fh}:00–${th}:00`}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-0.5">
                 AI Agent yangi arizalarni avtomat tekshiradi: ariza faylini o&apos;qiydi, obyekt mosligini tekshiradi (boshqa obyektga o&apos;tkazib bo&apos;lmaydi), maqsadga qarab kategoriya tanlaydi — so&apos;ng tasdiqlaydi, rad etadi yoki xodimga qoldiradi.
@@ -378,38 +402,43 @@ export default function AdminAgentPage() {
               <StatTile label="Agent rad etdi" value={String(aiStatus?.counts.agentRejected ?? 0)} tone="rose" />
             </div>
 
-            {/* Sozlama: kalit + nomi + model + oraliq */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Field label="AI kalit" icon={<Lock className="h-3.5 w-3.5" />}>
-                {cfg?.hasAiKey && !editKey ? (
-                  <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[12px] font-semibold ring-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Kalit saqlangan ({cfg.aiKeyHint || '••••'})
-                    </span>
-                    <button
-                      onClick={() => setEditKey(true)}
-                      className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-[11.5px] font-semibold ring-1 bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5" /> O&apos;zgartirish
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <Input
-                      value={aiKey}
-                      onChange={(e) => setAiKey(e.target.value)}
-                      type="password"
-                      placeholder="sk-ant-api03-…"
-                      className="h-9 rounded-lg font-mono text-[12px]"
-                    />
-                    <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
-                      Anthropic API kaliti (shifrlab saqlanadi){cfg?.hasAiKey && (
-                        <button onClick={() => { setEditKey(false); setAiKey(''); }} className="ml-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline">bekor qilish</button>
-                      )}
+            {/* Sozlama: kalit + nomi + model + oraliq + ish vaqti */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Qator 1 — AI kalit (to'liq eni) */}
+              <div className="md:col-span-2">
+                <Field label="AI kalit" icon={<Lock className="h-3.5 w-3.5" />}>
+                  {cfg?.hasAiKey && !editKey ? (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[12px] font-semibold ring-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Kalit saqlangan ({cfg.aiKeyHint || '••••'})
+                      </span>
+                      <button
+                        onClick={() => setEditKey(true)}
+                        className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-[11.5px] font-semibold ring-1 bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> O&apos;zgartirish
+                      </button>
                     </div>
-                  </>
-                )}
-              </Field>
+                  ) : (
+                    <>
+                      <Input
+                        value={aiKey}
+                        onChange={(e) => setAiKey(e.target.value)}
+                        type="password"
+                        placeholder="sk-ant-api03-…"
+                        className="h-9 rounded-lg font-mono text-[12px]"
+                      />
+                      <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
+                        Anthropic API kaliti (shifrlab saqlanadi){cfg?.hasAiKey && (
+                          <button onClick={() => { setEditKey(false); setAiKey(''); }} className="ml-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline">bekor qilish</button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </Field>
+              </div>
+
+              {/* Qator 2 — Agent nomi | Model */}
               <Field label="Agent nomi" icon={<Bot className="h-3.5 w-3.5" />}>
                 <Input
                   value={aiName}
@@ -419,36 +448,64 @@ export default function AdminAgentPage() {
                 />
                 <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Agent shu nom bilan ishlaydi — qarorlarda shu nom ko&apos;rinadi</div>
               </Field>
-              <div className="grid grid-cols-[1fr_auto] gap-3">
-                <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
-                  <div className="relative">
-                    <select
-                      value={aiModel}
-                      onChange={(e) => setAiModel(e.target.value)}
-                      className="w-full h-9 pl-3 pr-8 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 text-[12px] font-mono outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition"
-                    >
-                      <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-                      <option value="claude-opus-4-8">claude-opus-4-8</option>
-                      <option value="claude-haiku-4-5">claude-haiku-4-5</option>
-                      {aiModel && !['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'].includes(aiModel) && (
-                        <option value={aiModel}>{aiModel}</option>
-                      )}
-                    </select>
-                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-                  </div>
-                </Field>
-                <Field label="Tekshirish oralig'i (daqiqa)" icon={<Clock className="h-3.5 w-3.5" />}>
+              <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
+                <div className="relative">
+                  <select
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    className="w-full h-9 pl-3 pr-8 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 text-[12px] font-mono outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition"
+                  >
+                    <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+                    <option value="claude-opus-4-8">claude-opus-4-8</option>
+                    <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+                    {aiModel && !['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'].includes(aiModel) && (
+                      <option value={aiModel}>{aiModel}</option>
+                    )}
+                  </select>
+                  <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                </div>
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">AI model — javob sifati va narxi shunga bog&apos;liq</div>
+              </Field>
+
+              {/* Qator 3 — Tekshirish oralig'i | Ish vaqti */}
+              <Field label="Tekshirish oralig'i (daqiqa)" icon={<Clock className="h-3.5 w-3.5" />}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={1440}
+                  value={aiIntervalMin}
+                  onChange={(e) => setAiIntervalMin(e.target.value)}
+                  placeholder="5"
+                  className="h-9 rounded-lg font-mono text-[12px]"
+                />
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Necha daqiqada bir marta yangi arizalarni tekshiradi</div>
+              </Field>
+              <Field label="Ish vaqti (soat)" icon={<Clock className="h-3.5 w-3.5" />}>
+                <div className="flex items-center gap-2">
                   <Input
                     type="number"
-                    min={1}
-                    max={1440}
-                    value={aiIntervalMin}
-                    onChange={(e) => setAiIntervalMin(e.target.value)}
-                    placeholder="5"
-                    className="h-9 rounded-lg font-mono text-[12px] w-28"
+                    min={0}
+                    max={24}
+                    value={aiFromHour}
+                    onChange={(e) => setAiFromHour(e.target.value)}
+                    placeholder="0"
+                    aria-label="dan"
+                    className="h-9 rounded-lg font-mono text-[12px] w-20 text-center"
                   />
-                </Field>
-              </div>
+                  <span className="text-slate-400 dark:text-slate-500 text-[13px] shrink-0">—</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={24}
+                    value={aiToHour}
+                    onChange={(e) => setAiToHour(e.target.value)}
+                    placeholder="24"
+                    aria-label="gacha"
+                    className="h-9 rounded-lg font-mono text-[12px] w-20 text-center"
+                  />
+                </div>
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Agent shu soatlar oralig&apos;ida ishlaydi (0–24 = doim)</div>
+              </Field>
             </div>
 
             <div className="flex items-center gap-3 flex-wrap pt-1">
