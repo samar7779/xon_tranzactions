@@ -1934,6 +1934,7 @@ type CorrectionRow = {
   snapClient?: string | null;
   snapObject?: string | null;
   snapPurpose?: string | null;
+  externalId?: string | null;
 };
 
 type ApprovalPrefill = {
@@ -1961,13 +1962,18 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   const [rawQDebounced, setRawQDebounced] = useState('');
   const [rawHidden, setRawHidden] = useState<'active' | 'hidden' | 'all'>('active');
   const [infoRow, setInfoRow] = useState<any | null>(null);
-  const [agentInfo, setAgentInfo] = useState<CorrectionRow | null>(null);
+  const [detailRow, setDetailRow] = useState<CorrectionRow | null>(null);
   const [exporting, setExporting] = useState(false);
   const perPage = 50;
+
+  // ── Tozalash (clear) holati ──
+  const [clearOpen, setClearOpen] = useState(false);
+  const [clearPassword, setClearPassword] = useState('');
 
   // ── Pending tab ──
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingQ, setPendingQ] = useState('');
+  const [pendingAgentFilter, setPendingAgentFilter] = useState<'all' | 'processing' | 'needs_review'>('all');
 
   // ── Approved tab ──
   const [approvedPage, setApprovedPage] = useState(1);
@@ -1991,8 +1997,10 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   } | null>(null);
 
   useEffect(() => {
-    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRejectedPage(1); setRawQ(''); setRawQDebounced(''); setRawHidden('active'); }
+    if (open) { setTab('pending'); setRawPage(1); setPendingPage(1); setApprovedPage(1); setRejectedPage(1); setRawQ(''); setRawQDebounced(''); setRawHidden('active'); setClearOpen(false); setClearPassword(''); }
   }, [open]);
+  // Tab almashsa — tozalash popover'i yopilsin (status chalkashmasin)
+  useEffect(() => { setClearOpen(false); setClearPassword(''); }, [tab]);
   useEffect(() => { setPendingPage(1); }, [pendingQ]);
   useEffect(() => { setApprovedPage(1); }, [approvedQ, apFrom, apTo, apActor, apFlow, apActorType]);
   useEffect(() => { setRejectedPage(1); }, [rejectedQ, rjActorType]);
@@ -2007,12 +2015,38 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
     qc.invalidateQueries({ queryKey: ['correction-stats'] });
     qc.invalidateQueries({ queryKey: ['correction-pending'] });
     qc.invalidateQueries({ queryKey: ['correction-approved'] });
+    qc.invalidateQueries({ queryKey: ['correction-rejected'] });
     qc.invalidateQueries({ queryKey: ['client-xato'] });
     // Tasdiqlangach to'lov XATO'dan chiqadi — asosiy jadval/oplatakv ham yangilansin
     qc.invalidateQueries({ queryKey: ['transactions'] });
     qc.invalidateQueries({ queryKey: ['tx-stats'] });
     qc.invalidateQueries({ queryKey: ['oplata-kv'] });
   };
+
+  // ── Tozalash — joriy tab statusiga qarab ──
+  const clearStatus: 'pending' | 'approved' | 'rejected' | 'all' =
+    tab === 'pending' ? 'pending' : tab === 'approved' ? 'approved' : tab === 'rejected' ? 'rejected' : 'all';
+  const clearLabelMap: Record<typeof clearStatus, string> = {
+    pending: 'Kutilmoqda', approved: 'Tasdiqlangan', rejected: 'Rad etilgan', all: 'Barcha XATO',
+  };
+  const clearMut = useMutation({
+    mutationFn: ({ status, password }: { status: string; password: string }) =>
+      api.post<{ ok: boolean; deleted: number }>('/correction/clear', { status, password }),
+    onSuccess: (res) => {
+      toast.success(`${res.deleted} ta ariza tozalandi`);
+      qc.invalidateQueries({ queryKey: ['correction-pending'] });
+      qc.invalidateQueries({ queryKey: ['correction-approved'] });
+      qc.invalidateQueries({ queryKey: ['correction-rejected'] });
+      qc.invalidateQueries({ queryKey: ['correction-stats'] });
+      qc.invalidateQueries({ queryKey: ['client-xato'] });
+      setClearOpen(false);
+      setClearPassword('');
+    },
+    onError: (e: any) => {
+      const msg = String(e?.message || '');
+      toast.error(/403|parol|password|forbidden/i.test(msg) ? "Parol noto'g'ri" : (e?.message || tc('error')));
+    },
+  });
 
   // ── Stats (badge'lar uchun) ──
   const statsQuery = useQuery({
@@ -2154,6 +2188,9 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
   };
 
   const pendingRows = pendingQuery.data?.rows || [];
+  const pendingRowsFiltered = pendingAgentFilter === 'all'
+    ? pendingRows
+    : pendingRows.filter((r) => r.agentState === pendingAgentFilter);
   const approvedRows = approvedQuery.data?.rows || [];
   const rejectedRows = rejectedQuery.data?.rows || [];
   const rawItems = rawQuery.data?.items || [];
@@ -2274,6 +2311,47 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   Excel
                 </button>
               )}
+              {/* Tozalash — parol bilan */}
+              <div className="relative">
+                <button
+                  onClick={() => setClearOpen((v) => !v)}
+                  title="Ro'yxatni tozalash"
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold transition-colors"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Tozalash
+                </button>
+                {clearOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[214]" onClick={() => { if (!clearMut.isPending) setClearOpen(false); }} />
+                    <div className="absolute right-0 top-full mt-2 z-[215] w-72 rounded-xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 p-3.5 text-left animate-in fade-in zoom-in-95 duration-150">
+                      <div className="flex items-center gap-1.5 text-[12px] font-bold text-rose-600 dark:text-rose-400 mb-1">
+                        <AlertTriangle className="h-3.5 w-3.5" /> {clearLabelMap[clearStatus]} arizalarini o'chirish
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 mb-2.5 leading-snug">Bu amal qaytarilmaydi. Tasdiqlash uchun parol kiriting.</div>
+                      <input
+                        type="password"
+                        value={clearPassword}
+                        onChange={(e) => setClearPassword(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && clearPassword && !clearMut.isPending) clearMut.mutate({ status: clearStatus, password: clearPassword }); }}
+                        placeholder="Parol"
+                        autoFocus
+                        className="w-full h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-white dark:bg-slate-950 px-3 text-[12px] text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-rose-400 mb-2.5"
+                      />
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setClearOpen(false)} disabled={clearMut.isPending}>Bekor</Button>
+                        <button
+                          onClick={() => clearMut.mutate({ status: clearStatus, password: clearPassword })}
+                          disabled={!clearPassword || clearMut.isPending}
+                          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[12px] font-bold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          {clearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                          Tozalash
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
               <button
                 onClick={onClose}
                 title="Yopish"
@@ -2296,10 +2374,28 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         {/* ═══ TAB: KUTILMOQDA ═══ */}
         {tab === 'pending' && (
           <>
-            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0">
-              <div className="relative max-w-sm">
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 shrink-0 flex items-center gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[180px] max-w-sm">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 dark:text-slate-500" />
                 <Input value={pendingQ} onChange={(e) => setPendingQ(e.target.value)} placeholder="Qidirish (klient, shartnoma, izoh)…" className="pl-9 h-9 text-[12px]" />
+              </div>
+              {/* Agent holati bo'yicha filtr (client-side) */}
+              <div className="inline-flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800">
+                {([['all', 'Hammasi', null], ['processing', 'Ishlanmoqda', 'bot'], ['needs_review', "Ko'rib chiqish", 'eye']] as const).map(([v, lbl, ic]) => (
+                  <button
+                    key={v}
+                    onClick={() => setPendingAgentFilter(v)}
+                    className={cn(
+                      'inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-semibold transition-all',
+                      pendingAgentFilter === v
+                        ? (v === 'processing' ? 'bg-violet-600 text-white shadow-sm' : v === 'needs_review' ? 'bg-amber-500 text-white shadow-sm' : 'bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100 shadow-sm')
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200',
+                    )}
+                  >
+                    {ic === 'bot' ? <Bot className="h-3 w-3" /> : ic === 'eye' ? <Eye className="h-3 w-3" /> : null}
+                    {lbl}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="flex-1 min-h-0 overflow-auto bg-slate-50/40 dark:bg-slate-900">
@@ -2308,8 +2404,8 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
                   <span className="text-[12px]">{tc('loading')}</span>
                 </div>
-              ) : pendingRows.length === 0 ? (
-                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">Kutilayotgan arizalar yo'q</div>
+              ) : pendingRowsFiltered.length === 0 ? (
+                <div className="py-16 text-center text-[12px] text-slate-400 dark:text-slate-500">{pendingRows.length === 0 ? "Kutilayotgan arizalar yo'q" : 'Tanlangan filtrga mos ariza yo\'q'}</div>
               ) : (
                 <table className="w-full text-[12px]">
                   <thead className="sticky top-0 z-10 bg-slate-100 dark:bg-slate-800 text-[10.5px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
@@ -2321,13 +2417,13 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
                       <th className="text-left px-3 py-2">Kim yubordi</th>
                       <th className="text-left px-3 py-2">Izoh</th>
-                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Bot className="h-3 w-3" /> Agent</span></th>
+                      <th className="text-left px-3 py-2 min-w-[220px]"><span className="inline-flex items-center gap-1"><Bot className="h-3 w-3" /> Agent</span></th>
                       <th className="text-right px-3 py-2"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                    {pendingRows.map((r) => (
-                      <tr key={r.id} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors">
+                    {pendingRowsFiltered.map((r) => (
+                      <tr key={r.id} onClick={() => setDetailRow(r)} className="hover:bg-rose-50/40 dark:hover:bg-rose-950/20 transition-colors cursor-pointer">
                         <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmtDate(r.date)}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={r.client || ''}>{r.client || '—'}</td>
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[140px] truncate" title={r.object || ''}>{r.object || '—'}</td>
@@ -2346,20 +2442,20 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           </span>
                         </td>
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
-                        <td className="px-3 py-2 max-w-[190px]">
+                        <td className="px-3 py-2 min-w-[220px] max-w-[300px]">
                           {(r.agentState === 'processing' || r.agentState === 'needs_review') ? (
                             <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); setAgentInfo(r); }}
+                              onClick={(e) => { e.stopPropagation(); setDetailRow(r); }}
                               title="Agent qarorini ko'rish"
-                              className="flex flex-col items-start gap-0.5 text-left rounded-md -mx-1 px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group"
+                              className="flex flex-col items-start gap-0.5 text-left w-full rounded-md -mx-1 px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group"
                             >
                               <span className="inline-flex items-center gap-1">
                                 <AgentStateChip state={r.agentState} reason={r.agentReason} />
                                 <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400" />
                               </span>
                               {r.agentState === 'needs_review' && r.agentReason ? (
-                                <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight line-clamp-2">{r.agentReason}</span>
+                                <span className="text-[10.5px] text-slate-400 dark:text-slate-500 leading-relaxed break-words line-clamp-2 max-w-[280px]">{r.agentReason}</span>
                               ) : null}
                             </button>
                           ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
@@ -2367,7 +2463,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex items-center gap-1.5 justify-end">
                           <button
-                            onClick={() => handleReject(r.id)}
+                            onClick={(e) => { e.stopPropagation(); handleReject(r.id); }}
                             disabled={rejectMut.isPending && rejectingId === r.id}
                             title="Arizani rad etish"
                             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-[11px] font-semibold text-rose-600 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50"
@@ -2378,12 +2474,12 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                             Rad etish
                           </button>
                           <button
-                            onClick={() => setApproval({
+                            onClick={(e) => { e.stopPropagation(); setApproval({
                               mode: 'approve', requestId: r.id, txId: r.txId,
                               existingAttachmentId: r.attachmentId || undefined,
                               existingAttachmentName: r.attachmentName || undefined,
                               prefill: { contractNo: r.proposedContractNo || r.contractNo || '', client: r.client || '', amount: r.amount, date: r.date, purpose: r.purpose, object: r.object },
-                            })}
+                            }); }}
                             className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg bg-gradient-to-br from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white text-[11px] font-semibold transition-all shadow-sm"
                           >
                             <Wrench className="h-3 w-3" /> To'g'rilash
@@ -2459,7 +2555,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                     {approvedRows.map((r) => (
-                      <tr key={r.id} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors">
+                      <tr key={r.id} onClick={() => setDetailRow(r)} className="hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20 transition-colors cursor-pointer">
                         <td className="px-3 py-2 whitespace-nowrap text-slate-600 dark:text-slate-300">{fmtDate(r.reviewedAt)}</td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300 max-w-[160px] truncate" title={r.client || ''}>{r.client || '—'}</td>
                         <td className="px-3 py-2">
@@ -2485,7 +2581,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           {r.attachmentId ? (
                             <div className="inline-flex items-center gap-1">
                               <button
-                                onClick={() => viewAttachment(r.txId, r.attachmentId!)}
+                                onClick={(e) => { e.stopPropagation(); viewAttachment(r.txId, r.attachmentId!); }}
                                 title={`Ko'rish: ${r.attachmentName || ''}`}
                                 className="inline-flex items-center gap-1.5 h-7 px-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 text-[11px] font-medium transition-all max-w-[150px]"
                               >
@@ -2493,7 +2589,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                                 <span className="truncate">{r.attachmentName || 'Ko\'rish'}</span>
                               </button>
                               <button
-                                onClick={() => apiDownload(`/transactions/${r.txId}/attachments/${r.attachmentId}/download`, r.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                                onClick={(e) => { e.stopPropagation(); apiDownload(`/transactions/${r.txId}/attachments/${r.attachmentId}/download`, r.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error'))); }}
                                 title="Yuklab olish"
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-600 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 transition-all shrink-0"
                               >
@@ -2745,110 +2841,165 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
       onDone={invalidateAll}
     />
 
-    {/* AGENT QARORI — to'liq izoh modali (drawer ustida) */}
-    {agentInfo && (
-      <>
-        <div
-          className="fixed inset-0 z-[320] bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
-          onClick={() => setAgentInfo(null)}
-        />
-        <div className="fixed inset-0 z-[330] flex items-center justify-center p-4 pointer-events-none">
-          <div className="pointer-events-auto w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden animate-in zoom-in-95 fade-in duration-150">
-            {/* Header */}
-            <div className={cn(
-              'px-5 py-4 text-white shrink-0 flex items-center gap-2.5',
-              agentInfo.agentState === 'processing'
-                ? 'bg-gradient-to-br from-violet-600 to-indigo-600'
-                : 'bg-gradient-to-br from-amber-500 to-orange-600',
-            )}>
-              <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
-                <Bot className="h-5 w-5" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">AI agent</div>
-                <div className="text-lg font-black tracking-tight truncate">Agent qarori</div>
-              </div>
+    {/* ARIZA TAFSILOTI — to'liq detal modal (drawer ustida) */}
+    {detailRow && (() => {
+      const d = detailRow;
+      const contractShown = d.appliedContractNo || d.proposedContractNo;
+      const amtPos = (d.amount ?? 0) >= 0;
+      const copy = (val: string | null | undefined, label: string) => {
+        if (!val) return;
+        navigator.clipboard.writeText(val);
+        toast.success(`${label} nusxalandi`);
+      };
+      const Field = ({ label, children, wide }: { label: string; children: React.ReactNode; wide?: boolean }) => (
+        <div className={wide ? 'col-span-2' : ''}>
+          <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">{label}</div>
+          <div className="text-[12px] text-slate-700 dark:text-slate-200">{children}</div>
+        </div>
+      );
+      const IdField = ({ label, value }: { label: string; value: string | null | undefined }) => (
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">{label}</div>
+          {value ? (
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[11.5px] text-slate-700 dark:text-slate-200 truncate" title={value}>{value}</span>
               <button
-                onClick={() => setAgentInfo(null)}
-                className="w-8 h-8 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+                onClick={() => copy(value, label)}
+                title="Nusxalash"
+                className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors shrink-0"
               >
-                <X className="h-4 w-4" />
+                <Copy className="h-3 w-3" />
               </button>
             </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-              {/* Holat badge */}
-              <div>
-                {agentInfo.agentState === 'processing' ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900 animate-pulse">
-                    <Bot className="h-3.5 w-3.5" /> Agent ishlamoqda
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900">
-                    <Eye className="h-3.5 w-3.5" /> Ko'rib chiqish kerak
-                  </span>
-                )}
+          ) : <span className="text-slate-400">—</span>}
+        </div>
+      );
+      return (
+        <>
+          <div
+            className="fixed inset-0 z-[320] bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-150"
+            onClick={() => setDetailRow(null)}
+          />
+          <div className="fixed inset-0 z-[330] flex items-center justify-center p-4 pointer-events-none">
+            <div className="pointer-events-auto w-full sm:max-w-2xl max-h-[88vh] flex flex-col rounded-2xl bg-white dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden animate-in zoom-in-95 fade-in duration-150">
+              {/* Header */}
+              <div className="px-5 py-4 text-white shrink-0 flex items-center gap-2.5 bg-gradient-to-br from-rose-600 to-red-600">
+                <div className="w-9 h-9 rounded-xl bg-white/15 grid place-items-center shrink-0">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Ariza tafsiloti</div>
+                  <div className="text-lg font-black tracking-tight truncate">{d.snapClient || d.client || 'To\'lov'}</div>
+                </div>
+                <button
+                  onClick={() => setDetailRow(null)}
+                  className="w-8 h-8 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 transition-colors shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
 
-              {/* To'liq izoh */}
-              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-slate-50/70 dark:bg-slate-900 overflow-hidden">
-                <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
-                  Agent izohi
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                {/* Holat badge */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {d.agentState === 'processing' && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 ring-1 ring-violet-200 dark:ring-violet-900 animate-pulse">
+                      <Bot className="h-3.5 w-3.5" /> Agent ishlamoqda
+                    </span>
+                  )}
+                  {d.agentState === 'needs_review' && (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900">
+                      <Eye className="h-3.5 w-3.5" /> Ko'rib chiqish kerak
+                    </span>
+                  )}
                 </div>
-                <div className="p-4 text-[12.5px] leading-relaxed text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
-                  {agentInfo.agentReason || <span className="text-slate-400">Izoh yo'q</span>}
-                </div>
-              </div>
 
-              {/* To'lov konteksti */}
-              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
-                <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
-                  To'lov ma'lumoti
-                </div>
-                <div className="p-4 grid grid-cols-2 gap-y-2.5 gap-x-4 text-[12px]">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Klient</div>
-                    <div className="font-semibold text-slate-800 dark:text-slate-200 truncate" title={agentInfo.snapClient || agentInfo.client || ''}>{agentInfo.snapClient || agentInfo.client || '—'}</div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Summa</div>
-                    <div className={cn('font-bold tabular-nums', (agentInfo.amount ?? 0) >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
-                      {agentInfo.amount == null ? '—' : <>{(agentInfo.amount ?? 0) >= 0 ? '+' : '−'}{formatMoney(Math.abs(agentInfo.amount))}</>}
+                {/* Agent izohi (highlighted) */}
+                {d.agentReason ? (
+                  <div className="rounded-xl ring-1 ring-amber-200 dark:ring-amber-900 bg-amber-50/60 dark:bg-amber-950/20 overflow-hidden">
+                    <div className="px-4 py-2 bg-amber-100/60 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-900 text-[10px] uppercase tracking-widest font-bold text-amber-700 dark:text-amber-400 inline-flex items-center gap-1.5">
+                      <Bot className="h-3 w-3" /> Agent izohi
+                    </div>
+                    <div className="p-4 text-[12.5px] leading-relaxed break-words text-slate-700 dark:text-slate-200 whitespace-pre-wrap">
+                      {d.agentReason}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Obyekt</div>
-                    <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={agentInfo.snapObject || agentInfo.object || ''}>{agentInfo.snapObject || agentInfo.object || '—'}</div>
+                ) : null}
+
+                {/* Barcha maydonlar */}
+                <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-800 bg-white dark:bg-slate-950 overflow-hidden">
+                  <div className="px-4 py-2 bg-slate-100/70 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase tracking-widest font-bold text-slate-500 dark:text-slate-400">
+                    To'lov ma'lumoti
                   </div>
-                  <div>
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Shartnoma (taklif)</div>
-                    <div className="font-medium text-slate-700 dark:text-slate-300 truncate" title={agentInfo.proposedContractNo || ''}>{agentInfo.proposedContractNo || '—'}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Maqsad / izoh</div>
-                    <div className="text-slate-600 dark:text-slate-400 text-[11.5px] leading-snug">{agentInfo.snapPurpose || agentInfo.purpose || '—'}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-[10px] uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-0.5">Kim yubordi</div>
-                    <div className="inline-flex items-center gap-1.5 font-medium text-slate-700 dark:text-slate-300">
-                      <SourceIcon source={agentInfo.source} />
-                      <span className="truncate">{agentInfo.submittedByName || '—'}</span>
-                    </div>
+                  <div className="p-4 grid grid-cols-2 gap-y-3 gap-x-4">
+                    <Field label="Klient"><span className="font-semibold">{d.snapClient || d.client || '—'}</span></Field>
+                    <Field label="Summa">
+                      <span className={cn('font-bold tabular-nums', amtPos ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                        {d.amount == null ? '—' : <>{amtPos ? '+' : '−'}{formatMoney(Math.abs(d.amount))}</>}
+                      </span>
+                    </Field>
+                    <Field label="Sana">{fmtDate(d.date)}</Field>
+                    <Field label="Obyekt"><span className="break-words">{d.snapObject || d.object || '—'}</span></Field>
+                    <Field label="Shartnoma">
+                      {contractShown ? <span className="font-mono">{contractShown}</span> : <span className="text-slate-400">—</span>}
+                    </Field>
+                    <Field label="Kategoriya">{d.categoryName ? <span>{d.categoryName}{d.subCategoryName ? <span className="text-slate-400"> / {d.subCategoryName}</span> : null}</span> : <span className="text-slate-400">—</span>}</Field>
+                    <Field label="Maqsad / izoh" wide><span className="text-slate-600 dark:text-slate-400 text-[11.5px] leading-snug break-words whitespace-pre-wrap">{d.snapPurpose || d.purpose || '—'}</span></Field>
+                    <Field label="Kim yubordi">
+                      <span className="inline-flex items-center gap-1.5"><SourceIcon source={d.source} /> {d.submittedByName || '—'}</span>
+                    </Field>
+                    <Field label="Kim ko'rib chiqdi">
+                      {d.reviewedByName ? (
+                        <span className="inline-flex items-center gap-1.5"><span className="truncate">{d.reviewedByName}</span><ActorBadge type={d.reviewedByType} /></span>
+                      ) : <span className="text-slate-400">—</span>}
+                    </Field>
+                    <IdField label="IXT ID" value={d.externalId} />
+                    <IdField label="Tranzaksiya ID" value={d.txId} />
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Footer */}
-            <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
-              <Button variant="outline" size="sm" onClick={() => setAgentInfo(null)}>
-                <X className="h-3.5 w-3.5 mr-1" /> Yopish
-              </Button>
+                {/* Ariza fayli */}
+                {d.attachmentId ? (
+                  <div className="flex items-center gap-2.5 rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/70 dark:bg-emerald-950/20 px-3 py-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 grid place-items-center shrink-0">
+                      <Paperclip className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase tracking-wider font-bold text-emerald-600 dark:text-emerald-400">Ariza fayli</div>
+                      <div className="text-[12px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={d.attachmentName || ''}>{d.attachmentName || 'Ariza'}</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => viewAttachment(d.txId, d.attachmentId!)}
+                        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-semibold transition-colors"
+                      >
+                        <Eye className="h-3.5 w-3.5" /> Ko'rish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => apiDownload(`/transactions/${d.txId}/attachments/${d.attachmentId}/download`, d.attachmentName || 'ariza').catch((e: any) => toast.error(e?.message || tc('error')))}
+                        title="Yuklab olish"
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg ring-1 ring-emerald-300 dark:ring-emerald-800 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 transition-colors"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-3 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-end shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setDetailRow(null)}>
+                  <X className="h-3.5 w-3.5 mr-1" /> Yopish
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </>
-    )}
+        </>
+      );
+    })()}
     </>
   );
 }
