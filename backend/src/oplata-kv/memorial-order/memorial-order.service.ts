@@ -431,38 +431,64 @@ export class MemorialOrderService {
     doc.y = yMax + 1.5;
   }
 
-  /** Boshdagi umumiy ro'yxat — jami/to'liq/ma'lumoti yo'q + qaysi to'lovlar (sana) */
+  /** Boshdagi реестр — BARCHA to'lovlar jadval ko'rinishida (ma'lumoti yo'qlari ajratilgan) */
   private drawSummary(doc: Doc, contractNo: string, blocks: OrderBlock[], incomplete: OrderBlock[], todayStr: string) {
     const left = doc.page.margins.left;
     const right = doc.page.width - doc.page.margins.right;
+    const bottom = doc.page.height - doc.page.margins.bottom;
 
-    doc.font('B').fontSize(14).fillColor('#0f172a').text('МЕМОРИАЛЬНЫЙ ОРДЕР', left, doc.y);
+    doc.font('B').fontSize(14).fillColor('#0f172a').text('МЕМОРИАЛЬНЫЙ ОРДЕР — РЕЕСТР', left, doc.y);
     doc.font('R').fontSize(9).fillColor('#475569')
       .text(`Договор № ${contractNo}    ·    Изг. ${todayStr}`, left, doc.y + 1);
-    doc.y += 8;
+    doc.y += 6;
 
     const total = blocks.length;
     const ok = total - incomplete.length;
-    doc.font('R').fontSize(10).fillColor('#0f172a');
-    doc.text(`Всего платежей: ${total}        Полные данные: ${ok}        Без данных: ${incomplete.length}`, left, doc.y);
-    doc.y += 5;
-
-    if (incomplete.length) {
-      doc.font('B').fontSize(9).fillColor('#b45309')
-        .text(`Платежи без полных банковских данных (${incomplete.length}):`, left, doc.y);
-      doc.y += 2;
-      doc.font('R').fontSize(8.5).fillColor('#7c2d12');
-      incomplete.forEach((b, i) => {
-        doc.text(`${i + 1}.   ${this.fmtDate(b.date)}   —   ${this.fmtMoney(b.amount)} сум`, left + 10, doc.y + 1);
-        doc.y += 1;
-      });
-      doc.fillColor('#000');
-    }
-
+    doc.font('R').fontSize(10).fillColor('#0f172a')
+      .text(`Всего платежей: ${total}        Полные данные: ${ok}        Без данных: ${incomplete.length}`, left, doc.y);
     doc.y += 8;
-    doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(1).strokeColor('#94a3b8').stroke();
-    doc.strokeColor('#000');
-    doc.y += 8;
+
+    // Ustunlar
+    const cN = left;              const wN = 22;
+    const cDate = left + 22;      const wDate = 56;
+    const cDoc = left + 78;       const wDoc = 62;
+    const cPayer = left + 140;    const wPayer = 250;
+    const cSum = left + 392;      const wSum = right - (left + 392);
+
+    const drawHeader = () => {
+      const y = doc.y;
+      doc.font('B').fontSize(7.5).fillColor('#334155');
+      doc.text('№', cN, y, { width: wN });
+      doc.text('Дата', cDate, y, { width: wDate });
+      doc.text('№ ордера', cDoc, y, { width: wDoc });
+      doc.text('Плательщик', cPayer, y, { width: wPayer });
+      doc.text('Сумма', cSum, y, { width: wSum, align: 'right' });
+      doc.y = y + 11;
+      doc.moveTo(left, doc.y - 1).lineTo(right, doc.y - 1).lineWidth(0.6).strokeColor('#94a3b8').stroke();
+      doc.strokeColor('#000');
+    };
+    drawHeader();
+
+    blocks.forEach((b, i) => {
+      if (doc.y + 13 > bottom) { doc.addPage(); drawHeader(); }
+      const bad = !b.hasTx || !b.fromAccount;
+      const color = bad ? '#b45309' : '#0f172a';
+      const y = doc.y;
+      doc.fillColor(color);
+      doc.font('R').fontSize(8).text(String(i + 1), cN, y, { width: wN });
+      doc.text(this.fmtDate(b.date), cDate, y, { width: wDate });
+      doc.text(b.docNumber || '—', cDoc, y, { width: wDoc });
+      doc.text(b.fromName || (bad ? '(нет данных)' : '—'), cPayer, y, { width: wPayer, height: 10, ellipsis: true });
+      doc.font('B').fontSize(8).text(this.fmtMoney(b.amount), cSum, y, { width: wSum, align: 'right' });
+      doc.y = y + 12;
+      // ingichka ajratuvchi
+      doc.moveTo(left, doc.y - 1.5).lineTo(right, doc.y - 1.5).lineWidth(0.3).strokeColor('#e2e8f0').stroke();
+      doc.strokeColor('#000');
+    });
+    doc.fillColor('#000');
+
+    // Реестрдан keyin batafsil orderlar yangi sahifadan boshlanadi
+    doc.addPage();
   }
 
   private fmtDate(d: Date): string {
