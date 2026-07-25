@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { AttachmentsService } from '../attachments/attachments.service';
 import { CrmService } from '../crm/crm.service';
+import { CryptoService } from '../common/crypto/crypto.service';
 
 type Flow = 'all' | 'in' | 'out';
 
@@ -21,6 +22,7 @@ export class CorrectionService {
     private readonly categorization: CategorizationService,
     private readonly attachments: AttachmentsService,
     private readonly crm: CrmService,
+    private readonly crypto: CryptoService,
   ) {}
 
   // ─── Ariza yuborish (pending) ──────────────────────────────────────
@@ -326,7 +328,7 @@ export class CorrectionService {
   async approve(
     id: string,
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
-    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorType?: 'user' | 'agent'; actorName?: string },
+    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorType?: 'user' | 'agent'; actorName?: string; notify?: boolean },
   ) {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id } });
     if (!req) throw new NotFoundException('Ariza topilmadi');
@@ -388,6 +390,11 @@ export class CorrectionService {
       this.attachments.notifyApproved(attachmentId, actorEmail || undefined)
         .catch((e: any) => this.log.warn(`notifyApproved xato: ${e?.message}`));
     }
+    // Guruhga qaror xabari (shartnoma/sana/summa/maqsad/kim) — fire-and-forget.
+    // directCorrect (instant tuzatish) uchun notify:false — faqat ariza-oqimi xabar beradi.
+    if (opts.notify !== false) {
+      this.notifyGroupDecision(updated).catch((e: any) => this.log.warn(`Guruh xabar (approve) xato: ${e?.message}`));
+    }
 
     this.log.log(`Ariza tasdiqlandi: ${id} · tx=${req.txId} · ${contract} · ${actorEmail}`);
     return { ok: true, item: this.serialize(updated) };
@@ -415,6 +422,7 @@ export class CorrectionService {
       categoryId: opts.categoryId || null,
       subCategoryId: opts.subCategoryId || null,
       actorId: opts.actorId,
+      notify: false, // instant tuzatish — guruhga xabar yubormaymiz (spam bo'lmasin)
     });
   }
 
@@ -434,7 +442,89 @@ export class CorrectionService {
         rejectReason: (reason || '').slice(0, 2000) || null,
       },
     });
+    // Bekor qilindi — guruhga xabar (fire-and-forget)
+    this.notifyGroupDecision(updated).catch((e: any) => this.log.warn(`Guruh xabar (reject) xato: ${e?.message}`));
     return { ok: true, item: this.serialize(updated) };
+  }
+
+  // ─── Guruhga xabar (tasdiqlangan / bekor qilingan) ─────────────────
+  private htmlEsc(s: any): string {
+    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  private fmtMoney(v: any): string {
+    if (v == null) return '—';
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    return n.toLocaleString('ru-RU', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  }
+  private fmtDate(d: any): string {
+    if (!d) return '—';
+    try {
+      const dt = new Date(d);
+      const tash = new Date(dt.getTime() + 5 * 60 * 60 * 1000); // UTC+5
+      const dd = String(tash.getUTCDate()).padStart(2, '0');
+      const mm = String(tash.getUTCMonth() + 1).padStart(2, '0');
+      return `${dd}.${mm}.${tash.getUTCFullYear()}`;
+    } catch { return '—'; }
+  }
+
+  /** Submitter Telegram @username — chat_id bo'yicha (best-effort). */
+  private async tgResolveUsername(token: string, chatId?: string | null): Promise<string> {
+    if (!chatId || !/^-?\d+$/.test(String(chatId))) return '';
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/getChat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      const u = data?.result?.username;
+      return u ? ` (@${u})` : '';
+    } catch { return ''; }
+  }
+
+  /**
+   * Ariza tasdiqlangan/bekor qilinganda guruhga Telegram xabari.
+   * Faqat approved/rejected — "ko'rish kerak" (pending) uchun yuborilmaydi.
+   */
+  private async notifyGroupDecision(req: any): Promise<void> {
+    if (!req || (req.status !== 'approved' && req.status !== 'rejected')) return;
+    // Bot token + guruh — agent sozlamasidan
+    const [encTok, grp] = await Promise.all([
+      this.prisma.setting.findUnique({ where: { key: 'agent.botToken' } }),
+      this.prisma.setting.findUnique({ where: { key: 'agent.groupId' } }),
+    ]);
+    const groupId = grp?.value || null;
+    if (!encTok?.value || !groupId) return; // sozlanmagan — jim o'tamiz
+    let token: string;
+    try { token = this.crypto.decrypt(encTok.value); } catch { return; }
+
+    const approved = req.status === 'approved';
+    const contract = req.appliedContractNo || req.snapContractNo || req.proposedContractNo || '—';
+    const uname = await this.tgResolveUsername(token, req.submittedByChatId);
+
+    const lines = [
+      approved ? '✅ <b>Ariza tasdiqlandi</b>' : '❌ <b>Ariza bekor qilindi</b>',
+      '',
+      `🧾 Shartnoma: <b>${this.htmlEsc(contract)}</b>`,
+      `📅 Sana: ${this.htmlEsc(this.fmtDate(req.snapDate))}`,
+      `💵 Summa: <b>${this.htmlEsc(this.fmtMoney(req.snapAmount))}</b> so'm`,
+      `🎯 Maqsad: ${this.htmlEsc(req.snapPurpose || '—')}`,
+      '',
+      `👤 Yuborgan: ${this.htmlEsc(req.submittedByName || '—')}${this.htmlEsc(uname)}`,
+      approved
+        ? `✔️ Tasdiqladi: ${this.htmlEsc(req.reviewedByName || '—')}`
+        : `🚫 Bekor qildi: ${this.htmlEsc(req.reviewedByName || '—')}`,
+    ];
+    if (!approved && req.rejectReason) lines.push(`❗️ Sabab: ${this.htmlEsc(req.rejectReason)}`);
+
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: groupId, text: lines.join('\n'), parse_mode: 'HTML', disable_web_page_preview: true }),
+      });
+    } catch (e: any) {
+      this.log.warn(`Guruhga xabar yuborilmadi: ${e?.message}`);
+    }
   }
 
   async stats() {

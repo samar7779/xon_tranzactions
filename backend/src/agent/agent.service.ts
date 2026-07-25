@@ -30,6 +30,7 @@ export class AgentService {
   private readonly K_DATEFROM = 'agent.dateFrom';
   private readonly K_DAILY_TIME = 'agent.dailyTime';
   private readonly K_LAST_RESULT = 'agent.lastResult';
+  private readonly K_LAST_MSG = 'agent.lastDigestMsgId'; // oxirgi digest message_id (eskisini o'chirish uchun)
 
   // Kuniga 1 marta guard — qaysi Tashkent kuni jo'natildi
   private lastRunDay: number | null = null;
@@ -216,15 +217,20 @@ export class AgentService {
 
     // 1) login_url (chat_id auth) — BotFather /setdomain ulangan bo'lsa ishlaydi.
     const loginBtn = { inline_keyboard: [[{ text: '📋 Ro\'yxat', login_url: { url: `${base}/uz/xato-list` } }]] };
-    let sent = await this.sendMessage(token, groupId, text, loginBtn);
+    let msgId = await this.sendMessage(token, groupId, text, loginBtn);
 
     // 2) Fallback — login_url qabul qilinmasa (domen ulanmagan yoki guruh cheklovi),
     //    maxfiy kalit havolasi bilan jo'natamiz (agent ishlashda davom etadi).
-    if (!sent) {
+    if (!msgId) {
       const keyBtn = { inline_keyboard: [[{ text: '📋 Ro\'yxat', url: await this.xatoLink() }]] };
-      sent = await this.sendMessage(token, groupId, text, keyBtn);
+      msgId = await this.sendMessage(token, groupId, text, keyBtn);
     }
-    if (!sent) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
+    if (!msgId) return { ok: false, error: "Telegram jo'natilmadi (bot/guruh tekshiring)" };
+
+    // Yangi digest yuborildi — oldingi digestni o'chiramiz (chat to'lib ketmasin).
+    const prevMsg = await this.settings.get(this.K_LAST_MSG);
+    if (prevMsg) { await this.deleteMessage(token, groupId, Number(prevMsg)); }
+    await this.settings.set(this.K_LAST_MSG, String(msgId), 'agent');
 
     await this.saveResult(`${count} ta XATO — kunlik xabar jo'natildi`);
     this.log.log(`Agent digest jo'natildi: ${count} ta XATO`);
@@ -466,7 +472,7 @@ export class AgentService {
     } catch { return null; }
   }
 
-  private async sendMessage(token: string, chatId: string, text: string, replyMarkup?: any): Promise<boolean> {
+  private async sendMessage(token: string, chatId: string, text: string, replyMarkup?: any): Promise<number | null> {
     try {
       const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
         method: 'POST',
@@ -482,12 +488,23 @@ export class AgentService {
       const data: any = await res.json().catch(() => ({}));
       if (!data?.ok) {
         this.log.warn(`Telegram xato: ${data?.description || `HTTP ${res.status}`}`);
-        return false;
+        return null;
       }
-      return true;
+      return data?.result?.message_id ?? null;
     } catch (e: any) {
       this.log.warn(`Telegram send xato: ${e?.message}`);
-      return false;
+      return null;
     }
+  }
+
+  private async deleteMessage(token: string, chatId: string, messageId: number): Promise<void> {
+    if (!messageId || Number.isNaN(messageId)) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/deleteMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, message_id: messageId }),
+      });
+    } catch { /* eski xabar allaqachon yo'q bo'lishi mumkin — e'tibor bermaymiz */ }
   }
 }
