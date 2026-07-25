@@ -344,9 +344,13 @@ export class AgentAiService {
     ]);
     const system = [
       `Sen "${name}" — "Xon Saroy" ko'chmas mulk quruvchisi uchun XATO to'lov tuzatish arizalarini tekshiruvchi AI agentsan.`,
-      `Admin bilan O'ZBEK tilida qisqa, aniq va do'stona suhbatlashasan. Admin rasm (masalan ariza) yuborsa — uni o'qib tahlil qil.`,
+      `Admin bilan O'ZBEK tilida aniq, foydali va do'stona suhbatlashasan. Admin rasm (masalan ariza) yuborsa — uni o'qib tahlil qil.`,
       `Qoidalaring: shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan.`,
-      `MUHIM: shartnoma/klient/ID bo'yicha savol bo'lsa "lookup" tool orqali bazadan O'ZING qidir. XATO to'lovlar bo'yicha savol (nechta, qaysi obyekt, summa) bo'lsa "xato_query" tool orqali O'ZING ol. Taxmin qilma — avval tool bilan tekshir.`,
+      `SENDA QUROLLAR BOR — ularni FAOL ishlat, hech qachon "imkonim yo'q / eslay olmayman" deb rad qilma:`,
+      `• "lookup" — ariza yoki to'lovni bazadan topish (shartnoma/klient/ID bo'yicha).`,
+      `• "xato_query" — barcha XATO to'lovlar bo'yicha ma'lumot (soni/summa/misollar).`,
+      `• "read_ariza_file" — arizaning biriktirilgan FAYLINI (rasm yoki PDF) ochib O'QIYSAN. "Fayl ichida nima yozilgan", "arizani ko'rsat", "faylni o'qi" kabi savollarda SHU tool'ni chaqir va faylni ko'rib javob ber. Fayl har suhbatda qaytadan o'qiladi — bazada saqlangan, yo'qolmaydi.`,
+      `Taxmin qilma — avval mos tool bilan tekshir, keyin aniq javob ber. Savolga to'liq va foydali javob ber, quruq rad etma.`,
       `Joriy holat: ${pending} ta kutilmoqda, ${needsReview} ta xodimga qoldirilgan, ${agentApproved} ta sen tasdiqlagan, ${agentRejected} ta sen rad etgan.`,
     ].join('\n');
     const tools = [
@@ -359,6 +363,11 @@ export class AgentAiService {
         name: 'xato_query',
         description: 'XATO (CRM\'da tasdiqlanmagan) to\'lovlar bo\'yicha ma\'lumot — jami soni, umumiy summasi va shartnoma/klient/obyekt bo\'yicha misollar.',
         input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ixtiyoriy filtr: shartnoma/klient/obyekt' } } },
+      },
+      {
+        name: 'read_ariza_file',
+        description: 'Arizaning biriktirilgan faylini (rasm yoki PDF) ochib o\'qish — ichidagi ma\'lumotni ko\'rish uchun. Ariza ID, shartnoma raqami yoki klient ismi bo\'yicha topadi. "Fayl ichida nima yozilgan", "arizani ko\'rsat" kabi savollar uchun.',
+        input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ariza ID / shartnoma raqami / klient ismi' } }, required: ['query'] },
       },
     ];
 
@@ -378,11 +387,19 @@ export class AgentAiService {
           const toolResults: any[] = [];
           for (const block of data.content || []) {
             if (block.type === 'tool_use') {
-              let result: any;
-              if (block.name === 'lookup') result = await this.lookupForChat(String(block.input?.query || ''));
-              else if (block.name === 'xato_query') result = await this.queryXatoForChat(String(block.input?.query || ''));
-              else result = { error: 'noma\'lum tool' };
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
+              if (block.name === 'read_ariza_file') {
+                // Fayl o'qish — natijaga rasm/PDF blokini QO'SHAMIZ (Claude ko'rsin)
+                const r = await this.readArizaFileForChat(String(block.input?.query || ''));
+                const trContent: any[] = [{ type: 'text', text: r.found ? r.summary : (r.message || 'Fayl topilmadi') }];
+                if (r.found && r.fileBlock) trContent.push(r.fileBlock);
+                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: trContent });
+              } else {
+                let result: any;
+                if (block.name === 'lookup') result = await this.lookupForChat(String(block.input?.query || ''));
+                else if (block.name === 'xato_query') result = await this.queryXatoForChat(String(block.input?.query || ''));
+                else result = { error: 'noma\'lum tool' };
+                toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
+              }
             }
           }
           convo.push({ role: 'user', content: toolResults });
@@ -422,6 +439,44 @@ export class AgentAiService {
         summa: r.paymentAmount != null ? Number(r.paymentAmount) : null, sana: r.date, maqsad: r.purpose,
       })),
     };
+  }
+
+  /** Chat tool: arizaning biriktirilgan faylini (rasm/PDF) o'qish — Claude ko'rishi uchun blok qaytaradi. */
+  private async readArizaFileForChat(query: string): Promise<{ found: boolean; summary?: string; message?: string; fileBlock?: any }> {
+    const q = (query || '').trim();
+    if (!q) return { found: false, message: 'Qidiruv so\'zi kerak (ariza ID / shartnoma / klient).' };
+    const req = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: {
+        attachmentId: { not: null },
+        OR: [
+          { id: q },
+          { proposedContractNo: { contains: q, mode: 'insensitive' } },
+          { snapContractNo: { contains: q, mode: 'insensitive' } },
+          { appliedContractNo: { contains: q, mode: 'insensitive' } },
+          { snapClient: { contains: q, mode: 'insensitive' } },
+          { submittedByName: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+    if (!req) return { found: false, message: `"${q}" bo'yicha fayl biriktirilgan ariza topilmadi.` };
+    const att = await this.prisma.transactionAttachment.findUnique({ where: { id: req.attachmentId! } });
+    if (!att) return { found: false, message: 'Ariza fayli topilmadi (biriktirma o\'chirilgan).' };
+    let buf: Buffer;
+    try { buf = await fs.readFile(att.storagePath); }
+    catch { return { found: false, message: 'Fayl diskda topilmadi.' }; }
+    const b64 = buf.toString('base64');
+    const mt = att.mimeType || '';
+    const statusUz = req.status === 'approved' ? 'tasdiqlangan' : req.status === 'rejected' ? 'rad etilgan' : 'kutilmoqda';
+    const summary = `Ariza fayli: ${att.filename} · shartnoma ${req.appliedContractNo || req.proposedContractNo || req.snapContractNo || '—'} · klient ${req.snapClient || '—'} · holat: ${statusUz}. Fayl ichidagi ma'lumotni o'qib, admin savoliga javob ber.`;
+    if (mt === 'application/pdf' || att.filename.toLowerCase().endsWith('.pdf')) {
+      return { found: true, summary, fileBlock: { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } } };
+    }
+    if (mt.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(att.filename)) {
+      const media = mt.startsWith('image/') ? mt : 'image/jpeg';
+      return { found: true, summary, fileBlock: { type: 'image', source: { type: 'base64', media_type: media, data: b64 } } };
+    }
+    return { found: false, message: `Fayl turi qo'llab-quvvatlanmaydi (${mt || att.filename}). Faqat rasm va PDF o'qiladi.` };
   }
 
   /** Chat tarixi. */
