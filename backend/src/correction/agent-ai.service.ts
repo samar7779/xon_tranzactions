@@ -310,17 +310,19 @@ export class AgentAiService {
     };
   }
 
-  /** Agent bilan suhbat (Claude chat) — admin savol beradi. */
+  /** Agent bilan suhbat (Claude chat + qidiruv tool). Admin savol beradi, agent
+   *  arizani/to'lovni bazadan o'zi topib javob beradi. */
   async chat(messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<{ ok: boolean; reply?: string; error?: string }> {
     const apiKey = await this.getApiKey();
     if (!apiKey) return { ok: false, error: 'AI kalit sozlanmagan' };
-    const msgs = (messages || [])
+    const convo: any[] = (messages || [])
       .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
       .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
       .slice(-20);
-    if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return { ok: false, error: 'Xabar yo\'q' };
+    if (!convo.length || convo[convo.length - 1].role !== 'user') return { ok: false, error: 'Xabar yo\'q' };
 
     const name = await this.getName();
+    const model = await this.getModel();
     const [pending, needsReview, agentApproved, agentRejected] = await Promise.all([
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: null } }),
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: 'needs_review' } }),
@@ -330,24 +332,123 @@ export class AgentAiService {
     const system = [
       `Sen "${name}" — "Xon Saroy" ko'chmas mulk quruvchisi uchun XATO to'lov tuzatish arizalarini tekshiruvchi AI agentsan.`,
       `Admin bilan O'ZBEK tilida qisqa, aniq va do'stona suhbatlashasan.`,
-      `Sening qoidalaring: ariza faylini o'qiysan; shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan; tasdiqlaysan/rad etasan/xodimga qoldirasan.`,
+      `Qoidalaring: shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan; tasdiqlaysan/rad etasan/xodimga qoldirasan.`,
+      `MUHIM: agar admin shartnoma raqami, klient ismi yoki to'lov/ariza ID sini bersa — "lookup" tool orqali bazadan O'ZING qidirib top, so'ng natijani tahlil qilib javob ber. Taxmin qilma — avval qidir.`,
       `Joriy holat: ${pending} ta kutilmoqda, ${needsReview} ta xodimga qoldirilgan, ${agentApproved} ta sen tasdiqlagan, ${agentRejected} ta sen rad etgan.`,
-      `Qarorlaringni va qoidalaringni tushuntira olasan. Aniq ma'lumot bo'lmasa, taxmin qilmasdan ayt.`,
     ].join('\n');
+    const tools = [{
+      name: 'lookup',
+      description: 'Ariza yoki to\'lovni bazadan qidirish — shartnoma raqami, klient ismi, to\'lov ID, ariza ID yoki bank external ID bo\'yicha.',
+      input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Qidiruv so\'zi (shartnoma/klient/ID)' } }, required: ['query'] },
+    }];
 
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model: await this.getModel(), max_tokens: 1024, system, messages: msgs }),
-      });
-      const data: any = await res.json().catch(() => ({}));
-      if (!res.ok) return { ok: false, error: `Claude API xato: ${data?.error?.message || res.status}` };
-      const reply = (data?.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
-      return { ok: true, reply: reply || '(bo\'sh javob)' };
+      for (let i = 0; i < 5; i++) {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify({ model, max_tokens: 1200, system, messages: convo, tools }),
+        });
+        const data: any = await res.json().catch(() => ({}));
+        if (!res.ok) return { ok: false, error: `Claude API xato: ${data?.error?.message || res.status}` };
+
+        if (data?.stop_reason === 'tool_use') {
+          convo.push({ role: 'assistant', content: data.content });
+          const toolResults: any[] = [];
+          for (const block of data.content || []) {
+            if (block.type === 'tool_use' && block.name === 'lookup') {
+              const found = await this.lookupForChat(String(block.input?.query || ''));
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(found) });
+            }
+          }
+          convo.push({ role: 'user', content: toolResults });
+          continue;
+        }
+        const reply = (data?.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
+        return { ok: true, reply: reply || '(bo\'sh javob)' };
+      }
+      return { ok: true, reply: 'Javob juda uzun bo\'ldi — savolni aniqroq bering.' };
     } catch (e: any) {
       return { ok: false, error: e?.message };
     }
+  }
+
+  /** Chat tool: ariza yoki to'lovni bazadan qidirish. */
+  private async lookupForChat(query: string) {
+    const q = (query || '').trim();
+    if (!q) return { found: false, message: 'Qidiruv so\'zi bo\'sh' };
+
+    // 1) Arizalar
+    const arizalar = await this.prisma.xatoCorrectionRequest.findMany({
+      where: {
+        OR: [
+          { id: q }, { txId: q }, { oplataKvId: q },
+          { proposedContractNo: { contains: q, mode: 'insensitive' } },
+          { snapContractNo: { contains: q, mode: 'insensitive' } },
+          { snapExternalId: { contains: q, mode: 'insensitive' } },
+          { snapClient: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      take: 5, orderBy: { submittedAt: 'desc' },
+      select: {
+        id: true, status: true, agentState: true, agentReason: true, rejectReason: true,
+        proposedContractNo: true, appliedContractNo: true, categoryName: true, subCategoryName: true,
+        snapClient: true, snapObject: true, snapAmount: true, snapPurpose: true, snapExternalId: true,
+        submittedByName: true, reviewedByName: true, reviewedByType: true, submittedAt: true, reviewedAt: true,
+      },
+    });
+    if (arizalar.length) {
+      return {
+        found: true, type: 'ariza', count: arizalar.length,
+        items: arizalar.map((r) => ({
+          arizaId: r.id, status: r.status, agentState: r.agentState, agentReason: r.agentReason,
+          rejectReason: r.rejectReason, taklifShartnoma: r.proposedContractNo, qollanganShartnoma: r.appliedContractNo,
+          kategoriya: r.categoryName, subKategoriya: r.subCategoryName, klient: r.snapClient, obyekt: r.snapObject,
+          summa: r.snapAmount != null ? Number(r.snapAmount) : null, maqsad: r.snapPurpose, ixtId: r.snapExternalId,
+          kimYubordi: r.submittedByName, kimKordi: r.reviewedByName, kim: r.reviewedByType,
+        })),
+      };
+    }
+
+    // 2) To'lovlar (OplataKv)
+    const payments = await this.prisma.oplataKv.findMany({
+      where: {
+        OR: [
+          { id: q }, { sourceTxId: q },
+          { contractNo: { contains: q, mode: 'insensitive' } },
+          { client: { contains: q, mode: 'insensitive' } },
+        ],
+      },
+      take: 5,
+      select: { id: true, contractNo: true, client: true, object: true, paymentAmount: true, date: true, purpose: true, txType: true, sourceTxId: true },
+    });
+    if (payments.length) {
+      return {
+        found: true, type: 'tolov', count: payments.length,
+        items: payments.map((p) => ({
+          tolovId: p.id, shartnoma: p.contractNo, klient: p.client, obyekt: p.object,
+          summa: p.paymentAmount != null ? Number(p.paymentAmount) : null,
+          sana: p.date, maqsad: p.purpose, tur: p.txType, txId: p.sourceTxId,
+        })),
+      };
+    }
+
+    // 3) Tranzaksiya (id yoki external id)
+    const tx = await this.prisma.transaction.findFirst({
+      where: { OR: [{ id: q }, { externalId: q }] },
+      select: { id: true, externalId: true, contractNumber: true, fromName: true, amount: true, direction: true, valueDate: true, description: true },
+    });
+    if (tx) {
+      return {
+        found: true, type: 'tranzaksiya',
+        item: {
+          txId: tx.id, ixtId: tx.externalId, shartnoma: tx.contractNumber, klient: tx.fromName,
+          summa: Number(tx.amount) * (tx.direction === 'OUT' ? -1 : 1), sana: tx.valueDate, maqsad: tx.description,
+        },
+      };
+    }
+
+    return { found: false, message: `"${q}" bo'yicha ariza yoki to'lov topilmadi` };
   }
 
   /** Agent oxirgi qarorlari (faoliyat lentasi). */
