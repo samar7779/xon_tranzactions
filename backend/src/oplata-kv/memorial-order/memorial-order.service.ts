@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import * as path from 'path';
 import * as fs from 'fs';
 import PDFDocument from 'pdfkit';
+import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CryptoService } from '../../common/crypto/crypto.service';
 import { KapitalbankClient } from '../../integrations/kapitalbank/kapitalbank.client';
@@ -68,13 +69,92 @@ export class MemorialOrderService {
     const cn = (contractNo || '').trim();
     if (!cn) throw new NotFoundException('Shartnoma raqami kerak');
 
-    // 1. Shartnomaning barcha to'lovlari (sana bo'yicha), musbat summalar
+    const blocks = await this.buildBlocks(cn, opts);
+
+    const buffer = await this.renderPdf(cn, blocks);
+    return { buffer, filename: `mem-order-${this.safeName(cn)}.pdf` };
+  }
+
+  /** Shartnoma bo'yicha Excel (.xlsx) — barcha to'lovlar реестр jadval + tafsilotli ustunlar */
+  async generateXlsx(
+    contractNo: string,
+    opts: { fromBank?: boolean } = {},
+  ): Promise<{ buffer: Buffer; filename: string }> {
+    const cn = (contractNo || '').trim();
+    if (!cn) throw new NotFoundException('Shartnoma raqami kerak');
+    const blocks = await this.buildBlocks(cn, opts);
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Xon Tranzaksiyalar';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Реестр');
+
+    const total = blocks.length;
+    const incomplete = blocks.filter((b) => !b.hasTx || !b.fromAccount).length;
+
+    // Sarlavha
+    ws.mergeCells('A1:Q1');
+    ws.getCell('A1').value = `МЕМОРИАЛЬНЫЙ ОРДЕР — РЕЕСТР · Договор № ${cn}`;
+    ws.getCell('A1').font = { bold: true, size: 13 };
+    ws.mergeCells('A2:Q2');
+    ws.getCell('A2').value = `Всего платежей: ${total}   ·   Полные данные: ${total - incomplete}   ·   Без данных: ${incomplete}   ·   Изг. ${this.fmtDate(new Date())}`;
+    ws.getCell('A2').font = { size: 10, color: { argb: 'FF475569' } };
+
+    // Ustun kengliklari
+    [5, 12, 12, 12, 26, 22, 14, 9, 30, 24, 22, 9, 30, 16, 34, 40, 12]
+      .forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+    // Header (4-qator)
+    const headers = [
+      '№', 'Дата', '№ ордера', 'ID',
+      'Плательщик', 'Дебет счёт', 'ИНН плат.', 'МФО', 'Банк плательщика',
+      'Получатель', 'Кредит счёт', 'МФО', 'Банк получателя',
+      'Сумма', 'Сумма прописью', 'Детали платежа', 'Статус',
+    ];
+    const headerRow = ws.getRow(4);
+    headers.forEach((h, i) => { headerRow.getCell(i + 1).value = h; });
+    headerRow.font = { bold: true, size: 9 };
+    headerRow.alignment = { vertical: 'middle', wrapText: true };
+    headerRow.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEDE9FE' } };
+      c.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    // Qatorlar
+    let rowIdx = 5;
+    blocks.forEach((b, i) => {
+      const bad = !b.hasTx || !b.fromAccount;
+      const row = ws.getRow(rowIdx++);
+      row.values = [
+        i + 1, this.fmtDate(b.date), b.docNumber || '', b.id || '',
+        b.fromName || '', b.fromAccount || '', b.fromInn || '', b.fromMfo || '', mfoToBankName(b.fromMfo) || '',
+        b.toName || '', b.toAccount || '', b.toMfo || '', mfoToBankName(b.toMfo) || '',
+        Number(b.amount) || 0, amountToWordsRu(b.amount), b.description || '', bad ? 'нет данных' : 'полные',
+      ];
+      row.font = { size: 9, color: { argb: bad ? 'FFB45309' : 'FF0F172A' } };
+      row.getCell(14).numFmt = '#,##0.00';
+      row.alignment = { vertical: 'top', wrapText: false };
+    });
+
+    // ИТОГО
+    const totalSum = blocks.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+    const totalRow = ws.getRow(rowIdx + 1);
+    totalRow.getCell(13).value = 'ИТОГО:';
+    totalRow.getCell(14).value = totalSum;
+    totalRow.getCell(14).numFmt = '#,##0.00';
+    totalRow.font = { bold: true, size: 11 };
+
+    const arrayBuffer = await wb.xlsx.writeBuffer();
+    return { buffer: Buffer.from(arrayBuffer), filename: `mem-order-${this.safeName(cn)}.xlsx` };
+  }
+
+  /** Ma'lumot yig'ish (DB moslash + ixtiyoriy bankdan to'ldirish) — PDF/Excel uchun umumiy */
+  private async buildBlocks(cn: string, opts: { fromBank?: boolean }): Promise<OrderBlock[]> {
     const rows = await this.prisma.oplataKv.findMany({
       where: { contractNo: cn },
       orderBy: { date: 'asc' },
     });
 
-    // 2. sourceTxId -> Transaction (externalId YOKI id bo'yicha)
     const ids = rows.map((r) => r.sourceTxId).filter((x): x is string => !!x);
     const txs = ids.length
       ? await this.prisma.transaction.findMany({
@@ -87,10 +167,8 @@ export class MemorialOrderService {
       txMap.set(t.id, t);
     }
 
-    // 2b. sourceTxId bilan bog'lanmagan qatorlar uchun — DB'dagi bank tranzaksiyasini
-    //     shartnoma raqami bo'yicha topib, summa + sana yaqinligi bilan moslaymiz.
-    //     (Eski/qo'lda import qilingan to'lovlar sourceTxId'siz bo'ladi.)
-    const rowMatch = new Map<string, (typeof txs)[number]>(); // oplataKv.id -> tx
+    // Bog'lanmagan qatorlar — shartnoma raqami + summa + sana yaqinligi bilan moslash
+    const rowMatch = new Map<string, (typeof txs)[number]>();
     const unlinked = rows.filter((r) => !(r.sourceTxId && txMap.has(r.sourceTxId)));
     if (unlinked.length) {
       const linkedIds = txs.map((t) => t.id);
@@ -111,9 +189,8 @@ export class MemorialOrderService {
           if (used.has(c.id)) continue;
           const camt = Number(c.amount);
           const amtDiff = Math.abs(camt - amt);
-          // Summa (deyarli) teng bo'lishi shart — bank hujjati aynan shu to'lov
           if (amtDiff > Math.max(1, camt * 0.0001)) continue;
-          const dateDiff = Math.abs(c.txnDate.getTime() - rd) / 86_400_000; // kun
+          const dateDiff = Math.abs(c.txnDate.getTime() - rd) / 86_400_000;
           const score = amtDiff * 1000 + dateDiff;
           if (score < bestScore) { bestScore = score; best = c; }
         }
@@ -121,7 +198,6 @@ export class MemorialOrderService {
       }
     }
 
-    // 3. Bloklar
     const blocks: OrderBlock[] = rows.map((r) => {
       const tx = (r.sourceTxId ? txMap.get(r.sourceTxId) : undefined) || rowMatch.get(r.id);
       const amount = tx ? Number(tx.amount) : Number(r.paymentAmount ?? 0);
@@ -143,9 +219,6 @@ export class MemorialOrderService {
       };
     });
 
-    // 4. (ixtiyoriy) Bankdan to'ldirish — DB'da yo'q/to'liqsiz bloklarni
-    //    bankdan (getDoc1C) real ma'lumot bilan to'ldiramiz. FAQAT O'QISH —
-    //    hech narsa DB'ga yozilmaydi.
     if (opts.fromBank) {
       try {
         await this.fillFromBank(cn, rows, blocks);
@@ -153,10 +226,11 @@ export class MemorialOrderService {
         this.log.warn(`Bankdan to'ldirish xatosi: ${e?.message}`);
       }
     }
+    return blocks;
+  }
 
-    const buffer = await this.renderPdf(cn, blocks);
-    const safe = cn.replace(/[^\wа-яёА-ЯЁa-zA-Z0-9-]+/g, '_').slice(0, 40);
-    return { buffer, filename: `mem-order-${safe}.pdf` };
+  private safeName(cn: string): string {
+    return cn.replace(/[^\wа-яёА-ЯЁa-zA-Z0-9-]+/g, '_').slice(0, 40);
   }
 
   // ─────────────────────── Bankdan to'ldirish (read-only) ───────────────────────

@@ -1556,23 +1556,23 @@ function AktSverkaDialog({
     }
   };
 
-  // Мемориальный ордер (PDF) — shartnomaning barcha to'lovlari uchun bank hujjati
-  const [memOrderLoading, setMemOrderLoading] = useState(false);
-  const downloadMemorialOrder = async () => {
+  // Мемориальный ордер — PDF yoki Excel (foydalanuvchi tanlaydi). Bankdan to'liq ma'lumot olinadi.
+  const [memOrderLoading, setMemOrderLoading] = useState<'pdf' | 'xlsx' | null>(null);
+  const downloadMemorialOrder = async (fmt: 'pdf' | 'xlsx') => {
     if (!selectedContract) return;
-    setMemOrderLoading(true);
-    // Bankdan to'liq ma'lumot olinadi (DB'da yo'q/to'liqsiz to'lovlar uchun) — biroz sekin
-    const tid = toast.loading('Мем. ордер tayyorlanmoqda — bankdan to\'liq ma\'lumot olinmoqda...');
+    setMemOrderLoading(fmt);
+    const tid = toast.loading(`Мем. ордер (${fmt.toUpperCase()}) tayyorlanmoqda — bankdan ma'lumot olinmoqda...`);
     try {
+      const base = fmt === 'xlsx' ? '/oplata-kv/memorial-order/xlsx' : '/oplata-kv/memorial-order';
       await apiDownload(
-        `/oplata-kv/memorial-order?contractNo=${encodeURIComponent(selectedContract)}&bank=1`,
-        `mem-order-${selectedContract}.pdf`,
+        `${base}?contractNo=${encodeURIComponent(selectedContract)}&bank=1`,
+        `mem-order-${selectedContract}.${fmt}`,
       );
-      toast.success('Мем. ордер yuklab olindi', { id: tid });
+      toast.success('Yuklab olindi', { id: tid });
     } catch (e: any) {
-      toast.error(e?.message || 'PDF yuklab bo\'lmadi', { id: tid });
+      toast.error(e?.message || 'Yuklab bo\'lmadi', { id: tid });
     } finally {
-      setMemOrderLoading(false);
+      setMemOrderLoading(null);
     }
   };
 
@@ -1894,18 +1894,31 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Мем. ордер — shartnomaning barcha to'lovlari uchun bank memorial ordeni (PDF) */}
-            <button
-              onClick={downloadMemorialOrder}
-              disabled={!selectedContract || !data || data.items.length === 0 || memOrderLoading}
-              title="Мемориальный ордер (PDF) — barcha to'lovlar"
-              className="h-9 px-3 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[12px] shadow-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {memOrderLoading
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <FileText className="h-3.5 w-3.5" />}
-              Мем. ордер
-            </button>
+            {/* Мем. ордер — PDF yoki Excel (foydalanuvchi tanlaydi), barcha to'lovlar */}
+            <div className="inline-flex items-center rounded-lg overflow-hidden shadow-md">
+              <button
+                onClick={() => downloadMemorialOrder('pdf')}
+                disabled={!selectedContract || !data || data.items.length === 0 || !!memOrderLoading}
+                title="Мемориальный ордер — PDF (barcha to'lovlar)"
+                className="h-9 px-3 bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {memOrderLoading === 'pdf'
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <FileText className="h-3.5 w-3.5" />}
+                Мем. PDF
+              </button>
+              <button
+                onClick={() => downloadMemorialOrder('xlsx')}
+                disabled={!selectedContract || !data || data.items.length === 0 || !!memOrderLoading}
+                title="Мемориальный ордер — Excel реестр (barcha to'lovlar)"
+                className="h-9 px-3 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-l border-white/25"
+              >
+                {memOrderLoading === 'xlsx'
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <FileSpreadsheet className="h-3.5 w-3.5" />}
+                Мем. Excel
+              </button>
+            </div>
             {/* Planirovka — CRM'dagi real xonadon rejasi (uploads/plans), shimmer effekti */}
             <button
               onClick={() => setPlanOpen(true)}

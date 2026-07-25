@@ -87,6 +87,24 @@ export class OplataKvController {
     res.end(buffer);
   }
 
+  @Get('memorial-order/xlsx')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Shartnoma bo\'yicha Мемориальный ордер (Excel реестр) — barcha to\'lovlar' })
+  async memorialOrderXlsx(
+    @Query('contractNo') contractNo: string,
+    @Query('bank') bank: string,
+    @Res() res: Response,
+  ) {
+    const fromBank = bank === '1' || bank === 'true';
+    const { buffer, filename } = await this.memorialOrder.generateXlsx(contractNo, { fromBank });
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(buffer.length),
+    });
+    res.end(buffer);
+  }
+
   @Get('export-json')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Filtr bo\'yicha JSON eksport' })
