@@ -2288,7 +2288,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
         onClick={() => { if (!infoRow && !approval) onClose(); }}
       />
       {/* Yon panel (side drawer) — o'ngdan chiqadi. z-[210] < ApprovalModal (z-[300]/[310]) */}
-      <div className="fixed inset-y-0 right-0 z-[210] w-full sm:max-w-[1100px] bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+      <div className="fixed inset-y-0 right-0 z-[210] w-full sm:max-w-[1240px] bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
         <div className="bg-gradient-to-br from-rose-600 to-red-600 px-5 pt-4 pb-3 text-white shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -2417,7 +2417,7 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                       <th className="text-right px-3 py-2"><span className="inline-flex items-center gap-1 justify-end"><Wallet className="h-3 w-3" /> Summa</span></th>
                       <th className="text-left px-3 py-2">Kim yubordi</th>
                       <th className="text-left px-3 py-2">Izoh</th>
-                      <th className="text-left px-3 py-2 min-w-[220px]"><span className="inline-flex items-center gap-1"><Bot className="h-3 w-3" /> Agent</span></th>
+                      <th className="text-left px-3 py-2"><span className="inline-flex items-center gap-1"><Bot className="h-3 w-3" /> Agent</span></th>
                       <th className="text-right px-3 py-2"></th>
                     </tr>
                   </thead>
@@ -2442,21 +2442,16 @@ function ClientXatoDialog({ open, onClose }: { open: boolean; onClose: () => voi
                           </span>
                         </td>
                         <td className="px-3 py-2 text-slate-500 dark:text-slate-400 max-w-[180px] truncate" title={r.note || ''}>{r.note || '—'}</td>
-                        <td className="px-3 py-2 min-w-[220px] max-w-[300px]">
+                        <td className="px-3 py-2 whitespace-nowrap">
                           {(r.agentState === 'processing' || r.agentState === 'needs_review') ? (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); setDetailRow(r); }}
-                              title="Agent qarorini ko'rish"
-                              className="flex flex-col items-start gap-0.5 text-left w-full rounded-md -mx-1 px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group"
+                              title={r.agentReason || "Agent qarorini ko'rish"}
+                              className="inline-flex items-center gap-1 rounded-md -mx-1 px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-800/60 transition-colors group"
                             >
-                              <span className="inline-flex items-center gap-1">
-                                <AgentStateChip state={r.agentState} reason={r.agentReason} />
-                                <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400" />
-                              </span>
-                              {r.agentState === 'needs_review' && r.agentReason ? (
-                                <span className="text-[10.5px] text-slate-400 dark:text-slate-500 leading-relaxed break-words line-clamp-2 max-w-[280px]">{r.agentReason}</span>
-                              ) : null}
+                              <AgentStateChip state={r.agentState} reason={r.agentReason} />
+                              <FileText className="h-3 w-3 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400" />
                             </button>
                           ) : <span className="text-slate-300 dark:text-slate-600">—</span>}
                         </td>
