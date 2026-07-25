@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send, Users, Plus,
   Sparkles, BrainCircuit, CheckCircle2, XCircle, UserCog, ChevronDown, Settings2, Activity, Cpu,
+  History, MessageSquare, X, Search, Download, Pencil, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -33,15 +34,16 @@ interface AgentConfig {
   aiKeyHint: string | null;
   aiModel: string;
   aiIntervalMin: number;
+  aiName: string | null;
 }
 
 interface AiRunResult { id: string; ok: boolean; decision?: 'approve' | 'reject' | 'human'; reason?: string; error?: string }
 interface AiRunResponse { ok: boolean; processed: number; results: AiRunResult[] }
 
 interface AiStatusCounts { pending: number; processing: number; needsReview: number; agentApproved: number; agentRejected: number }
-interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; intervalMin: number; counts: AiStatusCounts }
+interface AiStatusResponse { ok: boolean; enabled: boolean; hasKey: boolean; running: boolean; model: string; intervalMin: number; name: string; counts: AiStatusCounts }
 
-interface AiRecentRow {
+interface AiActivityRow {
   id: string;
   status: 'pending' | 'approved' | 'rejected';
   agentState: 'processing' | 'needs_review' | 'done' | null;
@@ -49,10 +51,13 @@ interface AiRecentRow {
   agentAt: string;
   contractNo: string | null;
   client: string | null;
+  object: string | null;
   amount: number | null;
   byAgent: boolean;
 }
-interface AiRecentResponse { ok: boolean; rows: AiRecentRow[] }
+interface AiActivityResponse { ok: boolean; total: number; page: number; perPage: number; rows: AiActivityRow[] }
+
+type ChatMsg = { role: 'user' | 'assistant'; content: string };
 
 export default function AdminAgentPage() {
   const qc = useQueryClient();
@@ -73,12 +78,6 @@ export default function AdminAgentPage() {
   });
   const aiStatus = aiStatusQuery.data;
 
-  const aiRecentQuery = useQuery({
-    queryKey: ['agent-ai-recent'],
-    queryFn: () => api.get<AiRecentResponse>('/agent/ai/recent'),
-    refetchInterval: 15_000,
-  });
-
   const [botToken, setBotToken] = useState('');
   const [groupId, setGroupId] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -88,8 +87,24 @@ export default function AdminAgentPage() {
   const [aiModel, setAiModel] = useState('claude-sonnet-4-6');
   const [aiEnabled, setAiEnabled] = useState(false);
   const [aiIntervalMin, setAiIntervalMin] = useState('5');
+  const [aiName, setAiName] = useState('AI Agent');
+  const [editKey, setEditKey] = useState(false);
+  const [aiOpen, setAiOpen] = useState(true);
   const [digestOpen, setDigestOpen] = useState(false);
   const [initialized, setInitialized] = useState(false);
+
+  // Faoliyat modal
+  const [actOpen, setActOpen] = useState(false);
+  const [actQ, setActQ] = useState('');
+  const [actQDebounced, setActQDebounced] = useState('');
+  const [actPage, setActPage] = useState(1);
+  const [actExporting, setActExporting] = useState(false);
+  const ACT_PER_PAGE = 20;
+
+  // Suhbat modal
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState('');
 
   useEffect(() => {
     if (!cfg || initialized) return;
@@ -100,8 +115,15 @@ export default function AdminAgentPage() {
     setAiModel(cfg.aiModel || 'claude-sonnet-4-6');
     setAiEnabled(!!cfg.aiEnabled);
     setAiIntervalMin(String(cfg.aiIntervalMin || 5));
+    setAiName(cfg.aiName || 'AI Agent');
     setInitialized(true);
   }, [cfg, initialized]);
+
+  // Faoliyat qidiruvi — debounce ~300ms
+  useEffect(() => {
+    const t = setTimeout(() => { setActQDebounced(actQ.trim()); setActPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [actQ]);
 
   const wlSave = useMutation({
     mutationFn: (list: WlEntry[]) => api.put('/agent/config', { whitelist: list }),
@@ -142,15 +164,81 @@ export default function AdminAgentPage() {
   });
 
   const aiSaveMut = useMutation({
-    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled, aiIntervalMin: Number(aiIntervalMin) || 5 }),
+    mutationFn: () => api.put('/agent/config', { aiKey: aiKey.trim() || undefined, aiModel, aiEnabled, aiIntervalMin: Number(aiIntervalMin) || 5, aiName: aiName.trim() || 'AI Agent' }),
     onSuccess: () => {
       toast.success('Saqlandi');
       setAiKey('');
+      setEditKey(false);
       qc.invalidateQueries({ queryKey: ['agent-config'] });
       qc.invalidateQueries({ queryKey: ['agent-ai-status'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Saqlanmadi'),
   });
+
+  // Faoliyat ro'yxati (modal)
+  const actQuery = useQuery({
+    queryKey: ['agent-ai-activity', actQDebounced, actPage],
+    queryFn: () => api.get<AiActivityResponse>(`/agent/ai/activity?q=${encodeURIComponent(actQDebounced)}&page=${actPage}&perPage=${ACT_PER_PAGE}`),
+    enabled: actOpen,
+    refetchInterval: actOpen ? 15_000 : false,
+  });
+  const actTotal = actQuery.data?.total ?? 0;
+  const actPages = Math.max(1, Math.ceil(actTotal / ACT_PER_PAGE));
+
+  // Faoliyat → Excel (CSV) — barcha mos qatorlarni oladi
+  const exportActivity = async () => {
+    setActExporting(true);
+    try {
+      const res = await api.get<AiActivityResponse>(`/agent/ai/activity?q=${encodeURIComponent(actQDebounced)}&page=1&perPage=1000`);
+      const rows = res.rows || [];
+      const header = ['Sana', 'Klient', 'Shartnoma', 'Summa', 'Qaror', 'Sabab'];
+      const esc = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const lines = [header.map(esc).join(',')];
+      for (const r of rows) {
+        lines.push([
+          esc(fmtDateTime(r.agentAt)),
+          esc(r.client || ''),
+          esc(r.contractNo || ''),
+          esc(r.amount != null ? String(r.amount) : ''),
+          esc(decisionBadge(r).label),
+          esc(r.agentReason || ''),
+        ].join(','));
+      }
+      const csv = '﻿' + lines.join('\r\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'agent-faoliyat.csv';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast.error(e?.message || 'Yuklab bo\'lmadi');
+    } finally {
+      setActExporting(false);
+    }
+  };
+
+  // Suhbat (chat)
+  const chatMut = useMutation({
+    mutationFn: (msgs: ChatMsg[]) => api.post<{ ok: boolean; reply?: string; error?: string }>('/agent/ai/chat', { messages: msgs }, { timeout: 60_000 }),
+    onSuccess: (r) => {
+      if (r.ok && r.reply) setChatMsgs((p) => [...p, { role: 'assistant', content: r.reply as string }]);
+      else toast.error(r.error || 'Javob kelmadi');
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const sendChat = () => {
+    const content = chatInput.trim();
+    if (!content || chatMut.isPending) return;
+    const next: ChatMsg[] = [...chatMsgs, { role: 'user', content }];
+    setChatMsgs(next);
+    setChatInput('');
+    chatMut.mutate(next);
+  };
+  const agentName = aiStatus?.name || cfg?.aiName || 'AI Agent';
 
   const [aiRunSummary, setAiRunSummary] = useState<{ approve: number; reject: number; human: number; error: number } | null>(null);
   const aiRunMut = useMutation({
@@ -165,7 +253,7 @@ export default function AdminAgentPage() {
       toast.success(`${data.processed} ta ariza ko'rib chiqildi`);
       qc.invalidateQueries({ queryKey: ['agent-config'] });
       qc.invalidateQueries({ queryKey: ['agent-ai-status'] });
-      qc.invalidateQueries({ queryKey: ['agent-ai-recent'] });
+      qc.invalidateQueries({ queryKey: ['agent-ai-activity'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
@@ -234,8 +322,16 @@ export default function AdminAgentPage() {
             >
               <span className={cn('absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform', aiEnabled && 'translate-x-5')} />
             </button>
+            <button
+              onClick={() => setAiOpen((v) => !v)}
+              title={aiOpen ? "Yig'ish" : 'Ochish'}
+              className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors"
+            >
+              <ChevronDown className={cn('h-5 w-5 transition-transform', !aiOpen && '-rotate-90')} />
+            </button>
           </div>
 
+          {aiOpen && (
           <CardContent className="p-5 space-y-4">
             {/* Model + avtomat izohi */}
             <div className="flex items-center gap-2 flex-wrap text-[11.5px]">
@@ -245,6 +341,27 @@ export default function AdminAgentPage() {
               <span className="text-slate-500 dark:text-slate-400">
                 {`🔄 Har ${aiStatus?.intervalMin ?? cfg?.aiIntervalMin ?? 5} daqiqada avtomat tekshiradi — faqat kutilayotgan ariza bo'lsa (rasxod tejaladi). Ishlangan ariza qayta ishlanmaydi.`}
               </span>
+            </div>
+
+            {/* Dashboard sarlavha + tugmalar */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="text-[12px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                <Activity className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Holat paneli
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => setActOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold ring-1 bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                >
+                  <History className="h-4 w-4" /> Faoliyat
+                </button>
+                <button
+                  onClick={() => setChatOpen(true)}
+                  className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold ring-1 bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                >
+                  <MessageSquare className="h-4 w-4" /> Suhbat
+                </button>
+              </div>
             </div>
 
             {/* Dashboard hisoblagichlar */}
@@ -261,26 +378,64 @@ export default function AdminAgentPage() {
               <StatTile label="Agent rad etdi" value={String(aiStatus?.counts.agentRejected ?? 0)} tone="rose" />
             </div>
 
-            {/* Sozlama: kalit + model + oraliq */}
+            {/* Sozlama: kalit + nomi + model + oraliq */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Field label="AI kalit" icon={<Lock className="h-3.5 w-3.5" />}>
+                {cfg?.hasAiKey && !editKey ? (
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[12px] font-semibold ring-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Kalit saqlangan ({cfg.aiKeyHint || '••••'})
+                    </span>
+                    <button
+                      onClick={() => setEditKey(true)}
+                      className="inline-flex items-center gap-1 h-9 px-2.5 rounded-lg text-[11.5px] font-semibold ring-1 bg-white dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 text-slate-600 dark:text-slate-300 hover:ring-violet-300 hover:text-violet-700 dark:hover:text-violet-300 transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> O&apos;zgartirish
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      value={aiKey}
+                      onChange={(e) => setAiKey(e.target.value)}
+                      type="password"
+                      placeholder="sk-ant-api03-…"
+                      className="h-9 rounded-lg font-mono text-[12px]"
+                    />
+                    <div className="text-[10.5px] text-slate-400 dark:text-slate-500">
+                      Anthropic API kaliti (shifrlab saqlanadi){cfg?.hasAiKey && (
+                        <button onClick={() => { setEditKey(false); setAiKey(''); }} className="ml-1.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 underline">bekor qilish</button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Field>
+              <Field label="Agent nomi" icon={<Bot className="h-3.5 w-3.5" />}>
                 <Input
-                  value={aiKey}
-                  onChange={(e) => setAiKey(e.target.value)}
-                  type="password"
-                  placeholder={cfg?.hasAiKey ? `Saqlangan ${cfg.aiKeyHint || ''}` : 'sk-ant-api03-…'}
-                  className="h-9 rounded-lg font-mono text-[12px]"
+                  value={aiName}
+                  onChange={(e) => setAiName(e.target.value)}
+                  placeholder="AI Agent"
+                  className="h-9 rounded-lg text-[12px]"
                 />
-                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Anthropic API kaliti (shifrlab saqlanadi)</div>
+                <div className="text-[10.5px] text-slate-400 dark:text-slate-500">Agent shu nom bilan ishlaydi — qarorlarda shu nom ko&apos;rinadi</div>
               </Field>
               <div className="grid grid-cols-[1fr_auto] gap-3">
                 <Field label="Model" icon={<Sparkles className="h-3.5 w-3.5" />}>
-                  <Input
-                    value={aiModel}
-                    onChange={(e) => setAiModel(e.target.value)}
-                    placeholder="claude-sonnet-4-6"
-                    className="h-9 rounded-lg font-mono text-[12px]"
-                  />
+                  <div className="relative">
+                    <select
+                      value={aiModel}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      className="w-full h-9 pl-3 pr-8 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 text-[12px] font-mono outline-none focus:ring-2 focus:ring-violet-400 appearance-none cursor-pointer hover:ring-violet-300 transition"
+                    >
+                      <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+                      <option value="claude-opus-4-8">claude-opus-4-8</option>
+                      <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+                      {aiModel && !['claude-sonnet-4-6', 'claude-opus-4-8', 'claude-haiku-4-5'].includes(aiModel) && (
+                        <option value={aiModel}>{aiModel}</option>
+                      )}
+                    </select>
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                  </div>
                 </Field>
                 <Field label="Tekshirish oralig'i (daqiqa)" icon={<Clock className="h-3.5 w-3.5" />}>
                   <Input
@@ -325,44 +480,170 @@ export default function AdminAgentPage() {
               </div>
             )}
 
-            {/* Faoliyat (recent) */}
-            <div className="pt-1">
-              <div className="text-[12px] font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2 mb-2">
-                <Activity className="h-4 w-4 text-violet-600 dark:text-violet-400" /> Faoliyat
-                {aiRecentQuery.isFetching && <Loader2 className="h-3 w-3 animate-spin text-slate-400" />}
+          </CardContent>
+          )}
+        </Card>
+      )}
+
+      {/* ═══════════════ 📜 Faoliyat modal ═══════════════ */}
+      {actOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setActOpen(false)} />
+          <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+            {/* Sarlavha */}
+            <div className="px-5 py-3.5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-violet-500/[0.08] to-transparent">
+              <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-md">
+                <History className="h-4.5 w-4.5" />
               </div>
-              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-auto">
-                {(aiRecentQuery.data?.rows?.length ?? 0) === 0 ? (
-                  <div className="px-4 py-6 text-[12px] text-slate-400 dark:text-slate-500 text-center">Hali faoliyat yo&apos;q</div>
-                ) : (
-                  aiRecentQuery.data!.rows.map((r) => {
-                    const badge = decisionBadge(r);
-                    return (
-                      <div key={r.id} className="px-4 py-2.5 flex items-start gap-3">
-                        <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ring-1 shrink-0 mt-0.5', badge.cls)}>
-                          {badge.label}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap text-[12px]">
-                            <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[220px]">{r.client || '—'}</span>
-                            {r.contractNo && <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">{r.contractNo}</span>}
-                            {r.amount != null && (
-                              <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300">{r.amount.toLocaleString('ru-RU')}</span>
-                            )}
-                          </div>
-                          {r.agentReason && (
-                            <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 break-words">{r.agentReason}</div>
-                          )}
-                        </div>
-                        <div className="text-[10.5px] text-slate-400 dark:text-slate-500 shrink-0 mt-0.5 tabular-nums">{fmtDateTime(r.agentAt)}</div>
-                      </div>
-                    );
-                  })
-                )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100">Agent faoliyati</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">{actTotal.toLocaleString('ru-RU')} ta yozuv</div>
+              </div>
+              <Button onClick={exportActivity} disabled={actExporting} variant="outline" className="h-8 gap-1.5 text-[12px] font-semibold">
+                {actExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Excel
+              </Button>
+              <button onClick={() => setActOpen(false)} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors">
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            {/* Qidiruv */}
+            <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <Input
+                  value={actQ}
+                  onChange={(e) => setActQ(e.target.value)}
+                  placeholder="Klient, shartnoma yoki obyekt bo'yicha qidirish…"
+                  className="h-9 pl-9 rounded-lg text-[12.5px]"
+                />
+                {actQuery.isFetching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-slate-400" />}
               </div>
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Ro'yxat */}
+            <div className="flex-1 overflow-auto divide-y divide-slate-100 dark:divide-slate-800">
+              {actQuery.isLoading ? (
+                <div className="px-4 py-10 grid place-items-center text-slate-400 text-[12px]"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : (actQuery.data?.rows?.length ?? 0) === 0 ? (
+                <div className="px-4 py-10 text-[12.5px] text-slate-400 dark:text-slate-500 text-center">Faoliyat topilmadi</div>
+              ) : (
+                actQuery.data!.rows.map((r) => {
+                  const badge = decisionBadge(r);
+                  return (
+                    <div key={r.id} className="px-5 py-2.5 flex items-start gap-3">
+                      <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold ring-1 shrink-0 mt-0.5', badge.cls)}>
+                        {badge.label}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-[12px]">
+                          <span className="font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[220px]">{r.client || '—'}</span>
+                          {r.contractNo && <span className="font-mono text-[11px] text-slate-500 dark:text-slate-400">{r.contractNo}</span>}
+                          {r.amount != null && (
+                            <span className="font-mono text-[11px] font-semibold text-slate-600 dark:text-slate-300">{r.amount.toLocaleString('ru-RU')}</span>
+                          )}
+                        </div>
+                        {r.agentReason && (
+                          <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5 break-words whitespace-pre-wrap">{r.agentReason}</div>
+                        )}
+                      </div>
+                      <div className="text-[10.5px] text-slate-400 dark:text-slate-500 shrink-0 mt-0.5 tabular-nums">{fmtDateTime(r.agentAt)}</div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Sahifalash */}
+            <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-3">
+              <span className="text-[11.5px] text-slate-500 dark:text-slate-400">{actPage} / {actPages}</span>
+              <div className="flex items-center gap-2 ml-auto">
+                <Button onClick={() => setActPage((p) => Math.max(1, p - 1))} disabled={actPage <= 1 || actQuery.isFetching} variant="outline" className="h-8 gap-1 text-[12px]">
+                  <ChevronLeft className="h-4 w-4" /> Oldingi
+                </Button>
+                <Button onClick={() => setActPage((p) => Math.min(actPages, p + 1))} disabled={actPage >= actPages || actQuery.isFetching} variant="outline" className="h-8 gap-1 text-[12px]">
+                  Keyingi <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ 💬 Suhbat modal ═══════════════ */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setChatOpen(false)} />
+          <div className="relative w-full max-w-lg h-[80vh] max-h-[640px] flex flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+            {/* Sarlavha */}
+            <div className="px-5 py-3.5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-violet-500/[0.08] to-transparent">
+              <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-md">
+                <Bot className="h-4.5 w-4.5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100 truncate">{agentName}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Suhbat</div>
+              </div>
+              <button onClick={() => setChatOpen(false)} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors">
+                <X className="h-4.5 w-4.5" />
+              </button>
+            </div>
+
+            {/* Xabarlar */}
+            <div className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/30">
+              {chatMsgs.length === 0 && !chatMut.isPending ? (
+                <div className="h-full grid place-items-center text-center px-6">
+                  <div className="text-slate-400 dark:text-slate-500">
+                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-60" />
+                    <div className="text-[12.5px]">Agent bilan suhbatlashing — savol bering.</div>
+                  </div>
+                </div>
+              ) : (
+                chatMsgs.map((m, i) => (
+                  <div key={i} className={cn('flex flex-col', m.role === 'user' ? 'items-end' : 'items-start')}>
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5 px-1">
+                      {m.role === 'user' ? 'Siz' : agentName}
+                    </span>
+                    <div className={cn(
+                      'max-w-[85%] px-3.5 py-2 rounded-2xl text-[12.5px] whitespace-pre-wrap break-words',
+                      m.role === 'user'
+                        ? 'bg-violet-600 text-white rounded-br-sm'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-200 dark:ring-slate-700 rounded-bl-sm',
+                    )}>
+                      {m.content}
+                    </div>
+                  </div>
+                ))
+              )}
+              {chatMut.isPending && (
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5 px-1">{agentName}</span>
+                  <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-sm bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Kiritish */}
+            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                placeholder="Xabar yozing…"
+                className="h-10 rounded-xl text-[13px]"
+              />
+              <Button onClick={sendChat} disabled={chatMut.isPending || !chatInput.trim()} className="h-10 w-10 p-0 shrink-0 bg-violet-600 hover:bg-violet-700 text-white">
+                {chatMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ═══════════════ ⚙️ Telegram digest sozlamasi (yashirin) ═══════════════ */}
@@ -533,7 +814,7 @@ export default function AdminAgentPage() {
   );
 }
 
-function decisionBadge(r: AiRecentRow): { label: string; cls: string } {
+function decisionBadge(r: AiActivityRow): { label: string; cls: string } {
   if (r.status === 'approved') return { label: '✓ Tasdiqladi', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900' };
   if (r.status === 'rejected') return { label: '✗ Rad etdi', cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900' };
   if (r.agentState === 'needs_review') return { label: '👁 Xodimga qoldirdi', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900' };
