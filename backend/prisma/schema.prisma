@@ -285,6 +285,18 @@ model XatoCorrectionRequest {
   @@map("xato_correction_requests")
 }
 
+// AI Agent chat tarixi (admin bilan suhbat)
+model AgentChatMessage {
+  id        String   @id @default(cuid())
+  role      String   @db.VarChar(10)      // 'user' | 'assistant'
+  content   String   @db.Text
+  hasImage  Boolean  @default(false) @map("has_image")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@map("agent_chat_messages")
+}
+
 // ─────────────────────────────────────────────────────────────────
 // IMPORT BATCH — har bir Excel import sessiyasi alohida yozuv
 // Tarix, yuklab olish (re-export), o'chirish uchun

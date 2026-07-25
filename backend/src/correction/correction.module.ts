@@ -5,9 +5,10 @@ import { AgentAiService } from './agent-ai.service';
 import { CategorizationModule } from '../categorization/categorization.module';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { CrmModule } from '../crm/crm.module';
+import { OplataKvModule } from '../oplata-kv/oplata-kv.module';
 
 @Module({
-  imports: [CategorizationModule, AttachmentsModule, CrmModule],
+  imports: [CategorizationModule, AttachmentsModule, CrmModule, OplataKvModule],
   controllers: [CorrectionController],
   providers: [CorrectionService, AgentAiService],
   exports: [CorrectionService, AgentAiService],

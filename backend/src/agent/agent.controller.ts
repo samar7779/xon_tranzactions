@@ -80,8 +80,22 @@ export class AgentController {
 
   @Post('ai/chat')
   @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
-  @ApiOperation({ summary: 'AI agent bilan suhbat' })
-  aiChat(@Body() body: { messages?: Array<{ role: 'user' | 'assistant'; content: string }> }) {
-    return this.svc.aiChat(body?.messages || []);
+  @ApiOperation({ summary: 'AI agent bilan suhbat (rasm + tarix)' })
+  aiChat(@Body() body: { message?: string; image?: { data: string; mediaType?: string } }) {
+    return this.svc.aiChat({ message: body?.message, image: body?.image });
+  }
+
+  @Get('ai/chat/history')
+  @RequirePermissions(PERMISSIONS.AGENT_VIEW)
+  @ApiOperation({ summary: 'Chat tarixi' })
+  aiChatHistory() {
+    return this.svc.aiChatHistory();
+  }
+
+  @Post('ai/chat/clear')
+  @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
+  @ApiOperation({ summary: 'Chat tarixini tozalash' })
+  aiClearChat() {
+    return this.svc.aiClearChat();
   }
 }

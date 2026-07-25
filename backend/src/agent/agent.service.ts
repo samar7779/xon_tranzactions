@@ -154,7 +154,9 @@ export class AgentService {
   async aiStatus() { return this.agentAi.status(); }
   async aiRecent(limit = 15) { return this.agentAi.recent(limit); }
   async aiActivity(opts: { q?: string; page?: number; perPage?: number }) { return this.agentAi.activity(opts); }
-  async aiChat(messages: any[]) { return this.agentAi.chat(messages); }
+  async aiChat(input: { message?: string; image?: { data: string; mediaType?: string } }) { return this.agentAi.chat(input); }
+  async aiChatHistory() { return this.agentAi.chatHistory(); }
+  async aiClearChat() { return this.agentAi.clearChatHistory(); }
 
   private validTime(s?: string | null): string | null {
     if (!s) return null;

@@ -4,6 +4,7 @@ import * as fs from 'fs/promises';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CorrectionService } from './correction.service';
+import { OplataKvService } from '../oplata-kv/oplata-kv.service';
 
 /**
  * AI Agent — ariza tuzatish so'rovlarini avtomat tekshiradi (Claude vision).
@@ -58,6 +59,7 @@ export class AgentAiService {
     private readonly prisma: PrismaService,
     private readonly crypto: CryptoService,
     private readonly correction: CorrectionService,
+    private readonly oplataKv: OplataKvService,
   ) {}
 
   /**
@@ -312,14 +314,25 @@ export class AgentAiService {
 
   /** Agent bilan suhbat (Claude chat + qidiruv tool). Admin savol beradi, agent
    *  arizani/to'lovni bazadan o'zi topib javob beradi. */
-  async chat(messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<{ ok: boolean; reply?: string; error?: string }> {
+  async chat(input: { message?: string; image?: { data: string; mediaType?: string } }): Promise<{ ok: boolean; reply?: string; error?: string }> {
     const apiKey = await this.getApiKey();
     if (!apiKey) return { ok: false, error: 'AI kalit sozlanmagan' };
-    const convo: any[] = (messages || [])
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
-      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
-      .slice(-20);
-    if (!convo.length || convo[convo.length - 1].role !== 'user') return { ok: false, error: 'Xabar yo\'q' };
+    const userText = (input?.message || '').trim();
+    if (!userText && !input?.image?.data) return { ok: false, error: 'Xabar yo\'q' };
+
+    // Tarixdan konvo (oxirgi 30 xabar, matn)
+    const hist = await this.prisma.agentChatMessage.findMany({ orderBy: { createdAt: 'desc' }, take: 30 });
+    hist.reverse();
+    const convo: any[] = hist.map((m) => ({ role: m.role, content: m.content }));
+    // Yangi user xabari (rasm bilan bo'lishi mumkin)
+    if (input.image?.data) {
+      const parts: any[] = [];
+      if (userText) parts.push({ type: 'text', text: userText });
+      parts.push({ type: 'image', source: { type: 'base64', media_type: input.image.mediaType || 'image/jpeg', data: input.image.data } });
+      convo.push({ role: 'user', content: parts });
+    } else {
+      convo.push({ role: 'user', content: userText });
+    }
 
     const name = await this.getName();
     const model = await this.getModel();
@@ -331,23 +344,31 @@ export class AgentAiService {
     ]);
     const system = [
       `Sen "${name}" — "Xon Saroy" ko'chmas mulk quruvchisi uchun XATO to'lov tuzatish arizalarini tekshiruvchi AI agentsan.`,
-      `Admin bilan O'ZBEK tilida qisqa, aniq va do'stona suhbatlashasan.`,
-      `Qoidalaring: shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan; tasdiqlaysan/rad etasan/xodimga qoldirasan.`,
-      `MUHIM: agar admin shartnoma raqami, klient ismi yoki to'lov/ariza ID sini bersa — "lookup" tool orqali bazadan O'ZING qidirib top, so'ng natijani tahlil qilib javob ber. Taxmin qilma — avval qidir.`,
+      `Admin bilan O'ZBEK tilida qisqa, aniq va do'stona suhbatlashasan. Admin rasm (masalan ariza) yuborsa — uni o'qib tahlil qil.`,
+      `Qoidalaring: shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan.`,
+      `MUHIM: shartnoma/klient/ID bo'yicha savol bo'lsa "lookup" tool orqali bazadan O'ZING qidir. XATO to'lovlar bo'yicha savol (nechta, qaysi obyekt, summa) bo'lsa "xato_query" tool orqali O'ZING ol. Taxmin qilma — avval tool bilan tekshir.`,
       `Joriy holat: ${pending} ta kutilmoqda, ${needsReview} ta xodimga qoldirilgan, ${agentApproved} ta sen tasdiqlagan, ${agentRejected} ta sen rad etgan.`,
     ].join('\n');
-    const tools = [{
-      name: 'lookup',
-      description: 'Ariza yoki to\'lovni bazadan qidirish — shartnoma raqami, klient ismi, to\'lov ID, ariza ID yoki bank external ID bo\'yicha.',
-      input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Qidiruv so\'zi (shartnoma/klient/ID)' } }, required: ['query'] },
-    }];
+    const tools = [
+      {
+        name: 'lookup',
+        description: 'Ariza yoki to\'lovni bazadan qidirish — shartnoma, klient, to\'lov ID, ariza ID yoki bank external ID bo\'yicha.',
+        input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+      },
+      {
+        name: 'xato_query',
+        description: 'XATO (CRM\'da tasdiqlanmagan) to\'lovlar bo\'yicha ma\'lumot — jami soni, umumiy summasi va shartnoma/klient/obyekt bo\'yicha misollar.',
+        input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ixtiyoriy filtr: shartnoma/klient/obyekt' } } },
+      },
+    ];
 
     try {
-      for (let i = 0; i < 5; i++) {
+      let reply = '';
+      for (let i = 0; i < 6; i++) {
         const res = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
           headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-          body: JSON.stringify({ model, max_tokens: 1200, system, messages: convo, tools }),
+          body: JSON.stringify({ model, max_tokens: 1400, system, messages: convo, tools }),
         });
         const data: any = await res.json().catch(() => ({}));
         if (!res.ok) return { ok: false, error: `Claude API xato: ${data?.error?.message || res.status}` };
@@ -356,21 +377,62 @@ export class AgentAiService {
           convo.push({ role: 'assistant', content: data.content });
           const toolResults: any[] = [];
           for (const block of data.content || []) {
-            if (block.type === 'tool_use' && block.name === 'lookup') {
-              const found = await this.lookupForChat(String(block.input?.query || ''));
-              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(found) });
+            if (block.type === 'tool_use') {
+              let result: any;
+              if (block.name === 'lookup') result = await this.lookupForChat(String(block.input?.query || ''));
+              else if (block.name === 'xato_query') result = await this.queryXatoForChat(String(block.input?.query || ''));
+              else result = { error: 'noma\'lum tool' };
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
             }
           }
           convo.push({ role: 'user', content: toolResults });
           continue;
         }
-        const reply = (data?.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
-        return { ok: true, reply: reply || '(bo\'sh javob)' };
+        reply = (data?.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
+        break;
       }
-      return { ok: true, reply: 'Javob juda uzun bo\'ldi — savolni aniqroq bering.' };
+      if (!reply) reply = 'Javob juda uzun bo\'ldi — savolni aniqroq bering.';
+      // Tarixga saqlaymiz
+      await this.prisma.agentChatMessage.create({ data: { role: 'user', content: userText || '(rasm)', hasImage: !!input.image?.data } });
+      await this.prisma.agentChatMessage.create({ data: { role: 'assistant', content: reply } });
+      return { ok: true, reply };
     } catch (e: any) {
       return { ok: false, error: e?.message };
     }
+  }
+
+  /** Chat tool: XATO to'lovlar bo'yicha ma'lumot. */
+  private async queryXatoForChat(query: string) {
+    const { rows, count } = await this.oplataKv.getXatoListForAgent({ limit: 2000 });
+    const q = (query || '').trim().toLowerCase();
+    const filtered = q
+      ? rows.filter((r: any) =>
+          (r.contractNo || '').toLowerCase().includes(q) ||
+          (r.client || '').toLowerCase().includes(q) ||
+          (r.object || '').toLowerCase().includes(q) ||
+          (r.purpose || '').toLowerCase().includes(q))
+      : rows;
+    const sum = filtered.reduce((s: number, r: any) => s + (r.paymentAmount != null ? Number(r.paymentAmount) : 0), 0);
+    return {
+      jamiXatoSoni: count,
+      mosKelganSoni: filtered.length,
+      umumiySumma: sum,
+      misollar: filtered.slice(0, 15).map((r: any) => ({
+        shartnoma: r.contractNo, klient: r.client, obyekt: r.object,
+        summa: r.paymentAmount != null ? Number(r.paymentAmount) : null, sana: r.date, maqsad: r.purpose,
+      })),
+    };
+  }
+
+  /** Chat tarixi. */
+  async chatHistory(limit = 60) {
+    const rows = await this.prisma.agentChatMessage.findMany({ orderBy: { createdAt: 'desc' }, take: Math.min(200, limit) });
+    rows.reverse();
+    return { ok: true, rows: rows.map((m) => ({ role: m.role, content: m.content, hasImage: m.hasImage, at: m.createdAt })) };
+  }
+  async clearChatHistory() {
+    const res = await this.prisma.agentChatMessage.deleteMany({});
+    return { ok: true, deleted: res.count };
   }
 
   /** Chat tool: ariza yoki to'lovni bazadan qidirish. */
