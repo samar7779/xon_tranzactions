@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { AttachmentsService } from '../attachments/attachments.service';
@@ -129,7 +129,7 @@ export class CorrectionService {
       if (!row.sourceTxId) throw new BadRequestException("Bu to'lov tranzaksiyadan kelmagan — ariza yuborib bo'lmaydi");
       const tx = await this.prisma.transaction.findFirst({
         where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
-        select: { id: true },
+        select: { id: true, externalId: true },
       });
       if (!tx) throw new BadRequestException('Manba tranzaksiya topilmadi');
       txId = tx.id;
@@ -141,12 +141,13 @@ export class CorrectionService {
         snapContractNo: row.contractNo ?? null,
         snapTxType: row.txType ?? null,
         snapPurpose: row.purpose ?? null,
+        snapExternalId: tx.externalId ?? row.sourceTxId ?? null,
       };
     } else if (txId) {
       const tx = await this.prisma.transaction.findUnique({
         where: { id: txId },
         select: {
-          id: true, amount: true, direction: true, valueDate: true,
+          id: true, externalId: true, amount: true, direction: true, valueDate: true,
           description: true, fromName: true, contractNumber: true, type: true,
         },
       });
@@ -160,6 +161,7 @@ export class CorrectionService {
         snapContractNo: tx.contractNumber ?? null,
         snapTxType: String(tx.type || '') || null,
         snapPurpose: tx.description ?? null,
+        snapExternalId: tx.externalId ?? null,
       };
     } else {
       throw new BadRequestException("To'lov ko'rsatilmagan");
@@ -539,6 +541,17 @@ export class CorrectionService {
       contractNo: r.snapContractNo,
       txType: r.snapTxType,
       purpose: r.snapPurpose,
+      externalId: r.snapExternalId,
     };
+  }
+
+  /** Arizalarni DB'dan tozalash — parol bilan himoyalangan (7779). */
+  async clearRequests(opts: { status?: 'all' | 'pending' | 'approved' | 'rejected'; password?: string }) {
+    if ((opts.password || '').trim() !== '7779') throw new ForbiddenException("Parol noto'g'ri");
+    const where: any = {};
+    if (opts.status && opts.status !== 'all') where.status = opts.status;
+    const res = await this.prisma.xatoCorrectionRequest.deleteMany({ where });
+    this.log.log(`Arizalar tozalandi: ${res.count} ta (status=${opts.status || 'all'})`);
+    return { ok: true, deleted: res.count };
   }
 }

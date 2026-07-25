@@ -274,6 +274,7 @@ model XatoCorrectionRequest {
   snapContractNo     String?   @map("snap_contract_no") @db.VarChar(64)
   snapTxType         String?   @map("snap_tx_type") @db.VarChar(64)
   snapPurpose        String?   @map("snap_purpose") @db.Text
+  snapExternalId     String?   @map("snap_external_id") @db.VarChar(255)
 
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")

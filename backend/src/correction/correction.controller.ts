@@ -112,6 +112,13 @@ export class CorrectionController {
     return this.svc.reject(id, body?.reason || '', userId);
   }
 
+  @Post('clear')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({ summary: "Arizalarni DB'dan tozalash (parol bilan)" })
+  clear(@Body() body: { status?: 'all' | 'pending' | 'approved' | 'rejected'; password?: string }) {
+    return this.svc.clearRequests({ status: body?.status, password: body?.password });
+  }
+
   @Post('hide')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
   @ApiOperation({ summary: "To'lovni XATO ro'yxatidan yashirish / qaytarish" })
