@@ -174,22 +174,33 @@ export class MemorialOrderService {
       .filter((i) => i >= 0);
     if (!need.length) return;
 
-    const accounts = await this.prisma.bankAccount.findMany({
+    const allAccounts = await this.prisma.bankAccount.findMany({
       where: { syncEnabled: true },
       include: { credential: { include: { bank: true } } },
     });
-    if (!accounts.length) return;
+    if (!allAccounts.length) return;
 
-    // Kerakli noyob sanalar (dd.MM.yyyy)
+    // Maqsadli hisob: shartnomaning TO'LIQ to'lovlaridagi oluvchi hisobiga mos
+    // sync-hisob(lar) — aynan shu shartnoma tushadigan hisob. Shunda kerakmas
+    // hisoblarga so'rov ketmaydi (chegara tejaladi). Topilmasa — hammasi.
+    const recipientAccts = new Set(blocks.filter((b) => b.toAccount).map((b) => b.toAccount));
+    let accounts = allAccounts.filter((a) => recipientAccts.has(a.accountNo));
+    if (!accounts.length) accounts = allAccounts;
+
+    // Kerakli sanalar — har to'lov sanasi ±1 kun (bank sanasi biroz farq qilishi mumkin)
     const dates = new Set<string>();
     for (const i of need) {
-      const d = this.toApiDate(rows[i].date as Date);
-      if (d) dates.add(d);
+      const base = rows[i].date as Date;
+      if (!(base instanceof Date) || isNaN(base.getTime())) continue;
+      for (const off of [0, -1, 1]) {
+        const s = this.toApiDate(new Date(base.getTime() + off * 86_400_000));
+        if (s) dates.add(s);
+      }
     }
     if (!dates.size) return;
 
     // getDoc1C — har (hisob, sana) uchun, cheklangan
-    const MAX_CALLS = 30;
+    const MAX_CALLS = 90;
     let calls = 0;
     const pool: KbDoc1CItem[] = [];
     for (const acc of accounts) {
@@ -219,11 +230,13 @@ export class MemorialOrderService {
       }
       if (calls >= MAX_CALLS) break;
     }
+    this.log.log(`Мем.ордер bankdan: contract=${contractNo} need=${need.length} accounts=${accounts.length} dates=${dates.size} calls=${calls} pool=${pool.length}`);
     if (!pool.length) return;
 
     // Mos to'lovni topish: summa (deyarli) teng + shartnoma № purpose ichida
     const norm = (s?: string) => (s || '').toUpperCase().replace(/[^A-ZА-Я0-9]/gi, '');
     const cnNorm = norm(contractNo);
+    let filled = 0;
     for (const i of need) {
       const amt = Number(rows[i].paymentAmount ?? blocks[i].amount ?? 0);
       let best: KbDoc1CItem | undefined;
@@ -239,8 +252,10 @@ export class MemorialOrderService {
       // Faqat shartnoma № mos kelsa to'ldiramiz (noto'g'ri to'lovni oldini olish)
       if (best && norm(best.purpose).includes(cnNorm)) {
         blocks[i] = this.blockFromBankItem(best);
+        filled++;
       }
     }
+    this.log.log(`Мем.ордер bankdan to'ldirildi: ${filled}/${need.length}`);
   }
 
   private blockFromBankItem(it: KbDoc1CItem): OrderBlock {
