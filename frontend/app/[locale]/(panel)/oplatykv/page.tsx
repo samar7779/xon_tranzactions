@@ -1911,8 +1911,8 @@ function AktSverkaDialog({
               </button>
               {memMenuOpen && !memOrderLoading && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setMemMenuOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1.5 z-50 w-44 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl overflow-hidden">
+                  <div className="fixed inset-0 z-[55]" onClick={() => setMemMenuOpen(false)} />
+                  <div className="absolute right-0 bottom-full mb-2 z-[60] w-44 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl overflow-hidden">
                     <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">Format tanlang</div>
                     <button
                       onClick={() => { setMemMenuOpen(false); downloadMemorialOrder('pdf'); }}
