@@ -73,11 +73,12 @@ export class AgentService {
     }
     const pendingCount = await this.oplataKv.countXatoForAgent(dateFrom || null);
     // AI Agent config
-    const [aiEnc, aiModel, aiEnabled, aiInterval] = await Promise.all([
+    const [aiEnc, aiModel, aiEnabled, aiInterval, aiName] = await Promise.all([
       this.settings.get(this.K_AI_KEY),
       this.settings.get(this.K_AI_MODEL),
       this.settings.get(this.K_AI_ENABLED),
       this.settings.get('agent.aiIntervalMin'),
+      this.settings.get('agent.aiName'),
     ]);
     let hasAiKey = false; let aiKeyHint: string | null = null;
     if (aiEnc) { try { const k = this.crypto.decrypt(aiEnc); hasAiKey = !!k; aiKeyHint = k ? `…${k.slice(-4)}` : null; } catch { /* skip */ } }
@@ -99,6 +100,7 @@ export class AgentService {
       aiKeyHint,
       aiModel: aiModel || 'claude-sonnet-4-6',
       aiIntervalMin: Number(aiInterval) >= 1 ? Number(aiInterval) : 5,
+      aiName: aiName || 'AI Agent',
     };
   }
 
@@ -106,7 +108,7 @@ export class AgentService {
     body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
       whitelist?: Array<{ id: string; name: string }>;
-      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number; aiName?: string;
     },
     updatedBy?: string,
   ) {
@@ -128,6 +130,7 @@ export class AgentService {
       const n = Number(body.aiIntervalMin);
       await this.settings.set('agent.aiIntervalMin', n >= 1 && n <= 1440 ? String(Math.round(n)) : null, updatedBy);
     }
+    if (body.aiName !== undefined) await this.settings.set('agent.aiName', body.aiName.trim().slice(0, 60) || null, updatedBy);
     return this.getConfig();
   }
 
@@ -137,6 +140,8 @@ export class AgentService {
   }
   async aiStatus() { return this.agentAi.status(); }
   async aiRecent(limit = 15) { return this.agentAi.recent(limit); }
+  async aiActivity(opts: { q?: string; page?: number; perPage?: number }) { return this.agentAi.activity(opts); }
+  async aiChat(messages: any[]) { return this.agentAi.chat(messages); }
 
   private validTime(s?: string | null): string | null {
     if (!s) return null;

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -35,7 +35,7 @@ export class AgentController {
   saveConfig(
     @Body() body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
-      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number;
+      aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number; aiName?: string;
     },
     @CurrentUser() user?: AuthUser,
   ) {
@@ -68,5 +68,19 @@ export class AgentController {
   @ApiOperation({ summary: 'AI agent oxirgi qarorlari (faoliyat)' })
   aiRecent() {
     return this.svc.aiRecent(15);
+  }
+
+  @Get('ai/activity')
+  @RequirePermissions(PERMISSIONS.AGENT_VIEW)
+  @ApiOperation({ summary: 'AI agent faoliyati (paginatsiya + qidiruv)' })
+  aiActivity(@Query('q') q?: string, @Query('page') page?: string, @Query('perPage') perPage?: string) {
+    return this.svc.aiActivity({ q, page: Number(page) || 1, perPage: Number(perPage) || 20 });
+  }
+
+  @Post('ai/chat')
+  @RequirePermissions(PERMISSIONS.AGENT_MANAGE)
+  @ApiOperation({ summary: 'AI agent bilan suhbat' })
+  aiChat(@Body() body: { messages?: Array<{ role: 'user' | 'assistant'; content: string }> }) {
+    return this.svc.aiChat(body?.messages || []);
   }
 }

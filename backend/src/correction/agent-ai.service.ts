@@ -26,8 +26,13 @@ export class AgentAiService {
   private readonly K_AI_MODEL = 'agent.aiModel';
   private readonly K_AI_ENABLED = 'agent.aiEnabled';
   private readonly K_AI_INTERVAL = 'agent.aiIntervalMin';
+  private readonly K_AI_NAME = 'agent.aiName';
   private readonly DEFAULT_MODEL = 'claude-sonnet-4-6';
   private lastRunMs = 0;
+
+  async getName(): Promise<string> {
+    return (await this.setting(this.K_AI_NAME)) || 'AI Agent';
+  }
 
   // Ustma-ust ishlamaslik uchun (bir vaqtda bitta tsikl)
   private running = false;
@@ -184,6 +189,7 @@ export class AgentAiService {
           subCategoryId,
           actorId: 'agent',
           actorType: 'agent',
+          actorName: await this.getName(),
         });
         await this.prisma.xatoCorrectionRequest.update({
           where: { id: requestId }, data: { agentState: 'done', agentReason: reason },
@@ -193,7 +199,7 @@ export class AgentAiService {
       }
 
       if (finalDecision === 'reject') {
-        await this.correction.reject(requestId, reason, 'agent', 'agent');
+        await this.correction.reject(requestId, reason, 'agent', 'agent', await this.getName());
         await this.prisma.xatoCorrectionRequest.update({
           where: { id: requestId }, data: { agentState: 'done', agentReason: reason },
         });
@@ -244,9 +250,83 @@ export class AgentAiService {
     ]);
     return {
       ok: true, enabled, hasKey: !!apiKey, running: this.running,
-      model: await this.getModel(), intervalMin: await this.getIntervalMin(),
+      model: await this.getModel(), intervalMin: await this.getIntervalMin(), name: await this.getName(),
       counts: { pending, processing, needsReview, agentApproved, agentRejected },
     };
+  }
+
+  /** Agent faoliyati — paginatsiya + qidiruv (modal + Excel uchun). */
+  async activity(opts: { q?: string; page?: number; perPage?: number } = {}) {
+    const page = Math.max(1, opts.page || 1);
+    const perPage = Math.min(200, Math.max(1, opts.perPage || 20));
+    const where: any = { agentAt: { not: null } };
+    const q = (opts.q || '').trim();
+    if (q) {
+      where.OR = [
+        { proposedContractNo: { contains: q, mode: 'insensitive' } },
+        { snapContractNo: { contains: q, mode: 'insensitive' } },
+        { snapClient: { contains: q, mode: 'insensitive' } },
+        { agentReason: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const [total, rows] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where }),
+      this.prisma.xatoCorrectionRequest.findMany({
+        where, orderBy: { agentAt: 'desc' }, skip: (page - 1) * perPage, take: perPage,
+        select: {
+          id: true, status: true, agentState: true, agentReason: true, agentAt: true,
+          proposedContractNo: true, snapClient: true, snapObject: true, snapAmount: true, reviewedByType: true,
+        },
+      }),
+    ]);
+    return {
+      ok: true, total, page, perPage,
+      rows: rows.map((r) => ({
+        id: r.id, status: r.status, agentState: r.agentState, agentReason: r.agentReason,
+        agentAt: r.agentAt, contractNo: r.proposedContractNo, client: r.snapClient, object: r.snapObject,
+        amount: r.snapAmount != null ? Number(r.snapAmount) : null, byAgent: r.reviewedByType === 'agent',
+      })),
+    };
+  }
+
+  /** Agent bilan suhbat (Claude chat) — admin savol beradi. */
+  async chat(messages: Array<{ role: 'user' | 'assistant'; content: string }>): Promise<{ ok: boolean; reply?: string; error?: string }> {
+    const apiKey = await this.getApiKey();
+    if (!apiKey) return { ok: false, error: 'AI kalit sozlanmagan' };
+    const msgs = (messages || [])
+      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && m.content.trim())
+      .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }))
+      .slice(-20);
+    if (!msgs.length || msgs[msgs.length - 1].role !== 'user') return { ok: false, error: 'Xabar yo\'q' };
+
+    const name = await this.getName();
+    const [pending, needsReview, agentApproved, agentRejected] = await Promise.all([
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: null } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'pending', agentState: 'needs_review' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved', reviewedByType: 'agent' } }),
+      this.prisma.xatoCorrectionRequest.count({ where: { status: 'rejected', reviewedByType: 'agent' } }),
+    ]);
+    const system = [
+      `Sen "${name}" — "Xon Saroy" ko'chmas mulk quruvchisi uchun XATO to'lov tuzatish arizalarini tekshiruvchi AI agentsan.`,
+      `Admin bilan O'ZBEK tilida qisqa, aniq va do'stona suhbatlashasan.`,
+      `Sening qoidalaring: ariza faylini o'qiysan; shartnoma raqamidagi raqamlardan keyingi 3 harf = obyekt; to'lovni bir obyektdan boshqasiga o'tkazib bo'lmaydi; kategoriya har doim "Клиент/Физ.Л/Юр.Л"; sub-kategoriyani maqsadga qarab tanlaysan; tasdiqlaysan/rad etasan/xodimga qoldirasan.`,
+      `Joriy holat: ${pending} ta kutilmoqda, ${needsReview} ta xodimga qoldirilgan, ${agentApproved} ta sen tasdiqlagan, ${agentRejected} ta sen rad etgan.`,
+      `Qarorlaringni va qoidalaringni tushuntira olasan. Aniq ma'lumot bo'lmasa, taxmin qilmasdan ayt.`,
+    ].join('\n');
+
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+        body: JSON.stringify({ model: await this.getModel(), max_tokens: 1024, system, messages: msgs }),
+      });
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: `Claude API xato: ${data?.error?.message || res.status}` };
+      const reply = (data?.content || []).filter((c: any) => c.type === 'text').map((c: any) => c.text).join('\n').trim();
+      return { ok: true, reply: reply || '(bo\'sh javob)' };
+    } catch (e: any) {
+      return { ok: false, error: e?.message };
+    }
   }
 
   /** Agent oxirgi qarorlari (faoliyat lentasi). */

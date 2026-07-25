@@ -324,7 +324,7 @@ export class CorrectionService {
   async approve(
     id: string,
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number } | undefined,
-    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorType?: 'user' | 'agent' },
+    opts: { contractNo?: string | null; categoryId?: string | null; subCategoryId?: string | null; actorId: string; actorType?: 'user' | 'agent'; actorName?: string },
   ) {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id } });
     if (!req) throw new NotFoundException('Ariza topilmadi');
@@ -335,7 +335,7 @@ export class CorrectionService {
     if (!file?.buffer && !req.attachmentId) throw new BadRequestException('Ariza fayli majburiy');
 
     const isAgent = opts.actorType === 'agent';
-    const actorEmail = isAgent ? '🤖 AI Agent' : await this.actorEmail(opts.actorId);
+    const actorEmail = isAgent ? (opts.actorName || '🤖 AI Agent') : await this.actorEmail(opts.actorId);
 
     // 1) Ariza fayli — yangi yuklangan bo'lsa biriktiramiz, aks holda web'da
     //    yuborilgan mavjud faylni saqlaymiz
@@ -417,12 +417,12 @@ export class CorrectionService {
   }
 
   // ─── Rad etish ─────────────────────────────────────────────────────
-  async reject(id: string, reason: string, actorId: string, actorType?: 'user' | 'agent') {
+  async reject(id: string, reason: string, actorId: string, actorType?: 'user' | 'agent', actorName?: string) {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id }, select: { status: true } });
     if (!req) throw new NotFoundException('Ariza topilmadi');
     if (req.status !== 'pending') throw new BadRequestException("Bu ariza allaqachon ko'rib chiqilgan");
     const isAgent = actorType === 'agent';
-    const actorEmail = isAgent ? '🤖 AI Agent' : await this.actorEmail(actorId);
+    const actorEmail = isAgent ? (actorName || '🤖 AI Agent') : await this.actorEmail(actorId);
     const updated = await this.prisma.xatoCorrectionRequest.update({
       where: { id },
       data: {
