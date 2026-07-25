@@ -9,6 +9,8 @@ import {
   History, MessageSquare, X, Search, Download, Pencil, ChevronLeft, ChevronRight,
   Paperclip, Trash2, ImageIcon,
 } from 'lucide-react';
+import Markdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,6 +66,45 @@ type ChatMsg = { role: 'user' | 'assistant'; content: string; hasImage?: boolean
 type ChatImage = { data: string; mediaType: string };
 interface ChatHistoryRow { role: 'user' | 'assistant'; content: string; hasImage: boolean; at: string }
 interface ChatHistoryResponse { ok: boolean; rows: ChatHistoryRow[] }
+
+// Suhbat taklif chiplari (bo'sh holatda)
+const CHAT_SUGGESTIONS = [
+  '📊 Holat qanday?',
+  "📋 Barcha XATO to'lovlar",
+  "🔎 Falon shartnoma arizasini o'qib ber",
+  '❓ Nima qila olasan?',
+];
+
+// Assistant xabarlari uchun markdown → Tailwind (ixcham, chat pufagi ichida)
+const MD_COMPONENTS: Components = {
+  p: ({ children }) => <p className="text-sm leading-relaxed [&:not(:first-child)]:mt-2">{children}</p>,
+  strong: ({ children }) => <strong className="font-semibold text-slate-900 dark:text-slate-100">{children}</strong>,
+  em: ({ children }) => <em className="italic">{children}</em>,
+  a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="text-violet-600 dark:text-violet-400 underline break-words">{children}</a>,
+  ul: ({ children }) => <ul className="list-disc pl-4 space-y-0.5 my-1.5">{children}</ul>,
+  ol: ({ children }) => <ol className="list-decimal pl-4 space-y-0.5 my-1.5">{children}</ol>,
+  li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+  h1: ({ children }) => <h1 className="font-semibold text-sm mt-1 mb-1 text-slate-900 dark:text-slate-100">{children}</h1>,
+  h2: ({ children }) => <h2 className="font-semibold text-sm mt-1 mb-1 text-slate-900 dark:text-slate-100">{children}</h2>,
+  h3: ({ children }) => <h3 className="font-semibold text-sm mt-1 mb-1 text-slate-900 dark:text-slate-100">{children}</h3>,
+  hr: () => <hr className="my-2 border-slate-200 dark:border-slate-700" />,
+  blockquote: ({ children }) => <blockquote className="border-l-2 border-violet-300 dark:border-violet-700 pl-2.5 my-1.5 text-slate-500 dark:text-slate-400">{children}</blockquote>,
+  code: ({ className, children }) => {
+    const block = /language-/.test(className || '');
+    if (block) return <code className={cn('block p-2.5 rounded-lg bg-slate-900 dark:bg-slate-950 text-slate-100 text-[11.5px] font-mono overflow-x-auto my-1.5', className)}>{children}</code>;
+    return <code className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-[12px] font-mono text-violet-700 dark:text-violet-300">{children}</code>;
+  },
+  pre: ({ children }) => <pre className="my-1.5">{children}</pre>,
+  table: ({ children }) => (
+    <div className="block overflow-x-auto my-2 ring-1 ring-slate-200 dark:ring-slate-700 rounded-lg">
+      <table className="w-full text-xs border-collapse">{children}</table>
+    </div>
+  ),
+  thead: ({ children }) => <thead>{children}</thead>,
+  th: ({ children }) => <th className="bg-violet-50 dark:bg-violet-950/40 text-left font-semibold px-2.5 py-1.5 text-slate-700 dark:text-slate-200">{children}</th>,
+  td: ({ children }) => <td className="px-2.5 py-1.5 border-t border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300 align-top">{children}</td>,
+  tr: ({ children }) => <tr className="even:bg-slate-50/60 dark:even:bg-slate-800/30">{children}</tr>,
+};
 
 export default function AdminAgentPage() {
   const qc = useQueryClient();
@@ -288,6 +329,13 @@ export default function AdminAgentPage() {
     setChatInput('');
     setChatImage(null);
     chatMut.mutate({ message: content, image: img || undefined });
+  };
+  // Taklif chipini yuborish (matn bo'yicha, rasm-siz) — state race'siz
+  const sendSuggestion = (text: string) => {
+    if (chatMut.isPending) return;
+    setChatMsgs((p) => [...p, { role: 'user', content: text }]);
+    setChatInput('');
+    chatMut.mutate({ message: text });
   };
 
   const chatClearMut = useMutation({
@@ -696,93 +744,133 @@ export default function AdminAgentPage() {
         </div>
       )}
 
-      {/* ═══════════════ 💬 Suhbat drawer (o'ng tomon) ═══════════════ */}
+      {/* ═══════════════ 💬 Suhbat drawer (o'ng tomon, premium) ═══════════════ */}
       {chatOpen && (
         <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
           {/* Backdrop — bosilganda YOPILMAYDI (faqat X yoki ESC) */}
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[460px] flex flex-col bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 animate-in slide-in-from-right duration-300">
-            {/* Sarlavha */}
-            <div className="px-5 py-3.5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-violet-500/[0.08] to-transparent shrink-0">
-              <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-md">
-                <Bot className="h-4.5 w-4.5" />
+          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[560px] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-in slide-in-from-right duration-300">
+            {/* Sarlavha — gradient bar */}
+            <div className="px-5 py-4 flex items-center gap-3 shrink-0 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 shadow-lg">
+              <div className="relative shrink-0">
+                <div className="w-11 h-11 rounded-2xl grid place-items-center bg-white/15 ring-2 ring-white/40 shadow-inner">
+                  <Bot className="h-6 w-6 text-white" />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 ring-2 ring-violet-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100 truncate">{agentName}</div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400">Suhbat</div>
+                <div className="text-[15px] font-bold text-white truncate">{agentName}</div>
+                <div className="text-[11px] text-white/70 flex items-center gap-1.5">
+                  <span className="text-emerald-300">●</span> Onlayn · AI yordamchi
+                </div>
               </div>
               <button
                 onClick={clearChat}
                 disabled={chatClearMut.isPending || chatMsgs.length === 0}
                 title="Tarixni tozalash"
-                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500 shrink-0 transition-colors"
+                className="w-9 h-9 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 text-white disabled:opacity-40 disabled:hover:bg-white/10 shrink-0 transition-colors"
               >
-                {chatClearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Tarixni tozalash
+                {chatClearMut.isPending ? <Loader2 className="h-4.5 w-4.5 animate-spin" /> : <Trash2 className="h-4.5 w-4.5" />}
               </button>
-              <button onClick={() => setChatOpen(false)} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors">
+              <button
+                onClick={() => setChatOpen(false)}
+                title="Yopish"
+                className="w-9 h-9 grid place-items-center rounded-lg bg-white/10 hover:bg-white/20 text-white shrink-0 transition-colors"
+              >
                 <X className="h-4.5 w-4.5" />
               </button>
             </div>
 
             {/* Xabarlar */}
-            <div ref={chatScrollRef} className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/30">
+            <div ref={chatScrollRef} className="flex-1 overflow-auto px-4 py-5 space-y-4 bg-slate-50 dark:bg-slate-950/40">
               {chatHistoryQuery.isLoading ? (
-                <div className="h-full grid place-items-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+                <div className="h-full grid place-items-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : chatMsgs.length === 0 && !chatMut.isPending ? (
-                <div className="h-full grid place-items-center text-center px-6">
-                  <div className="text-slate-400 dark:text-slate-500">
-                    <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-60" />
-                    <div className="text-[12.5px]">Agent bilan suhbatlashing — savol bering.</div>
+                /* Bo'sh holat — premium */
+                <div className="h-full grid place-items-center text-center px-4">
+                  <div>
+                    <div className="relative mx-auto w-20 h-20 mb-4">
+                      <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-600 blur-xl opacity-40" />
+                      <div className="relative w-20 h-20 rounded-3xl grid place-items-center bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-xl shadow-violet-500/30">
+                        <Bot className="h-10 w-10 text-white" />
+                      </div>
+                    </div>
+                    <div className="text-[16px] font-bold text-slate-800 dark:text-slate-100">Salom! Men {agentName} 👋</div>
+                    <div className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1 mb-5 max-w-xs mx-auto">
+                      Arizalarni tekshiraman, XATO to&apos;lovlarni topaman va rasm (ariza) o&apos;qiy olaman. Savol bering yoki quyidagidan tanlang.
+                    </div>
+                    <div className="flex flex-wrap gap-2 justify-center max-w-sm mx-auto">
+                      {CHAT_SUGGESTIONS.map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => sendSuggestion(s)}
+                          className="px-3 py-1.5 rounded-full text-[12px] font-medium bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 hover:ring-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:shadow-sm transition-all"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ) : (
                 chatMsgs.map((m, i) => (
-                  <div key={i} className={cn('flex flex-col', m.role === 'user' ? 'items-end' : 'items-start')}>
-                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5 px-1">
-                      {m.role === 'user' ? 'Siz' : agentName}
-                    </span>
-                    <div className={cn(
-                      'max-w-[85%] px-3.5 py-2 rounded-2xl text-[12.5px] whitespace-pre-wrap break-words',
-                      m.role === 'user'
-                        ? 'bg-violet-600 text-white rounded-br-sm'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-200 dark:ring-slate-700 rounded-bl-sm',
-                    )}>
-                      {m.hasImage && (
-                        <span className={cn(
-                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold mb-1 mr-1 align-middle',
-                          m.role === 'user' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300',
-                        )}>
-                          <ImageIcon className="h-3 w-3" /> rasm
-                        </span>
-                      )}
-                      {m.content || (m.hasImage ? '' : '—')}
+                  m.role === 'user' ? (
+                    <div key={i} className="flex justify-end animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-tr-md bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white text-[13px] leading-relaxed shadow-sm whitespace-pre-wrap break-words">
+                        {m.hasImage && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold mb-1 mr-1 align-middle bg-white/20 text-white">
+                            <ImageIcon className="h-3 w-3" /> rasm
+                          </span>
+                        )}
+                        {m.content || (m.hasImage ? '' : '—')}
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div key={i} className="flex items-start gap-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-sm mt-0.5">
+                        <Bot className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="max-w-[85%] px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm text-slate-700 dark:text-slate-200 break-words">
+                        {m.hasImage && (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold mb-1.5 bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300">
+                            <ImageIcon className="h-3 w-3" /> rasm
+                          </span>
+                        )}
+                        {m.content ? (
+                          <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>{m.content}</Markdown>
+                        ) : (
+                          !m.hasImage && <span className="text-sm">—</span>
+                        )}
+                      </div>
+                    </div>
+                  )
                 ))
               )}
               {chatMut.isPending && (
-                <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-0.5 px-1">{agentName}</span>
-                  <div className="px-3.5 py-2.5 rounded-2xl rounded-bl-sm bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700">
-                    <span className="flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" />
+                <div className="flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <div className="w-8 h-8 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-sm mt-0.5">
+                    <Bot className="h-4 w-4 text-white" />
+                  </div>
+                  <div className="px-4 py-3 rounded-2xl rounded-tl-md bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '-0.3s' }} />
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" style={{ animationDelay: '-0.15s' }} />
+                      <span className="w-2 h-2 rounded-full bg-violet-400 animate-bounce" />
                     </span>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Kiritish */}
-            <div className="border-t border-slate-100 dark:border-slate-800 shrink-0">
+            {/* Kiritish — modern footer */}
+            <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3">
               {chatImage && (
-                <div className="px-4 pt-3">
+                <div className="mb-2.5">
                   <div className="relative inline-block">
                     <img
                       src={`data:${chatImage.mediaType};base64,${chatImage.data}`}
                       alt="biriktirilgan rasm"
-                      className="h-16 w-16 object-cover rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+                      className="h-16 w-16 object-cover rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 shadow-sm"
                     />
                     <button
                       onClick={() => setChatImage(null)}
@@ -794,26 +882,33 @@ export default function AdminAgentPage() {
                   </div>
                 </div>
               )}
-              <div className="px-4 py-3 flex items-center gap-2">
+              <div className="flex items-end gap-2">
                 <input ref={chatFileRef} type="file" accept="image/*" onChange={onChatFile} className="hidden" />
                 <button
                   onClick={() => chatFileRef.current?.click()}
                   disabled={chatMut.isPending}
                   title="Rasm biriktirish"
-                  className="w-10 h-10 grid place-items-center rounded-xl shrink-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40 disabled:opacity-40 transition-colors"
+                  className="w-11 h-11 grid place-items-center rounded-2xl shrink-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40 disabled:opacity-40 transition-colors"
                 >
-                  <Paperclip className="h-4.5 w-4.5" />
+                  <Paperclip className="h-5 w-5" />
                 </button>
-                <Input
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                  placeholder="Xabar yozing…"
-                  className="h-10 rounded-xl text-[13px]"
-                />
-                <Button onClick={sendChat} disabled={chatMut.isPending || (!chatInput.trim() && !chatImage)} className="h-10 w-10 p-0 shrink-0 bg-violet-600 hover:bg-violet-700 text-white">
-                  {chatMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                <div className="flex-1">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                    placeholder="Xabar yozing…"
+                    className="w-full h-11 px-4 rounded-2xl bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-[13.5px] text-slate-700 dark:text-slate-200 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-violet-400 focus:bg-white dark:focus:bg-slate-800 transition"
+                  />
+                </div>
+                <button
+                  onClick={sendChat}
+                  disabled={chatMut.isPending || (!chatInput.trim() && !chatImage)}
+                  title="Yuborish"
+                  className="w-11 h-11 grid place-items-center rounded-2xl shrink-0 text-white shadow-md bg-gradient-to-br from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-40 disabled:shadow-none transition-all"
+                >
+                  {chatMut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+                </button>
               </div>
             </div>
           </div>
