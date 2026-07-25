@@ -36,6 +36,7 @@ export class AgentController {
     @Body() body: {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
       aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number; aiName?: string;
+      aiFromHour?: number; aiToHour?: number;
     },
     @CurrentUser() user?: AuthUser,
   ) {

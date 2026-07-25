@@ -73,12 +73,14 @@ export class AgentService {
     }
     const pendingCount = await this.oplataKv.countXatoForAgent(dateFrom || null);
     // AI Agent config
-    const [aiEnc, aiModel, aiEnabled, aiInterval, aiName] = await Promise.all([
+    const [aiEnc, aiModel, aiEnabled, aiInterval, aiName, aiFrom, aiTo] = await Promise.all([
       this.settings.get(this.K_AI_KEY),
       this.settings.get(this.K_AI_MODEL),
       this.settings.get(this.K_AI_ENABLED),
       this.settings.get('agent.aiIntervalMin'),
       this.settings.get('agent.aiName'),
+      this.settings.get('agent.aiFromHour'),
+      this.settings.get('agent.aiToHour'),
     ]);
     let hasAiKey = false; let aiKeyHint: string | null = null;
     if (aiEnc) { try { const k = this.crypto.decrypt(aiEnc); hasAiKey = !!k; aiKeyHint = k ? `…${k.slice(-4)}` : null; } catch { /* skip */ } }
@@ -101,6 +103,8 @@ export class AgentService {
       aiModel: aiModel || 'claude-sonnet-4-6',
       aiIntervalMin: Number(aiInterval) >= 1 ? Number(aiInterval) : 5,
       aiName: aiName || 'AI Agent',
+      aiFromHour: Number(aiFrom) >= 0 && Number(aiFrom) <= 24 ? Number(aiFrom) : 0,
+      aiToHour: Number(aiTo) >= 0 && Number(aiTo) <= 24 ? Number(aiTo) : 24,
     };
   }
 
@@ -109,6 +113,7 @@ export class AgentService {
       botToken?: string; groupId?: string; enabled?: boolean; dateFrom?: string | null; dailyTime?: string;
       whitelist?: Array<{ id: string; name: string }>;
       aiKey?: string; aiModel?: string; aiEnabled?: boolean; aiIntervalMin?: number; aiName?: string;
+      aiFromHour?: number; aiToHour?: number;
     },
     updatedBy?: string,
   ) {
@@ -131,6 +136,14 @@ export class AgentService {
       await this.settings.set('agent.aiIntervalMin', n >= 1 && n <= 1440 ? String(Math.round(n)) : null, updatedBy);
     }
     if (body.aiName !== undefined) await this.settings.set('agent.aiName', body.aiName.trim().slice(0, 60) || null, updatedBy);
+    if (body.aiFromHour !== undefined) {
+      const n = Number(body.aiFromHour);
+      await this.settings.set('agent.aiFromHour', n >= 0 && n <= 24 ? String(Math.round(n)) : null, updatedBy);
+    }
+    if (body.aiToHour !== undefined) {
+      const n = Number(body.aiToHour);
+      await this.settings.set('agent.aiToHour', n >= 0 && n <= 24 ? String(Math.round(n)) : null, updatedBy);
+    }
     return this.getConfig();
   }
 

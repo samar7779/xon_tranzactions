@@ -27,11 +27,28 @@ export class AgentAiService {
   private readonly K_AI_ENABLED = 'agent.aiEnabled';
   private readonly K_AI_INTERVAL = 'agent.aiIntervalMin';
   private readonly K_AI_NAME = 'agent.aiName';
+  private readonly K_AI_FROM = 'agent.aiFromHour';
+  private readonly K_AI_TO = 'agent.aiToHour';
   private readonly DEFAULT_MODEL = 'claude-sonnet-4-6';
   private lastRunMs = 0;
 
   async getName(): Promise<string> {
     return (await this.setting(this.K_AI_NAME)) || 'AI Agent';
+  }
+
+  /** Ish vaqti oynasi (Toshkent soati). Default 0..24 = doim. */
+  async getWorkHours(): Promise<{ from: number; to: number }> {
+    const f = Number(await this.setting(this.K_AI_FROM));
+    const t = Number(await this.setting(this.K_AI_TO));
+    return {
+      from: f >= 0 && f <= 24 ? Math.round(f) : 0,
+      to: t >= 0 && t <= 24 ? Math.round(t) : 24,
+    };
+  }
+  private inWorkWindow(from: number, to: number): boolean {
+    if (from === to) return true; // teng bo'lsa — doim
+    const h = new Date(Date.now() + 5 * 60 * 60 * 1000).getUTCHours(); // Toshkent UTC+5
+    return from < to ? (h >= from && h < to) : (h >= from || h < to);
   }
 
   // Ustma-ust ishlamaslik uchun (bir vaqtda bitta tsikl)
@@ -53,6 +70,8 @@ export class AgentAiService {
     if (this.running) return;
     try {
       if (!(await this.isEnabled())) return;
+      const { from, to } = await this.getWorkHours();
+      if (!this.inWorkWindow(from, to)) return; // ish vaqti emas
       const intervalMin = await this.getIntervalMin();
       if (Date.now() - this.lastRunMs < intervalMin * 60_000) return; // interval hali o'tmagan
       this.lastRunMs = Date.now();
@@ -248,9 +267,11 @@ export class AgentAiService {
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'approved', reviewedByType: 'agent' } }),
       this.prisma.xatoCorrectionRequest.count({ where: { status: 'rejected', reviewedByType: 'agent' } }),
     ]);
+    const wh = await this.getWorkHours();
     return {
       ok: true, enabled, hasKey: !!apiKey, running: this.running,
       model: await this.getModel(), intervalMin: await this.getIntervalMin(), name: await this.getName(),
+      fromHour: wh.from, toHour: wh.to,
       counts: { pending, processing, needsReview, agentApproved, agentRejected },
     };
   }
