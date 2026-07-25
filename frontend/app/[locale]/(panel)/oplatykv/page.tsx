@@ -1558,6 +1558,7 @@ function AktSverkaDialog({
 
   // Мемориальный ордер — PDF yoki Excel (foydalanuvchi tanlaydi). Bankdan to'liq ma'lumot olinadi.
   const [memOrderLoading, setMemOrderLoading] = useState<'pdf' | 'xlsx' | null>(null);
+  const [memMenuOpen, setMemMenuOpen] = useState(false);
   const downloadMemorialOrder = async (fmt: 'pdf' | 'xlsx') => {
     if (!selectedContract) return;
     setMemOrderLoading(fmt);
@@ -1894,30 +1895,40 @@ function AktSverkaDialog({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Мем. ордер — PDF yoki Excel (foydalanuvchi tanlaydi), barcha to'lovlar */}
-            <div className="inline-flex items-center rounded-lg overflow-hidden shadow-md">
+            {/* Мем. ордер — bosilганда PDF yoki Excel tanlanadi */}
+            <div className="relative">
               <button
-                onClick={() => downloadMemorialOrder('pdf')}
+                onClick={() => setMemMenuOpen((o) => !o)}
                 disabled={!selectedContract || !data || data.items.length === 0 || !!memOrderLoading}
-                title="Мемориальный ордер — PDF (barcha to'lovlar)"
-                className="h-9 px-3 bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Мемориальный ордер — PDF yoki Excel"
+                className="h-9 px-3 rounded-lg bg-gradient-to-br from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-[12px] shadow-md inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                {memOrderLoading === 'pdf'
+                {memOrderLoading
                   ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   : <FileText className="h-3.5 w-3.5" />}
-                Мем. PDF
+                Мем. ордер
+                <ChevronDown className={cn('h-3 w-3 opacity-80 transition-transform', memMenuOpen && 'rotate-180')} />
               </button>
-              <button
-                onClick={() => downloadMemorialOrder('xlsx')}
-                disabled={!selectedContract || !data || data.items.length === 0 || !!memOrderLoading}
-                title="Мемориальный ордер — Excel реестр (barcha to'lovlar)"
-                className="h-9 px-3 bg-gradient-to-br from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-semibold text-[12px] inline-flex items-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed border-l border-white/25"
-              >
-                {memOrderLoading === 'xlsx'
-                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  : <FileSpreadsheet className="h-3.5 w-3.5" />}
-                Мем. Excel
-              </button>
+              {memMenuOpen && !memOrderLoading && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setMemMenuOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-50 w-44 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl overflow-hidden">
+                    <div className="px-3 pt-2 pb-1 text-[9px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">Format tanlang</div>
+                    <button
+                      onClick={() => { setMemMenuOpen(false); downloadMemorialOrder('pdf'); }}
+                      className="w-full px-3 py-2.5 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-sky-50 dark:hover:bg-sky-950/40 inline-flex items-center gap-2.5 transition-colors"
+                    >
+                      <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400" /> PDF hujjat
+                    </button>
+                    <button
+                      onClick={() => { setMemMenuOpen(false); downloadMemorialOrder('xlsx'); }}
+                      className="w-full px-3 py-2.5 text-left text-[12px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 inline-flex items-center gap-2.5 transition-colors border-t border-slate-100 dark:border-slate-800"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Excel (xlsx)
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
             {/* Planirovka — CRM'dagi real xonadon rejasi (uploads/plans), shimmer effekti */}
             <button
