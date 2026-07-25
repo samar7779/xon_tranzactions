@@ -1,12 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Bot, Loader2, Save, Play, Lock, CalendarDays, Clock, KeyRound, Building2, Info, Send, Users, Plus,
   Sparkles, BrainCircuit, CheckCircle2, XCircle, UserCog, ChevronDown, Settings2, Activity, Cpu,
   History, MessageSquare, X, Search, Download, Pencil, ChevronLeft, ChevronRight,
+  Paperclip, Trash2, ImageIcon,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,7 +60,10 @@ interface AiActivityRow {
 }
 interface AiActivityResponse { ok: boolean; total: number; page: number; perPage: number; rows: AiActivityRow[] }
 
-type ChatMsg = { role: 'user' | 'assistant'; content: string };
+type ChatMsg = { role: 'user' | 'assistant'; content: string; hasImage?: boolean };
+type ChatImage = { data: string; mediaType: string };
+interface ChatHistoryRow { role: 'user' | 'assistant'; content: string; hasImage: boolean; at: string }
+interface ChatHistoryResponse { ok: boolean; rows: ChatHistoryRow[] }
 
 export default function AdminAgentPage() {
   const qc = useQueryClient();
@@ -105,10 +109,13 @@ export default function AdminAgentPage() {
   const [actExporting, setActExporting] = useState(false);
   const ACT_PER_PAGE = 20;
 
-  // Suhbat modal
+  // Suhbat drawer
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
+  const [chatImage, setChatImage] = useState<ChatImage | null>(null);
+  const chatFileRef = useRef<HTMLInputElement>(null);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!cfg || initialized) return;
@@ -235,24 +242,86 @@ export default function AdminAgentPage() {
     }
   };
 
-  // Suhbat (chat)
+  const agentName = aiStatus?.name || cfg?.aiName || 'AI Agent';
+
+  // Suhbat (chat) — tarix DB'da (stateful)
+  const chatHistoryQuery = useQuery({
+    queryKey: ['agent-ai-chat-history'],
+    queryFn: () => api.get<ChatHistoryResponse>('/agent/ai/chat/history'),
+    enabled: chatOpen,
+  });
+  // Tarixdan chatMsgs'ni seed qilish (optimistik ko'rsatish uchun)
+  useEffect(() => {
+    const rows = chatHistoryQuery.data?.rows;
+    if (!rows) return;
+    setChatMsgs(rows.map((r) => ({ role: r.role, content: r.content, hasImage: r.hasImage })));
+  }, [chatHistoryQuery.data]);
+
+  // ESC bilan yopish (backdrop bosilganda YOPILMAYDI)
+  useEffect(() => {
+    if (!chatOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setChatOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [chatOpen]);
+
+  // Yangi xabar kelganda pastga scroll
+  useEffect(() => {
+    if (chatOpen) chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [chatMsgs, chatOpen]);
+
   const chatMut = useMutation({
-    mutationFn: (msgs: ChatMsg[]) => api.post<{ ok: boolean; reply?: string; error?: string }>('/agent/ai/chat', { messages: msgs }, { timeout: 60_000 }),
+    mutationFn: (body: { message: string; image?: ChatImage }) =>
+      api.post<{ ok: boolean; reply?: string; error?: string }>('/agent/ai/chat', body, { timeout: 60_000 }),
     onSuccess: (r) => {
       if (r.ok && r.reply) setChatMsgs((p) => [...p, { role: 'assistant', content: r.reply as string }]);
       else toast.error(r.error || 'Javob kelmadi');
+      qc.invalidateQueries({ queryKey: ['agent-ai-chat-history'] });
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
   const sendChat = () => {
     const content = chatInput.trim();
-    if (!content || chatMut.isPending) return;
-    const next: ChatMsg[] = [...chatMsgs, { role: 'user', content }];
-    setChatMsgs(next);
+    if ((!content && !chatImage) || chatMut.isPending) return;
+    const img = chatImage;
+    setChatMsgs((p) => [...p, { role: 'user', content, hasImage: !!img }]);
     setChatInput('');
-    chatMut.mutate(next);
+    setChatImage(null);
+    chatMut.mutate({ message: content, image: img || undefined });
   };
-  const agentName = aiStatus?.name || cfg?.aiName || 'AI Agent';
+
+  const chatClearMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; deleted: number }>('/agent/ai/chat/clear', {}),
+    onSuccess: () => {
+      setChatMsgs([]);
+      qc.invalidateQueries({ queryKey: ['agent-ai-chat-history'] });
+      chatHistoryQuery.refetch();
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const clearChat = () => {
+    if (chatClearMut.isPending) return;
+    if (!window.confirm('Suhbat tarixi butunlay o\'chirilsinmi?')) return;
+    chatClearMut.mutate();
+  };
+
+  // Rasm biriktirish — FileReader orqali base64, prefiksni ajratib olamiz
+  const onChatFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // bir xil faylni qayta tanlash mumkin bo'lsin
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Faqat rasm biriktiring'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error("Rasm 5 MB dan katta bo'lmasin"); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const res = String(reader.result || '');
+      const comma = res.indexOf(',');
+      const data = comma >= 0 ? res.slice(comma + 1) : res; // "data:<mime>;base64," prefiksini olib tashlaymiz
+      setChatImage({ data, mediaType: file.type });
+    };
+    reader.onerror = () => toast.error("Rasmni o'qib bo'lmadi");
+    reader.readAsDataURL(file);
+  };
 
   const [aiRunSummary, setAiRunSummary] = useState<{ approve: number; reject: number; human: number; error: number } | null>(null);
   const aiRunMut = useMutation({
@@ -627,13 +696,14 @@ export default function AdminAgentPage() {
         </div>
       )}
 
-      {/* ═══════════════ 💬 Suhbat modal ═══════════════ */}
+      {/* ═══════════════ 💬 Suhbat drawer (o'ng tomon) ═══════════════ */}
       {chatOpen && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setChatOpen(false)} />
-          <div className="relative w-full max-w-lg h-[80vh] max-h-[640px] flex flex-col rounded-2xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+        <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
+          {/* Backdrop — bosilganda YOPILMAYDI (faqat X yoki ESC) */}
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
+          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[460px] flex flex-col bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 animate-in slide-in-from-right duration-300">
             {/* Sarlavha */}
-            <div className="px-5 py-3.5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-violet-500/[0.08] to-transparent">
+            <div className="px-5 py-3.5 flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-violet-500/[0.08] to-transparent shrink-0">
               <div className="w-9 h-9 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-md">
                 <Bot className="h-4.5 w-4.5" />
               </div>
@@ -641,14 +711,24 @@ export default function AdminAgentPage() {
                 <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100 truncate">{agentName}</div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400">Suhbat</div>
               </div>
+              <button
+                onClick={clearChat}
+                disabled={chatClearMut.isPending || chatMsgs.length === 0}
+                title="Tarixni tozalash"
+                className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[11.5px] font-semibold text-slate-500 dark:text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500 shrink-0 transition-colors"
+              >
+                {chatClearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Tarixni tozalash
+              </button>
               <button onClick={() => setChatOpen(false)} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 transition-colors">
                 <X className="h-4.5 w-4.5" />
               </button>
             </div>
 
             {/* Xabarlar */}
-            <div className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/30">
-              {chatMsgs.length === 0 && !chatMut.isPending ? (
+            <div ref={chatScrollRef} className="flex-1 overflow-auto p-4 space-y-3 bg-slate-50/40 dark:bg-slate-950/30">
+              {chatHistoryQuery.isLoading ? (
+                <div className="h-full grid place-items-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : chatMsgs.length === 0 && !chatMut.isPending ? (
                 <div className="h-full grid place-items-center text-center px-6">
                   <div className="text-slate-400 dark:text-slate-500">
                     <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-60" />
@@ -667,7 +747,15 @@ export default function AdminAgentPage() {
                         ? 'bg-violet-600 text-white rounded-br-sm'
                         : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-200 dark:ring-slate-700 rounded-bl-sm',
                     )}>
-                      {m.content}
+                      {m.hasImage && (
+                        <span className={cn(
+                          'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold mb-1 mr-1 align-middle',
+                          m.role === 'user' ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300',
+                        )}>
+                          <ImageIcon className="h-3 w-3" /> rasm
+                        </span>
+                      )}
+                      {m.content || (m.hasImage ? '' : '—')}
                     </div>
                   </div>
                 ))
@@ -687,17 +775,46 @@ export default function AdminAgentPage() {
             </div>
 
             {/* Kiritish */}
-            <div className="px-4 py-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
-              <Input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
-                placeholder="Xabar yozing…"
-                className="h-10 rounded-xl text-[13px]"
-              />
-              <Button onClick={sendChat} disabled={chatMut.isPending || !chatInput.trim()} className="h-10 w-10 p-0 shrink-0 bg-violet-600 hover:bg-violet-700 text-white">
-                {chatMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
+            <div className="border-t border-slate-100 dark:border-slate-800 shrink-0">
+              {chatImage && (
+                <div className="px-4 pt-3">
+                  <div className="relative inline-block">
+                    <img
+                      src={`data:${chatImage.mediaType};base64,${chatImage.data}`}
+                      alt="biriktirilgan rasm"
+                      className="h-16 w-16 object-cover rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+                    />
+                    <button
+                      onClick={() => setChatImage(null)}
+                      title="Rasmni olib tashlash"
+                      className="absolute -top-2 -right-2 w-5 h-5 grid place-items-center rounded-full bg-slate-700 text-white shadow hover:bg-rose-600 transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="px-4 py-3 flex items-center gap-2">
+                <input ref={chatFileRef} type="file" accept="image/*" onChange={onChatFile} className="hidden" />
+                <button
+                  onClick={() => chatFileRef.current?.click()}
+                  disabled={chatMut.isPending}
+                  title="Rasm biriktirish"
+                  className="w-10 h-10 grid place-items-center rounded-xl shrink-0 text-slate-400 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/40 disabled:opacity-40 transition-colors"
+                >
+                  <Paperclip className="h-4.5 w-4.5" />
+                </button>
+                <Input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  placeholder="Xabar yozing…"
+                  className="h-10 rounded-xl text-[13px]"
+                />
+                <Button onClick={sendChat} disabled={chatMut.isPending || (!chatInput.trim() && !chatImage)} className="h-10 w-10 p-0 shrink-0 bg-violet-600 hover:bg-violet-700 text-white">
+                  {chatMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
