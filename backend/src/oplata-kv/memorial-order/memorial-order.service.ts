@@ -487,6 +487,19 @@ export class MemorialOrderService {
     });
     doc.fillColor('#000');
 
+    // ── ИТОГО (jami summa) ──
+    const totalSum = blocks.reduce((s, b) => s + (Number(b.amount) || 0), 0);
+    if (doc.y + 20 > bottom) { doc.addPage(); }
+    doc.y += 1;
+    doc.moveTo(left, doc.y).lineTo(right, doc.y).lineWidth(1).strokeColor('#334155').stroke();
+    doc.strokeColor('#000');
+    doc.y += 4;
+    const yTot = doc.y;
+    doc.font('B').fontSize(9.5).fillColor('#0f172a');
+    doc.text('ИТОГО:', cDoc, yTot, { width: cSum - cDoc, align: 'left' });
+    doc.text(`${this.fmtMoney(totalSum)} сум`, left, yTot, { width: right - left, align: 'right' });
+    doc.y = yTot + 14;
+
     // Реестрдан keyin batafsil orderlar yangi sahifadan boshlanadi
     doc.addPage();
   }
