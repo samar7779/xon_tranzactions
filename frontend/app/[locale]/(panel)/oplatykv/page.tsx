@@ -161,6 +161,13 @@ export default function OplataKvPage() {
     if (fromUrl) return fromUrl;
     try { return localStorage.getItem('oplatykv-q-v1') || ''; } catch { return ''; }
   });
+  // Qidiruv debounce — har harfда emas, ~350ms jimlikdan keyin backend'ga so'rov.
+  // Input `q` bilan tez yoziladi, ro'yxat so'rovi `qDebounced` bo'yicha ketadi.
+  const [qDebounced, setQDebounced] = useState(q);
+  useEffect(() => {
+    const id = setTimeout(() => { setQDebounced(q); setPage(1); }, 350);
+    return () => clearTimeout(id);
+  }, [q]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
@@ -393,7 +400,7 @@ export default function OplataKvPage() {
     // Har doim sana bo'yicha yangidan-eskigacha (bugun tepada)
     p.set('sortBy', 'date');
     p.set('sortDir', 'desc');
-    if (q.trim()) p.set('q', q.trim());
+    if (qDebounced.trim()) p.set('q', qDebounced.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
     // Per-column filterlar (vergul bilan)
@@ -405,12 +412,12 @@ export default function OplataKvPage() {
     applyAmountParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, q, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
+  }, [page, perPage, qDebounced, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
 
   // Filter popoverga uzatish uchun — barcha AKTIV column filterlar (page'siz)
   const activeFilterParams = useMemo(() => {
     const p = new URLSearchParams();
-    if (q.trim()) p.set('q', q.trim());
+    if (qDebounced.trim()) p.set('q', qDebounced.trim());
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo)   p.set('dateTo', dateTo);
     for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
@@ -421,7 +428,7 @@ export default function OplataKvPage() {
     applyAmountParams(p);
     return p.toString();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
+  }, [qDebounced, dateFrom, dateTo, columnFiltersKey, amountFiltersKey]);
 
   // ─── Export — filter-aware (BARCHA filtrlar — column + xatoOnly) ───
   const qsForExport = useMemo(() => {

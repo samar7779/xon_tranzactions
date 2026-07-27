@@ -147,6 +147,14 @@ export default function TransactionsPage() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(25);
   const [q, setQ] = useState('');
+  // Qidiruv debounce — inputga har harf yozilганda emas, ~350ms jimlikdan keyin
+  // backend'ga so'rov (12 ustun ILIKE + count qimmat). Input `q` bilan tez yoziladi,
+  // so'rov esa `qDebounced` bo'yicha ketadi.
+  const [qDebounced, setQDebounced] = useState('');
+  useEffect(() => {
+    const id = setTimeout(() => { setQDebounced(q); setPage(1); }, 350);
+    return () => clearTimeout(id);
+  }, [q]);
   const [direction, setDirection] = useState<string>('all');
   const [matchStatus, setMatchStatus] = useState<string>('all');
   const [bankId, setBankId] = useState<string>('all');
@@ -414,7 +422,7 @@ export default function TransactionsPage() {
     : '';
 
   const params = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-  if (q) params.set('q', q);
+  if (qDebounced) params.set('q', qDebounced);
   if (direction !== 'all') params.set('direction', direction);
   if (dateFrom) params.set('dateFrom', dateFrom);
   if (dateTo) params.set('dateTo', dateTo);
@@ -441,7 +449,7 @@ export default function TransactionsPage() {
   // Self-exclusion popover ichida buildWhere helper'da amalga oshiriladi
   const activeFilterParams = (() => {
     const p = new URLSearchParams();
-    if (q) p.set('q', q);
+    if (qDebounced) p.set('q', qDebounced);
     if (direction !== 'all') p.set('direction', direction);
     if (dateFrom) p.set('dateFrom', dateFrom);
     if (dateTo) p.set('dateTo', dateTo);
@@ -459,7 +467,7 @@ export default function TransactionsPage() {
   const contractSourcesKey = Array.from(contractSources).sort().join(',');
   const sourcesKey = Array.from(sources).sort().join(',');
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', page, perPage, q, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey, amountKey],
+    queryKey: ['transactions', page, perPage, qDebounced, direction, dateFrom, dateTo, bankId, columnFiltersKey, contractSourcesKey, batchFilter, sourcesKey, amountKey],
     queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/transactions?${params}`),
   });
   const { data: banks } = useQuery({
@@ -501,7 +509,7 @@ export default function TransactionsPage() {
       if (kpiMode === 'CLIENT') p.set('categoryCode', 'CLIENT');
       if (bankId && bankId !== 'all') p.set('bankId', bankId);
       if (direction && direction !== 'all') p.set('direction', direction);
-      if (q) p.set('q', q);
+      if (qDebounced) p.set('q', qDebounced);
       if (batchFilter) p.set('batchId', batchFilter);
       // Kolonna (Google Sheets stilidagi) filterlar — KPI ham jadval bilan bir xil bo'lishi uchun
       for (const [col, paramName] of Object.entries(COLUMN_TO_PARAM)) {
@@ -823,7 +831,7 @@ export default function TransactionsPage() {
                   )}
                   placeholder={t('searchPlaceholder')}
                   value={q}
-                  onChange={(e) => { setQ(e.target.value); setPage(1); }}
+                  onChange={(e) => setQ(e.target.value)}
                 />
                 {q && (
                   <button
