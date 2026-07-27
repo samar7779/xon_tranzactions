@@ -176,7 +176,7 @@ export class MemorialOrderService {
     blocks.forEach((b, bi) => {
       const base = bi * 26;
       const R = (off: number): any => ords.getRow(base + off);
-      for (let o = 1; o <= 26; o++) R(o).height = 10.2;
+      for (let o = 1; o <= 26; o++) R(o).height = 14;   // o'qishga qulay (10.2 juda past edi)
 
       // Yuqori chiziq (1-qator pastki + 2-qator yuqori)
       lineBH(R(1), 'bottom');
