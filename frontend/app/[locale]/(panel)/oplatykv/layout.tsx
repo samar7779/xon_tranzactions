@@ -6,17 +6,22 @@ import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Topbar } from '@/components/topbar';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { PERMS } from '@/lib/permissions';
 
 const TABS = [
-  { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', img: '/sheets.png',         exact: true  },
-  { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      img: '/xon-saroy-logo.png', exact: false },
-  { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  img: '/xonpay.jpg',         exact: false },
+  { key: 'overview', href: '/oplatykv',         label: 'ОплатыКв', img: '/sheets.png',         exact: true,  perm: PERMS.OPLATAKV_VIEW },
+  { key: 'crm',      href: '/oplatykv/crm',     label: 'CRM',      img: '/xon-saroy-logo.png', exact: false, perm: PERMS.CRM_VIEW },
+  { key: 'billing',  href: '/oplatykv/billing', label: 'Billing',  img: '/xonpay.jpg',         exact: false, perm: PERMS.CRM_VIEW },
 ];
 
 export default function OplatyKvLayout({ children }: { children: React.ReactNode }) {
   const t = useTranslations('oplatykv');
   const pathname = usePathname();
   const { locale } = useParams<{ locale: string }>();
+  const user = useAuth((s) => s.user);
+  // Faqat ruxsat bor tablar ko'rsatiladi (CRM/Billing — CRM_VIEW)
+  const visibleTabs = TABS.filter((t) => !!user?.permissions?.includes(t.perm));
   const activeKey = (() => {
     if (pathname === `/${locale}/oplatykv`) return 'overview';
     const match = TABS.find((t) => !t.exact && pathname.startsWith(`/${locale}${t.href}`));
@@ -29,9 +34,10 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
         title="ОплатыКв"
         subtitle={t('subtitle')}
       />
+      {visibleTabs.length > 1 && (
       <div className="px-6 lg:px-8 pt-3 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-700 sticky top-0 z-30">
         <nav className="flex items-center gap-1" role="tablist">
-          {TABS.map((t) => {
+          {visibleTabs.map((t) => {
             const href = `/${locale}${t.href}`;
             const active = activeKey === t.key;
             return (
@@ -59,6 +65,7 @@ export default function OplatyKvLayout({ children }: { children: React.ReactNode
           })}
         </nav>
       </div>
+      )}
       {children}
     </>
   );

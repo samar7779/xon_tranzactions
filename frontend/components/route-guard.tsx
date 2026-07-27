@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { usePathname, useParams } from 'next/navigation';
+import { usePathname, useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ShieldAlert, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -64,6 +64,7 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const { locale } = useParams<{ locale: string }>();
   const user = useAuth((s) => s.user);
   const tc = useTranslations('common');
+  const router = useRouter();
 
   // /uz/admin/roles → /admin/roles (locale segmentini olib tashlaymiz)
   const segments = pathname.split('/').filter(Boolean);
@@ -72,13 +73,23 @@ export function RouteGuard({ children }: { children: React.ReactNode }) {
   const rule = ROUTE_PERMISSIONS.find(
     (r) => path === r.prefix || path.startsWith(r.prefix + '/'),
   );
+  const allowed = !rule || (user?.permissions?.includes(rule.permission) ?? false);
 
-  // Qoidasi yo'q yo'l — cheklov qo'ymaymiz
-  if (!rule) return <>{children}</>;
+  // Ruxsat yo'q bo'lsa — foydalanuvchi kira oladigan birinchi sahifaga yo'naltiramiz
+  // (xato ko'rsatmasdan). Umuman ruxsatli sahifa bo'lmasa — "ruxsat yo'q" ekrani.
+  const landing = LANDING_ROUTES.find((r) =>
+    r.anyOf.some((p) => user?.permissions?.includes(p)),
+  );
+  const landingHref = landing ? `/${locale}${landing.path}` : null;
+  const canRedirect = !allowed && !!user && !!landingHref && landingHref !== pathname;
 
-  const allowed = user?.permissions?.includes(rule.permission) ?? false;
+  useEffect(() => {
+    if (canRedirect) router.replace(landingHref!);
+  }, [canRedirect, landingHref, router]);
+
   if (allowed) return <>{children}</>;
-
+  if (!user) return null;              // hali yuklanmoqda — xato ko'rsatmaymiz
+  if (canRedirect) return null;        // ruxsatli sahifaga yo'naltirilyapti
   return <AccessDenied locale={locale} tc={tc} />;
 }
 
