@@ -144,64 +144,105 @@ export class MemorialOrderService {
     totalRow.getCell(14).numFmt = '#,##0.00';
     totalRow.font = { bold: true, size: 11 };
 
-    // ── 2-varaq: "Ордера" — har to'lov PDF'dagi kabi blok ko'rinishida ──
+    // ── 2-varaq: "Ордера" — bank Мемориальный ордер formati (namunaga mos) ──
     const ords = wb.addWorksheet('Ордера');
-    ords.getColumn(1).width = 30;
-    ords.getColumn(2).width = 44;
-    ords.getColumn(3).width = 14;
-    ords.getColumn(4).width = 22;
+    [3, 28, 22, 16, 12, 6, 13, 18, 4].forEach((w, i) => { ords.getColumn(i + 1).width = w; });
     const todayStr = this.fmtDate(new Date());
+    const GRAY = 'FF595959';
+    const DARK = 'FF000000';
     let r = 1;
+
+    // label(B=2) + value(C=3) [+ label2(G=7) + value2(H=8)]
     const put = (
-      label: string, value: any, label2?: string, value2?: any,
-      o: { bold?: boolean; money?: boolean } = {},
+      label: string, value: any,
+      o: { bold?: boolean; money?: boolean; label2?: string; value2?: any; wrap?: boolean } = {},
     ) => {
       const row = ords.getRow(r++);
-      row.getCell(1).value = label;
-      row.getCell(1).font = { size: 9, color: { argb: 'FF64748B' } };
-      const vc = row.getCell(2);
+      row.getCell(2).value = label;
+      row.getCell(2).font = { size: 9, color: { argb: GRAY } };
+      const vc = row.getCell(3);
       vc.value = value;
-      vc.font = { size: 10, bold: !!o.bold, color: { argb: 'FF0F172A' } };
+      vc.font = { size: 10, bold: !!o.bold, color: { argb: DARK } };
       if (o.money) vc.numFmt = '#,##0.00';
-      if (label2 !== undefined) {
-        row.getCell(3).value = label2;
-        row.getCell(3).font = { size: 9, color: { argb: 'FF64748B' } };
-        row.getCell(4).value = value2;
-        row.getCell(4).font = { size: 10, color: { argb: 'FF0F172A' } };
+      if (o.wrap) { vc.alignment = { wrapText: true, vertical: 'top' }; row.height = 28; }
+      if (o.label2 !== undefined) {
+        row.getCell(7).value = o.label2;
+        row.getCell(7).font = { size: 9, color: { argb: GRAY } };
+        row.getCell(8).value = o.value2;
+        row.getCell(8).font = { size: 10, color: { argb: DARK } };
+      }
+      return row;
+    };
+    // Butun blok kengligida (B..I) yuqori/pastki chiziq
+    const hline = (rowNum: number, side: 'top' | 'bottom') => {
+      for (let c = 2; c <= 9; c++) {
+        const cell = ords.getRow(rowNum).getCell(c);
+        cell.border = { ...(cell.border || {}), [side]: { style: 'thin', color: { argb: DARK } } };
       }
     };
+
     blocks.forEach((b) => {
       const bad = !b.hasTx || !b.fromAccount;
+
+      // ── Sarlavha: "Мемориальный ордер" + № qutisi + Отв. ──
+      const hRow = r;
       const hr = ords.getRow(r++);
-      hr.getCell(1).value = `Мемориальный ордер № ${b.docNumber || '—'}`;
-      hr.getCell(1).font = { bold: true, size: 12, color: { argb: 'FF0F172A' } };
-      hr.getCell(4).value = 'Отв. системный пользователь B2';
-      hr.getCell(4).font = { size: 8, color: { argb: 'FF94A3B8' } };
-      put('ID', b.id || '—', 'Изг.', todayStr);
+      hr.getCell(2).value = 'Мемориальный ордер';
+      hr.getCell(2).font = { bold: true, size: 11, color: { argb: DARK } };
+      ords.mergeCells(hRow, 3, hRow, 4);            // № qutisi C:D
+      const numCell = hr.getCell(3);
+      numCell.value = b.docNumber || '—';
+      numCell.font = { size: 10, color: { argb: DARK } };
+      numCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      numCell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' } };
+      hr.getCell(7).value = 'Отв. системный пользователь B2';
+      hr.getCell(7).font = { size: 8, color: { argb: 'FF808080' } };
+      hline(hRow, 'top');
+
+      // ── Плательщик ──
+      put('ID', b.id || '—', { label2: 'Изг.', value2: todayStr });
       put('Дата', this.fmtDate(b.date));
       put('Наименование плательщика', b.fromName || '—');
-      put('Дебет счёт плательщика', b.fromAccount || '—', 'ИНН', b.fromInn || '—');
-      put('Наим. банка плательщика', mfoToBankName(b.fromMfo) || b.fromMfo || '—', 'Код банка', b.fromMfo || '—');
-      put('Сумма', Number(b.amount) || 0, undefined, undefined, { bold: true, money: true });
+      put('Дебет счёт плательщика', b.fromAccount || '—', { label2: 'ИНН', value2: b.fromInn || '—' });
+      put('Наим. банка плательщика', mfoToBankName(b.fromMfo) || b.fromMfo || '—', { label2: 'Код банка', value2: b.fromMfo || '—' });
+      put('Сумма', Number(b.amount) || 0, { bold: true, money: true });
+      r++; // bo'sh qator
+
+      // ── Получатель ──
       put('Наименование получателя', b.toName || '—');
       put('Кредит счёт получателя', b.toAccount || '—');
-      put('Наим. банка получателя', mfoToBankName(b.toMfo) || b.toMfo || '—', 'Код банка', b.toMfo || '—');
+      put('Наим. банка получателя', mfoToBankName(b.toMfo) || b.toMfo || '—', { label2: 'Код банка', value2: b.toMfo || '—' });
       put('Сумма прописью', amountToWordsRu(b.amount));
-      put('Детали платежа', b.description || '—');
+      put('Детали платежа', b.description || '—', { wrap: true });
       if (bad) {
         const wr = ords.getRow(r++);
-        wr.getCell(1).value = '(!) Ma\'lumot to\'liq emas — bank tafsilotlari topilmadi';
-        wr.getCell(1).font = { size: 8, color: { argb: 'FFB45309' } };
+        wr.getCell(2).value = "(!) Ma'lumot to'liq emas — bank tafsilotlari topilmadi";
+        wr.getCell(2).font = { size: 8, color: { argb: 'FFB45309' } };
       }
-      const sr = ords.getRow(r++);
-      sr.getCell(1).value = 'Руководитель ______   Гл. бухгалтер ______';
-      sr.getCell(1).font = { size: 8, color: { argb: 'FF475569' } };
-      sr.getCell(4).value = `Проведён ${this.fmtDate(b.date)}`;
-      sr.getCell(4).font = { size: 8, color: { argb: 'FF475569' } };
-      const mp = ords.getRow(r++);
-      mp.getCell(1).value = 'М.П.  БАНК';
-      mp.getCell(1).font = { size: 8, bold: true, color: { argb: 'FF475569' } };
-      r++; // bo'sh ajratuvchi qator
+      r++; // bo'sh qator
+
+      // ── Imzo bloki ──
+      const s1 = ords.getRow(r++);
+      s1.getCell(2).value = 'Руководитель ______________';
+      s1.getCell(2).font = { size: 9, color: { argb: 'FF404040' } };
+      s1.getCell(5).value = 'Главный бухгалтер ______________';
+      s1.getCell(5).font = { size: 9, color: { argb: 'FF404040' } };
+      const s2 = ords.getRow(r++);
+      s2.getCell(2).value = 'подпись'; s2.getCell(2).font = { size: 8, italic: true, color: { argb: GRAY } }; s2.getCell(2).alignment = { horizontal: 'center' };
+      s2.getCell(5).value = 'подпись'; s2.getCell(5).font = { size: 8, italic: true, color: { argb: GRAY } }; s2.getCell(5).alignment = { horizontal: 'center' };
+      r++; // bo'sh
+      const s3 = ords.getRow(r++);
+      s3.getCell(2).value = 'Проверен ________'; s3.getCell(2).font = { size: 9, color: { argb: 'FF404040' } };
+      s3.getCell(4).value = 'Одобрен ________'; s3.getCell(4).font = { size: 9, color: { argb: 'FF404040' } };
+      s3.getCell(7).value = 'Проведен'; s3.getCell(7).font = { size: 9, color: { argb: 'FF404040' } };
+      const s4 = ords.getRow(r++);
+      s4.getCell(2).value = 'М.П.  БАНК'; s4.getCell(2).font = { size: 9, bold: true, color: { argb: 'FF404040' } };
+      s4.getCell(3).value = 'Подпись'; s4.getCell(3).font = { size: 8, italic: true, color: { argb: GRAY } };
+      s4.getCell(5).value = 'Подпись'; s4.getCell(5).font = { size: 8, italic: true, color: { argb: GRAY } };
+      s4.getCell(7).value = this.fmtDate(b.date); s4.getCell(7).font = { size: 9, color: { argb: DARK } };
+      hline(r - 1, 'bottom');
+
+      r += 2; // bloklar orasi
     });
 
     const arrayBuffer = await wb.xlsx.writeBuffer();
