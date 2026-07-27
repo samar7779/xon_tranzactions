@@ -370,6 +370,8 @@ export class CrmService {
             showMap.set(num, name);
             // CrmContract keshiga ham yozamiz (keyingi safar tez)
             try {
+              const crmOrderId = detail.id != null ? String(detail.id).slice(0, 64)
+                : (detail.order_id != null ? String(detail.order_id).slice(0, 64) : null);
               await this.prisma.crmContract.upsert({
                 where: { contractNumber: num },
                 create: {
@@ -377,10 +379,12 @@ export class CrmService {
                   customerName: name,
                   status: String(detail.status || '').toLowerCase() || null,
                   objectName: detail.object_name || null,
+                  crmOrderId,
                   found: true,
                 },
                 update: {
                   customerName: name,
+                  crmOrderId,
                   found: true,
                   lastVerifiedAt: new Date(),
                 },

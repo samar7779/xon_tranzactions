@@ -179,18 +179,23 @@ export class CrmContractCacheService {
           const objectName = trunc(extractObject(detail), 255);
           const apartmentNumber = trunc(detail.apartment_number || detail.client?.apartment_number || null, 64);
           const phone = trunc(detail.client?.phone_primary || detail.client?.phone || null, 64);
+          // CRM order/shartnoma ID — API'da order_id sifatida chiqadi
+          const crmOrderId = trunc(
+            detail.id != null ? String(detail.id) : (detail.order_id != null ? String(detail.order_id) : null),
+            64,
+          );
           const contractKey = trunc(v.toUpperCase(), 128) as string;
 
           const saved = await this.prisma.crmContract.upsert({
             where: { contractNumber: contractKey },
             create: {
               contractNumber: contractKey,
-              customerName, status, objectName, apartmentNumber, phone,
+              customerName, status, objectName, apartmentNumber, phone, crmOrderId,
               rawSnapshot: pickSnapshot(detail),
               found: true,
             },
             update: {
-              customerName, status, objectName, apartmentNumber, phone,
+              customerName, status, objectName, apartmentNumber, phone, crmOrderId,
               rawSnapshot: pickSnapshot(detail),
               found: true,
               lastVerifiedAt: new Date(),

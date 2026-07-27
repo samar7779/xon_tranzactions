@@ -204,13 +204,27 @@ export class PublicApiController {
         take: perPageN,
       }),
     ]);
+    const orderIdMap = await this.orderIdMapForContracts(items.map((it) => it.contractNo));
     return {
       ok: true,
       total,
       page: pageN,
       perPage: perPageN,
-      items: items.map((it) => this.oplataKvShape(it)),
+      items: items.map((it) => this.oplataKvShape(it, orderIdMap.get((it.contractNo || '').toUpperCase()) ?? null)),
     };
+  }
+
+  /** contractNo -> CRM order_id xaritasi (CrmContract'dan, katta harf bilan mos) */
+  private async orderIdMapForContracts(contractNos: (string | null)[]): Promise<Map<string, string | null>> {
+    const keys = [...new Set(contractNos.filter(Boolean).map((c) => (c as string).toUpperCase()))];
+    const map = new Map<string, string | null>();
+    if (!keys.length) return map;
+    const rows = await this.prisma.crmContract.findMany({
+      where: { contractNumber: { in: keys } },
+      select: { contractNumber: true, crmOrderId: true },
+    });
+    for (const r of rows) map.set(r.contractNumber.toUpperCase(), r.crmOrderId ?? null);
+    return map;
   }
 
   @Get('oplata-kv/:id')
@@ -236,7 +250,8 @@ export class PublicApiController {
     if (!row) throw new NotFoundException(
       `ОплатыКв qatori topilmadi yoki hali split qilinmagan. Qidirilgan maydonlar: id (cuid), sourceTxId. Berilgan: "${idTrimmed.slice(0, 64)}"`,
     );
-    return { ok: true, item: this.oplataKvShape(row) };
+    const orderIdMap = await this.orderIdMapForContracts([row.contractNo]);
+    return { ok: true, item: this.oplataKvShape(row, orderIdMap.get((row.contractNo || '').toUpperCase()) ?? null) };
   }
 
   // ─── ACCOUNTS ────────────────────────────────────────────────────
@@ -590,10 +605,11 @@ export class PublicApiController {
     };
   }
 
-  private oplataKvShape(it: any) {
+  private oplataKvShape(it: any, orderId: string | null = null) {
     return {
       id: it.id,
       contractNo: it.contractNo,
+      order_id: orderId,   // CRM order/shartnoma ID (contractNo bo'yicha CrmContract'dan)
       date: it.date,
       paymentAmount: it.paymentAmount != null ? Number(it.paymentAmount) : null,
       firstInstallment: it.firstInstallment != null ? Number(it.firstInstallment) : null,

@@ -517,6 +517,7 @@ model CrmContract {
   objectName      String?  @map("object_name") @db.VarChar(255)
   apartmentNumber String?  @map("apartment_number") @db.VarChar(64)
   phone           String?  @db.VarChar(64)
+  crmOrderId      String?  @map("crm_order_id") @db.VarChar(64)   // CRM order/shartnoma ID (API'da order_id)
   rawSnapshot     Json?    @map("raw_snapshot")          // CRM javobining qisqartmasi
   found           Boolean  @default(true)                // false → CRM'da topilmadi, kelajakda yana urinma
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
