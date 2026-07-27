@@ -131,6 +131,18 @@ export function extractContractCandidates(description: string | null | undefined
     if (!candidates.includes(v2)) candidates.push(v2);
   }
 
+  // Variant: SUFFIKS — tail'dan keyin "/XX" yoki "-XX" (1-3 alnum).
+  // Misol: "№393FZ026RNK/SH-сонли" → shartnoma raqami "393FZO26RNK/SH".
+  // CRM raqamni shu qo'shimcha bilan saqlashi mumkin; ajratuvchi / yoki - bo'lishi
+  // mumkinligi uchun ikkala shaklni ham (slash bilan va tutash) sinaymiz.
+  const suf = afterMatch.match(/^\s*[/\-]([A-Z0-9]{1,3})(?=\s|[.,;)\]/\-]|$)/i);
+  if (suf) {
+    const withSep = (base + '/' + suf[1]).toUpperCase();
+    const noSep = (base + suf[1]).toUpperCase();
+    if (!candidates.includes(withSep)) candidates.push(withSep);
+    if (!candidates.includes(noSep)) candidates.push(noSep);
+  }
+
   return candidates;
 }
 

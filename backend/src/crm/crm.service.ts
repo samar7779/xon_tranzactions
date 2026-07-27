@@ -471,8 +471,9 @@ export class CrmService {
             detail = exact;
             this.log.log(`  → exact match: status=${exact.status || '-'}`);
           } else if (items.length > 0) {
-            // 2) Trimmed/normalized match (whitespace, dash bilan farqlar)
-            const norm = (s: string) => s.replace(/[\s\-_]/g, '').toUpperCase();
+            // 2) Trimmed/normalized match (whitespace, dash, slash, nuqta bilan farqlar)
+            // Masalan "393FZO26RNK/SH" (izohda) ~ "393FZO26RNK-SH" (CRM) — ajratuvchi farqi.
+            const norm = (s: string) => s.replace(/[\s\-_./]/g, '').toUpperCase();
             const target = norm(contractNo);
             const fuzzy = items.find((it) => norm(String(it.contract || '')) === target);
             if (fuzzy) {
