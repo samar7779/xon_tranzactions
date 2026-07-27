@@ -234,6 +234,73 @@ export class CrmContractCacheService {
       // ignore — log allaqachon yozilgan
     }
   }
+
+  // ───────────── crm_order_id backfill (mavjud shartnomalar uchun) ─────────────
+
+  private backfillRunning = false;
+
+  /**
+   * crmOrderId bo'sh (null) bo'lgan MAVJUD topilgan shartnomalarni CRM'dan qayta
+   * olib order_id bilan to'ldiradi. Fonda ishlaydi (konkurentlik cheklangan).
+   * FAQAT crmOrderId yangilanadi — found/nom/obyekt tegilmaydi. XATO/topilmagan
+   * (found=false) shartnomalar tegilmaydi.
+   */
+  async backfillOrderIds(opts: { limit?: number } = {}): Promise<{ pending: number; alreadyRunning: boolean }> {
+    if (this.backfillRunning) {
+      const remaining = await this.prisma.crmContract.count({ where: { found: true, crmOrderId: null } });
+      return { pending: remaining, alreadyRunning: true };
+    }
+    const limit = Math.min(100000, Math.max(1, opts.limit ?? 50000));
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: true, crmOrderId: null },
+      select: { contractNumber: true },
+      take: limit,
+    });
+    const keys = rows.map((r) => r.contractNumber);
+    this.backfillRunning = true;
+    this.runBackfill(keys)
+      .catch((e) => this.log.warn(`crmOrderId backfill xato: ${e?.message}`))
+      .finally(() => { this.backfillRunning = false; });
+    return { pending: keys.length, alreadyRunning: false };
+  }
+
+  private async runBackfill(keys: string[]): Promise<void> {
+    const CONCURRENCY = 4;
+    let idx = 0;
+    let done = 0;
+    let filled = 0;
+    const worker = async () => {
+      while (idx < keys.length) {
+        const k = keys[idx++];
+        try { if (await this.backfillOne(k)) filled++; } catch { /* ignore */ }
+        if (++done % 200 === 0) this.log.log(`crmOrderId backfill: ${done}/${keys.length} (to'ldi: ${filled})`);
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    this.log.log(`crmOrderId backfill tugadi: ${keys.length} ta ko'rildi, ${filled} ta to'ldi`);
+  }
+
+  /** Bitta shartnoma — CRM'dan order id olib, faqat crmOrderId ustunini yangilaydi */
+  private async backfillOne(contractNumber: string): Promise<boolean> {
+    const key = (contractNumber || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
+    if (!key) return false;
+    const variants = contractVariants(key).slice(0, 8);
+    for (const v of variants) {
+      try {
+        const res = await this.crm.show({ contract: v });
+        const detail: any = (res as any)?.detail;
+        const oid = detail?.id ?? detail?.order_id;
+        if (detail && oid != null) {
+          await this.prisma.crmContract.updateMany({
+            where: { contractNumber: { in: variants } },
+            data: { crmOrderId: String(oid).slice(0, 64) },
+          });
+          return true;
+        }
+      } catch { /* keyingi variantni sinaymiz */ }
+    }
+    return false;
+  }
 }
 
 function toCached(row: any): CachedContract {
@@ -255,6 +322,7 @@ function toCached(row: any): CachedContract {
 function pickSnapshot(detail: any): any {
   if (!detail) return null;
   return {
+    id: detail.id ?? detail.order_id ?? null,
     contract: detail.contract,
     status: detail.status,
     total_amount: detail.total_amount,

@@ -12,6 +12,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { OplataKvService } from './oplata-kv.service';
 import { MemorialOrderService } from './memorial-order/memorial-order.service';
+import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -47,6 +48,7 @@ export class OplataKvController {
   constructor(
     private readonly svc: OplataKvService,
     private readonly memorialOrder: MemorialOrderService,
+    private readonly crmCache: CrmContractCacheService,
   ) {}
 
   @Get()
@@ -439,6 +441,14 @@ export class OplataKvController {
   @ApiOperation({ summary: "КЛИЕНТ nomlarini CRM shartnoma egasi ismiga tuzatish (agregator o'rniga)" })
   async fixClientNames() {
     return this.svc.fixClientNamesFromCrm({});
+  }
+
+  @Post('backfill-order-ids')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SYNC)
+  @ApiOperation({ summary: "crm_order_id bo'sh shartnomalarni CRM'dan olib to'ldirish (API order_id uchun). Fonda ishlaydi." })
+  async backfillOrderIds(@Body() body: { limit?: number }) {
+    const res = await this.crmCache.backfillOrderIds({ limit: body?.limit });
+    return { ok: true, ...res };
   }
 
   @Get('unsplit-contracts')
