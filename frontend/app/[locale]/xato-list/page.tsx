@@ -98,6 +98,7 @@ export default function XatoListPage() {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [flow, setFlow] = useState<Flow>('all');
+  const [objFilter, setObjFilter] = useState('');   // obyekt (hisob) bo'yicha filtr
   const [page, setPage] = useState(1);
   const perPage = 30;
   const [key, setKey] = useState('');
@@ -274,11 +275,19 @@ export default function XatoListPage() {
     return { inC, outC, inSum, outSum, pendingC };
   }, [allRows]);
 
+  // Obyekt (hisob) bo'yicha filtr uchun — mavjud obyektlar ro'yxati
+  const objectOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const r of allRows) { if (r.object && r.object.trim()) set.add(r.object.trim()); }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+  }, [allRows]);
+
   const rows = allRows.filter((r) => {
     const a = r.amount ?? 0;
     if (flow === 'in' && a < 0) return false;
     if (flow === 'out' && a >= 0) return false;
     if (flow === 'pending' && !r.pending) return false;
+    if (objFilter && (r.object || '') !== objFilter) return false;
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
@@ -371,18 +380,32 @@ export default function XatoListPage() {
           <>
           {/* ═══ Sticky search bar ═══ */}
           <div className="sticky top-2 z-20">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="ID, shartnoma raqami, klient yoki izoh bo'yicha qidirish…"
-                className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
-              />
-              {q && (
-                <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
-                  <X className="w-4 h-4" />
-                </button>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="ID, shartnoma raqami, klient yoki izoh bo'yicha qidirish…"
+                  className="w-full h-12 pl-10 pr-10 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg shadow-slate-900/5 outline-none focus:ring-2 focus:ring-violet-400 text-[13.5px] transition"
+                />
+                {q && (
+                  <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {/* Obyekt (hisob) bo'yicha filtr — masalan VATAN RESIDENCE / ОИЛА */}
+              {objectOptions.length > 0 && (
+                <select
+                  value={objFilter}
+                  onChange={(e) => { setObjFilter(e.target.value); setPage(1); }}
+                  title="Hisob (obyekt) bo'yicha filtr"
+                  className="h-12 shrink-0 max-w-[45vw] sm:max-w-[240px] rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg px-3.5 pr-8 text-[13px] font-medium outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer"
+                >
+                  <option value="">🏦 Barcha hisoblar</option>
+                  {objectOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
               )}
             </div>
           </div>
