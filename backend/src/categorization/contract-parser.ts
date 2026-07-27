@@ -135,31 +135,78 @@ export function extractContractCandidates(description: string | null | undefined
 }
 
 /**
- * Bitta shartnoma raqamining muqobil yozilishlari (O↔0) — DB qidiruvi uchun.
- *   "1234ZURABCD" → ["1234ZURABCD", "1234ZURABC0", "1234ZURAB0D", ...]
+ * Bitta shartnoma raqamining muqobil yozilishlari — DB/CRM qidiruvi uchun.
+ *   "1234ZURABCD" → ["1234ZURABCD", "1234ZURABC0", "1234ZUR4BCD", ...]
  *
- * Bank izohlarida O va 0 aralashib ketadi, shuning uchun bir necha variantni
- * sinab ko'rishimiz kerak.
+ * Bank izohlarida operatorlar belgilarni aralashtirib yozadilar:
+ *   - O (latin harf) ↔ 0 (raqam)  — "MSO" / "MS0"
+ *   - I (latin harf) ↔ 1 (raqam)  — "...23I2" / "...2312"   (user: "I harfi 1 bolib qolgan")
+ * Shuning uchun har bir chalkash belgi uchun ikkala variantni sinab ko'ramiz.
+ *
+ * Variantlar ORIGINALDAN o'zgarish soni (Hamming masofasi) bo'yicha tartiblanadi —
+ * eng kam o'zgargan (eng ehtimolli) variantlar oldinda, chunki chaqiruvchi
+ * ko'pincha faqat birinchi N tasini (slice) sinaydi.
+ *
+ * Eslatma: '1'→'I' faqat bosh raqamlardan KEYIN sinaladi (masalan "1254VTN..."
+ * dagi bosh "1" haqiqiy raqam, shartnoma raqami doim raqam bilan boshlanadi).
  */
 export function contractVariants(normalized: string): string[] {
-  const variants = new Set<string>([normalized]);
-  variants.add(normalized.replace(/0/g, 'O'));
-  variants.add(normalized.replace(/O/g, '0'));
-  // Qisman almashtirishlar — har bir 0/O ni alohida-alohida almashtirish
-  const indices: number[] = [];
-  for (let i = 0; i < normalized.length; i++) {
-    if (normalized[i] === '0' || normalized[i] === 'O') indices.push(i);
+  const s = normalized.toUpperCase();
+  // Har bir chalkash belgi uchun [asl-mos, muqobil] juftlik
+  const AMBIG: Record<string, [string, string]> = {
+    O: ['O', '0'],
+    '0': ['O', '0'],
+    I: ['I', '1'],
+    '1': ['1', 'I'],
+  };
+  // Bosh raqamlar bloki (masalan "1254") — bu yerdagi 1 haqiqiy raqam, I ga aylantirmaymiz
+  const leadLen = s.match(/^\d+/)?.[0].length ?? 0;
+
+  const positions: number[] = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === 'O' || ch === '0' || ch === 'I') positions.push(i);
+    else if (ch === '1' && i >= leadLen) positions.push(i);
   }
-  // 2^n ko'p bo'lib ketmasin — max 6 ta almashinish bo'lsa to'xtaymiz
-  if (indices.length <= 6) {
-    const n = 1 << indices.length;
-    for (let mask = 0; mask < n; mask++) {
-      const arr = normalized.split('');
-      for (let bit = 0; bit < indices.length; bit++) {
-        arr[indices[bit]] = ((mask >> bit) & 1) ? '0' : 'O';
-      }
-      variants.add(arr.join(''));
+
+  if (positions.length === 0) return [s];
+
+  // Juda ko'p chalkash belgi — 2^n portlashini oldini olish uchun faqat
+  // "hammasi bir xil" ko'rinishlarni qaytaramiz
+  if (positions.length > 10) {
+    return Array.from(
+      new Set([
+        s,
+        s.replace(/0/g, 'O'),
+        s.replace(/O/g, '0'),
+        s.replace(/1/g, 'I'),
+        s.replace(/I/g, '1'),
+      ]),
+    );
+  }
+
+  const k = positions.length;
+  const out: { v: string; dist: number }[] = [];
+  for (let mask = 0; mask < 1 << k; mask++) {
+    const arr = s.split('');
+    let dist = 0;
+    for (let b = 0; b < k; b++) {
+      const p = positions[b];
+      const pick = AMBIG[s[p]][(mask >> b) & 1];
+      arr[p] = pick;
+      if (pick !== s[p]) dist++;
+    }
+    out.push({ v: arr.join(''), dist });
+  }
+  out.sort((a, b) => a.dist - b.dist);
+
+  const seen = new Set<string>();
+  const res: string[] = [];
+  for (const o of out) {
+    if (!seen.has(o.v)) {
+      seen.add(o.v);
+      res.push(o.v);
     }
   }
-  return Array.from(variants);
+  return res;
 }
