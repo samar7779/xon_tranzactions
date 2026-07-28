@@ -10,7 +10,7 @@ import {
   TrendingUp, Zap, Database, RefreshCcw, Search, X, History, Settings, ShieldAlert, Save,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ChevronDown,
   Plus, Trash2, ArrowRight, Building2, Sparkles, Trash, Layers, Split,
-  Download, FileText, ArrowRightLeft,
+  Download, FileText, ArrowRightLeft, Link2,
 } from 'lucide-react';
 // Clock allaqachon import qilingan
 import { Card, CardContent } from '@/components/ui/card';
@@ -677,6 +677,9 @@ function SyncSettingsPanel() {
             {t('oplataAutoImportDesc')}
           </div>
 
+          {/* ── ORDER ID (CRM bog'lash) — coverage + backfill ── */}
+          <OrderIdSection />
+
           {/* Sozlamalar collapse — 4 ta funksiya bir tugma orqasiga yashiriladi */}
           <button
             type="button"
@@ -1125,6 +1128,121 @@ function SyncSettingsPanel() {
         </CardContent>
         )}
       </Card>
+    </div>
+  );
+}
+
+// ═══ ORDER ID (CRM bog'lash) — coverage + backfill ═══
+type OrderIdCoverage = {
+  ok: boolean;
+  rows: { total: number; withOrderId: number; withoutOrderId: number; percent: number };
+  contracts: { foundTotal: number; filled: number; pending: number; xato: number };
+};
+
+function OrderIdSection() {
+  const qc = useQueryClient();
+  const coverageKey = ['oplatakv', 'order-id-coverage'];
+  const { data, isLoading, isFetching, refetch } = useQuery({
+    queryKey: coverageKey,
+    queryFn: () => api.get<OrderIdCoverage>('/oplata-kv/order-id-coverage'),
+  });
+
+  const backfillMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; pending: number; alreadyRunning?: boolean }>('/oplata-kv/backfill-order-ids', {}),
+    onSuccess: (r) => {
+      if (r.alreadyRunning) {
+        toast.info(`Allaqachon ishlamoqda (${r.pending} ta qoldi)`, { duration: 8000 });
+      } else {
+        toast.success(`To'ldirish boshlandi: ${r.pending} ta shartnoma. Bir necha daqiqada tayyor.`, { duration: 8000 });
+      }
+      qc.invalidateQueries({ queryKey: coverageKey });
+      // Background ish davom etarkan raqamlarni yangilash uchun bir necha marta refetch
+      setTimeout(() => refetch(), 9000);
+      setTimeout(() => refetch(), 20000);
+    },
+    onError: (e: any) => toast.error(e?.message || "Order ID to'ldirishda xato"),
+  });
+
+  const rows = data?.rows;
+  const contracts = data?.contracts;
+  const percent = rows?.percent ?? 0;
+
+  return (
+    <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white/60 dark:bg-slate-900/40 p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-violet-50 dark:bg-violet-900/30 grid place-items-center shrink-0">
+          <Link2 className="h-5 w-5 text-violet-600 dark:text-violet-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13.5px] font-bold text-slate-800 dark:text-slate-200">Order ID (CRM bog'lash)</div>
+          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+            To'lovlarni CRM shartnoma order_id bilan bog'lash
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Yangilash"
+          className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
+        >
+          <RefreshCcw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+        </button>
+      </div>
+
+      {/* Coverage */}
+      {isLoading ? (
+        <div className="flex items-center gap-2 py-3 text-[12px] text-slate-400 dark:text-slate-500">
+          <Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda…
+        </div>
+      ) : rows ? (
+        <div className="space-y-2">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-2xl font-bold tracking-tight tabular-nums text-slate-900 dark:text-slate-100">
+              {rows.withOrderId} <span className="text-slate-400 dark:text-slate-500 font-semibold">/ {rows.total}</span>
+            </span>
+            <span className="text-[13px] font-semibold text-violet-600 dark:text-violet-400 tabular-nums">({percent}%)</span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">to'lovlarda order_id bor</span>
+          </div>
+          {/* Thin progress bar */}
+          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-500 transition-all"
+              style={{ width: `${Math.min(100, Math.max(0, percent))}%` }}
+            />
+          </div>
+          <div className="text-[11.5px] text-slate-500 dark:text-slate-400 tabular-nums">
+            <span className="font-semibold text-slate-700 dark:text-slate-300">{rows.withoutOrderId}</span> ta to'lovda order_id yo'q
+          </div>
+          {contracts && (
+            <div className="text-[10.5px] text-slate-400 dark:text-slate-500 tabular-nums">
+              Shartnomalar: <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{contracts.filled}</span> to'ldirilgan ·{' '}
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">{contracts.pending}</span> kutilmoqda ·{' '}
+              <span className="text-rose-600 dark:text-rose-400 font-semibold">{contracts.xato}</span> XATO (order_id yo'q)
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="text-[12px] text-slate-400 dark:text-slate-500 py-2">Ma'lumot topilmadi</div>
+      )}
+
+      {/* Backfill button */}
+      <div className="pt-1">
+        <Button
+          onClick={() => backfillMut.mutate()}
+          disabled={backfillMut.isPending}
+          className="h-9 px-4 gap-2 bg-gradient-to-br from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white text-[12px] shadow-md shadow-violet-500/25"
+        >
+          {backfillMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+          Order ID'larni to'ldirish
+        </Button>
+      </div>
+
+      {/* Helper note */}
+      <div className="text-[10px] text-slate-400 dark:text-slate-500">
+        XATO to'lovlar (CRM'da shartnoma yo'q) order_id olmaydi — bu normal.
+      </div>
     </div>
   );
 }
