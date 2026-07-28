@@ -451,6 +451,13 @@ export class OplataKvController {
     return { ok: true, ...res };
   }
 
+  @Get('order-id-coverage')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'API order_id qamrovi — nechta to\'lovda order_id bor/yo\'q + shartnoma statistikasi' })
+  orderIdCoverage() {
+    return this.svc.orderIdCoverage();
+  }
+
   @Get('unsplit-contracts')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: "CRM topilgan, lekin to'lovi split bo'lmagan shartnomalar (split kerak)" })

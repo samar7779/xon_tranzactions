@@ -867,6 +867,32 @@ export class OplataKvService {
    * "Split bo'lmagan" = paymentAmount bor, lekin firstInstallment/monthlyAmount/
    * paymentCategory NULL (qo'lda qo'yilmagan). Har shartnoma uchun qator soni + summa.
    */
+  /**
+   * API order_id (crm_order_id) qamrovi — nechta to'lovda order_id bor/yo'q + shartnoma darajasi.
+   * order_id = contractNo → CrmContract.crm_order_id (katta harf bilan mos).
+   * API'da ko'rinadigan qatorlar = paymentCategory != null (split qilingan).
+   */
+  async orderIdCoverage() {
+    const [rowTotal, rowWithRaw, foundTotal, filled, xato] = await Promise.all([
+      this.prisma.oplataKv.count({ where: { paymentCategory: { not: null } } }),
+      this.prisma.$queryRaw<Array<{ n: bigint }>>`
+        SELECT COUNT(*)::bigint AS n
+        FROM oplata_kv o
+        JOIN crm_contracts c ON upper(o.contract_no) = upper(c.contract_number)
+        WHERE o.payment_category IS NOT NULL AND c.crm_order_id IS NOT NULL`,
+      this.prisma.crmContract.count({ where: { found: true } }),
+      this.prisma.crmContract.count({ where: { found: true, crmOrderId: { not: null } } }),
+      this.prisma.crmContract.count({ where: { found: false } }),
+    ]);
+    const rowWith = Number(rowWithRaw?.[0]?.n ?? 0);
+    const pct = rowTotal > 0 ? Math.round((rowWith / rowTotal) * 1000) / 10 : 0;
+    return {
+      ok: true,
+      rows: { total: rowTotal, withOrderId: rowWith, withoutOrderId: Math.max(0, rowTotal - rowWith), percent: pct },
+      contracts: { foundTotal, filled, pending: Math.max(0, foundTotal - filled), xato },
+    };
+  }
+
   async unsplitContracts() {
     // CRM verified shartnoma raqamlari
     const verified = await this.prisma.crmContract.findMany({
