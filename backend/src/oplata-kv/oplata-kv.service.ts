@@ -360,18 +360,21 @@ export class OplataKvService {
     });
     const verifiedNos = verified.map((c) => c.contractNumber);
 
-    // Manual (qo'lda kiritilgan) YOKI XATO ro'yxatidan yashirilgan — ikkovi ham chiqmaydi
-    const manualTx = await this.prisma.transaction.findMany({
-      where: { OR: [{ isContractManual: true }, { xatoHidden: true }] },
+    // FAQAT XATO ro'yxatidan YASHIRILGAN (xatoHidden) chiqmaydi.
+    // Qo'lda shartnoma berilgan (isContractManual) bo'lsa ham — agar shartnoma CRM'da
+    // topilmagan bo'lsa (contractNo notIn verifiedNos) — bu hali XATO, ro'yxatda ko'rinsin.
+    // (CRM'da tasdiqlangan qo'lda shartnomalar baribir verifiedNos orqali chiqib ketadi.)
+    const hiddenTx = await this.prisma.transaction.findMany({
+      where: { xatoHidden: true },
       select: { id: true, externalId: true },
     });
-    const manualIds: string[] = [];
-    manualTx.forEach((t) => { manualIds.push(t.id); if (t.externalId) manualIds.push(t.externalId); });
+    const hiddenIds: string[] = [];
+    hiddenTx.forEach((t) => { hiddenIds.push(t.id); if (t.externalId) hiddenIds.push(t.externalId); });
 
     return {
       sourceTxId: { not: null },
       contractNo: { notIn: verifiedNos },
-      ...(manualIds.length > 0 ? { NOT: { sourceTxId: { in: manualIds } } } : {}),
+      ...(hiddenIds.length > 0 ? { NOT: { sourceTxId: { in: hiddenIds } } } : {}),
     };
   }
 

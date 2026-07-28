@@ -487,19 +487,6 @@ export default function OplataKvPage() {
     onError: (e: any) => { setSyncError(e?.message || tc('error')); },
   });
 
-  // order_id (crm_order_id) backfill — API'da bo'sh order_id'larni CRM'dan to'ldiradi
-  const backfillOrderMut = useMutation({
-    mutationFn: () => api.post<{ ok: boolean; pending: number; alreadyRunning: boolean }>(
-      '/oplata-kv/backfill-order-ids', {}, { timeout: 60_000 },
-    ),
-    onSuccess: (r: any) => {
-      toast.success(r.alreadyRunning
-        ? `order_id to'ldirish allaqachon ishlayapti (${r.pending} qoldi)`
-        : `order_id to'ldirish boshlandi: ${r.pending} shartnoma (fonda ishlaydi)`);
-    },
-    onError: (e: any) => toast.error(e?.message || tc('error')),
-  });
-
   // BG status polling — sync tugagach obyekt/split orqada davom etadi
   useEffect(() => {
     if (!syncResult || !syncResult.objectsBackground) return;
@@ -570,20 +557,6 @@ export default function OplataKvPage() {
                   title={t('syncNow')}
                 >
                   <RefreshCw className={cn('h-4 w-4', syncNowMut.isPending && 'animate-spin')} />
-                </button>
-              )}
-
-              {/* order_id to'ldirish — CRM'dan (API order_id uchun), fonda */}
-              {canSync && (
-                <button
-                  onClick={() => backfillOrderMut.mutate()}
-                  disabled={backfillOrderMut.isPending}
-                  className="h-10 w-10 rounded-xl bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-200 dark:ring-sky-900 hover:bg-sky-100 dark:hover:bg-sky-900/30 text-sky-700 dark:text-sky-300 grid place-items-center transition-colors disabled:opacity-60 shrink-0"
-                  title="order_id to'ldirish (CRM'dan, API uchun)"
-                >
-                  {backfillOrderMut.isPending
-                    ? <Loader2 className="h-4 w-4 animate-spin" />
-                    : <Hash className="h-4 w-4" />}
                 </button>
               )}
 
