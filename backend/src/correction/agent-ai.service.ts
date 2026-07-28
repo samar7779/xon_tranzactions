@@ -122,6 +122,26 @@ export class AgentAiService {
     return m ? m[1] : null;
   }
 
+  /**
+   * Ikki shartnoma raqami "bir xil"mi — bank izoh matnida HARF TUSHIB QOLISHI
+   * xatosini hisobga oladi (masalan "1699TN25PP" aslida "1699VTN25PP" — "V" tushgan).
+   * Faqat tushgan harf (subsequence) qabul qilinadi; harf ALMASHTIRILISHI (boshqa
+   * obyekt) qabul qilinmaydi. Maksimum 2 ta harf farqi.
+   */
+  looseSameContract(a?: string | null, b?: string | null): boolean {
+    const norm = (s?: string | null) => (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const x = norm(a), y = norm(b);
+    if (!x || !y) return false;
+    if (x === y) return true;
+    const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+    if (long.length - short.length > 2) return false; // 2 dan ko'p farq — typo emas
+    let i = 0;
+    for (let j = 0; j < long.length && i < short.length; j++) {
+      if (long[j] === short[i]) i++;
+    }
+    return i === short.length; // short — long ichida tartib bilan bor (faqat harf tushgan)
+  }
+
   // ─── Bitta arizani agent bilan qayta ishlash ───────────────────────
   async processRequest(requestId: string): Promise<{ ok: boolean; decision?: string; reason?: string; error?: string }> {
     const req = await this.prisma.xatoCorrectionRequest.findUnique({ where: { id: requestId } });
@@ -171,7 +191,8 @@ export class AgentAiService {
 
       // 3) Obyekt kodlari (deterministik guard)
       const proposedObj = this.objectCode(req.proposedContractNo);
-      const purposeObj = this.objectCode(this.firstContractInText(req.snapPurpose));
+      const purposeContract = this.firstContractInText(req.snapPurpose);
+      const purposeObj = this.objectCode(purposeContract);
 
       // 4) Claude'ni chaqirish
       const model = await this.getModel();
@@ -189,7 +210,11 @@ export class AgentAiService {
       // 5) Deterministik OBYEKT guard — mos kelmasa xodimga
       let finalDecision = decision.decision;
       let reason = decision.reason || '';
-      if (proposedObj && purposeObj && proposedObj !== purposeObj) {
+      // Bank izoh matnida shartnoma raqamidan HARF tushib qolishi mumkin (masalan
+      // "1699TN25PP" aslida "1699VTN25PP") — bu holda obyekt kodlari farq qilsa ham
+      // BIR XIL shartnoma, xodimga qoldirmaymiz.
+      if (proposedObj && purposeObj && proposedObj !== purposeObj
+          && !this.looseSameContract(purposeContract, req.proposedContractNo)) {
         finalDecision = 'human';
         reason = `Obyekt mos emas: maqsad "${purposeObj}", taklif "${proposedObj}". Boshqa obyektga o'tkazib bo'lmaydi — xodim tekshirsin.`;
       }
@@ -350,6 +375,11 @@ export class AgentAiService {
       `• "lookup" — ariza yoki to'lovni bazadan topish (shartnoma/klient/ID bo'yicha).`,
       `• "xato_query" — barcha XATO to'lovlar bo'yicha ma'lumot (soni/summa/misollar).`,
       `• "read_ariza_file" — arizaning biriktirilgan FAYLINI (rasm yoki PDF) ochib O'QIYSAN. "Fayl ichida nima yozilgan", "arizani ko'rsat", "faylni o'qi" kabi savollarda SHU tool'ni chaqir va faylni ko'rib javob ber. Fayl har suhbatda qaytadan o'qiladi — bazada saqlangan, yo'qolmaydi.`,
+      `• "list_review_arizas" — XODIMGA QOLDIRILGAN (ko'rib chiqish kerak) arizalar ro'yxati. "xodimga qoldirilgan qaysi" deganda shuni chaqir.`,
+      `• "recheck_ariza" — arizani QAYTA tekshirish (agent qaytadan ishlaydi). Admin "yana tekshir / qayta ko'r" desa shuni chaqir. query bo'sh bo'lsa — barcha needs_review qayta tekshiriladi.`,
+      `• "act_on_ariza" — arizani TASDIQLASH (approve) yoki RAD ETISH (reject). Admin "qabul qil / tasdiqla / rad et" desa shuni chaqir.`,
+      `• "object_variants" — tizimdagi obyekt nomlari ro'yxati (obyekt tanlash uchun).`,
+      `MUHIM — HARAKAT QILISHDAN OLDIN SO'RA: arizani tasdiqlash/rad etishdan oldin ADMIN'dan aniq tasdiq ol. Obyekt mos kelmasa yoki qaysi shartnoma noaniq bo'lsa — o'zing hal qilma, admindan SO'RA (masalan: "VATAN obyektiga tasdiqlaymi yoki boshqa obyektmi?"). Admin "barcha obyekt variantlarini ber" desa — object_variants bilan ro'yxat ber. Faqat admin aniq buyruq bergandagina act_on_ariza ni ishlat.`,
       `Taxmin qilma — avval mos tool bilan tekshir, keyin aniq javob ber. Savolga to'liq va foydali javob ber, quruq rad etma.`,
       `Joriy holat: ${pending} ta kutilmoqda, ${needsReview} ta xodimga qoldirilgan, ${agentApproved} ta sen tasdiqlagan, ${agentRejected} ta sen rad etgan.`,
     ].join('\n');
@@ -368,6 +398,26 @@ export class AgentAiService {
         name: 'read_ariza_file',
         description: 'Arizaning biriktirilgan faylini (rasm yoki PDF) ochib o\'qish — ichidagi ma\'lumotni ko\'rish uchun. Ariza ID, shartnoma raqami yoki klient ismi bo\'yicha topadi. "Fayl ichida nima yozilgan", "arizani ko\'rsat" kabi savollar uchun.',
         input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ariza ID / shartnoma raqami / klient ismi' } }, required: ['query'] },
+      },
+      {
+        name: 'list_review_arizas',
+        description: 'Xodimga qoldirilgan (ko\'rib chiqish kerak) arizalar ro\'yxati — id, shartnoma, klient, summa, obyekt, agent izohi.',
+        input_schema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'recheck_ariza',
+        description: 'Xodimga qoldirilgan arizani QAYTA tekshirish — agent qaytadan ishlaydi (fayl+qoidalar). query bo\'sh bo\'lsa barcha needs_review qayta tekshiriladi.',
+        input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ariza ID / shartnoma / klient (ixtiyoriy)' } } },
+      },
+      {
+        name: 'act_on_ariza',
+        description: 'Arizani TASDIQLASH (approve) yoki RAD ETISH (reject) — admin buyrug\'i bilan. approve uchun contractNo ixtiyoriy (bo\'lmasa taklif qilingani ishlatiladi); reject uchun reason kerak.',
+        input_schema: { type: 'object', properties: { arizaId: { type: 'string' }, action: { type: 'string', enum: ['approve', 'reject'] }, contractNo: { type: 'string' }, reason: { type: 'string' } }, required: ['arizaId', 'action'] },
+      },
+      {
+        name: 'object_variants',
+        description: 'Tizimda mavjud obyekt nomlari ro\'yxati (obyekt tanlash uchun). query — ixtiyoriy filtr.',
+        input_schema: { type: 'object', properties: { query: { type: 'string' } } },
       },
     ];
 
@@ -397,6 +447,10 @@ export class AgentAiService {
                 let result: any;
                 if (block.name === 'lookup') result = await this.lookupForChat(String(block.input?.query || ''));
                 else if (block.name === 'xato_query') result = await this.queryXatoForChat(String(block.input?.query || ''));
+                else if (block.name === 'list_review_arizas') result = await this.listReviewArizas();
+                else if (block.name === 'recheck_ariza') result = await this.recheckAriza(String(block.input?.query || ''));
+                else if (block.name === 'act_on_ariza') result = await this.actOnAriza(block.input || {});
+                else if (block.name === 'object_variants') result = await this.objectVariants(String(block.input?.query || ''));
                 else result = { error: 'noma\'lum tool' };
                 toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
               }
@@ -477,6 +531,100 @@ export class AgentAiService {
       return { found: true, summary, fileBlock: { type: 'image', source: { type: 'base64', media_type: media, data: b64 } } };
     }
     return { found: false, message: `Fayl turi qo'llab-quvvatlanmaydi (${mt || att.filename}). Faqat rasm va PDF o'qiladi.` };
+  }
+
+  /** Chat tool: xodimga qoldirilgan (needs_review) arizalar. */
+  private async listReviewArizas() {
+    const rows = await this.prisma.xatoCorrectionRequest.findMany({
+      where: { status: 'pending', agentState: 'needs_review' },
+      orderBy: { submittedAt: 'desc' }, take: 20,
+    });
+    return {
+      soni: rows.length,
+      arizalar: rows.map((r) => ({
+        arizaId: r.id, shartnoma: r.proposedContractNo, klient: r.snapClient,
+        summa: r.snapAmount != null ? Number(r.snapAmount) : null,
+        obyekt: r.snapObject, maqsad: r.snapPurpose, agentIzohi: r.agentReason,
+      })),
+    };
+  }
+
+  /** Chat tool: arizani qayta tekshirish (agent qaytadan ishlaydi). */
+  private async recheckAriza(query: string) {
+    const q = (query || '').trim();
+    const where: any = { status: 'pending', agentState: 'needs_review' };
+    if (q) {
+      where.agentState = { in: ['needs_review', null] };
+      where.OR = [
+        { id: q },
+        { proposedContractNo: { contains: q, mode: 'insensitive' } },
+        { snapContractNo: { contains: q, mode: 'insensitive' } },
+        { snapClient: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const arizas = await this.prisma.xatoCorrectionRequest.findMany({ where, orderBy: { submittedAt: 'desc' }, take: 5 });
+    if (!arizas.length) return { qaytaTekshirildi: 0, xabar: q ? `"${q}" bo'yicha qayta tekshiriladigan ariza topilmadi.` : 'Xodimga qoldirilgan ariza yo\'q.' };
+    const natijalar: any[] = [];
+    for (const a of arizas) {
+      await this.prisma.xatoCorrectionRequest.update({ where: { id: a.id }, data: { agentState: null } });
+      const r = await this.processRequest(a.id);
+      natijalar.push({ arizaId: a.id, shartnoma: a.proposedContractNo, klient: a.snapClient, natija: r.decision || (r.ok ? '?' : 'xato'), izoh: r.reason || r.error });
+    }
+    return { qaytaTekshirildi: natijalar.length, natijalar };
+  }
+
+  /** Chat tool: arizani tasdiqlash / rad etish (admin buyrug'i bilan). */
+  private async actOnAriza(input: { arizaId?: string; action?: string; contractNo?: string; reason?: string }) {
+    const id = (input.arizaId || '').trim();
+    if (!id) return { ok: false, xabar: 'arizaId kerak.' };
+    const req = await this.prisma.xatoCorrectionRequest.findFirst({
+      where: { OR: [{ id }, { proposedContractNo: id }, { snapContractNo: id }] },
+      orderBy: { submittedAt: 'desc' },
+    });
+    if (!req) return { ok: false, xabar: `Ariza topilmadi: ${id}` };
+    if (req.status !== 'pending') return { ok: false, xabar: `Bu ariza allaqachon ${req.status === 'approved' ? 'tasdiqlangan' : 'rad etilgan'}.` };
+    const name = await this.getName();
+
+    if (input.action === 'approve') {
+      const contract = (input.contractNo || req.proposedContractNo || '').trim();
+      if (!contract) return { ok: false, xabar: 'Tasdiqlash uchun shartnoma raqami kerak (contractNo).' };
+      const clientCat = await this.prisma.category.findFirst({ where: { code: 'CLIENT' }, select: { id: true, children: { select: { id: true, name: true } } } });
+      const subId = this.inferSubCategoryId(req.snapPurpose, clientCat?.children || []);
+      await this.correction.approve(req.id, undefined, {
+        contractNo: contract, categoryId: clientCat?.id || null, subCategoryId: subId,
+        actorId: 'agent', actorType: 'agent', actorName: name,
+      });
+      await this.prisma.xatoCorrectionRequest.update({ where: { id: req.id }, data: { agentState: 'done', agentReason: `Chat orqali admin buyrug'i bilan tasdiqlandi (${contract})` } });
+      return { ok: true, natija: 'approved', shartnoma: contract };
+    }
+    if (input.action === 'reject') {
+      const reason = (input.reason || '').trim() || 'Chat orqali admin rad etdi';
+      await this.correction.reject(req.id, reason, 'agent', 'agent', name);
+      await this.prisma.xatoCorrectionRequest.update({ where: { id: req.id }, data: { agentState: 'done', agentReason: reason } });
+      return { ok: true, natija: 'rejected', sabab: reason };
+    }
+    return { ok: false, xabar: 'action "approve" yoki "reject" bo\'lishi kerak.' };
+  }
+
+  /** Maqsad matnidan sub-kategoriyani taxmin qiladi (chat approve uchun). */
+  private inferSubCategoryId(purpose: string | null, children: Array<{ id: string; name: string }>): string | null {
+    const p = (purpose || '').toLowerCase();
+    const find = (kw: string) => children.find((c) => c.name.toLowerCase().includes(kw))?.id || null;
+    if (/(автостоян|avtostoyan|парковк)/.test(p)) return find('автостоян');
+    if (/(возврат|qaytar)/.test(p)) return find('возврат');
+    if (/(сч[её]тчик|schetchik|hisoblagich)/.test(p)) return find('сч');
+    if (/(переоформл)/.test(p)) return find('переоформл');
+    return find('квартир'); // default — kvartira to'lovi
+  }
+
+  /** Chat tool: tizimdagi obyekt nomlari. */
+  private async objectVariants(query: string) {
+    const rows = await this.prisma.oplataKv.findMany({ where: { object: { not: null } }, select: { object: true }, distinct: ['object'], take: 300 });
+    let objs = rows.map((r) => r.object).filter(Boolean) as string[];
+    const q = (query || '').trim().toLowerCase();
+    if (q) objs = objs.filter((o) => o.toLowerCase().includes(q));
+    objs.sort();
+    return { soni: objs.length, obyektlar: objs.slice(0, 60) };
   }
 
   /** Chat tarixi. */
@@ -602,6 +750,9 @@ export class AgentAiService {
       '1) OBYEKT: shartnoma raqamidagi raqamlardan keyingi 3 harf obyektni bildiradi (masalan 118VTN24LJ → VTN).',
       '   To\'lovni bir obyektdan boshqa obyektga o\'tkazib BO\'LMAYDI. Agar taklif qilingan shartnoma obyekti',
       '   maqsaddagi shartnoma obyektidan farq qilsa — "human" (xodimga qoldir).',
+      '   ESLATMA: bank izoh matnida shartnoma raqamidan HARF tushib qolishi mumkin (masalan "1699TN25PP"',
+      '   aslida "1699VTN25PP" — "V" tushgan). Raqamlar va oxiri mos kelib faqat harf tushgan bo\'lsa — bu',
+      '   BIR XIL shartnoma, obyekt farqi deb hisoblama, o\'tkazib yubor.',
       '2) Ariza faylini diqqat bilan o\'qi: undagi shartnoma raqami taklif qilingan tuzatishga mos keladimi?',
       '   Ariza haqiqiy va tuzatishni tasdiqlasa — yaxshi. Tushunarsiz/mos kelmasa — "human".',
       '3) Kategoriya har doim "Клиент / Физ.Л / Юр.Л" (bu mijozdan kelgan to\'lov).',
