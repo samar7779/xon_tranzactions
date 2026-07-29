@@ -786,7 +786,7 @@ export default function AdminAgentPage() {
         <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
           {/* Backdrop — bosilganda YOPILMAYDI (faqat X yoki ESC) */}
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[640px] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-in slide-in-from-right duration-300">
+          <div className="absolute inset-y-0 right-0 w-full sm:w-[72vw] sm:max-w-[1000px] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-in slide-in-from-right duration-300">
             {/* Sarlavha — gradient bar */}
             <div className="px-5 py-4 flex items-center gap-3 shrink-0 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 shadow-lg">
               <div className="relative shrink-0">
@@ -824,38 +824,45 @@ export default function AdminAgentPage() {
                 <div className="h-full grid place-items-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : chatMsgs.length === 0 && !chatMut.isPending ? (
                 /* Bo'sh holat — ERP uslubidagi premium salomlashuv + action kartalar */
-                <div className="min-h-full flex flex-col items-center justify-center text-center px-4 py-6">
-                  <AiAvatar size={124} />
-                  <div className="mt-5 text-[22px] font-extrabold tracking-tight bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 dark:from-violet-300 dark:via-fuchsia-300 dark:to-indigo-300 bg-clip-text text-transparent">
+                <div className="relative min-h-full flex flex-col items-center justify-center text-center px-6 py-10 overflow-hidden">
+                  {/* dekorativ yog'du fon */}
+                  <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 w-[520px] h-[520px] rounded-full bg-violet-500/10 dark:bg-violet-500/15 blur-3xl" />
+                  <div className="pointer-events-none absolute top-1/3 -right-24 w-[360px] h-[360px] rounded-full bg-fuchsia-500/10 dark:bg-fuchsia-500/10 blur-3xl" />
+                  <div className="pointer-events-none absolute bottom-0 -left-24 w-[360px] h-[360px] rounded-full bg-indigo-500/10 dark:bg-indigo-500/10 blur-3xl" />
+
+                  <div className="relative">
+                    <AiAvatar size={150} />
+                  </div>
+                  <div className="relative mt-6 text-[30px] leading-tight font-extrabold tracking-tight bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 dark:from-violet-300 dark:via-fuchsia-300 dark:to-indigo-300 bg-clip-text text-transparent">
                     Assalomu alaykum!
                   </div>
-                  <div className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                  <div className="relative mt-2.5 text-[14.5px] text-slate-500 dark:text-slate-400 max-w-xl mx-auto leading-relaxed">
                     Men <span className="font-semibold text-slate-700 dark:text-slate-200">{agentName}</span> — arizalarni tekshiraman,
                     XATO to&apos;lovlarni topaman va rasm (ariza) o&apos;qiy olaman.
                     Boshlash uchun quyidagidan birini tanlang:
                   </div>
 
-                  {/* Action kartalar — 2×2 grid */}
-                  <div className="mt-6 grid grid-cols-2 gap-3 w-full max-w-md mx-auto">
+                  {/* Action kartalar — keng ekranда 4 ustun, kичикда 2 */}
+                  <div className="relative mt-8 grid grid-cols-2 lg:grid-cols-4 gap-3.5 w-full max-w-3xl mx-auto">
                     {CHAT_CARDS.map((c) => {
                       const Icon = c.icon;
                       return (
                         <button
                           key={c.title}
                           onClick={() => sendSuggestion(c.q)}
-                          className="group text-left rounded-2xl p-3.5 bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 hover:ring-violet-300 dark:hover:ring-violet-700/60 hover:shadow-lg hover:shadow-violet-500/5 hover:-translate-y-0.5 transition-all duration-200"
+                          className="group text-left rounded-2xl p-4 bg-white/90 dark:bg-slate-900/80 backdrop-blur ring-1 ring-slate-200 dark:ring-slate-800 hover:ring-violet-300 dark:hover:ring-violet-700/60 hover:shadow-xl hover:shadow-violet-500/10 hover:-translate-y-1 transition-all duration-200"
                         >
-                          <div className={cn('w-10 h-10 rounded-xl grid place-items-center bg-gradient-to-br ring-1 mb-2.5 rotate-45 transition-all', CARD_TONE[c.tone])}>
-                            <Icon className="h-4 w-4 -rotate-45" />
+                          <div className={cn('w-11 h-11 rounded-xl grid place-items-center bg-gradient-to-br ring-1 mb-3 rotate-45 transition-all group-hover:scale-105', CARD_TONE[c.tone])}>
+                            <Icon className="h-4.5 w-4.5 -rotate-45" />
                           </div>
-                          <div className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{c.title}</div>
-                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{c.desc}</div>
+                          <div className="text-[14px] font-bold text-slate-800 dark:text-slate-100">{c.title}</div>
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">{c.desc}</div>
                         </button>
                       );
                     })}
                   </div>
 
-                  <div className="mt-5 text-[10.5px] text-slate-400 dark:text-slate-500">
+                  <div className="relative mt-7 text-[11.5px] text-slate-400 dark:text-slate-500">
                     yoki pastдан savolingizni yozing ✍️
                   </div>
                 </div>
