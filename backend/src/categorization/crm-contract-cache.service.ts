@@ -62,7 +62,10 @@ export class CrmContractCacheService {
    *
    * @param opts.forceRefresh — true bo'lsa cache o'chiriladi va fresh CRM lookup qilinadi
    */
-  async lookup(contractNumber: string, opts?: { forceRefresh?: boolean }): Promise<CachedContract | null> {
+  async lookup(
+    contractNumber: string,
+    opts?: { forceRefresh?: boolean; payerHint?: string },
+  ): Promise<CachedContract | null> {
     if (!contractNumber) return null;
     // № va N° simbollarini olib tashlaymiz + bo'shliqlarni tozalaymiz
     const key = contractNumber
@@ -81,16 +84,31 @@ export class CrmContractCacheService {
       });
     }
 
-    // Parallel chaqiruvlarni birlashtirish
+    // Parallel chaqiruvlarni birlashtirish (number bo'yicha kesh)
+    let cached: CachedContract | null;
     const existing = this.inflight.get(key);
-    if (existing) return existing;
+    if (existing) {
+      cached = await existing;
+    } else {
+      const promise = this.doLookup(key, opts?.payerHint).finally(() => this.inflight.delete(key));
+      this.inflight.set(key, promise);
+      cached = await promise;
+    }
 
-    const promise = this.doLookup(key).finally(() => this.inflight.delete(key));
-    this.inflight.set(key, promise);
-    return promise;
+    // ── DUBLIKAT: kesh mijozi izoh (payerHint) ichidagi ismга mos kelmasa —
+    // bir raqamда bir necha shartnoma bo'lishi mumkin. payer bo'yicha to'g'risini
+    // qayta hal qilamiz (faqat payerHint berilганда — categorization). Fresh fetch
+    // pickContractByName orqali izohdagi ismга mos shartnomani tanlaydi.
+    if (opts?.payerHint && cached?.found && !this.crm.matchesPayer(cached.customerName, opts.payerHint)) {
+      try {
+        const specific = await this.fetchFromCrmAndCache(key, opts.payerHint);
+        if (specific?.found) return specific;
+      } catch { /* ignore — kesh qaytadi */ }
+    }
+    return cached;
   }
 
-  private async doLookup(key: string): Promise<CachedContract | null> {
+  private async doLookup(key: string, payerHint?: string): Promise<CachedContract | null> {
     // 1) Keshda bormi — variantlar bilan
     const variants = contractVariants(key).slice(0, 16); // xavfsizlik chegarasi
     const cached = await this.prisma.crmContract.findFirst({
@@ -109,21 +127,21 @@ export class CrmContractCacheService {
       if (!cached.found) {
         // Cache o'chiramiz va yangidan CRM ga so'raymiz
         await this.prisma.crmContract.deleteMany({ where: { contractNumber: { in: variants } } });
-        return this.fetchFromCrmAndCache(key);
+        return this.fetchFromCrmAndCache(key, payerHint);
       }
       this.refreshInBackground(cached.contractNumber).catch(() => { /* ignore */ });
       return toCached(cached);
     }
 
     // 2) Yangi — CRM'ga so'rov yuboramiz (har bir variantni ketma-ket)
-    return this.fetchFromCrmAndCache(key);
+    return this.fetchFromCrmAndCache(key, payerHint);
   }
 
-  private async fetchFromCrmAndCache(key: string): Promise<CachedContract | null> {
+  private async fetchFromCrmAndCache(key: string, payerHint?: string): Promise<CachedContract | null> {
     const variants = contractVariants(key).slice(0, 8);
     for (const v of variants) {
       try {
-        const res = await this.crm.show({ contract: v });
+        const res = await this.crm.show({ contract: v, payerHint });
         const detail: any = (res as any)?.detail;
         if ((res as any)?.ok && detail) {
           // XonSaroy client object'dan F.I.O. yig'ish (last + first + middle)

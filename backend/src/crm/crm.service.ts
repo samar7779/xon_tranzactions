@@ -414,8 +414,32 @@ export class CrmService {
    * Agar MySQL ulanishi bo'lsa, client'ga qo'shimcha ma'lumotlar ham qo'shiladi
    * (telefon, pasport, manzil va h.k.).
    */
-  async show(opts: { contract?: string; id?: string | number }) {
+  async show(opts: { contract?: string; id?: string | number; payerHint?: string }) {
     if (!opts.contract && !opts.id) return { ok: false, error: 'contract yoki id kerak' };
+    const contractInput = opts.contract?.trim() || '';
+
+    // ── DUBLIKAT DIZAMBIGUATSIYA ──
+    // Bitta shartnoma raqami CRM'да BIR NECHTA bo'lishi mumkin (masalan "821ZUR23V1"
+    // ikki xil mijozда). payerHint (to'lov izohi matni) berilса, /index barcha
+    // nomzodlarni beradi va izohдаги ism-familyaga MOS kelganini tanlaymiz.
+    if (contractInput && opts.payerHint) {
+      const picked = await this.pickContractByName(contractInput, opts.payerHint);
+      if (picked) {
+        let detail: any = picked;
+        // To'liq, kanonik detail — id bo'yicha /show (id aniq, dublikatsiz)
+        if (picked.id != null) {
+          const full: any = await this.call('/show', { id: picked.id, is_trashed: 1, trashed_status: 1, with_trashed: 1 });
+          const fd = full.ok ? (full.data?.data || null) : null;
+          if (fd) detail = fd;
+        }
+        const cn = String(detail.contract || contractInput).trim();
+        const extras = await this.fetchClientExtras(cn);
+        if (extras) detail.client = { ...(detail.client || {}), ...extras };
+        return { ok: true, detail };
+      }
+      // picked null → nomzod yo'q yoki ishonchli tanlov yo'q → oddiy oqimga tushamiz
+    }
+
     const body: Record<string, any> = {};
     if (opts.contract) body.contract = opts.contract.trim();
     else body.id = opts.id;
@@ -507,6 +531,88 @@ export class CrmService {
       return { ok: true, detail: null };
     }
     return { ok: true, detail };
+  }
+
+  // ─────────── Dublikat shartnoma: izohдаги ism bo'yicha tanlash ───────────
+
+  /** Kirill → lotin fonetik translit (ism solishtiruvi uchun). Faqat harflar qoladi. */
+  private nameTranslit(s: string): string {
+    const map: Record<string, string> = {
+      'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E', 'Ж': 'J',
+      'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M', 'Н': 'N', 'О': 'O',
+      'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U', 'Ф': 'F', 'Х': 'X', 'Ц': 'S',
+      'Ч': 'C', 'Ш': 'S', 'Щ': 'S', 'Ъ': '', 'Ы': 'I', 'Ь': '', 'Э': 'E', 'Ю': 'U',
+      'Я': 'A', 'Ў': 'O', 'Қ': 'Q', 'Ғ': 'G', 'Ҳ': 'H',
+    };
+    let out = '';
+    for (const ch of String(s || '').toUpperCase()) out += (map[ch] !== undefined ? map[ch] : ch);
+    return out.replace(/[^A-Z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  /** CRM nomining necha bo'lagi (≥4 harf) izoh matnida uchraydi. */
+  private nameScore(crmName: string, hintText: string): number {
+    const H = this.nameTranslit(hintText);
+    if (!H) return 0;
+    const tokens = this.nameTranslit(crmName).split(' ').filter((t) => t.length >= 4);
+    let hits = 0;
+    for (const t of tokens) if (H.includes(t)) hits++;
+    return hits;
+  }
+
+  /** CRM nomi izoh matniga ishonchli mos keladimi (kamida 2 bo'lak, yoki bitta bo'lakli nom). */
+  matchesPayer(crmName: string | null | undefined, hintText: string | null | undefined): boolean {
+    if (!crmName || !hintText) return false;
+    const tokens = this.nameTranslit(crmName).split(' ').filter((t) => t.length >= 4);
+    const score = this.nameScore(crmName, hintText);
+    return score >= 2 || (tokens.length <= 1 && score >= 1);
+  }
+
+  private clientNameOf(it: any): string {
+    if (!it) return '';
+    if (it.client_full_name) return String(it.client_full_name).trim();
+    const c = it.client;
+    if (c) {
+      if (typeof c === 'string') return c.trim();
+      const src = c.attributes || c;
+      const name = [src.last_name, src.first_name, src.middle_name].filter(Boolean).join(' ').trim();
+      if (name) return name;
+      return String(src.full_name_lotin || src.full_name_kirill || src.full_name || '').trim();
+    }
+    return String(it.fio || '').trim();
+  }
+
+  /**
+   * Shartnoma raqami bo'yicha CRM'да BIR NECHTA nomzod bo'lsa — izohдаги ismга
+   * qarab TO'G'RISINI tanlaydi. Bitta nomzod bo'lsa — o'shani. Ishonchli tanlov
+   * bo'lmasa (ism mos kelmasa) — null (chaqiruvchi oddiy oqimga tushadi).
+   */
+  private async pickContractByName(contractNo: string, hint: string): Promise<any | null> {
+    try {
+      const idxRes: any = await this.call('/index', {
+        contract: contractNo, 'per-page': 50, is_trashed: 1, trashed_status: 1, with_trashed: 1,
+      });
+      if (!idxRes.ok) return null;
+      const items: any[] = idxRes.data?.data || [];
+      if (!items.length) return null;
+      const norm = (s: string) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
+      const target = norm(contractNo);
+      const matches = items.filter((it) => norm(it.contract) === target);
+      if (matches.length === 0) return null;
+      if (matches.length === 1) return matches[0];
+      // Bir nechta — ism bo'yicha ballab tanlaymiz
+      const scored = matches
+        .map((it) => ({ it, score: this.nameScore(this.clientNameOf(it), hint) }))
+        .sort((a, b) => b.score - a.score);
+      if (scored[0].score >= 2 && scored[0].score > (scored[1]?.score ?? 0)) {
+        this.log.log(`CRM dublikat (${contractNo}): ${matches.length} ta — ism bo'yicha "${this.clientNameOf(scored[0].it)}" tanlandi (ball ${scored[0].score})`);
+        return scored[0].it;
+      }
+      this.log.warn(`CRM dublikat (${contractNo}): ${matches.length} ta, izohдаги ismга aniq mos yo'q — tanlanmadi`);
+      return null;
+    } catch (e: any) {
+      this.log.warn(`pickContractByName xato (${contractNo}): ${e?.message}`);
+      return null;
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════

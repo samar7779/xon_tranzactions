@@ -1368,7 +1368,9 @@ export class CategorizationService {
       if (candidates.length > 0) {
         contractNumber = candidates[0];  // default asosiy
         for (const cand of candidates) {
-          const c = await this.crmCache.lookup(cand);
+          // payerHint = izoh matni — bir raqamда bir necha shartnoma bo'lsa,
+          // izohдаги ism-familyaga qarab to'g'ri mijoz tanlanadi (dublikat dizambiguatsiya).
+          const c = await this.crmCache.lookup(cand, { payerHint: tx.description ?? undefined });
           if (c?.found) {
             contractNumber = cand;  // verified topildi — uni ishlatamiz
             break;
@@ -1381,7 +1383,7 @@ export class CategorizationService {
     // CRM tasdiqlasa — subkategoriya CRM ma'lumoti bo'yicha (parking/kvartira)
     // CRM topa olmasa ("xato" hol — legacy 1h-cloumn.py) — baribir CLIENT, default VZNOS_KV
     if (contractNumber) {
-      const cached = await this.crmCache.lookup(contractNumber);
+      const cached = await this.crmCache.lookup(contractNumber, { payerHint: tx.description ?? undefined });
       const inCrm = cached?.found && !this.isExcludedClientStatus(cached.status);
       if (inCrm || cached) {
         // Status excluded bo'lsa — CLIENT emas (reinvestiция / фиктивный)
