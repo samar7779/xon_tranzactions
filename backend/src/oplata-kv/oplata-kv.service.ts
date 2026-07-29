@@ -1083,12 +1083,35 @@ export class OplataKvService {
         take,
         select: {
           id: true, date: true, contractNo: true, paymentAmount: true,
-          client: true, object: true, txType: true, purpose: true,
+          client: true, object: true, txType: true, purpose: true, sourceTxId: true,
         },
       }),
       this.prisma.oplataKv.count({ where: countWhere }),
     ]);
-    return { rows, count };
+
+    // ── Qabul qiluvchi HISOB (obyekt filtri uchun) ──
+    // XATO to'lovlarда `object` (CRM'дан) null bo'ladi. Lekin foydalanuvchi hisob
+    // (masalan "VATAN RESIDENCE" / "ЗУРСАН") bo'yicha filtrlashni xohlaydi — u tranzaksiyada
+    // har doim bor. sourceTxId → Transaction (kirimда qabul qiluvchi = toName, chiqimда = fromName).
+    const txIds = rows.map((r) => r.sourceTxId).filter((v): v is string => !!v);
+    const txMap = new Map<string, { direction: string; toName: string | null; fromName: string | null }>();
+    if (txIds.length) {
+      const txs = await this.prisma.transaction.findMany({
+        where: { OR: [{ externalId: { in: txIds } }, { id: { in: txIds } }] },
+        select: { id: true, externalId: true, direction: true, toName: true, fromName: true },
+      });
+      for (const t of txs) {
+        const rec = { direction: t.direction as string, toName: t.toName, fromName: t.fromName };
+        if (t.externalId) txMap.set(t.externalId, rec);
+        txMap.set(t.id, rec);
+      }
+    }
+    const enriched = rows.map((r) => {
+      const t = r.sourceTxId ? txMap.get(r.sourceTxId) : undefined;
+      const account = t ? (t.direction === 'IN' ? t.toName : t.fromName) : null;
+      return { ...r, account: (account && account.trim()) || null };
+    });
+    return { rows: enriched, count };
   }
 
   // ───────────────── FIND ONE ─────────────────

@@ -390,7 +390,7 @@ export class AgentService {
         return {
           id: r.id, date: r.date, contractNo: r.contractNo,
           amount: r.paymentAmount != null ? Number(r.paymentAmount) : null,
-          client: r.client, object: r.object, txType: r.txType, purpose: r.purpose,
+          client: r.client, object: r.object, account: (r as any).account ?? null, txType: r.txType, purpose: r.purpose,
           pending: !!p,
           rejected: !p && rejectedSet.has(r.id),
           pendingInfo: p ? {

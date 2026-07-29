@@ -16,6 +16,7 @@ interface XatoRow {
   amount: number | null;
   client: string | null;
   object: string | null;
+  account: string | null;
   txType: string | null;
   purpose: string | null;
   pending?: boolean;
@@ -275,11 +276,15 @@ export default function XatoListPage() {
     return { inC, outC, inSum, outSum, pendingC };
   }, [allRows]);
 
-  // Obyekt (hisob) bo'yicha filtr uchun — mavjud obyektlar ro'yxati
+  // Hisob (obyekt) bo'yicha filtr uchun — mavjud hisoblar ro'yxati.
+  // XATO to'lovlarда CRM `object` null bo'ladi — shuning uchun qabul qiluvchi
+  // hisob (`account`, masalan "VATAN RESIDENCE" / "ЗУРСАН") ga tushib qolamiz.
+  const rowAccount = (r: XatoRow) => (r.object?.trim() || r.account?.trim() || '');
   const objectOptions = useMemo(() => {
     const set = new Set<string>();
-    for (const r of allRows) { if (r.object && r.object.trim()) set.add(r.object.trim()); }
+    for (const r of allRows) { const v = rowAccount(r); if (v) set.add(v); }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'ru'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allRows]);
 
   const rows = allRows.filter((r) => {
@@ -287,7 +292,7 @@ export default function XatoListPage() {
     if (flow === 'in' && a < 0) return false;
     if (flow === 'out' && a >= 0) return false;
     if (flow === 'pending' && !r.pending) return false;
-    if (objFilter && (r.object || '') !== objFilter) return false;
+    if (objFilter && rowAccount(r) !== objFilter) return false;
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
@@ -295,6 +300,7 @@ export default function XatoListPage() {
       r.contractNo?.toLowerCase().includes(s) ||
       r.client?.toLowerCase().includes(s) ||
       r.object?.toLowerCase().includes(s) ||
+      r.account?.toLowerCase().includes(s) ||
       r.purpose?.toLowerCase().includes(s)
     );
   });
