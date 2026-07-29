@@ -10,7 +10,8 @@ import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
-import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
+import { CrmContractCacheService, ReverifyStatus } from '../categorization/crm-contract-cache.service';
+import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from '../sync/settings.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
@@ -68,6 +69,7 @@ export class OplataKvService {
     private readonly settings: SettingsService,
     private readonly config: ConfigService,
     private readonly http: HttpService,
+    private readonly categorization: CategorizationService,
   ) {
     this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
     this.tgToken = this.config.get<string>('TG_BOT_TOKEN') || '';
@@ -391,6 +393,109 @@ export class OplataKvService {
       distinct: ['contractNo'],
     });
     return rows.map((r) => r.contractNo).filter((c): c is string => !!c);
+  }
+
+  // ───────────── XATO to'lovlarni TO'LIQ qayta kategoriyalash (manba pipeline) ─────────────
+
+  private readonly SAMPLE_CAP = 200;
+  private reverifyStatus: ReverifyStatus = {
+    running: false, startedAt: null, finishedAt: null,
+    total: 0, done: 0, fixed: 0, notFound: 0, errors: 0,
+    fixedSamples: [], notFoundSamples: [],
+  };
+
+  getReverifyStatus(): ReverifyStatus {
+    return this.reverifyStatus;
+  }
+
+  /**
+   * XATO to'lovlarni TO'LIQ qayta kategoriyalaydi — xuddi to'lov yangi tushgandek.
+   * Har XATO qator uchun categorizeOne(force + forceRefresh): izohдан qayta ekstraksiya
+   * (/SH suffiks, I↔1, probel), fresh CRM lookup (buzuq param tuzatilган), ism bo'yicha
+   * dublikat dizambiguatsiya — HAMMASI qo'llanadi. Topilса tx.contractNumber yangilanadi
+   * va oplata_kv qatori ham yangilanib XATO'dan chiqadi. Fonда ishlaydi.
+   */
+  async reverifyXato(): Promise<{ pending: number; alreadyRunning: boolean }> {
+    if (this.reverifyStatus.running) {
+      return { pending: Math.max(0, this.reverifyStatus.total - this.reverifyStatus.done), alreadyRunning: true };
+    }
+    const xatoFilter = await this.buildXatoFilter();
+    const rows = await this.prisma.oplataKv.findMany({
+      where: xatoFilter,
+      select: { id: true, sourceTxId: true, contractNo: true },
+    });
+    this.reverifyStatus = {
+      running: true, startedAt: new Date().toISOString(), finishedAt: null,
+      total: rows.length, done: 0, fixed: 0, notFound: 0, errors: 0,
+      fixedSamples: [], notFoundSamples: [],
+    };
+    this.runReverifyXato(rows)
+      .catch((e) => this.log.warn(`reverifyXato xato: ${e?.message}`))
+      .finally(() => {
+        this.reverifyStatus.running = false;
+        this.reverifyStatus.finishedAt = new Date().toISOString();
+      });
+    return { pending: rows.length, alreadyRunning: false };
+  }
+
+  private async runReverifyXato(
+    rows: Array<{ id: string; sourceTxId: string | null; contractNo: string | null }>,
+  ): Promise<void> {
+    const CONCURRENCY = 4;
+    const st = this.reverifyStatus;
+
+    // sourceTxId → Transaction.id (bulk)
+    const txIds = rows.map((r) => r.sourceTxId).filter((v): v is string => !!v);
+    const txMap = new Map<string, string>();
+    if (txIds.length) {
+      const txs = await this.prisma.transaction.findMany({
+        where: { OR: [{ externalId: { in: txIds } }, { id: { in: txIds } }] },
+        select: { id: true, externalId: true },
+      });
+      for (const t of txs) { if (t.externalId) txMap.set(t.externalId, t.id); txMap.set(t.id, t.id); }
+    }
+
+    let idx = 0;
+    const worker = async () => {
+      while (idx < rows.length) {
+        const row = rows[idx++];
+        try {
+          const txId = row.sourceTxId ? txMap.get(row.sourceTxId) : null;
+          if (!txId) {
+            st.notFound++;
+            if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: row.contractNo || '—', reason: 'Tranzaksiya topilmadi' });
+          } else {
+            // TO'LIQ qayta kategoriyalash — manba pipeline (yangi to'lov kabi)
+            const res = await this.categorization.categorizeOne(txId, { force: true, forceRefresh: true, actor: 'sync' });
+            const resolvedNo = res?.contractNumber || row.contractNo || null;
+            const cc = resolvedNo ? await this.crmCache.lookup(resolvedNo) : null;
+            if (cc?.found) {
+              // oplata_kv qatorini yangilaymiz → XATO filtridan (found=true) chiqadi
+              await this.prisma.oplataKv.update({
+                where: { id: row.id },
+                data: {
+                  contractNo: cc.contractNumber,
+                  object: cc.objectName ?? undefined,
+                  client: cc.customerName ?? undefined,
+                },
+              });
+              st.fixed++;
+              if (st.fixedSamples.length < this.SAMPLE_CAP) st.fixedSamples.push({ contract: cc.contractNumber, client: cc.customerName, object: cc.objectName, status: cc.status });
+            } else {
+              st.notFound++;
+              if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: resolvedNo || '—', reason: "CRM'да topilmadi" });
+            }
+          }
+        } catch (e: any) {
+          st.errors++;
+          if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: row.contractNo || '—', reason: 'Xato: ' + String(e?.message || '').slice(0, 80) });
+        }
+        st.done++;
+        if (st.done % 50 === 0) this.log.log(`reverifyXato: ${st.done}/${rows.length} (tuzatildi ${st.fixed})`);
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    this.log.log(`reverifyXato tugadi: ${rows.length} ko'rildi, tuzatildi ${st.fixed}, topilmadi ${st.notFound}, xato ${st.errors}`);
   }
 
   // ───────────────── LIST ─────────────────

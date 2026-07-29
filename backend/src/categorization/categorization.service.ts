@@ -190,7 +190,7 @@ export class CategorizationService {
    */
   async categorizeOne(
     txId: string,
-    opts?: { force?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
+    opts?: { force?: boolean; forceRefresh?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
   ): Promise<CategorizeResult> {
     const tx = await this.prisma.transaction.findUnique({
       where: { id: txId },
@@ -1323,7 +1323,7 @@ export class CategorizationService {
 
   private async runRules(
     tx: CategorizationInput,
-    opts?: { force?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
+    opts?: { force?: boolean; forceRefresh?: boolean; actor?: 'auto' | 'manual' | 'cron' | 'sync'; actorId?: string },
   ): Promise<CategorizeResult> {
     // Skip — agar allaqachon kategoriyalangan va force=false
     // LEKIN: agar shartnoma raqami bor lekin CRM tekshirilmagan bo'lsa — CRM lookup qilamiz
@@ -1355,7 +1355,9 @@ export class CategorizationService {
 
     let categoryId: string | null = null;
     let subcategoryId: string | null = null;
-    let contractNumber: string | null = tx.contractNumber;
+    // forceRefresh — izohдан QAYTA ekstraksiya qilamiz (mavjud tx.contractNumber ni
+    // e'tiborsiz qoldirib), /SH suffiks / I↔1 / ism dizambiguatsiya to'liq qayta ishlasin.
+    let contractNumber: string | null = opts?.forceRefresh ? null : tx.contractNumber;
     let reason = '';
 
     // ── 1) Shartnoma raqamini ajratamiz (description'dan) — bir nechta variantlarni sinab ko'ramiz
@@ -1370,7 +1372,7 @@ export class CategorizationService {
         for (const cand of candidates) {
           // payerHint = izoh matni — bir raqamда bir necha shartnoma bo'lsa,
           // izohдаги ism-familyaga qarab to'g'ri mijoz tanlanadi (dublikat dizambiguatsiya).
-          const c = await this.crmCache.lookup(cand, { payerHint: tx.description ?? undefined });
+          const c = await this.crmCache.lookup(cand, { forceRefresh: opts?.forceRefresh, payerHint: tx.description ?? undefined });
           if (c?.found) {
             contractNumber = cand;  // verified topildi — uni ishlatamiz
             break;
@@ -1383,7 +1385,7 @@ export class CategorizationService {
     // CRM tasdiqlasa — subkategoriya CRM ma'lumoti bo'yicha (parking/kvartira)
     // CRM topa olmasa ("xato" hol — legacy 1h-cloumn.py) — baribir CLIENT, default VZNOS_KV
     if (contractNumber) {
-      const cached = await this.crmCache.lookup(contractNumber, { payerHint: tx.description ?? undefined });
+      const cached = await this.crmCache.lookup(contractNumber, { forceRefresh: opts?.forceRefresh, payerHint: tx.description ?? undefined });
       const inCrm = cached?.found && !this.isExcludedClientStatus(cached.status);
       if (inCrm || cached) {
         // Status excluded bo'lsa — CLIENT emas (reinvestiция / фиктивный)
