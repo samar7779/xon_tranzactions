@@ -1261,7 +1261,7 @@ type ReverifyStatus = {
   fixed: number;
   notFound: number;
   errors: number;
-  fixedSamples: { contract: string; client: string | null; object: string | null; status: string | null }[];
+  fixedSamples: { contract: string; from?: string | null; client: string | null; object: string | null; status: string | null }[];
   notFoundSamples: { contract: string; reason: string }[];
 };
 
@@ -1360,7 +1360,12 @@ function ReverifySection() {
               <div className="mt-1.5 max-h-52 overflow-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
                 {st.fixedSamples.map((s, i) => (
                   <div key={i} className="px-2.5 py-1.5 text-[11px] flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/40">
-                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 shrink-0">{s.contract}</span>
+                    <span className="font-mono font-semibold shrink-0">
+                      {s.from && (
+                        <><span className="text-rose-400 dark:text-rose-500 line-through">{s.from}</span>{' → '}</>
+                      )}
+                      <span className="text-emerald-700 dark:text-emerald-400">{s.contract}</span>
+                    </span>
                     <span className="text-slate-500 dark:text-slate-400 truncate">{s.client || '—'}</span>
                     {s.object && <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500 shrink-0">{s.object}</span>}
                   </div>

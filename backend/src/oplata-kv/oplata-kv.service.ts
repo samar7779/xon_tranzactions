@@ -463,7 +463,7 @@ export class OplataKvService {
           const txId = row.sourceTxId ? txMap.get(row.sourceTxId) : null;
           if (!txId) {
             st.notFound++;
-            if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: row.contractNo || '—', reason: 'Tranzaksiya topilmadi' });
+            if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: row.contractNo || '—', reason: 'Tranzaksiya topilmadi (oplata_kv qatori bank tx bilan bog\'lanmagan)' });
           } else {
             // TO'LIQ qayta kategoriyalash — manba pipeline (yangi to'lov kabi)
             const res = await this.categorization.categorizeOne(txId, { force: true, forceRefresh: true, actor: 'sync' });
@@ -480,10 +480,19 @@ export class OplataKvService {
                 },
               });
               st.fixed++;
-              if (st.fixedSamples.length < this.SAMPLE_CAP) st.fixedSamples.push({ contract: cc.contractNumber, client: cc.customerName, object: cc.objectName, status: cc.status });
+              if (st.fixedSamples.length < this.SAMPLE_CAP) {
+                const changed = row.contractNo && row.contractNo !== cc.contractNumber ? row.contractNo : null;
+                st.fixedSamples.push({ contract: cc.contractNumber, from: changed, client: cc.customerName, object: cc.objectName, status: cc.status });
+              }
             } else {
               st.notFound++;
-              if (st.notFoundSamples.length < this.SAMPLE_CAP) st.notFoundSamples.push({ contract: resolvedNo || '—', reason: "CRM'да topilmadi" });
+              if (st.notFoundSamples.length < this.SAMPLE_CAP) {
+                // Aniq sabab: raqam umuman ajratilmadimi yoki ajratildi-yu CRM'да yo'qmi
+                const reason = !resolvedNo
+                  ? "Izohдан shartnoma raqami ajratilmadi (purpose'да № yo'q/noaniq)"
+                  : `CRM'да yo'q — qidirildi: ${resolvedNo}`;
+                st.notFoundSamples.push({ contract: resolvedNo || row.contractNo || '—', reason });
+              }
             }
           }
         } catch (e: any) {

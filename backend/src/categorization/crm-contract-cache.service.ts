@@ -38,7 +38,7 @@ export interface ReverifyStatus {
   fixed: number;      // CRM'да topildi → found=true bo'ldi
   notFound: number;   // CRM'да yo'q (haqiqatan topilmadi)
   errors: number;     // CRM API xatosi (timeout va h.k.)
-  fixedSamples: { contract: string; client: string | null; object: string | null; status: string | null }[];
+  fixedSamples: { contract: string; from?: string | null; client: string | null; object: string | null; status: string | null }[];
   notFoundSamples: { contract: string; reason: string }[];
 }
 
@@ -168,7 +168,8 @@ export class CrmContractCacheService {
             const str = String(s);
             return str.length > max ? str.slice(0, max) : str;
           };
-          const customerName = buildName(detail.client) || detail.fio || null; // Text — limit yo'q
+          // client_full_name — /index item shakli (payerHint/dublikat yo'lidan kelganда)
+          const customerName = buildName(detail.client) || detail.client_full_name || detail.fio || null; // Text — limit yo'q
           // Status XonSaroy da OBJECT bo'lishi mumkin: { type: 'cancelled', name: {uz, ru}, color }
           // type ni asosiy hisoblaymiz (cancelled, active, etc) — string bo'lsa o'zini ishlatamiz
           const extractStatus = (s: any): string | null => {
