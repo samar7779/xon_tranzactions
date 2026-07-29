@@ -6,7 +6,7 @@ import {
   AlertTriangle, Search, User, Building2, X, ChevronLeft, ChevronRight,
   Loader2, ArrowDownLeft, ArrowUpRight, CheckCircle2, Layers, Link2, ShieldCheck,
   Clock, Send, RotateCcw, Copy, Paperclip, Upload, FileCheck2, FileText, XCircle, ListChecks,
-  Users, ChevronDown,
+  Users, ChevronDown, Check, Landmark,
 } from 'lucide-react';
 
 interface XatoRow {
@@ -94,12 +94,123 @@ function fmtCompact(v: number): string {
 
 type Flow = 'all' | 'in' | 'out' | 'pending';
 
+/** Hisob (obyekt) bo'yicha qidiruvli, ko'p tanlovli filtr (galochka + ikonka). */
+function AccountMultiSelect({
+  options, selected, onChange,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+
+  const filtered = useMemo(() => {
+    const s = search.trim().toLowerCase();
+    return s ? options.filter((o) => o.toLowerCase().includes(s)) : options;
+  }, [options, search]);
+
+  const toggle = (o: string) => onChange(selected.includes(o) ? selected.filter((x) => x !== o) : [...selected, o]);
+  const label = selected.length === 0 ? 'Barcha hisoblar' : selected.length === 1 ? selected[0] : `${selected.length} ta hisob`;
+
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        title="Hisob (obyekt) bo'yicha filtr"
+        className={`h-12 max-w-[52vw] sm:max-w-[240px] w-full flex items-center gap-2 rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 shadow-lg px-3.5 text-[13px] font-medium outline-none cursor-pointer transition ${open ? 'ring-2 ring-violet-400' : 'ring-slate-200/80 dark:ring-slate-700'}`}
+      >
+        <Landmark className="w-4 h-4 text-violet-500 shrink-0" />
+        <span className="truncate flex-1 text-left">{label}</span>
+        {selected.length > 0 && (
+          <span className="shrink-0 min-w-[18px] h-[18px] px-1 grid place-items-center rounded-full bg-violet-600 text-white text-[10px] font-bold tabular-nums">{selected.length}</span>
+        )}
+        <ChevronDown className={`w-4 h-4 text-slate-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-[292px] max-h-[400px] rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+          {/* Qidiruv */}
+          <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Hisob qidirish..."
+                className="w-full h-9 pl-8 pr-7 rounded-xl bg-slate-50 dark:bg-slate-800 text-[13px] outline-none ring-1 ring-transparent focus:ring-violet-300 dark:focus:ring-violet-700"
+              />
+              {search && (
+                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X className="w-3.5 h-3.5" /></button>
+              )}
+            </div>
+          </div>
+
+          {/* Barcha hisoblar (tozalash) */}
+          <button
+            onClick={() => onChange([])}
+            className={`flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-left transition-colors border-b border-slate-100 dark:border-slate-800 ${selected.length === 0 ? 'bg-violet-50/70 dark:bg-violet-950/30' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+          >
+            <span className={`w-4 h-4 rounded-md grid place-items-center ring-1 shrink-0 ${selected.length === 0 ? 'bg-violet-600 ring-violet-600' : 'ring-slate-300 dark:ring-slate-600'}`}>
+              {selected.length === 0 && <Check className="w-3 h-3 text-white" />}
+            </span>
+            <Landmark className="w-4 h-4 text-slate-400 shrink-0" />
+            <span className="font-medium">Barcha hisoblar</span>
+          </button>
+
+          {/* Ro'yxat */}
+          <div className="overflow-y-auto flex-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-6 text-center text-[12px] text-slate-400">Topilmadi</div>
+            ) : filtered.map((o) => {
+              const on = selected.includes(o);
+              return (
+                <button
+                  key={o}
+                  onClick={() => toggle(o)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 text-[13px] text-left transition-colors ${on ? 'bg-violet-50/60 dark:bg-violet-950/25' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'}`}
+                >
+                  <span className={`w-4 h-4 rounded-md grid place-items-center ring-1 shrink-0 transition ${on ? 'bg-violet-600 ring-violet-600' : 'ring-slate-300 dark:ring-slate-600'}`}>
+                    {on && <Check className="w-3 h-3 text-white" />}
+                  </span>
+                  <Building2 className={`w-4 h-4 shrink-0 ${on ? 'text-violet-500' : 'text-slate-400'}`} />
+                  <span className="truncate flex-1">{o}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Pastki panel */}
+          {selected.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30">
+              <span className="text-[11px] text-slate-500">{selected.length} ta tanlangan</span>
+              <button onClick={() => onChange([])} className="text-[11px] font-semibold text-violet-600 hover:text-violet-700">Tozalash</button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function XatoListPage() {
   const [data, setData] = useState<XatoResp | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [flow, setFlow] = useState<Flow>('all');
-  const [objFilter, setObjFilter] = useState('');   // obyekt (hisob) bo'yicha filtr
+  const [objSel, setObjSel] = useState<string[]>([]);   // obyekt (hisob) bo'yicha filtr (ko'p tanlov)
   const [page, setPage] = useState(1);
   const perPage = 30;
   const [key, setKey] = useState('');
@@ -292,7 +403,7 @@ export default function XatoListPage() {
     if (flow === 'in' && a < 0) return false;
     if (flow === 'out' && a >= 0) return false;
     if (flow === 'pending' && !r.pending) return false;
-    if (objFilter && rowAccount(r) !== objFilter) return false;
+    if (objSel.length > 0 && !objSel.includes(rowAccount(r))) return false;
     if (!q.trim()) return true;
     const s = q.trim().toLowerCase();
     return (
@@ -401,17 +512,13 @@ export default function XatoListPage() {
                   </button>
                 )}
               </div>
-              {/* Obyekt (hisob) bo'yicha filtr — masalan VATAN RESIDENCE / ОИЛА */}
+              {/* Obyekt (hisob) bo'yicha filtr — qidiruvli, ko'p tanlovli */}
               {objectOptions.length > 0 && (
-                <select
-                  value={objFilter}
-                  onChange={(e) => { setObjFilter(e.target.value); setPage(1); }}
-                  title="Hisob (obyekt) bo'yicha filtr"
-                  className="h-12 shrink-0 max-w-[45vw] sm:max-w-[240px] rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md ring-1 ring-slate-200/80 dark:ring-slate-700 shadow-lg px-3.5 pr-8 text-[13px] font-medium outline-none focus:ring-2 focus:ring-violet-400 cursor-pointer"
-                >
-                  <option value="">🏦 Barcha hisoblar</option>
-                  {objectOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
+                <AccountMultiSelect
+                  options={objectOptions}
+                  selected={objSel}
+                  onChange={(v) => { setObjSel(v); setPage(1); }}
+                />
               )}
             </div>
           </div>
