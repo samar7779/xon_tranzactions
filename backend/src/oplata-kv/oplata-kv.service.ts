@@ -378,6 +378,21 @@ export class OplataKvService {
     };
   }
 
+  /**
+   * Hozir XATO bo'lgan oplata_kv qatorlarining DISTINCT shartnoma raqamlari.
+   * "Qayta tekshirish" shu ro'yxatni CRM'ga tekshiradi — butun DB'даги 5000+
+   * eski found=false qatorni emas, faqat haqiqiy XATO to'lovlarning shartnomalarini.
+   */
+  async getXatoContractNumbers(): Promise<string[]> {
+    const xatoFilter = await this.buildXatoFilter();
+    const rows = await this.prisma.oplataKv.findMany({
+      where: xatoFilter,
+      select: { contractNo: true },
+      distinct: ['contractNo'],
+    });
+    return rows.map((r) => r.contractNo).filter((c): c is string => !!c);
+  }
+
   // ───────────────── LIST ─────────────────
   async list(q: ListOplataKvDto) {
     const page = Math.max(1, Number(q.page) || 1);

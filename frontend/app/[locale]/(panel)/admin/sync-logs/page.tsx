@@ -680,6 +680,9 @@ function SyncSettingsPanel() {
           {/* ── ORDER ID (CRM bog'lash) — coverage + backfill ── */}
           <OrderIdSection />
 
+          {/* ── XATO shartnomalarni CRM'ga qayta tekshirish — batafsil hisobot bilan ── */}
+          <ReverifySection />
+
           {/* Sozlamalar collapse — 4 ta funksiya bir tugma orqasiga yashiriladi */}
           <button
             type="button"
@@ -1242,6 +1245,169 @@ function OrderIdSection() {
       {/* Helper note */}
       <div className="text-[10px] text-slate-400 dark:text-slate-500">
         XATO to'lovlar (CRM'da shartnoma yo'q) order_id olmaydi — bu normal.
+      </div>
+    </div>
+  );
+}
+
+// ═══ XATO shartnomalarni CRM'ga qayta tekshirish — batafsil hisobot ═══
+type ReverifyStatus = {
+  ok: boolean;
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  total: number;
+  done: number;
+  fixed: number;
+  notFound: number;
+  errors: number;
+  fixedSamples: { contract: string; client: string | null; object: string | null; status: string | null }[];
+  notFoundSamples: { contract: string; reason: string }[];
+};
+
+function ReverifySection() {
+  const statusKey = ['oplatakv', 'reverify-status'];
+  const [poll, setPoll] = useState(false);
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: statusKey,
+    queryFn: () => api.get<ReverifyStatus>('/oplata-kv/reverify-status'),
+    refetchInterval: poll ? 2500 : false,
+  });
+  useEffect(() => { setPoll(!!data?.running); }, [data?.running]);
+
+  const reverifyMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; pending: number; alreadyRunning?: boolean }>('/oplata-kv/reverify-contracts', {}),
+    onSuccess: (r) => {
+      if (r.alreadyRunning) {
+        toast.info(`Allaqachon ketyapti (${r.pending} ta qoldi)`, { duration: 8000 });
+      } else {
+        toast.success(`Qayta tekshirish boshlandi: ${r.pending} ta XATO shartnoma. Fonда ishlaydi.`, { duration: 8000 });
+      }
+      setPoll(true);
+      setTimeout(() => refetch(), 1500);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Qayta tekshirishда xato'),
+  });
+
+  const st = data;
+  const hasRun = !!st && (st.total > 0 || st.running || !!st.finishedAt);
+  const pct = st && st.total > 0 ? Math.round((st.done / st.total) * 100) : 0;
+
+  return (
+    <div className="rounded-2xl ring-1 ring-slate-200 dark:ring-slate-700 bg-white/60 dark:bg-slate-900/40 p-4 space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-900/30 grid place-items-center shrink-0">
+          <ShieldAlert className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13.5px] font-bold text-slate-800 dark:text-slate-200">XATO shartnomalarni qayta tekshirish</div>
+          <div className="text-[10.5px] text-slate-500 dark:text-slate-400">
+            CRM'да bor lekin XATO'да qotib qolgan shartnomalarni topib tuzatadi
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          disabled={isFetching}
+          title="Yangilash"
+          className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-700 dark:hover:text-slate-300 transition-colors disabled:opacity-50"
+        >
+          <RefreshCcw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
+        </button>
+      </div>
+
+      {/* Summary */}
+      {hasRun && st ? (
+        <div className="space-y-2">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className="text-2xl font-bold tracking-tight tabular-nums text-emerald-600 dark:text-emerald-400">
+              {st.fixed} <span className="text-slate-400 dark:text-slate-500 font-semibold text-lg">/ {st.total}</span>
+            </span>
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">tuzatildi (CRM'да topildi)</span>
+            {st.running && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                <Loader2 className="h-3 w-3 animate-spin" /> ketyapti {st.done}/{st.total} ({pct}%)
+              </span>
+            )}
+            {!st.running && st.finishedAt && (
+              <span className="text-[11px] text-slate-400 dark:text-slate-500">✓ tugadi</span>
+            )}
+          </div>
+          {/* Progress bar */}
+          <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+            <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all" style={{ width: `${pct}%` }} />
+          </div>
+          {/* Breakdown */}
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11.5px] tabular-nums">
+            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> <span className="font-semibold">{st.fixed}</span> tuzatildi
+            </span>
+            <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+              <XCircle className="h-3.5 w-3.5" /> <span className="font-semibold">{st.notFound}</span> CRM'да topilmadi
+            </span>
+            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
+              <AlertTriangle className="h-3.5 w-3.5" /> <span className="font-semibold">{st.errors}</span> CRM xatosi
+            </span>
+          </div>
+
+          {/* Samples — tuzatilganlar */}
+          {st.fixedSamples.length > 0 && (
+            <details className="group" open>
+              <summary className="cursor-pointer text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 select-none">
+                ✓ Tuzatildi — sabab: CRM'да topildi ({st.fixedSamples.length}{st.fixed > st.fixedSamples.length ? `/${st.fixed}` : ''} ko'rsatildi)
+              </summary>
+              <div className="mt-1.5 max-h-52 overflow-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                {st.fixedSamples.map((s, i) => (
+                  <div key={i} className="px-2.5 py-1.5 text-[11px] flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 shrink-0">{s.contract}</span>
+                    <span className="text-slate-500 dark:text-slate-400 truncate">{s.client || '—'}</span>
+                    {s.object && <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500 shrink-0">{s.object}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+
+          {/* Samples — tuzatilmaganlar */}
+          {st.notFoundSamples.length > 0 && (
+            <details className="group">
+              <summary className="cursor-pointer text-[11px] font-semibold text-amber-700 dark:text-amber-400 select-none">
+                Tuzatilmadi — sabab bilan ({st.notFoundSamples.length}{(st.notFound + st.errors) > st.notFoundSamples.length ? `/${st.notFound + st.errors}` : ''} ko'rsatildi)
+              </summary>
+              <div className="mt-1.5 max-h-52 overflow-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+                {st.notFoundSamples.map((s, i) => (
+                  <div key={i} className="px-2.5 py-1.5 text-[11px] flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <span className="font-mono font-semibold text-slate-700 dark:text-slate-300 shrink-0">{s.contract}</span>
+                    <span className="ml-auto text-[10px] text-slate-400 dark:text-slate-500 truncate">{s.reason}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      ) : (
+        <div className="text-[11.5px] text-slate-400 dark:text-slate-500 py-1">
+          Hali ishga tushirilmagan. Tugmani bosing — barcha XATO shartnomalar CRM'ga qayta tekshiriladi.
+        </div>
+      )}
+
+      {/* Button */}
+      <div className="pt-1">
+        <Button
+          onClick={() => reverifyMut.mutate()}
+          disabled={reverifyMut.isPending || !!st?.running}
+          className="h-9 px-4 gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[12px] shadow-md shadow-amber-500/25"
+        >
+          {(reverifyMut.isPending || st?.running) ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldAlert className="h-4 w-4" />}
+          {st?.running ? 'Tekshirilmoqda…' : 'XATO shartnomalarni qayta tekshirish'}
+        </Button>
+      </div>
+
+      {/* Helper note */}
+      <div className="text-[10px] text-slate-400 dark:text-slate-500">
+        Tuzatilganlar (CRM'да topilgan) avtomatik XATO ro'yxatidan chiqadi — to'lovni qayta kategoriyalash shart emas.
+        Haqiqatan CRM'да yo'q bo'lganlar XATO'да qoladi (normal).
       </div>
     </div>
   );

@@ -29,6 +29,19 @@ export interface CachedContract {
   lastVerifiedAt: Date;
 }
 
+export interface ReverifyStatus {
+  running: boolean;
+  startedAt: string | null;
+  finishedAt: string | null;
+  total: number;
+  done: number;
+  fixed: number;      // CRM'да topildi → found=true bo'ldi
+  notFound: number;   // CRM'да yo'q (haqiqatan topilmadi)
+  errors: number;     // CRM API xatosi (timeout va h.k.)
+  fixedSamples: { contract: string; client: string | null; object: string | null; status: string | null }[];
+  notFoundSamples: { contract: string; reason: string }[];
+}
+
 const STALE_AFTER_MS = 24 * 60 * 60 * 1000; // 24 soat
 // Avval 7 kun edi — juda uzoq. Endi 4 soatda bir marta XATO shartnomalar
 // qayta CRM ga tekshiriladi (CRM ma'lumotlari tezroq sinxronlanadi).
@@ -347,7 +360,17 @@ export class CrmContractCacheService {
 
   // ───────────── XATO (found=false) shartnomalarni qayta tekshirish ─────────────
 
-  private reverifyRunning = false;
+  private readonly SAMPLE_CAP = 200;
+  private reverifyStatus: ReverifyStatus = {
+    running: false, startedAt: null, finishedAt: null,
+    total: 0, done: 0, fixed: 0, notFound: 0, errors: 0,
+    fixedSamples: [], notFoundSamples: [],
+  };
+
+  /** Oxirgi (yoki joriy) qayta tekshirish hisoboti — frontend poll qiladi. */
+  getReverifyStatus(): ReverifyStatus {
+    return this.reverifyStatus;
+  }
 
   /**
    * found=false (XATO — CRM'да topilmagan deb keshlangan) shartnomalarni CRM'ga
@@ -357,43 +380,77 @@ export class CrmContractCacheService {
    *
    * Sabab: contract keyinroq CRM'ga qo'shilган YOKI o'sha payt CRM lookup buzuq param
    * bilan topa olmaган — natijada found=false keshlangan va 4 soatgacha qotib qolган.
+   *
+   * Batafsil hisobot getReverifyStatus() orqali: nechta tuzatildi (kim/obyekt bilan),
+   * nechta CRM'да topilmadi, nechta CRM xatosi.
    */
-  async reverifyNotFound(opts: { limit?: number } = {}): Promise<{ pending: number; alreadyRunning: boolean }> {
-    if (this.reverifyRunning) {
-      const remaining = await this.prisma.crmContract.count({ where: { found: false } });
-      return { pending: remaining, alreadyRunning: true };
+  /**
+   * Berilgan shartnoma raqamlari ro'yxatini CRM'ga qayta tekshiradi (forceRefresh).
+   * Chaqiruvchi ro'yxatni beradi — masalan FAQAT hozir XATO bo'lgan oplata_kv
+   * to'lovlarining shartnomalari (butun DB'даги minglab eski found=false emas).
+   * Raqamlar normalizatsiya + dedup qilinadi. Fonда ishlaydi, darhol qaytadi.
+   */
+  reverifyContracts(rawKeys: string[]): { pending: number; alreadyRunning: boolean } {
+    if (this.reverifyStatus.running) {
+      return { pending: Math.max(0, this.reverifyStatus.total - this.reverifyStatus.done), alreadyRunning: true };
     }
-    const limit = Math.min(100000, Math.max(1, opts.limit ?? 50000));
-    const rows = await this.prisma.crmContract.findMany({
-      where: { found: false },
-      select: { contractNumber: true },
-      take: limit,
-    });
-    const keys = rows.map((r) => r.contractNumber);
-    this.reverifyRunning = true;
+    const seen = new Set<string>();
+    const keys: string[] = [];
+    for (const rk of rawKeys || []) {
+      const k = String(rk || '').replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
+      if (k && !seen.has(k)) { seen.add(k); keys.push(k); }
+    }
+    this.reverifyStatus = {
+      running: true, startedAt: new Date().toISOString(), finishedAt: null,
+      total: keys.length, done: 0, fixed: 0, notFound: 0, errors: 0,
+      fixedSamples: [], notFoundSamples: [],
+    };
     this.runReverify(keys)
       .catch((e) => this.log.warn(`XATO reverify xato: ${e?.message}`))
-      .finally(() => { this.reverifyRunning = false; });
+      .finally(() => {
+        this.reverifyStatus.running = false;
+        this.reverifyStatus.finishedAt = new Date().toISOString();
+      });
     return { pending: keys.length, alreadyRunning: false };
   }
 
   private async runReverify(keys: string[]): Promise<void> {
     const CONCURRENCY = 4;
+    const st = this.reverifyStatus;
     let idx = 0;
-    let done = 0;
-    let fixed = 0;
     const worker = async () => {
       while (idx < keys.length) {
         const k = keys[idx++];
         try {
           const res = await this.lookup(k, { forceRefresh: true });
-          if (res?.found) fixed++;
-        } catch { /* ignore */ }
-        if (++done % 100 === 0) this.log.log(`XATO reverify: ${done}/${keys.length} (tuzatildi: ${fixed})`);
+          if (res?.found) {
+            st.fixed++;
+            if (st.fixedSamples.length < this.SAMPLE_CAP) {
+              st.fixedSamples.push({
+                contract: res.contractNumber,
+                client: res.customerName,
+                object: res.objectName,
+                status: res.status,
+              });
+            }
+          } else {
+            st.notFound++;
+            if (st.notFoundSamples.length < this.SAMPLE_CAP) {
+              st.notFoundSamples.push({ contract: k, reason: "CRM'да topilmadi" });
+            }
+          }
+        } catch (e: any) {
+          st.errors++;
+          if (st.notFoundSamples.length < this.SAMPLE_CAP) {
+            st.notFoundSamples.push({ contract: k, reason: 'CRM xatosi: ' + String(e?.message || '').slice(0, 80) });
+          }
+        }
+        st.done++;
+        if (st.done % 100 === 0) this.log.log(`XATO reverify: ${st.done}/${keys.length} (tuzatildi: ${st.fixed})`);
       }
     };
     await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
-    this.log.log(`XATO reverify tugadi: ${keys.length} ko'rildi, ${fixed} ta found=true bo'ldi`);
+    this.log.log(`XATO reverify tugadi: ${keys.length} ko'rildi, ${st.fixed} tuzatildi, ${st.notFound} topilmadi, ${st.errors} xato`);
   }
 }
 
