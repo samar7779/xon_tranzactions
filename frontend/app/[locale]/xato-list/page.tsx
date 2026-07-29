@@ -94,6 +94,24 @@ function fmtCompact(v: number): string {
 
 type Flow = 'all' | 'in' | 'out' | 'pending';
 
+/**
+ * Hisob nomini normallashtirish — bir kompaniyaning turli yozuvlarini
+ * (qo'shtirnoq, МЧЖ/MCHJ/MAS'ULIYATI CHEKLANGAN JAMIYAT, hisob raqami) birlashtiradi.
+ * Masalan: "AFSONA RESIDENCE" MCHJ · МЧЖ "AFSONA RESIDENCE" · ?AFSONA RESIDENCE?MCHJ → AFSONA RESIDENCE
+ */
+const DROP_TOKENS = new Set(['MCHJ', 'МЧЖ', 'ООО', 'ОАО', 'АЖ', 'AJ', 'ХК', 'XK', 'ЙТТ', 'YTT', 'ЙТ']);
+function normAccount(s: string): string {
+  if (!s) return '';
+  const x = s.toUpperCase()
+    .replace(/[«»""''`?]/g, ' ')                                  // qo'shtirnoq / ?
+    .replace(/\d{5,}/g, ' ')                                      // hisob / STIR raqamlari
+    .replace(/MAS['’ʼ]?ULIYATI\s+CHEKLANGAN\s+JAMIYATI?/g, ' ')   // to'liq shakl (lotin)
+    .replace(/МАС['’ʼ]?УЛИЯТИ\s+ЧЕКЛАНГАН\s+ЖАМИЯТ[И]?/g, ' ')     // to'liq shakl (kirill)
+    .replace(/\s+/g, ' ')
+    .trim();
+  return x.split(' ').filter((w) => w && !DROP_TOKENS.has(w)).join(' ').trim();
+}
+
 /** Hisob (obyekt) bo'yicha qidiruvli, ko'p tanlovli filtr (galochka + ikonka). */
 function AccountMultiSelect({
   options, selected, onChange,
@@ -390,7 +408,7 @@ export default function XatoListPage() {
   // Hisob (obyekt) bo'yicha filtr uchun — mavjud hisoblar ro'yxati.
   // XATO to'lovlarда CRM `object` null bo'ladi — shuning uchun qabul qiluvchi
   // hisob (`account`, masalan "VATAN RESIDENCE" / "ЗУРСАН") ga tushib qolamiz.
-  const rowAccount = (r: XatoRow) => (r.object?.trim() || r.account?.trim() || '');
+  const rowAccount = (r: XatoRow) => normAccount(r.object?.trim() || r.account?.trim() || '');
   const objectOptions = useMemo(() => {
     const set = new Set<string>();
     for (const r of allRows) { const v = rowAccount(r); if (v) set.add(v); }
