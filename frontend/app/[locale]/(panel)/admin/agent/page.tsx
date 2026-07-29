@@ -8,6 +8,7 @@ import {
   Sparkles, BrainCircuit, CheckCircle2, XCircle, UserCog, ChevronDown, Settings2, Activity, Cpu,
   History, MessageSquare, X, Search, Download, Pencil, ChevronLeft, ChevronRight,
   Paperclip, Trash2, ImageIcon,
+  BarChart3, FileSearch, AlertTriangle, HelpCircle,
 } from 'lucide-react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -74,6 +75,42 @@ const CHAT_SUGGESTIONS = [
   "🔎 Falon shartnoma arizasini o'qib ber",
   '❓ Nima qila olasan?',
 ];
+
+// ERP uslubidagi boshlang'ich action kartalari
+const CHAT_CARDS = [
+  { icon: BarChart3, title: 'Holat', desc: "Bugungi arizalar, XATO soni va tushum", q: '📊 Holat qanday?', tone: 'violet' as const },
+  { icon: AlertTriangle, title: "XATO to'lovlar", desc: "CRM'да topilmagan to'lovlar ro'yxati", q: "📋 Barcha XATO to'lovlar", tone: 'rose' as const },
+  { icon: FileSearch, title: "Ariza o'qish", desc: "Shartnoma arizasini o'qib, xulosa berish", q: "🔎 Falon shartnoma arizasini o'qib ber", tone: 'sky' as const },
+  { icon: HelpCircle, title: 'Yordam', desc: "Nima qila olaman — imkoniyatlar ro'yxati", q: '❓ Nima qila olasan?', tone: 'emerald' as const },
+];
+const CARD_TONE: Record<string, string> = {
+  violet: 'from-violet-500/15 to-fuchsia-500/10 text-violet-600 dark:text-violet-300 ring-violet-500/20 group-hover:ring-violet-400/50',
+  rose: 'from-rose-500/15 to-orange-500/10 text-rose-600 dark:text-rose-300 ring-rose-500/20 group-hover:ring-rose-400/50',
+  sky: 'from-sky-500/15 to-cyan-500/10 text-sky-600 dark:text-sky-300 ring-sky-500/20 group-hover:ring-sky-400/50',
+  emerald: 'from-emerald-500/15 to-teal-500/10 text-emerald-600 dark:text-emerald-300 ring-emerald-500/20 group-hover:ring-emerald-400/50',
+};
+
+/** Premium AI avatar — gradient orb + aylanuvchi halqa + bot/sparkle (ERP uslubi). */
+function AiAvatar({ size = 116, ring = true }: { size?: number; ring?: boolean }) {
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      {/* tashqi yog'du */}
+      <div className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-500 via-fuchsia-500 to-indigo-500 blur-2xl opacity-40 animate-pulse" />
+      {ring && (
+        <>
+          {/* aylanuvchi konus-gradient halqa */}
+          <div className="absolute inset-0 rounded-full animate-[spin_8s_linear_infinite]" style={{ background: 'conic-gradient(from 0deg,#a78bfa,#e879f9,#818cf8,#22d3ee,#a78bfa)' }} />
+          <div className="absolute inset-[3px] rounded-full bg-slate-50 dark:bg-slate-950" />
+        </>
+      )}
+      {/* ichki gradient doira */}
+      <div className={cn('absolute rounded-full grid place-items-center bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 shadow-2xl shadow-violet-500/40', ring ? 'inset-[6px]' : 'inset-0')}>
+        <Bot className="text-white" style={{ width: size * 0.4, height: size * 0.4 }} />
+        <Sparkles className="absolute text-white/85" style={{ width: size * 0.15, height: size * 0.15, top: size * 0.12, right: size * 0.12 }} />
+      </div>
+    </div>
+  );
+}
 
 // Assistant xabarlari uchun markdown → Tailwind (ixcham, chat pufagi ichida)
 const MD_COMPONENTS: Components = {
@@ -749,7 +786,7 @@ export default function AdminAgentPage() {
         <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true">
           {/* Backdrop — bosilganda YOPILMAYDI (faqat X yoki ESC) */}
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" />
-          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[560px] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-in slide-in-from-right duration-300">
+          <div className="absolute inset-y-0 right-0 w-full sm:max-w-[640px] flex flex-col bg-slate-50 dark:bg-slate-950 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-800 animate-in slide-in-from-right duration-300">
             {/* Sarlavha — gradient bar */}
             <div className="px-5 py-4 flex items-center gap-3 shrink-0 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 shadow-lg">
               <div className="relative shrink-0">
@@ -786,30 +823,40 @@ export default function AdminAgentPage() {
               {chatHistoryQuery.isLoading ? (
                 <div className="h-full grid place-items-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
               ) : chatMsgs.length === 0 && !chatMut.isPending ? (
-                /* Bo'sh holat — premium */
-                <div className="h-full grid place-items-center text-center px-4">
-                  <div>
-                    <div className="relative mx-auto w-20 h-20 mb-4">
-                      <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-violet-500 to-fuchsia-600 blur-xl opacity-40" />
-                      <div className="relative w-20 h-20 rounded-3xl grid place-items-center bg-gradient-to-br from-violet-500 to-fuchsia-600 shadow-xl shadow-violet-500/30">
-                        <Bot className="h-10 w-10 text-white" />
-                      </div>
-                    </div>
-                    <div className="text-[16px] font-bold text-slate-800 dark:text-slate-100">Salom! Men {agentName} 👋</div>
-                    <div className="text-[12.5px] text-slate-500 dark:text-slate-400 mt-1 mb-5 max-w-xs mx-auto">
-                      Arizalarni tekshiraman, XATO to&apos;lovlarni topaman va rasm (ariza) o&apos;qiy olaman. Savol bering yoki quyidagidan tanlang.
-                    </div>
-                    <div className="flex flex-wrap gap-2 justify-center max-w-sm mx-auto">
-                      {CHAT_SUGGESTIONS.map((s) => (
+                /* Bo'sh holat — ERP uslubidagi premium salomlashuv + action kartalar */
+                <div className="min-h-full flex flex-col items-center justify-center text-center px-4 py-6">
+                  <AiAvatar size={124} />
+                  <div className="mt-5 text-[22px] font-extrabold tracking-tight bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 dark:from-violet-300 dark:via-fuchsia-300 dark:to-indigo-300 bg-clip-text text-transparent">
+                    Assalomu alaykum!
+                  </div>
+                  <div className="mt-1.5 text-[13px] text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                    Men <span className="font-semibold text-slate-700 dark:text-slate-200">{agentName}</span> — arizalarni tekshiraman,
+                    XATO to&apos;lovlarni topaman va rasm (ariza) o&apos;qiy olaman.
+                    Boshlash uchun quyidagidan birini tanlang:
+                  </div>
+
+                  {/* Action kartalar — 2×2 grid */}
+                  <div className="mt-6 grid grid-cols-2 gap-3 w-full max-w-md mx-auto">
+                    {CHAT_CARDS.map((c) => {
+                      const Icon = c.icon;
+                      return (
                         <button
-                          key={s}
-                          onClick={() => sendSuggestion(s)}
-                          className="px-3 py-1.5 rounded-full text-[12px] font-medium bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 hover:ring-violet-400 hover:text-violet-700 dark:hover:text-violet-300 hover:shadow-sm transition-all"
+                          key={c.title}
+                          onClick={() => sendSuggestion(c.q)}
+                          className="group text-left rounded-2xl p-3.5 bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 hover:ring-violet-300 dark:hover:ring-violet-700/60 hover:shadow-lg hover:shadow-violet-500/5 hover:-translate-y-0.5 transition-all duration-200"
                         >
-                          {s}
+                          <div className={cn('w-10 h-10 rounded-xl grid place-items-center bg-gradient-to-br ring-1 mb-2.5 rotate-45 transition-all', CARD_TONE[c.tone])}>
+                            <Icon className="h-4 w-4 -rotate-45" />
+                          </div>
+                          <div className="text-[13px] font-bold text-slate-800 dark:text-slate-100">{c.title}</div>
+                          <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 leading-snug">{c.desc}</div>
                         </button>
-                      ))}
-                    </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 text-[10.5px] text-slate-400 dark:text-slate-500">
+                    yoki pastдан savolingizni yozing ✍️
                   </div>
                 </div>
               ) : (
