@@ -451,6 +451,14 @@ export class OplataKvController {
     return { ok: true, ...res };
   }
 
+  @Post('reverify-contracts')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SYNC)
+  @ApiOperation({ summary: "XATO (found=false) shartnomalarni CRM'ga qayta tekshirish. CRM'да bor bo'lganlar found=true bo'lib XATO ro'yxatidan chiqadi. Fonда ishlaydi." })
+  async reverifyContracts(@Body() body: { limit?: number }) {
+    const res = await this.crmCache.reverifyNotFound({ limit: body?.limit });
+    return { ok: true, ...res };
+  }
+
   @Get('order-id-coverage')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'API order_id qamrovi — nechta to\'lovda order_id bor/yo\'q + shartnoma statistikasi' })

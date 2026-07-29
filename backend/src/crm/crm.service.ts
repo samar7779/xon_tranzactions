@@ -178,6 +178,7 @@ export class CrmService {
       const object = typeof it.object === 'string' ? it.object : (it.object?.name || null);
       const status = it.status?.name?.uz || it.status?.name?.ru || it.status?.type || null;
       return {
+        id: it.id != null ? it.id : (it.order_id != null ? it.order_id : null),
         contract: it.contract,
         clientFullName: it.client_full_name || null,
         object,
@@ -426,17 +427,13 @@ export class CrmService {
     // To'g'ri param nomi: trashed_status=1 (with trashed)
     // XonSaroy CRM aniqlangan param: is_trashed=1 (active + trashed birga)
     // Aniq URL misol: app.xonsaroy.uz/contracts?limit=20&is_trashed=1
+    // MINIMAL param to'plami — searchContracts (qo'lда qidiruv, ishlaydi) bilan bir xil.
+    // Ilgari status:'all' / cancelled:1 kabi ortiqcha paramlar CRM query'sini buzib
+    // (WHERE status='all' → 0 natija) ba'zi contractlarni topilmas qilardi.
+    // is_trashed=1 active + trashed ikkalasini birga qaytaradi.
     body.is_trashed = 1;
-    // Eski variantlar — xavfsizlik uchun qoldiramiz (boshqa endpoint'lar uchun)
     body.trashed_status = 1;
-    body.trashed = 1;
     body.with_trashed = 1;
-    body.with_deleted = 1;
-    body.include_trashed = 1;
-    body.include_deleted = 1;
-    body.cancelled = 1;
-    body.with_cancelled = 1;
-    body.status = 'all';
     const r = await this.call('/show', body);
     let detail: any = r.ok ? (r.data?.data || null) : null;
     const contractNo = (opts.contract || detail?.contract || '').toString().trim();
@@ -444,23 +441,17 @@ export class CrmService {
     // ── FALLBACK: /show 404 qaytsa, /index orqali urunish (deleted/cancelled uchun) ──
     if (!detail && contractNo) {
       try {
+        // MUHIM: aynan searchContracts (qo'lда qidiruv — ISHLAYDI) bilan bir xil
+        // MINIMAL param to'plami. Ilgari qo'shilgan status:'all' / cancelled:1 kabi
+        // ortiqcha paramlar CRM query'sini buzib (masalan WHERE status='all' → 0 natija,
+        // yoki faqat bekor qilinganlarni qaytarib) avto lookup'ни topilmas qilardi.
+        // is_trashed=1 allaqachon active + trashed contractlarni birga qaytaradi.
         const idxRes = await this.call('/index', {
           contract: contractNo,
           'per-page': 50,
-          // PRIMARY — XonSaroy CRM URL'da aniqlangan: is_trashed=1
           is_trashed: 1,
-          // Eski variantlar — boshqa endpoint'lar uchun xavfsizlik
           trashed_status: 1,
-          cancelled: 1,
-          is_cancelled: 1,
-          include_cancelled: 1,
-          with_cancelled: 1,
-          status: 'all',
-          trashed: 1,
           with_trashed: 1,
-          with_deleted: 1,
-          include_trashed: 1,
-          include_deleted: 1,
         });
         if (idxRes.ok) {
           const items: any[] = idxRes.data?.data || [];

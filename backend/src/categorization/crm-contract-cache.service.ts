@@ -209,6 +209,49 @@ export class CrmContractCacheService {
       }
     }
 
+    // ── FALLBACK: /show topa olmadi — searchContracts (/index, qo'lда qidiruv
+    // ISHLAYDIGAN yo'l) bilan urinamiz. CRM'да bor lekin /show bermagan contractlar
+    // uchun (avto vs qo'lда parity kafolati). Foydalanuvchi qo'lда topa olsa — avto ham topsin.
+    const scNorm = (s: any) => String(s || '').replace(/[\s\-_./]/g, '').toUpperCase();
+    for (const v of contractVariants(key).slice(0, 4)) {
+      try {
+        const sc: any = await this.crm.searchContracts(v, 20);
+        const items: any[] = sc?.items || [];
+        if (!items.length) continue;
+        const targ = scNorm(v);
+        const hit = items.find((it) => scNorm(it.contract) === targ);
+        if (hit) {
+          const contractKey = String(hit.contract || v).toUpperCase().slice(0, 128);
+          const saved = await this.prisma.crmContract.upsert({
+            where: { contractNumber: contractKey },
+            create: {
+              contractNumber: contractKey,
+              customerName: hit.clientFullName || null,
+              status: hit.status ? String(hit.status).toLowerCase().slice(0, 128) : null,
+              objectName: hit.object ? String(hit.object).slice(0, 255) : null,
+              apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
+              crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
+              found: true,
+            },
+            update: {
+              customerName: hit.clientFullName || null,
+              status: hit.status ? String(hit.status).toLowerCase().slice(0, 128) : null,
+              objectName: hit.object ? String(hit.object).slice(0, 255) : null,
+              apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
+              crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
+              found: true,
+              lastVerifiedAt: new Date(),
+              lastError: null,
+            },
+          });
+          this.log.log(`CRM searchContracts fallback topdi: ${contractKey} (klient: ${hit.clientFullName || '-'})`);
+          return toCached(saved);
+        }
+      } catch (e: any) {
+        this.log.warn(`searchContracts fallback xato (${v}): ${e?.message}`);
+      }
+    }
+
     // CRM'da topilmadi — keshga "found=false" yozib qo'yamiz, qayta urinmaymiz (NOT_FOUND_RETRY_AFTER_MS davomida)
     const safeKey = key.length > 128 ? key.slice(0, 128) : key;
     const saved = await this.prisma.crmContract.upsert({
@@ -300,6 +343,57 @@ export class CrmContractCacheService {
       } catch { /* keyingi variantni sinaymiz */ }
     }
     return false;
+  }
+
+  // ───────────── XATO (found=false) shartnomalarni qayta tekshirish ─────────────
+
+  private reverifyRunning = false;
+
+  /**
+   * found=false (XATO — CRM'да topilmagan deb keshlangan) shartnomalarni CRM'ga
+   * QAYTA tekshiradi (forceRefresh — keshni chetlab o'tib). CRM'да endi bor bo'lganlar
+   * found=true ga o'tadi va XATO ro'yxatidan AVTOMATIK chiqadi (XATO filtri found=true
+   * setni jonli o'qiydi — to'lovlarni qayta kategoriyalash shart emas). Fonда ishlaydi.
+   *
+   * Sabab: contract keyinroq CRM'ga qo'shilган YOKI o'sha payt CRM lookup buzuq param
+   * bilan topa olmaган — natijada found=false keshlangan va 4 soatgacha qotib qolган.
+   */
+  async reverifyNotFound(opts: { limit?: number } = {}): Promise<{ pending: number; alreadyRunning: boolean }> {
+    if (this.reverifyRunning) {
+      const remaining = await this.prisma.crmContract.count({ where: { found: false } });
+      return { pending: remaining, alreadyRunning: true };
+    }
+    const limit = Math.min(100000, Math.max(1, opts.limit ?? 50000));
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: false },
+      select: { contractNumber: true },
+      take: limit,
+    });
+    const keys = rows.map((r) => r.contractNumber);
+    this.reverifyRunning = true;
+    this.runReverify(keys)
+      .catch((e) => this.log.warn(`XATO reverify xato: ${e?.message}`))
+      .finally(() => { this.reverifyRunning = false; });
+    return { pending: keys.length, alreadyRunning: false };
+  }
+
+  private async runReverify(keys: string[]): Promise<void> {
+    const CONCURRENCY = 4;
+    let idx = 0;
+    let done = 0;
+    let fixed = 0;
+    const worker = async () => {
+      while (idx < keys.length) {
+        const k = keys[idx++];
+        try {
+          const res = await this.lookup(k, { forceRefresh: true });
+          if (res?.found) fixed++;
+        } catch { /* ignore */ }
+        if (++done % 100 === 0) this.log.log(`XATO reverify: ${done}/${keys.length} (tuzatildi: ${fixed})`);
+      }
+    };
+    await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
+    this.log.log(`XATO reverify tugadi: ${keys.length} ko'rildi, ${fixed} ta found=true bo'ldi`);
   }
 }
 

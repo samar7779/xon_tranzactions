@@ -487,6 +487,23 @@ export default function OplataKvPage() {
     onError: (e: any) => { setSyncError(e?.message || tc('error')); },
   });
 
+  // XATO (CRM'да topilmagan deb keshlangan) shartnomalarni CRM'ga qayta tekshirish.
+  // CRM'да bor bo'lganlar found=true bo'lib XATO ro'yxatidan avtomatik chiqadi.
+  const reverifyMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; pending: number; alreadyRunning: boolean }>('/oplata-kv/reverify-contracts', {}),
+    onSuccess: (r: any) => {
+      if (r?.alreadyRunning) {
+        toast.info(`Qayta tekshirish allaqachon ketyapti (${r.pending} ta qoldi)`);
+      } else {
+        toast.success(`${r?.pending ?? 0} ta XATO shartnoma CRM'ga qayta tekshirilyapti (fonда). Bir necha daqiqadan so'ng ro'yxatni yangilang.`);
+      }
+      setTimeout(() => {
+        qc.invalidateQueries({ queryKey: ['oplata-kv'] });
+      }, 15_000);
+    },
+    onError: (e: any) => { toast.error(e?.message || tc('error')); },
+  });
+
   // BG status polling — sync tugagach obyekt/split orqada davom etadi
   useEffect(() => {
     if (!syncResult || !syncResult.objectsBackground) return;
@@ -557,6 +574,19 @@ export default function OplataKvPage() {
                   title={t('syncNow')}
                 >
                   <RefreshCw className={cn('h-4 w-4', syncNowMut.isPending && 'animate-spin')} />
+                </button>
+              )}
+
+              {/* XATO shartnomalarni CRM'ga qayta tekshirish — CRM'да bor lekin
+                  XATO'да qotib qolganlarни found=true ga o'tkazadi (fonда). */}
+              {canSync && (
+                <button
+                  onClick={() => reverifyMut.mutate()}
+                  disabled={reverifyMut.isPending}
+                  className="h-10 w-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-200 dark:ring-amber-900 hover:bg-amber-100 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300 grid place-items-center transition-colors disabled:opacity-60 shrink-0"
+                  title="XATO shartnomalarni CRM'ga qayta tekshirish (CRM'да bor bo'lsa XATO'dan chiqadi)"
+                >
+                  <FileCheck2 className={cn('h-4 w-4', reverifyMut.isPending && 'animate-pulse')} />
                 </button>
               )}
 
