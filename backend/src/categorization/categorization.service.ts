@@ -1329,9 +1329,20 @@ export class CategorizationService {
     // LEKIN: agar shartnoma raqami bor lekin CRM tekshirilmagan bo'lsa — CRM lookup qilamiz
     if (!opts?.force && tx.categoryId) {
       // Mavjud shartnoma bor bo'lsa, CRM keshini tekshiramiz (cache hit/miss, agar yo'q bo'lsa lookup qilinadi)
+      let existingNo = tx.contractNumber;
       if (tx.contractNumber) {
         try {
-          await this.crmCache.lookup(tx.contractNumber);
+          const c = await this.crmCache.lookup(tx.contractNumber, { payerHint: tx.description ?? undefined });
+          // Kanonik shaklga to'g'irlash — CRM boshqa shaklда topgan bo'lsa (I↔1, O↔0, /SH,
+          // dublikat ism), saqlangan contractNumber found=true set bilan mos kelsin (XATO bo'lmasin).
+          if (c?.found && c.contractNumber && c.contractNumber !== tx.contractNumber) {
+            await this.prisma.transaction.update({
+              where: { id: tx.id },
+              data: { contractNumber: c.contractNumber },
+            });
+            existingNo = c.contractNumber;
+            this.log.log(`Shartnoma kanonik shaklga to'g'irlandi: ${tx.contractNumber} → ${c.contractNumber} (tx ${tx.id})`);
+          }
         } catch (e: any) {
           this.log.warn(`CRM lookup xato (${tx.id}, ${tx.contractNumber}): ${e?.message}`);
         }
@@ -1340,8 +1351,10 @@ export class CategorizationService {
         ok: true,
         categoryCode: 'EXISTING',
         subcategoryCode: null,
-        contractNumber: tx.contractNumber,
-        reason: 'allaqachon kategoriyalangan (shartnoma CRM tekshirildi)',
+        contractNumber: existingNo,
+        reason: existingNo !== tx.contractNumber
+          ? `shartnoma CRM kanonik shakliga to'g'irlandi (${existingNo})`
+          : 'allaqachon kategoriyalangan (shartnoma CRM tekshirildi)',
       };
     }
 
@@ -1374,7 +1387,10 @@ export class CategorizationService {
           // izohдаги ism-familyaga qarab to'g'ri mijoz tanlanadi (dublikat dizambiguatsiya).
           const c = await this.crmCache.lookup(cand, { forceRefresh: opts?.forceRefresh, payerHint: tx.description ?? undefined });
           if (c?.found) {
-            contractNumber = cand;  // verified topildi — uni ishlatamiz
+            // MUHIM: xom candidate (masalan "821ZUR23VI") emas, CRM kanonik shaklini
+            // ("821ZUR23V1") saqlaymiz — aks holда XATO tekshiruvи (found=true set bilan
+            // aniq mos) mos kelmay to'lov XATO'да qolardi.
+            contractNumber = c.contractNumber || cand;
             break;
           }
         }
@@ -1386,6 +1402,9 @@ export class CategorizationService {
     // CRM topa olmasa ("xato" hol — legacy 1h-cloumn.py) — baribir CLIENT, default VZNOS_KV
     if (contractNumber) {
       const cached = await this.crmCache.lookup(contractNumber, { forceRefresh: opts?.forceRefresh, payerHint: tx.description ?? undefined });
+      // CRM kanonik shakliga o'tkazamiz (agar topilgan bo'lsa) — saqlanadigan
+      // contractNumber found=true set bilan aniq mos kelsin (XATO bo'lmasin).
+      if (cached?.found && cached.contractNumber) contractNumber = cached.contractNumber;
       const inCrm = cached?.found && !this.isExcludedClientStatus(cached.status);
       if (inCrm || cached) {
         // Status excluded bo'lsa — CLIENT emas (reinvestiция / фиктивный)
