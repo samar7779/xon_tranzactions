@@ -635,9 +635,10 @@ export class CorrectionService {
     };
   }
 
-  /** Arizalarni DB'dan tozalash — parol bilan himoyalangan (7779). */
+  /** Arizalarni DB'dan tozalash — parol bilan himoyalangan (ADMIN_ACTION_PASSWORD env). */
   async clearRequests(opts: { status?: 'all' | 'pending' | 'approved' | 'rejected'; password?: string }) {
-    if ((opts.password || '').trim() !== '7779') throw new ForbiddenException("Parol noto'g'ri");
+    const expected = process.env.ADMIN_ACTION_PASSWORD || '';
+    if (!expected || (opts.password || '').trim() !== expected) throw new ForbiddenException("Parol noto'g'ri");
     const where: any = {};
     if (opts.status && opts.status !== 'all') where.status = opts.status;
     const res = await this.prisma.xatoCorrectionRequest.deleteMany({ where });

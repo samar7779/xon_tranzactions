@@ -39,8 +39,6 @@ export interface HistoryEntry {
   details: any;
 }
 
-const DEFAULT_BOT_TOKEN = '***REMOVED***';
-
 @Injectable()
 export class SverkaTelegramService implements OnModuleInit {
   private readonly log = new Logger(SverkaTelegramService.name);
@@ -56,7 +54,6 @@ export class SverkaTelegramService implements OnModuleInit {
   private static readonly KEY_SENT_LOG = 'sverka.telegram.sentLog'; // /clear uchun — chat bo'yicha message_id'lar
 
   private static readonly HISTORY_LIMIT = 500;
-  private static readonly DEFAULT_PASSWORD = '7779';
 
   constructor(
     private prisma: PrismaService,
@@ -400,7 +397,7 @@ export class SverkaTelegramService implements OnModuleInit {
     const s = await this.prisma.setting.findUnique({
       where: { key: SverkaTelegramService.KEY_BOT_TOKEN },
     });
-    return s?.value || DEFAULT_BOT_TOKEN;
+    return s?.value || process.env.SVERKA_BOT_TOKEN || '';
   }
 
   async setBotToken(token: string, actor?: { name: string | null }): Promise<{ ok: true; username?: string }> {
@@ -438,8 +435,8 @@ export class SverkaTelegramService implements OnModuleInit {
     const s = await this.prisma.setting.findUnique({
       where: { key: SverkaTelegramService.KEY_PASSWORD },
     });
-    const expected = s?.value || SverkaTelegramService.DEFAULT_PASSWORD;
-    return password === expected;
+    const expected = s?.value || process.env.ADMIN_ACTION_PASSWORD || '';
+    return !!expected && password === expected;
   }
 
   // ─── CHATS ──────────────────────────────────────────────

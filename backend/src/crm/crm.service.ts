@@ -5,8 +5,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 const XONSAROY_BASE_URL = process.env.XONSAROY_API_URL || 'https://app-api.xonsaroy.uz/api/v4/client/order';
 // payment-history endpoint /client/order DAN tashqarida — /client/payment-history
 const XONSAROY_CLIENT_BASE = process.env.XONSAROY_CLIENT_BASE || 'https://app-api.xonsaroy.uz/api/v4/client';
-const XONSAROY_KEY = process.env.XONSAROY_API_KEY || '***REMOVED***';
-const XONSAROY_SECRET = process.env.XONSAROY_API_SECRET || '***REMOVED***';
+const XONSAROY_KEY = process.env.XONSAROY_API_KEY || '';
+const XONSAROY_SECRET = process.env.XONSAROY_API_SECRET || '';
 
 // Planirovka rasmlari shu S3 bucket'da (uploads/plans/...). CRM relative yo'l
 // bersa shu host qo'shiladi; presigned (X-Amz) bo'lsa o'zi to'liq keladi.

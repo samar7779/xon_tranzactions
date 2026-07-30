@@ -901,7 +901,6 @@ export class CounterpartiesService {
   // ═══════════════════════════════════════════════════════════════
   private static readonly SETTING_AUTO_REFRESH = 'counterparties.autoRefreshEnabled';
   private static readonly SETTING_ACTIVITY_LOG = 'counterparties.activityLog';
-  private static readonly TRUNCATE_PASSWORD = '7779';
   private static readonly ACTIVITY_LOG_LIMIT = 1000;
 
   /** Auto-refresh yoqilganmi? (default: true) */
@@ -1488,7 +1487,8 @@ export class CounterpartiesService {
     ok: true;
     deleted: { counterparties: number; history: number };
   }> {
-    if (password !== CounterpartiesService.TRUNCATE_PASSWORD) {
+    const expected = process.env.ADMIN_ACTION_PASSWORD || '';
+    if (!expected || password !== expected) {
       throw new BadRequestException("Noto'g'ri parol");
     }
     // Avval CounterpartyHistory tozalash (FK constraint sababli)
