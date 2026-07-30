@@ -98,6 +98,7 @@ const ENDPOINTS: Endpoint[] = [
     params: [
       { name: 'page', in: 'query', descKey: 'page', example: '1' },
       { name: 'perPage', in: 'query', descKey: 'perPage', example: '50' },
+      { name: 'compositeId', in: 'query', descKey: 'compositeId', example: '' },
       { name: 'deletedSince', in: 'query', descKey: 'deletedSince', example: '2026-07-01T00:00:00Z' },
     ],
   },

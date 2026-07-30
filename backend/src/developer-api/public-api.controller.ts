@@ -240,10 +240,16 @@ export class PublicApiController {
     @Query('page') page?: string,
     @Query('perPage') perPage?: string,
     @Query('deletedSince') deletedSince?: string,
+    @Query('compositeId') compositeId?: string,
   ) {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
     const where: any = { action: 'deleted' };
+    // Composite ID (bank kompozit / sourceTxId) bo'yicha aniq/qisman qidirish.
+    // oplataKvId = OplataKv.id (sync qilinganlar uchun bu = Transaction.externalId = kompozit).
+    if (compositeId && compositeId.trim()) {
+      where.oplataKvId = { contains: compositeId.trim() };
+    }
     let deltaMode = false;
     if (deletedSince) {
       const since = new Date(deletedSince);

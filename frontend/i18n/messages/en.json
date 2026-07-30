@@ -2290,6 +2290,7 @@
       "qOplata": "Search by client, object or description",
       "updatedSince": "Delta-sync: ISO time (e.g. 2026-07-09T10:00:00Z). Returns payments changed at/after this time, ordered by updatedAt",
       "deletedSince": "Delta-sync: ISO time. Returns payments deleted at/after this time, ordered by deletedAt",
+      "compositeId": "Composite ID (bank composite / sourceTxId) — exact or partial search. To check if a specific payment was deleted",
       "okId": "OplataKv row ID",
       "qAccount": "Search by account number or owner",
       "idOrAccountNo": "ID (cuid) or account number (20 digits)",
