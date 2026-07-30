@@ -385,6 +385,39 @@ export class OplataKvService {
    * "Qayta tekshirish" shu ro'yxatni CRM'ga tekshiradi — butun DB'даги 5000+
    * eski found=false qatorni emas, faqat haqiqiy XATO to'lovlarning shartnomalarini.
    */
+  /**
+   * Tuzatish boti — to'g'ridan-to'g'ri shartnoma biriktirish (admin bajaruvchi).
+   * tx'ga setContractManual → oplata_kv AVTOMAT sinxronlanadi (contractNo/obyekt/klient).
+   * CRM'da bor bo'lsa kanonik shaklda saqlaydi va XATO'dan chiqadi.
+   */
+  async botAssignContract(
+    oplataKvId: string, contractNo: string, actorName: string,
+  ): Promise<{ ok: boolean; error?: string; contractNo?: string; client?: string | null; object?: string | null; found?: boolean }> {
+    const row = await this.prisma.oplataKv.findUnique({ where: { id: oplataKvId }, select: { id: true, sourceTxId: true } });
+    if (!row) return { ok: false, error: "To'lov topilmadi" };
+    const cc = await this.crmCache.lookup(contractNo);
+    const finalNo = (cc?.found && cc.contractNumber) ? cc.contractNumber : String(contractNo || '').trim();
+    if (!finalNo) return { ok: false, error: "Shartnoma raqami bo'sh" };
+    let txId: string | null = null;
+    if (row.sourceTxId) {
+      const tx = await this.prisma.transaction.findFirst({
+        where: { OR: [{ externalId: row.sourceTxId }, { id: row.sourceTxId }] },
+        select: { id: true },
+      });
+      txId = tx?.id ?? null;
+    }
+    if (txId) {
+      await this.categorization.setContractManual(txId, finalNo, ''); // tx + oplata_kv sinxron
+    } else {
+      await this.prisma.oplataKv.update({
+        where: { id: row.id },
+        data: { contractNo: finalNo, object: cc?.objectName ?? undefined, client: cc?.customerName ?? undefined },
+      });
+    }
+    this.log.log(`Bot: to'lov ${oplataKvId} → shartnoma ${finalNo} biriktirildi (bajardi: ${actorName})`);
+    return { ok: true, contractNo: finalNo, client: cc?.customerName ?? null, object: cc?.objectName ?? null, found: !!cc?.found };
+  }
+
   async getXatoContractNumbers(): Promise<string[]> {
     const xatoFilter = await this.buildXatoFilter();
     const rows = await this.prisma.oplataKv.findMany({
