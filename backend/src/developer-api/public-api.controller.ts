@@ -227,6 +227,54 @@ export class PublicApiController {
     return map;
   }
 
+  @Get('oplata-kv/deleted')
+  @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
+  @ApiOperation({
+    summary: "O'chirilgan kvartira to'lovlari (arxiv)",
+    description: "O'chirilgan (bekor qilingan) to'lovlar. Iste'molchi bularni o'z bazasidan olib tashlashi kerak. " +
+      "deletedSince (ISO vaqt) berilsa — shu vaqt va undan keyin o'chirilganlar createdAt bo'yicha o'sish tartibida. " +
+      "Har element to'liq to'lov ma'lumoti + deleted/deletedAt/deletedBy/deletedReason bilan qaytadi. " +
+      "MUHIM: bu route :id dan OLDIN e'lon qilingan (route conflict oldini olish uchun).",
+  })
+  async listDeletedOplataKv(
+    @Query('page') page?: string,
+    @Query('perPage') perPage?: string,
+    @Query('deletedSince') deletedSince?: string,
+  ) {
+    const pageN = Math.max(1, Number(page) || 1);
+    const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
+    const where: any = { action: 'deleted' };
+    let deltaMode = false;
+    if (deletedSince) {
+      const since = new Date(deletedSince);
+      if (!isNaN(since.getTime())) { where.createdAt = { gte: since }; deltaMode = true; }
+    }
+    const orderBy: any = deltaMode ? [{ createdAt: 'asc' }, { id: 'asc' }] : [{ createdAt: 'desc' }, { id: 'desc' }];
+    const [total, rows] = await Promise.all([
+      this.prisma.oplataKvHistory.count({ where }),
+      this.prisma.oplataKvHistory.findMany({ where, orderBy, skip: (pageN - 1) * perPageN, take: perPageN }),
+    ]);
+    // changes = o'chirish vaqtidagi to'liq OplataKv snapshot (JSON)
+    const snaps = rows.map((r) => {
+      const snap: any = (r.changes && typeof r.changes === 'object' && !Array.isArray(r.changes)) ? r.changes : {};
+      return { r, snap };
+    });
+    const orderIdMap = await this.orderIdMapForContracts(snaps.map((s) => s.snap.contractNo ?? null));
+    return {
+      ok: true,
+      total,
+      page: pageN,
+      perPage: perPageN,
+      items: snaps.map(({ r, snap }) => ({
+        ...this.oplataKvShape(snap, orderIdMap.get((snap.contractNo || '').toUpperCase()) ?? null),
+        deleted: true,
+        deletedAt: r.createdAt,
+        deletedBy: r.actorName ?? null,
+        deletedReason: r.note ?? null,
+      })),
+    };
+  }
+
   @Get('oplata-kv/:id')
   @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
   @ApiOperation({

@@ -448,21 +448,27 @@ export class TransactionsController {
   @UseGuards(RolesGuard)
   @Roles('SUPERADMIN')
   @ApiOperation({ summary: 'Hisob raqami bo\'yicha barcha tranzaksiyalarni o\'chirish (faqat SUPERADMIN)' })
-  async cleanupByAccount(@Body() body: { accountNo: string; confirm: string }) {
+  async cleanupByAccount(
+    @Body() body: { accountNo: string; confirm: string },
+    @CurrentUser('email') email?: string,
+  ) {
     if (!body?.accountNo) return { ok: false, error: 'accountNo kerak' };
     if (body?.confirm !== body?.accountNo) {
       return { ok: false, error: 'Tasdiq matni hisob raqamiga teng emas' };
     }
-    return this.svc.deleteByAccountNo(body.accountNo);
+    return this.svc.deleteByAccountNo(body.accountNo, email ? `manual:${email}` : undefined);
   }
 
   @Post('delete-row-by-id')
   @RequirePermissions(PERMISSIONS.CLEANUP_RUN)
   @ApiOperation({ summary: "Tozalash: bitta yozuvni ichki id bo'yicha o'chirish (confirm=id)" })
-  async deleteRowById(@Body() body: { id: string; table: 'transaction' | 'oplatakv'; confirm: string }) {
+  async deleteRowById(
+    @Body() body: { id: string; table: 'transaction' | 'oplatakv'; confirm: string },
+    @CurrentUser('email') email?: string,
+  ) {
     if (!body?.id) return { ok: false, error: 'id kerak' };
     if (body?.confirm !== body?.id) return { ok: false, error: 'Tasdiq id ga teng emas' };
     const tbl = body.table === 'oplatakv' ? 'oplatakv' : 'transaction';
-    return this.svc.deleteRowById(body.id, tbl);
+    return this.svc.deleteRowById(body.id, tbl, email ? `manual:${email}` : undefined);
   }
 }

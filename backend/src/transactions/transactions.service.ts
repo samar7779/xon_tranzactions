@@ -647,22 +647,26 @@ export class TransactionsService {
    * Bog'liq Payment yozuvlarini ham birga o'chiradi (avval).
    * Hisob raqamining o'zi DB'dan o'chmaydi — faqat tranzaksiyalar.
    */
-  async deleteByAccountNo(accountNo: string) {
+  async deleteByAccountNo(accountNo: string, actor = 'qo\'lda tozalash (hisob)') {
     const acc = await this.prisma.bankAccount.findFirst({
       where: { accountNo },
       select: { id: true, accountNo: true, ownerName: true, branch: true },
     });
     if (!acc) return { ok: false, error: 'Bunday hisob raqami topilmadi' };
 
-    // Bog'liq payment'larni avval o'chiramiz (FK cascade'siz)
-    const txnIds = await this.prisma.transaction.findMany({
-      where: { accountId: acc.id },
-      select: { id: true },
-    });
-    const ids = txnIds.map((t) => t.id);
+    // To'liq tranzaksiyalar (snapshot arxivi uchun — ma'lumot yo'qolmasin)
+    const txns = await this.prisma.transaction.findMany({ where: { accountId: acc.id } });
+    const ids = txns.map((t) => t.id);
     if (ids.length === 0) {
       return { ok: true, deleted: 0, account: acc };
     }
+    // 1) Snapshot arxivlash (change log) — to'liq ma'lumot yo'qolmasin
+    await this.archiveTxDeletions(txns, actor, `Hisob (${acc.accountNo}) tozalandi — barcha tranzaksiyalar o'chirildi`);
+    // 2) Bog'liq OplataKv — arxivlab o'chirish (cascade)
+    const oplataKeys: string[] = [];
+    for (const t of txns) { if (t.externalId) oplataKeys.push(t.externalId); oplataKeys.push(t.id); }
+    const oplataDeleted = await this.archiveAndDeleteOplataKv(oplataKeys, actor, "Bog'liq tranzaksiya o'chirilgani uchun avtomatik o'chirildi");
+    // 3) Payment + tranzaksiyalar
     await this.prisma.payment.deleteMany({ where: { transactionId: { in: ids } } });
     const res = await this.prisma.transaction.deleteMany({ where: { accountId: acc.id } });
     // Hisob qoldig'ini tiklash (foydalanuvchi keyingi sync'da o'qiydi)
@@ -670,7 +674,7 @@ export class TransactionsService {
       where: { id: acc.id },
       data: { balance: null, lastSyncedAt: null },
     });
-    return { ok: true, deleted: res.count, account: acc };
+    return { ok: true, deleted: res.count, oplataKvDeleted: oplataDeleted, account: acc };
   }
 
   /**
@@ -708,27 +712,94 @@ export class TransactionsService {
   }
 
   /**
-   * Tozalash vositasi — bitta yozuvni ICHKI id bo'yicha o'chirish (aniq, bittalab).
-   * transaction: bog'liq payment + attachment ham o'chadi.
+   * O'chirishдан oldin OplataKv qatorlarini history'ga arxivlab (action='deleted'),
+   * keyin o'chiradi. sourceTxId (externalId yoki ichki id) bo'yicha topadi.
+   * Arxiv API'da (v1/oplata-kv/deleted) va Tarixda ko'rinadi. Qaytadi: nechta o'chdi.
    */
-  async deleteRowById(id: string, table: 'transaction' | 'oplatakv') {
+  private async archiveAndDeleteOplataKv(sourceKeys: string[], actor: string, reason: string): Promise<number> {
+    const keys = [...new Set(sourceKeys.filter(Boolean))];
+    if (!keys.length) return 0;
+    const rows = await this.prisma.oplataKv.findMany({ where: { sourceTxId: { in: keys } } });
+    if (!rows.length) return 0;
+    await this.prisma.oplataKvHistory.createMany({
+      data: rows.map((r) => ({
+        oplataKvId: r.id,
+        action: 'deleted',
+        actorType: 'user',
+        actorId: null,
+        actorName: actor,
+        fieldsChanged: ['*'],
+        changes: r as any,
+        note: reason,
+      })),
+    });
+    await this.prisma.oplataKv.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } });
+    return rows.length;
+  }
+
+  /** Tranzaksiyalar snapshotini transaction_change_logs'ga DELETED sifatida yozadi (to'liq oldData). */
+  private async archiveTxDeletions(txs: any[], actor: string, note: string): Promise<void> {
+    if (!txs.length) return;
+    await this.prisma.transactionChangeLog.createMany({
+      data: txs.map((tx) => ({
+        txId: tx.id,
+        externalId: tx.externalId || tx.id,
+        accountId: tx.accountId ?? null,
+        changeType: 'DELETED' as any,
+        fieldsChanged: ['*'],
+        oldData: tx as any,
+        newData: undefined,
+        txnDate: tx.txnDate ?? null,
+        amount: tx.amount ?? null,
+        direction: tx.direction ?? null,
+        contractNumber: tx.contractNumber ?? null,
+        bankNameSnap: (tx as any).importBankNameText ?? tx.bank?.name ?? null,
+        accountNoSnap: tx.account?.accountNo ?? null,
+        detectedBy: actor,
+        note,
+      })),
+    });
+  }
+
+  /**
+   * Tozalash vositasi — bitta yozuvni ICHKI id bo'yicha o'chirish (aniq, bittalab).
+   * MUHIM: o'chirilgan to'lov TO'LIQ ma'lumoti arxivlanadi (transaction → change log,
+   * oplata_kv → history), so'ng o'chiriladi. transaction o'chganda bog'liq OplataKv ham
+   * arxivlanib o'chadi (cascade). payment + attachment ham ketadi.
+   */
+  async deleteRowById(id: string, table: 'transaction' | 'oplatakv', actor = 'qo\'lda tozalash') {
     const rowId = (id || '').trim();
     if (!rowId) return { ok: false, error: "id bo'sh", deleted: 0 };
 
     if (table === 'oplatakv') {
-      const row = await this.prisma.oplataKv.findUnique({ where: { id: rowId }, select: { id: true } });
+      const row = await this.prisma.oplataKv.findUnique({ where: { id: rowId } });
       if (!row) return { ok: false, error: 'Yozuv topilmadi', deleted: 0 };
+      // Arxivlab o'chirish
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id, action: 'deleted', actorType: 'user', actorId: null, actorName: actor,
+          fieldsChanged: ['*'], changes: row as any, note: "Qo'lda tozalash vositasi orqali o'chirildi",
+        },
+      });
       await this.prisma.oplataKv.delete({ where: { id: rowId } });
       return { ok: true, deleted: 1, table };
     }
 
-    const tx = await this.prisma.transaction.findUnique({ where: { id: rowId }, select: { id: true } });
+    const tx = await this.prisma.transaction.findUnique({
+      where: { id: rowId },
+      include: { account: { select: { accountNo: true } }, bank: { select: { name: true } } },
+    });
     if (!tx) return { ok: false, error: 'Tranzaksiya topilmadi', deleted: 0 };
-    // Bog'liq payment'lar (FK cascade yo'q) — avval o'chiramiz.
-    // Attachment'lar esa onDelete: Cascade — tranzaksiya o'chganda avtomatik ketadi.
+    // 1) Snapshot arxivlash (to'liq ma'lumot yo'qolmasin)
+    await this.archiveTxDeletions([tx], actor, "Qo'lda tozalash vositasi orqali o'chirildi");
+    // 2) Bog'liq OplataKv — arxivlab o'chirish (cascade)
+    const oplataDeleted = await this.archiveAndDeleteOplataKv(
+      [tx.externalId || '', tx.id], actor, "Bog'liq tranzaksiya o'chirilgani uchun avtomatik o'chirildi",
+    );
+    // 3) Payment + tranzaksiya (attachment onDelete: Cascade)
     await this.prisma.payment.deleteMany({ where: { transactionId: rowId } });
     await this.prisma.transaction.delete({ where: { id: rowId } });
-    return { ok: true, deleted: 1, table };
+    return { ok: true, deleted: 1, oplataKvDeleted: oplataDeleted, table };
   }
 
   async findOne(idOrExternal: string) {
