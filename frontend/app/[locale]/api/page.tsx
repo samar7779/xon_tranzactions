@@ -93,6 +93,15 @@ const ENDPOINTS: Endpoint[] = [
     ],
   },
   {
+    method: 'GET', path: '/api/v1/oplata-kv/deleted', groupKey: 'oplatakv',
+    titleKey: 'okDeletedT', descKey: 'okDeletedD', scope: 'oplatakv:read',
+    params: [
+      { name: 'page', in: 'query', descKey: 'page', example: '1' },
+      { name: 'perPage', in: 'query', descKey: 'perPage', example: '50' },
+      { name: 'deletedSince', in: 'query', descKey: 'deletedSince', example: '2026-07-01T00:00:00Z' },
+    ],
+  },
+  {
     method: 'GET', path: '/api/v1/oplata-kv/{id}', groupKey: 'oplatakv',
     titleKey: 'okOneT', descKey: 'okOneD', scope: 'oplatakv:read',
     params: [{ name: 'id', in: 'path', required: true, descKey: 'okId' }],
