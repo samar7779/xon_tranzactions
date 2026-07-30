@@ -969,6 +969,9 @@ export default function AdminAgentPage() {
         </div>
       )}
 
+      {/* ═══════════════ 🤖 Tuzatish bot (Telegram — agent bilan suhbat) ═══════════════ */}
+      {canManage && <CorrectionBotCard />}
+
       {/* ═══════════════ ⚙️ Telegram digest sozlamasi (yashirin) ═══════════════ */}
       {canManage && (
         <Card className="border-0 shadow-soft overflow-hidden">
@@ -1174,5 +1177,124 @@ function StatTile({ label, value, tone, mono, pulse }: { label: string; value: s
       <div className="text-[9.5px] uppercase tracking-wider font-bold opacity-70">{label}</div>
       <div className={cn('text-[14px] font-bold mt-0.5 truncate', mono && 'font-mono text-[12px]')}>{value}</div>
     </div>
+  );
+}
+
+// ═══ Tuzatish bot (Telegram) — sozlama kartasi ═══
+type CorrBotConfig = {
+  ok: boolean; enabled: boolean; hasToken: boolean; tokenHint: string | null;
+  botUsername: string | null; groupId: string | null; whitelist: { id: string; name: string }[];
+};
+
+function CorrectionBotCard() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const { data: cfg } = useQuery({
+    queryKey: ['corrbot-config'],
+    queryFn: () => api.get<CorrBotConfig>('/correction-bot/config'),
+  });
+  const [enabled, setEnabled] = useState(false);
+  const [botToken, setBotToken] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [whitelist, setWhitelist] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    if (!cfg) return;
+    setEnabled(cfg.enabled); setGroupId(cfg.groupId || ''); setWhitelist(cfg.whitelist || []);
+  }, [cfg]);
+
+  const saveMut = useMutation({
+    mutationFn: (patch: any) => api.put('/correction-bot/config', patch),
+    onSuccess: () => { toast.success('Saqlandi ✓'); setBotToken(''); qc.invalidateQueries({ queryKey: ['corrbot-config'] }); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const save = () => saveMut.mutate({ enabled, groupId: groupId.trim(), whitelist, ...(botToken.trim() ? { botToken: botToken.trim() } : {}) });
+
+  const addRow = () => setWhitelist((w) => [...w, { id: '', name: '' }]);
+  const setRow = (i: number, k: 'id' | 'name', v: string) => setWhitelist((w) => w.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
+  const delRow = (i: number) => setWhitelist((w) => w.filter((_, idx) => idx !== i));
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-5 py-4 flex items-center gap-3.5 text-left hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
+      >
+        <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-sky-500 to-cyan-600 text-white shadow-md shadow-sky-500/25">
+          <Bot className="h-5 w-5" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13.5px] font-bold text-slate-700 dark:text-slate-200">🤖 Tuzatish bot (Telegram)</span>
+            {cfg?.enabled
+              ? <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">YOQILGAN</span>
+              : <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">O&apos;CHIQ</span>}
+            {cfg?.botUsername && <span className="text-[11px] font-mono text-sky-600 dark:text-sky-400">{cfg.botUsername}</span>}
+          </div>
+          <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+            Foydalanuvchi bot orqali AGENT bilan suhbatlashib XATO to&apos;lovni to&apos;g&apos;rilaydi — ruxsat chat ID orqali (begonalar kira olmaydi)
+          </div>
+        </div>
+        <ChevronDown className={cn('h-5 w-5 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <CardContent className="px-5 pb-5 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800">
+          {/* Yoqish */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setEnabled((v) => !v)}
+              className={cn('w-11 h-6 rounded-full transition-colors relative shrink-0', enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700')}
+            >
+              <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all', enabled ? 'left-[22px]' : 'left-0.5')} />
+            </button>
+            <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">Botni yoqish</span>
+          </div>
+
+          {/* Bot token */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Bot token {cfg?.hasToken && <span className="text-emerald-600 dark:text-emerald-400">— saqlangan ({cfg.tokenHint})</span>}
+            </label>
+            <Input value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={cfg?.hasToken ? "O'zgartirish uchun yangi token…" : '123456:ABC-DEF…'} className="mt-1" />
+          </div>
+
+          {/* Guruh ID */}
+          <div>
+            <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Guruh ID (XATO ro&apos;yxati + &quot;tuzatildi&quot; xabari shu yerga)</label>
+            <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="-1001234567890" className="mt-1" />
+          </div>
+
+          {/* Whitelist */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Ruxsat berilganlar — chat ID + ism (&quot;kim bajardi&quot;)</label>
+              <button onClick={addRow} className="text-[11px] font-semibold text-sky-600 hover:text-sky-700 dark:text-sky-400 inline-flex items-center gap-1">
+                <Plus className="h-3.5 w-3.5" /> qo&apos;shish
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              {whitelist.length === 0 && <div className="text-[12px] text-slate-400 dark:text-slate-500">Hali hech kim qo&apos;shilmagan — begonalar botni ishlata olmaydi</div>}
+              {whitelist.map((w, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input value={w.id} onChange={(e) => setRow(i, 'id', e.target.value)} placeholder="chat ID" className="h-9 flex-1 font-mono text-[12px]" />
+                  <Input value={w.name} onChange={(e) => setRow(i, 'name', e.target.value)} placeholder="Ism (kim bajardi)" className="h-9 flex-[1.5]" />
+                  <button onClick={() => delRow(i)} className="w-8 h-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Saqlash */}
+          <div className="flex items-center gap-3 pt-1">
+            <Button onClick={save} disabled={saveMut.isPending} className="gap-2 bg-gradient-to-br from-sky-600 to-cyan-600 hover:from-sky-700 hover:to-cyan-700 text-white">
+              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
+            </Button>
+            <span className="text-[10.5px] text-slate-400 dark:text-slate-500">Bajaruvchi — faqat ruxsat berilganlar (ismi &quot;kim bajardi&quot;ga yoziladi)</span>
+          </div>
+        </CardContent>
+      )}
+    </Card>
   );
 }

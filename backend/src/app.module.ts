@@ -32,6 +32,7 @@ import { AgentModule } from './agent/agent.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
 import { ChekModule } from './chek/chek.module';
 import { CorrectionModule } from './correction/correction.module';
+import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { CorrectionModule } from './correction/correction.module';
     OplataKvModule,
     GoogleExportModule,
     AgentModule,
+    CorrectionBotModule,
     DeveloperApiModule,
     ChekModule,
     CorrectionModule,
