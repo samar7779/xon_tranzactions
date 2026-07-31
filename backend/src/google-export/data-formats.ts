@@ -34,7 +34,12 @@ function cell(v: any): string {
 
 // ─── CSV ───
 function csv(ds: Dataset): string {
-  const esc = (s: string) => (/[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s);
+  const esc = (s: string) => {
+    // FIX (A2): CSV formula injection — =,+,-,@ (tab/CR) bilan boshlansa ' bilan neytrallashtiramiz.
+    let v = s;
+    if (v && /^[=+\-@\t\r]/.test(v)) v = "'" + v;
+    return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  };
   const head = ds.columns.map((c) => esc(c.header)).join(',');
   const body = ds.rows.map((r) => ds.columns.map((c) => esc(cell(r[c.key]))).join(',')).join('\r\n');
   return '﻿' + head + '\r\n' + body; // BOM — Excel kirill uchun

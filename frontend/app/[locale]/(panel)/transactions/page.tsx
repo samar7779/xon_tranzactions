@@ -605,7 +605,12 @@ export default function TransactionsPage() {
         it.description || '',
       ]),
     ];
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    // FIX (A2): CSV formula injection — =,+,-,@ (tab/CR) bilan boshlangan katakni ' bilan neytrallashtiramiz
+    const csv = rows.map((r) => r.map((c) => {
+      let s = String(c);
+      if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+      return `"${s.replace(/"/g, '""')}"`;
+    }).join(',')).join('\n');
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

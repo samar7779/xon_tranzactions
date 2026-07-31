@@ -866,21 +866,26 @@ export class CounterpartiesService {
       c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
     });
 
+    // FIX (A2): Excel formula injection — =,+,-,@ (tab/CR) bilan boshlangan matnni ' bilan neytrallashtiramiz.
+    const fx = (v: any): string => {
+      const s = v == null ? '' : String(v);
+      return /^[=+\-@\t\r]/.test(s) ? "'" + s : s;
+    };
     for (const it of items) {
       const accounts = Array.isArray(it.bankAccounts)
         ? (it.bankAccounts as any[]).map((b) => `${b.account} (MFO ${b.mfo || '—'})`).join('; ')
         : '';
       ws.addRow({
         inn: it.inn,
-        name: it.name,
-        director: it.director || '',
+        name: fx(it.name),
+        director: fx(it.director),
         rating: it.rating ?? '',
-        phone: it.phone || '',
-        address: it.address || '',
-        vatStatus: it.vatStatus || '',
-        vatNumber: it.vatNumber || '',
-        oked: it.oked || '',
-        accounts,
+        phone: fx(it.phone),
+        address: fx(it.address),
+        vatStatus: fx(it.vatStatus),
+        vatNumber: fx(it.vatNumber),
+        oked: fx(it.oked),
+        accounts: fx(accounts),
         addedAt: it.addedAt ? it.addedAt.toISOString().slice(0, 19).replace('T', ' ') : '',
         lastFetchedAt: it.lastFetchedAt ? it.lastFetchedAt.toISOString().slice(0, 19).replace('T', ' ') : '',
       });
