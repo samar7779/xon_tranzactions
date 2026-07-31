@@ -1101,8 +1101,19 @@ export class CategorizationService {
             take: 2,
           });
           if (candidates.length === 1) {
-            row = candidates[0];
-            this.log.log(`OplatyKv strategy-b: matched by date+amount, old contractNo=${row.contractNo} (txId=${p.txId})`);
+            // FIX (B#7): date+amount moslik NOANIQ — boshqa mijoz bir kunda bir xil summa
+            // to'lagan bo'lishi mumkin. Faqat XATO (CRM'da tasdiqlanmagan) qatorni qutqaramiz;
+            // CRM'da tasdiqlangan qator boshqa mijozniki bo'lishi mumkin — ustidan YOZMAYMIZ.
+            const cand = candidates[0];
+            const verified = cand.contractNo
+              ? await this.prisma.crmContract.findFirst({ where: { contractNumber: cand.contractNo, found: true }, select: { contractNumber: true } })
+              : null;
+            if (verified) {
+              this.log.warn(`OplatyKv strategy-b skip: ${cand.contractNo} CRM'da tasdiqlangan — noaniq moslik, tegmaymiz (txId=${p.txId})`);
+            } else {
+              row = cand;
+              this.log.log(`OplatyKv strategy-b: matched by date+amount, old contractNo=${cand.contractNo} (txId=${p.txId})`);
+            }
           } else if (candidates.length > 1) {
             this.log.warn(`OplatyKv strategy-b: ${candidates.length} ta moslik (txId=${p.txId})`);
           }
