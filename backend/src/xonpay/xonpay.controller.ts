@@ -112,7 +112,7 @@ export class XonpayController {
   }
 
   @Post('admin/fix-date-shift')
-  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @RequirePermissions(PERMISSIONS.XONPAY_MANAGE)
   @ApiOperation({
     summary: "TZ bug fix: barcha datePaid ga +1 kun qoshish (FAQAT BIR MARTA!)",
     description: "Eski parseDate UTC bo'lganidan keyin sana 1 kun kam yozilgan edi. Bu endpoint bir marta chaqirilib, hammasi tuzatiladi.",
@@ -122,7 +122,7 @@ export class XonpayController {
   }
 
   @Post('admin/cleanup-orphans')
-  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @RequirePermissions(PERMISSIONS.XONPAY_MANAGE)
   @ApiOperation({
     summary: 'Orphan tozalashni fonda boshlash (504 timeout bo\'lmasin)',
     description: '?dryRun=true (default) faqat sanaydi. ?dryRun=false ochiradi. Progress: GET /admin/cleanup-orphans/status',
@@ -139,7 +139,7 @@ export class XonpayController {
   }
 
   @Post('admin/truncate')
-  @RequirePermissions(PERMISSIONS.CRM_VIEW)
+  @RequirePermissions(PERMISSIONS.XONPAY_MANAGE)
   @ApiOperation({
     summary: 'HAMMASINI tozalash (TRUNCATE) — keyin qaytadan sync qilish kerak',
     description: "XAVFLI: barcha xonpay_transactions yozuvlari o'chiriladi. Match links Transaction'dan SetNull bo'ladi.",

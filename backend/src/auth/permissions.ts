@@ -63,6 +63,7 @@ export const PERMISSIONS = {
   // Bank ulanishlari
   CREDENTIALS_VIEW: 'credentials:view',
   CREDENTIALS_MANAGE: 'credentials:manage',
+  CREDENTIALS_REVEAL: 'credentials:reveal',   // bank parolini OCHIQ ko'rish — alohida (SUPERADMIN)
   CREDENTIALS_TEST: 'credentials:test',
 
   // Banklar
@@ -129,6 +130,9 @@ export const PERMISSIONS = {
   // ─── QO'SHIMCHA ───
   // CRM
   CRM_VIEW: 'crm:view',
+
+  // XonPay — destruktiv admin amallar (truncate/fix-date-shift/cleanup) uchun alohida ruxsat
+  XONPAY_MANAGE: 'xonpay:manage',
 
   // Kategoriyalar
   CATEGORIES_VIEW: 'categories:view',
@@ -237,6 +241,7 @@ export const PERMISSION_TREE: PermModule[] = [
         items: [
           { value: PERMISSIONS.CREDENTIALS_VIEW, label: 'Ulanishlarni ko\'rish' },
           { value: PERMISSIONS.CREDENTIALS_MANAGE, label: 'Ulanish qo\'shish/o\'chirish' },
+          { value: PERMISSIONS.CREDENTIALS_REVEAL, label: 'Bank parolini ochiq ko\'rish (SUPERADMIN)' },
           { value: PERMISSIONS.CREDENTIALS_TEST, label: 'Bankka ulanishni tekshirish' },
         ],
       },
@@ -362,6 +367,7 @@ export const PERMISSION_TREE: PermModule[] = [
         name: 'CRM (XonSaroy)',
         items: [
           { value: PERMISSIONS.CRM_VIEW, label: 'CRM\'dan shartnoma qidirish' },
+          { value: PERMISSIONS.XONPAY_MANAGE, label: 'XonPay destruktiv amallar (tozalash/tuzatish)' },
         ],
       },
       {

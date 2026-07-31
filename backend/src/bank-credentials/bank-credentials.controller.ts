@@ -52,7 +52,7 @@ export class BankCredentialsController {
   test(@Param('id') id: string) { return this.svc.testConnection(id); }
 
   @Get(':id/reveal-password')
-  @RequirePermissions(PERMISSIONS.CREDENTIALS_MANAGE)
+  @RequirePermissions(PERMISSIONS.CREDENTIALS_REVEAL) // FIX (A3): alohida ruxsat (default faqat SUPERADMIN)
   @ApiOperation({ summary: "Parolni ochiq holda ko'rsatish" })
   reveal(@Param('id') id: string) { return this.svc.revealPassword(id); }
 }
