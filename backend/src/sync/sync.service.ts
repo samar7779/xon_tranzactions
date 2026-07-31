@@ -190,8 +190,9 @@ export class SyncService implements OnModuleInit {
         const items = result?.content || [];
         fetched += items.length;
         for (const it of items) {
-          // Yo'nalish: acc_dt === bizning account → IN (kirim), aks holda OUT
-          const direction: 'IN' | 'OUT' = it.acc_dt === acc.accountNo ? 'IN' : 'OUT';
+          // FIX (B#12): asosiy logika bilan bir xil — acc_ct === bizning account → IN (kirim).
+          // Avval acc_dt ishlatilgan edi (teskari) — debug oynasi noto'g'ri ko'rsatardi.
+          const direction: 'IN' | 'OUT' = it.acc_ct === acc.accountNo ? 'IN' : 'OUT';
           const compositeId = this.makeCompositeId(it, acc.accountNo, bank.code);
           const num = String(it.num || '');
           if (numsSet && !numsSet.has(num)) continue;
@@ -774,11 +775,12 @@ export class SyncService implements OnModuleInit {
     else direction = item.dir === 2 ? 'IN' : 'OUT'; // fallback
 
     // Holat: PDF §9.1 (1 introduced, 2 approved, 3 proved, 6 deleted, 16 deferred)
+    // FIX (B#11): FAQAT state=3 (provodka qilingan) COMPLETED. Qolgani (1,2,16 va
+    // boshqa provodka qilinmagan) → PENDING — real bo'lmagan "bajarilgan" pul harakati ko'rsatilmasin.
     const status: TxnStatus =
       item.state === 3 ? 'COMPLETED'
         : item.state === 6 ? 'CANCELLED'
-        : item.state === 16 ? 'PENDING'
-        : 'COMPLETED';
+        : 'PENDING';
 
     const type: TxnType = this.guessType(item.purp_code, item.dtype);
     const amountSom = new Prisma.Decimal((item.amount ?? 0) / 100);
@@ -917,11 +919,14 @@ export class SyncService implements OnModuleInit {
     const dayKey = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
     const fetchedDayKeys = new Set(fetchedDays.map(dayKey));
 
-    // Bank javobini general_id va b2_id bo'yicha index qilamiz
-    const bankByGeneralId = new Map<string, KbDoc1CItem>();
+    // Bank javobini general_id+num va b2_id bo'yicha index qilamiz.
+    // FIX (B#13): kalit = general_id + num (externalId formatiga mos). Avval faqat general_id
+    // edi — bitta general_id'da bir necha sub-qator bo'lsa faqat oxirgisi saqlanib, boshqalar
+    // noto'g'ri solishtirilardi (collision).
+    const bankByGenNum = new Map<string, KbDoc1CItem>();
     const bankByB2Id = new Map<string, KbDoc1CItem>();
     for (const it of fetchedItems) {
-      if (it.general_id) bankByGeneralId.set(String(it.general_id), it);
+      if (it.general_id) bankByGenNum.set(`${it.general_id}_${String(it.num || 'no_num')}`, it);
       if (it.b2_id) bankByB2Id.set(String(it.b2_id), it);
     }
 
@@ -946,13 +951,17 @@ export class SyncService implements OnModuleInit {
       if (!fetchedDayKeys.has(dayKey(tx.txnDate))) continue;
       // Bank javobida general_id yoki b2_id orqali topish
       const ext = tx.externalId;
-      // Composite ID'dan general_id'ni ajratib olish (format: {gen_id}_{num}_{ddate}_..._{sign})
-      const extParts = ext.replace(/^IP_/, '').split('_');
-      const possibleGenId = extParts[0] && extParts[0] !== 'no_general_id' ? extParts[0] : null;
+      // Composite ID format: {gen_id}_{num}_{ddate}_..._{sign}
+      // FIX (B#13): general_id + num bo'yicha ANIQ moslashtiramiz (collision yo'q).
+      const rawExt = ext.replace(/^IP_/, '');
+      const extParts = rawExt.split('_');
+      const genNumKey = !rawExt.startsWith('no_general_id') && extParts[0]
+        ? `${extParts[0]}_${extParts[1] ?? 'no_num'}`
+        : null;
 
       let bankItem: KbDoc1CItem | null = null;
-      if (possibleGenId && bankByGeneralId.has(possibleGenId)) {
-        bankItem = bankByGeneralId.get(possibleGenId)!;
+      if (genNumKey && bankByGenNum.has(genNumKey)) {
+        bankItem = bankByGenNum.get(genNumKey)!;
       } else if (tx.bankB2Id && bankByB2Id.has(tx.bankB2Id)) {
         bankItem = bankByB2Id.get(tx.bankB2Id)!;
       }
@@ -1001,8 +1010,7 @@ export class SyncService implements OnModuleInit {
       const newStatus: TxnStatus =
         bankItem.state === 3 ? 'COMPLETED'
           : bankItem.state === 6 ? 'CANCELLED'
-          : bankItem.state === 16 ? 'PENDING'
-          : 'COMPLETED';
+          : 'PENDING'; // FIX (B#11): faqat state=3 COMPLETED; qolgani provodka qilinmagan → PENDING
       const newDescription = (bankItem as any).naznach || (bankItem as any).details || tx.description;
 
       const fieldsChanged: string[] = [];
