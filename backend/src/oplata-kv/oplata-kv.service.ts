@@ -2289,7 +2289,11 @@ export class OplataKvService {
           let runningMonthly = Number(existingSums._sum.monthlyAmount || 0);
 
           // Date asc tartibida — running balance to'g'ri ishlashi uchun
-          items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          // FIX (B#6): sana + id bo'yicha barqaror tartib — bir xil sanadagi qatorlar izchil ishlansin
+          items.sort((a, b) => {
+            const d = new Date(a.date).getTime() - new Date(b.date).getTime();
+            return d !== 0 ? d : (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+          });
 
           // FIX (B#5): shartnoma qatorlarini ATOMIK yangilaymiz — updatelarni yig'ib,
           // bitta $transaction'da bajaramiz (yarim yozilish bo'lmaydi, running-balance izchil).
@@ -2470,8 +2474,13 @@ export class OplataKvService {
     const existingSums = await this.prisma.oplataKv.aggregate({
       where: {
         contractNo: row.contractNo,
-        date: { lt: row.date },
         id: { not: row.id },
+        // FIX (B#6): oldingi kunlar + BIR XIL sanadagi "oldingi" qatorlar (id bo'yicha barqaror tartib).
+        // Avval date:{lt} edi — bir xil sanadagi qatorlar bir-birini running-balansiga qo'shmасди.
+        OR: [
+          { date: { lt: row.date } },
+          { date: row.date, id: { lt: row.id } },
+        ],
       },
       _sum: { firstInstallment: true, monthlyAmount: true },
     });
