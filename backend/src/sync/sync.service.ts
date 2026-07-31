@@ -26,6 +26,8 @@ const KNOWN_FIELDS = new Set([
 export class SyncService implements OnModuleInit {
   private readonly logger = new Logger(SyncService.name);
   private readonly daysBack: number;
+  // FIX (B#4): bir hisobga bir vaqtda bitta syncAccount — parallel (cron ustma-ust) ishga tushishni oldini oladi
+  private readonly syncingAccounts = new Set<string>();
 
   constructor(
     private prisma: PrismaService,
@@ -459,6 +461,13 @@ export class SyncService implements OnModuleInit {
    * opts.dates berilsa — o'sha sanalar bo'yicha backfill qilinadi (qoldiq yangilanmaydi).
    */
   async syncAccount(credentialId: string, accountId: string, opts?: { dates?: string[] }) {
+    // FIX (B#4): shu hisob allaqachon sync bo'layotgan bo'lsa — parallel ishga tushirmaymiz
+    if (this.syncingAccounts.has(accountId)) {
+      this.logger.debug(`syncAccount skip: ${accountId} allaqachon sync bo'layapti`);
+      return { ok: true, fetched: 0, saved: 0, errors: 0, skipped: true };
+    }
+    this.syncingAccounts.add(accountId);
+    try {
     const cred = await this.prisma.bankCredential.findUnique({
       where: { id: credentialId },
       include: { bank: true },
@@ -638,6 +647,10 @@ export class SyncService implements OnModuleInit {
       throw e;
     }
     return { ok: true, fetched, saved, errors };
+    } finally {
+      // FIX (B#4): sync tugadi (yoki xato) — qulfni bo'shatamiz
+      this.syncingAccounts.delete(accountId);
+    }
   }
 
   /**
