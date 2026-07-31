@@ -4193,6 +4193,17 @@ export class OplataKvService {
 
     // Tranzaksiya bilan barcha qatorlarni yaratamiz
     const created = await this.prisma.$transaction(async (tx) => {
+      // FIX (B#2): manba shartnomani QULFLAYMIZ — bir vaqtli 2-pereboska double-spend qilmasin.
+      // Advisory lock transaction oxirigacha ushlanadi; 2-so'rov birinchisini kutadi.
+      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${fromCn}))`;
+      // Qoldiqni QULF ostida qayta tekshiramiz (TOCTOU'ni yopadi — 2-so'rov yangilangan qoldiqni ko'radi).
+      const agg = await tx.oplataKv.aggregate({ where: { contractNo: fromCn }, _sum: { paymentAmount: true } });
+      const paidNow = Number(agg._sum.paymentAmount || 0);
+      if (paidNow < input.amount - 0.01) {
+        throw new BadRequestException(
+          `Manba qoldig'i yetarli emas (qayta tekshiruv): ${paidNow.toFixed(2)} < ${input.amount.toFixed(2)}`,
+        );
+      }
       // 1) Source qator (manfiy summa)
       const sourceRow = await tx.oplataKv.create({
         data: {
