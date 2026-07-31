@@ -2291,6 +2291,9 @@ export class OplataKvService {
           // Date asc tartibida — running balance to'g'ri ishlashi uchun
           items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+          // FIX (B#5): shartnoma qatorlarini ATOMIK yangilaymiz — updatelarni yig'ib,
+          // bitta $transaction'da bajaramiz (yarim yozilish bo'lmaydi, running-balance izchil).
+          const updates: any[] = [];
           for (const item of items) {
             const amount = Number(item.paymentAmount);
 
@@ -2299,15 +2302,14 @@ export class OplataKvService {
             // lekin Оплата ustuniga "Общий" (GENERAL) qo'yiladi. Running totals'ga
             // qo'shilmaydi.
             if (item.sourceTxId && schetchikSourceIds.has(item.sourceTxId)) {
-              await this.prisma.oplataKv.update({
+              updates.push(this.prisma.oplataKv.update({
                 where: { id: item.id },
                 data: {
                   firstInstallment: null,
                   monthlyAmount:    null,
                   paymentCategory:  'GENERAL' as OplataKvCategory,
                 },
-              });
-              filled++;
+              }));
               continue; // running totals'ga qo'shmaymiz
             }
 
@@ -2373,16 +2375,18 @@ export class OplataKvService {
               category = absMonthly > absFirst ? 'MONTHLY' : 'FIRST';
             }
 
-            await this.prisma.oplataKv.update({
+            updates.push(this.prisma.oplataKv.update({
               where: { id: item.id },
               data: {
                 firstInstallment: firstInstallment !== 0 ? new Prisma.Decimal(firstInstallment) : null,
                 monthlyAmount:    monthlyAmount    !== 0 ? new Prisma.Decimal(monthlyAmount)    : null,
                 paymentCategory:  category as OplataKvCategory,
               },
-            });
-            filled++;
+            }));
           }
+          // FIX (B#5): barcha yangilanishlar bitta transactionда — atomik (xatoda rollback)
+          if (updates.length) await this.prisma.$transaction(updates);
+          filled += updates.length;
         } catch (e: any) {
           this.log.warn(`splitInstallments ${contractNo} xato: ${e?.message}`);
           errors += items.length;
