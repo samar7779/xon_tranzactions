@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 import { PrismaModule } from './common/prisma/prisma.module';
 import { CryptoModule } from './common/crypto/crypto.module';
@@ -38,7 +39,9 @@ import { CorrectionBotModule } from './correction-bot/correction-bot.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ScheduleModule.forRoot(),
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    // FIX (A1): brute-force/DoS himoyasi — global limit (mijoz IP bo'yicha, trust proxy bilan).
+    // Limit generous (jonli admin ishlatishni buzmasin), lekin brute-force (mingga) bloklanadi.
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 300 }]),
 
     PrismaModule,
     CryptoModule,
@@ -75,6 +78,11 @@ import { CorrectionBotModule } from './correction-bot/correction-bot.module';
     DeveloperApiModule,
     ChekModule,
     CorrectionModule,
+  ],
+  providers: [
+    // FIX (A1): ThrottlerGuard'ni GLOBAL bog'laymiz — avval ThrottlerModule sozlangan-u,
+    // APP_GUARD sifatida ulanmagan edi (throttling o'lik edi). Endi barcha route himoyalangan.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

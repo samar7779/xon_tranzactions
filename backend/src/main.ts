@@ -20,6 +20,11 @@ async function bootstrap() {
     verify: (req: any, _res, buf) => { req.rawBody = buf; },
   }));
   app.use(urlencoded({ limit: '100mb', extended: true }));
+
+  // FIX (A1): nginx reverse-proxy orqasida — X-Forwarded-For'ni faqat ishonchli proxy'dan olamiz
+  // (req.ip to'g'ri bo'lsin; IP allowlist/audit soxtalashtirilmasin).
+  app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
+
   const config = app.get(ConfigService);
   const port = config.get<number>('PORT', 3001);
   const swaggerPath = config.get<string>('SWAGGER_PATH', 'docs');
@@ -34,26 +39,31 @@ async function bootstrap() {
     }),
   );
 
+  // FIX (A1): origin '*' bilan credentials:true xavfli (har qanday origin + cookie).
+  // '*' bo'lsa credentials'ni o'chiramiz; prod'da aniq domen (CORS_ORIGIN) qo'yiladi.
   app.enableCors({
     origin: corsOrigin === '*' ? true : corsOrigin.split(',').map((s) => s.trim()),
-    credentials: true,
+    credentials: corsOrigin !== '*',
   });
 
   app.setGlobalPrefix('api', { exclude: ['/'] });
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Xon Tranzaksiyalar API')
-    .setDescription('Xon Saroy — banklar tranzaksiyalari monitoring tizimi')
-    .setVersion('0.1.1')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup(swaggerPath, app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // FIX (A1): Swagger'ni FAQAT non-production'da ochamiz — prod'da API sxemasi anonim ko'rinmasin.
+  if (config.get<string>('NODE_ENV') !== 'production') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Xon Tranzaksiyalar API')
+      .setDescription('Xon Saroy — banklar tranzaksiyalari monitoring tizimi')
+      .setVersion('0.1.1')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup(swaggerPath, app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+    Logger.log(`📚 Swagger: http://localhost:${port}/${swaggerPath}`, 'Bootstrap');
+  }
 
   await app.listen(port);
   Logger.log(`🚀 Backend: http://localhost:${port}`, 'Bootstrap');
-  Logger.log(`📚 Swagger: http://localhost:${port}/${swaggerPath}`, 'Bootstrap');
 }
 bootstrap();
