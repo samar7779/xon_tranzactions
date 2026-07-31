@@ -113,6 +113,9 @@ export class CrmContractCacheService {
     const variants = contractVariants(key).slice(0, 16); // xavfsizlik chegarasi
     const cached = await this.prisma.crmContract.findFirst({
       where: { contractNumber: { in: variants } },
+      // FIX (B#9): found=true'ni prioritetlashtir — bir kalitga found=false + found=true
+      // qatorlar bo'lsa, tasdiqlangani tanlanadi (CRM'da bor shartnoma XATO'да qotmasin).
+      orderBy: [{ found: 'desc' }, { lastVerifiedAt: 'desc' }],
     });
 
     if (cached) {
@@ -366,8 +369,11 @@ export class CrmContractCacheService {
         const detail: any = (res as any)?.detail;
         const oid = detail?.id ?? detail?.order_id;
         if (detail && oid != null) {
+          // FIX (B#8): crmOrderId'ni FAQAT so'ralgan qatorga yozamiz — variantlarga EMAS.
+          // Variantlar (I/1, O/0) boshqa REAL shartnoma bo'lishi mumkin (118MSOP26LA vs 118MS0P26LA)
+          // — ularning order_id'sini noto'g'ri ustidan yozib yubormaymiz.
           await this.prisma.crmContract.updateMany({
-            where: { contractNumber: { in: variants } },
+            where: { contractNumber },
             data: { crmOrderId: String(oid).slice(0, 64) },
           });
           return true;
