@@ -282,6 +282,7 @@ model XatoCorrectionRequest {
   @@index([status])
   @@index([txId])
   @@index([submittedAt])
+  @@index([oplataKvId]) // FIX (A6): badge/status so'rovlari (where oplataKvId in [...]) uchun indeks
   @@map("xato_correction_requests")
 }
 
