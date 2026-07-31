@@ -69,34 +69,50 @@ export class CrmService {
     for (const [k, v] of Object.entries(body)) {
       if (v != null) form.set(k, String(v));
     }
-    const ctrl = new AbortController();
-    const tm = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Authorization': this.auth(),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: form,
-        signal: ctrl.signal,
-      });
-      const text = await res.text();
-      if (!res.ok) {
-        this.log.warn(`XonSaroy ${url} -> ${res.status}: ${text.slice(0, 200)}`);
-        return { ok: false, status: res.status, error: text };
-      }
+    // FIX (A5): tranzitiv xato (tarmoq/timeout/5xx) uchun cheklangan retry + backoff.
+    // CRM chaqiruvlar (show/search/payment-history) idempotent (read) — retry xavfsiz.
+    const MAX_ATTEMPTS = 3;
+    let lastErr = 'Network error';
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const ctrl = new AbortController();
+      const tm = setTimeout(() => ctrl.abort(), timeoutMs);
       try {
-        return { ok: true, data: JSON.parse(text) };
-      } catch {
-        return { ok: false, status: 200, error: 'Invalid JSON', raw: text };
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': this.auth(),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: form,
+          signal: ctrl.signal,
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          // 5xx — tranzitiv (retry); 4xx — client xato (retry yo'q)
+          if (res.status >= 500 && attempt < MAX_ATTEMPTS) {
+            lastErr = `HTTP ${res.status}`;
+          } else {
+            this.log.warn(`XonSaroy ${url} -> ${res.status}: ${text.slice(0, 200)}`);
+            return { ok: false, status: res.status, error: text };
+          }
+        } else {
+          try {
+            return { ok: true, data: JSON.parse(text) };
+          } catch {
+            this.log.warn(`XonSaroy ${url} Invalid JSON: ${text.slice(0, 150)}`);
+            return { ok: false, status: 200, error: 'Invalid JSON', raw: text };
+          }
+        }
+      } catch (e: any) {
+        lastErr = e?.message || 'Network error';
+      } finally {
+        clearTimeout(tm);
       }
-    } catch (e: any) {
-      this.log.error(`XonSaroy ${url} error: ${e?.message}`);
-      return { ok: false, error: e?.message || 'Network error' };
-    } finally {
-      clearTimeout(tm);
+      // Faqat retry kerak bo'lganda (5xx / tarmoq xato) shu yerga yetamiz — backoff
+      if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 300 * attempt));
     }
+    this.log.error(`XonSaroy ${url} error (${MAX_ATTEMPTS} urinishdan keyin): ${lastErr}`);
+    return { ok: false, error: lastErr };
   }
 
   /**

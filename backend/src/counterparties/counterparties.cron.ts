@@ -16,15 +16,19 @@ export class CounterpartiesCron {
 
   @Cron('0 8-22 * * *', { name: 'counterparties-refresh', timeZone: 'Asia/Tashkent' })
   async refreshHourly() {
-    // Avval auto-refresh sozlamasini tekshirish — admin o'chirib qo'ygan bo'lishi mumkin
-    const enabled = await this.svc.isAutoRefreshEnabled();
-    if (!enabled) {
-      this.log.log('Cron: kontragentlarni yangilash O\'CHIRILGAN (settings) — skip');
-      return;
+    // FIX (A5): butun cron try/catch — sozlama o'qish yoki refreshAll xatosi unhandled rejection bo'lmasin.
+    try {
+      const enabled = await this.svc.isAutoRefreshEnabled();
+      if (!enabled) {
+        this.log.log('Cron: kontragentlarni yangilash O\'CHIRILGAN (settings) — skip');
+        return;
+      }
+      this.log.log('Cron: kontragentlarni yangilash boshlandi');
+      // refreshAll background'da — xatoni yutmay logga yozamiz
+      Promise.resolve(this.svc.refreshAll()).catch((e: any) => this.log.warn(`refreshAll xato: ${e?.message}`));
+    } catch (e: any) {
+      this.log.warn(`counterparties refreshHourly cron xato: ${e?.message}`);
     }
-    this.log.log('Cron: kontragentlarni yangilash boshlandi');
-    // refreshAll endi background'ga ishlaydi — log o'zi yozadi
-    this.svc.refreshAll();
   }
 
   /**

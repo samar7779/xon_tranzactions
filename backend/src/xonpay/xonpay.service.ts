@@ -38,6 +38,19 @@ function extractUuid(purpose: string | null | undefined): string | null {
   return m ? m[1].toUpperCase() : null;
 }
 
+// FIX (A5): ishonchsiz CRM ma'lumotidan BigInt — THROW qilmaydi (bitta noto'g'ri maydon
+// tufayli butun to'lov upsert'dan tushib qolmasin).
+function toBigId(v: any): bigint | null {
+  if (v == null) return null;
+  const s = String(v).replace(/[^\d-]/g, '');
+  if (!s || s === '-') return null;
+  try { return BigInt(s); } catch { return null; }
+}
+function toBigAmount(v: any): bigint {
+  const n = Number(String(v ?? 0).replace(/[\s,]/g, ''));
+  return isFinite(n) ? BigInt(Math.round(n)) : BigInt(0);
+}
+
 function getRu(obj: any, fallback = ''): string {
   if (!obj) return fallback;
   if (typeof obj === 'string') return obj;
@@ -487,11 +500,11 @@ export class XonpayService implements OnModuleInit {
             const data = {
               externalId,
               xonpayUuid,
-              crmId: p.id ? BigInt(p.id) : null,
+              crmId: toBigId(p.id),
               crmUuid: p.uuid || null,
-              orderId: p.order_id ? BigInt(p.order_id) : null,
+              orderId: toBigId(p.order_id),
               contract: p.contract || null,
-              amount: BigInt(p.amount || 0),
+              amount: toBigAmount(p.amount),
               datePaid: parseDateOnly(p.date_paid),
               type: getRu(p.type) || null,
               category: getRu(p.category) || null,
