@@ -537,7 +537,9 @@ export class SyncService implements OnModuleInit {
         // Bu kunni 'muvaffaqiyatli olingan' deb belgilaymiz — change detection
         // faqat shu kunlardagi DB yozuvlarni tekshiradi (xato bo'lmagan)
         const parsedDay = this.parseDdate(dateStr);
-        if (parsedDay) fetchedDayStarts.push(parsedDay);
+        // FIX (B#1): kunni "olindi" deb faqat KAMIDA 1 yozuv kelganda belgilaymiz.
+        // Bank bo'sh javob bersa (200 + bo'sh content = nuqson) — o'sha kun o'chirishga ruxsat bermaydi.
+        if (parsedDay && dayItems.length > 0) fetchedDayStarts.push(parsedDay);
         // i=0 (bugungi kun) saldo_out — eng oxirgi qoldiq (backfill'da qoldiqqa tegmaymiz)
         if (!isBackfill && i === 0 && daySaldoOut != null) {
           latestSaldoOut = Number(daySaldoOut);
@@ -897,6 +899,10 @@ export class SyncService implements OnModuleInit {
     const sortedDays = [...fetchedDays].sort((a, b) => a.getTime() - b.getTime());
     const minDay = new Date(sortedDays[0]); minDay.setHours(0, 0, 0, 0);
     const maxDay = new Date(sortedDays[sortedDays.length - 1]); maxDay.setHours(23, 59, 59, 999);
+    // FIX (B#1): faqat HAQIQATAN yozuv kelgan kunlarni o'chirishga ruxsat beramiz.
+    // Oraliq ichida bo'sh javob bergan kun bo'lsa — o'sha kun DB yozuvlari o'chmaydi.
+    const dayKey = (d: Date) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+    const fetchedDayKeys = new Set(fetchedDays.map(dayKey));
 
     // Bank javobini general_id va b2_id bo'yicha index qilamiz
     const bankByGeneralId = new Map<string, KbDoc1CItem>();
@@ -923,6 +929,8 @@ export class SyncService implements OnModuleInit {
     let editedCount = 0;
 
     for (const tx of dbTxs) {
+      // FIX (B#1): tranzaksiya kuni haqiqatan yozuv kelgan (bo'sh emas) kun bo'lmasa — tegmaymiz.
+      if (!fetchedDayKeys.has(dayKey(tx.txnDate))) continue;
       // Bank javobida general_id yoki b2_id orqali topish
       const ext = tx.externalId;
       // Composite ID'dan general_id'ni ajratib olish (format: {gen_id}_{num}_{ddate}_..._{sign})
@@ -1238,9 +1246,11 @@ export class SyncService implements OnModuleInit {
             date: ds,
             useProxy: cred.useProxy === true,
           });
-          fetchedItems.push(...(result?.content || []));
+          const content = result?.content || [];
+          fetchedItems.push(...content);
           const parsed = this.parseDdate(ds);
-          if (parsed) fetchedDays.push(parsed);
+          // FIX (B#1): bo'sh javob (bank nuqsoni) o'chirishga ruxsat bermaydi — kunni faqat yozuv kelganda qo'shamiz.
+          if (parsed && content.length > 0) fetchedDays.push(parsed);
         } catch (e: any) {
           this.logger.warn(`manualCheck getDoc1C xato (${acc.accountNo} · ${ds}): ${e?.message}`);
         }
