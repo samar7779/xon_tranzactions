@@ -21,7 +21,7 @@ export class ImportController {
 
   @Post('transactions')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 30 * 1024 * 1024 } })) // FIX (A4): 30MB — OOM/zip-bomb oldini oladi
   @ApiOperation({ summary: "Excel'dan tranzaksiyalarni qo'lda import qilish (rus sarlavhalar)" })
   async importTransactions(
     @UploadedFile() file: any,
@@ -33,7 +33,7 @@ export class ImportController {
 
   @Post('aloqa-bank')
   @RequirePermissions(PERMISSIONS.SYNC_RUN)
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 30 * 1024 * 1024 } })) // FIX (A4): 30MB — OOM/zip-bomb oldini oladi
   @ApiOperation({ summary: "Aloqa Bank Excel format (10 ustun, shartnoma yo'q) — read-only" })
   async importAloqaBank(
     @UploadedFile() file: any,

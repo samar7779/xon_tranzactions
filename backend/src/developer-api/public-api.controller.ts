@@ -475,6 +475,7 @@ export class PublicApiController {
   // bitta joydan beradi. Scope kerak emas — kalit faol bo'lishi yetarli.
 
   @Get('_meta/all')
+  @RequireApiScopes(API_SCOPES.ACCOUNTS_READ) // FIX (A4): bank hisoblari qaytadi — scope talab qilinadi
   @ApiOperation({ summary: 'Barcha meta-ma\'lumotlar bitta javobda (UI filter qurish uchun)' })
   async metaAll() {
     const [banks, accounts, categories, subcategories] = await Promise.all([
@@ -534,6 +535,7 @@ export class PublicApiController {
   }
 
   @Get('_meta/accounts')
+  @RequireApiScopes(API_SCOPES.ACCOUNTS_READ) // FIX (A4): bank hisoblari — scope talab qilinadi
   @ApiOperation({ summary: 'Barcha hisob raqamlar (filter uchun, accounts ga teng)' })
   async metaAccounts() {
     const items = await this.prisma.bankAccount.findMany({

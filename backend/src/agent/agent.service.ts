@@ -291,7 +291,10 @@ export class AgentService {
       .map((k) => `${k}=${params[k]}`);
     const secret = crypto.createHash('sha256').update(token).digest();
     const computed = crypto.createHmac('sha256', secret).update(pairs.join('\n')).digest('hex');
-    if (computed !== hash) return null;
+    // FIX (A4): timing-safe solishtirish — timing attack orqali to'g'ri hash topib olinmasin.
+    const computedBuf = Buffer.from(computed, 'hex');
+    const hashBuf = Buffer.from(hash, 'hex');
+    if (computedBuf.length !== hashBuf.length || !crypto.timingSafeEqual(computedBuf, hashBuf)) return null;
     const authDate = Number(params.auth_date);
     if (authDate && Date.now() / 1000 - authDate > 86400) return null; // 1 kundan eski emas
     const name = [params.first_name, params.last_name].filter(Boolean).join(' ').trim() || String(params.username || params.id);
