@@ -83,7 +83,8 @@ export class ReconcileService {
     const login = (cred.loginPrefix || '') + cred.loginName;
 
     // ── Bankdan kunma-kun: ochilish/yopilish saldosi + oborotlar ──
-    let saldoInTiyin: number | null = null;   // birinchi muvaffaqiyatli kun
+    let saldoInTiyin: number | null = null;   // davrning BIRINCHI kuni ochilish saldosi
+    let firstDayOk = false;                   // FIX (B#10): 1-kun muvaffaqiyatli olindimi (opening ishonchli)
     let saldoOutTiyin: number | null = null;  // oxirgi muvaffaqiyatli kun
     let totalDebitTiyin = 0;
     let totalCreditTiyin = 0;
@@ -107,8 +108,11 @@ export class ReconcileService {
           date: dateStr,
           useProxy: cred.useProxy === true,
         });
-        if (saldoInTiyin === null && result?.saldo_in != null) {
+        // FIX (B#10): opening'ni FAQAT davrning birinchi kunidan olamiz. Avval "birinchi
+        // muvaffaqiyatli kun" edi — 1-kun xato bo'lsa keyingi kun ochilishini olib formula buzilardi.
+        if (i === 0 && result?.saldo_in != null) {
           saldoInTiyin = Number(result.saldo_in);
+          firstDayOk = true;
         }
         if (result?.saldo_out != null) saldoOutTiyin = Number(result.saldo_out);
         const dayCredit = Number(result?.total_credit || 0);
@@ -225,9 +229,12 @@ export class ReconcileService {
     const computedClosing = bankOpening + dbInflow - dbOutflow;
     const formulaDiff = bankClosing - computedClosing;
 
+    // FIX (B#10): opening ishonchli bo'lmasa (1-kun xato) formula tekshiruvini 'ok' deb hisoblamaymiz.
+    const formulaReliable = firstDayOk;
     const ok =
       Math.abs(creditDiff) < EPSILON &&
       Math.abs(debitDiff) < EPSILON &&
+      formulaReliable &&
       Math.abs(formulaDiff) < EPSILON;
 
     return {
@@ -258,6 +265,7 @@ export class ReconcileService {
         debit: debitDiff,
         formula: formulaDiff,
         computedClosing,
+        formulaReliable, // FIX (B#10): opening ishonchli (1-kun olindi)mi
       },
       status: ok ? 'ok' : 'mismatch',
       dailyBreakdown,
