@@ -1611,7 +1611,12 @@ function BackfillDialog({ open, onOpenChange, banks }: { open: boolean; onOpenCh
     queryKey: ['backfill-status', progress?.startedAt],
     queryFn: () => api.get<{ items: any[] }>(`/sync/backfill/status?since=${encodeURIComponent(progress!.startedAt)}`),
     enabled: !!progress,
-    refetchInterval: 2000,
+    // FIX (A7): jarayon tugagach 2s pollingni to'xtatamiz — keraksiz so'rov yubormaymiz.
+    refetchInterval: (query) => {
+      const items = ((query.state.data as any)?.items || []) as any[];
+      const done = items.filter((l: any) => l.status !== 'RUNNING').length;
+      return progress && done >= progress.total ? false : 2000;
+    },
   });
   const logs = statusData?.items || [];
   const doneCount = logs.filter((l: any) => l.status !== 'RUNNING').length;
