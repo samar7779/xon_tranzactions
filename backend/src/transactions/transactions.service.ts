@@ -200,28 +200,37 @@ export class TransactionsService {
    * __xato_requested marker bo'lsa, verified contractNumber'larni topib OR shartiga qo'shamiz.
    * (buildWhere'da JOIN qilolmaymiz, shuning uchun bu yerda alohida ishlaymiz)
    */
-  private async applyXatoFilter(where: any): Promise<any> {
-    if (!where.__xato_requested) return where;
+  private async applyContractStatusFilters(where: any): Promise<any> {
+    // FIX (B#3): xato/bekor shartlarini mavjud where.OR (qidiruv/hisob) ga PUSH
+    // qilmaymiz — aks holda "X hisob YOKI butun bazadagi xato" bo'lib ketardi.
+    // To'g'ri: (mavjud filtrlar) AND (xato [OR bekor]).
+    const wantXato = !!where.__xato_requested;
+    const wantBekor = !!where.__bekor_requested;
     delete where.__xato_requested;
-    // Verified shartnomalar ro'yxati
-    const verified = await this.prisma.crmContract.findMany({
-      where: { found: true },
-      select: { contractNumber: true },
-    });
-    const verifiedList = verified.map((c) => c.contractNumber);
-    // Xato shart: contractNumber bor + verified ro'yxatda yo'q
-    const xatoCond = {
-      AND: [{ contractNumber: { not: null } }, { contractNumber: { notIn: verifiedList } }],
-    };
-    // Mavjud OR'ga qo'shamiz
-    if (where.OR) {
-      where.OR.push(xatoCond);
-    } else if (where.AND) {
-      // AND ichida OR bo'lishi mumkin — kerak bo'lsa qayta yig'amiz
-      where.OR = [xatoCond];
-    } else {
-      where.OR = [xatoCond];
+    delete where.__bekor_requested;
+    if (!wantXato && !wantBekor) return where;
+
+    const orGroup: any[] = [];
+    if (wantXato) {
+      const verified = await this.prisma.crmContract.findMany({
+        where: { found: true },
+        select: { contractNumber: true },
+      });
+      const verifiedList = verified.map((c) => c.contractNumber);
+      // Xato: contractNumber bor + verified ro'yxatda yo'q
+      orGroup.push({ AND: [{ contractNumber: { not: null } }, { contractNumber: { notIn: verifiedList } }] });
     }
+    if (wantBekor) {
+      const nums = await this.cancelledContractNumbers();
+      // nums bo'sh bo'lsa — { in: [] } hech narsani topmaydi (to'g'ri: bekor yo'q)
+      orGroup.push({ contractNumber: { in: nums } });
+    }
+    // Bittasi bo'lsa o'zi, ikkovi bo'lsa OR (xato YOKI bekor)
+    const statusCond = orGroup.length === 1 ? orGroup[0] : { OR: orGroup };
+    // Mavjud where'ni AND bilan birlashtiramiz — OR/qidiruvni buzmaydi.
+    where.AND = where.AND
+      ? [...(Array.isArray(where.AND) ? where.AND : [where.AND]), statusCond]
+      : [statusCond];
     return where;
   }
 
@@ -240,26 +249,10 @@ export class TransactionsService {
     return rows.map((r) => r.contractNumber);
   }
 
-  /**
-   * __bekor_requested marker bo'lsa — CRM'da cancelled status'li shartnoma
-   * raqamlarini topib OR shartiga qo'shamiz (buildWhere'da JOIN qilolmaymiz).
-   */
-  private async applyBekorFilter(where: any): Promise<any> {
-    if (!where.__bekor_requested) return where;
-    delete where.__bekor_requested;
-    const nums = await this.cancelledContractNumbers();
-    // nums bo'sh bo'lsa — { in: [] } hech narsani topmaydi (to'g'ri: bekor yo'q)
-    const bekorCond = { contractNumber: { in: nums } };
-    if (where.OR) where.OR.push(bekorCond);
-    else where.OR = [bekorCond];
-    return where;
-  }
-
   async list(query: ListTransactionsDto) {
     const { page: rawPage = 1, perPage = 50 } = query;
     let where = this.buildWhere(query);
-    where = await this.applyXatoFilter(where);
-    where = await this.applyBekorFilter(where);
+    where = await this.applyContractStatusFilters(where);
 
     // Page'ni katta sonlar uchun cheklash (xavfsizlik) — frontend stale state
     // page=19859 yuborsa OFFSET million bo'lib ketmasligi uchun.
@@ -440,8 +433,7 @@ export class TransactionsService {
     const queryExcludingSelf: any = { ...query };
     if (selfParam) delete queryExcludingSelf[selfParam];
     let where = this.buildWhere(queryExcludingSelf);
-    where = await this.applyXatoFilter(where);
-    where = await this.applyBekorFilter(where);
+    where = await this.applyContractStatusFilters(where);
 
     switch (column) {
       case 'bank': {
@@ -1222,8 +1214,7 @@ export class TransactionsService {
       else where.categoryId = '__nonexistent__';
     }
 
-    where = await this.applyXatoFilter(where);
-    where = await this.applyBekorFilter(where);
+    where = await this.applyContractStatusFilters(where);
 
     const [grouped, total, byBank] = await Promise.all([
       this.prisma.transaction.groupBy({
