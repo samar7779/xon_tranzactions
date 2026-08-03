@@ -251,7 +251,7 @@ export class CategorizationService {
    * (Butun jadval emas — targetlangan to'plam; limit bilan cheklangan.)
    */
   async diagnoseCategorize(opts: {
-    accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number; actorId?: string;
+    accountNos?: string[]; accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number; actorId?: string;
   }): Promise<{
     ok: boolean; accountFound?: boolean; total: number; categorized: number; notCategorized: number;
     rows: Array<{
@@ -262,8 +262,14 @@ export class CategorizationService {
   }> {
     const where: any = { categoryId: null }; // faqat kategoriyasizlar (nega qo'yilmaganini ko'rish uchun)
 
-    if (opts.accountNo?.trim()) {
-      const accs = await this.prisma.bankAccount.findMany({ where: { accountNo: opts.accountNo.trim() }, select: { id: true } });
+    // Hisob raqamlar — ko'p tanlov (accountNos) yoki bitta (accountNo, backward compat)
+    const accNos = Array.from(new Set([
+      ...(opts.accountNos || []),
+      ...(opts.accountNo ? [opts.accountNo] : []),
+    ].map((s) => String(s || '').trim()).filter(Boolean)));
+
+    if (accNos.length > 0) {
+      const accs = await this.prisma.bankAccount.findMany({ where: { accountNo: { in: accNos } }, select: { id: true } });
       if (accs.length === 0) return { ok: true, accountFound: false, total: 0, categorized: 0, notCategorized: 0, rows: [] };
       where.accountId = { in: accs.map((a) => a.id) };
     }

@@ -7319,7 +7319,7 @@ type DiagResult = {
 };
 function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const qc = useQueryClient();
-  const [accountNo, setAccountNo] = useState('');
+  const [accountNos, setAccountNos] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [onlyNoRule, setOnlyNoRule] = useState(false);
@@ -7343,14 +7343,18 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
     );
   }, [accounts, accSearch]);
 
-  const selectedAcc = useMemo(
-    () => (accounts?.items || []).find((a: any) => a.accountNo === accountNo),
-    [accounts, accountNo],
+  const firstSelectedAcc = useMemo(
+    () => (accounts?.items || []).find((a: any) => a.accountNo === accountNos[0]),
+    [accounts, accountNos],
   );
+  const toggleAcc = (no: string) => {
+    setAccountNos((prev) => (prev.includes(no) ? prev.filter((x) => x !== no) : [...prev, no]));
+    setResult(null);
+  };
 
   const mut = useMutation({
     mutationFn: () => api.post<DiagResult>('/categorization/diagnose', {
-      accountNo: accountNo.trim() || undefined,
+      accountNos: accountNos.length ? accountNos : undefined,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
       limit: 2000,
@@ -7365,7 +7369,7 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
   });
 
   useEffect(() => {
-    if (!open) setTimeout(() => { setAccountNo(''); setDateFrom(''); setDateTo(''); setOnlyNoRule(false); setResult(null); setAccOpen(false); setAccSearch(''); }, 300);
+    if (!open) setTimeout(() => { setAccountNos([]); setDateFrom(''); setDateTo(''); setOnlyNoRule(false); setResult(null); setAccOpen(false); setAccSearch(''); }, 300);
   }, [open]);
 
   const rows = useMemo(() => {
@@ -7393,18 +7397,31 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
         {/* Filtrlar */}
         <div className="p-6 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
           <div className="sm:col-span-3 relative">
-            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Hisob raqam</label>
+            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Hisob raqam <span className="text-slate-400">(bir nechtasini tanlash mumkin)</span></label>
             <button
               type="button"
               onClick={() => setAccOpen((v) => !v)}
-              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px] flex items-center gap-2 text-left"
+              className="mt-1 w-full min-h-11 px-3 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px] flex items-center gap-2 text-left"
             >
               <Landmark className="h-4 w-4 text-rose-500 shrink-0" />
-              <span className={cn('flex-1 truncate', !accountNo && 'text-slate-400 dark:text-slate-500')}>
-                {accountNo
-                  ? <><span className="font-mono">{accountNo}</span>{selectedAcc?.ownerName ? <span className="text-slate-500 dark:text-slate-400"> — {selectedAcc.ownerName}</span> : null}</>
-                  : 'Barcha hisoblar'}
-              </span>
+              {accountNos.length === 0 ? (
+                <span className="flex-1 truncate text-slate-400 dark:text-slate-500">Barcha hisoblar</span>
+              ) : accountNos.length === 1 ? (
+                <span className="flex-1 truncate">
+                  <span className="font-mono">{accountNos[0]}</span>
+                  {firstSelectedAcc?.ownerName ? <span className="text-slate-500 dark:text-slate-400"> — {firstSelectedAcc.ownerName}</span> : null}
+                </span>
+              ) : (
+                <span className="flex-1 flex flex-wrap gap-1">
+                  {accountNos.slice(0, 3).map((no) => (
+                    <span key={no} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 text-[11px] font-mono">
+                      {no}
+                      <XCircle className="h-3 w-3 cursor-pointer hover:text-rose-900 dark:hover:text-rose-100" onClick={(e) => { e.stopPropagation(); toggleAcc(no); }} />
+                    </span>
+                  ))}
+                  {accountNos.length > 3 && <span className="text-[11px] text-slate-500 dark:text-slate-400 self-center">+{accountNos.length - 3} ta</span>}
+                </span>
+              )}
               <ChevronDown className={cn('h-4 w-4 text-slate-400 shrink-0 transition-transform', accOpen && 'rotate-180')} />
             </button>
             {accOpen && (
@@ -7424,33 +7441,42 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
                       />
                     </div>
                   </div>
-                  <div className="max-h-64 overflow-auto py-1">
+                  <div className="max-h-56 overflow-auto py-1">
                     <button
                       type="button"
-                      onClick={() => { setAccountNo(''); setResult(null); setAccOpen(false); setAccSearch(''); }}
-                      className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2', !accountNo && 'bg-rose-50/60 dark:bg-rose-950/20')}
+                      onClick={() => { setAccountNos([]); setResult(null); }}
+                      className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2', accountNos.length === 0 && 'bg-rose-50/60 dark:bg-rose-950/20')}
                     >
                       <Landmark className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span className="text-slate-600 dark:text-slate-300">Barcha hisoblar</span>
-                      {!accountNo && <CheckCircle2 className="h-4 w-4 text-rose-500 ml-auto shrink-0" />}
+                      <span className="text-slate-600 dark:text-slate-300">Barcha hisoblar (tanlovni tozalash)</span>
+                      {accountNos.length === 0 && <CheckCircle2 className="h-4 w-4 text-rose-500 ml-auto shrink-0" />}
                     </button>
-                    {filteredAccounts.map((a: any) => (
-                      <button
-                        key={a.id}
-                        type="button"
-                        onClick={() => { setAccountNo(a.accountNo); setResult(null); setAccOpen(false); setAccSearch(''); }}
-                        className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2', accountNo === a.accountNo && 'bg-rose-50/60 dark:bg-rose-950/20')}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="font-mono text-slate-700 dark:text-slate-200 truncate">{a.accountNo}</div>
-                          {a.ownerName && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{a.ownerName}</div>}
-                        </div>
-                        {accountNo === a.accountNo && <CheckCircle2 className="h-4 w-4 text-rose-500 shrink-0" />}
-                      </button>
-                    ))}
+                    {filteredAccounts.map((a: any) => {
+                      const checked = accountNos.includes(a.accountNo);
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => toggleAcc(a.accountNo)}
+                          className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2.5', checked && 'bg-rose-50/60 dark:bg-rose-950/20')}
+                        >
+                          <span className={cn('h-4 w-4 rounded-[5px] shrink-0 grid place-items-center ring-1 transition-colors', checked ? 'bg-rose-600 ring-rose-600 text-white' : 'ring-slate-300 dark:ring-slate-600')}>
+                            {checked && <Check className="h-3 w-3" />}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-mono text-slate-700 dark:text-slate-200 truncate">{a.accountNo}</div>
+                            {a.ownerName && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{a.ownerName}</div>}
+                          </div>
+                        </button>
+                      );
+                    })}
                     {filteredAccounts.length === 0 && (
                       <div className="px-3 py-6 text-center text-[12px] text-slate-400">Hisob topilmadi</div>
                     )}
+                  </div>
+                  <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100 dark:border-slate-800 text-[12px]">
+                    <span className="text-slate-500 dark:text-slate-400">{accountNos.length > 0 ? `${accountNos.length} ta tanlandi` : 'Barcha hisoblar'}</span>
+                    <button type="button" onClick={() => setAccOpen(false)} className="px-3 py-1 rounded-md bg-rose-600 hover:bg-rose-700 text-white font-medium">Tayyor</button>
                   </div>
                 </div>
               </>

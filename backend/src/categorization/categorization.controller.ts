@@ -150,10 +150,10 @@ export class CategorizationController {
       "Kategoriyasiz (categoryId=null) tranzaksiyalarni FILTRLAB kategoriyalash qoidalarini ishga tushiradi: " +
       "qoidaga mos kelganlar kategoriyalanadi (DB'ga yoziladi, run-all kabi), mos kelmaganlar bo'sh qoladi. " +
       "HAR BIR to'lov uchun natija yoki sababni ('qoida topilmadi' va h.k.) qaytaradi. " +
-      "accountNo — bitta hisob raqam; dateFrom/dateTo — YYYY-MM-DD (Toshkent vaqti); limit — max 2000 (default 500).",
+      "accountNos — bir yoki bir nechta hisob raqam (bo'sh = barchasi); dateFrom/dateTo — YYYY-MM-DD (Toshkent vaqti); limit — max 2000 (default 500).",
   })
   diagnose(
-    @Body() body: { accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number },
+    @Body() body: { accountNos?: string[]; accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number },
     @CurrentUser('id') userId: string,
   ) {
     return this.svc.diagnoseCategorize({ ...body, actorId: userId });
