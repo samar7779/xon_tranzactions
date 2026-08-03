@@ -9,7 +9,7 @@ import {
   Columns3, CalendarDays, Filter as FilterIcon, Hash, Link2,
   Download, Database, FileText, FileJson, FileCode2, FileSpreadsheet,
   KeyRound, Lock, Server, Send, Building2,
-  Hammer, History, Search, Eye, ChevronLeft, RefreshCw, Clock, X,
+  Hammer, History, Eye, ChevronLeft, RefreshCw, Clock, X,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -1225,10 +1225,11 @@ function ShmitdTab({ canManage }: { canManage: boolean }) {
 
   // History
   const [hPage, setHPage] = useState(1);
-  const [hDate, setHDate] = useState('');
+  const [hFrom, setHFrom] = useState('');
+  const [hTo, setHTo] = useState('');
   const { data: hist, isFetching } = useQuery({
-    queryKey: ['shmitd-history', hPage, hDate],
-    queryFn: () => api.get<{ ok: boolean; total: number; rows: ShmitdRow[] }>(`/shmitd/history?page=${hPage}&perPage=15${hDate ? `&date=${encodeURIComponent(hDate)}` : ''}`),
+    queryKey: ['shmitd-history', hPage, hFrom, hTo],
+    queryFn: () => api.get<{ ok: boolean; total: number; rows: ShmitdRow[] }>(`/shmitd/history?page=${hPage}&perPage=15${hFrom ? `&from=${hFrom}` : ''}${hTo ? `&to=${hTo}` : ''}`),
   });
   const rows = hist?.rows || [];
   const totalPages = Math.max(1, Math.ceil((hist?.total || 0) / 15));
@@ -1342,12 +1343,15 @@ function ShmitdTab({ canManage }: { canManage: boolean }) {
         </button>
         {showHistory && (
           <CardContent className="px-5 pb-5 pt-1 space-y-3 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1 max-w-xs">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input value={hDate} onChange={(e) => { setHDate(e.target.value); setHPage(1); }} placeholder="Sana bo'yicha qidirish (masalan 01.08)" className="pl-8 h-9" />
-              </div>
-              <button onClick={() => qc.invalidateQueries({ queryKey: ['shmitd-history'] })} title="Yangilash" className="h-9 w-9 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} /></button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1"><CalendarDays className="h-3.5 w-3.5" /> Sana:</span>
+              <input type="date" value={hFrom} onChange={(e) => { setHFrom(e.target.value); setHPage(1); }} title="Boshlanish sanasi" className="h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] outline-none focus:ring-2 focus:ring-amber-400" />
+              <span className="text-slate-400 text-[12px]">—</span>
+              <input type="date" value={hTo} onChange={(e) => { setHTo(e.target.value); setHPage(1); }} title="Tugash sanasi" className="h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[12.5px] outline-none focus:ring-2 focus:ring-amber-400" />
+              {(hFrom || hTo) && (
+                <button onClick={() => { setHFrom(''); setHTo(''); setHPage(1); }} title="Tozalash" className="h-9 px-2.5 rounded-lg text-[12px] text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 inline-flex items-center gap-1"><X className="h-3.5 w-3.5" /> tozalash</button>
+              )}
+              <button onClick={() => qc.invalidateQueries({ queryKey: ['shmitd-history'] })} title="Yangilash" className="h-9 w-9 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 ml-auto"><RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} /></button>
             </div>
 
             <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100 dark:ring-slate-800">

@@ -39,8 +39,11 @@ export class ShmitdController {
   @Get('history')
   @RequirePermissions(PERMISSIONS.EXPORT_VIEW)
   @ApiOperation({ summary: 'Jo\'natish tarixi (paginatsiya + sana qidiruv)' })
-  history(@Query('page') page?: string, @Query('perPage') perPage?: string, @Query('date') date?: string) {
-    return this.svc.history({ page: Number(page), perPage: Number(perPage), date });
+  history(
+    @Query('page') page?: string, @Query('perPage') perPage?: string,
+    @Query('from') from?: string, @Query('to') to?: string, @Query('date') date?: string,
+  ) {
+    return this.svc.history({ page: Number(page), perPage: Number(perPage), from, to, date });
   }
 
   @Get('history/:id/html')

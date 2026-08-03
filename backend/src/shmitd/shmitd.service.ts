@@ -123,6 +123,13 @@ export class ShmitdService {
     return `${dd}.${mm}.${d.getUTCFullYear()}`;
   }
 
+  /** "dd.MM.yyyy" → Date (UTC yarim tun) — range filtr uchun. */
+  private parseTarget(s: string): Date | null {
+    const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(String(s || '').trim());
+    if (!m) return null;
+    return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
+  }
+
   private num(v: any): number {
     if (v == null || String(v).trim() === '') return 0;
     const n = parseFloat(String(v).replace(',', '.'));
@@ -152,36 +159,56 @@ export class ShmitdService {
     if (!token || !groupId) return { ok: false, status: 'error', error: 'Bot token yoki guruh ID yo\'q' };
     const offset = Number(await this.settings.get(this.K_OFFSET) ?? -1);
     const target = this.targetDateStr(offset);
+    const targetAt = this.parseTarget(target);
     try {
       const all = await this.readSheet();
       const { headers, rows, yellow, red } = this.buildReport(all, target);
       if (rows.length === 0) {
         await this.tgText(token, groupId, `${target}\n\nНа данную дату результаты измерений отсутствуют. Замеры не проводились.`);
-        await this.prisma.shmitdLog.create({ data: { targetDate: target, totalCount: 0, yellowCount: 0, redCount: 0, status: 'empty', triggeredBy, groupId } });
+        await this.prisma.shmitdLog.create({ data: { targetDate: target, targetAt, totalCount: 0, yellowCount: 0, redCount: 0, status: 'empty', triggeredBy, groupId } });
         return { ok: true, status: 'empty', total: 0 };
       }
       const html = this.renderHtml(headers, rows, yellow, red, target);
       const fileName = `SHMITD_${target.replace(/\./g, '-')}.html`;
       await this.tgDocument(token, groupId, html, fileName, `Результаты испытаний молотком Шмидта — ${target}`);
       await this.prisma.shmitdLog.create({
-        data: { targetDate: target, totalCount: rows.length, yellowCount: yellow, redCount: red, status: 'sent', fileName, htmlContent: html.slice(0, 900_000), triggeredBy, groupId },
+        data: { targetDate: target, targetAt, totalCount: rows.length, yellowCount: yellow, redCount: red, status: 'sent', fileName, htmlContent: html.slice(0, 900_000), triggeredBy, groupId },
       });
       this.log.log(`SHMITD jo'natildi ${target}: ${rows.length} qator (${triggeredBy})`);
       return { ok: true, status: 'sent', total: rows.length, yellow, red };
     } catch (e: any) {
-      await this.prisma.shmitdLog.create({ data: { targetDate: target, status: 'error', error: String(e?.message || '').slice(0, 500), triggeredBy, groupId } }).catch(() => {});
+      await this.prisma.shmitdLog.create({ data: { targetDate: target, targetAt, status: 'error', error: String(e?.message || '').slice(0, 500), triggeredBy, groupId } }).catch(() => {});
       return { ok: false, status: 'error', error: e?.message };
     }
   }
 
   // ─── History ──────────────────────────────────────────────────────
-  async history(opts: { page?: number; perPage?: number; date?: string }) {
+  private backfilled = false;
+  /** targetAt bo'sh (eski) yozuvlarni targetDate (dd.MM.yyyy) dan to'ldiradi — bir marta. */
+  private async backfillTargetAt() {
+    if (this.backfilled) return;
+    this.backfilled = true;
+    try {
+      const nulls = await this.prisma.shmitdLog.findMany({ where: { targetAt: null }, select: { id: true, targetDate: true } });
+      for (const r of nulls) {
+        const d = this.parseTarget(r.targetDate);
+        if (d) await this.prisma.shmitdLog.update({ where: { id: r.id }, data: { targetAt: d } });
+      }
+    } catch { /* skip */ }
+  }
+
+  async history(opts: { page?: number; perPage?: number; from?: string; to?: string; date?: string }) {
+    await this.backfillTargetAt();
     const page = Math.max(1, Number(opts.page) || 1);
     const perPage = Math.min(50, Math.max(1, Number(opts.perPage) || 15));
     const where: any = {};
-    if (opts.date && opts.date.trim()) {
-      // sana qidiruv — targetDate (dd.MM.yyyy) contains yoki sentAt kuni
-      where.OR = [{ targetDate: { contains: opts.date.trim() } }];
+    if ((opts.from && opts.from.trim()) || (opts.to && opts.to.trim())) {
+      // Sanadan sanagacha (hisobot sanasi = targetAt)
+      where.targetAt = {};
+      if (opts.from?.trim()) { const d = new Date(`${opts.from.trim()}T00:00:00Z`); if (!isNaN(d.getTime())) where.targetAt.gte = d; }
+      if (opts.to?.trim()) { const d = new Date(`${opts.to.trim()}T23:59:59.999Z`); if (!isNaN(d.getTime())) where.targetAt.lte = d; }
+    } else if (opts.date && opts.date.trim()) {
+      where.targetDate = { contains: opts.date.trim() };
     }
     const [total, rows] = await Promise.all([
       this.prisma.shmitdLog.count({ where }),

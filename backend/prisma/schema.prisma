@@ -1160,18 +1160,19 @@ model ApiRequestLog {
 
 // SHMITD — Shmidt bolg'a natijalari hisoboti Telegram guruhga jo'natish tarixi
 model ShmitdLog {
-  id          String   @id @default(cuid())
-  targetDate  String   @map("target_date") @db.VarChar(20) // hisobot sanasi (dd.MM.yyyy)
-  sentAt      DateTime @default(now()) @map("sent_at") // qachon jo'natildi
-  totalCount  Int      @default(0) @map("total_count") // jami o'lchov
-  yellowCount Int      @default(0) @map("yellow_count") // sariq qatorlar
-  redCount    Int      @default(0) @map("red_count") // qizil qatorlar
-  status      String   @default("sent") @db.VarChar(20) // sent | empty | error
-  error       String?  @db.Text
-  fileName    String?  @map("file_name") @db.VarChar(255)
-  htmlContent String?  @map("html_content") @db.Text // jo'natilgan HTML (qayta ko'rish uchun)
-  triggeredBy String?  @map("triggered_by") @db.VarChar(120) // cron | manual:<email>
-  groupId     String?  @map("group_id") @db.VarChar(64)
+  id          String    @id @default(cuid())
+  targetDate  String    @map("target_date") @db.VarChar(20) // hisobot sanasi (dd.MM.yyyy)
+  targetAt    DateTime? @map("target_at") // hisobot sanasi (Date — range filtr uchun)
+  sentAt      DateTime  @default(now()) @map("sent_at") // qachon jo'natildi
+  totalCount  Int       @default(0) @map("total_count") // jami o'lchov
+  yellowCount Int       @default(0) @map("yellow_count") // sariq qatorlar
+  redCount    Int       @default(0) @map("red_count") // qizil qatorlar
+  status      String    @default("sent") @db.VarChar(20) // sent | empty | error
+  error       String?   @db.Text
+  fileName    String?   @map("file_name") @db.VarChar(255)
+  htmlContent String?   @map("html_content") @db.Text // jo'natilgan HTML (qayta ko'rish uchun)
+  triggeredBy String?   @map("triggered_by") @db.VarChar(120) // cron | manual:<email>
+  groupId     String?   @map("group_id") @db.VarChar(64)
 
   @@index([sentAt(sort: Desc)])
   @@index([targetDate])
