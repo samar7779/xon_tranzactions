@@ -311,6 +311,17 @@ export default function TransactionsPage() {
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const [diagnoseOpen, setDiagnoseOpen] = useState(false);
+  // Qo'shimcha amallar — parol (7779) bilan himoyalangan UI gate (server amallar baribir permission/parol talab qiladi)
+  const [extraUnlocked, setExtraUnlocked] = useState(false);
+  const [extraPwPrompt, setExtraPwPrompt] = useState(false);
+  const [extraPwValue, setExtraPwValue] = useState('');
+  const tryUnlockExtra = () => {
+    if (extraPwValue.trim() === '7779') {
+      setExtraUnlocked(true); setExtraToolsOpen(true); setExtraPwPrompt(false); setExtraPwValue('');
+    } else {
+      toast.error("Noto'g'ri parol"); setExtraPwValue('');
+    }
+  };
   const recategorizeAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
     onSuccess: (r: any) => {
@@ -741,7 +752,7 @@ export default function TransactionsPage() {
           </button>
 
           {/* AI Sparkles — bugungi statistika + qoshimcha amallar (KPI'dan tashqari, o'ng pastki burchak) */}
-          <DropdownMenu>
+          <DropdownMenu onOpenChange={(o) => { if (!o) { setExtraToolsOpen(false); setExtraUnlocked(false); setExtraPwPrompt(false); setExtraPwValue(''); } }}>
             <DropdownMenuTrigger asChild>
               <button
                 title={t('aiAssistantTitle')}
@@ -761,16 +772,50 @@ export default function TransactionsPage() {
                 <TodayStatsInline />
               </div>
               <div className="p-1">
-                {/* Qoshimcha amallar — collapsible, default'da yopiq */}
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); setExtraToolsOpen((v) => !v); }}
-                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400 transition-colors"
-                >
-                  <span className="flex-1 text-left">{t('extraTools')}</span>
-                  <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', extraToolsOpen && 'rotate-180')} />
-                </button>
-                {extraToolsOpen && (
+                {/* Qoshimcha amallar — parol (7779) bilan himoyalangan, faqat ikonka tugma */}
+                {extraPwPrompt && !extraUnlocked ? (
+                  <div className="flex items-center gap-1.5 px-1 py-1">
+                    <Lock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      autoFocus
+                      value={extraPwValue}
+                      onChange={(e) => setExtraPwValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter') tryUnlockExtra();
+                        if (e.key === 'Escape') { setExtraPwPrompt(false); setExtraPwValue(''); }
+                      }}
+                      placeholder="Parol"
+                      className="flex-1 min-w-0 h-8 px-2 rounded-md bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px]"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); tryUnlockExtra(); }}
+                      className="h-8 px-2.5 rounded-md bg-violet-600 hover:bg-violet-700 text-white text-[12px] font-medium shrink-0"
+                    >
+                      OK
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    title={t('extraTools')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (extraUnlocked) setExtraToolsOpen((v) => !v);
+                      else { setExtraPwPrompt(true); setExtraPwValue(''); }
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-2 py-1.5 rounded-sm hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                  >
+                    {extraUnlocked
+                      ? <Wrench className="h-4 w-4" />
+                      : <Lock className="h-4 w-4" />}
+                    <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', extraUnlocked && extraToolsOpen && 'rotate-180')} />
+                  </button>
+                )}
+                {extraUnlocked && extraToolsOpen && (
                   <div className="mt-0.5">
                     <DropdownMenuItem
                       onSelect={(e) => { e.preventDefault(); setBackfillOpen(true); }}
@@ -7279,12 +7324,29 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
   const [dateTo, setDateTo] = useState('');
   const [onlyNoRule, setOnlyNoRule] = useState(false);
   const [result, setResult] = useState<DiagResult | null>(null);
+  const [accOpen, setAccOpen] = useState(false);
+  const [accSearch, setAccSearch] = useState('');
 
   const { data: accounts } = useQuery({
     queryKey: ['bank-accounts'],
     queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
     enabled: open,
   });
+
+  const filteredAccounts = useMemo(() => {
+    const list = accounts?.items || [];
+    const q = accSearch.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((a: any) =>
+      String(a.accountNo || '').toLowerCase().includes(q) ||
+      String(a.ownerName || '').toLowerCase().includes(q),
+    );
+  }, [accounts, accSearch]);
+
+  const selectedAcc = useMemo(
+    () => (accounts?.items || []).find((a: any) => a.accountNo === accountNo),
+    [accounts, accountNo],
+  );
 
   const mut = useMutation({
     mutationFn: () => api.post<DiagResult>('/categorization/diagnose', {
@@ -7303,7 +7365,7 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
   });
 
   useEffect(() => {
-    if (!open) setTimeout(() => { setAccountNo(''); setDateFrom(''); setDateTo(''); setOnlyNoRule(false); setResult(null); }, 300);
+    if (!open) setTimeout(() => { setAccountNo(''); setDateFrom(''); setDateTo(''); setOnlyNoRule(false); setResult(null); setAccOpen(false); setAccSearch(''); }, 300);
   }, [open]);
 
   const rows = useMemo(() => {
@@ -7330,18 +7392,69 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
 
         {/* Filtrlar */}
         <div className="p-6 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
-          <div className="sm:col-span-3">
+          <div className="sm:col-span-3 relative">
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Hisob raqam</label>
-            <select
-              value={accountNo}
-              onChange={(e) => { setAccountNo(e.target.value); setResult(null); }}
-              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px]"
+            <button
+              type="button"
+              onClick={() => setAccOpen((v) => !v)}
+              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px] flex items-center gap-2 text-left"
             >
-              <option value="">Barcha hisoblar</option>
-              {(accounts?.items || []).map((a: any) => (
-                <option key={a.id} value={a.accountNo}>{a.accountNo}{a.ownerName ? ` — ${a.ownerName}` : ''}</option>
-              ))}
-            </select>
+              <Landmark className="h-4 w-4 text-rose-500 shrink-0" />
+              <span className={cn('flex-1 truncate', !accountNo && 'text-slate-400 dark:text-slate-500')}>
+                {accountNo
+                  ? <><span className="font-mono">{accountNo}</span>{selectedAcc?.ownerName ? <span className="text-slate-500 dark:text-slate-400"> — {selectedAcc.ownerName}</span> : null}</>
+                  : 'Barcha hisoblar'}
+              </span>
+              <ChevronDown className={cn('h-4 w-4 text-slate-400 shrink-0 transition-transform', accOpen && 'rotate-180')} />
+            </button>
+            {accOpen && (
+              <>
+                {/* tashqariga bosilганda yopish */}
+                <div className="fixed inset-0 z-40" onClick={() => setAccOpen(false)} />
+                <div className="absolute z-50 left-0 right-0 mt-1 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl overflow-hidden">
+                  <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                      <input
+                        autoFocus
+                        value={accSearch}
+                        onChange={(e) => setAccSearch(e.target.value)}
+                        placeholder="Hisob raqam yoki nom bo'yicha qidirish..."
+                        className="w-full h-9 pl-8 pr-2 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[13px]"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-auto py-1">
+                    <button
+                      type="button"
+                      onClick={() => { setAccountNo(''); setResult(null); setAccOpen(false); setAccSearch(''); }}
+                      className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2', !accountNo && 'bg-rose-50/60 dark:bg-rose-950/20')}
+                    >
+                      <Landmark className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span className="text-slate-600 dark:text-slate-300">Barcha hisoblar</span>
+                      {!accountNo && <CheckCircle2 className="h-4 w-4 text-rose-500 ml-auto shrink-0" />}
+                    </button>
+                    {filteredAccounts.map((a: any) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => { setAccountNo(a.accountNo); setResult(null); setAccOpen(false); setAccSearch(''); }}
+                        className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-rose-50 dark:hover:bg-rose-950/30 flex items-center gap-2', accountNo === a.accountNo && 'bg-rose-50/60 dark:bg-rose-950/20')}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-mono text-slate-700 dark:text-slate-200 truncate">{a.accountNo}</div>
+                          {a.ownerName && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{a.ownerName}</div>}
+                        </div>
+                        {accountNo === a.accountNo && <CheckCircle2 className="h-4 w-4 text-rose-500 shrink-0" />}
+                      </button>
+                    ))}
+                    {filteredAccounts.length === 0 && (
+                      <div className="px-3 py-6 text-center text-[12px] text-slate-400">Hisob topilmadi</div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
           <div>
             <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Sanadan</label>
@@ -7373,7 +7486,7 @@ function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpe
           </div>
         )}
 
-        <div className="flex-1 overflow-auto px-6 pb-6 min-h-0">
+        <div className="flex-1 overflow-auto px-6 pb-6 min-h-[300px]">
           {result && result.accountFound === false && (
             <div className="rounded-xl px-3.5 py-2.5 text-[13px] ring-1 bg-rose-50 dark:bg-rose-950/30 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300">
               Bu hisob raqam topilmadi. Hisob raqamni tekshiring.
