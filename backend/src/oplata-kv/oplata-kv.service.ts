@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, InternalServerErrorException, HttpException, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
@@ -4258,22 +4258,29 @@ export class OplataKvService {
       destCrms.push({ contractNo: dn, customerName: dBal.customerName, objectName: dBal.objectName });
     }
 
-    // Faylni saqlash
-    const groupId = randomUUID();
-    const safeName = input.file.originalname.replace(/[^\w\d.\-_ ()\[\]а-яёА-ЯЁa-zA-Z0-9]/g, '_').slice(0, 200);
-    const dir = path.join(this.uploadsDir, 'perereboska', groupId);
-    await fs.mkdir(dir, { recursive: true });
-    const filePath = path.join(dir, safeName);
-    await fs.writeFile(filePath, input.file.buffer);
-
+    // Sana validatsiyasi (fayl saqlashdan oldin)
     const dateObj = new Date(input.date);
     if (isNaN(dateObj.getTime())) throw new BadRequestException("Sana noto'g'ri formatda");
 
     const note = (input.note || '').trim() || null;
     const TX_TYPE = 'Переброска';
 
-    // Tranzaksiya bilan barcha qatorlarni yaratamiz
-    const created = await this.prisma.$transaction(async (tx) => {
+    // Fayl yo'llari
+    const groupId = randomUUID();
+    const safeName = input.file.originalname.replace(/[^\w\d.\-_ ()\[\]а-яёА-ЯЁa-zA-Z0-9]/g, '_').slice(0, 200);
+    const dir = path.join(this.uploadsDir, 'perereboska', groupId);
+    const filePath = path.join(dir, safeName);
+
+    // Fayl yozuvi + DB tranzaksiyasi — himoyalangan: xato bo'lsa GENERIC 500 emas,
+    // aniq sabab (Prisma kodi bilan) qaytadi, stack log qilinadi, yarim fayl tozalanadi.
+    let created: { sourceRow: any; destRows: any[] };
+    try {
+      // Faylni saqlash
+      await fs.mkdir(dir, { recursive: true });
+      await fs.writeFile(filePath, input.file.buffer);
+
+      // Tranzaksiya bilan barcha qatorlarni yaratamiz
+      created = await this.prisma.$transaction(async (tx) => {
       // FIX (B#2): manba shartnomani QULFLAYMIZ — bir vaqtli 2-pereboska double-spend qilmasin.
       // Advisory lock transaction oxirigacha ushlanadi; 2-so'rov birinchisini kutadi.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${fromCn}))`;
@@ -4356,7 +4363,13 @@ export class OplataKvService {
       }
 
       return { sourceRow, destRows };
-    });
+      });
+    } catch (e: any) {
+      if (e instanceof HttpException) throw e; // BadRequest (qayta tekshiruv) — o'z xabari bilan qaytadi
+      this.log.error(`Perereboska saqlashda xato (manba ${fromCn}, summa ${input.amount}): ${e?.stack || e?.message || e}`);
+      await fs.rm(dir, { recursive: true, force: true }).catch(() => {}); // orphan faylni tozalash (tranzaksiya rollback bo'ldi)
+      throw new InternalServerErrorException(`Переброска saqlashda xato: ${e?.code ? `[${e.code}] ` : ''}${e?.message || e}`);
+    }
 
     // Split (1 взнос / ежемесячный hisoblash) — barcha yangi qatorlar uchun.
     // Source qator avval (manfiy summa — refund logikasi), keyin destinations.
