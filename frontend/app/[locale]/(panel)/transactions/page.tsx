@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  RefreshCw, Landmark, Ban, Gauge, Scissors, PlusCircle,
+  RefreshCw, Landmark, Ban, Gauge, Scissors, PlusCircle, Stethoscope,
   Clock, Send, XCircle, FileWarning, Bot,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
@@ -310,6 +310,7 @@ export default function TransactionsPage() {
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
   const [addFromTxOpen, setAddFromTxOpen] = useState(false);
+  const [diagnoseOpen, setDiagnoseOpen] = useState(false);
   const recategorizeAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
     onSuccess: (r: any) => {
@@ -806,6 +807,15 @@ export default function TransactionsPage() {
                       >
                         <PlusCircle className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
                         <span className="flex-1">{"ОплатыКв'ga qo'shish"}</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setDiagnoseOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <Stethoscope className="h-4 w-4 mr-2 text-rose-600 dark:text-rose-400" />
+                        <span className="flex-1">Diagnostik kategoriyalash</span>
                       </DropdownMenuItem>
                     )}
                   </div>
@@ -1473,6 +1483,7 @@ export default function TransactionsPage() {
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
       <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
+      <CategorizeDiagnoseDialog open={diagnoseOpen} onOpenChange={setDiagnoseOpen} />
 
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
@@ -7246,6 +7257,167 @@ function AddFromTxDialog({ open, onOpenChange }: { open: boolean; onOpenChange: 
               {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Qidirish + qo'shish"}
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Diagnostik kategoriyalash — bitta hisob + sana oralig'i bo'yicha, har bir to'lov uchun sabab. */
+type DiagRow = {
+  id: string; externalId: string | null; date: string | null; amount: number; direction: string;
+  party: string | null; description: string | null; contractNo: string | null;
+  categoryCode: string | null; reason: string;
+};
+type DiagResult = {
+  ok: boolean; accountFound?: boolean; total: number; categorized: number; notCategorized: number; rows: DiagRow[];
+};
+function CategorizeDiagnoseDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const qc = useQueryClient();
+  const [accountNo, setAccountNo] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [onlyNoRule, setOnlyNoRule] = useState(false);
+  const [result, setResult] = useState<DiagResult | null>(null);
+
+  const { data: accounts } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => api.get<{ items: any[] }>('/bank-accounts'),
+    enabled: open,
+  });
+
+  const mut = useMutation({
+    mutationFn: () => api.post<DiagResult>('/categorization/diagnose', {
+      accountNo: accountNo.trim() || undefined,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      limit: 2000,
+    }),
+    onSuccess: (r) => {
+      setResult(r);
+      if (r.accountFound === false) { toast.error('Bu hisob raqam topilmadi'); return; }
+      if (r.categorized > 0) qc.invalidateQueries({ queryKey: ['transactions'] });
+      toast.success(`${r.total} ta tekshirildi · ${r.categorized} ta kategoriyalandi`);
+    },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  useEffect(() => {
+    if (!open) setTimeout(() => { setAccountNo(''); setDateFrom(''); setDateTo(''); setOnlyNoRule(false); setResult(null); }, 300);
+  }, [open]);
+
+  const rows = useMemo(() => {
+    if (!result) return [];
+    return onlyNoRule ? result.rows.filter((r) => !r.categoryCode) : result.rows;
+  }, [result, onlyNoRule]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-rose-50 to-pink-50 dark:from-rose-950/40 dark:to-pink-950/40 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center shadow-md shrink-0">
+              <Stethoscope className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">Diagnostik kategoriyalash</DialogTitle>
+              <DialogDescription className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {"Hisob raqam + sana oralig'i bo'yicha kategoriyasiz to'lovlarni tekshiradi. Qoidaga mos kelganlar kategoriyalanadi, mos kelmaganlarga sabab ko'rsatiladi."}
+              </DialogDescription>
+            </div>
+          </div>
+        </div>
+
+        {/* Filtrlar */}
+        <div className="p-6 pb-4 grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+          <div className="sm:col-span-3">
+            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Hisob raqam</label>
+            <select
+              value={accountNo}
+              onChange={(e) => { setAccountNo(e.target.value); setResult(null); }}
+              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px]"
+            >
+              <option value="">Barcha hisoblar</option>
+              {(accounts?.items || []).map((a: any) => (
+                <option key={a.id} value={a.accountNo}>{a.accountNo}{a.ownerName ? ` — ${a.ownerName}` : ''}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Sanadan</label>
+            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setResult(null); }}
+              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px]" />
+          </div>
+          <div>
+            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">Sanagacha</label>
+            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setResult(null); }}
+              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-rose-400 text-[14px]" />
+          </div>
+          <div className="flex items-end">
+            <Button onClick={() => mut.mutate()} disabled={mut.isPending} className="w-full h-11 bg-rose-600 hover:bg-rose-700 text-white">
+              {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Tekshirish'}
+            </Button>
+          </div>
+        </div>
+
+        {/* Natijalar */}
+        {result && result.accountFound !== false && (
+          <div className="px-6 pb-2 flex items-center gap-2 flex-wrap shrink-0 text-[12px]">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">Jami: <b>{result.total}</b></span>
+            <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">Kategoriyalandi: <b>{result.categorized}</b></span>
+            <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">Qoldi: <b>{result.notCategorized}</b></span>
+            <label className="ml-auto flex items-center gap-1.5 cursor-pointer select-none text-slate-600 dark:text-slate-400">
+              <input type="checkbox" checked={onlyNoRule} onChange={(e) => setOnlyNoRule(e.target.checked)} className="accent-rose-600" />
+              Faqat kategoriyasizlar
+            </label>
+          </div>
+        )}
+
+        <div className="flex-1 overflow-auto px-6 pb-6 min-h-0">
+          {result && result.accountFound === false && (
+            <div className="rounded-xl px-3.5 py-2.5 text-[13px] ring-1 bg-rose-50 dark:bg-rose-950/30 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300">
+              Bu hisob raqam topilmadi. Hisob raqamni tekshiring.
+            </div>
+          )}
+          {result && result.accountFound !== false && rows.length === 0 && (
+            <div className="text-center text-[13px] text-slate-400 py-8">
+              {result.total === 0 ? "Bu filtrda kategoriyasiz to'lov topilmadi." : "Barcha to'lovlar kategoriyalandi 🎉"}
+            </div>
+          )}
+          {rows.length > 0 && (
+            <table className="w-full text-[12px] border-separate border-spacing-0">
+              <thead className="sticky top-0 z-10">
+                <tr className="text-left text-slate-500 dark:text-slate-400">
+                  <th className="py-2 px-2 bg-white dark:bg-slate-900 font-medium">Sana</th>
+                  <th className="py-2 px-2 bg-white dark:bg-slate-900 font-medium">Kontragent / Izoh</th>
+                  <th className="py-2 px-2 bg-white dark:bg-slate-900 font-medium text-right">Summa</th>
+                  <th className="py-2 px-2 bg-white dark:bg-slate-900 font-medium">Natija / Sabab</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.id} className="border-t border-slate-100 dark:border-slate-800 align-top">
+                    <td className="py-2 px-2 whitespace-nowrap text-slate-500 dark:text-slate-400 font-mono">{r.date || '—'}</td>
+                    <td className="py-2 px-2 max-w-[280px]">
+                      <div className="text-slate-700 dark:text-slate-200 truncate" title={r.party || ''}>{r.party || '—'}</div>
+                      {r.description && <div className="text-[11px] text-slate-400 dark:text-slate-500 truncate" title={r.description}>{r.description}</div>}
+                      {r.contractNo && <div className="text-[11px] font-mono text-indigo-500 dark:text-indigo-400">{r.contractNo}</div>}
+                    </td>
+                    <td className="py-2 px-2 whitespace-nowrap text-right font-mono">
+                      <span className={r.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                        {r.direction === 'IN' ? '+' : '−'}{Math.abs(r.amount).toLocaleString('ru-RU')}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2">
+                      {r.categoryCode
+                        ? <span className="inline-block px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 text-[11px]">{r.categoryCode}{r.reason ? ` · ${r.reason}` : ''}</span>
+                        : <span className="inline-block px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 text-[11px]">{r.reason || 'qoida topilmadi'}</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </DialogContent>
     </Dialog>

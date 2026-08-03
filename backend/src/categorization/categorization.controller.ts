@@ -141,6 +141,24 @@ export class CategorizationController {
     return this.svc.getStatus();
   }
 
+  // ─── Diagnostik kategoriyalash: hisob + sana oralig'i, har bir to'lov uchun sabab ───
+  @Post('diagnose')
+  @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)
+  @ApiOperation({
+    summary: "Diagnostik kategoriyalash — hisob raqam + sana oralig'i bo'yicha",
+    description:
+      "Kategoriyasiz (categoryId=null) tranzaksiyalarni FILTRLAB kategoriyalash qoidalarini ishga tushiradi: " +
+      "qoidaga mos kelganlar kategoriyalanadi (DB'ga yoziladi, run-all kabi), mos kelmaganlar bo'sh qoladi. " +
+      "HAR BIR to'lov uchun natija yoki sababni ('qoida topilmadi' va h.k.) qaytaradi. " +
+      "accountNo — bitta hisob raqam; dateFrom/dateTo — YYYY-MM-DD (Toshkent vaqti); limit — max 2000 (default 500).",
+  })
+  diagnose(
+    @Body() body: { accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number },
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.svc.diagnoseCategorize({ ...body, actorId: userId });
+  }
+
   // ─── XATO shartnomalarni qayta tekshirish (CRM cache refresh) ───
   @Post('recheck-xato')
   @RequirePermissions(PERMISSIONS.CATEGORIES_MANAGE)

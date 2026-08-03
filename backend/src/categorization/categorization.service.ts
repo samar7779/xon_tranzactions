@@ -246,6 +246,72 @@ export class CategorizationService {
   }
 
   /**
+   * DIAGNOSTIK kategoriyalash — hisob raqam + sana oralig'i bo'yicha FILTRLANGAN
+   * kategoriyasiz tranzaksiyalarni kategoriyalaydi va HAR BIRI uchun natija/sababni qaytaradi.
+   * (Butun jadval emas — targetlangan to'plam; limit bilan cheklangan.)
+   */
+  async diagnoseCategorize(opts: {
+    accountNo?: string; dateFrom?: string; dateTo?: string; limit?: number; actorId?: string;
+  }): Promise<{
+    ok: boolean; accountFound?: boolean; total: number; categorized: number; notCategorized: number;
+    rows: Array<{
+      id: string; externalId: string | null; date: string | null; amount: number; direction: string;
+      party: string | null; description: string | null; contractNo: string | null;
+      categoryCode: string | null; reason: string;
+    }>;
+  }> {
+    const where: any = { categoryId: null }; // faqat kategoriyasizlar (nega qo'yilmaganini ko'rish uchun)
+
+    if (opts.accountNo?.trim()) {
+      const accs = await this.prisma.bankAccount.findMany({ where: { accountNo: opts.accountNo.trim() }, select: { id: true } });
+      if (accs.length === 0) return { ok: true, accountFound: false, total: 0, categorized: 0, notCategorized: 0, rows: [] };
+      where.accountId = { in: accs.map((a) => a.id) };
+    }
+    if (opts.dateFrom || opts.dateTo) {
+      where.txnDate = {};
+      if (opts.dateFrom) where.txnDate.gte = new Date(`${opts.dateFrom}T00:00:00+05:00`);
+      if (opts.dateTo) where.txnDate.lte = new Date(`${opts.dateTo}T23:59:59.999+05:00`);
+    }
+
+    const limit = Math.min(2000, Math.max(1, opts.limit || 500));
+    const txs = await this.prisma.transaction.findMany({
+      where,
+      select: { ...this.txSelectFields(), externalId: true, txnDate: true },
+      orderBy: { txnDate: 'desc' },
+      take: limit,
+    });
+
+    const rows: any[] = [];
+    let categorized = 0;
+    for (const tx of txs) {
+      let categoryCode: string | null = null;
+      let reason = '';
+      try {
+        const r = await this.runRules(tx as any, { actor: 'manual', actorId: opts.actorId });
+        categoryCode = r.categoryCode && r.categoryCode !== 'EXISTING' ? r.categoryCode : null;
+        reason = r.reason || '';
+        if (categoryCode) categorized++;
+      } catch (e: any) {
+        reason = `xato: ${(e?.message || '').slice(0, 120)}`;
+      }
+      const t: any = tx;
+      rows.push({
+        id: t.id,
+        externalId: t.externalId ?? null,
+        date: t.txnDate ? t.txnDate.toISOString().slice(0, 10) : null,
+        amount: Number(t.amount),
+        direction: t.direction,
+        party: t.direction === 'IN' ? (t.fromName || null) : (t.toName || null),
+        description: t.description || null,
+        contractNo: t.contractNumber || null,
+        categoryCode,
+        reason,
+      });
+    }
+    return { ok: true, accountFound: true, total: txs.length, categorized, notCategorized: txs.length - categorized, rows };
+  }
+
+  /**
    * XATO shartnomalarni qayta tekshirish — fonda ishlaydi.
    * Logika:
    *   1) DB'dan barcha uniq XATO shartnomalarni topadi (contractNumber bor, lekin CrmContract.found=false yoki yo'q)
