@@ -3301,7 +3301,7 @@ function AddChoiceDialog({
   const tc = useTranslations('common');
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-[640px] p-0 overflow-hidden gap-0">
+      <DialogContent className="sm:max-w-[880px] p-0 overflow-hidden gap-0">
         <div className="bg-gradient-to-br from-indigo-600 via-violet-600 to-fuchsia-600 px-6 pt-6 pb-5 text-white">
           <div className="text-[10px] uppercase tracking-widest font-bold text-white/70 mb-1">
             {t('newRecord')}
@@ -3311,8 +3311,8 @@ function AddChoiceDialog({
             {t('addChoiceDesc')}
           </div>
         </div>
-        <div className="p-5 grid grid-cols-2 gap-4 bg-slate-50/40 dark:bg-slate-900">
-          {/* Variant 1: Oddiy */}
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4 bg-slate-50/40 dark:bg-slate-900">
+          {/* Variant 1: To'lov */}
           <button
             onClick={onPickManual}
             className="group relative rounded-2xl bg-white dark:bg-slate-900 ring-2 ring-slate-200 dark:ring-slate-700 hover:ring-indigo-500 hover:shadow-xl transition-all p-5 text-left overflow-hidden"
@@ -3328,6 +3328,35 @@ function AddChoiceDialog({
               </div>
               <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 inline-flex items-center gap-1">
                 {t('start')} <ChevronRight className="h-3 w-3" />
+              </div>
+            </div>
+          </button>
+
+          {/* Variant AI: AI Переброска — premium teaser (hozircha "tez orada") */}
+          <button
+            onClick={() => { toast.success(t('aiPerereboskaSoon')); onClose(); }}
+            className="group relative rounded-2xl p-5 text-left overflow-hidden ring-2 ring-violet-200 dark:ring-violet-900 hover:ring-fuchsia-400 dark:hover:ring-fuchsia-500 hover:shadow-2xl hover:shadow-fuchsia-500/25 transition-all bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 dark:from-violet-950/40 dark:via-slate-900 dark:to-fuchsia-950/30"
+          >
+            {/* animatsion nur-orb */}
+            <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-gradient-to-br from-violet-400 via-fuchsia-400 to-cyan-300 blur-2xl opacity-30 group-hover:opacity-60 group-hover:scale-125 transition-all duration-500" />
+            {/* shimmer sweep */}
+            <div className="pointer-events-none absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000 ease-out bg-gradient-to-r from-transparent via-white/40 dark:via-white/10 to-transparent" />
+            <div className="relative">
+              <div className="relative w-12 h-12 rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-pink-500 grid place-items-center text-white shadow-lg shadow-fuchsia-500/40 mb-3">
+                <Sparkles className="h-6 w-6" />
+                <span className="absolute inset-0 rounded-xl ring-2 ring-fuchsia-400/60 animate-pulse" />
+              </div>
+              <div className="font-bold text-[15px] inline-flex items-center gap-1.5">
+                <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 dark:from-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent">AI Переброска</span>
+                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-sm">
+                  {t('badgeSoon')}
+                </span>
+              </div>
+              <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {t('aiPerereboskaCardDesc')}
+              </div>
+              <div className="mt-3 text-[10px] font-bold uppercase tracking-wider text-fuchsia-600 dark:text-fuchsia-400 inline-flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> {t('start')} <ChevronRight className="h-3 w-3" />
               </div>
             </div>
           </button>
