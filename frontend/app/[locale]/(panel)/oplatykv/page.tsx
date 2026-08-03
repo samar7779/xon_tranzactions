@@ -2123,6 +2123,27 @@ function CrmSverkaView({
   const matched = comparison.matched;
   const oplataMore = comparison.status === 'oplata-more';
 
+  // ─── SANA bo'yicha solishtirish (qator emas — sana) ───
+  // Har kun uchun OplatyKv summasi va CRM summasi. Teng bo'lsa — xira yashil qator,
+  // farq bo'lsa — qizil qator (ikkala jadvalда ham).
+  const dayKey = (d: string | null | undefined) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+  const oplataByDay = new Map<string, number>();
+  for (const it of oplata.items) { const k = dayKey(it.date); if (k) oplataByDay.set(k, (oplataByDay.get(k) || 0) + Number(it.paymentAmount || 0)); }
+  const crmByDay = new Map<string, number>();
+  for (const h of crm.histories) { const k = dayKey(h.datePaid); if (k) crmByDay.set(k, (crmByDay.get(k) || 0) + Number(h.amount || 0)); }
+  const dayMatched = (d: string | null | undefined) => {
+    const k = dayKey(d); if (!k) return null;
+    return Math.abs((oplataByDay.get(k) || 0) - (crmByDay.get(k) || 0)) < 0.01;
+  };
+  // Qator foni: mos → xira yashil, farq → qizil
+  const cmpRowCls = (d: string | null | undefined) => {
+    const m = dayMatched(d);
+    if (m === null) return '';
+    return m
+      ? 'bg-emerald-50/50 dark:bg-emerald-950/20'
+      : 'bg-rose-50/70 dark:bg-rose-950/30';
+  };
+
   return (
     <div className="px-7 py-5 space-y-5">
       {/* CRM ulanmaganmi? */}
@@ -2188,6 +2209,13 @@ function CrmSverkaView({
         />
       </div>
 
+      {/* Sana bo'yicha rang izohi */}
+      <div className="flex items-center gap-4 text-[11px] text-slate-500 dark:text-slate-400 -mb-1">
+        <span className="font-semibold uppercase tracking-wider text-[10px]">Sana bo&apos;yicha:</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-50/50 dark:bg-emerald-950/20 ring-1 ring-emerald-300 dark:ring-emerald-800" /> summa mos</span>
+        <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-50/70 dark:bg-rose-950/30 ring-1 ring-rose-300 dark:ring-rose-800" /> farq bor</span>
+      </div>
+
       {/* Side-by-side jadval — OplatyKv (chap) vs CRM histories (o'ng) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* OplatyKv */}
@@ -2220,7 +2248,7 @@ function CrmSverkaView({
                 }).map((it: OplataKvItem) => (
                   <tr
                     key={it.id}
-                    className="border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer"
+                    className={cn('border-t border-slate-100 dark:border-slate-700 hover:bg-indigo-50/40 dark:hover:bg-indigo-950/40 transition-colors cursor-pointer', cmpRowCls(it.date))}
                     onClick={() => onRowClick(it)}
                   >
                     <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">{fmtDateRu(it.date)}</td>
@@ -2272,7 +2300,7 @@ function CrmSverkaView({
                 }).map((h: any, i: number) => {
                   const isInitial = h.typeKey.toLowerCase().includes('init') || h.typeKey.toLowerCase().includes('boshlang');
                   return (
-                    <tr key={i} className="border-t border-slate-100 dark:border-slate-700 hover:bg-sky-50/40 dark:hover:bg-sky-950/40 transition-colors">
+                    <tr key={i} className={cn('border-t border-slate-100 dark:border-slate-700 hover:bg-sky-50/40 dark:hover:bg-sky-950/40 transition-colors', cmpRowCls(h.datePaid))}>
                       <td className="px-3 py-1.5 tabular-nums whitespace-nowrap">
                         {h.datePaid ? fmtDateRu(h.datePaid) : '—'}
                       </td>
