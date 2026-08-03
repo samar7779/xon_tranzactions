@@ -3332,9 +3332,9 @@ function AddChoiceDialog({
             </div>
           </button>
 
-          {/* Variant AI: AI Переброска — premium teaser (hozircha "tez orada") */}
+          {/* Variant AI: AI Переброска — premium (hozircha Переброска formasini ochadi; AI tekshiruv keyin) */}
           <button
-            onClick={() => { toast.success(t('aiPerereboskaSoon')); onClose(); }}
+            onClick={onPickPerereboska}
             className="group relative rounded-2xl p-5 text-left overflow-hidden ring-2 ring-violet-200 dark:ring-violet-900 hover:ring-fuchsia-400 dark:hover:ring-fuchsia-500 hover:shadow-2xl hover:shadow-fuchsia-500/25 transition-all bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 dark:from-violet-950/40 dark:via-slate-900 dark:to-fuchsia-950/30"
           >
             {/* animatsion nur-orb */}
@@ -3348,9 +3348,6 @@ function AddChoiceDialog({
               </div>
               <div className="font-bold text-[15px] inline-flex items-center gap-1.5">
                 <span className="bg-gradient-to-r from-violet-600 to-fuchsia-600 dark:from-violet-400 dark:to-fuchsia-400 bg-clip-text text-transparent">AI Переброска</span>
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-gradient-to-r from-violet-500 to-fuchsia-500 shadow-sm">
-                  {t('badgeSoon')}
-                </span>
               </div>
               <div className="text-[11.5px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                 {t('aiPerereboskaCardDesc')}
