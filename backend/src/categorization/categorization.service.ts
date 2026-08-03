@@ -295,6 +295,17 @@ export class CategorizationService {
         reason = `xato: ${(e?.message || '').slice(0, 120)}`;
       }
       const t: any = tx;
+      // Diagnostik boyitish — kategoriya qo'yilmagan bo'lsa NEGA ekanini aniqroq ko'rsatamiz:
+      // parser izohdan shartnoma raqamini umuman ko'ra oldimi? (yangi obyekt kodi ro'yxatda
+      // yo'q bo'lsa — masalan "VHA" — bu yerda darhol ko'rinadi).
+      if (!categoryCode) {
+        const cands = extractContractCandidates(t.description);
+        if (cands.length > 0) {
+          reason = `shartnoma ajratildi (${cands[0]}), lekin CRM'da topilmadi / mos qoida yo'q`;
+        } else if (this.looksLikeContractText(t.description)) {
+          reason = "izohda shartnomaga o'xshash matn bor, lekin raqam ajratilmadi — obyekt kodi ro'yxatda yo'q bo'lishi mumkin";
+        }
+      }
       rows.push({
         id: t.id,
         externalId: t.externalId ?? null,
@@ -309,6 +320,13 @@ export class CategorizationService {
       });
     }
     return { ok: true, accountFound: true, total: txs.length, categorized, notCategorized: txs.length - categorized, rows };
+  }
+
+  /** Izoh shartnoma to'loviga o'xshaydimi? (diagnostikada notanish obyekt kodini ajratish uchun) */
+  private looksLikeContractText(desc: string | null | undefined): boolean {
+    if (!desc) return false;
+    const s = desc.toLowerCase();
+    return /шартнома|shartnoma|договор|\bдог\b|дог\.|тулов|to'lov|взнос|квартир|kvartir|инвест/.test(s);
   }
 
   /**

@@ -9,7 +9,7 @@
  * Format: <1–4 raqam><3–4 harf (obyekt kodi)><3–4 harf yoki raqam (tail)>
  *
  * Obyekt kodlari (Xon Saroy obyektlari):
- *   AFS, YLZ, MSO, FZO, VDY, ZUR, SLQ, OCN, VTN, PRL, ORZ, SRH, BHR, RMZ
+ *   AFS, YLZ, MSO, FZO, VDY, ZUR, SLQ, OCN, VTN, PRL, ORZ, SRH, BHR, RMZ, VHA
  *
  * Eslatma: O (latin), 0 (raqam), О (kirill) — bir xil deb qaraladi, chunki bank
  * izohlarida ularni aralashtirib yozadilar (masalan, "MS0" va "MSO").
@@ -18,7 +18,7 @@
 // Yangi obyekt qo'shilsa shu ro'yxatga qo'shing.
 const OBJECT_CODES = [
   'AFS', 'YLZ', 'MSO', 'FZO', 'VDY', 'ZUR', 'SLQ', 'OCN',
-  'VTN', 'PRL', 'ORZ', 'SRH', 'BHR', 'RMZ',
+  'VTN', 'PRL', 'ORZ', 'SRH', 'BHR', 'RMZ', 'VHA',
 ];
 
 // O/0/О almashinuvchi (latin O, raqam 0, kirill О)
