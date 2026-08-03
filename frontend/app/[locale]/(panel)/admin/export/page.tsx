@@ -9,6 +9,7 @@ import {
   Columns3, CalendarDays, Filter as FilterIcon, Hash, Link2,
   Download, Database, FileText, FileJson, FileCode2, FileSpreadsheet,
   KeyRound, Lock, Server, Send, Building2,
+  Hammer, History, Search, Eye, ChevronLeft, RefreshCw, Clock, X,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -125,7 +126,7 @@ export default function AdminExportPage() {
   const canDownload = !!user?.permissions?.includes(PERMS.EXPORT_DOWNLOAD);
   const canAutsourcing = !!user?.permissions?.includes(PERMS.EXPORT_AUTSOURCING);
 
-  const [tab, setTab] = useState<'sheets' | 'autsourcing'>('sheets');
+  const [tab, setTab] = useState<'sheets' | 'autsourcing' | 'shmitd'>('sheets');
   const [sheets, setSheets] = useState<SheetTarget[]>([]);
   const [dirty, setDirty] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
@@ -261,6 +262,19 @@ export default function AdminExportPage() {
               )}
             >
               <Send className="h-3.5 w-3.5" /> Autsoursing
+            </button>
+          )}
+          {canAutsourcing && (
+            <button
+              onClick={() => setTab('shmitd')}
+              className={cn(
+                'px-3.5 h-8 rounded-lg text-[12.5px] font-semibold inline-flex items-center gap-1.5 transition-colors',
+                tab === 'shmitd'
+                  ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200',
+              )}
+            >
+              <Hammer className="h-3.5 w-3.5" /> SHMITD
             </button>
           )}
         </div>
@@ -459,6 +473,9 @@ export default function AdminExportPage() {
 
       {/* ─── Autsoursing tab ─── */}
       {tab === 'autsourcing' && canAutsourcing && <AutsourcingTab canManage={canManage} />}
+
+      {/* ─── SHMITD tab ─── */}
+      {tab === 'shmitd' && canAutsourcing && <ShmitdTab canManage={canManage} />}
 
       {/* ─── Fayl yuklab olish dialogi ─── */}
       <Dialog open={dlOpen} onOpenChange={setDlOpen}>
@@ -1149,5 +1166,238 @@ function HelpSection({ clientEmail }: { clientEmail: string | null }) {
         </CardContent>
       )}
     </Card>
+  );
+}
+
+// ═══════════════ SHMITD tab — Shmidt bolg'a hisoboti Telegram guruhga ═══════════════
+type ShmitdConfig = {
+  ok: boolean; enabled: boolean; hasToken: boolean; tokenHint: string | null;
+  groupId: string | null; spreadsheetId: string | null; sheetName: string;
+  hasSa: boolean; saEmail: string | null; dateOffset: number; cronTimes: string[];
+};
+type ShmitdRow = {
+  id: string; targetDate: string; sentAt: string; totalCount: number; yellowCount: number;
+  redCount: number; status: string; error: string | null; fileName: string | null; triggeredBy: string | null;
+};
+const OFFSET_LABEL: Record<number, string> = { 0: 'Bugun', [-1]: 'Kecha', [-2]: '2 kun oldin', [-3]: '3 kun oldin', 1: 'Ertaga' };
+
+function ShmitdTab({ canManage }: { canManage: boolean }) {
+  const qc = useQueryClient();
+  const { data: cfg } = useQuery({ queryKey: ['shmitd-config'], queryFn: () => api.get<ShmitdConfig>('/shmitd/config') });
+
+  const [enabled, setEnabled] = useState(false);
+  const [botToken, setBotToken] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [sheetName, setSheetName] = useState('SHMITD');
+  const [saJson, setSaJson] = useState('');
+  const [dateOffset, setDateOffset] = useState(-1);
+  const [times, setTimes] = useState<string[]>([]);
+  useEffect(() => {
+    if (!cfg) return;
+    setEnabled(cfg.enabled); setGroupId(cfg.groupId || ''); setSpreadsheetId(cfg.spreadsheetId || '');
+    setSheetName(cfg.sheetName || 'SHMITD'); setDateOffset(cfg.dateOffset ?? -1); setTimes(cfg.cronTimes || []);
+  }, [cfg]);
+
+  const [showConfig, setShowConfig] = useState(true);
+  const [showHistory, setShowHistory] = useState(true);
+
+  const saveMut = useMutation({
+    mutationFn: (patch: any) => api.put('/shmitd/config', patch),
+    onSuccess: () => { toast.success('Saqlandi'); setBotToken(''); setSaJson(''); qc.invalidateQueries({ queryKey: ['shmitd-config'] }); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const save = () => saveMut.mutate({
+    enabled, groupId: groupId.trim(), spreadsheetId: spreadsheetId.trim(), sheetName: sheetName.trim(),
+    dateOffset, cronTimes: times, ...(botToken.trim() ? { botToken: botToken.trim() } : {}), ...(saJson.trim() ? { saJson: saJson.trim() } : {}),
+  });
+
+  const sendMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; status: string; total?: number; error?: string }>('/shmitd/send', {}),
+    onSuccess: (r: any) => {
+      if (r.status === 'sent') toast.success(`Jo'natildi — ${r.total} qator (sariq ${r.yellow ?? 0}, qizil ${r.red ?? 0})`);
+      else if (r.status === 'empty') toast.info('Bu sanada ma\'lumot yo\'q — guruhga xabar berildi');
+      else toast.error(r.error || 'Xato');
+      qc.invalidateQueries({ queryKey: ['shmitd-history'] });
+    },
+    onError: (e: any) => toast.error(e?.message || 'Jo\'natishda xato'),
+  });
+
+  // History
+  const [hPage, setHPage] = useState(1);
+  const [hDate, setHDate] = useState('');
+  const { data: hist, isFetching } = useQuery({
+    queryKey: ['shmitd-history', hPage, hDate],
+    queryFn: () => api.get<{ ok: boolean; total: number; rows: ShmitdRow[] }>(`/shmitd/history?page=${hPage}&perPage=15${hDate ? `&date=${encodeURIComponent(hDate)}` : ''}`),
+  });
+  const rows = hist?.rows || [];
+  const totalPages = Math.max(1, Math.ceil((hist?.total || 0) / 15));
+
+  const addTime = () => setTimes((t) => [...t, '09:00']);
+  const setTime = (i: number, v: string) => setTimes((t) => t.map((x, idx) => (idx === i ? v : x)));
+  const delTime = (i: number) => setTimes((t) => t.filter((_, idx) => idx !== i));
+
+  const fmt = (s: string) => { try { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return s; } };
+  const statusBadge = (st: string) => {
+    if (st === 'sent') return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300"><CheckCircle2 className="h-3 w-3" /> Yuborildi</span>;
+    if (st === 'empty') return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">Bo&apos;sh</span>;
+    return <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300"><AlertTriangle className="h-3 w-3" /> Xato</span>;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ─── Config ─── */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button onClick={() => setShowConfig((v) => !v)} className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+          <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-gradient-to-br from-amber-500 to-yellow-600 text-white shadow-md shadow-amber-500/25"><Hammer className="h-5 w-5" /></div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-bold text-slate-800 dark:text-slate-100">SHMITD — Telegram guruhga jo&apos;natish</span>
+              {cfg?.enabled
+                ? <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">YOQILGAN</span>
+                : <span className="px-1.5 py-0.5 rounded-md text-[9.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">O&apos;CHIQ</span>}
+            </div>
+            <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">Google Sheet (SHMITD) → sana bo&apos;yicha HTML hisobot → guruhga (jadval bo&apos;yicha avtomat)</div>
+          </div>
+          {showConfig ? <Eye className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+        </button>
+        {showConfig && (
+          <CardContent className="px-5 pb-5 pt-1 space-y-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={() => setEnabled((v) => !v)} disabled={!canManage} className={cn('w-11 h-6 rounded-full transition-colors relative shrink-0 disabled:opacity-50', enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-700')}>
+                <span className={cn('absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all', enabled ? 'left-[22px]' : 'left-0.5')} />
+              </button>
+              <span className="text-[13px] font-medium text-slate-700 dark:text-slate-200">Avtomat jo&apos;natishni yoqish (jadval bo&apos;yicha)</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Bot token {cfg?.hasToken && <span className="text-emerald-600 dark:text-emerald-400">— saqlangan ({cfg.tokenHint})</span>}</label>
+                <Input value={botToken} onChange={(e) => setBotToken(e.target.value)} disabled={!canManage} placeholder={cfg?.hasToken ? 'O\'zgartirish uchun yangi token…' : '123456:ABC…'} className="mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Guruh chat ID</label>
+                <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} disabled={!canManage} placeholder="-1001234567890" className="mt-1 font-mono text-[12px]" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Spreadsheet ID</label>
+                <Input value={spreadsheetId} onChange={(e) => setSpreadsheetId(e.target.value)} disabled={!canManage} placeholder="1gU5BK8…" className="mt-1 font-mono text-[12px]" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Varaq (sheet) nomi</label>
+                <Input value={sheetName} onChange={(e) => setSheetName(e.target.value)} disabled={!canManage} placeholder="SHMITD" className="mt-1" />
+              </div>
+              <div>
+                <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Qaysi sana</label>
+                <select value={dateOffset} onChange={(e) => setDateOffset(Number(e.target.value))} disabled={!canManage} className="mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[13px] outline-none focus:ring-2 focus:ring-amber-400">
+                  {[1, 0, -1, -2, -3].map((o) => <option key={o} value={o}>{OFFSET_LABEL[o] || `${o} kun`}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Jo&apos;natish vaqtlari (Toshkent)</label>
+                  {canManage && <button onClick={addTime} className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 inline-flex items-center gap-1"><Plus className="h-3.5 w-3.5" /> qo&apos;shish</button>}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {times.length === 0 && <span className="text-[12px] text-slate-400">Vaqt qo&apos;shilmagan</span>}
+                  {times.map((t, i) => (
+                    <div key={i} className="inline-flex items-center gap-1 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 bg-slate-50 dark:bg-slate-900 pl-1">
+                      <Clock className="h-3.5 w-3.5 text-slate-400" />
+                      <input type="time" value={t} onChange={(e) => setTime(i, e.target.value)} disabled={!canManage} className="h-8 bg-transparent text-[12px] outline-none w-[72px]" />
+                      {canManage && <button onClick={() => delTime(i)} className="w-6 h-8 grid place-items-center text-slate-400 hover:text-rose-600"><X className="h-3.5 w-3.5" /></button>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Service-account JSON {cfg?.hasSa ? <span className="text-emerald-600 dark:text-emerald-400">— ulangan ({cfg.saEmail})</span> : <span className="text-amber-600">— app SA ishlatiladi yoki bu yerga qo&apos;ying</span>}</label>
+              <textarea value={saJson} onChange={(e) => setSaJson(e.target.value)} disabled={!canManage} placeholder={cfg?.hasSa ? 'O\'zgartirish uchun yangi JSON…' : '{ "client_email": …, "private_key": … }'} rows={2} className="mt-1 w-full px-3 py-2 rounded-lg bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-[11.5px] font-mono outline-none focus:ring-2 focus:ring-amber-400 resize-y" />
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              {canManage && (
+                <Button onClick={save} disabled={saveMut.isPending} className="gap-2">
+                  {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Saqlash
+                </Button>
+              )}
+              <Button onClick={() => sendMut.mutate()} disabled={sendMut.isPending} className="gap-2 bg-gradient-to-br from-amber-500 to-yellow-600 hover:from-amber-600 hover:to-yellow-700 text-white">
+                {sendMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Hozir jo&apos;natish
+              </Button>
+            </div>
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ─── History ─── */}
+      <Card className="border-0 shadow-soft overflow-hidden">
+        <button onClick={() => setShowHistory((v) => !v)} className="w-full px-5 py-4 flex items-center gap-3 text-left hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors">
+          <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"><History className="h-5 w-5" /></div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-slate-800 dark:text-slate-100">Jo&apos;natish tarixi</div>
+            <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">{hist?.total ?? 0} ta yozuv — sana bo&apos;yicha qidiring, hisobotni oching</div>
+          </div>
+          {showHistory ? <Eye className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+        </button>
+        {showHistory && (
+          <CardContent className="px-5 pb-5 pt-1 space-y-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Input value={hDate} onChange={(e) => { setHDate(e.target.value); setHPage(1); }} placeholder="Sana bo'yicha qidirish (masalan 01.08)" className="pl-8 h-9" />
+              </div>
+              <button onClick={() => qc.invalidateQueries({ queryKey: ['shmitd-history'] })} title="Yangilash" className="h-9 w-9 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"><RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} /></button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl ring-1 ring-slate-100 dark:ring-slate-800">
+              <table className="w-full text-[12px]">
+                <thead className="bg-slate-50 dark:bg-slate-900/60 text-slate-500 dark:text-slate-400">
+                  <tr className="text-left">
+                    <th className="px-3 py-2 font-semibold">Sana</th>
+                    <th className="px-3 py-2 font-semibold">Jo&apos;natildi</th>
+                    <th className="px-3 py-2 font-semibold text-center">Jami</th>
+                    <th className="px-3 py-2 font-semibold text-center">Sariq</th>
+                    <th className="px-3 py-2 font-semibold text-center">Qizil</th>
+                    <th className="px-3 py-2 font-semibold">Holat</th>
+                    <th className="px-3 py-2 font-semibold">Kim</th>
+                    <th className="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {rows.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-400">Yozuv yo&apos;q</td></tr>}
+                  {rows.map((r) => (
+                    <tr key={r.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                      <td className="px-3 py-2 font-mono font-semibold text-slate-700 dark:text-slate-200">{r.targetDate}</td>
+                      <td className="px-3 py-2 text-slate-500 dark:text-slate-400 tabular-nums">{fmt(r.sentAt)}</td>
+                      <td className="px-3 py-2 text-center tabular-nums font-semibold">{r.totalCount}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-amber-600 dark:text-amber-400 font-semibold">{r.yellowCount}</td>
+                      <td className="px-3 py-2 text-center tabular-nums text-rose-600 dark:text-rose-400 font-semibold">{r.redCount}</td>
+                      <td className="px-3 py-2">{statusBadge(r.status)}</td>
+                      <td className="px-3 py-2 text-slate-400 dark:text-slate-500 text-[10.5px] truncate max-w-[120px]">{r.triggeredBy || '—'}</td>
+                      <td className="px-3 py-2 text-right">
+                        {r.status === 'sent' && (
+                          <button onClick={() => apiDownload(`/shmitd/history/${r.id}/html`, `${r.fileName || 'SHMITD'}.html`)} title="Hisobotni yuklab olish" className="inline-grid place-items-center w-7 h-7 rounded-lg text-slate-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/40"><Download className="h-4 w-4" /></button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-slate-400">{hist?.total} ta · sahifa {hPage}/{totalPages}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setHPage((p) => Math.max(1, p - 1))} disabled={hPage <= 1} className="h-8 w-8 grid place-items-center rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronLeft className="h-4 w-4" /></button>
+                  <button onClick={() => setHPage((p) => Math.min(totalPages, p + 1))} disabled={hPage >= totalPages} className="h-8 w-8 grid place-items-center rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+    </div>
   );
 }

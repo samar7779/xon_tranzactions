@@ -34,6 +34,7 @@ import { DeveloperApiModule } from './developer-api/developer-api.module';
 import { ChekModule } from './chek/chek.module';
 import { CorrectionModule } from './correction/correction.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
+import { ShmitdModule } from './shmitd/shmitd.module';
 
 @Module({
   imports: [
@@ -75,6 +76,7 @@ import { CorrectionBotModule } from './correction-bot/correction-bot.module';
     GoogleExportModule,
     AgentModule,
     CorrectionBotModule,
+    ShmitdModule,
     DeveloperApiModule,
     ChekModule,
     CorrectionModule,

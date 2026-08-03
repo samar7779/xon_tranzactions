@@ -12,17 +12,17 @@ datasource db {
 // Permissions list constants: backend/src/auth/permissions.ts
 // ─────────────────────────────────────────────────────────────────
 model Role {
-  id          String      @id @default(cuid())
-  name        String      @unique @db.VarChar(64)         // SUPERADMIN, ACCOUNTANT
-  label       String      @db.VarChar(128)                 // "Bosh admin"
-  description String?     @db.Text
-  permissions String[]                                     // ["transactions:view", "banks:manage", ...]
-  isSystem    Boolean     @default(false) @map("is_system") // o'chirib bo'lmaydigan tizim roli
+  id          String   @id @default(cuid())
+  name        String   @unique @db.VarChar(64) // SUPERADMIN, ACCOUNTANT
+  label       String   @db.VarChar(128) // "Bosh admin"
+  description String?  @db.Text
+  permissions String[] // ["transactions:view", "banks:manage", ...]
+  isSystem    Boolean  @default(false) @map("is_system") // o'chirib bo'lmaydigan tizim roli
 
-  users       AdminUser[]
+  users AdminUser[]
 
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("roles")
 }
@@ -35,14 +35,14 @@ model AdminUser {
   email        String    @unique @db.VarChar(190)
   passwordHash String    @map("password_hash") @db.VarChar(255)
   fullName     String?   @map("full_name") @db.VarChar(190)
-  role         AdminRole @default(ADMIN)                   // legacy enum (eski guard'lar uchun)
-  roleId       String?   @map("role_id")                   // Yangi RBAC: Role tablega FK
+  role         AdminRole @default(ADMIN) // legacy enum (eski guard'lar uchun)
+  roleId       String?   @map("role_id") // Yangi RBAC: Role tablega FK
   roleRef      Role?     @relation(fields: [roleId], references: [id])
   isActive     Boolean   @default(true) @map("is_active")
   lastLoginAt  DateTime? @map("last_login_at")
 
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([roleId])
   @@map("admin_users")
@@ -58,106 +58,106 @@ enum AdminRole {
 // TRANSACTION — asosiy to'lov yozuvi
 // ─────────────────────────────────────────────────────────────────
 model Transaction {
-  id            String    @id @default(cuid())
-  externalId    String?   @unique @map("external_id")   // Bank tomonidan berilgan global_id yoki b2_id
-  type          TxnType
-  status        TxnStatus @default(PENDING)
-  direction     TxnDirection                            // IN yoki OUT
+  id         String       @id @default(cuid())
+  externalId String?      @unique @map("external_id") // Bank tomonidan berilgan global_id yoki b2_id
+  type       TxnType
+  status     TxnStatus    @default(PENDING)
+  direction  TxnDirection // IN yoki OUT
 
   // Pul ma'lumotlari
-  amount        Decimal   @db.Decimal(18, 2)
-  currency      String    @default("UZS") @db.VarChar(3)
+  amount   Decimal @db.Decimal(18, 2)
+  currency String  @default("UZS") @db.VarChar(3)
 
   // Manba/qabul qiluvchi
-  fromMfo       String?   @map("from_mfo") @db.VarChar(8)
-  fromAccount   String?   @map("from_account")
-  fromName      String?   @map("from_name")
-  fromInn       String?   @map("from_inn") @db.VarChar(16)
-  toMfo         String?   @map("to_mfo") @db.VarChar(8)
-  toAccount     String?   @map("to_account")
-  toName        String?   @map("to_name")
-  toInn         String?   @map("to_inn") @db.VarChar(16)
+  fromMfo     String? @map("from_mfo") @db.VarChar(8)
+  fromAccount String? @map("from_account")
+  fromName    String? @map("from_name")
+  fromInn     String? @map("from_inn") @db.VarChar(16)
+  toMfo       String? @map("to_mfo") @db.VarChar(8)
+  toAccount   String? @map("to_account")
+  toName      String? @map("to_name")
+  toInn       String? @map("to_inn") @db.VarChar(16)
 
   // Tafsilot
-  description   String?   @db.Text
-  reference     String?   @db.VarChar(64)   // uniq — bank ref/code
-  purposeCode   String?   @map("purpose_code") @db.VarChar(16)
-  docNumber     String?   @map("doc_number") @db.VarChar(64)
-  docType       String?   @map("doc_type") @db.VarChar(8)
+  description String? @db.Text
+  reference   String? @db.VarChar(64) // uniq — bank ref/code
+  purposeCode String? @map("purpose_code") @db.VarChar(16)
+  docNumber   String? @map("doc_number") @db.VarChar(64)
+  docType     String? @map("doc_type") @db.VarChar(8)
 
   // Bank ID'lari — composite externalId'ni hosil qilish uchun ham, alohida indeks uchun ham
-  bankGeneralId String?   @map("bank_general_id") @db.VarChar(64)  // general_id (NCI)
-  bankB2Id      String?   @map("bank_b2_id") @db.VarChar(64)        // b2_id
+  bankGeneralId String? @map("bank_general_id") @db.VarChar(64) // general_id (NCI)
+  bankB2Id      String? @map("bank_b2_id") @db.VarChar(64) // b2_id
 
   // Bank ichki ma'lumotlari
-  bankClientId  String?   @map("bank_client_id") @db.VarChar(32)    // client_id
-  bankBranch    String?   @map("bank_branch") @db.VarChar(8)        // branch (operatsiya o'tgan filial)
+  bankClientId String? @map("bank_client_id") @db.VarChar(32) // client_id
+  bankBranch   String? @map("bank_branch") @db.VarChar(8) // branch (operatsiya o'tgan filial)
 
   // Qo'shimcha vaqtlar
-  valueDate     DateTime? @map("value_date") @db.Date               // vdate — mablag' mavjud bo'lish sanasi
-  operationTime String?   @map("operation_time") @db.VarChar(8)     // time HH:mm:ss
-  settlementTime String?  @map("settlement_time") @db.VarChar(8)    // stime
-  inputAt       DateTime? @map("input_at")                          // input_date + input_time birlashtirilgan
+  valueDate      DateTime? @map("value_date") @db.Date // vdate — mablag' mavjud bo'lish sanasi
+  operationTime  String?   @map("operation_time") @db.VarChar(8) // time HH:mm:ss
+  settlementTime String?   @map("settlement_time") @db.VarChar(8) // stime
+  inputAt        DateTime? @map("input_at") // input_date + input_time birlashtirilgan
 
   // Anor 24/7 va xato
-  isAnor        Boolean   @default(false) @map("is_anor")           // anor=1
-  bankErrCode   String?   @map("bank_err_code") @db.VarChar(32)     // err
-  bankErrMsg    String?   @map("bank_err_msg") @db.Text             // err_msg
+  isAnor      Boolean @default(false) @map("is_anor") // anor=1
+  bankErrCode String? @map("bank_err_code") @db.VarChar(32) // err
+  bankErrMsg  String? @map("bank_err_msg") @db.Text // err_msg
 
   // To'liq raw javob va kelajakda qo'shilishi mumkin bo'lgan fieldlar uchun
-  metadata      Json?                                                // bank javobining to'liq raw
-  rawExtra      Json?     @map("raw_extra")                          // bizga noma'lum fieldlar (future-proof)
+  metadata Json? // bank javobining to'liq raw
+  rawExtra Json? @map("raw_extra") // bizga noma'lum fieldlar (future-proof)
 
   // ─── MANBA (Sync / Import) ───
   // SYNC = bank API'dan avtomatik olingan, IMPORT = qo'lda Excel'dan kiritilgan
-  source        TxnSource @default(SYNC)
+  source                 TxnSource    @default(SYNC)
   // Qo'lda import qilinganda — bizning kategoriya ro'yxatida yo'q nomlar matn sifatida saqlanadi
   // TEXT (unlimited) — Excel'dan har xil uzunlikdagi nomlar kelishi mumkin
-  importCategoryText     String?  @map("import_category_text") @db.Text
+  importCategoryText     String?      @map("import_category_text") @db.Text
   // Qo'lda import qilinganda — kontragent nomi (free-text, Counterparty bilan match qilinmagan)
-  importCounterpartyText String?  @map("import_counterparty_text") @db.Text
+  importCounterpartyText String?      @map("import_counterparty_text") @db.Text
   // Qo'lda import qilinganda — bank nomi (Excel'dagi original matn, agar bank topilmagan bo'lsa)
-  importBankNameText     String?  @map("import_bank_name_text") @db.Text
+  importBankNameText     String?      @map("import_bank_name_text") @db.Text
   // Qo'lda import qilinganda — kim import qilgan va qachon
-  importedBy             String?  @map("imported_by") @db.VarChar(190)
-  importedAt             DateTime? @map("imported_at")
+  importedBy             String?      @map("imported_by") @db.VarChar(190)
+  importedAt             DateTime?    @map("imported_at")
   // Import batch (tarix + ko'plab tranzaksiyalarni bitta yozuv bilan o'chirish/eksport qilish)
-  importBatchId          String?   @map("import_batch_id")
+  importBatchId          String?      @map("import_batch_id")
   importBatch            ImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
 
   // Bog'lanishlar
-  bankId        String?      @map("bank_id")
-  bank          Bank?        @relation(fields: [bankId], references: [id])
-  accountId     String?      @map("account_id")
-  account       BankAccount? @relation(fields: [accountId], references: [id])
+  bankId    String?      @map("bank_id")
+  bank      Bank?        @relation(fields: [bankId], references: [id])
+  accountId String?      @map("account_id")
+  account   BankAccount? @relation(fields: [accountId], references: [id])
 
   // Kategoriya — 2 darajali (F va G ustunlar Sheets'dagi). Bor bo'lsa, qayta yozilmaydi.
-  categoryId    String?      @map("category_id")
-  category      Category?    @relation("TxnCategory", fields: [categoryId], references: [id])
-  subcategoryId String?      @map("subcategory_id")
-  subcategory   Category?    @relation("TxnSubcategory", fields: [subcategoryId], references: [id])
+  categoryId       String?   @map("category_id")
+  category         Category? @relation("TxnCategory", fields: [categoryId], references: [id])
+  subcategoryId    String?   @map("subcategory_id")
+  subcategory      Category? @relation("TxnSubcategory", fields: [subcategoryId], references: [id])
   // Topilgan shartnoma raqami (description'dan ajratilgan + CRM bilan tasdiqlangan)
   // VarChar(128) — import paytida uzunroq shartnoma raqamlari kelishi mumkin
-  contractNumber String?     @map("contract_number") @db.VarChar(128)
+  contractNumber   String?   @map("contract_number") @db.VarChar(128)
   // Shartnoma qo'lda kiritilganmi (CRM tekshirilmagan, foydalanuvchi javobgar)
   // true bo'lsa — frontend "QO'LDA" badge ko'rsatadi (XATO emas)
   isContractManual Boolean   @default(false) @map("is_contract_manual")
   // XATO ro'yxatidan yashirilganmi (Telegram/web agent ro'yxatida ko'rinmaydi)
   xatoHidden       Boolean   @default(false) @map("xato_hidden")
   // Kategoriya qachon va kim tomonidan qo'yilgan (auto/manual/cron/import)
-  categorizedAt   DateTime?  @map("categorized_at")
-  categorizedBy   String?    @map("categorized_by") @db.VarChar(20)
-  categorizedById String?    @map("categorized_by_id")
+  categorizedAt    DateTime? @map("categorized_at")
+  categorizedBy    String?   @map("categorized_by") @db.VarChar(20)
+  categorizedById  String?   @map("categorized_by_id")
 
   // Billing: avto-match orqali mijozga bog'lanadi (INN orqali)
-  customerId    String?     @map("customer_id")
-  customer      Customer?   @relation(fields: [customerId], references: [id])
-  matchStatus   MatchStatus @default(UNMATCHED) @map("match_status")
-  matchedAt     DateTime?   @map("matched_at")
+  customerId  String?     @map("customer_id")
+  customer    Customer?   @relation(fields: [customerId], references: [id])
+  matchStatus MatchStatus @default(UNMATCHED) @map("match_status")
+  matchedAt   DateTime?   @map("matched_at")
 
   // Qo'lda tanlangan kontragent (Counterparty jadvali bo'yicha) — INN avto-lookup ustidan
   // Foydalanuvchi tahrirlash dialogida qidirib tanlaganda
-  manualCounterpartyId String?    @map("manual_counterparty_id")
+  manualCounterpartyId String?       @map("manual_counterparty_id")
   manualCounterparty   Counterparty? @relation("ManualCounterparty", fields: [manualCounterpartyId], references: [id])
 
   // Biriktirilgan fayllar (ariza, hujjat va h.k.)
@@ -165,13 +165,13 @@ model Transaction {
   xonpayMatches XonpayTransaction[]
 
   // To'lov bosqichlariga taqsimlanishi (bitta tranzaksiya = bir nechta payment)
-  payments      Payment[]
+  payments Payment[]
 
   // Vaqtlar
-  txnDate       DateTime  @map("txn_date")
-  syncedAt      DateTime  @default(now()) @map("synced_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  txnDate   DateTime @map("txn_date")
+  syncedAt  DateTime @default(now()) @map("synced_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([txnDate])
   // Kompozit indeks list orderBy [txnDate desc, id desc] uchun.
@@ -201,21 +201,21 @@ model Transaction {
 // (ariza, hujjat, rasm). To'lov ariz orqali to'g'rilash uchun.
 // ─────────────────────────────────────────────────────────────────
 model TransactionAttachment {
-  id            String      @id @default(cuid())
-  txId          String      @map("tx_id")
-  transaction   Transaction @relation(fields: [txId], references: [id], onDelete: Cascade)
+  id          String      @id @default(cuid())
+  txId        String      @map("tx_id")
+  transaction Transaction @relation(fields: [txId], references: [id], onDelete: Cascade)
 
-  type          String      @db.VarChar(32)              // 'ariza' | 'document' | 'image' (kelajakda)
-  filename      String      @db.VarChar(255)              // foydalanuvchi ko'rgan nom
-  mimeType      String      @map("mime_type") @db.VarChar(128)
-  fileSize      Int         @map("file_size")             // bayt
-  storagePath   String      @map("storage_path") @db.VarChar(500)  // server diskdagi yo'l
+  type        String @db.VarChar(32) // 'ariza' | 'document' | 'image' (kelajakda)
+  filename    String @db.VarChar(255) // foydalanuvchi ko'rgan nom
+  mimeType    String @map("mime_type") @db.VarChar(128)
+  fileSize    Int    @map("file_size") // bayt
+  storagePath String @map("storage_path") @db.VarChar(500) // server diskdagi yo'l
 
-  contractNumber String?    @map("contract_number") @db.VarChar(128)  // qaysi shartnomaga tegishli
-  notes         String?     @db.Text                       // izoh
+  contractNumber String? @map("contract_number") @db.VarChar(128) // qaysi shartnomaga tegishli
+  notes          String? @db.Text // izoh
 
-  uploadedBy    String?     @map("uploaded_by") @db.VarChar(190)     // email
-  uploadedAt    DateTime    @default(now()) @map("uploaded_at")
+  uploadedBy String?  @map("uploaded_by") @db.VarChar(190) // email
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
 
   @@index([txId])
   @@index([uploadedAt])
@@ -228,56 +228,56 @@ model TransactionAttachment {
 // kategoriya + ariza fayl) → approved. Hech narsa avtomat tasdiqlanmaydi.
 // ─────────────────────────────────────────────────────────────────
 model XatoCorrectionRequest {
-  id                 String    @id @default(cuid())
-  txId               String    @map("tx_id") @db.VarChar(64)            // Transaction.id
-  oplataKvId         String?   @map("oplata_kv_id") @db.VarChar(255)    // OplataKv.id (agar web/telegram'dan)
+  id         String  @id @default(cuid())
+  txId       String  @map("tx_id") @db.VarChar(64) // Transaction.id
+  oplataKvId String? @map("oplata_kv_id") @db.VarChar(255) // OplataKv.id (agar web/telegram'dan)
 
   // Yuborilgan taklif
-  proposedContractNo String?   @map("proposed_contract_no") @db.VarChar(128)
-  note               String?   @db.Text
+  proposedContractNo String? @map("proposed_contract_no") @db.VarChar(128)
+  note               String? @db.Text
 
-  status             String    @default("pending") @db.VarChar(16)      // pending | approved | rejected
+  status String @default("pending") @db.VarChar(16) // pending | approved | rejected
 
   // Kim yubordi
-  source             String    @default("telegram") @db.VarChar(16)     // telegram | web | app
-  submittedByName    String    @map("submitted_by_name") @db.VarChar(190)
-  submittedByChatId  String?   @map("submitted_by_chat_id") @db.VarChar(64)
-  submittedById      String?   @map("submitted_by_id") @db.VarChar(64)  // AdminUser.id (app)
-  submittedAt        DateTime  @default(now()) @map("submitted_at")
+  source            String   @default("telegram") @db.VarChar(16) // telegram | web | app
+  submittedByName   String   @map("submitted_by_name") @db.VarChar(190)
+  submittedByChatId String?  @map("submitted_by_chat_id") @db.VarChar(64)
+  submittedById     String?  @map("submitted_by_id") @db.VarChar(64) // AdminUser.id (app)
+  submittedAt       DateTime @default(now()) @map("submitted_at")
 
   // Tasdiqlash / rad etish
-  reviewedById       String?   @map("reviewed_by_id") @db.VarChar(64)
-  reviewedByName     String?   @map("reviewed_by_name") @db.VarChar(190)
-  reviewedByType     String?   @map("reviewed_by_type") @db.VarChar(10)  // 'agent' | 'user'
-  reviewedAt         DateTime? @map("reviewed_at")
-  rejectReason       String?   @map("reject_reason") @db.Text
+  reviewedById   String?   @map("reviewed_by_id") @db.VarChar(64)
+  reviewedByName String?   @map("reviewed_by_name") @db.VarChar(190)
+  reviewedByType String?   @map("reviewed_by_type") @db.VarChar(10) // 'agent' | 'user'
+  reviewedAt     DateTime? @map("reviewed_at")
+  rejectReason   String?   @map("reject_reason") @db.Text
 
   // AI Agent
-  agentState         String?   @map("agent_state") @db.VarChar(16)  // 'processing' | 'needs_review' | 'done'
-  agentReason        String?   @map("agent_reason") @db.Text          // agent qarori izohi
-  agentAt            DateTime? @map("agent_at")
+  agentState  String?   @map("agent_state") @db.VarChar(16) // 'processing' | 'needs_review' | 'done'
+  agentReason String?   @map("agent_reason") @db.Text // agent qarori izohi
+  agentAt     DateTime? @map("agent_at")
 
   // Qo'llanilgan natija (approved bo'lganda)
-  appliedContractNo  String?   @map("applied_contract_no") @db.VarChar(128)
-  categoryId         String?   @map("category_id") @db.VarChar(64)
-  categoryName       String?   @map("category_name") @db.VarChar(190)
-  subCategoryId      String?   @map("sub_category_id") @db.VarChar(64)
-  subCategoryName    String?   @map("sub_category_name") @db.VarChar(190)
-  attachmentId       String?   @map("attachment_id") @db.VarChar(64)
-  attachmentName     String?   @map("attachment_name") @db.VarChar(255)
+  appliedContractNo String? @map("applied_contract_no") @db.VarChar(128)
+  categoryId        String? @map("category_id") @db.VarChar(64)
+  categoryName      String? @map("category_name") @db.VarChar(190)
+  subCategoryId     String? @map("sub_category_id") @db.VarChar(64)
+  subCategoryName   String? @map("sub_category_name") @db.VarChar(190)
+  attachmentId      String? @map("attachment_id") @db.VarChar(64)
+  attachmentName    String? @map("attachment_name") @db.VarChar(255)
 
   // Ko'rsatish uchun snapshot (yuborilgan paytdagi holat)
-  snapAmount         Decimal?  @map("snap_amount") @db.Decimal(15, 2)
-  snapDate           DateTime? @map("snap_date")
-  snapClient         String?   @map("snap_client") @db.VarChar(300)
-  snapObject         String?   @map("snap_object") @db.VarChar(300)
-  snapContractNo     String?   @map("snap_contract_no") @db.VarChar(64)
-  snapTxType         String?   @map("snap_tx_type") @db.VarChar(64)
-  snapPurpose        String?   @map("snap_purpose") @db.Text
-  snapExternalId     String?   @map("snap_external_id") @db.VarChar(255)
+  snapAmount     Decimal?  @map("snap_amount") @db.Decimal(15, 2)
+  snapDate       DateTime? @map("snap_date")
+  snapClient     String?   @map("snap_client") @db.VarChar(300)
+  snapObject     String?   @map("snap_object") @db.VarChar(300)
+  snapContractNo String?   @map("snap_contract_no") @db.VarChar(64)
+  snapTxType     String?   @map("snap_tx_type") @db.VarChar(64)
+  snapPurpose    String?   @map("snap_purpose") @db.Text
+  snapExternalId String?   @map("snap_external_id") @db.VarChar(255)
 
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([status])
   @@index([txId])
@@ -289,7 +289,7 @@ model XatoCorrectionRequest {
 // AI Agent chat tarixi (admin bilan suhbat)
 model AgentChatMessage {
   id        String   @id @default(cuid())
-  role      String   @db.VarChar(10)      // 'user' | 'assistant'
+  role      String   @db.VarChar(10) // 'user' | 'assistant'
   content   String   @db.Text
   hasImage  Boolean  @default(false) @map("has_image")
   createdAt DateTime @default(now()) @map("created_at")
@@ -303,17 +303,17 @@ model AgentChatMessage {
 // Tarix, yuklab olish (re-export), o'chirish uchun
 // ─────────────────────────────────────────────────────────────────
 model ImportBatch {
-  id           String        @id @default(cuid())
-  kind         String        @db.VarChar(32)              // 'transactions' | 'counterparties' (kelajakda)
-  fileName     String?       @map("file_name") @db.VarChar(255)
-  fileSize     Int?          @map("file_size")             // bayt
-  importedBy   String?       @map("imported_by") @db.VarChar(190)
-  importedAt   DateTime      @default(now()) @map("imported_at")
-  rowsTotal    Int           @default(0) @map("rows_total")
-  rowsAdded    Int           @default(0) @map("rows_added")
-  rowsSkipped  Int           @default(0) @map("rows_skipped")
-  rowsErrors   Int           @default(0) @map("rows_errors")
-  notes        String?       @db.Text                       // 'Legacy import' kabi izoh
+  id          String   @id @default(cuid())
+  kind        String   @db.VarChar(32) // 'transactions' | 'counterparties' (kelajakda)
+  fileName    String?  @map("file_name") @db.VarChar(255)
+  fileSize    Int?     @map("file_size") // bayt
+  importedBy  String?  @map("imported_by") @db.VarChar(190)
+  importedAt  DateTime @default(now()) @map("imported_at")
+  rowsTotal   Int      @default(0) @map("rows_total")
+  rowsAdded   Int      @default(0) @map("rows_added")
+  rowsSkipped Int      @default(0) @map("rows_skipped")
+  rowsErrors  Int      @default(0) @map("rows_errors")
+  notes       String?  @db.Text // 'Legacy import' kabi izoh
 
   transactions Transaction[]
 
@@ -323,68 +323,68 @@ model ImportBatch {
 }
 
 enum MatchStatus {
-  UNMATCHED     // INN topilmadi yoki hali tekshirilmagan
-  AUTO          // Avtomatik mos topildi (INN orqali)
-  MANUAL        // Admin qo'lda biriktirgan
-  PARTIAL       // Qisman taqsimlangan
-  IGNORED       // Admin "bu billing'ga aloqasi yo'q" deb belgilagan
+  UNMATCHED // INN topilmadi yoki hali tekshirilmagan
+  AUTO // Avtomatik mos topildi (INN orqali)
+  MANUAL // Admin qo'lda biriktirgan
+  PARTIAL // Qisman taqsimlangan
+  IGNORED // Admin "bu billing'ga aloqasi yo'q" deb belgilagan
 }
 
 enum TxnType {
-  TRANSFER       // O'tkazma
-  PAYMENT        // To'lov
-  SALARY         // Maosh
-  TAX            // Soliq
-  FEE            // Komissiya
-  REFUND         // Qaytarish
-  OTHER          // Boshqa
+  TRANSFER // O'tkazma
+  PAYMENT // To'lov
+  SALARY // Maosh
+  TAX // Soliq
+  FEE // Komissiya
+  REFUND // Qaytarish
+  OTHER // Boshqa
 }
 
 enum TxnStatus {
-  PENDING        // Kutilmoqda
-  COMPLETED      // Yakunlangan
-  FAILED         // Muvaffaqiyatsiz
-  CANCELLED      // Bekor qilingan
-  REVERSED       // Qaytarilgan
+  PENDING // Kutilmoqda
+  COMPLETED // Yakunlangan
+  FAILED // Muvaffaqiyatsiz
+  CANCELLED // Bekor qilingan
+  REVERSED // Qaytarilgan
 }
 
 enum TxnDirection {
-  IN             // Kiruvchi
-  OUT            // Chiquvchi
+  IN // Kiruvchi
+  OUT // Chiquvchi
 }
 
 enum TxnSource {
-  SYNC           // Bank API'dan avtomatik sync
-  IMPORT         // Qo'lda Excel'dan import qilingan (standart format)
-  MANUAL         // Qo'lda admin tomonidan kiritilgan (kelajakda)
-  ALOQA_BANK     // Aloqa Bank Excel import (read-only — edit/delete/category bloklangan)
+  SYNC // Bank API'dan avtomatik sync
+  IMPORT // Qo'lda Excel'dan import qilingan (standart format)
+  MANUAL // Qo'lda admin tomonidan kiritilgan (kelajakda)
+  ALOQA_BANK // Aloqa Bank Excel import (read-only — edit/delete/category bloklangan)
 }
 
 // ─────────────────────────────────────────────────────────────────
 // BANK — bank manbalari (Kapitalbank, Uzcard, Humo, ...)
 // ─────────────────────────────────────────────────────────────────
 model Bank {
-  id           String           @id @default(cuid())
-  code         String           @unique @db.VarChar(32)  // KAPITALBANK, UZCARD, HUMO
-  name         String           @db.VarChar(128)
-  apiBaseUrl   String?          @map("api_base_url")
-  apiKind      BankApiKind      @default(KAPITALBANK_V3) @map("api_kind")
-  isActive     Boolean          @default(true) @map("is_active")
-  syncIntervalMinutes Int       @default(5) @map("sync_interval_minutes") // har necha daqiqada sync
+  id                  String      @id @default(cuid())
+  code                String      @unique @db.VarChar(32) // KAPITALBANK, UZCARD, HUMO
+  name                String      @db.VarChar(128)
+  apiBaseUrl          String?     @map("api_base_url")
+  apiKind             BankApiKind @default(KAPITALBANK_V3) @map("api_kind")
+  isActive            Boolean     @default(true) @map("is_active")
+  syncIntervalMinutes Int         @default(5) @map("sync_interval_minutes") // har necha daqiqada sync
 
   credentials  BankCredential[]
   accounts     BankAccount[]
   transactions Transaction[]
 
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("banks")
 }
 
 enum BankApiKind {
   KAPITALBANK_V3
-  IPAK_YOLI_V1   // Ipak Yo'li — Kapitalbank bilan bir xil OpenAPI 24/7 framework (mb.ipakyulibank.uz)
+  IPAK_YOLI_V1 // Ipak Yo'li — Kapitalbank bilan bir xil OpenAPI 24/7 framework (mb.ipakyulibank.uz)
   GENERIC
 }
 
@@ -393,62 +393,62 @@ enum BankApiKind {
 // admin panel orqali kiritiladi, parol shifrlanib saqlanadi
 // ─────────────────────────────────────────────────────────────────
 model BankCredential {
-  id              String        @id @default(cuid())
-  bankId          String        @map("bank_id")
-  bank            Bank          @relation(fields: [bankId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  bankId String @map("bank_id")
+  bank   Bank   @relation(fields: [bankId], references: [id], onDelete: Cascade)
 
-  label           String        @db.VarChar(128)              // "Xon Saroy — Kapitalbank Yunusobod"
-  loginPrefix     String?       @map("login_prefix") @db.VarChar(8)  // "IB#" yoki bo'sh
-  loginName       String        @map("login_name") @db.VarChar(128)
-  passwordEnc     String        @map("password_enc") @db.Text       // AES-256-GCM bilan shifrlangan
-  clientIdExt     String?       @map("client_id_ext") @db.VarChar(64) // KapitalBank Client.id (APILogin javobida)
-  branch          String?       @db.VarChar(8)                       // MFO
-  authMode        BankAuthMode  @default(IP_WHITELIST) @map("auth_mode")
-  isActive        Boolean       @default(true) @map("is_active")
-  useProxy        Boolean       @default(false) @map("use_proxy")  // ahost orqali yuborish (IP whitelist'ni chetlab o'tish)
+  label       String       @db.VarChar(128) // "Xon Saroy — Kapitalbank Yunusobod"
+  loginPrefix String?      @map("login_prefix") @db.VarChar(8) // "IB#" yoki bo'sh
+  loginName   String       @map("login_name") @db.VarChar(128)
+  passwordEnc String       @map("password_enc") @db.Text // AES-256-GCM bilan shifrlangan
+  clientIdExt String?      @map("client_id_ext") @db.VarChar(64) // KapitalBank Client.id (APILogin javobida)
+  branch      String?      @db.VarChar(8) // MFO
+  authMode    BankAuthMode @default(IP_WHITELIST) @map("auth_mode")
+  isActive    Boolean      @default(true) @map("is_active")
+  useProxy    Boolean      @default(false) @map("use_proxy") // ahost orqali yuborish (IP whitelist'ni chetlab o'tish)
 
   // sessiya holatini ham saqlab qo'yamiz (SMS rejim uchun zaxira)
-  sid             String?       @db.VarChar(255)
-  sidExpiresAt    DateTime?     @map("sid_expires_at")
-  lastVerifiedAt  DateTime?     @map("last_verified_at")
-  lastError       String?       @map("last_error") @db.Text
+  sid            String?   @db.VarChar(255)
+  sidExpiresAt   DateTime? @map("sid_expires_at")
+  lastVerifiedAt DateTime? @map("last_verified_at")
+  lastError      String?   @map("last_error") @db.Text
 
-  accounts        BankAccount[]
+  accounts BankAccount[]
 
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([bankId, loginName])
   @@map("bank_credentials")
 }
 
 enum BankAuthMode {
-  IP_WHITELIST    // Server IP banked oq ro'yxatda — har so'rovda Basic Auth
-  SMS_SID         // APILogin orqali SID olib, kesh
+  IP_WHITELIST // Server IP banked oq ro'yxatda — har so'rovda Basic Auth
+  SMS_SID // APILogin orqali SID olib, kesh
 }
 
 // ─────────────────────────────────────────────────────────────────
 // BANK ACCOUNT — kompaniya hisob raqamlari (har biri o'z credential'iga bog'lanadi)
 // ─────────────────────────────────────────────────────────────────
 model BankAccount {
-  id             String          @id @default(cuid())
-  bankId         String          @map("bank_id")
-  bank           Bank            @relation(fields: [bankId], references: [id])
-  credentialId   String          @map("credential_id")
-  credential     BankCredential  @relation(fields: [credentialId], references: [id], onDelete: Cascade)
+  id           String         @id @default(cuid())
+  bankId       String         @map("bank_id")
+  bank         Bank           @relation(fields: [bankId], references: [id])
+  credentialId String         @map("credential_id")
+  credential   BankCredential @relation(fields: [credentialId], references: [id], onDelete: Cascade)
 
-  branch         String          @db.VarChar(8)              // MFO (5 belgi, 8 zaxira)
-  accountNo      String          @map("account_no") @db.VarChar(32)
-  ownerName      String?         @map("owner_name") @db.VarChar(128)
-  currency       String          @default("UZS") @db.VarChar(3)
-  balance        Decimal?        @db.Decimal(18, 2)
-  syncEnabled    Boolean         @default(true) @map("sync_enabled")
-  lastSyncedAt   DateTime?       @map("last_synced_at")
+  branch       String    @db.VarChar(8) // MFO (5 belgi, 8 zaxira)
+  accountNo    String    @map("account_no") @db.VarChar(32)
+  ownerName    String?   @map("owner_name") @db.VarChar(128)
+  currency     String    @default("UZS") @db.VarChar(3)
+  balance      Decimal?  @db.Decimal(18, 2)
+  syncEnabled  Boolean   @default(true) @map("sync_enabled")
+  lastSyncedAt DateTime? @map("last_synced_at")
 
-  transactions   Transaction[]
+  transactions Transaction[]
 
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@unique([branch, accountNo])
   @@index([credentialId])
@@ -459,22 +459,22 @@ model BankAccount {
 // CATEGORY — tranzaksiya turlari (xarajat/daromad kategoriyalari)
 // ─────────────────────────────────────────────────────────────────
 model Category {
-  id           String        @id @default(cuid())
-  code         String        @unique @db.VarChar(64)
-  name         String        @db.VarChar(128)
-  parentId     String?       @map("parent_id")
-  parent       Category?     @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children     Category[]    @relation("CategoryHierarchy")
-  color        String?       @db.VarChar(16)   // UI uchun hex rang
-  icon         String?       @db.VarChar(64)
-  isSystem     Boolean       @default(false) @map("is_system")  // seed kategoriyalar — o'chirilmaydi
-  sortOrder    Int           @default(0) @map("sort_order")
+  id        String     @id @default(cuid())
+  code      String     @unique @db.VarChar(64)
+  name      String     @db.VarChar(128)
+  parentId  String?    @map("parent_id")
+  parent    Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryHierarchy")
+  color     String?    @db.VarChar(16) // UI uchun hex rang
+  icon      String?    @db.VarChar(64)
+  isSystem  Boolean    @default(false) @map("is_system") // seed kategoriyalar — o'chirilmaydi
+  sortOrder Int        @default(0) @map("sort_order")
 
-  transactions   Transaction[] @relation("TxnCategory")
+  transactions    Transaction[] @relation("TxnCategory")
   subTransactions Transaction[] @relation("TxnSubcategory")
 
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([parentId])
   @@map("categories")
@@ -485,22 +485,22 @@ model Category {
 // Kim, qachon, qaysi kategoriyani qo'ydi/o'zgartirdi — to'liq tarix.
 // ─────────────────────────────────────────────────────────────────
 model TransactionCategoryHistory {
-  id               String   @id @default(cuid())
-  txId             String   @map("tx_id")
-  action           String   @db.VarChar(20)            // 'sync' | 'auto' | 'manual' | 'cron' | 'force'
-  actorId          String?  @map("actor_id")            // user id (manual uchun)
-  actorName        String?  @map("actor_name") @db.VarChar(128)  // email / 'cron' / 'sync'
-  oldCategoryId    String?  @map("old_category_id")
-  oldCategoryName  String?  @map("old_category_name") @db.VarChar(128)
-  oldSubcategoryId String?  @map("old_subcategory_id")
-  oldSubcategoryName String? @map("old_subcategory_name") @db.VarChar(128)
-  newCategoryId    String?  @map("new_category_id")
-  newCategoryName  String?  @map("new_category_name") @db.VarChar(128)
-  newSubcategoryId String?  @map("new_subcategory_id")
-  newSubcategoryName String? @map("new_subcategory_name") @db.VarChar(128)
-  contractNumber   String?  @map("contract_number") @db.VarChar(32)
-  reason           String?  @db.Text                    // 'CRM topdi: ...' / 'qo'lda o'zgartirildi'
-  createdAt        DateTime @default(now()) @map("created_at")
+  id                 String   @id @default(cuid())
+  txId               String   @map("tx_id")
+  action             String   @db.VarChar(20) // 'sync' | 'auto' | 'manual' | 'cron' | 'force'
+  actorId            String?  @map("actor_id") // user id (manual uchun)
+  actorName          String?  @map("actor_name") @db.VarChar(128) // email / 'cron' / 'sync'
+  oldCategoryId      String?  @map("old_category_id")
+  oldCategoryName    String?  @map("old_category_name") @db.VarChar(128)
+  oldSubcategoryId   String?  @map("old_subcategory_id")
+  oldSubcategoryName String?  @map("old_subcategory_name") @db.VarChar(128)
+  newCategoryId      String?  @map("new_category_id")
+  newCategoryName    String?  @map("new_category_name") @db.VarChar(128)
+  newSubcategoryId   String?  @map("new_subcategory_id")
+  newSubcategoryName String?  @map("new_subcategory_name") @db.VarChar(128)
+  contractNumber     String?  @map("contract_number") @db.VarChar(32)
+  reason             String?  @db.Text // 'CRM topdi: ...' / 'qo'lda o'zgartirildi'
+  createdAt          DateTime @default(now()) @map("created_at")
 
   @@index([txId, createdAt])
   @@index([actorId])
@@ -512,15 +512,15 @@ model TransactionCategoryHistory {
 // Har tranzaksiyada CRM'ga so'rov yubormaslik uchun.
 // ─────────────────────────────────────────────────────────────────
 model CrmContract {
-  contractNumber  String   @id @map("contract_number") @db.VarChar(128)  // Transaction bilan teng
-  customerName    String?  @map("customer_name") @db.Text                  // uzun org nomlari uchun
+  contractNumber  String   @id @map("contract_number") @db.VarChar(128) // Transaction bilan teng
+  customerName    String?  @map("customer_name") @db.Text // uzun org nomlari uchun
   status          String?  @db.VarChar(128)
   objectName      String?  @map("object_name") @db.VarChar(255)
   apartmentNumber String?  @map("apartment_number") @db.VarChar(64)
   phone           String?  @db.VarChar(64)
-  crmOrderId      String?  @map("crm_order_id") @db.VarChar(64)   // CRM order/shartnoma ID (API'da order_id)
-  rawSnapshot     Json?    @map("raw_snapshot")          // CRM javobining qisqartmasi
-  found           Boolean  @default(true)                // false → CRM'da topilmadi, kelajakda yana urinma
+  crmOrderId      String?  @map("crm_order_id") @db.VarChar(64) // CRM order/shartnoma ID (API'da order_id)
+  rawSnapshot     Json?    @map("raw_snapshot") // CRM javobining qisqartmasi
+  found           Boolean  @default(true) // false → CRM'da topilmadi, kelajakda yana urinma
   firstSeenAt     DateTime @default(now()) @map("first_seen_at")
   lastVerifiedAt  DateTime @default(now()) @map("last_verified_at")
   lastError       String?  @map("last_error") @db.Text
@@ -534,23 +534,23 @@ model CrmContract {
 // XONPAY SYNC LOG — har bir sync (manual + cron) tarixi
 // ─────────────────────────────────────────────────────────────────
 model XonpaySyncLog {
-  id          String    @id @default(cuid())
-  trigger     String    @db.VarChar(16)  // 'manual' | 'cron'
-  actorId     String?   @map("actor_id")
-  actorEmail  String?   @map("actor_email") @db.VarChar(190)
-  actorName   String?   @map("actor_name") @db.VarChar(190)  // To'liq ism (User.fullName)
-  status      String    @db.VarChar(16)  // 'running' | 'success' | 'failed' | 'cancelled'
-  pages       Int       @default(0)
-  fetched     Int       @default(0)
-  xonpay      Int       @default(0)
-  inserted    Int       @default(0)
-  updated     Int       @default(0)
-  matched     Int       @default(0)
-  errors      Int       @default(0)
-  errorMessage String?  @map("error_message") @db.Text
-  startedAt   DateTime  @default(now()) @map("started_at")
-  finishedAt  DateTime? @map("finished_at")
-  durationMs  Int?      @map("duration_ms")
+  id           String    @id @default(cuid())
+  trigger      String    @db.VarChar(16) // 'manual' | 'cron'
+  actorId      String?   @map("actor_id")
+  actorEmail   String?   @map("actor_email") @db.VarChar(190)
+  actorName    String?   @map("actor_name") @db.VarChar(190) // To'liq ism (User.fullName)
+  status       String    @db.VarChar(16) // 'running' | 'success' | 'failed' | 'cancelled'
+  pages        Int       @default(0)
+  fetched      Int       @default(0)
+  xonpay       Int       @default(0)
+  inserted     Int       @default(0)
+  updated      Int       @default(0)
+  matched      Int       @default(0)
+  errors       Int       @default(0)
+  errorMessage String?   @map("error_message") @db.Text
+  startedAt    DateTime  @default(now()) @map("started_at")
+  finishedAt   DateTime? @map("finished_at")
+  durationMs   Int?      @map("duration_ms")
 
   @@index([startedAt])
   @@index([trigger, startedAt])
@@ -565,37 +565,37 @@ model XonpaySyncLog {
 // Maqsad: qancha XonPay'dan keldi vs qancha Kapitalbankka tushdi.
 // ─────────────────────────────────────────────────────────────────
 model XonpayTransaction {
-  externalId           String   @id @map("external_id") @db.VarChar(255)  // CRM external_id
-  xonpayUuid           String?  @map("xonpay_uuid") @db.VarChar(64)       // purpose'dan extract: XONPAY:(UUID)
-  crmId                BigInt?  @map("crm_id")
-  crmUuid              String?  @map("crm_uuid") @db.VarChar(64)
-  orderId              BigInt?  @map("order_id")
-  contract             String?  @db.VarChar(128)
-  amount               BigInt   @default(0)
-  datePaid             DateTime? @map("date_paid") @db.Date
-  type                 String?  @db.VarChar(128)
-  category             String?  @db.VarChar(128)
-  status               String?  @db.VarChar(64)
-  purpose              String?  @db.Text
-  fullName             String?  @map("full_name") @db.Text
-  objectName           String?  @map("object_name") @db.VarChar(255)
-  isProblematic        Boolean  @default(false) @map("is_problematic")
-  isReceivedFromBank   Boolean  @default(false) @map("is_received_from_bank")
-  crmCreatedAt         DateTime? @map("crm_created_at")
-  crmUpdatedAt         DateTime? @map("crm_updated_at")
+  externalId         String    @id @map("external_id") @db.VarChar(255) // CRM external_id
+  xonpayUuid         String?   @map("xonpay_uuid") @db.VarChar(64) // purpose'dan extract: XONPAY:(UUID)
+  crmId              BigInt?   @map("crm_id")
+  crmUuid            String?   @map("crm_uuid") @db.VarChar(64)
+  orderId            BigInt?   @map("order_id")
+  contract           String?   @db.VarChar(128)
+  amount             BigInt    @default(0)
+  datePaid           DateTime? @map("date_paid") @db.Date
+  type               String?   @db.VarChar(128)
+  category           String?   @db.VarChar(128)
+  status             String?   @db.VarChar(64)
+  purpose            String?   @db.Text
+  fullName           String?   @map("full_name") @db.Text
+  objectName         String?   @map("object_name") @db.VarChar(255)
+  isProblematic      Boolean   @default(false) @map("is_problematic")
+  isReceivedFromBank Boolean   @default(false) @map("is_received_from_bank")
+  crmCreatedAt       DateTime? @map("crm_created_at")
+  crmUpdatedAt       DateTime? @map("crm_updated_at")
 
   // ── Reconciliation ──
-  matchedTxId          String?  @map("matched_tx_id")
-  matchedTx            Transaction? @relation(fields: [matchedTxId], references: [id], onDelete: SetNull)
-  matchedExternalId    String?  @map("matched_external_id") @db.VarChar(255)
-  matchedAmount        BigInt?  @map("matched_amount")
-  matchedDate          DateTime? @map("matched_date") @db.Date
-  isMatched            Boolean  @default(false) @map("is_matched")
-  matchedAt            DateTime? @map("matched_at")
-  lastCheckedAt        DateTime? @map("last_checked_at")
+  matchedTxId       String?      @map("matched_tx_id")
+  matchedTx         Transaction? @relation(fields: [matchedTxId], references: [id], onDelete: SetNull)
+  matchedExternalId String?      @map("matched_external_id") @db.VarChar(255)
+  matchedAmount     BigInt?      @map("matched_amount")
+  matchedDate       DateTime?    @map("matched_date") @db.Date
+  isMatched         Boolean      @default(false) @map("is_matched")
+  matchedAt         DateTime?    @map("matched_at")
+  lastCheckedAt     DateTime?    @map("last_checked_at")
 
-  syncedAt             DateTime @default(now()) @map("synced_at")
-  updatedAt            DateTime @updatedAt @map("updated_at_local")
+  syncedAt  DateTime @default(now()) @map("synced_at")
+  updatedAt DateTime @updatedAt @map("updated_at_local")
 
   @@index([contract])
   @@index([datePaid])
@@ -609,17 +609,17 @@ model XonpayTransaction {
 // SYNC LOG — bank API'dan ma'lumot olish tarixi
 // ─────────────────────────────────────────────────────────────────
 model SyncLog {
-  id           String      @id @default(cuid())
-  source       String      @db.VarChar(255)             // "accountNo · ownerName" yoki bank kodi
-  accountId    String?     @map("account_id")
+  id           String     @id @default(cuid())
+  source       String     @db.VarChar(255) // "accountNo · ownerName" yoki bank kodi
+  accountId    String?    @map("account_id")
   status       SyncStatus
-  fetched      Int         @default(0)
-  saved        Int         @default(0)
-  errors       Int         @default(0)
-  errorMessage String?     @map("error_message") @db.Text
-  durationMs   Int?        @map("duration_ms")
-  startedAt    DateTime    @default(now()) @map("started_at")
-  finishedAt   DateTime?   @map("finished_at")
+  fetched      Int        @default(0)
+  saved        Int        @default(0)
+  errors       Int        @default(0)
+  errorMessage String?    @map("error_message") @db.Text
+  durationMs   Int?       @map("duration_ms")
+  startedAt    DateTime   @default(now()) @map("started_at")
+  finishedAt   DateTime?  @map("finished_at")
 
   @@index([startedAt])
   @@index([source, status])
@@ -640,30 +640,30 @@ enum SyncStatus {
 // yozuv update/delete qilinadi va shu yerga audit yoziladi.
 // ─────────────────────────────────────────────────────────────────
 model TransactionChangeLog {
-  id              String          @id @default(cuid())
+  id             String        @id @default(cuid())
   // Eski tx ID (delete bo'lsa null bo'ladi — tx o'chirilgan)
-  txId            String?         @map("tx_id")
+  txId           String?       @map("tx_id")
   // Asl externalId (composite) — qidirish uchun
-  externalId      String          @map("external_id") @db.VarChar(255)
-  accountId       String?         @map("account_id")
-  changeType      TxChangeType    @map("change_type")
+  externalId     String        @map("external_id") @db.VarChar(255)
+  accountId      String?       @map("account_id")
+  changeType     TxChangeType  @map("change_type")
   // O'zgargan field'lar nomlari (masalan ['status','amount'])
-  fieldsChanged   String[]        @map("fields_changed") @default([])
+  fieldsChanged  String[]      @default([]) @map("fields_changed")
   // Eski qiymatlar (delete uchun butun qator snapshot)
-  oldData         Json?           @map("old_data")
+  oldData        Json?         @map("old_data")
   // Yangi qiymatlar (delete uchun null)
-  newData         Json?           @map("new_data")
+  newData        Json?         @map("new_data")
   // Qulay qidirish uchun snapshot fields (delete bo'lsa eski qiymat, edit uchun yangi)
-  txnDate         DateTime?       @map("txn_date")
-  amount          Decimal?        @db.Decimal(18, 2)
-  direction       TxnDirection?
-  contractNumber  String?         @map("contract_number") @db.VarChar(128)
-  bankNameSnap    String?         @map("bank_name_snap") @db.VarChar(120)
-  accountNoSnap   String?         @map("account_no_snap") @db.VarChar(64)
+  txnDate        DateTime?     @map("txn_date")
+  amount         Decimal?      @db.Decimal(18, 2)
+  direction      TxnDirection?
+  contractNumber String?       @map("contract_number") @db.VarChar(128)
+  bankNameSnap   String?       @map("bank_name_snap") @db.VarChar(120)
+  accountNoSnap  String?       @map("account_no_snap") @db.VarChar(64)
   // Audit
-  detectedAt      DateTime        @default(now()) @map("detected_at")
-  detectedBy      String?         @map("detected_by") @db.VarChar(190)  // 'sync' | 'manual:<email>'
-  note            String?         @db.Text
+  detectedAt     DateTime      @default(now()) @map("detected_at")
+  detectedBy     String?       @map("detected_by") @db.VarChar(190) // 'sync' | 'manual:<email>'
+  note           String?       @db.Text
 
   @@index([detectedAt(sort: Desc)])
   @@index([changeType])
@@ -673,8 +673,8 @@ model TransactionChangeLog {
 }
 
 enum TxChangeType {
-  DELETED   // bank tomonida o'chirilgan (yoki bekor qilingan)
-  EDITED    // bank field o'zgartirgan (status, amount, va h.k.)
+  DELETED // bank tomonida o'chirilgan (yoki bekor qilingan)
+  EDITED // bank field o'zgartirgan (status, amount, va h.k.)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -700,25 +700,25 @@ model Setting {
 // Bank tranzaksiyasi INN orqali avtomatik mos topiladi
 // ─────────────────────────────────────────────────────────────────
 model Customer {
-  id            String     @id @default(cuid())
-  name          String     @db.VarChar(255)               // "OOO Tashkent Mall"
-  inn           String?    @unique @db.VarChar(16)        // 300123456 — INN/STIR
-  pinfl         String?    @db.VarChar(16)                // jismoniy shaxs uchun
-  shortName     String?    @map("short_name") @db.VarChar(64)
-  contactPerson String?    @map("contact_person") @db.VarChar(128)
-  phone         String?    @db.VarChar(32)
-  email         String?    @db.VarChar(128)
-  address       String?    @db.Text
-  bankAccount   String?    @map("bank_account") @db.VarChar(32)
-  bankMfo       String?    @map("bank_mfo") @db.VarChar(8)
-  notes         String?    @db.Text
-  isActive      Boolean    @default(true) @map("is_active")
+  id            String  @id @default(cuid())
+  name          String  @db.VarChar(255) // "OOO Tashkent Mall"
+  inn           String? @unique @db.VarChar(16) // 300123456 — INN/STIR
+  pinfl         String? @db.VarChar(16) // jismoniy shaxs uchun
+  shortName     String? @map("short_name") @db.VarChar(64)
+  contactPerson String? @map("contact_person") @db.VarChar(128)
+  phone         String? @db.VarChar(32)
+  email         String? @db.VarChar(128)
+  address       String? @db.Text
+  bankAccount   String? @map("bank_account") @db.VarChar(32)
+  bankMfo       String? @map("bank_mfo") @db.VarChar(8)
+  notes         String? @db.Text
+  isActive      Boolean @default(true) @map("is_active")
 
-  contracts     Contract[]
-  transactions  Transaction[]
+  contracts    Contract[]
+  transactions Transaction[]
 
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([name])
   @@map("customers")
@@ -728,30 +728,30 @@ model Customer {
 // CONTRACT — shartnoma (mijoz bilan)
 // ─────────────────────────────────────────────────────────────────
 model Contract {
-  id            String           @id @default(cuid())
-  number        String           @unique @db.VarChar(64)  // SHRT-2026-001 — avto-generatsiya
-  customerId    String           @map("customer_id")
-  customer      Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  id         String   @id @default(cuid())
+  number     String   @unique @db.VarChar(64) // SHRT-2026-001 — avto-generatsiya
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
-  title         String           @db.VarChar(255)         // "Tashkent Mall qurilishi"
-  description   String?          @db.Text
-  projectAddress String?         @map("project_address") @db.Text
+  title          String  @db.VarChar(255) // "Tashkent Mall qurilishi"
+  description    String? @db.Text
+  projectAddress String? @map("project_address") @db.Text
 
-  totalAmount   Decimal          @map("total_amount") @db.Decimal(18, 2)
-  currency      String           @default("UZS") @db.VarChar(3)
+  totalAmount Decimal @map("total_amount") @db.Decimal(18, 2)
+  currency    String  @default("UZS") @db.VarChar(3)
 
-  signDate      DateTime         @map("sign_date")
-  startDate     DateTime?        @map("start_date")
-  endDate       DateTime?        @map("end_date")
+  signDate  DateTime  @map("sign_date")
+  startDate DateTime? @map("start_date")
+  endDate   DateTime? @map("end_date")
 
-  status        ContractStatus   @default(ACTIVE)
-  notes         String?          @db.Text
+  status ContractStatus @default(ACTIVE)
+  notes  String?        @db.Text
 
-  stages        ContractStage[]
-  payments      Payment[]
+  stages   ContractStage[]
+  payments Payment[]
 
-  createdAt     DateTime         @default(now()) @map("created_at")
-  updatedAt     DateTime         @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([customerId])
   @@index([status])
@@ -760,36 +760,36 @@ model Contract {
 }
 
 enum ContractStatus {
-  DRAFT          // Loyiha
-  ACTIVE         // Faol — to'lov kutilmoqda
-  COMPLETED      // To'liq to'langan
-  CANCELLED      // Bekor qilingan
-  SUSPENDED      // To'xtatilgan
+  DRAFT // Loyiha
+  ACTIVE // Faol — to'lov kutilmoqda
+  COMPLETED // To'liq to'langan
+  CANCELLED // Bekor qilingan
+  SUSPENDED // To'xtatilgan
 }
 
 // ─────────────────────────────────────────────────────────────────
 // CONTRACT STAGE — to'lov bosqichi (avans, poydevor, devor, yakuniy ...)
 // ─────────────────────────────────────────────────────────────────
 model ContractStage {
-  id            String        @id @default(cuid())
-  contractId    String        @map("contract_id")
-  contract      Contract      @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  contractId String   @map("contract_id")
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
 
-  ordinal       Int                                       // 1, 2, 3, 4 — tartib raqami
-  title         String        @db.VarChar(128)            // "Avans", "Poydevor"
-  amount        Decimal       @db.Decimal(18, 2)
-  percentage    Decimal?      @db.Decimal(5, 2)           // 30.00 — ixtiyoriy
-  dueDate       DateTime?     @map("due_date")            // kutilgan to'lov sanasi
+  ordinal    Int // 1, 2, 3, 4 — tartib raqami
+  title      String    @db.VarChar(128) // "Avans", "Poydevor"
+  amount     Decimal   @db.Decimal(18, 2)
+  percentage Decimal?  @db.Decimal(5, 2) // 30.00 — ixtiyoriy
+  dueDate    DateTime? @map("due_date") // kutilgan to'lov sanasi
 
-  paidAmount    Decimal       @default(0) @map("paid_amount") @db.Decimal(18, 2)
-  status        StageStatus   @default(PENDING)
-  paidAt        DateTime?     @map("paid_at")             // to'liq to'langan sana
-  notes         String?       @db.Text
+  paidAmount Decimal     @default(0) @map("paid_amount") @db.Decimal(18, 2)
+  status     StageStatus @default(PENDING)
+  paidAt     DateTime?   @map("paid_at") // to'liq to'langan sana
+  notes      String?     @db.Text
 
-  payments      Payment[]
+  payments Payment[]
 
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([contractId, ordinal])
   @@index([status])
@@ -798,10 +798,10 @@ model ContractStage {
 }
 
 enum StageStatus {
-  PENDING        // To'lanmagan
-  PARTIAL        // Qisman to'langan
-  PAID           // To'liq to'langan
-  OVERDUE        // Muddati o'tgan
+  PENDING // To'lanmagan
+  PARTIAL // Qisman to'langan
+  PAID // To'liq to'langan
+  OVERDUE // Muddati o'tgan
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -818,12 +818,12 @@ model Payment {
   stageId       String        @map("stage_id")
   stage         ContractStage @relation(fields: [stageId], references: [id])
 
-  amount        Decimal       @db.Decimal(18, 2)          // shu bosqichga taqsimlangan summa
-  source        PaymentSource @default(AUTO)
-  notes         String?       @db.Text
+  amount Decimal       @db.Decimal(18, 2) // shu bosqichga taqsimlangan summa
+  source PaymentSource @default(AUTO)
+  notes  String?       @db.Text
 
-  createdAt     DateTime      @default(now()) @map("created_at")
-  createdBy     String?       @map("created_by")          // AdminUser.id (manual link uchun)
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") // AdminUser.id (manual link uchun)
 
   @@index([transactionId])
   @@index([contractId])
@@ -832,8 +832,8 @@ model Payment {
 }
 
 enum PaymentSource {
-  AUTO           // Avtomatik (INN orqali)
-  MANUAL         // Admin qo'lda biriktirgan
+  AUTO // Avtomatik (INN orqali)
+  MANUAL // Admin qo'lda biriktirgan
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -843,55 +843,55 @@ enum PaymentSource {
 // Name foydalanuvchi kiritgandek qoladi — refresh paytida tegilmaydi.
 // ─────────────────────────────────────────────────────────────────
 model Counterparty {
-  id                String    @id @default(cuid())
-  inn               String    @unique @db.VarChar(20)        // 9/14 raqam standart, lekin legacy kodlar uchun (null0004, kod0088, va h.k.) ruxsat etilgan
-  name              String    @db.VarChar(255)               // foydalanuvchi kiritgan — refresh'da o'zgarmaydi
+  id   String @id @default(cuid())
+  inn  String @unique @db.VarChar(20) // 9/14 raqam standart, lekin legacy kodlar uchun (null0004, kod0088, va h.k.) ruxsat etilgan
+  name String @db.VarChar(255) // foydalanuvchi kiritgan — refresh'da o'zgarmaydi
 
   // Qo'lda kiritilgan kontragentlar (INN 9/14 raqamli emas) — DIDOX/Chamber tegmaydi
-  isManual          Boolean   @default(false) @map("is_manual")
+  isManual Boolean @default(false) @map("is_manual")
 
   // — DIDOX briefData'dan keladigan maydonlar (cron yangilaydi) —
-  fullName          String?   @map("full_name") @db.VarChar(255)
-  director          String?   @db.VarChar(255)
-  directorPinfl     String?   @map("director_pinfl") @db.VarChar(20)
-  accountant        String?   @db.VarChar(255)               // glav. bukh — invoice'dan
+  fullName      String? @map("full_name") @db.VarChar(255)
+  director      String? @db.VarChar(255)
+  directorPinfl String? @map("director_pinfl") @db.VarChar(20)
+  accountant    String? @db.VarChar(255) // glav. bukh — invoice'dan
 
-  phone             String?   @db.VarChar(50)
-  email             String?   @db.VarChar(190)
-  address           String?   @db.Text                       // billingAddress
+  phone   String? @db.VarChar(50)
+  email   String? @db.VarChar(190)
+  address String? @db.Text // billingAddress
 
-  vatNumber         String?   @map("vat_number") @db.VarChar(20)         // Рег. код НДС
-  vatStatus         String?   @map("vat_status") @db.VarChar(100)        // "Faol/Nofaol" matn
-  vatStatusCode     Int?      @map("vat_status_code")                    // 10/20/21/22/30/50/60
-  taxMode           String?   @map("tax_mode") @db.VarChar(50)
+  vatNumber     String? @map("vat_number") @db.VarChar(20) // Рег. код НДС
+  vatStatus     String? @map("vat_status") @db.VarChar(100) // "Faol/Nofaol" matn
+  vatStatusCode Int?    @map("vat_status_code") // 10/20/21/22/30/50/60
+  taxMode       String? @map("tax_mode") @db.VarChar(50)
 
-  opf               String?   @db.VarChar(100)
-  oked              String?   @db.VarChar(255)
-  companyType       String?   @map("company_type") @db.VarChar(100)
-  businessType      String?   @map("business_type") @db.VarChar(100)
-  registrationDate  DateTime? @map("registration_date") @db.Date
-  registrationNumber String?  @map("registration_number") @db.VarChar(50)
+  opf                String?   @db.VarChar(100)
+  oked               String?   @db.VarChar(255)
+  companyType        String?   @map("company_type") @db.VarChar(100)
+  businessType       String?   @map("business_type") @db.VarChar(100)
+  registrationDate   DateTime? @map("registration_date") @db.Date
+  registrationNumber String?   @map("registration_number") @db.VarChar(50)
 
   // — Reyting (DIDOX sustainabilityRating, Chamber criteriaAll bilan bir xil) —
-  rating            Int?
-  ratingType        String?   @map("rating_type") @db.VarChar(20)
-  ratingTitle       String?   @map("rating_title") @db.VarChar(100)
+  rating      Int?
+  ratingType  String? @map("rating_type") @db.VarChar(20)
+  ratingTitle String? @map("rating_title") @db.VarChar(100)
 
   // — JSON maydonlar —
-  bankAccounts      Json?     @map("bank_accounts")          // [{account, mfo, bankName, lastSeen}, ...]
-  founders          Json?                                     // [{fullName, share, ...}, ...]
-  rawDidoxBrief     Json?     @map("raw_didox_brief")        // butun briefData (debug uchun)
+  bankAccounts  Json? @map("bank_accounts") // [{account, mfo, bankName, lastSeen}, ...]
+  founders      Json? // [{fullName, share, ...}, ...]
+  rawDidoxBrief Json? @map("raw_didox_brief") // butun briefData (debug uchun)
 
   // — Tizim metadata —
-  addedBy           String    @map("added_by") @db.VarChar(50)   // AdminUser.id
-  addedAt           DateTime  @default(now()) @map("added_at")
-  lastFetchedAt     DateTime? @map("last_fetched_at")            // oxirgi DIDOX so'rovi
-  lastFetchError    String?   @map("last_fetch_error") @db.Text  // agar DIDOX javob bermasa
-  isActive          Boolean   @default(true) @map("is_active")
-  notes             String?   @db.Text
+  addedBy        String    @map("added_by") @db.VarChar(50) // AdminUser.id
+  addedAt        DateTime  @default(now()) @map("added_at")
+  lastFetchedAt  DateTime? @map("last_fetched_at") // oxirgi DIDOX so'rovi
+  lastFetchError String?   @map("last_fetch_error") @db.Text // agar DIDOX javob bermasa
+  isActive       Boolean   @default(true) @map("is_active")
+  notes          String?   @db.Text
 
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Back-relation: qaysi tranzaksiyalar shu kontragent'ga qo'lda bog'langan
   manualTransactions Transaction[] @relation("ManualCounterparty")
@@ -909,18 +909,18 @@ model Counterparty {
 // shu yerda saqlanadi: kim, qachon, qaysi manbadan.
 // ─────────────────────────────────────────────────────────────────
 model CounterpartyHistory {
-  id              String   @id @default(cuid())
-  inn             String   @db.VarChar(20)               // kontragent INN — easy filter
-  action          String   @db.VarChar(20)               // created | manual_edit | refreshed | cron_refresh | imported | deleted
-  actorType       String   @map("actor_type") @db.VarChar(10)  // user | cron | system
-  actorId         String?  @map("actor_id") @db.VarChar(50)    // AdminUser.id (cron uchun null)
-  actorName       String?  @map("actor_name") @db.VarChar(190) // log uchun shu paytdagi nom (admin keyin o'chirilsa ham qoladi)
-  source          String?  @db.VarChar(30)               // didox | chamber | didox+chamber | manual | none
-  fieldsChanged   String[] @map("fields_changed") @default([])   // qaysi maydonlar o'zgardi
-  changes         Json?                                  // {fieldName: {old: '…', new: '…'}, ...} — manual_edit uchun
-  note            String?  @db.Text                      // qisqacha izoh
+  id            String   @id @default(cuid())
+  inn           String   @db.VarChar(20) // kontragent INN — easy filter
+  action        String   @db.VarChar(20) // created | manual_edit | refreshed | cron_refresh | imported | deleted
+  actorType     String   @map("actor_type") @db.VarChar(10) // user | cron | system
+  actorId       String?  @map("actor_id") @db.VarChar(50) // AdminUser.id (cron uchun null)
+  actorName     String?  @map("actor_name") @db.VarChar(190) // log uchun shu paytdagi nom (admin keyin o'chirilsa ham qoladi)
+  source        String?  @db.VarChar(30) // didox | chamber | didox+chamber | manual | none
+  fieldsChanged String[] @default([]) @map("fields_changed") // qaysi maydonlar o'zgardi
+  changes       Json? // {fieldName: {old: '…', new: '…'}, ...} — manual_edit uchun
+  note          String?  @db.Text // qisqacha izoh
 
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([inn, createdAt(sort: Desc)])
   @@index([actorId])
@@ -932,44 +932,44 @@ model CounterpartyHistory {
 // ОплатыКв — Kvartira to'lovlari (alohida muhim jadval)
 // ═══════════════════════════════════════════════════════════════
 model OplataKv {
-  id                String   @id @default(cuid())
+  id String @id @default(cuid())
 
-  contractNo        String   @map("contract_no") @db.VarChar(50)        // Дог №
-  date              DateTime @db.Date                                    // Дата
-  paymentAmount     Decimal? @map("payment_amount") @db.Decimal(15, 2)   // Сумма оплаты (+/-)
-  firstInstallment  Decimal? @map("first_installment") @db.Decimal(15, 2) // 1 взнос (+/-)
-  monthlyAmount     Decimal? @map("monthly_amount") @db.Decimal(15, 2)   // ежемесячный (+/-)
-  purpose           String?  @db.Text                                    // Назначение платежа
-  txType            String?  @map("tx_type") @db.VarChar(60)             // Тип
-  note              String?  @db.Text                                    // Примечание
-  paymentCategory   OplataKvCategory? @map("payment_category")           // Оплата
-  object            String?  @db.VarChar(255)                            // Объект
-  client            String?  @db.VarChar(255)                            // Клиент
-  paymentMethod     String?  @map("payment_method") @db.VarChar(120)     // Способ оплаты
+  contractNo       String            @map("contract_no") @db.VarChar(50) // Дог №
+  date             DateTime          @db.Date // Дата
+  paymentAmount    Decimal?          @map("payment_amount") @db.Decimal(15, 2) // Сумма оплаты (+/-)
+  firstInstallment Decimal?          @map("first_installment") @db.Decimal(15, 2) // 1 взнос (+/-)
+  monthlyAmount    Decimal?          @map("monthly_amount") @db.Decimal(15, 2) // ежемесячный (+/-)
+  purpose          String?           @db.Text // Назначение платежа
+  txType           String?           @map("tx_type") @db.VarChar(60) // Тип
+  note             String?           @db.Text // Примечание
+  paymentCategory  OplataKvCategory? @map("payment_category") // Оплата
+  object           String?           @db.VarChar(255) // Объект
+  client           String?           @db.VarChar(255) // Клиент
+  paymentMethod    String?           @map("payment_method") @db.VarChar(120) // Способ оплаты
 
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
-  createdById       String?  @map("created_by_id") @db.VarChar(50)       // AdminUser.id
-  createdByName     String?  @map("created_by_name") @db.VarChar(190)    // muzlatib qo'yilgan ism
-  importBatchId     String?  @map("import_batch_id") @db.VarChar(50)     // ImportBatch.id (agar import bilan kelgan bo'lsa)
-  sourceTxId        String?  @unique @map("source_tx_id") @db.VarChar(255) // Transaction externalId (bank kompozit) yoki cuid (dedup uchun unique)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdById   String?  @map("created_by_id") @db.VarChar(50) // AdminUser.id
+  createdByName String?  @map("created_by_name") @db.VarChar(190) // muzlatib qo'yilgan ism
+  importBatchId String?  @map("import_batch_id") @db.VarChar(50) // ImportBatch.id (agar import bilan kelgan bo'lsa)
+  sourceTxId    String?  @unique @map("source_tx_id") @db.VarChar(255) // Transaction externalId (bank kompozit) yoki cuid (dedup uchun unique)
 
   // Переброска (shartnomadan shartnomaga pul o'tkazma) — guruh ID
   // Source qator (manfiy summa) + N ta destination qator (musbat summa) bir guruhga bog'lanadi.
   // perereboskaFilePath — biriktirilgan hujjat (majburiy) — faqat source qatorda saqlanadi.
-  perereboskaGroupId   String?  @map("perereboska_group_id") @db.VarChar(50)
-  perereboskaFilePath  String?  @map("perereboska_file_path") @db.Text
-  perereboskaFileName  String?  @map("perereboska_file_name") @db.VarChar(255)
-  perereboskaFileMime  String?  @map("perereboska_file_mime") @db.VarChar(128)
-  perereboskaFileSize  Int?     @map("perereboska_file_size")
+  perereboskaGroupId  String? @map("perereboska_group_id") @db.VarChar(50)
+  perereboskaFilePath String? @map("perereboska_file_path") @db.Text
+  perereboskaFileName String? @map("perereboska_file_name") @db.VarChar(255)
+  perereboskaFileMime String? @map("perereboska_file_mime") @db.VarChar(128)
+  perereboskaFileSize Int?    @map("perereboska_file_size")
 
   // Tranzaksiyada qo'lda shartnoma tuzatilganda (ariza yoki manual) — true.
   // Manba (МАНБА) ustunida "Qo'lda" badge ko'rsatish uchun.
-  wasManuallyEdited    Boolean  @default(false) @map("was_manually_edited")
+  wasManuallyEdited Boolean @default(false) @map("was_manually_edited")
 
   // Agent (XATO to'lov notifikatori) — Telegram guruhga jo'natilgan vaqt.
   // NULL = hali jo'natilmagan; qayta-qayta jo'natmaslik (dedupe) uchun.
-  agentNotifiedAt      DateTime? @map("agent_notified_at")
+  agentNotifiedAt DateTime? @map("agent_notified_at")
 
   // History — FK relation atayin yo'q (CounterpartyHistory pattern): qator o'chirilgandan
   // keyin ham audit log saqlanib qoladi.
@@ -990,8 +990,8 @@ model OplataKv {
 // ─────────────────────────────────────────────────────────────────
 model OplataKvObjectMapping {
   id            String   @id @default(cuid())
-  crmName       String   @unique @map("crm_name") @db.VarChar(255)   // CRM dan keladigan obyekt nomi
-  oplataName    String   @map("oplata_name") @db.VarChar(255)        // OplatyKv'ga yoziladigan nom
+  crmName       String   @unique @map("crm_name") @db.VarChar(255) // CRM dan keladigan obyekt nomi
+  oplataName    String   @map("oplata_name") @db.VarChar(255) // OplatyKv'ga yoziladigan nom
   createdAt     DateTime @default(now()) @map("created_at")
   createdByName String?  @map("created_by_name") @db.VarChar(190)
 
@@ -1008,20 +1008,20 @@ model OplataKvObjectMapping {
 // ─────────────────────────────────────────────────────────────────
 model ContractSchedule {
   id             String   @id @default(cuid())
-  scheduleId     String   @unique @map("schedule_id") @db.VarChar(40)  // CRM schedule.id — upsert kaliti
+  scheduleId     String   @unique @map("schedule_id") @db.VarChar(40) // CRM schedule.id — upsert kaliti
   contractNo     String   @map("contract_no") @db.VarChar(128)
-  object         String?  @db.VarChar(255)                             // canonical obyekt (mapping bilan)
+  object         String?  @db.VarChar(255) // canonical obyekt (mapping bilan)
   clientName     String?  @map("client_name") @db.VarChar(255)
-  dueDate        DateTime @map("due_date") @db.Date                    // muddat sanasi (date_payment)
-  amount         Decimal  @db.Decimal(18, 2)                           // to'lanishi kerak
-  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(18, 2)  // tushgan (CRM)
-  remaining      Decimal  @default(0) @db.Decimal(18, 2)               // qolgan (left)
-  kind           String   @db.VarChar(16)                              // 'initial' | 'monthly'
+  dueDate        DateTime @map("due_date") @db.Date // muddat sanasi (date_payment)
+  amount         Decimal  @db.Decimal(18, 2) // to'lanishi kerak
+  amountPaid     Decimal  @default(0) @map("amount_paid") @db.Decimal(18, 2) // tushgan (CRM)
+  remaining      Decimal  @default(0) @db.Decimal(18, 2) // qolgan (left)
+  kind           String   @db.VarChar(16) // 'initial' | 'monthly'
   contractStatus String?  @map("contract_status") @db.VarChar(64)
   syncedAt       DateTime @map("synced_at")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([dueDate, kind])
   @@index([object])
@@ -1030,24 +1030,24 @@ model ContractSchedule {
 }
 
 enum OplataKvCategory {
-  MONTHLY   // ежемесячный
-  FIRST     // 1 взнос
-  GENERAL   // Общий
+  MONTHLY // ежемесячный
+  FIRST // 1 взнос
+  GENERAL // Общий
 }
 
 model OplataKvHistory {
-  id              String   @id @default(cuid())
-  oplataKvId      String   @map("oplata_kv_id") @db.VarChar(255)       // OplataKv.id (externalId — bank kompozit 75+) — FK emas
+  id         String @id @default(cuid())
+  oplataKvId String @map("oplata_kv_id") @db.VarChar(255) // OplataKv.id (externalId — bank kompozit 75+) — FK emas
 
-  action          String   @db.VarChar(20)                            // created | edited | deleted | imported
-  actorType       String   @map("actor_type") @db.VarChar(10)         // user | system
-  actorId         String?  @map("actor_id") @db.VarChar(50)
-  actorName       String?  @map("actor_name") @db.VarChar(190)        // full name — muzlatilgan
-  fieldsChanged   String[] @map("fields_changed") @default([])
-  changes         Json?                                                // {field: {old, new}}
-  note            String?  @db.Text
+  action        String   @db.VarChar(20) // created | edited | deleted | imported
+  actorType     String   @map("actor_type") @db.VarChar(10) // user | system
+  actorId       String?  @map("actor_id") @db.VarChar(50)
+  actorName     String?  @map("actor_name") @db.VarChar(190) // full name — muzlatilgan
+  fieldsChanged String[] @default([]) @map("fields_changed")
+  changes       Json? // {field: {old, new}}
+  note          String?  @db.Text
 
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@index([oplataKvId, createdAt(sort: Desc)])
   @@index([actorId])
@@ -1061,29 +1061,29 @@ model OplataKvHistory {
 // saqlanadi. Har so'rov ApiRequestLog'ga yoziladi (audit + analytics).
 // ═══════════════════════════════════════════════════════════════
 model ApiKey {
-  id              String       @id @default(cuid())
-  keyId           String       @unique @map("key_id") @db.VarChar(64)   // public, masalan "xk_live_abc123..."
-  secretHash      String       @map("secret_hash") @db.VarChar(128)     // SHA-256 hex
-  secretPreview   String       @map("secret_preview") @db.VarChar(20)   // oxirgi 4 belgi, UI'da ko'rsatish uchun
-  name            String       @db.VarChar(190)
-  description     String?      @db.Text
-  scopes          String[]     @default([])                              // ["transactions:read", ...]
-  expiresAt       DateTime?    @map("expires_at")                        // null = cheksiz
-  isActive        Boolean      @default(true) @map("is_active")
-  allowedIps      String[]     @default([]) @map("allowed_ips")          // bo'sh = barcha IP
-  createdById     String?      @map("created_by_id")
-  createdByEmail  String?      @map("created_by_email") @db.VarChar(190)
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
-  revokedAt       DateTime?    @map("revoked_at")
-  revokedReason   String?      @map("revoked_reason") @db.Text
+  id             String    @id @default(cuid())
+  keyId          String    @unique @map("key_id") @db.VarChar(64) // public, masalan "xk_live_abc123..."
+  secretHash     String    @map("secret_hash") @db.VarChar(128) // SHA-256 hex
+  secretPreview  String    @map("secret_preview") @db.VarChar(20) // oxirgi 4 belgi, UI'da ko'rsatish uchun
+  name           String    @db.VarChar(190)
+  description    String?   @db.Text
+  scopes         String[]  @default([]) // ["transactions:read", ...]
+  expiresAt      DateTime? @map("expires_at") // null = cheksiz
+  isActive       Boolean   @default(true) @map("is_active")
+  allowedIps     String[]  @default([]) @map("allowed_ips") // bo'sh = barcha IP
+  createdById    String?   @map("created_by_id")
+  createdByEmail String?   @map("created_by_email") @db.VarChar(190)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  revokedAt      DateTime? @map("revoked_at")
+  revokedReason  String?   @map("revoked_reason") @db.Text
 
   // Foydalanish stats (denormalized — fast read)
-  lastUsedAt      DateTime?    @map("last_used_at")
-  lastUsedIp      String?      @map("last_used_ip") @db.VarChar(64)
-  totalRequests   Int          @default(0) @map("total_requests")
+  lastUsedAt    DateTime? @map("last_used_at")
+  lastUsedIp    String?   @map("last_used_ip") @db.VarChar(64)
+  totalRequests Int       @default(0) @map("total_requests")
 
-  logs            ApiRequestLog[]
+  logs ApiRequestLog[]
 
   @@index([isActive, expiresAt])
   @@index([createdAt(sort: Desc)])
@@ -1098,34 +1098,34 @@ model ApiKey {
 // tg_send — kelajakda Telegram xabari uchun (hozircha ishlatilmaydi).
 // ─────────────────────────────────────────────────────────────────
 model ChekDog {
-  id             String   @id @default(cuid())
-  contractNumber String   @map("contract_number") @db.VarChar(128)
+  id             String @id @default(cuid())
+  contractNumber String @map("contract_number") @db.VarChar(128)
 
   // CRM (XonSaroy /order/index) dan avtomatik keladi
-  manager        String?  @db.VarChar(255)                        // created_by F.I.O. (menejer)
-  managerPhone   String?  @map("manager_phone") @db.VarChar(64)   // created_by.phone
+  manager           String? @db.VarChar(255) // created_by F.I.O. (menejer)
+  managerPhone      String? @map("manager_phone") @db.VarChar(64) // created_by.phone
   managerTgUsername String? @map("manager_tg_username") @db.VarChar(128) // Xon HR API'dan (@username)
-  branchName     String?  @map("branch_name") @db.VarChar(255)    // created_by.branch.name (Сотув офис)
-  objectName     String?  @map("object_name") @db.VarChar(255)    // object (obyekt/JK)
-  crmStatus      String?  @map("crm_status") @db.VarChar(128)     // CRM holati (Сотилди va h.k.) — TG xabar uchun
+  branchName        String? @map("branch_name") @db.VarChar(255) // created_by.branch.name (Сотув офис)
+  objectName        String? @map("object_name") @db.VarChar(255) // object (obyekt/JK)
+  crmStatus         String? @map("crm_status") @db.VarChar(128) // CRM holati (Сотилди va h.k.) — TG xabar uchun
 
   // Forma maydonlari
-  data           DateTime @db.Date                                // Дата — sana (default: today)
-  vidDogovora    String   @map("vid_dogovora") @db.VarChar(48)    // Вид договора (4 variant)
-  kontrolyor     String   @db.VarChar(16)                         // Контролёр: otkaz | prinyat
-  prichinaOtkaza String?  @map("prichina_otkaza") @db.Text        // Причина отказа
-  shtrafy        BigInt?                                          // Штрафы — suma (ixtiyoriy)
+  data           DateTime @db.Date // Дата — sana (default: today)
+  vidDogovora    String   @map("vid_dogovora") @db.VarChar(48) // Вид договора (4 variant)
+  kontrolyor     String   @db.VarChar(16) // Контролёр: otkaz | prinyat
+  prichinaOtkaza String?  @map("prichina_otkaza") @db.Text // Причина отказа
+  shtrafy        BigInt? // Штрафы — suma (ixtiyoriy)
 
   // Kim qo'shdi (foydalanuvchiga ko'rsatilmaydi, faqat DB'da)
-  dobavilId      String?  @map("dobavil_id")
-  dobavilName    String?  @map("dobavil_name") @db.VarChar(255)
+  dobavilId   String? @map("dobavil_id")
+  dobavilName String? @map("dobavil_name") @db.VarChar(255)
 
   // Telegram xabari yuborildimi (cron faqat tgSend=false larni yuboradi)
-  tgSend         Boolean   @default(false) @map("tg_send")
-  tgSentAt       DateTime? @map("tg_sent_at")
+  tgSend   Boolean   @default(false) @map("tg_send")
+  tgSentAt DateTime? @map("tg_sent_at")
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([createdAt(sort: Desc)])
   @@index([contractNumber])
@@ -1138,22 +1138,42 @@ model ChekDog {
 // yoki sezgir ma'lumot saqlanmaydi.
 // ─────────────────────────────────────────────────────────────────
 model ApiRequestLog {
-  id            String     @id @default(cuid())
-  apiKeyId      String?    @map("api_key_id")
-  apiKey        ApiKey?    @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
-  method        String     @db.VarChar(10)
-  path          String     @db.VarChar(255)
-  query         Json?
-  statusCode    Int        @map("status_code")
-  durationMs    Int        @map("duration_ms")
-  ip            String?    @db.VarChar(64)
-  userAgent     String?    @map("user_agent") @db.VarChar(512)
-  responseSize  Int?       @map("response_size")
-  errorMessage  String?    @map("error_message") @db.VarChar(512)
-  createdAt     DateTime   @default(now()) @map("created_at")
+  id           String   @id @default(cuid())
+  apiKeyId     String?  @map("api_key_id")
+  apiKey       ApiKey?  @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  method       String   @db.VarChar(10)
+  path         String   @db.VarChar(255)
+  query        Json?
+  statusCode   Int      @map("status_code")
+  durationMs   Int      @map("duration_ms")
+  ip           String?  @db.VarChar(64)
+  userAgent    String?  @map("user_agent") @db.VarChar(512)
+  responseSize Int?     @map("response_size")
+  errorMessage String?  @map("error_message") @db.VarChar(512)
+  createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([apiKeyId, createdAt(sort: Desc)])
   @@index([createdAt(sort: Desc)])
   @@index([statusCode])
   @@map("api_request_logs")
+}
+
+// SHMITD — Shmidt bolg'a natijalari hisoboti Telegram guruhga jo'natish tarixi
+model ShmitdLog {
+  id          String   @id @default(cuid())
+  targetDate  String   @map("target_date") @db.VarChar(20) // hisobot sanasi (dd.MM.yyyy)
+  sentAt      DateTime @default(now()) @map("sent_at") // qachon jo'natildi
+  totalCount  Int      @default(0) @map("total_count") // jami o'lchov
+  yellowCount Int      @default(0) @map("yellow_count") // sariq qatorlar
+  redCount    Int      @default(0) @map("red_count") // qizil qatorlar
+  status      String   @default("sent") @db.VarChar(20) // sent | empty | error
+  error       String?  @db.Text
+  fileName    String?  @map("file_name") @db.VarChar(255)
+  htmlContent String?  @map("html_content") @db.Text // jo'natilgan HTML (qayta ko'rish uchun)
+  triggeredBy String?  @map("triggered_by") @db.VarChar(120) // cron | manual:<email>
+  groupId     String?  @map("group_id") @db.VarChar(64)
+
+  @@index([sentAt(sort: Desc)])
+  @@index([targetDate])
+  @@map("shmitd_logs")
 }
