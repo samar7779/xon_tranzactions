@@ -15,7 +15,7 @@ import {
   Wrench, Printer, ChevronDown, Tag, FileSignature, CheckCircle2,
   Filter as FilterIcon, Briefcase, Sparkles, Activity, Paperclip,
   Upload as UploadIcon, Trash2, FileIcon, Settings, ScanLine, Lock,
-  RefreshCw, Landmark, Ban, Gauge, Scissors,
+  RefreshCw, Landmark, Ban, Gauge, Scissors, PlusCircle,
   Clock, Send, XCircle, FileWarning, Bot,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
@@ -309,6 +309,7 @@ export default function TransactionsPage() {
   // Recategorize progress modal — live polling bilan ko'rsatadi
   const [recategorizeOpen, setRecategorizeOpen] = useState(false);
   const [schotchikBackfillOpen, setSchotchikBackfillOpen] = useState(false);
+  const [addFromTxOpen, setAddFromTxOpen] = useState(false);
   const recategorizeAllMut = useMutation({
     mutationFn: () => api.post<{ ok: boolean; started?: boolean; message?: string }>('/categorization/run-all'),
     onSuccess: (r: any) => {
@@ -796,6 +797,15 @@ export default function TransactionsPage() {
                       >
                         <Gauge className="h-4 w-4 mr-2 text-cyan-600 dark:text-cyan-400" />
                         <span className="flex-1">Schotchik backfill</span>
+                      </DropdownMenuItem>
+                    )}
+                    {canManageCategories && (
+                      <DropdownMenuItem
+                        onSelect={(e) => { e.preventDefault(); setAddFromTxOpen(true); }}
+                        className="cursor-pointer"
+                      >
+                        <PlusCircle className="h-4 w-4 mr-2 text-emerald-600 dark:text-emerald-400" />
+                        <span className="flex-1">{"ОплатыКв'ga qo'shish"}</span>
                       </DropdownMenuItem>
                     )}
                   </div>
@@ -1462,6 +1472,7 @@ export default function TransactionsPage() {
       {/* ═══ KATEGORIYALASH JARAYONI (LIVE) ═══ */}
       <RecategorizeProgressDialog open={recategorizeOpen} onOpenChange={setRecategorizeOpen} />
       <SchotchikBackfillDialog open={schotchikBackfillOpen} onOpenChange={setSchotchikBackfillOpen} />
+      <AddFromTxDialog open={addFromTxOpen} onOpenChange={setAddFromTxOpen} />
 
       {/* ═══ KATEGORIYANI O'ZGARTIRISH ═══ */}
       <CategoryEditDialog
@@ -7171,6 +7182,75 @@ type SchotchikResult = {
     currentSubcategory: string | null;
   }>;
 };
+
+/** Bitta tranzaksiyani ID bo'yicha ОплатыКв'ga qo'shish (sana chegarasini inobatga olmaydi, idempotent). */
+function AddFromTxDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  const qc = useQueryClient();
+  const [txRef, setTxRef] = useState('');
+  const [result, setResult] = useState<{ status: string; message: string } | null>(null);
+
+  const mut = useMutation({
+    mutationFn: (ref: string) => api.post<{ ok: boolean; status: string; message: string; oplataKvId?: string }>('/oplata-kv/add-from-tx', { txRef: ref }),
+    onSuccess: (r) => {
+      setResult({ status: r.status, message: r.message });
+      if (r.status === 'added') { toast.success(r.message); qc.invalidateQueries({ queryKey: ['oplatakv'] }); }
+      else if (r.status === 'exists') toast(r.message);
+      else toast.error(r.message);
+    },
+    onError: (e: any) => { const m = e?.message || 'Xato'; setResult({ status: 'error', message: m }); toast.error(m); },
+  });
+
+  useEffect(() => { if (!open) setTimeout(() => { setTxRef(''); setResult(null); }, 300); }, [open]);
+
+  const submit = () => { const r = txRef.trim(); if (r) mut.mutate(r); };
+  const resCls = result?.status === 'added'
+    ? 'bg-emerald-50 dark:bg-emerald-950/30 ring-emerald-200 dark:ring-emerald-900 text-emerald-700 dark:text-emerald-300'
+    : result?.status === 'exists'
+    ? 'bg-amber-50 dark:bg-amber-950/30 ring-amber-200 dark:ring-amber-900 text-amber-700 dark:text-amber-300'
+    : 'bg-rose-50 dark:bg-rose-950/30 ring-rose-200 dark:ring-rose-900 text-rose-700 dark:text-rose-300';
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg p-0 gap-0 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/40">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 grid place-items-center shadow-md shrink-0">
+              <PlusCircle className="h-5 w-5 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">{"To'lovni ОплатыКв'ga qo'shish"}</DialogTitle>
+              <DialogDescription className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                {"To'lov / tranzaksiya ID kiriting — sana chegarasidan qat'i nazar ОплатыКв'ga qo'shiladi. Allaqachon bor bo'lsa — qo'shmaydi (log)."}
+              </DialogDescription>
+            </div>
+          </div>
+        </div>
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-[12px] font-medium text-slate-600 dark:text-slate-400">{"To'lov / Tranzaksiya ID"}</label>
+            <input
+              autoFocus
+              value={txRef}
+              onChange={(e) => { setTxRef(e.target.value); setResult(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
+              placeholder="masalan 20208000405355033001"
+              className="mt-1 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-emerald-400 text-[14px]"
+            />
+          </div>
+          {result && (
+            <div className={`rounded-xl px-3.5 py-2.5 text-[13px] ring-1 ${resCls}`}>{result.message}</div>
+          )}
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="outline" onClick={() => onOpenChange(false)}>Yopish</Button>
+            <Button onClick={submit} disabled={!txRef.trim() || mut.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              {mut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Qidirish + qo'shish"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function SchotchikBackfillDialog({
   open, onOpenChange,

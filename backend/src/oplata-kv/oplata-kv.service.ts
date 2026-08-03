@@ -1288,6 +1288,74 @@ export class OplataKvService {
     return this.syncFromTransactions({ minDate, actor });
   }
 
+  /**
+   * Bitta tranzaksiyani ID (yoki externalId) bo'yicha ОплатыКв'ga qo'shish.
+   * Sana chegarasini (min date) INOBATGA OLMAYDI — tarixiy to'lovni qo'lda qo'shish uchun.
+   * Idempotent: ОплатыКв'da allaqachon bo'lsa qo'shmaydi (log qaytaradi).
+   */
+  async addOneFromTransaction(txRef: string, actor?: Actor): Promise<{
+    ok: boolean;
+    status: 'added' | 'exists' | 'not_found' | 'no_contract' | 'not_client';
+    message: string;
+    oplataKvId?: string;
+  }> {
+    const ref = (txRef || '').trim();
+    if (!ref) return { ok: false, status: 'not_found', message: "To'lov ID kiritilmagan" };
+
+    // 1) Tranzaksiyani topamiz — id yoki externalId bo'yicha
+    const tx = await this.prisma.transaction.findFirst({
+      where: { OR: [{ id: ref }, { externalId: ref }] },
+      include: { category: { select: { code: true } }, subcategory: { select: { name: true } } },
+    });
+    if (!tx) return { ok: false, status: 'not_found', message: `Tranzaksiya topilmadi: ${ref}` };
+
+    // 2) ОплатыКв'da bormi (sourceTxId = externalId yoki id)
+    const dedupKey = tx.externalId || tx.id;
+    const keys = Array.from(new Set([dedupKey, tx.id, tx.externalId].filter(Boolean))) as string[];
+    const existing = await this.prisma.oplataKv.findFirst({ where: { sourceTxId: { in: keys } }, select: { id: true } });
+    if (existing) return { ok: true, status: 'exists', message: "Bu to'lov allaqachon ОплатыКв'da bor", oplataKvId: existing.id };
+
+    // 3) Shartlar — CLIENT + shartnoma bo'lishi kerak
+    if (tx.category?.code !== 'CLIENT') {
+      return { ok: false, status: 'not_client', message: `Faqat CLIENT to'lovlar qo'shiladi (bu: ${tx.category?.code || 'kategoriyasiz'})` };
+    }
+    if (!tx.contractNumber) {
+      return { ok: false, status: 'no_contract', message: "Shartnoma raqami yo'q — avval tranzaksiyaga shartnoma biriktiring" };
+    }
+
+    // 4) CRM ma'lumot (klient/obyekt) + qatorni yaratamiz (auto-import bilan bir xil mantiq)
+    const crm = await this.crmCache.lookup(tx.contractNumber).catch(() => null);
+    const rawAmount = Math.abs(Number(tx.amount));
+    const signedAmount = tx.direction === 'IN' ? rawAmount : -rawAmount; // IN=+, OUT=- (refund)
+    const txParty = tx.direction === 'IN' ? tx.fromName : tx.toName;
+    const txTypeName = tx.subcategory?.name || (tx.direction === 'IN' ? 'Взносы за квартиры' : 'Возврат взносов за кв.');
+    const actorName = actor?.name || 'qo\'lda qo\'shildi';
+
+    const created = await this.prisma.oplataKv.create({
+      data: {
+        id: tx.externalId || randomUUID(),
+        contractNo: tx.contractNumber,
+        date: this.toTashkentDateOnly(tx.txnDate),
+        paymentAmount: new Prisma.Decimal(signedAmount),
+        purpose: tx.description || null,
+        txType: txTypeName,
+        client: crm?.customerName || txParty || null,
+        object: crm?.objectName || null,
+        sourceTxId: dedupKey,
+        createdByName: actorName,
+      },
+      select: { id: true },
+    });
+
+    // 5) Shu shartnoma bo'yicha split — 1-vznos/oylik kategoriyalash (best-effort)
+    try { await this.splitInstallments({ contractNo: tx.contractNumber, actor }); } catch { /* split keyin ham ishlaydi */ }
+
+    return {
+      ok: true, status: 'added', oplataKvId: created.id,
+      message: `Qo'shildi: ${tx.contractNumber} · ${signedAmount.toLocaleString('ru-RU')} · ${txTypeName}`,
+    };
+  }
+
   async syncFromTransactions(opts: { minDate?: Date | null; limit?: number; actor?: Actor; runInline?: boolean } = {}) {
     const startedAt = Date.now();
     const minDate = opts.minDate ?? null;

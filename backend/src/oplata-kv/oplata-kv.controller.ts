@@ -157,6 +157,13 @@ export class OplataKvController {
     return this.svc.schotchikToMonthly({ dateFrom: body?.dateFrom, dryRun: body?.dryRun, actor: actorFrom(u) });
   }
 
+  @Post('add-from-tx')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
+  @ApiOperation({ summary: "Bitta tranzaksiyani ID/externalId bo'yicha ОплатыКв'ga qo'shish (sana chegarasini inobatga olmaydi, idempotent)" })
+  addFromTx(@Body() body: { txRef?: string }, @CurrentUser() u?: AuthUser) {
+    return this.svc.addOneFromTransaction(body?.txRef || '', actorFrom(u));
+  }
+
   @Get('schotchik-config')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Счётчик→Ежемесячный avto-rejim sozlamalari' })
