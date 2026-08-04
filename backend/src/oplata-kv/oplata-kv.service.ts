@@ -4653,7 +4653,10 @@ export class OplataKvService {
       if (!found) warnings.push(`Maqsadli shartnoma topilmadi: ${d.contractNo}`);
       if (found && objectName && dObj && dObj !== objectName) warnings.push(`Obyekt mos emas: ${d.contractNo} (${dObj}) ≠ manba (${objectName})`);
       if (d.contractNo === fromCn) warnings.push(`Maqsadli manba bilan bir xil: ${d.contractNo}`);
-      destResolved.push({ contractNo: d.contractNo, amount: d.amount, client: bal?.customerName || null, object: dObj, found });
+      destResolved.push({
+        contractNo: d.contractNo, amount: d.amount, client: bal?.customerName || null,
+        object: dObj, found, balance: bal ? Number(bal.totalPaid) : null,
+      });
     }
 
     // Summa balansi
@@ -4667,12 +4670,16 @@ export class OplataKvService {
       ? 'Hujjat forma bilan mos, qoidalar bajarildi'
       : warnings.join('; ');
 
+    const fromBalance = fromInfo ? Number(fromInfo.totalPaid) : null;
+    const balanceEnough = fromBalance == null || totalAmount <= 0 ? true : fromBalance >= totalAmount - 0.01;
+
     return {
       ok: true,
       extracted: {
         fromContractNo: fromCn || null,
         fromClient: fromInfo?.customerName || null,
         objectName,
+        fromBalance,
         totalAmount,
         destinations: destResolved,
         applicantName: ex?.applicantName || null,
@@ -4680,6 +4687,7 @@ export class OplataKvService {
         notes: ex?.notes || null,
         date: new Date().toISOString().slice(0, 10),
       },
+      balanceEnough,
       agentState,
       agentReason,
       warnings,

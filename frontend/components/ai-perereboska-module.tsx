@@ -6,21 +6,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   X, Sparkles, Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
-  History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw, Landmark,
-  Wand2, ShieldCheck, ShieldAlert,
+  History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw,
+  Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
 // ─────────────────────────────────────────────────────────────
-type DestRow = { contractNo: string; amount: string; client?: string | null; object?: string | null; found?: boolean };
+type DestRow = { contractNo: string; amount: string; client?: string | null; object?: string | null; found?: boolean; balance?: number | null };
 type AnalyzeResult = {
   ok: boolean;
   extracted: {
-    fromContractNo: string | null; fromClient: string | null; objectName: string | null;
-    totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean }>;
+    fromContractNo: string | null; fromClient: string | null; objectName: string | null; fromBalance: number | null;
+    totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
     applicantName: string | null; confidence: string | null; notes: string | null; date: string;
   };
+  balanceEnough: boolean;
   agentState: 'verified' | 'needs_review';
   agentReason: string;
   warnings: string[];
@@ -56,7 +57,7 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
       />
       <div
         className={cn(
-          'absolute right-0 top-0 h-full w-full max-w-3xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col transition-transform duration-300 ease-out',
+          'absolute right-0 top-0 h-full w-full max-w-5xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col transition-transform duration-300 ease-out',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
@@ -110,15 +111,30 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
 
-  // Tahrirlanadigan forma (agent o'qiganidan keyin to'ldiriladi)
+  // Tahrirlanadigan forma
   const [fromCn, setFromCn] = useState('');
+  const [fromBalance, setFromBalance] = useState<number | null>(null);
+  const [fromMeta, setFromMeta] = useState<{ client: string | null; object: string | null }>({ client: null, object: null });
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
   const [dests, setDests] = useState<DestRow[]>([]);
 
-  const reset = () => { setFile(null); setResult(null); setFromCn(''); setDate(''); setNote(''); setDests([]); if (fileRef.current) fileRef.current.value = ''; };
+  // Rasm preview
+  useEffect(() => {
+    if (!file || !file.type.startsWith('image/')) { setPreviewUrl(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  const reset = () => {
+    setFile(null); setResult(null); setFromCn(''); setFromBalance(null);
+    setFromMeta({ client: null, object: null }); setDate(''); setNote(''); setDests([]);
+    if (fileRef.current) fileRef.current.value = '';
+  };
 
   const analyzeMut = useMutation({
     mutationFn: (f: File) => { const fd = new FormData(); fd.append('file', f); return api.postForm<AnalyzeResult>('/oplata-kv/perereboska/analyze', fd, { timeout: 90_000 }); },
@@ -126,17 +142,22 @@ function WorkTab({ onDone }: { onDone: () => void }) {
       setResult(r);
       const e = r.extracted;
       setFromCn(e.fromContractNo || '');
+      setFromBalance(e.fromBalance);
+      setFromMeta({ client: e.fromClient, object: e.objectName });
       setDate(e.date || new Date().toISOString().slice(0, 10));
-      setDests((e.destinations || []).map((d) => ({ contractNo: d.contractNo, amount: String(d.amount || ''), client: d.client, object: d.object, found: d.found })));
+      setDests((e.destinations || []).map((d) => ({ contractNo: d.contractNo, amount: String(d.amount || ''), client: d.client, object: d.object, found: d.found, balance: d.balance })));
       if (r.agentState === 'verified') toast.success('Agent: hujjat mos ✓');
       else toast('Agent: tekshirish kerak ⚠️', { description: r.agentReason });
     },
     onError: (e: any) => toast.error(e?.message || 'Tahlil xatosi'),
   });
 
+  const destTotal = useMemo(() => dests.reduce((s, d) => s + num(d.amount), 0), [dests]);
+  const balanceShort = fromBalance != null && destTotal > fromBalance + 0.01;
+
   const createMut = useMutation({
     mutationFn: () => {
-      if (!file) throw new Error('Ariza fayli yo\'q');
+      if (!file) throw new Error("Ariza fayli yo'q");
       const fd = new FormData();
       fd.append('fromContractNo', fromCn.trim());
       fd.append('amount', String(destTotal));
@@ -152,44 +173,77 @@ function WorkTab({ onDone }: { onDone: () => void }) {
     onError: (e: any) => toast.error(e?.message || 'Yaratishda xato'),
   });
 
-  const destTotal = useMemo(() => dests.reduce((s, d) => s + num(d.amount), 0), [dests]);
   const onFile = (f: File | null) => { setFile(f); setResult(null); if (f) analyzeMut.mutate(f); };
   const setDest = (i: number, patch: Partial<DestRow>) => setDests((p) => p.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
   const addDest = () => setDests((p) => [...p, { contractNo: '', amount: '' }]);
   const rmDest = (i: number) => setDests((p) => p.filter((_, idx) => idx !== i));
 
-  const canCreate = !!file && !!fromCn.trim() && !!date && dests.length > 0 && dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !createMut.isPending;
+  const canCreate = !!file && !!fromCn.trim() && !!date && dests.length > 0 &&
+    dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !balanceShort && !createMut.isPending;
+
+  const isImg = !!file && file.type.startsWith('image/');
 
   return (
-    <div className="p-5 space-y-4">
-      {/* 1. Ariza yuklash */}
+    <div className="p-6 space-y-5 max-w-4xl mx-auto">
+      {/* 1. Ariza yuklash — pro */}
       <div>
         <div className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">1 · Arizani yuklang</div>
-        <label className={cn(
-          'flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed p-6 cursor-pointer transition-colors',
-          file ? 'border-violet-300 dark:border-violet-800 bg-violet-50/50 dark:bg-violet-950/20' : 'border-slate-300 dark:border-slate-700 hover:border-violet-400',
-        )}>
-          <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
-          {file ? <FileText className="h-8 w-8 text-violet-500" /> : <Upload className="h-8 w-8 text-slate-400" />}
-          <div className="text-center">
-            {file ? (
-              <><div className="text-[13px] font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[400px]">{file.name}</div>
-                <div className="text-[11px] text-slate-400">{(file.size / 1024).toFixed(0)} KB · qayta yuklash uchun bosing</div></>
-            ) : (
-              <><div className="text-[13px] font-medium text-slate-600 dark:text-slate-300">Ariza (PDF yoki rasm)</div>
-                <div className="text-[11px] text-slate-400">Agent o'qib, переброска ma'lumotini ajratadi</div></>
-            )}
+        {!file ? (
+          <label className="group relative flex flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-violet-400 dark:hover:border-violet-600 bg-white dark:bg-slate-900 hover:bg-violet-50/40 dark:hover:bg-violet-950/20 p-10 cursor-pointer transition-all overflow-hidden">
+            <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-gradient-to-br from-violet-200 to-fuchsia-200 dark:from-violet-900/40 dark:to-fuchsia-900/40 blur-2xl opacity-40 group-hover:opacity-70 transition-opacity" />
+            <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
+            <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 grid place-items-center text-white shadow-lg shadow-fuchsia-500/30 group-hover:scale-110 transition-transform">
+              <Upload className="h-7 w-7" />
+            </div>
+            <div className="relative text-center">
+              <div className="text-[14px] font-bold text-slate-700 dark:text-slate-200">Arizani shu yerga tashlang</div>
+              <div className="text-[12px] text-slate-400 mt-0.5">PDF yoki rasm · agent o'qib, переброска ma'lumotini ajratadi</div>
+            </div>
+          </label>
+        ) : (
+          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-3 flex items-center gap-4">
+            <div className="w-24 h-28 rounded-xl overflow-hidden shrink-0 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center bg-slate-50 dark:bg-slate-800">
+              {isImg && previewUrl
+                ? <img src={previewUrl} alt="ariza" className="w-full h-full object-cover" />
+                : <div className="flex flex-col items-center gap-1 text-rose-500"><FileText className="h-9 w-9" /><span className="text-[10px] font-bold">PDF</span></div>}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 truncate">{file.name}</div>
+              <div className="text-[11px] text-slate-400">{(file.size / 1024).toFixed(0)} KB · {isImg ? 'rasm' : 'PDF'}</div>
+              <div className="mt-2 flex gap-2">
+                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30">
+                  <RefreshCw className="h-3 w-3" /> O'zgartirish
+                </button>
+                <button onClick={reset} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30">
+                  <Trash2 className="h-3 w-3" /> Olib tashlash
+                </button>
+              </div>
+              <input ref={fileRef} type="file" accept="application/pdf,image/*" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
+            </div>
           </div>
-        </label>
+        )}
       </div>
 
+      {/* Analiz jarayoni — pro */}
       {analyzeMut.isPending && (
-        <div className="flex items-center gap-2 text-[13px] text-violet-600 dark:text-violet-400">
-          <Loader2 className="h-4 w-4 animate-spin" /> Agent arizani o'qiyapti...
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-600 via-fuchsia-600 to-pink-600 p-5 text-white shadow-lg shadow-fuchsia-500/25">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-white/15 grid place-items-center shrink-0">
+              <Sparkles className="h-6 w-6 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-bold text-[14px]">Agent arizani o'qiyapti…</div>
+              <div className="text-[12px] text-white/80">Claude vision hujjatni tahlil qilmoqda</div>
+              <div className="mt-2.5 h-1.5 rounded-full bg-white/20 overflow-hidden">
+                <div className="h-full w-1/2 rounded-full bg-white/80 animate-pulse" />
+              </div>
+            </div>
+            <Loader2 className="h-6 w-6 animate-spin shrink-0" />
+          </div>
         </div>
       )}
 
-      {/* 2. Agent xulosasi + tahrir */}
+      {/* 2. Natija */}
       {result && (
         <>
           {/* Agent verdikt */}
@@ -215,6 +269,63 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             {result.extracted.applicantName && <div className="mt-1 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
           </div>
 
+          {/* Qoldiq jadvali */}
+          <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-violet-500" />
+              <span className="text-[12px] font-semibold text-slate-600 dark:text-slate-300">Shartnomalar qoldig'i</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px] min-w-[520px]">
+                <thead>
+                  <tr className="text-left text-slate-400">
+                    <th className="px-4 py-2 font-medium">Shartnoma</th>
+                    <th className="px-2 py-2 font-medium text-right">Joriy qoldiq</th>
+                    <th className="px-2 py-2 font-medium text-right">O'tkazma</th>
+                    <th className="px-4 py-2 font-medium text-right">Yangi qoldiq</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Manba */}
+                  <tr className="border-t border-slate-100 dark:border-slate-800 bg-rose-50/30 dark:bg-rose-950/10">
+                    <td className="px-4 py-2">
+                      <div className="font-mono font-semibold text-slate-800 dark:text-slate-100">{fromCn || '—'} <span className="text-[9px] text-slate-400 font-sans">MANBA</span></div>
+                      <div className="text-[10px] text-slate-400 truncate">{fromMeta.client || ''}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>
+                    </td>
+                    <td className="px-2 py-2 text-right font-mono">{fromBalance != null ? formatMoney(fromBalance) : '—'}</td>
+                    <td className="px-2 py-2 text-right font-mono text-rose-600">−{formatMoney(destTotal)}</td>
+                    <td className={cn('px-4 py-2 text-right font-mono font-semibold', balanceShort ? 'text-rose-600' : 'text-slate-800 dark:text-slate-100')}>
+                      {fromBalance != null ? formatMoney(fromBalance - destTotal) : '—'}
+                    </td>
+                  </tr>
+                  {/* Maqsadlar */}
+                  {dests.map((d, i) => (
+                    <tr key={i} className="border-t border-slate-100 dark:border-slate-800">
+                      <td className="px-4 py-2">
+                        <div className="font-mono text-slate-700 dark:text-slate-200">{d.contractNo || '—'}</div>
+                        <div className="text-[10px] text-slate-400 truncate">{d.client || ''}{d.object ? ` · ${d.object}` : ''}</div>
+                      </td>
+                      <td className="px-2 py-2 text-right font-mono">{d.balance != null ? formatMoney(d.balance) : '—'}</td>
+                      <td className="px-2 py-2 text-right font-mono text-emerald-600">+{formatMoney(num(d.amount))}</td>
+                      <td className="px-4 py-2 text-right font-mono font-semibold text-slate-800 dark:text-slate-100">{d.balance != null ? formatMoney(d.balance + num(d.amount)) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Qoldiq yetmasa — blok */}
+          {balanceShort && (
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5 flex items-start gap-2.5">
+              <Ban className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
+                <b>Manba qoldig'i yetarli emas — переброска qilib bo'lmaydi.</b>
+                <div className="mt-0.5">Qoldiq <b>{formatMoney(fromBalance || 0)}</b>, o'tkazma <b>{formatMoney(destTotal)}</b> (yetmayapti: {formatMoney(destTotal - (fromBalance || 0))}). Summani kamaytiring yoki arizani tekshiring.</div>
+              </div>
+            </div>
+          )}
+
           {/* Tahrirlanadigan forma */}
           <div className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">2 · Tekshiring va to'g'irlang</div>
           <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-4 space-y-3">
@@ -223,7 +334,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 <label className="text-[11px] font-medium text-slate-500">Manba shartnoma</label>
                 <input value={fromCn} onChange={(e) => setFromCn(e.target.value.toUpperCase())}
                   className="mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono" />
-                {result.extracted.fromClient && <div className="text-[11px] text-slate-400 mt-0.5 truncate">{result.extracted.fromClient}{result.extracted.objectName ? ` · ${result.extracted.objectName}` : ''}</div>}
+                {fromMeta.client && <div className="text-[11px] text-slate-400 mt-0.5 truncate">{fromMeta.client}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>}
               </div>
               <div>
                 <label className="text-[11px] font-medium text-slate-500">Sana</label>
@@ -246,7 +357,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                       {d.client && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{d.client}{d.object ? ` · ${d.object}` : ''}</div>}
                     </div>
                     <input value={d.amount} onChange={(e) => setDest(i, { amount: e.target.value })} placeholder="Summa" inputMode="numeric"
-                      className="w-36 h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] text-right font-mono" />
+                      className="w-40 h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] text-right font-mono" />
                     <button onClick={() => rmDest(i)} className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30"><Trash2 className="h-4 w-4" /></button>
                   </div>
                 ))}
@@ -259,13 +370,13 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 className="mt-1 w-full h-9 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px]" />
             </div>
 
-            <div className="flex items-center justify-between pt-1 text-[12px] border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-between pt-2 text-[12px] border-t border-slate-100 dark:border-slate-800">
               <span className="text-slate-500">Maqsadlar jami: <b className="font-mono">{formatMoney(destTotal)}</b></span>
               <span className="text-slate-500">{dests.length} ta shartnoma</span>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end gap-2 pb-4">
             <button onClick={reset} className="px-4 h-11 rounded-xl text-[13px] font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">Tozalash</button>
             <button onClick={() => createMut.mutate()} disabled={!canCreate}
               className="px-5 h-11 rounded-xl text-[13px] font-semibold text-white bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-2 shadow-lg shadow-fuchsia-500/25">
@@ -302,7 +413,7 @@ function HistoryTab() {
 
   const doReverse = (id: string) => {
     const reason = window.prompt('Orqaga qaytarish sababi (ixtiyoriy):', '') ?? null;
-    if (reason === null) return; // bekor qilindi
+    if (reason === null) return;
     reverseMut.mutate({ id, reason });
   };
 
@@ -311,8 +422,7 @@ function HistoryTab() {
   ];
 
   return (
-    <div className="p-5 space-y-4">
-      {/* Filtrlar */}
+    <div className="p-6 space-y-4 max-w-4xl mx-auto">
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex rounded-lg bg-slate-100 dark:bg-slate-800 p-0.5">
           {STAT.map((s) => (
@@ -375,6 +485,15 @@ function HistoryTab() {
 // ═══════════════════════════════════════════════════════════════
 // TAB 3 — SOZLAMALAR
 // ═══════════════════════════════════════════════════════════════
+function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={onClick}
+      className={cn('relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors', on ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-600')}>
+      <span className={cn('inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform', on ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+    </button>
+  );
+}
+
 function SettingsTab() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
@@ -392,14 +511,8 @@ function SettingsTab() {
 
   if (isLoading || !local) return <div className="flex items-center gap-2 text-[13px] text-slate-400 py-10 justify-center"><Loader2 className="h-4 w-4 animate-spin" /> Yuklanmoqda...</div>;
 
-  const Toggle = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
-    <button onClick={onClick} className={cn('w-11 h-6 rounded-full transition-colors relative shrink-0', on ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-600')}>
-      <span className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform', on ? 'translate-x-5' : 'translate-x-0.5')} />
-    </button>
-  );
-
   return (
-    <div className="p-5 space-y-3 max-w-xl">
+    <div className="p-6 space-y-3 max-w-2xl mx-auto">
       {!data?.hasKey && (
         <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 p-3 text-[12px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" /> AI kalit sozlanmagan. Admin → Agent → AI kalit bo'limidan kiriting (agent ariza o'qishi uchun kerak).
@@ -408,19 +521,19 @@ function SettingsTab() {
 
       <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
         <div className="flex items-center gap-3 p-4">
-          <div className="flex-1"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Agent (AI o'qish)</div><div className="text-[11.5px] text-slate-400">O'chirilsa — oddiy qo'lda переброска</div></div>
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Agent (AI o'qish)</div><div className="text-[11.5px] text-slate-400">O'chirilsa — oddiy qo'lda переброска</div></div>
           <Toggle on={local.aiEnabled} onClick={() => setLocal({ ...local, aiEnabled: !local.aiEnabled })} />
         </div>
         <div className="flex items-center gap-3 p-4">
-          <div className="flex-1"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Qat'iy tekshiruv</div><div className="text-[11.5px] text-slate-400">Yoqilsa — nomuvofiqlikda ogohlantirish kuchli (yaratishdan oldin ko'rib chiqish shart)</div></div>
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Qat'iy tekshiruv</div><div className="text-[11.5px] text-slate-400">Yoqilsa — nomuvofiqlikda ogohlantirish kuchli</div></div>
           <Toggle on={local.strict} onClick={() => setLocal({ ...local, strict: !local.strict })} />
         </div>
         <div className="flex items-center gap-3 p-4">
-          <div className="flex-1"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Telegram xabar</div><div className="text-[11.5px] text-slate-400">Переброска yaratilganda/bekor qilinganda guruhga xabar</div></div>
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Telegram xabar</div><div className="text-[11.5px] text-slate-400">Переброска yaratilganda/bekor qilinganda guruhga xabar</div></div>
           <Toggle on={local.tgNotify} onClick={() => setLocal({ ...local, tgNotify: !local.tgNotify })} />
         </div>
         <div className="flex items-center gap-3 p-4">
-          <div className="flex-1"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">AI model</div><div className="text-[11.5px] text-slate-400">Ariza o'qish uchun Claude modeli</div></div>
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">AI model</div><div className="text-[11.5px] text-slate-400">Ariza o'qish uchun Claude modeli</div></div>
           <select value={local.aiModel} onChange={(e) => setLocal({ ...local, aiModel: e.target.value })}
             className="h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] outline-none focus:ring-2 focus:ring-violet-400">
             <option value="claude-sonnet-4-6">Sonnet (tez, arzon)</option>
