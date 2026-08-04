@@ -4678,6 +4678,19 @@ export class OplataKvService {
     if (nameCheck && ex?.applicantMatchesHolder === false) {
       warnings.push(`Ism mos emas: arizachi "${ex?.applicantName || '?'}" maqsadli shartnoma egasiga to'g'ri kelmaydi${ex?.nameNote ? ` — ${ex.nameNote}` : ''}`);
     }
+    // Manba va maqsad shartnoma egasi bir xil odammi (CRM nomlari — bir xil yozuvда, token o'xshashligi)
+    if (nameCheck && fromInfo?.customerName) {
+      const nameTokens = (s: string) => new Set(String(s || '').toUpperCase().replace(/[^A-ZА-ЯЁ]+/gi, ' ').trim().split(/\s+/).filter((w) => w.length >= 3));
+      const srcTok = nameTokens(fromInfo.customerName);
+      for (const dr of destResolved) {
+        if (dr.found && dr.client) {
+          const common = [...nameTokens(dr.client)].filter((t) => srcTok.has(t));
+          if (common.length === 0) {
+            warnings.push(`Manba va maqsad shartnoma egasi HAR XIL: manba "${fromInfo.customerName}" ≠ maqsad "${dr.client}" (${dr.contractNo})`);
+          }
+        }
+      }
+    }
 
     // TAKROR tekshiruvi — shu manbadan shu summada allaqachon переброска bo'lganmi
     // (bloklamaydi, faqat ogohlantiradi — haqiqatan takror bo'lishi ham mumkin)
@@ -4710,6 +4723,7 @@ export class OplataKvService {
       extracted: {
         fromContractNo: fromCn || null,
         fromClient: fromInfo?.customerName || null,
+        fromFound: !!fromInfo?.foundInCrm,
         objectName,
         fromBalance,
         totalAmount,
@@ -4736,7 +4750,7 @@ export class OplataKvService {
       "Shartnoma raqami formati: raqamlar + obyekt kodi (SRH, VHA, ZUR, VTN...) + raqam/harflar. Masalan: 2986SRH2593, 4026SRH264E.",
       "MUHIM: arizada bir nechta pul raqami bo'lishi mumkin (o'tkaziladigan summa, qaytarilgan pul, qayta to'lov majburiyati). Faqat MAQSADLI shartnomaga o'tkazilayotgan summani ol.",
       "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
-      "notes'ni QISQA va o'qishga qulay MARKDOWN formatда yoz: kalit faktlar uchun bullet (- ), summalarni **qalin** qil. Uzun paragraf yozma.",
+      "notes'ni QISQA MARKDOWN formatда yoz: bullet (- ), summalarni **qalin**. FAQAT переброска uchun muhim narsalarni yoz (manba, maqsad, summa, obyekt, arizachi). Plastik karta, karta raqami, to'lov usuli, qaytarish/qayta to'lov summasi kabi переброскага aloqasiz tafsilotlarni YOZMA.",
       nameCheck
         ? "ISM TEKSHIRUVI: arizachi (imzo egasi) ismini MAQSADLI shartnoma egasi ismi (arizada yozilgan) bilan solishtir. Transliteratsiya (Dumcheva↔Dushayeva), ism tartibi, kirill/lotin farqini HISOBGA OL — mohiyatan bir odammi. Mos bo'lsa applicantMatchesHolder=true, aks holda false + nameNote'da qisqa tushuntir."
         : '',

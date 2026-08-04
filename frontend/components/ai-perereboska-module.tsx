@@ -28,7 +28,7 @@ type DestRow = { contractNo: string; amount: string; client?: string | null; obj
 type AnalyzeResult = {
   ok: boolean;
   extracted: {
-    fromContractNo: string | null; fromClient: string | null; objectName: string | null; fromBalance: number | null;
+    fromContractNo: string | null; fromClient: string | null; fromFound: boolean; objectName: string | null; fromBalance: number | null;
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
     applicantName: string | null; confidence: string | null; notes: string | null; date: string;
   };
@@ -130,6 +130,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   // Tahrirlanadigan forma
   const [fromCn, setFromCn] = useState('');
   const [fromBalance, setFromBalance] = useState<number | null>(null);
+  const [fromFound, setFromFound] = useState<boolean | null>(null);
   const [fromMeta, setFromMeta] = useState<{ client: string | null; object: string | null }>({ client: null, object: null });
   const [date, setDate] = useState('');
   const [note, setNote] = useState('');
@@ -144,7 +145,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   }, [file]);
 
   const reset = () => {
-    setFile(null); setResult(null); setShowPreview(false); setFromCn(''); setFromBalance(null);
+    setFile(null); setResult(null); setShowPreview(false); setFromCn(''); setFromBalance(null); setFromFound(null);
     setFromMeta({ client: null, object: null }); setDate(''); setNote(''); setDests([]);
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -156,6 +157,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
       const e = r.extracted;
       setFromCn(e.fromContractNo || '');
       setFromBalance(e.fromBalance);
+      setFromFound(e.fromFound);
       setFromMeta({ client: e.fromClient, object: e.objectName });
       setDate(e.date || new Date().toISOString().slice(0, 10));
       setDests((e.destinations || []).map((d) => ({ contractNo: d.contractNo, amount: String(d.amount || ''), client: d.client, object: d.object, found: d.found, balance: d.balance })));
@@ -164,6 +166,26 @@ function WorkTab({ onDone }: { onDone: () => void }) {
     },
     onError: (e: any) => toast.error(e?.message || 'Tahlil xatosi'),
   });
+
+  // Shartnoma raqami tahrirlanganда qayta tekshirish (CRM/tarixда bormi)
+  const lookupContract = async (no: string) => {
+    const cn = no.trim().toUpperCase();
+    if (!cn) return null;
+    try {
+      return await api.get<{ foundInCrm: boolean; customerName: string | null; objectName: string | null; totalPaid: number }>(`/oplata-kv/contract-balance?contractNo=${encodeURIComponent(cn)}`);
+    } catch { return null; }
+  };
+  const verifyFrom = async () => {
+    if (!fromCn.trim()) { setFromFound(null); return; }
+    const r = await lookupContract(fromCn);
+    if (r) { setFromFound(r.foundInCrm); setFromBalance(Number(r.totalPaid)); setFromMeta({ client: r.customerName, object: r.objectName }); }
+    else setFromFound(false);
+  };
+  const verifyDest = async (i: number) => {
+    const d = dests[i]; if (!d || !d.contractNo.trim()) return;
+    const r = await lookupContract(d.contractNo);
+    setDest(i, r ? { found: r.foundInCrm, client: r.customerName, object: r.objectName, balance: Number(r.totalPaid) } : { found: false, client: null, object: null, balance: null });
+  };
 
   const destTotal = useMemo(() => dests.reduce((s, d) => s + num(d.amount), 0), [dests]);
   const balanceShort = fromBalance != null && destTotal > fromBalance + 0.01;
@@ -191,8 +213,13 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const addDest = () => setDests((p) => [...p, { contractNo: '', amount: '' }]);
   const rmDest = (i: number) => setDests((p) => p.filter((_, idx) => idx !== i));
 
+  const notFoundList = [
+    ...(fromFound === false ? [fromCn.trim()] : []),
+    ...dests.filter((d) => d.found === false && d.contractNo.trim()).map((d) => d.contractNo.trim()),
+  ].filter(Boolean);
+  const notFound = notFoundList.length > 0;
   const canCreate = !!file && !!fromCn.trim() && !!date && dests.length > 0 &&
-    dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !balanceShort && !createMut.isPending;
+    dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !balanceShort && !notFound && !createMut.isPending;
 
   const isImg = !!file && file.type.startsWith('image/');
 
@@ -293,16 +320,19 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             {result.extracted.applicantName && <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
           </div>
 
-          {/* Takror ogohlantirishi */}
+          {/* Takror ogohlantirishi — diqqat tortuvchi effekt */}
           {result.duplicates && result.duplicates.length > 0 && (
-            <div className="rounded-xl bg-orange-50 dark:bg-orange-950/30 ring-1 ring-orange-300 dark:ring-orange-800 p-3.5 flex items-start gap-2.5">
-              <Copy className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
-              <div className="text-[12.5px] text-orange-700 dark:text-orange-300">
-                <b>Diqqat — takror bo'lishi mumkin!</b>
-                <div className="mt-0.5">
+            <div className="relative rounded-2xl bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/50 dark:to-amber-950/40 ring-2 ring-orange-400 dark:ring-orange-500 p-4 flex items-start gap-3 shadow-xl shadow-orange-400/40">
+              <span className="pointer-events-none absolute inset-0 rounded-2xl ring-2 ring-orange-500/70 animate-pulse" />
+              <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-orange-500 to-amber-600 grid place-items-center text-white shrink-0 shadow-lg animate-bounce">
+                <Copy className="h-5 w-5" />
+              </div>
+              <div className="relative text-[13px] text-orange-800 dark:text-orange-200">
+                <b className="text-[15px]">⚠️ DIQQAT — takror bo'lishi mumkin!</b>
+                <div className="mt-1">
                   Shu manbadan shu summada allaqachon <b>{result.duplicates.length} ta</b> переброска mavjud
-                  {result.duplicates.map((d) => d.date).filter(Boolean).length > 0 && <> ({result.duplicates.map((d) => d.date).filter(Boolean).join(', ')})</>}.
-                  Adashib 2 marta qilmayapsizmi? Haqiqatan takror bo'lsa — davom eting.
+                  {result.duplicates.map((d) => d.date).filter(Boolean).length > 0 && <> (<b>{result.duplicates.map((d) => d.date).filter(Boolean).join(', ')}</b>)</>}.
+                  {' '}<b>Adashib 2 marta qilmayapsizmi?</b> Haqiqatan takror bo'lsa — davom eting.
                 </div>
               </div>
             </div>
@@ -354,6 +384,17 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             </div>
           </div>
 
+          {/* Shartnoma topilmadi — blok */}
+          {notFound && (
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5 flex items-start gap-2.5">
+              <Ban className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
+                <b>Shartnoma topilmadi — переброска qilib bo'lmaydi.</b>
+                <div className="mt-0.5">CRM va to'lov tarixida yo'q: <b>{notFoundList.join(', ')}</b>. Agent raqamni noto'g'ri o'qigan bo'lishi mumkin (masalan K4 → EA) — raqamni to'g'irlab, boshqa maydonga bosing (qayta tekshiriladi).</div>
+              </div>
+            </div>
+          )}
+
           {/* Qoldiq yetmasa — blok */}
           {balanceShort && (
             <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5 flex items-start gap-2.5">
@@ -371,9 +412,11 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-[11px] font-medium text-slate-500">Manba shartnoma</label>
-                <input value={fromCn} onChange={(e) => setFromCn(e.target.value.toUpperCase())}
-                  className="mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono" />
-                {fromMeta.client && <div className="text-[11px] text-slate-400 mt-0.5 truncate">{fromMeta.client}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>}
+                <input value={fromCn} onChange={(e) => { setFromCn(e.target.value.toUpperCase()); setFromFound(null); }} onBlur={verifyFrom}
+                  className={cn('mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono', fromFound === false ? 'ring-rose-400 dark:ring-rose-600' : 'ring-slate-200 dark:ring-slate-700')} />
+                {fromFound === false
+                  ? <div className="text-[11px] text-rose-500 mt-0.5">Topilmadi (CRM/tarixда yo'q)</div>
+                  : fromMeta.client && <div className="text-[11px] text-slate-400 mt-0.5 truncate">{fromMeta.client}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>}
               </div>
               <div>
                 <label className="text-[11px] font-medium text-slate-500">Sana</label>
@@ -391,9 +434,11 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 {dests.map((d, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="flex-1">
-                      <input value={d.contractNo} onChange={(e) => setDest(i, { contractNo: e.target.value.toUpperCase() })} placeholder="Shartnoma №"
-                        className="w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono" />
-                      {d.client && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{d.client}{d.object ? ` · ${d.object}` : ''}</div>}
+                      <input value={d.contractNo} onChange={(e) => setDest(i, { contractNo: e.target.value.toUpperCase(), found: undefined })} onBlur={() => verifyDest(i)} placeholder="Shartnoma №"
+                        className={cn('w-full h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] font-mono', d.found === false ? 'ring-rose-400 dark:ring-rose-600' : 'ring-slate-200 dark:ring-slate-700')} />
+                      {d.found === false
+                        ? <div className="text-[10px] text-rose-500 mt-0.5">Topilmadi (CRM/tarixда yo'q)</div>
+                        : d.client && <div className="text-[10px] text-slate-400 mt-0.5 truncate">{d.client}{d.object ? ` · ${d.object}` : ''}</div>}
                     </div>
                     <input value={d.amount} onChange={(e) => setDest(i, { amount: e.target.value })} placeholder="Summa" inputMode="numeric"
                       className="w-40 h-9 px-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[13px] text-right font-mono" />
