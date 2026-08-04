@@ -8,6 +8,7 @@ import {
   X, Sparkles, Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
   History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw,
   Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw, Eye, ExternalLink, Copy,
+  Lock, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -54,6 +55,7 @@ const sameName = (a?: string | null, b?: string | null) => {
 export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [tab, setTab] = useState<'work' | 'history' | 'settings'>('work');
   const [mounted, setMounted] = useState(false);
+  const [settingsUnlocked, setSettingsUnlocked] = useState(false);
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!open) return;
@@ -61,6 +63,8 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [open, onClose]);
+  // Modul yopilganда sozlama qulfini qayta yopamiz (keyingi ochilishда parol so'raladi)
+  useEffect(() => { if (!open) { setSettingsUnlocked(false); setTab('work'); } }, [open]);
 
   if (!mounted) return null;
 
@@ -102,12 +106,15 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
               <button
                 key={tt.key}
                 onClick={() => setTab(tt.key)}
+                title={tt.key === 'settings' ? 'Sozlamalar (parol)' : undefined}
                 className={cn(
                   'flex items-center gap-1.5 px-3.5 py-2 rounded-t-lg text-[13px] font-semibold transition-colors',
                   tab === tt.key ? 'bg-slate-50 dark:bg-slate-950 text-violet-700 dark:text-violet-300' : 'text-white/80 hover:bg-white/10',
                 )}
               >
-                <tt.icon className="h-4 w-4" /> {tt.label}
+                {tt.key === 'settings'
+                  ? (settingsUnlocked ? <tt.icon className="h-4 w-4" /> : <Lock className="h-4 w-4" />)
+                  : <><tt.icon className="h-4 w-4" /> {tt.label}</>}
               </button>
             ))}
           </div>
@@ -117,7 +124,7 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
         <div className="flex-1 overflow-auto">
           {tab === 'work' && <WorkTab onDone={onClose} />}
           {tab === 'history' && <HistoryTab />}
-          {tab === 'settings' && <SettingsTab />}
+          {tab === 'settings' && (settingsUnlocked ? <SettingsTab /> : <SettingsGate onUnlock={() => setSettingsUnlocked(true)} />)}
         </div>
       </div>
     </div>,
@@ -534,11 +541,16 @@ function HistoryTab() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const perPage = 20;
+  useEffect(() => { setPage(1); }, [status, dateFrom, dateTo, q]); // filtr o'zgarsa 1-betga
 
   const { data, isLoading } = useQuery({
-    queryKey: ['perereboska-history', status, dateFrom, dateTo, q],
-    queryFn: () => api.get<{ items: any[]; total: number }>(`/oplata-kv/perereboska/history?status=${status}&dateFrom=${dateFrom}&dateTo=${dateTo}&q=${encodeURIComponent(q)}`),
+    queryKey: ['perereboska-history', status, dateFrom, dateTo, q, page],
+    queryFn: () => api.get<{ items: any[]; total: number; page: number; perPage: number }>(`/oplata-kv/perereboska/history?status=${status}&dateFrom=${dateFrom}&dateTo=${dateTo}&q=${encodeURIComponent(q)}&page=${page}`),
   });
+  const total = data?.total || 0;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
 
   const reverseMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => api.delete(`/oplata-kv/perereboska/${id}?reason=${encodeURIComponent(reason)}`),
@@ -621,6 +633,24 @@ function HistoryTab() {
           );
         })}
       </div>
+
+      {/* Paginatsiya */}
+      {total > perPage && (
+        <div className="flex items-center justify-between pt-1 text-[12px]">
+          <span className="text-slate-400">Jami: <b className="text-slate-600 dark:text-slate-300">{total}</b></span>
+          <div className="flex items-center gap-1">
+            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="inline-flex items-center gap-0.5 h-8 px-2.5 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed">
+              <ChevronLeft className="h-3.5 w-3.5" /> Oldingi
+            </button>
+            <span className="px-2 text-slate-500 dark:text-slate-400 font-medium">{page} / {totalPages}</span>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="inline-flex items-center gap-0.5 h-8 px-2.5 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed">
+              Keyingi <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -634,6 +664,28 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
       className={cn('relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors', on ? 'bg-violet-600' : 'bg-slate-300 dark:bg-slate-600')}>
       <span className={cn('inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform', on ? 'translate-x-[22px]' : 'translate-x-0.5')} />
     </button>
+  );
+}
+
+function SettingsGate({ onUnlock }: { onUnlock: () => void }) {
+  const [pw, setPw] = useState('');
+  const tryUnlock = () => { if (pw.trim() === '7779') onUnlock(); else { toast.error("Noto'g'ri parol"); setPw(''); } };
+  return (
+    <div className="p-6 flex items-center justify-center min-h-[320px]">
+      <div className="w-full max-w-xs text-center">
+        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-600 grid place-items-center text-white mx-auto shadow-lg shadow-fuchsia-500/30"><Lock className="h-7 w-7" /></div>
+        <div className="mt-3 text-[15px] font-bold text-slate-800 dark:text-slate-100">Sozlamalar himoyalangan</div>
+        <div className="text-[12px] text-slate-400 mt-0.5">Kirish uchun parolni kiriting</div>
+        <input
+          type="password" inputMode="numeric" autoFocus value={pw}
+          onChange={(e) => setPw(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') tryUnlock(); }}
+          placeholder="Parol"
+          className="mt-4 w-full h-11 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-violet-400 text-[15px] text-center tracking-widest"
+        />
+        <button onClick={tryUnlock} className="mt-3 w-full h-11 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold text-[13px]">Kirish</button>
+      </div>
+    </div>
   );
 }
 
