@@ -42,6 +42,7 @@ import { api, apiDownload } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
 import { cn, formatMoney } from '@/lib/utils';
+import { AiPerereboskaModule } from '@/components/ai-perereboska-module';
 
 type Category = 'MONTHLY' | 'FIRST' | 'GENERAL';
 
@@ -217,6 +218,7 @@ export default function OplataKvPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [perereboskaOpen, setPerereboskaOpen] = useState(false);
+  const [aiPerereboskaOpen, setAiPerereboskaOpen] = useState(false);
   const [deleteRow, setDeleteRow] = useState<OplataKvItem | null>(null);
   const [historyRow, setHistoryRow] = useState<OplataKvItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -914,7 +916,11 @@ export default function OplataKvPage() {
         onClose={() => setAddChoiceOpen(false)}
         onPickManual={() => { setAddChoiceOpen(false); setCreateOpen(true); }}
         onPickPerereboska={() => { setAddChoiceOpen(false); setPerereboskaOpen(true); }}
+        onPickAiPerereboska={() => { setAddChoiceOpen(false); setAiPerereboskaOpen(true); }}
       />
+
+      {/* AI Переброска — 3-tab yon modul */}
+      <AiPerereboskaModule open={aiPerereboskaOpen} onClose={() => setAiPerereboskaOpen(false)} />
 
       {/* Hozir sync — progress modal (admin panelidagi kabi) */}
       <SyncProgressDialog
@@ -3291,11 +3297,12 @@ function ActionBadge({ action }: { action: string }) {
 // ADD CHOICE DIALOG — "Qoshish" bosilganda 2 ta variantni tanlash
 // ═════════════════════════════════════════════════════════════════════
 function AddChoiceDialog({
-  open, onClose, onPickManual, onPickPerereboska,
+  open, onClose, onPickManual, onPickPerereboska, onPickAiPerereboska,
 }: {
   open: boolean; onClose: () => void;
   onPickManual: () => void;
   onPickPerereboska: () => void;
+  onPickAiPerereboska: () => void;
 }) {
   const t = useTranslations('oplatykv');
   const tc = useTranslations('common');
@@ -3332,9 +3339,9 @@ function AddChoiceDialog({
             </div>
           </button>
 
-          {/* Variant AI: AI Переброска — premium (hozircha Переброска formasini ochadi; AI tekshiruv keyin) */}
+          {/* Variant AI: AI Переброска — 3-tab yon modul (agent ariza o'qiydi) */}
           <button
-            onClick={onPickPerereboska}
+            onClick={onPickAiPerereboska}
             className="group relative rounded-2xl p-5 text-left overflow-hidden ring-2 ring-violet-200 dark:ring-violet-900 hover:ring-fuchsia-400 dark:hover:ring-fuchsia-500 hover:shadow-2xl hover:shadow-fuchsia-500/25 transition-all bg-gradient-to-br from-violet-50 via-white to-fuchsia-50 dark:from-violet-950/40 dark:via-slate-900 dark:to-fuchsia-950/30"
           >
             {/* animatsion nur-orb */}
