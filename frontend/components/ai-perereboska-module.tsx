@@ -7,11 +7,11 @@ import { toast } from 'sonner';
 import {
   X, Sparkles, Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
   History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw,
-  Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw, Eye, ExternalLink,
+  Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw, Eye, ExternalLink, Copy,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { api } from '@/lib/api';
+import { api, apiDownload } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
 // Agent matni (notes/izoh) — markdown render (o'qishga qulay)
@@ -33,6 +33,7 @@ type AnalyzeResult = {
     applicantName: string | null; confidence: string | null; notes: string | null; date: string;
   };
   balanceEnough: boolean;
+  duplicates?: Array<{ date: string | null; amount: number }>;
   agentState: 'verified' | 'needs_review';
   agentReason: string;
   warnings: string[];
@@ -292,6 +293,21 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             {result.extracted.applicantName && <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
           </div>
 
+          {/* Takror ogohlantirishi */}
+          {result.duplicates && result.duplicates.length > 0 && (
+            <div className="rounded-xl bg-orange-50 dark:bg-orange-950/30 ring-1 ring-orange-300 dark:ring-orange-800 p-3.5 flex items-start gap-2.5">
+              <Copy className="h-5 w-5 text-orange-500 shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-orange-700 dark:text-orange-300">
+                <b>Diqqat — takror bo'lishi mumkin!</b>
+                <div className="mt-0.5">
+                  Shu manbadan shu summada allaqachon <b>{result.duplicates.length} ta</b> переброска mavjud
+                  {result.duplicates.map((d) => d.date).filter(Boolean).length > 0 && <> ({result.duplicates.map((d) => d.date).filter(Boolean).join(', ')})</>}.
+                  Adashib 2 marta qilmayapsizmi? Haqiqatan takror bo'lsa — davom eting.
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Qoldiq jadvali */}
           <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden">
             <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 flex items-center gap-2">
@@ -505,14 +521,22 @@ function HistoryTab() {
                   </div>
                   {cancelled && g.cancelReason && <div className="text-[11px] text-rose-400 mt-0.5">Sabab: {g.cancelReason}</div>}
                 </div>
-                <div className="text-right shrink-0">
+                <div className="text-right shrink-0 flex flex-col items-end gap-1">
                   <div className="font-mono font-bold text-[14px] text-slate-800 dark:text-slate-100">{formatMoney(Number(g.amount))}</div>
-                  {!cancelled && (
-                    <button onClick={() => doReverse(g.id)} disabled={reverseMut.isPending}
-                      className="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50">
-                      <RotateCcw className="h-3 w-3" /> Orqaga qaytarish
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1">
+                    {!cancelled && g.fileName && (
+                      <button onClick={() => apiDownload(`/oplata-kv/perereboska/${g.id}/file`, g.fileName).catch((e: any) => toast.error(e?.message || 'Hujjat topilmadi'))}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30" title="Arizani yuklab olish">
+                        <FileText className="h-3 w-3" /> Hujjat
+                      </button>
+                    )}
+                    {!cancelled && (
+                      <button onClick={() => doReverse(g.id)} disabled={reverseMut.isPending}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50">
+                        <RotateCcw className="h-3 w-3" /> Orqaga qaytarish
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

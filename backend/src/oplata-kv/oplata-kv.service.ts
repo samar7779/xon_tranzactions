@@ -4679,6 +4679,24 @@ export class OplataKvService {
       warnings.push(`Ism mos emas: arizachi "${ex?.applicantName || '?'}" maqsadli shartnoma egasiga to'g'ri kelmaydi${ex?.nameNote ? ` — ${ex.nameNote}` : ''}`);
     }
 
+    // TAKROR tekshiruvi — shu manbadan shu summada allaqachon переброска bo'lganmi
+    // (bloklamaydi, faqat ogohlantiradi — haqiqatan takror bo'lishi ham mumkin)
+    let duplicates: Array<{ date: string | null; amount: number }> = [];
+    if (fromCn && totalAmount > 0) {
+      const existing = await this.prisma.oplataKv.findMany({
+        where: { contractNo: fromCn, txType: 'Переброска', paymentAmount: { lt: 0 } },
+        select: { date: true, paymentAmount: true },
+        orderBy: { date: 'desc' }, take: 30,
+      });
+      duplicates = existing
+        .filter((r) => Math.abs(Math.abs(Number(r.paymentAmount)) - totalAmount) <= 1)
+        .map((r) => ({ date: r.date ? new Date(r.date).toISOString().slice(0, 10) : null, amount: Math.abs(Number(r.paymentAmount)) }));
+      if (duplicates.length > 0) {
+        const dts = duplicates.map((d) => d.date || '?').join(', ');
+        warnings.push(`Takror bo'lishi mumkin: ${fromCn} dan shu summada (${totalAmount.toLocaleString('ru-RU')}) allaqachon ${duplicates.length} ta переброска bor (${dts}). Haqiqatan takror bo'lsa davom eting.`);
+      }
+    }
+
     const agentState = warnings.length === 0 ? 'verified' : 'needs_review';
     const agentReason = warnings.length === 0
       ? 'Hujjat forma bilan mos, qoidalar bajarildi'
@@ -4702,6 +4720,7 @@ export class OplataKvService {
         date: new Date().toISOString().slice(0, 10),
       },
       balanceEnough,
+      duplicates,
       agentState,
       agentReason,
       warnings,
