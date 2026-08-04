@@ -985,6 +985,48 @@ model OplataKv {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// PEREREBOSKA GROUP — har bir переброска uchun audit yozuvi (tarix + orqaga qaytarish)
+// id = OplataKv qatorlaridagi perereboskaGroupId. Pul qatorlari o'chirilса ham (reverse)
+// bu yozuv qoladi (status=cancelled) — tarix filtrlash uchun.
+// ─────────────────────────────────────────────────────────────────
+model PerereboskaGroup {
+  id             String   @id @default(cuid()) // = perereboskaGroupId
+  fromContractNo String   @map("from_contract_no") @db.VarChar(50)
+  objectName     String?  @map("object_name") @db.VarChar(255)
+  fromClient     String?  @map("from_client") @db.VarChar(255)
+  amount         Decimal  @db.Decimal(15, 2)
+  date           DateTime @db.Date
+  destinations   Json // [{ contractNo, amount, client }]
+  note           String?  @db.Text
+
+  // Hujjat (ariza) — fayl source qatorda ham bor, bu yerda metadata
+  fileName String? @map("file_name") @db.VarChar(255)
+  fileMime String? @map("file_mime") @db.VarChar(128)
+  fileSize Int?    @map("file_size")
+  filePath String? @map("file_path") @db.Text
+
+  // AI agent (ariza'dan o'qish) — ixtiyoriy
+  agentUsed   Boolean @default(false) @map("agent_used")
+  agentState  String? @map("agent_state") @db.VarChar(30) // verified / needs_review
+  agentReason String? @map("agent_reason") @db.Text
+  agentData   Json?   @map("agent_data") // Claude o'qigan xom natija
+
+  status          String    @default("active") @db.VarChar(20) // active / cancelled
+  createdAt       DateTime  @default(now()) @map("created_at")
+  createdById     String?   @map("created_by_id") @db.VarChar(50)
+  createdByName   String?   @map("created_by_name") @db.VarChar(190)
+  cancelledAt     DateTime? @map("cancelled_at")
+  cancelledById   String?   @map("cancelled_by_id") @db.VarChar(50)
+  cancelledByName String?   @map("cancelled_by_name") @db.VarChar(190)
+  cancelReason    String?   @map("cancel_reason") @db.Text
+
+  @@index([status])
+  @@index([date(sort: Desc)])
+  @@index([fromContractNo])
+  @@map("perereboska_group")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // OPLATA KV — OBJECT NAME MAPPING (CRM → OplatyKv)
 // CRM dan "XON SAROY AFSONASI" kelsa, OplatyKv'ga "АФСОНА" deb yoziladi
 // ─────────────────────────────────────────────────────────────────

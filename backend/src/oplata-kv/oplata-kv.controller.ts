@@ -295,6 +295,11 @@ export class OplataKvController {
       date: string;
       destinations: string; // JSON string [{ contractNo, amount }]
       note?: string;
+      // AI Переброска — agent ariza'dan o'qigan bo'lsa (ixtiyoriy)
+      agentUsed?: string | boolean;
+      agentState?: string;
+      agentReason?: string;
+      agentData?: string; // JSON string
     },
     @CurrentUser() user?: AuthUser,
   ) {
@@ -311,6 +316,8 @@ export class OplataKvController {
     } catch {
       throw new BadRequestException("destinations JSON noto'g'ri");
     }
+    let agentData: any = null;
+    if (body.agentData) { try { agentData = JSON.parse(body.agentData); } catch { /* skip */ } }
     return this.svc.createPerereboska({
       fromContractNo: body.fromContractNo,
       amount: Number(body.amount),
@@ -324,14 +331,67 @@ export class OplataKvController {
         size: file.size,
       },
       actor: actorFrom(user),
+      agentUsed: body.agentUsed === 'true' || body.agentUsed === true,
+      agentState: body.agentState || null,
+      agentReason: body.agentReason || null,
+      agentData,
     });
   }
 
   @Delete('perereboska/:groupId')
   @RequirePermissions(PERMISSIONS.OPLATAKV_DELETE)
-  @ApiOperation({ summary: 'Перереброска guruh\'ini o\'chirish (barcha qatorlar + file)' })
-  deletePerereboska(@Param('groupId') groupId: string, @CurrentUser() user?: AuthUser) {
-    return this.svc.deletePerereboskaGroup(groupId, actorFrom(user));
+  @ApiOperation({ summary: "Переброска'ni orqaga qaytarish (pul qatorlari o'chadi, balans tiklanadi, tarixda cancelled qoladi)" })
+  deletePerereboska(
+    @Param('groupId') groupId: string,
+    @Query('reason') reason?: string,
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.deletePerereboskaGroup(groupId, actorFrom(user), reason);
+  }
+
+  // ═══ AI ПЕРЕБРОСКА — ariza tahlili, tarix, sozlamalar ═══
+  @Post('perereboska/analyze')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_CREATE)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: "AI Переброска — arizani Claude vision bilan o'qib переброска ma'lumotini ajratadi (DB'ga yozmaydi)" })
+  async analyzePerereboska(@UploadedFile() file: any) {
+    if (!file?.buffer) throw new BadRequestException('Hujjat (file) majburiy');
+    return this.svc.analyzePerereboskaAriza({
+      buffer: file.buffer,
+      originalname: fixFileName(file.originalname) || 'file',
+      mimetype: file.mimetype || 'application/octet-stream',
+      size: file.size,
+    });
+  }
+
+  @Get('perereboska/history')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'Переброска tarixi — filtrlar bilan (status, sana oralig\'i, qidiruv)' })
+  perereboskaHistory(
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('q') q?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.svc.perereboskaHistory({ status, dateFrom, dateTo, q, page: page ? Number(page) : 1 });
+  }
+
+  @Get('perereboska-settings')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'AI Переброска sozlamalari' })
+  getPerereboskaSettings() {
+    return this.svc.getPerereboskaSettings();
+  }
+
+  @Post('perereboska-settings')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
+  @ApiOperation({ summary: 'AI Переброска sozlamalarini saqlash' })
+  savePerereboskaSettings(
+    @Body() body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean },
+    @CurrentUser() user?: AuthUser,
+  ) {
+    return this.svc.savePerereboskaSettings(body, actorFrom(user));
   }
 
   @Get('perereboska/:groupId/file')

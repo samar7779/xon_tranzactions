@@ -13,6 +13,7 @@ import { CrmService } from '../crm/crm.service';
 import { CrmContractCacheService, ReverifyStatus } from '../categorization/crm-contract-cache.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from '../sync/settings.service';
+import { CryptoService } from '../common/crypto/crypto.service';
 import {
   CreateOplataKvDto, UpdateOplataKvDto, ListOplataKvDto,
 } from './dto/oplata-kv.dto';
@@ -70,6 +71,7 @@ export class OplataKvService {
     private readonly config: ConfigService,
     private readonly http: HttpService,
     private readonly categorization: CategorizationService,
+    private readonly crypto: CryptoService,
   ) {
     this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
     this.tgToken = this.config.get<string>('TG_BOT_TOKEN') || '';
@@ -4194,6 +4196,11 @@ export class OplataKvService {
     note?: string;
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number };
     actor: Actor;
+    // AI Переброска — agent ariza'dan o'qigan bo'lsa (ixtiyoriy)
+    agentUsed?: boolean;
+    agentState?: string | null;     // verified / needs_review
+    agentReason?: string | null;
+    agentData?: any;
   }) {
     const fromCn = (input.fromContractNo || '').trim().toUpperCase();
     if (!fromCn) throw new BadRequestException("Manba shartnoma bo'sh");
@@ -4345,6 +4352,35 @@ export class OplataKvService {
         destRows.push(r);
       }
 
+      // 3) Переброска guruh yozuvi (tarix + orqaga qaytarish uchun audit)
+      await tx.perereboskaGroup.create({
+        data: {
+          id: groupId,
+          fromContractNo: fromCn,
+          objectName: fromObjectName,
+          fromClient: fromCustomerName,
+          amount: input.amount,
+          date: dateObj,
+          destinations: destCrms.map((dc, i) => ({
+            contractNo: dc.contractNo,
+            amount: input.destinations[i].amount,
+            client: dc.customerName,
+          })) as any,
+          note,
+          fileName: safeName,
+          fileMime: input.file.mimetype.slice(0, 128),
+          fileSize: input.file.size,
+          filePath,
+          agentUsed: !!input.agentUsed,
+          agentState: input.agentState || null,
+          agentReason: input.agentReason || null,
+          agentData: (input.agentData ?? null) as any,
+          status: 'active',
+          createdById: input.actor.id,
+          createdByName: input.actor.name,
+        },
+      });
+
       // History (audit)
       try {
         await tx.oplataKvHistory.create({
@@ -4410,52 +4446,72 @@ export class OplataKvService {
   }
 
   /**
-   * Перереброска guruh'ini o'chirish — barcha tegishli qatorlar + file.
-   * Telegram'ga xabar yuboriladi.
+   * Перереброска guruh'ini orqaga qaytarish — pul qatorlari o'chiriladi (balans tiklanadi),
+   * guruh yozuvi 'cancelled' bo'ladi (tarixda qoladi), fayl o'chiriladi. Telegram xabar.
    */
-  async deletePerereboskaGroup(groupId: string, actor: Actor) {
+  async deletePerereboskaGroup(groupId: string, actor: Actor, reason?: string) {
     if (!groupId) throw new BadRequestException("groupId bo'sh");
 
     const rows = await this.prisma.oplataKv.findMany({
       where: { perereboskaGroupId: groupId },
       orderBy: { paymentAmount: 'asc' }, // source (manfiy) avval
     });
-    if (rows.length === 0) throw new NotFoundException('Перереброска guruh topilmadi');
-
-    const sourceRow = rows.find((r) => Number(r.paymentAmount || 0) < 0) || rows[0];
-    const filePath = sourceRow.perereboskaFilePath;
-    let fileBuffer: Buffer | null = null;
-    if (filePath) {
-      try { fileBuffer = await fs.readFile(filePath); } catch {}
+    // Guruh yozuvi bor lekin qatorlar yo'q bo'lsa (allaqachon bekor qilingan) — xato bermaymiz
+    const grp = await this.prisma.perereboskaGroup.findUnique({ where: { id: groupId } });
+    if (rows.length === 0 && !grp) throw new NotFoundException('Перереброска guruh topilmadi');
+    if (rows.length === 0 && grp?.status === 'cancelled') {
+      throw new BadRequestException('Bu переброска allaqachon bekor qilingan');
     }
 
-    // DB'dan o'chirish
-    await this.prisma.oplataKv.deleteMany({ where: { perereboskaGroupId: groupId } });
-
-    // Diskdan o'chirish
-    if (filePath) {
-      try {
-        await fs.unlink(filePath);
-        await fs.rmdir(path.dirname(filePath)).catch(() => {});
-      } catch (e: any) {
-        this.log.warn(`Perereboska file o'chirilmadi: ${e?.message}`);
+    if (rows.length > 0) {
+      const sourceRow = rows.find((r) => Number(r.paymentAmount || 0) < 0) || rows[0];
+      const filePath = sourceRow.perereboskaFilePath;
+      let fileBuffer: Buffer | null = null;
+      if (filePath) {
+        try { fileBuffer = await fs.readFile(filePath); } catch {}
       }
+
+      // Pul qatorlarini o'chirish (balans tiklanadi)
+      await this.prisma.oplataKv.deleteMany({ where: { perereboskaGroupId: groupId } });
+
+      // Diskdan faylni o'chirish
+      if (filePath) {
+        try {
+          await fs.unlink(filePath);
+          await fs.rmdir(path.dirname(filePath)).catch(() => {});
+        } catch (e: any) {
+          this.log.warn(`Perereboska file o'chirilmadi: ${e?.message}`);
+        }
+      }
+
+      // Telegram
+      void this.notifyPerereboskaTelegram('deleted', {
+        groupId,
+        fromCn: sourceRow.contractNo,
+        objectName: sourceRow.object,
+        amount: Math.abs(Number(sourceRow.paymentAmount || 0)),
+        destinations: rows
+          .filter((r) => r.id !== sourceRow.id)
+          .map((r) => ({ contractNo: r.contractNo, amount: Number(r.paymentAmount || 0) })),
+        actor,
+        filePath: null,
+        fileName: sourceRow.perereboskaFileName || 'document',
+        fileMime: sourceRow.perereboskaFileMime || 'application/octet-stream',
+        fileBuffer,
+      });
     }
 
-    // Telegram
-    void this.notifyPerereboskaTelegram('deleted', {
-      groupId,
-      fromCn: sourceRow.contractNo,
-      objectName: sourceRow.object,
-      amount: Math.abs(Number(sourceRow.paymentAmount || 0)),
-      destinations: rows
-        .filter((r) => r.id !== sourceRow.id)
-        .map((r) => ({ contractNo: r.contractNo, amount: Number(r.paymentAmount || 0) })),
-      actor,
-      filePath: null,
-      fileName: sourceRow.perereboskaFileName || 'document',
-      fileMime: sourceRow.perereboskaFileMime || 'application/octet-stream',
-      fileBuffer,
+    // Guruh yozuvini 'cancelled' qilamiz (tarixda qoladi, filtrlash uchun)
+    await this.prisma.perereboskaGroup.updateMany({
+      where: { id: groupId },
+      data: {
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelledById: actor.id ?? null,
+        cancelledByName: actor.name ?? null,
+        cancelReason: (reason || '').trim() || null,
+        filePath: null, // fayl o'chirildi
+      },
     });
 
     return { ok: true, deleted: rows.length, groupId };
@@ -4482,6 +4538,243 @@ export class OplataKvService {
     };
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // AI ПЕРЕБРОСКА — sozlamalar, ariza'ni Claude vision bilan o'qish, tarix
+  // ═══════════════════════════════════════════════════════════════════
+  private readonly K_PB_AI_ENABLED = 'perereboska.aiEnabled';
+  private readonly K_PB_AI_MODEL = 'perereboska.aiModel';
+  private readonly K_PB_STRICT = 'perereboska.strict';
+  private readonly K_PB_TG = 'perereboska.tgNotify';
+
+  async isPerereboskaAiEnabled(): Promise<boolean> {
+    return (await this.settings.get(this.K_PB_AI_ENABLED)) !== '0'; // default yoqiq
+  }
+  async getPerereboskaAiModel(): Promise<string> {
+    return (await this.settings.get(this.K_PB_AI_MODEL))
+      || (await this.settings.get('agent.aiModel'))
+      || 'claude-sonnet-4-6';
+  }
+  async isPerereboskaStrict(): Promise<boolean> {
+    return (await this.settings.get(this.K_PB_STRICT)) === '1'; // default yumshoq (ogohlantirib o'tkazadi)
+  }
+  async isPerereboskaTgNotify(): Promise<boolean> {
+    return (await this.settings.get(this.K_PB_TG)) !== '0'; // default yoqiq
+  }
+
+  async getPerereboskaSettings() {
+    const [aiEnabled, aiModel, strict, tgNotify, key] = await Promise.all([
+      this.isPerereboskaAiEnabled(),
+      this.getPerereboskaAiModel(),
+      this.isPerereboskaStrict(),
+      this.isPerereboskaTgNotify(),
+      this.getAiKey(),
+    ]);
+    return { aiEnabled, aiModel, strict, tgNotify, hasKey: !!key };
+  }
+
+  async savePerereboskaSettings(
+    body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean },
+    actor?: Actor,
+  ) {
+    const by = actor?.name || undefined;
+    if (body.aiEnabled !== undefined) await this.settings.set(this.K_PB_AI_ENABLED, body.aiEnabled ? '1' : '0', by);
+    if (body.aiModel !== undefined) await this.settings.set(this.K_PB_AI_MODEL, (body.aiModel || '').trim(), by);
+    if (body.strict !== undefined) await this.settings.set(this.K_PB_STRICT, body.strict ? '1' : '0', by);
+    if (body.tgNotify !== undefined) await this.settings.set(this.K_PB_TG, body.tgNotify ? '1' : '0', by);
+    return this.getPerereboskaSettings();
+  }
+
+  /** ANTHROPIC kalit — agent.aiKey (shifrlangan) yoki env */
+  private async getAiKey(): Promise<string | null> {
+    const enc = await this.settings.get('agent.aiKey');
+    if (enc) { try { return this.crypto.decrypt(enc); } catch { /* skip */ } }
+    return process.env.ANTHROPIC_API_KEY || null;
+  }
+
+  /**
+   * AI Переброска — yuklangan arizani Claude vision bilan o'qib, переброска
+   * ma'lumotlarini (manba/maqsad/summa) ajratadi va qoidalarni tekshiradi.
+   * DB'ga YOZMAYDI — faqat tahlil. Xodim tasdiqlagach createPerereboska chaqiriladi.
+   */
+  async analyzePerereboskaAriza(file: { buffer: Buffer; originalname: string; mimetype: string; size: number }) {
+    if (!file?.buffer) throw new BadRequestException('Hujjat (file) majburiy');
+    if (file.size > 25 * 1024 * 1024) throw new BadRequestException('Fayl 25 MB dan oshmasligi kerak');
+    const apiKey = await this.getAiKey();
+    if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
+
+    // Fayl blokini tayyorlash
+    const b64 = file.buffer.toString('base64');
+    const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname);
+    const isImage = (file.mimetype || '').startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(file.originalname);
+    let fileBlock: any;
+    if (isPdf) {
+      fileBlock = { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } };
+    } else if (isImage) {
+      const media = (file.mimetype || '').startsWith('image/') ? file.mimetype : 'image/jpeg';
+      fileBlock = { type: 'image', source: { type: 'base64', media_type: media, data: b64 } };
+    } else {
+      throw new BadRequestException("Hujjat PDF yoki rasm bo'lishi kerak");
+    }
+
+    const model = await this.getPerereboskaAiModel();
+    const ex = await this.claudeExtractPerereboska(apiKey, model, fileBlock);
+
+    // Ajratilganni tozalash
+    const fromCn = String(ex?.fromContractNo || '').trim().toUpperCase();
+    const dests = (Array.isArray(ex?.destinations) ? ex.destinations : [])
+      .map((d: any) => ({ contractNo: String(d?.contractNo || '').trim().toUpperCase(), amount: Number(d?.amount) || 0 }))
+      .filter((d: any) => d.contractNo);
+    const destSum = dests.reduce((s: number, d: any) => s + d.amount, 0);
+    const totalAmount = Number(ex?.totalAmount) || destSum;
+
+    const warnings: string[] = [];
+    if (ex?.isTransferApplication === false) warnings.push("Hujjat переброска arizasiga o'xshamaydi");
+    if (!fromCn) warnings.push('Manba shartnoma aniqlanmadi');
+    if (dests.length === 0) warnings.push('Maqsadli shartnoma aniqlanmadi');
+
+    // Manba tekshiruvi
+    let fromInfo: any = null;
+    let objectName: string | null = null;
+    if (fromCn) {
+      fromInfo = await this.contractBalance(fromCn).catch(() => null);
+      if (!fromInfo?.foundInCrm) warnings.push(`Manba shartnoma topilmadi (CRM/tarix): ${fromCn}`);
+      objectName = fromInfo?.objectName || null;
+      if (fromInfo && totalAmount > 0 && Number(fromInfo.totalPaid) < totalAmount - 0.01) {
+        warnings.push(`Manba qoldig'i yetarli emas: ${Number(fromInfo.totalPaid).toLocaleString('ru-RU')} < ${totalAmount.toLocaleString('ru-RU')}`);
+      }
+    }
+
+    // Maqsadlar tekshiruvi
+    const destResolved: any[] = [];
+    for (const d of dests) {
+      const bal = await this.contractBalance(d.contractNo).catch(() => null);
+      const found = !!bal?.foundInCrm;
+      const dObj = bal?.objectName || null;
+      if (!found) warnings.push(`Maqsadli shartnoma topilmadi: ${d.contractNo}`);
+      if (found && objectName && dObj && dObj !== objectName) warnings.push(`Obyekt mos emas: ${d.contractNo} (${dObj}) ≠ manba (${objectName})`);
+      if (d.contractNo === fromCn) warnings.push(`Maqsadli manba bilan bir xil: ${d.contractNo}`);
+      destResolved.push({ contractNo: d.contractNo, amount: d.amount, client: bal?.customerName || null, object: dObj, found });
+    }
+
+    // Summa balansi
+    const sumMatch = totalAmount > 0 && Math.abs(destSum - totalAmount) <= 0.01;
+    if (!sumMatch && dests.length > 0) {
+      warnings.push(`Summalar teng emas: maqsad jami ${destSum.toLocaleString('ru-RU')} ≠ manba ${totalAmount.toLocaleString('ru-RU')}`);
+    }
+
+    const agentState = warnings.length === 0 ? 'verified' : 'needs_review';
+    const agentReason = warnings.length === 0
+      ? 'Hujjat forma bilan mos, qoidalar bajarildi'
+      : warnings.join('; ');
+
+    return {
+      ok: true,
+      extracted: {
+        fromContractNo: fromCn || null,
+        fromClient: fromInfo?.customerName || null,
+        objectName,
+        totalAmount,
+        destinations: destResolved,
+        applicantName: ex?.applicantName || null,
+        confidence: ex?.confidence || null,
+        notes: ex?.notes || null,
+        date: new Date().toISOString().slice(0, 10),
+      },
+      agentState,
+      agentReason,
+      warnings,
+    };
+  }
+
+  /** Claude Messages API — arizadan переброска ma'lumotini structured (tool) ajratadi */
+  private async claudeExtractPerereboska(apiKey: string, model: string, fileBlock: any): Promise<any> {
+    const system = [
+      "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy yordamchisisan.",
+      "Foydalanuvchi ПЕРЕБРОСКА (bir shartnomadan boshqasiga pul o'tkazish) arizasini yuklaydi.",
+      "Arizada: manba (eski/bekor qilingan) shartnoma raqami, o'tkaziladigan summa, va yangi (maqsadli) shartnoma raqami(lari) bo'ladi.",
+      "Shartnoma raqami formati: raqamlar + obyekt kodi (SRH, VHA, ZUR, VTN...) + raqam/harflar. Masalan: 2986SRH2593, 4026SRH264E.",
+      "MUHIM: arizada bir nechta pul raqami bo'lishi mumkin (o'tkaziladigan summa, qaytarilgan pul, qayta to'lov majburiyati). Faqat MAQSADLI shartnomaga o'tkazilayotgan summani ol.",
+      "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
+    ].join(' ');
+    const userContent = [
+      { type: 'text', text: "Ushbu arizani diqqat bilan o'qib, extract_perereboska tool orqali ma'lumotlarni qaytar." },
+      fileBlock,
+    ];
+    const tools = [{
+      name: 'extract_perereboska',
+      description: "Ariza'dan переброска ma'lumotlarini ajratish",
+      input_schema: {
+        type: 'object',
+        properties: {
+          isTransferApplication: { type: 'boolean', description: "Bu haqiqatan переброска / o'zaro hisob-kitob arizasimi" },
+          fromContractNo: { type: 'string', description: 'Manba (eski) shartnoma raqami' },
+          destinations: {
+            type: 'array',
+            description: "Maqsadli shartnomalar va ularga o'tkaziladigan summa",
+            items: {
+              type: 'object',
+              properties: { contractNo: { type: 'string' }, amount: { type: 'number' } },
+              required: ['contractNo', 'amount'],
+            },
+          },
+          totalAmount: { type: 'number', description: "Manbadan o'tkazilayotgan jami summa" },
+          applicantName: { type: 'string', description: 'Arizachi (imzo egasi) ismi' },
+          confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+          notes: { type: 'string', description: 'Qisqa izoh yoki shubha' },
+        },
+        required: ['isTransferApplication', 'destinations'],
+      },
+    }];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model, max_tokens: 1200, system,
+        messages: [{ role: 'user', content: userContent }],
+        tools, tool_choice: { type: 'tool', name: 'extract_perereboska' },
+      }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data: any = await res.json();
+    const toolUse = (data?.content || []).find((c: any) => c.type === 'tool_use');
+    if (!toolUse?.input) throw new BadRequestException("Claude javobi tushunarsiz (hujjat o'qilmadi)");
+    return toolUse.input;
+  }
+
+  /** Переброска tarixi — guruh yozuvlari, filtrlar bilan */
+  async perereboskaHistory(filters: {
+    status?: string; dateFrom?: string; dateTo?: string; q?: string; page?: number; perPage?: number;
+  }) {
+    const where: any = {};
+    if (filters.status && filters.status !== 'all') where.status = filters.status;
+    if (filters.dateFrom || filters.dateTo) {
+      where.date = {};
+      if (filters.dateFrom) where.date.gte = new Date(`${filters.dateFrom}T00:00:00+05:00`);
+      if (filters.dateTo) where.date.lte = new Date(`${filters.dateTo}T23:59:59.999+05:00`);
+    }
+    const q = filters.q?.trim();
+    if (q) {
+      where.OR = [
+        { fromContractNo: { contains: q, mode: 'insensitive' } },
+        { fromClient: { contains: q, mode: 'insensitive' } },
+        { objectName: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+    const page = Math.max(1, filters.page || 1);
+    const perPage = Math.min(100, Math.max(1, filters.perPage || 20));
+    const [items, total] = await Promise.all([
+      this.prisma.perereboskaGroup.findMany({
+        where, orderBy: [{ createdAt: 'desc' }], skip: (page - 1) * perPage, take: perPage,
+      }),
+      this.prisma.perereboskaGroup.count({ where }),
+    ]);
+    return { ok: true, items, total, page, perPage };
+  }
+
   /** Telegram notification — Перереброска create/delete */
   private async notifyPerereboskaTelegram(
     action: 'created' | 'deleted',
@@ -4499,6 +4792,7 @@ export class OplataKvService {
     },
   ) {
     if (!this.tgToken || !this.tgChat) return;
+    if (!(await this.isPerereboskaTgNotify())) return; // sozlamada o'chirilgan bo'lsa
     try {
       const icon = action === 'created' ? '🔄' : '🗑️';
       const verb = action === 'created' ? 'yaratildi' : "o'chirildi";
