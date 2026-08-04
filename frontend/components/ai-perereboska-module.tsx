@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   X, Sparkles, Upload, FileText, Loader2, CheckCircle2, AlertTriangle,
   History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw,
-  Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw,
+  Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw, Eye, ExternalLink,
 } from 'lucide-react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -123,6 +123,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [showPreview, setShowPreview] = useState(false);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
 
   // Tahrirlanadigan forma
@@ -133,16 +134,16 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const [note, setNote] = useState('');
   const [dests, setDests] = useState<DestRow[]>([]);
 
-  // Rasm preview
+  // Fayl preview URL (rasm ham, PDF ham — ochib ko'rish uchun)
   useEffect(() => {
-    if (!file || !file.type.startsWith('image/')) { setPreviewUrl(null); return; }
+    if (!file) { setPreviewUrl(null); return; }
     const url = URL.createObjectURL(file);
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [file]);
 
   const reset = () => {
-    setFile(null); setResult(null); setFromCn(''); setFromBalance(null);
+    setFile(null); setResult(null); setShowPreview(false); setFromCn(''); setFromBalance(null);
     setFromMeta({ client: null, object: null }); setDate(''); setNote(''); setDests([]);
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -213,16 +214,23 @@ function WorkTab({ onDone }: { onDone: () => void }) {
           </label>
         ) : (
           <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-3 flex items-center gap-4">
-            <div className="w-24 h-28 rounded-xl overflow-hidden shrink-0 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center bg-slate-50 dark:bg-slate-800">
+            <button onClick={() => setShowPreview(true)} title="Ochib ko'rish"
+              className="group/thumb relative w-24 h-28 rounded-xl overflow-hidden shrink-0 ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center bg-slate-50 dark:bg-slate-800">
               {isImg && previewUrl
                 ? <img src={previewUrl} alt="ariza" className="w-full h-full object-cover" />
                 : <div className="flex flex-col items-center gap-1 text-rose-500"><FileText className="h-9 w-9" /><span className="text-[10px] font-bold">PDF</span></div>}
-            </div>
+              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 transition-opacity grid place-items-center">
+                <Eye className="h-6 w-6 text-white" />
+              </div>
+            </button>
             <div className="min-w-0 flex-1">
               <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 truncate">{file.name}</div>
               <div className="text-[11px] text-slate-400">{(file.size / 1024).toFixed(0)} KB · {isImg ? 'rasm' : 'PDF'}</div>
-              <div className="mt-2 flex gap-2">
-                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30">
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button onClick={() => setShowPreview(true)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30">
+                  <Eye className="h-3 w-3" /> Ochib ko'rish
+                </button>
+                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
                   <RefreshCw className="h-3 w-3" /> O'zgartirish
                 </button>
                 <button onClick={reset} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30">
@@ -400,6 +408,24 @@ function WorkTab({ onDone }: { onDone: () => void }) {
             </button>
           </div>
         </>
+      )}
+
+      {/* PDF/rasm — ochib ko'rish overlay */}
+      {showPreview && previewUrl && (
+        <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-sm flex flex-col" onClick={() => setShowPreview(false)}>
+          <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-white shrink-0" onClick={(e) => e.stopPropagation()}>
+            <span className="text-[13px] font-medium truncate">{file?.name}</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] bg-white/15 hover:bg-white/25 transition-colors"><ExternalLink className="h-3.5 w-3.5" /> Yangi tabda</a>
+              <button onClick={() => setShowPreview(false)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[12px] bg-white/15 hover:bg-white/25 transition-colors"><X className="h-3.5 w-3.5" /> Yopish</button>
+            </div>
+          </div>
+          <div className="flex-1 min-h-0 px-4 pb-4" onClick={(e) => e.stopPropagation()}>
+            {isImg
+              ? <img src={previewUrl} alt="ariza" className="max-h-full max-w-full mx-auto object-contain rounded-lg" />
+              : <iframe src={previewUrl} title="ariza" className="w-full h-full rounded-lg bg-white" />}
+          </div>
+        </div>
       )}
     </div>
   );
