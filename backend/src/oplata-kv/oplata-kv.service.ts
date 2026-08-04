@@ -4290,7 +4290,9 @@ export class OplataKvService {
       created = await this.prisma.$transaction(async (tx) => {
       // FIX (B#2): manba shartnomani QULFLAYMIZ — bir vaqtli 2-pereboska double-spend qilmasin.
       // Advisory lock transaction oxirigacha ushlanadi; 2-so'rov birinchisini kutadi.
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${fromCn}))`;
+      // $executeRaw ishlatiladi — pg_advisory_xact_lock 'void' qaytaradi, $queryRaw uni
+      // deserialize qila olmay P2010 xato beradi (переброска saqlashni butunlay buzardi).
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${fromCn}))`;
       // Qoldiqni QULF ostida qayta tekshiramiz (TOCTOU'ni yopadi — 2-so'rov yangilangan qoldiqni ko'radi).
       const agg = await tx.oplataKv.aggregate({ where: { contractNo: fromCn }, _sum: { paymentAmount: true } });
       const paidNow = Number(agg._sum.paymentAmount || 0);
@@ -4703,6 +4705,7 @@ export class OplataKvService {
       "Shartnoma raqami formati: raqamlar + obyekt kodi (SRH, VHA, ZUR, VTN...) + raqam/harflar. Masalan: 2986SRH2593, 4026SRH264E.",
       "MUHIM: arizada bir nechta pul raqami bo'lishi mumkin (o'tkaziladigan summa, qaytarilgan pul, qayta to'lov majburiyati). Faqat MAQSADLI shartnomaga o'tkazilayotgan summani ol.",
       "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
+      "notes'ni QISQA va o'qishga qulay MARKDOWN formatда yoz: kalit faktlar uchun bullet (- ), summalarni **qalin** qil. Uzun paragraf yozma.",
     ].join(' ');
     const userContent = [
       { type: 'text', text: "Ushbu arizani diqqat bilan o'qib, extract_perereboska tool orqali ma'lumotlarni qaytar." },

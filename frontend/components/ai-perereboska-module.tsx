@@ -9,8 +9,19 @@ import {
   History, Settings, ArrowRightLeft, Trash2, Plus, RotateCcw,
   Wand2, ShieldCheck, ShieldAlert, Wallet, Ban, RefreshCw,
 } from 'lucide-react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
+
+// Agent matni (notes/izoh) — markdown render (o'qishga qulay)
+function MdText({ children }: { children: string }) {
+  return (
+    <div className="text-[12px] leading-relaxed text-slate-600 dark:text-slate-300 [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-4 [&_ul]:my-1 [&_ul]:space-y-0.5 [&_ol]:list-decimal [&_ol]:pl-4 [&_ol]:my-1 [&_strong]:font-semibold [&_strong]:text-slate-800 dark:[&_strong]:text-slate-100 [&_code]:font-mono [&_code]:text-[11px]">
+      <Markdown remarkPlugins={[remarkGfm]}>{children}</Markdown>
+    </div>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────
 type DestRow = { contractNo: string; amount: string; client?: string | null; object?: string | null; found?: boolean; balance?: number | null };
@@ -57,7 +68,7 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
       />
       <div
         className={cn(
-          'absolute right-0 top-0 h-full w-full max-w-5xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col transition-transform duration-300 ease-out',
+          'absolute right-0 top-0 h-full w-full max-w-6xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col transition-transform duration-300 ease-out',
           open ? 'translate-x-0' : 'translate-x-full',
         )}
       >
@@ -184,7 +195,7 @@ function WorkTab({ onDone }: { onDone: () => void }) {
   const isImg = !!file && file.type.startsWith('image/');
 
   return (
-    <div className="p-6 space-y-5 max-w-4xl mx-auto">
+    <div className="p-6 space-y-5 max-w-5xl mx-auto">
       {/* 1. Ariza yuklash — pro */}
       <div>
         <div className="text-[12px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">1 · Arizani yuklang</div>
@@ -265,8 +276,12 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 ))}
               </ul>
             )}
-            {result.extracted.notes && <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400 italic">📝 {result.extracted.notes}</div>}
-            {result.extracted.applicantName && <div className="mt-1 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
+            {result.extracted.notes && (
+              <div className="mt-2.5 rounded-lg bg-white/70 dark:bg-slate-900/50 ring-1 ring-slate-200/70 dark:ring-slate-700/50 px-3 py-2">
+                <MdText>{result.extracted.notes}</MdText>
+              </div>
+            )}
+            {result.extracted.applicantName && <div className="mt-2 text-[11.5px] text-slate-500 dark:text-slate-400">👤 Arizachi: {result.extracted.applicantName}</div>}
           </div>
 
           {/* Qoldiq jadvali */}
