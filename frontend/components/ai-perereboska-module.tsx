@@ -78,7 +78,6 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
     <div className={cn('fixed inset-0 z-[100]', open ? 'pointer-events-auto' : 'pointer-events-none')}>
       <div
         className={cn('absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300', open ? 'opacity-100' : 'opacity-0')}
-        onClick={onClose}
       />
       <div
         className={cn(
