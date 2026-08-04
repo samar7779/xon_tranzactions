@@ -4679,14 +4679,17 @@ export class OplataKvService {
       warnings.push(`Ism mos emas: arizachi "${ex?.applicantName || '?'}" maqsadli shartnoma egasiga to'g'ri kelmaydi${ex?.nameNote ? ` — ${ex.nameNote}` : ''}`);
     }
     // Manba va maqsad shartnoma egasi bir xil odammi (CRM nomlari — bir xil yozuvда, token o'xshashligi)
+    // Kamida 2 ta umumiy so'z (familya+ism) kerak — faqat ism mos kelsa (Gulnora↔Gulnora) yetarli emas.
     if (nameCheck && fromInfo?.customerName) {
-      const nameTokens = (s: string) => new Set(String(s || '').toUpperCase().replace(/[^A-ZА-ЯЁ]+/gi, ' ').trim().split(/\s+/).filter((w) => w.length >= 3));
+      const nameTokens = (s: string) => String(s || '').toUpperCase().replace(/[^A-ZА-ЯЁ]+/gi, ' ').trim().split(/\s+/).filter((w) => w.length >= 3);
       const srcTok = nameTokens(fromInfo.customerName);
       for (const dr of destResolved) {
         if (dr.found && dr.client) {
-          const common = [...nameTokens(dr.client)].filter((t) => srcTok.has(t));
-          if (common.length === 0) {
-            warnings.push(`Manba va maqsad shartnoma egasi HAR XIL: manba "${fromInfo.customerName}" ≠ maqsad "${dr.client}" (${dr.contractNo})`);
+          const dTok = nameTokens(dr.client);
+          const common = dTok.filter((t) => srcTok.includes(t)).length;
+          const need = Math.min(srcTok.length, dTok.length, 2);
+          if (need > 0 && common < need) {
+            warnings.push(`Mijoz ismi HAR XIL: manba egasi "${fromInfo.customerName}" ≠ maqsad egasi "${dr.client}" (${dr.contractNo})`);
           }
         }
       }
@@ -4729,6 +4732,7 @@ export class OplataKvService {
         totalAmount,
         destinations: destResolved,
         applicantName: ex?.applicantName || null,
+        applicantMatchesHolder: nameCheck ? (ex?.applicantMatchesHolder ?? null) : null,
         confidence: ex?.confidence || null,
         notes: ex?.notes || null,
         date: new Date().toISOString().slice(0, 10),

@@ -30,7 +30,7 @@ type AnalyzeResult = {
   extracted: {
     fromContractNo: string | null; fromClient: string | null; fromFound: boolean; objectName: string | null; fromBalance: number | null;
     totalAmount: number; destinations: Array<{ contractNo: string; amount: number; client: string | null; object: string | null; found: boolean; balance: number | null }>;
-    applicantName: string | null; confidence: string | null; notes: string | null; date: string;
+    applicantName: string | null; applicantMatchesHolder: boolean | null; confidence: string | null; notes: string | null; date: string;
   };
   balanceEnough: boolean;
   duplicates?: Array<{ date: string | null; amount: number }>;
@@ -40,6 +40,15 @@ type AnalyzeResult = {
 };
 
 const num = (s: any) => { const n = Number(String(s ?? '').replace(/\s/g, '')); return isNaN(n) ? 0 : n; };
+
+// Ism taqqoslash — CRM nomlari (bir xil yozuv). Kamida 2 ta umumiy so'z (familya+ism) kerak.
+const nameTokens = (s: string) => (s || '').toUpperCase().replace(/[^A-ZА-ЯЁ]+/gi, ' ').trim().split(/\s+/).filter((w) => w.length >= 3);
+const sameName = (a?: string | null, b?: string | null) => {
+  const ta = nameTokens(a || ''), tb = nameTokens(b || '');
+  if (!ta.length || !tb.length) return true; // noma'lum — bloklamaymiz
+  const common = ta.filter((t) => tb.includes(t)).length;
+  return common >= Math.min(ta.length, tb.length, 2);
+};
 
 // ═══════════════════════════════════════════════════════════════
 export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -121,6 +130,8 @@ export function AiPerereboskaModule({ open, onClose }: { open: boolean; onClose:
 // ═══════════════════════════════════════════════════════════════
 function WorkTab({ onDone }: { onDone: () => void }) {
   const qc = useQueryClient();
+  const { data: pbSettings } = useQuery({ queryKey: ['perereboska-settings'], queryFn: () => api.get<{ nameCheck: boolean }>('/oplata-kv/perereboska-settings') });
+  const nameCheckOn = !!pbSettings?.nameCheck;
   const fileRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -218,8 +229,18 @@ function WorkTab({ onDone }: { onDone: () => void }) {
     ...dests.filter((d) => d.found === false && d.contractNo.trim()).map((d) => d.contractNo.trim()),
   ].filter(Boolean);
   const notFound = notFoundList.length > 0;
+  // Ism filtri yoqilганда — arizachi + manba + maqsad shartnoma egasi bir xil bo'lishi SHART
+  const nameIssues = nameCheckOn ? [
+    ...(result?.extracted?.applicantMatchesHolder === false
+      ? [`Arizachi "${result?.extracted?.applicantName || '?'}" shartnoma egasiga mos emas (arizadagi ism)`]
+      : []),
+    ...(fromMeta.client
+      ? dests.filter((d) => d.found && d.client && !sameName(fromMeta.client, d.client)).map((d) => `Maqsad boshqa odam: ${d.contractNo} (${d.client})`)
+      : []),
+  ] : [];
+  const nameBlocked = nameIssues.length > 0;
   const canCreate = !!file && !!fromCn.trim() && !!date && dests.length > 0 &&
-    dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !balanceShort && !notFound && !createMut.isPending;
+    dests.every((d) => d.contractNo.trim() && num(d.amount) > 0) && !balanceShort && !notFound && !nameBlocked && !createMut.isPending;
 
   const isImg = !!file && file.type.startsWith('image/');
 
@@ -391,6 +412,18 @@ function WorkTab({ onDone }: { onDone: () => void }) {
               <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
                 <b>Shartnoma topilmadi — переброска qilib bo'lmaydi.</b>
                 <div className="mt-0.5">CRM va to'lov tarixida yo'q: <b>{notFoundList.join(', ')}</b>. Agent raqamni noto'g'ri o'qigan bo'lishi mumkin (masalan K4 → EA) — raqamni to'g'irlab, boshqa maydonga bosing (qayta tekshiriladi).</div>
+              </div>
+            </div>
+          )}
+
+          {/* Mijoz ismi mos emas — blok (ism filtri yoqilganда) */}
+          {nameBlocked && (
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-950/30 ring-1 ring-rose-200 dark:ring-rose-900 p-3.5 flex items-start gap-2.5">
+              <Ban className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-rose-700 dark:text-rose-300">
+                <b>Ism mos emas — переброска qilib bo'lmaydi.</b>
+                <ul className="mt-1 space-y-0.5 list-disc pl-4">{nameIssues.map((it, i) => <li key={i}>{it}</li>)}</ul>
+                <div className="mt-1 text-[11.5px] opacity-80">Ism tekshiruvi yoqilganida arizachi, manba va maqsad egasi bir xil bo'lishi shart. Sozlamada o'chirsangiz ruxsat beriladi.</div>
               </div>
             </div>
           )}
