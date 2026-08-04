@@ -4547,6 +4547,7 @@ export class OplataKvService {
   private readonly K_PB_AI_MODEL = 'perereboska.aiModel';
   private readonly K_PB_STRICT = 'perereboska.strict';
   private readonly K_PB_TG = 'perereboska.tgNotify';
+  private readonly K_PB_NAMECHECK = 'perereboska.nameCheck';
 
   async isPerereboskaAiEnabled(): Promise<boolean> {
     return (await this.settings.get(this.K_PB_AI_ENABLED)) !== '0'; // default yoqiq
@@ -4562,20 +4563,24 @@ export class OplataKvService {
   async isPerereboskaTgNotify(): Promise<boolean> {
     return (await this.settings.get(this.K_PB_TG)) !== '0'; // default yoqiq
   }
+  async isPerereboskaNameCheck(): Promise<boolean> {
+    return (await this.settings.get(this.K_PB_NAMECHECK)) === '1'; // default o'chiq
+  }
 
   async getPerereboskaSettings() {
-    const [aiEnabled, aiModel, strict, tgNotify, key] = await Promise.all([
+    const [aiEnabled, aiModel, strict, tgNotify, nameCheck, key] = await Promise.all([
       this.isPerereboskaAiEnabled(),
       this.getPerereboskaAiModel(),
       this.isPerereboskaStrict(),
       this.isPerereboskaTgNotify(),
+      this.isPerereboskaNameCheck(),
       this.getAiKey(),
     ]);
-    return { aiEnabled, aiModel, strict, tgNotify, hasKey: !!key };
+    return { aiEnabled, aiModel, strict, tgNotify, nameCheck, hasKey: !!key, tgChat: this.tgChat };
   }
 
   async savePerereboskaSettings(
-    body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean },
+    body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean; nameCheck?: boolean },
     actor?: Actor,
   ) {
     const by = actor?.name || undefined;
@@ -4583,6 +4588,7 @@ export class OplataKvService {
     if (body.aiModel !== undefined) await this.settings.set(this.K_PB_AI_MODEL, (body.aiModel || '').trim(), by);
     if (body.strict !== undefined) await this.settings.set(this.K_PB_STRICT, body.strict ? '1' : '0', by);
     if (body.tgNotify !== undefined) await this.settings.set(this.K_PB_TG, body.tgNotify ? '1' : '0', by);
+    if (body.nameCheck !== undefined) await this.settings.set(this.K_PB_NAMECHECK, body.nameCheck ? '1' : '0', by);
     return this.getPerereboskaSettings();
   }
 
@@ -4619,7 +4625,8 @@ export class OplataKvService {
     }
 
     const model = await this.getPerereboskaAiModel();
-    const ex = await this.claudeExtractPerereboska(apiKey, model, fileBlock);
+    const nameCheck = await this.isPerereboskaNameCheck();
+    const ex = await this.claudeExtractPerereboska(apiKey, model, fileBlock, nameCheck);
 
     // Ajratilganni tozalash
     const fromCn = String(ex?.fromContractNo || '').trim().toUpperCase();
@@ -4667,6 +4674,11 @@ export class OplataKvService {
       warnings.push(`Summalar teng emas: maqsad jami ${destSum.toLocaleString('ru-RU')} ≠ manba ${totalAmount.toLocaleString('ru-RU')}`);
     }
 
+    // Ism-familya tekshiruvi (sozlamada yoqilgan bo'lsa) — Claude transliteratsiyani hisobga oladi
+    if (nameCheck && ex?.applicantMatchesHolder === false) {
+      warnings.push(`Ism mos emas: arizachi "${ex?.applicantName || '?'}" maqsadli shartnoma egasiga to'g'ri kelmaydi${ex?.nameNote ? ` — ${ex.nameNote}` : ''}`);
+    }
+
     const agentState = warnings.length === 0 ? 'verified' : 'needs_review';
     const agentReason = warnings.length === 0
       ? 'Hujjat forma bilan mos, qoidalar bajarildi'
@@ -4697,7 +4709,7 @@ export class OplataKvService {
   }
 
   /** Claude Messages API — arizadan переброска ma'lumotini structured (tool) ajratadi */
-  private async claudeExtractPerereboska(apiKey: string, model: string, fileBlock: any): Promise<any> {
+  private async claudeExtractPerereboska(apiKey: string, model: string, fileBlock: any, nameCheck = false): Promise<any> {
     const system = [
       "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy yordamchisisan.",
       "Foydalanuvchi ПЕРЕБРОСКА (bir shartnomadan boshqasiga pul o'tkazish) arizasini yuklaydi.",
@@ -4706,7 +4718,10 @@ export class OplataKvService {
       "MUHIM: arizada bir nechta pul raqami bo'lishi mumkin (o'tkaziladigan summa, qaytarilgan pul, qayta to'lov majburiyati). Faqat MAQSADLI shartnomaga o'tkazilayotgan summani ol.",
       "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
       "notes'ni QISQA va o'qishga qulay MARKDOWN formatда yoz: kalit faktlar uchun bullet (- ), summalarni **qalin** qil. Uzun paragraf yozma.",
-    ].join(' ');
+      nameCheck
+        ? "ISM TEKSHIRUVI: arizachi (imzo egasi) ismini MAQSADLI shartnoma egasi ismi (arizada yozilgan) bilan solishtir. Transliteratsiya (Dumcheva↔Dushayeva), ism tartibi, kirill/lotin farqini HISOBGA OL — mohiyatan bir odammi. Mos bo'lsa applicantMatchesHolder=true, aks holda false + nameNote'da qisqa tushuntir."
+        : '',
+    ].filter(Boolean).join(' ');
     const userContent = [
       { type: 'text', text: "Ushbu arizani diqqat bilan o'qib, extract_perereboska tool orqali ma'lumotlarni qaytar." },
       fileBlock,
@@ -4730,6 +4745,8 @@ export class OplataKvService {
           },
           totalAmount: { type: 'number', description: "Manbadan o'tkazilayotgan jami summa" },
           applicantName: { type: 'string', description: 'Arizachi (imzo egasi) ismi' },
+          applicantMatchesHolder: { type: 'boolean', description: 'Arizachi ismi maqsadli shartnoma egasiga mos keladimi (ism tekshiruvi so\'ralganda)' },
+          nameNote: { type: 'string', description: 'Ism mos kelmasa qisqa tushuntirish' },
           confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
           notes: { type: 'string', description: 'Qisqa izoh yoki shubha' },
         },

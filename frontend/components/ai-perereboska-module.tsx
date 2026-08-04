@@ -539,10 +539,10 @@ function SettingsTab() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['perereboska-settings'],
-    queryFn: () => api.get<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; hasKey: boolean }>('/oplata-kv/perereboska-settings'),
+    queryFn: () => api.get<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean; hasKey: boolean; tgChat: string }>('/oplata-kv/perereboska-settings'),
   });
-  const [local, setLocal] = useState<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean } | null>(null);
-  useEffect(() => { if (data) setLocal({ aiEnabled: data.aiEnabled, aiModel: data.aiModel, strict: data.strict, tgNotify: data.tgNotify }); }, [data]);
+  const [local, setLocal] = useState<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean } | null>(null);
+  useEffect(() => { if (data) setLocal({ aiEnabled: data.aiEnabled, aiModel: data.aiModel, strict: data.strict, tgNotify: data.tgNotify, nameCheck: data.nameCheck }); }, [data]);
 
   const saveMut = useMutation({
     mutationFn: (body: any) => api.post('/oplata-kv/perereboska-settings', body),
@@ -566,11 +566,15 @@ function SettingsTab() {
           <Toggle on={local.aiEnabled} onClick={() => setLocal({ ...local, aiEnabled: !local.aiEnabled })} />
         </div>
         <div className="flex items-center gap-3 p-4">
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Ism-familya tekshirish</div><div className="text-[11.5px] text-slate-400">Yoqilsa — arizachi ismi maqsadli shartnoma egasiga mos kelishini tekshiradi (transliteratsiyani hisobga oladi)</div></div>
+          <Toggle on={local.nameCheck} onClick={() => setLocal({ ...local, nameCheck: !local.nameCheck })} />
+        </div>
+        <div className="flex items-center gap-3 p-4">
           <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Qat'iy tekshiruv</div><div className="text-[11.5px] text-slate-400">Yoqilsa — nomuvofiqlikda ogohlantirish kuchli</div></div>
           <Toggle on={local.strict} onClick={() => setLocal({ ...local, strict: !local.strict })} />
         </div>
         <div className="flex items-center gap-3 p-4">
-          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Telegram xabar</div><div className="text-[11.5px] text-slate-400">Переброска yaratilganda/bekor qilinganda guruhga xabar</div></div>
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Telegram xabar</div><div className="text-[11.5px] text-slate-400">Переброска yaratilganda/bekor qilinganda guruhga xabar{data?.tgChat ? <> · guruh <code className="font-mono text-slate-500 dark:text-slate-300">{data.tgChat}</code></> : ''}</div></div>
           <Toggle on={local.tgNotify} onClick={() => setLocal({ ...local, tgNotify: !local.tgNotify })} />
         </div>
         <div className="flex items-center gap-3 p-4">

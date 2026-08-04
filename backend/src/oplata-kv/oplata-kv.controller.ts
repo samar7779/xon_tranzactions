@@ -388,7 +388,7 @@ export class OplataKvController {
   @RequirePermissions(PERMISSIONS.OPLATAKV_MANAGE)
   @ApiOperation({ summary: 'AI Переброска sozlamalarini saqlash' })
   savePerereboskaSettings(
-    @Body() body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean },
+    @Body() body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean; nameCheck?: boolean },
     @CurrentUser() user?: AuthUser,
   ) {
     return this.svc.savePerereboskaSettings(body, actorFrom(user));
