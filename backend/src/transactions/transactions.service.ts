@@ -278,6 +278,53 @@ export class TransactionsService {
     return this.enrichAndReturn(items, total, page, perPage);
   }
 
+  /**
+   * Google Sheets eksport uchun — HISOB RAQAMLARI bo'yicha tranzaksiyalar.
+   * Har qator ustun mapping uchun tayyor maydonlar bilan qaytadi (accountNo, bankName,
+   * category, subcategory nomlari bilan). accounts bo'sh bo'lsa — hammasi.
+   */
+  async getRowsForExport(filter: { accounts?: string[]; dateFrom?: string | null; dateTo?: string | null; limit?: number }) {
+    const where: Prisma.TransactionWhereInput = {};
+    if (filter.accounts && filter.accounts.length > 0) {
+      where.account = { accountNo: { in: filter.accounts.map((a) => String(a).trim()).filter(Boolean) } };
+    }
+    if (filter.dateFrom || filter.dateTo) {
+      const range: any = {};
+      if (filter.dateFrom) range.gte = new Date(filter.dateFrom);
+      if (filter.dateTo) range.lte = new Date(`${filter.dateTo}T23:59:59.999`);
+      where.txnDate = range;
+    }
+    const take = Math.min(Math.max(1, filter.limit || 100000), 200000);
+    const rows = await this.prisma.transaction.findMany({
+      where,
+      orderBy: [{ txnDate: 'asc' }, { id: 'asc' }],
+      take,
+      include: {
+        account: { select: { accountNo: true } },
+        bank: { select: { name: true } },
+        category: { select: { name: true } },
+        subcategory: { select: { name: true } },
+      },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      externalId: r.externalId,
+      txnDate: r.txnDate,
+      amount: r.amount,
+      direction: r.direction,
+      fromName: r.fromName, fromAccount: r.fromAccount, fromInn: r.fromInn,
+      toName: r.toName, toAccount: r.toAccount, toInn: r.toInn,
+      description: r.description,
+      contractNumber: r.contractNumber,
+      docNumber: r.docNumber,
+      reference: r.reference,
+      accountNo: r.account?.accountNo || (r as any).toAccount || (r as any).fromAccount || null,
+      bankName: r.bank?.name || (r as any).importBankNameText || null,
+      category: r.category?.name || null,
+      subcategory: r.subcategory?.name || null,
+    }));
+  }
+
   private buildListArgs(where: any, page: number, perPage: number): Prisma.TransactionFindManyArgs {
     return {
         where,

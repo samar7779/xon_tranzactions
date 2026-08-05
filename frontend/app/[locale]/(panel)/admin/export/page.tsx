@@ -27,11 +27,12 @@ interface SheetColumn { col: string; field: string; }
 interface SheetTarget {
   id: string;
   name: string;
+  source?: 'oplatakv' | 'transaction';
   spreadsheetId: string;
   tabName: string;
   startRow: number;
   dateFrom: string | null;
-  filter: { objects?: string[]; categories?: string[]; txTypes?: string[] };
+  filter: { objects?: string[]; categories?: string[]; txTypes?: string[]; accounts?: string[] };
   columns: SheetColumn[];
 }
 interface ConfigResp {
@@ -71,7 +72,30 @@ const FIELDS: Array<{ value: string; label: string }> = [
   { value: 'purpose',         label: 'Назначение' },
   { value: 'note',            label: 'Примечание' },
 ];
-const FIELD_LABEL: Record<string, string> = Object.fromEntries(FIELDS.map((f) => [f.value, f.label]));
+// Tranzaksiya → hujayra maydonlari
+const TX_FIELDS: Array<{ value: string; label: string }> = [
+  { value: 'externalId',     label: 'ID (external)' },
+  { value: 'accountNo',      label: 'Hisob raqami' },
+  { value: 'bankName',       label: 'Bank' },
+  { value: 'txnDate',        label: 'Sana' },
+  { value: 'amount',         label: 'Summa' },
+  { value: 'direction',      label: "Yo'nalish (IN/OUT)" },
+  { value: 'fromName',       label: 'Kimdan (nomi)' },
+  { value: 'fromAccount',    label: 'Kimdan (hisob)' },
+  { value: 'fromInn',        label: 'Kimdan (INN)' },
+  { value: 'toName',         label: 'Kimga (nomi)' },
+  { value: 'toAccount',      label: 'Kimga (hisob)' },
+  { value: 'toInn',          label: 'Kimga (INN)' },
+  { value: 'description',    label: 'Izoh' },
+  { value: 'contractNumber', label: 'Shartnoma' },
+  { value: 'category',       label: 'Kategoriya' },
+  { value: 'subcategory',    label: 'Subkategoriya' },
+  { value: 'docNumber',      label: 'Hujjat №' },
+  { value: 'reference',      label: 'Reference' },
+  { value: 'id',             label: 'Ichki ID' },
+];
+const FIELD_LABEL: Record<string, string> = Object.fromEntries([...FIELDS, ...TX_FIELDS].map((f) => [f.value, f.label]));
+const fieldsForSource = (src?: string) => (src === 'transaction' ? TX_FIELDS : FIELDS);
 
 const CATEGORIES: Array<{ value: string; label: string }> = [
   { value: 'MONTHLY', label: 'ежемесячный' },
@@ -109,11 +133,12 @@ function blankSheet(idx: number): SheetTarget {
   return {
     id: `sheet-${Date.now()}-${idx}`,
     name: `Sheet ${idx + 1}`,
+    source: 'oplatakv',
     spreadsheetId: '',
     tabName: '',
     startRow: 2,
     dateFrom: '',
-    filter: { objects: [], categories: [], txTypes: [] },
+    filter: { objects: [], categories: [], txTypes: [], accounts: [] },
     columns: [{ col: 'A', field: 'date' }, { col: 'B', field: 'contractNo' }],
   };
 }
@@ -683,52 +708,66 @@ function SheetCard({
           </Field>
         </div>
 
-        {/* Filtr */}
+        {/* Manba + Filtr */}
         <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-3">
+          {/* Manba tanlash */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Manba:</span>
+            <div className="inline-flex rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+              {([['oplatakv', 'ОплатыКв'], ['transaction', 'Tranzaksiya']] as const).map(([sv, lbl]) => (
+                <button
+                  key={sv}
+                  onClick={() => canManage && onChange({ source: sv })}
+                  disabled={!canManage}
+                  className={cn('px-3 h-7 text-[11px] font-semibold transition-colors',
+                    (sheet.source || 'oplatakv') === sv ? 'bg-indigo-600 text-white' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800')}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
             <FilterIcon className="h-3.5 w-3.5" /> Filtr (ixtiyoriy — bo'sh = hammasi)
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="Объект(lar) — vergul bilan">
-              <Input
-                value={objectsText}
-                onChange={(e) => setFilter({ objects: toArr(e.target.value) })}
+
+          {sheet.source === 'transaction' ? (
+            <Field label="Hisob raqamlari — vergul yoki yangi qatorda (bo'sh = barcha hisob)">
+              <textarea
+                value={(sheet.filter?.accounts || []).join('\n')}
+                onChange={(e) => setFilter({ accounts: e.target.value.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean) })}
                 disabled={!canManage}
-                placeholder="masalan: Xon Saroy, Yangi Bino"
-                className="h-9 rounded-lg text-[12px]"
+                rows={3}
+                placeholder={'20208000705500044002\n20208000505500044002\n20208000005500044001'}
+                className="w-full px-3 py-2 rounded-lg text-[12px] font-mono bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 resize-y"
               />
             </Field>
-            <Field label="Тип(lar) — vergul bilan">
-              <Input
-                value={txTypesText}
-                onChange={(e) => setFilter({ txTypes: toArr(e.target.value) })}
-                disabled={!canManage}
-                placeholder="masalan: Взносы за квартиры"
-                className="h-9 rounded-lg text-[12px]"
-              />
-            </Field>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Оплата:</span>
-            {CATEGORIES.map((c) => {
-              const active = (sheet.filter?.categories || []).includes(c.value);
-              return (
-                <button
-                  key={c.value}
-                  onClick={() => canManage && toggleCategory(c.value)}
-                  disabled={!canManage}
-                  className={cn(
-                    'px-2.5 h-7 rounded-lg text-[11px] font-semibold ring-1 transition-colors',
-                    active
-                      ? 'bg-indigo-600 text-white ring-indigo-700'
-                      : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800',
-                  )}
-                >
-                  {c.label}
-                </button>
-              );
-            })}
-          </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Объект(lar) — vergul bilan">
+                  <Input value={objectsText} onChange={(e) => setFilter({ objects: toArr(e.target.value) })} disabled={!canManage} placeholder="masalan: Xon Saroy, Yangi Bino" className="h-9 rounded-lg text-[12px]" />
+                </Field>
+                <Field label="Тип(lar) — vergul bilan">
+                  <Input value={txTypesText} onChange={(e) => setFilter({ txTypes: toArr(e.target.value) })} disabled={!canManage} placeholder="masalan: Взносы за квартиры" className="h-9 rounded-lg text-[12px]" />
+                </Field>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Оплата:</span>
+                {CATEGORIES.map((c) => {
+                  const active = (sheet.filter?.categories || []).includes(c.value);
+                  return (
+                    <button key={c.value} onClick={() => canManage && toggleCategory(c.value)} disabled={!canManage}
+                      className={cn('px-2.5 h-7 rounded-lg text-[11px] font-semibold ring-1 transition-colors',
+                        active ? 'bg-indigo-600 text-white ring-indigo-700' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                      {c.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Ustun mapping */}
@@ -753,7 +792,7 @@ function SheetCard({
                   disabled={!canManage}
                   className="flex-1 h-8 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:ring-indigo-400 px-2"
                 >
-                  {FIELDS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  {fieldsForSource(sheet.source).map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
                 </select>
                 {canManage && (
                   <button

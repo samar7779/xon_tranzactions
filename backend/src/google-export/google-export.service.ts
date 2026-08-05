@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as ExcelJS from 'exceljs';
 import { SettingsService } from '../sync/settings.service';
 import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { TransactionsService } from '../transactions/transactions.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { serialize, FORMATS, Dataset, ExportColumn } from './data-formats';
@@ -18,6 +19,7 @@ export interface SheetColumn {
 export interface SheetTarget {
   id: string;             // barqaror identifikator (frontend generatsiya qiladi)
   name: string;           // ko'rinish uchun nom (label)
+  source?: 'oplatakv' | 'transaction'; // MANBA: ОплатыКв (default) yoki Tranzaksiya
   spreadsheetId: string;  // Google jadval ID
   tabName: string;        // list (tab) nomi
   startRow: number;       // shu qatordan pastga clear + yozish
@@ -26,6 +28,7 @@ export interface SheetTarget {
     objects?: string[];
     categories?: string[]; // MONTHLY | FIRST | GENERAL
     txTypes?: string[];
+    accounts?: string[];   // TRANZAKSIYA manbasi uchun — hisob raqamlari
   };
   columns: SheetColumn[];
 }
@@ -37,6 +40,35 @@ const FIELD_KEYS = new Set([
   'id', 'contractNo', 'date', 'paymentAmount', 'firstInstallment', 'monthlyAmount',
   'paymentCategory', 'object', 'client', 'txType', 'paymentMethod', 'purpose', 'note',
 ]);
+
+// TRANZAKSIYA → hujayra qiymati uchun mavjud maydonlar
+const TX_FIELD_KEYS = new Set([
+  'externalId', 'id', 'accountNo', 'bankName', 'txnDate', 'amount', 'direction',
+  'fromName', 'fromAccount', 'fromInn', 'toName', 'toAccount', 'toInn',
+  'description', 'contractNumber', 'category', 'subcategory', 'docNumber', 'reference',
+]);
+// Frontend uchun tranzaksiya ustunlari (key → header)
+const TX_COLS: ExportColumn[] = [
+  { key: 'externalId',      header: 'ID (external)' },
+  { key: 'accountNo',       header: 'Hisob raqami' },
+  { key: 'bankName',        header: 'Bank' },
+  { key: 'txnDate',         header: 'Sana' },
+  { key: 'amount',          header: 'Summa' },
+  { key: 'direction',       header: "Yo'nalish (IN/OUT)" },
+  { key: 'fromName',        header: 'Kimdan (nomi)' },
+  { key: 'fromAccount',     header: 'Kimdan (hisob)' },
+  { key: 'fromInn',         header: 'Kimdan (INN)' },
+  { key: 'toName',          header: 'Kimga (nomi)' },
+  { key: 'toAccount',       header: 'Kimga (hisob)' },
+  { key: 'toInn',           header: 'Kimga (INN)' },
+  { key: 'description',     header: 'Izoh' },
+  { key: 'contractNumber',  header: 'Shartnoma' },
+  { key: 'category',        header: 'Kategoriya' },
+  { key: 'subcategory',     header: 'Subkategoriya' },
+  { key: 'docNumber',       header: 'Hujjat №' },
+  { key: 'reference',       header: 'Reference' },
+  { key: 'id',              header: 'Ichki ID' },
+];
 
 const CATEGORY_LABEL: Record<string, string> = {
   MONTHLY: 'ежемесячный',
@@ -77,6 +109,7 @@ export class GoogleExportService {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly oplataKv: OplataKvService,
+    private readonly transactions: TransactionsService,
     private readonly crypto: CryptoService,
     private readonly prisma: PrismaService,
   ) {}
@@ -205,18 +238,21 @@ export class GoogleExportService {
   private validateTarget(s: SheetTarget, idx: number): SheetTarget {
     const label = s?.name || `Sheet ${idx + 1}`;
     const startRow = Math.max(1, Math.floor(Number(s?.startRow) || 1));
+    const source: 'oplatakv' | 'transaction' = s?.source === 'transaction' ? 'transaction' : 'oplatakv';
+    const fieldSet = source === 'transaction' ? TX_FIELD_KEYS : FIELD_KEYS;
     const columns = Array.isArray(s?.columns) ? s.columns : [];
     for (const c of columns) {
       if (c.col && !/^[A-Z]{1,3}$/.test(String(c.col).toUpperCase())) {
         throw new BadRequestException(`"${label}" — ustun harfi noto'g'ri: "${c.col}" (A..ZZZ)`);
       }
-      if (c.field && !FIELD_KEYS.has(c.field)) {
+      if (c.field && !fieldSet.has(c.field)) {
         throw new BadRequestException(`"${label}" — nomaʼlum maydon: "${c.field}"`);
       }
     }
     return {
       id: s.id || `sheet-${idx + 1}`,
       name: label,
+      source,
       spreadsheetId: (s.spreadsheetId || '').trim(),
       tabName: (s.tabName || '').trim(),
       startRow,
@@ -225,6 +261,7 @@ export class GoogleExportService {
         objects: Array.isArray(s.filter?.objects) ? s.filter!.objects!.filter(Boolean) : [],
         categories: Array.isArray(s.filter?.categories) ? s.filter!.categories!.filter(Boolean) : [],
         txTypes: Array.isArray(s.filter?.txTypes) ? s.filter!.txTypes!.filter(Boolean) : [],
+        accounts: Array.isArray(s.filter?.accounts) ? s.filter!.accounts!.map((a) => String(a).trim()).filter(Boolean) : [],
       },
       columns: columns
         .filter((c) => c.col && c.field)
@@ -275,6 +312,25 @@ export class GoogleExportService {
       case 'paymentMethod':    return row.paymentMethod || '';
       case 'purpose':          return row.purpose || '';
       case 'note':             return row.note || '';
+      // ─── Tranzaksiya maydonlari ───
+      case 'txnDate':          return this.fmtDate(row.txnDate);
+      case 'amount':           return row.amount != null ? Number(row.amount) : '';
+      case 'direction':        return row.direction || '';
+      case 'fromName':         return row.fromName || '';
+      case 'fromAccount':      return row.fromAccount || '';
+      case 'fromInn':          return row.fromInn || '';
+      case 'toName':           return row.toName || '';
+      case 'toAccount':        return row.toAccount || '';
+      case 'toInn':            return row.toInn || '';
+      case 'description':      return row.description || '';
+      case 'contractNumber':   return row.contractNumber || '';
+      case 'category':         return row.category || '';
+      case 'subcategory':      return row.subcategory || '';
+      case 'docNumber':        return row.docNumber || '';
+      case 'reference':        return row.reference || '';
+      case 'externalId':       return row.externalId || '';
+      case 'accountNo':        return row.accountNo || '';
+      case 'bankName':         return row.bankName || '';
       default:                 return '';
     }
   }
@@ -360,16 +416,22 @@ export class GoogleExportService {
         requestBody: { ranges: clearRanges },
       });
 
-      // 2) FETCH — ОплатыКв'dan sana + filtr bo'yicha
+      // 2) FETCH — manba (ОплатыКв yoki Tranzaksiya) bo'yicha
       step = 'fetch';
       const dateTo = this.todayTashkent();
-      const rows = await this.oplataKv.getRowsForExport({
-        dateFrom: target.dateFrom || null,
-        dateTo,
-        objects: target.filter?.objects || [],
-        categories: target.filter?.categories || [],
-        txTypes: target.filter?.txTypes || [],
-      });
+      const rows = target.source === 'transaction'
+        ? await this.transactions.getRowsForExport({
+            accounts: target.filter?.accounts || [],
+            dateFrom: target.dateFrom || null,
+            dateTo,
+          })
+        : await this.oplataKv.getRowsForExport({
+            dateFrom: target.dateFrom || null,
+            dateTo,
+            objects: target.filter?.objects || [],
+            categories: target.filter?.categories || [],
+            txTypes: target.filter?.txTypes || [],
+          });
 
       // 3) WRITE — har ustunni alohida (COLUMNS major) yozamiz
       step = 'write';
