@@ -4548,6 +4548,7 @@ export class OplataKvService {
   private readonly K_PB_STRICT = 'perereboska.strict';
   private readonly K_PB_TG = 'perereboska.tgNotify';
   private readonly K_PB_NAMECHECK = 'perereboska.nameCheck';
+  private readonly K_PB_SHOWREVERSE = 'perereboska.showReverse';
 
   async isPerereboskaAiEnabled(): Promise<boolean> {
     return (await this.settings.get(this.K_PB_AI_ENABLED)) !== '0'; // default yoqiq
@@ -4566,21 +4567,25 @@ export class OplataKvService {
   async isPerereboskaNameCheck(): Promise<boolean> {
     return (await this.settings.get(this.K_PB_NAMECHECK)) === '1'; // default o'chiq
   }
+  async isPerereboskaShowReverse(): Promise<boolean> {
+    return (await this.settings.get(this.K_PB_SHOWREVERSE)) !== '0'; // default yoqiq
+  }
 
   async getPerereboskaSettings() {
-    const [aiEnabled, aiModel, strict, tgNotify, nameCheck, key] = await Promise.all([
+    const [aiEnabled, aiModel, strict, tgNotify, nameCheck, showReverse, key] = await Promise.all([
       this.isPerereboskaAiEnabled(),
       this.getPerereboskaAiModel(),
       this.isPerereboskaStrict(),
       this.isPerereboskaTgNotify(),
       this.isPerereboskaNameCheck(),
+      this.isPerereboskaShowReverse(),
       this.getAiKey(),
     ]);
-    return { aiEnabled, aiModel, strict, tgNotify, nameCheck, hasKey: !!key, tgChat: this.tgChat };
+    return { aiEnabled, aiModel, strict, tgNotify, nameCheck, showReverse, hasKey: !!key, tgChat: this.tgChat };
   }
 
   async savePerereboskaSettings(
-    body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean; nameCheck?: boolean },
+    body: { aiEnabled?: boolean; aiModel?: string; strict?: boolean; tgNotify?: boolean; nameCheck?: boolean; showReverse?: boolean },
     actor?: Actor,
   ) {
     const by = actor?.name || undefined;
@@ -4589,6 +4594,7 @@ export class OplataKvService {
     if (body.strict !== undefined) await this.settings.set(this.K_PB_STRICT, body.strict ? '1' : '0', by);
     if (body.tgNotify !== undefined) await this.settings.set(this.K_PB_TG, body.tgNotify ? '1' : '0', by);
     if (body.nameCheck !== undefined) await this.settings.set(this.K_PB_NAMECHECK, body.nameCheck ? '1' : '0', by);
+    if (body.showReverse !== undefined) await this.settings.set(this.K_PB_SHOWREVERSE, body.showReverse ? '1' : '0', by);
     return this.getPerereboskaSettings();
   }
 
@@ -4752,7 +4758,8 @@ export class OplataKvService {
       "Foydalanuvchi ПЕРЕБРОСКА (bir shartnomadan boshqasiga pul o'tkazish) arizasini yuklaydi.",
       "Arizada: manba (eski/bekor qilingan) shartnoma raqami, o'tkaziladigan summa, va yangi (maqsadli) shartnoma raqami(lari) bo'ladi.",
       "Shartnoma raqami formati: raqamlar + obyekt kodi (SRH, VHA, ZUR, VTN...) + raqam/harflar. Masalan: 2986SRH2593, 4026SRH264E.",
-      "MUHIM: arizada bir nechta pul raqami bo'lishi mumkin (o'tkaziladigan summa, qaytarilgan pul, qayta to'lov majburiyati). Faqat MAQSADLI shartnomaga o'tkazilayotgan summani ol.",
+      "O'TKAZILADIGAN SUMMANI TO'G'RI ANIQLA (JUDA MUHIM): ariza odatda '<eski shartnoma> bo'yicha QOLGAN [X] so'mni yangi (maqsadli) shartnomaga TO'LOV HISOBIDA QABUL QILISHINGIZNI so'rayman' deydi — aynan shu [X] o'tkaziladigan summa (totalAmount = maqsadli shartnoma summasi).",
+      "Arizada 'shartnomani bekor qilish asosida menga QAYTARILGAN [Y] so'm' degan ALOHIDA band bo'lishi mumkin — [Y] QAYTARILGAN pul, u o'tkazma EMAS, uni totalAmount qilib OLMA. Ikkovini adashtirma: totalAmount = yangi shartnomaga qabul qilinadigan [X], qaytarilgan [Y] emas (odatda X > Y).",
       "Aniq bo'lmasa taxmin qilma — confidence='low' qo'y va notes'da yoz.",
       "notes'ni QISQA MARKDOWN formatда yoz: bullet (- ), summalarni **qalin**. FAQAT переброска uchun muhim narsalarni yoz (manba, maqsad, summa, obyekt, arizachi). Plastik karta, karta raqami, to'lov usuli, qaytarish/qayta to'lov summasi kabi переброскага aloqasiz tafsilotlarni YOZMA.",
       nameCheck

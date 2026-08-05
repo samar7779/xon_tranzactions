@@ -456,6 +456,11 @@ function WorkTab({ onDone }: { onDone: () => void }) {
                 {fromFound === false
                   ? <div className="text-[11px] text-rose-500 mt-0.5">Topilmadi (CRM/tarixда yo'q)</div>
                   : fromMeta.client && <div className="text-[11px] text-slate-400 mt-0.5 truncate">{fromMeta.client}{fromMeta.object ? ` · ${fromMeta.object}` : ''}</div>}
+                {destTotal > 0 && (
+                  <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 dark:bg-rose-950/30 text-[11px] font-mono text-rose-600 dark:text-rose-400">
+                    Bu shartnomadan olinadi: −{formatMoney(destTotal)}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-[11px] font-medium text-slate-500">Sana</label>
@@ -536,6 +541,8 @@ function WorkTab({ onDone }: { onDone: () => void }) {
 // ═══════════════════════════════════════════════════════════════
 function HistoryTab() {
   const qc = useQueryClient();
+  const { data: pbSettings } = useQuery({ queryKey: ['perereboska-settings'], queryFn: () => api.get<{ showReverse: boolean }>('/oplata-kv/perereboska-settings') });
+  const showReverse = pbSettings?.showReverse !== false; // default ko'rsatiladi
   const [status, setStatus] = useState<'all' | 'active' | 'cancelled'>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -608,7 +615,8 @@ function HistoryTab() {
                   <div className="text-[11px] text-slate-400 mt-0.5 truncate">
                     {g.objectName || '—'} · {g.fromClient || ''} · {g.date ? String(g.date).slice(0, 10) : ''}
                   </div>
-                  {cancelled && g.cancelReason && <div className="text-[11px] text-rose-400 mt-0.5">Sabab: {g.cancelReason}</div>}
+                  {g.createdByName && <div className="text-[10px] text-slate-400 mt-0.5">Kim qildi: <b className="text-slate-500 dark:text-slate-300">{g.createdByName}</b></div>}
+                  {cancelled && g.cancelReason && <div className="text-[11px] text-rose-400 mt-0.5">Sabab: {g.cancelReason}{g.cancelledByName ? ` · ${g.cancelledByName}` : ''}</div>}
                 </div>
                 <div className="text-right shrink-0 flex flex-col items-end gap-1">
                   <div className="font-mono font-bold text-[14px] text-slate-800 dark:text-slate-100">{formatMoney(Number(g.amount))}</div>
@@ -619,7 +627,7 @@ function HistoryTab() {
                         <FileText className="h-3 w-3" /> Hujjat
                       </button>
                     )}
-                    {!cancelled && (
+                    {!cancelled && showReverse && (
                       <button onClick={() => doReverse(g.id)} disabled={reverseMut.isPending}
                         className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-50">
                         <RotateCcw className="h-3 w-3" /> Orqaga qaytarish
@@ -692,10 +700,10 @@ function SettingsTab() {
   const qc = useQueryClient();
   const { data, isLoading } = useQuery({
     queryKey: ['perereboska-settings'],
-    queryFn: () => api.get<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean; hasKey: boolean; tgChat: string }>('/oplata-kv/perereboska-settings'),
+    queryFn: () => api.get<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean; showReverse: boolean; hasKey: boolean; tgChat: string }>('/oplata-kv/perereboska-settings'),
   });
-  const [local, setLocal] = useState<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean } | null>(null);
-  useEffect(() => { if (data) setLocal({ aiEnabled: data.aiEnabled, aiModel: data.aiModel, strict: data.strict, tgNotify: data.tgNotify, nameCheck: data.nameCheck }); }, [data]);
+  const [local, setLocal] = useState<{ aiEnabled: boolean; aiModel: string; strict: boolean; tgNotify: boolean; nameCheck: boolean; showReverse: boolean } | null>(null);
+  useEffect(() => { if (data) setLocal({ aiEnabled: data.aiEnabled, aiModel: data.aiModel, strict: data.strict, tgNotify: data.tgNotify, nameCheck: data.nameCheck, showReverse: data.showReverse }); }, [data]);
 
   const saveMut = useMutation({
     mutationFn: (body: any) => api.post('/oplata-kv/perereboska-settings', body),
@@ -729,6 +737,10 @@ function SettingsTab() {
         <div className="flex items-center gap-3 p-4">
           <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Telegram xabar</div><div className="text-[11.5px] text-slate-400">Переброска yaratilganda/bekor qilinganda guruhga xabar{data?.tgChat ? <> · guruh <code className="font-mono text-slate-500 dark:text-slate-300">{data.tgChat}</code></> : ''}</div></div>
           <Toggle on={local.tgNotify} onClick={() => setLocal({ ...local, tgNotify: !local.tgNotify })} />
+        </div>
+        <div className="flex items-center gap-3 p-4">
+          <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Orqaga qaytarish tugmasi</div><div className="text-[11.5px] text-slate-400">Tarixда переброскани orqaga qaytarish tugmasi ko'rinsinmi. O'chirilса — ro'yxatда tugma ko'rinmaydi.</div></div>
+          <Toggle on={local.showReverse} onClick={() => setLocal({ ...local, showReverse: !local.showReverse })} />
         </div>
         <div className="flex items-center gap-3 p-4">
           <div className="flex-1 min-w-0"><div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">AI model</div><div className="text-[11.5px] text-slate-400">Ariza o'qish uchun Claude modeli</div></div>
