@@ -5043,17 +5043,37 @@ export class OplataKvService {
       if (s.perereboskaFilePath) byGroup.set(key, { filePath: s.perereboskaFilePath, fileName: s.perereboskaFileName || 'file', contractNo: s.contractNo || '' });
     }
 
-    let added = 0;
+    let added = 0, missing = 0;
+    const missingSamples: string[] = [];
     for (const [gid, info] of byGroup) {
       if (!info.filePath) continue;
-      try {
-        await fs.access(info.filePath);
+      let exists = false;
+      try { await fs.access(info.filePath); exists = true; } catch {}
+      if (exists) {
         const subDir = info.contractNo ? `${info.contractNo}/` : 'no-contract/';
         zip.file(info.filePath, { name: `${subDir}${gid}__${info.fileName}` });
         added++;
-      } catch {}
+      } else {
+        missing++;
+        if (missingSamples.length < 25) missingSamples.push(`${gid} -> ${info.filePath}`);
+      }
     }
-    this.log.log(`Perereboska ZIP: ${added}/${byGroup.size} fayl qo'shildi`);
+
+    // Diagnostika manifesti — ZIP ichiga _manifest.txt qo'shamiz (nima topilgani/qo'shilgani/yo'qligi)
+    const manifest = [
+      `Perereboska ZIP — ${new Date().toISOString()}`,
+      ``,
+      `PerereboskaGroup (status=active, filePath bor): ${groups.length}`,
+      `OplataKv qatorlari (perereboskaFilePath bor): ${sources.length}`,
+      `Jami noyob (dedup groupId): ${byGroup.size}`,
+      `Qo'shildi (fayl diskda BOR): ${added}`,
+      `Diskda YO'Q (skip qilindi): ${missing}`,
+      `uploadsDir: ${this.uploadsDir}`,
+    ];
+    if (missingSamples.length) manifest.push(``, `Diskda topilmagan fayllar (namuna):`, ...missingSamples);
+    zip.append(manifest.join('\n'), { name: '_manifest.txt' });
+
+    this.log.log(`Perereboska ZIP: ${added}/${byGroup.size} qo'shildi, ${missing} yo'q`);
     await zip.finalize();
   }
 }
