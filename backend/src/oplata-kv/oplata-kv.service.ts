@@ -5019,26 +5019,41 @@ export class OplataKvService {
     });
     zip.pipe(res);
 
+    // Ikkala manbadan yig'amiz — eski (OplataKv qatorlari) + yangi (PerereboskaGroup, AI перебросkалар
+    // shu jadvalда). groupId bo'yicha dedup — bir fayl 2 marta qo'shilmasin.
+    const byGroup = new Map<string, { filePath: string; fileName: string; contractNo: string }>();
+
+    const groups = await this.prisma.perereboskaGroup.findMany({
+      where: { status: 'active', filePath: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      take: 10_000,
+    });
+    for (const g of groups) {
+      if (g.filePath) byGroup.set(g.id, { filePath: g.filePath, fileName: g.fileName || 'file', contractNo: g.fromContractNo || '' });
+    }
+
     const sources = await this.prisma.oplataKv.findMany({
       where: { perereboskaFilePath: { not: null } },
       orderBy: { createdAt: 'desc' },
       take: 10_000,
     });
+    for (const s of sources) {
+      const key = s.perereboskaGroupId || s.id;
+      if (byGroup.has(key)) continue; // allaqachon group'dan olingan
+      if (s.perereboskaFilePath) byGroup.set(key, { filePath: s.perereboskaFilePath, fileName: s.perereboskaFileName || 'file', contractNo: s.contractNo || '' });
+    }
 
     let added = 0;
-    for (const s of sources) {
-      if (!s.perereboskaFilePath) continue;
+    for (const [gid, info] of byGroup) {
+      if (!info.filePath) continue;
       try {
-        await fs.access(s.perereboskaFilePath);
-        const fname = s.perereboskaFileName || 'file';
-        const subDir = s.contractNo ? `${s.contractNo}/` : 'no-contract/';
-        zip.file(s.perereboskaFilePath, {
-          name: `${subDir}${s.perereboskaGroupId}__${fname}`,
-        });
+        await fs.access(info.filePath);
+        const subDir = info.contractNo ? `${info.contractNo}/` : 'no-contract/';
+        zip.file(info.filePath, { name: `${subDir}${gid}__${info.fileName}` });
         added++;
       } catch {}
     }
-    this.log.log(`Perereboska ZIP: ${added}/${sources.length} fayl qo'shildi`);
+    this.log.log(`Perereboska ZIP: ${added}/${byGroup.size} fayl qo'shildi`);
     await zip.finalize();
   }
 }
