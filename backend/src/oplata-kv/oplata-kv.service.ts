@@ -624,7 +624,7 @@ export class OplataKvService {
       where.txType = { startsWith: 'возврат', mode: 'insensitive' };
     } else {
       // Oddiy: 0 dan katta summalar + "взнос" qatnashgan tiplar
-      // (masalan "взнос от имени клиента", "Взносы за автостоянку")
+      // (masalan "Взносы за автостоянку", "Взносы за квартиры")
       where.paymentAmount = { gt: 0 };
       if (opts.includeSchotchik) {
         // Toggle yoqilsa — "За счетчик" (счётчик) to'lovlarni ham qo'shamiz
@@ -636,6 +636,8 @@ export class OplataKvService {
       } else {
         where.txType = { contains: 'взнос', mode: 'insensitive' };
       }
+      // "Взнос от имени клиента" — mijoz nomidan boshqa odam to'lagan, obyekt tushumiga KIRMAYDI
+      where.NOT = { txType: { contains: 'от имени', mode: 'insensitive' } };
     }
 
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
@@ -867,6 +869,8 @@ export class OplataKvService {
       } else {
         where.txType = { contains: 'взнос', mode: 'insensitive' };
       }
+      // "Взнос от имени клиента" — obyekt tushumiga kirmaydi (byObject summary bilan mos)
+      where.NOT = { txType: { contains: 'от имени', mode: 'insensitive' } };
     }
 
     const ROW_CAP = 5000;
