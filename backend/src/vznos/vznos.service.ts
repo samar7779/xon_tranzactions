@@ -61,7 +61,8 @@ export class VznosService {
       if (res?.ok) detail = res.detail;
     } catch { /* live API xato — basic bilan davom */ }
 
-    const apt = detail?.order_apartments?.[0]?.apartment || null;
+    const orderApt0 = detail?.order_apartments?.[0] || null;
+    const apt = orderApt0?.apartment || null;
     const client = detail?.client || {};
     const pick = (...vals: any[]): any => {
       for (const v of vals) {
@@ -94,6 +95,12 @@ export class VznosService {
       terraceArea: numOr(apt?.terrace_area, apt?.terrace, apt?.balcony_area),
       contractDate: dateRaw ? String(dateRaw).slice(0, 10) : null,
       contractValue: numOr(detail?.price, detail?.total_price, detail?.amount, detail?.sum, detail?.total, apt?.price, apt?.total_price),
+      // DIAGNOSTIKA — xom struktura (aniq maydon nomlarini topish uchun). Keyin olib tashlanadi.
+      _debug: {
+        detailKeys: detail ? Object.keys(detail) : null,
+        clientKeys: client ? Object.keys(client) : null,
+        orderApt0,
+      },
     };
   }
 
