@@ -19,6 +19,7 @@ export interface VznosDto {
   floor?: string | null;
   block?: string | null;
   terraceArea?: number | null;
+  virtualStatus?: string | null;
   comment?: string | null;
 }
 
@@ -96,6 +97,11 @@ export class VznosService {
       terraceArea: numOr(info.balcony_area, info.terrace_area, info.terrace),
       contractDate: dateRaw ? String(dateRaw).slice(0, 10) : null,
       contractValue: numOr(detail?.price, detail?.total_price, detail?.amount, detail?.sum, detail?.total),
+      virtualStatus: (() => {
+        const vs = detail?.virtual_status?.value?.name || detail?.virtual_status?.name || detail?.virtual_status;
+        if (!vs) return null;
+        return typeof vs === 'object' ? (vs.ru || vs.uz || null) : String(vs);
+      })(),
     };
   }
 
@@ -186,6 +192,7 @@ export class VznosService {
         floor: dto.floor || null,
         block: dto.block || null,
         terraceArea: dto.terraceArea != null ? (dto.terraceArea as any) : null,
+        virtualStatus: dto.virtualStatus || null,
         comment: dto.comment || null,
         inCrm: !!crm?.found,
         status: 'active',
@@ -212,6 +219,7 @@ export class VznosService {
     if (dto.floor !== undefined) data.floor = dto.floor || null;
     if (dto.block !== undefined) data.block = dto.block || null;
     if (dto.terraceArea !== undefined) data.terraceArea = dto.terraceArea != null ? dto.terraceArea : null;
+    if (dto.virtualStatus !== undefined) data.virtualStatus = dto.virtualStatus || null;
     if (dto.comment !== undefined) data.comment = dto.comment || null;
     await this.prisma.vznosContract.update({ where: { id }, data });
     return { ok: true };

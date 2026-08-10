@@ -1045,6 +1045,7 @@ model VznosContract {
   floor         String?   @db.VarChar(20) // кават
   block         String?   @db.VarChar(50) // блок
   terraceArea   Decimal?  @map("terrace_area") @db.Decimal(10, 2) // терраса майдони
+  virtualStatus String?   @map("virtual_status") @db.VarChar(60) // CRM holati (masalan "Бартер")
   comment       String?   @db.Text // Коммент
 
   inCrm  Boolean @default(false) @map("in_crm") // CRM'da topilganmi (qo'shishда)

@@ -21,7 +21,7 @@ type Vznos = {
   id: string; contractNo: string; projectName: string | null; contractDate: string | null;
   contractValue: number | null; fullName: string | null; apartmentArea: number | null;
   apartmentNo: string | null; floor: string | null; block: string | null; terraceArea: number | null;
-  comment: string | null; inCrm: boolean; status: string; paid: number; remaining: number | null;
+  virtualStatus: string | null; comment: string | null; inCrm: boolean; status: string; paid: number; remaining: number | null;
   createdByName: string | null; cancelledByName: string | null; transferToContractNo: string | null;
 };
 
@@ -135,6 +135,7 @@ export default function VznosPage() {
                           <div className="font-mono font-semibold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                             {r.contractNo}
                             {r.inCrm && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300">CRM</span>}
+                            {r.virtualStatus && <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-700 text-white">{r.virtualStatus}</span>}
                           </div>
                           {cancelled && <span className="text-[10px] text-rose-500">Bekor → {r.transferToContractNo}</span>}
                         </td>
@@ -271,8 +272,8 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
     setF(row ? {
       contractNo: row.contractNo, projectName: row.projectName || '', contractDate: row.contractDate ? String(row.contractDate).slice(0, 10) : '',
       contractValue: row.contractValue ?? '', fullName: row.fullName || '', apartmentArea: row.apartmentArea ?? '', apartmentNo: row.apartmentNo || '',
-      floor: row.floor || '', block: row.block || '', terraceArea: row.terraceArea ?? '', comment: row.comment || '',
-    } : { contractNo: '', projectName: '', contractDate: '', contractValue: '', fullName: '', apartmentArea: '', apartmentNo: '', floor: '', block: '', terraceArea: '', comment: '' });
+      floor: row.floor || '', block: row.block || '', terraceArea: row.terraceArea ?? '', virtualStatus: row.virtualStatus || '', comment: row.comment || '',
+    } : { contractNo: '', projectName: '', contractDate: '', contractValue: '', fullName: '', apartmentArea: '', apartmentNo: '', floor: '', block: '', terraceArea: '', virtualStatus: '', comment: '' });
   }, [open, row]);
 
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
@@ -281,7 +282,7 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
     mutationFn: (cn: string) => api.get<{
       found: boolean; fullName: string | null; projectName: string | null; apartmentNo: string | null;
       floor: string | null; block: string | null; apartmentArea: number | null; terraceArea: number | null;
-      contractDate: string | null; contractValue: number | null;
+      contractDate: string | null; contractValue: number | null; virtualStatus: string | null;
     }>(`/vznos/crm-lookup?contractNo=${encodeURIComponent(cn)}`),
     onSuccess: (r) => {
       setCrmChecked({ found: r.found });
@@ -298,6 +299,7 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
           terraceArea: r.terraceArea ?? '',
           contractDate: r.contractDate || '',
           contractValue: r.contractValue ?? '',
+          virtualStatus: r.virtualStatus || '',
         }));
         toast.success("CRM'da topildi — ma'lumot tortildi");
       } else toast("CRM'da yo'q — to'liq qo'lda kiriting");
@@ -311,7 +313,8 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
       const body = {
         contractNo: f.contractNo, projectName: f.projectName || null, contractDate: f.contractDate || null,
         contractValue: num(f.contractValue), fullName: f.fullName || null, apartmentArea: num(f.apartmentArea),
-        apartmentNo: f.apartmentNo || null, floor: f.floor || null, block: f.block || null, terraceArea: num(f.terraceArea), comment: f.comment || null,
+        apartmentNo: f.apartmentNo || null, floor: f.floor || null, block: f.block || null, terraceArea: num(f.terraceArea),
+        virtualStatus: f.virtualStatus || null, comment: f.comment || null,
       };
       return isEdit ? api.patch(`/vznos/${row!.id}`, body) : api.post('/vznos', body);
     },
@@ -368,6 +371,7 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
             <div><label className="text-[11px] font-medium text-slate-500">Кават</label><input value={f.floor || ''} onChange={(e) => set('floor', e.target.value)} className={inputCls} /></div>
             <div><label className="text-[11px] font-medium text-slate-500">Блок</label><input value={f.block || ''} onChange={(e) => set('block', e.target.value)} className={inputCls} /></div>
             <div><label className="text-[11px] font-medium text-slate-500">Терраса майдони</label><input inputMode="decimal" value={f.terraceArea ?? ''} onChange={(e) => set('terraceArea', e.target.value)} className={cn(inputCls, 'text-right font-mono')} /></div>
+            <div className="col-span-2"><label className="text-[11px] font-medium text-slate-500">CRM holati (masalan Бартер)</label><input value={f.virtualStatus || ''} onChange={(e) => set('virtualStatus', e.target.value)} placeholder="Бартер, Ипотека, Наличные..." className={inputCls} /></div>
             <div className="col-span-2"><label className="text-[11px] font-medium text-slate-500">Коммент</label><input value={f.comment || ''} onChange={(e) => set('comment', e.target.value)} className={inputCls} /></div>
           </div>
         </div>
