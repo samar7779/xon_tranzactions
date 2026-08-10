@@ -322,16 +322,29 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
-  const inputCls = 'mt-1 w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[13px]';
+  const manualMode = crmChecked !== null && !crmChecked.found;
+  const inputCls = cn('mt-1 w-full h-10 px-3 rounded-lg outline-none text-[13px] ring-1',
+    manualMode
+      ? 'bg-amber-50 dark:bg-amber-950/20 ring-amber-300 dark:ring-amber-700 focus:ring-2 focus:ring-amber-400'
+      : 'bg-slate-50 dark:bg-slate-800 ring-slate-200 dark:ring-slate-700 focus:ring-2 focus:ring-indigo-400');
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-2xl p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col">
-        <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/40 shrink-0">
-          <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">{isEdit ? 'Shartnomani tahrirlash' : 'Yangi shartnoma'}</DialogTitle>
+        <div className={cn('px-6 py-4 border-b border-slate-200 dark:border-slate-800 shrink-0 bg-gradient-to-r transition-colors', manualMode ? 'from-amber-50 to-orange-50 dark:from-amber-950/40 dark:to-orange-950/40' : 'from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/40')}>
+          <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100">{isEdit ? 'Shartnomani tahrirlash' : 'Yangi shartnoma'}{manualMode && <span className="ml-2 text-[11px] font-bold text-amber-600">· QO'LDA</span>}</DialogTitle>
           <DialogDescription className="text-[12px] text-slate-500 mt-0.5">Взнос от имени клиента — o'z shartnomamiz. Qo'shilганда mos to'lovlar avtomat bog'lanadi.</DialogDescription>
         </div>
         <div className="p-6 space-y-3 overflow-auto">
+          {manualMode && (
+            <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-300 dark:ring-amber-700 p-3.5 flex items-start gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-500 grid place-items-center text-white shrink-0"><Ban className="h-4 w-4" /></div>
+              <div className="text-[12.5px] text-amber-800 dark:text-amber-200">
+                <b>CRM'da topilmadi — qo'lda kiritish rejimi.</b>
+                <div className="mt-0.5">Bu shartnoma CRM'да yo'q. Barcha ma'lumotlarni (лойиха, сана, киймат, ФИШ, хонадон, майдон...) o'zingiz to'ldiring.</div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2 sm:col-span-1">
               <label className="text-[11px] font-medium text-slate-500">Шартнома № *</label>

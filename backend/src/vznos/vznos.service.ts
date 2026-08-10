@@ -61,8 +61,9 @@ export class VznosService {
       if (res?.ok) detail = res.detail;
     } catch { /* live API xato — basic bilan davom */ }
 
-    const orderApt0 = detail?.order_apartments?.[0] || null;
-    const apt = orderApt0?.apartment || null;
+    // Apartment ma'lumotlari CRM detalда `info` obyektida:
+    // info = { number, floor, rooms, area, balcony_area, block, ... }
+    const info = detail?.info || {};
     const client = detail?.client || {};
     const pick = (...vals: any[]): any => {
       for (const v of vals) {
@@ -78,9 +79,9 @@ export class VznosService {
       const n = Number(String(v).replace(/[^\d.\-]/g, ''));
       return isNaN(n) || n === 0 ? null : n;
     };
-    const objRaw = pick(apt?.block?.building?.object?.name, client.object_name, detail?.object_name);
+    const objRaw = pick(info.object?.name, info.object, client.object_name, detail?.object_name, detail?.payment_detail?.company_name);
     const objName = objRaw && typeof objRaw === 'object' ? (objRaw.name || objRaw.uz || objRaw.ru || null) : objRaw;
-    const dateRaw = pick(detail?.date, detail?.contract_date, detail?.order_date, detail?.created_at, apt?.created_at);
+    const dateRaw = pick(detail?.contract_date, detail?.date, detail?.order_date, detail?.created_at);
 
     return {
       ok: true,
@@ -88,19 +89,13 @@ export class VznosService {
       contractNo: pick(detail?.contract, basic?.contractNo) || cn,
       fullName: basic?.customerName || pick(client.full_name_lotin, client.full_name_kirill, client.full_name) || null,
       projectName: objName || basic?.objectName || null,
-      apartmentNo: pick(client.apartment_number, detail?.apartment_number, apt?.number, apt?.name, basic?.apartmentNumber)?.toString() || null,
-      floor: pick(client.floor, apt?.floor, apt?.storey)?.toString() || null,
-      block: (() => { const b = pick(apt?.block?.name, apt?.block?.title, client.block); return b && typeof b === 'object' ? (b.name || b.uz || b.ru || null) : (b?.toString() || null); })(),
-      apartmentArea: numOr(apt?.area, apt?.total_area, apt?.square, apt?.plan_area, apt?.full_area),
-      terraceArea: numOr(apt?.terrace_area, apt?.terrace, apt?.balcony_area),
+      apartmentNo: pick(info.number, client.apartment_number, detail?.apartment_number, basic?.apartmentNumber)?.toString() || null,
+      floor: pick(info.floor, client.floor)?.toString() || null,
+      block: (() => { const b = pick(info.block, client.block); return b && typeof b === 'object' ? (b.name || b.uz || b.ru || null) : (b != null ? String(b) : null); })(),
+      apartmentArea: numOr(info.area, info.total_area, info.square),
+      terraceArea: numOr(info.balcony_area, info.terrace_area, info.terrace),
       contractDate: dateRaw ? String(dateRaw).slice(0, 10) : null,
-      contractValue: numOr(detail?.price, detail?.total_price, detail?.amount, detail?.sum, detail?.total, apt?.price, apt?.total_price),
-      // DIAGNOSTIKA — xom struktura (aniq maydon nomlarini topish uchun). Keyin olib tashlanadi.
-      _debug: {
-        detailKeys: detail ? Object.keys(detail) : null,
-        clientKeys: client ? Object.keys(client) : null,
-        orderApt0,
-      },
+      contractValue: numOr(detail?.price, detail?.total_price, detail?.amount, detail?.sum, detail?.total),
     };
   }
 
