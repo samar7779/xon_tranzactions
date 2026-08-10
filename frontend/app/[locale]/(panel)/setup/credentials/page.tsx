@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Wifi, AlertCircle, CheckCircle2, KeyRound, MoreVertical,
   Activity, RefreshCw, Lock, Shield, Globe, Eye, EyeOff, Copy, Check, Pencil,
+  X, Building2, ShieldCheck, Send,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -279,34 +281,40 @@ type BankPwdConfig = {
 };
 
 function BankPwdDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [mounted, setMounted] = useState(false);
   const [gate, setGate] = useState('');
   const [unlocked, setUnlocked] = useState(false);
   const [cfg, setCfg] = useState<BankPwdConfig | null>(null);
-  const [cands, setCands] = useState<Record<string, string>>({}); // bankId → textarea (qatorda)
+  const [cands, setCands] = useState<Record<string, string[]>>({}); // bankId → parollar
+  const [newPwd, setNewPwd] = useState<Record<string, string>>({}); // bankId → yangi input
   const [botToken, setBotToken] = useState('');
   const [groupId, setGroupId] = useState('');
   const [result, setResult] = useState<any>(null);
 
+  useEffect(() => setMounted(true), []);
   useEffect(() => {
-    if (!open) { setUnlocked(false); setGate(''); setCfg(null); setCands({}); setBotToken(''); setGroupId(''); setResult(null); }
-  }, [open]);
+    if (!open) { setUnlocked(false); setGate(''); setCfg(null); setCands({}); setNewPwd({}); setBotToken(''); setGroupId(''); setResult(null); return; }
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [open, onClose]);
 
   const unlockMut = useMutation({
     mutationFn: (password: string) => api.post<BankPwdConfig>('/bank-pwd/config', { password }),
     onSuccess: (r) => {
       setCfg(r); setUnlocked(true);
-      const m: Record<string, string> = {};
-      for (const b of r.banks) m[b.id] = (b.candidates || []).join('\n');
+      const m: Record<string, string[]> = {};
+      for (const b of r.banks) m[b.id] = [...(b.candidates || [])];
       setCands(m); setGroupId(r.groupId || '');
     },
-    onError: () => toast.error('Kod noto\'g\'ri'),
+    onError: () => toast.error("Kod noto'g'ri"),
   });
   const saveMut = useMutation({
     mutationFn: () => {
       const candidates: Record<string, string[]> = {};
-      for (const [bid, txt] of Object.entries(cands)) {
-        const list = txt.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-        if (list.length) candidates[bid] = list;
+      for (const [bid, list] of Object.entries(cands)) {
+        const clean = list.map((s) => s.trim()).filter(Boolean);
+        if (clean.length) candidates[bid] = clean;
       }
       return api.post('/bank-pwd/save', { password: gate, candidates, groupId: groupId.trim(), ...(botToken.trim() ? { botToken: botToken.trim() } : {}) });
     },
@@ -319,84 +327,117 @@ function BankPwdDialog({ open, onClose }: { open: boolean; onClose: () => void }
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
-        <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white shrink-0">
-          <DialogTitle className="text-[16px] font-bold flex items-center gap-2"><KeyRound className="h-5 w-5" /> Bank paroli — avtomat topish</DialogTitle>
-          <DialogDescription className="text-white/80 text-[12px] mt-0.5">Bank parol xatosi berса — taxminiy parollarni ketma-ket sinab, ishlaganini o'rnatadi</DialogDescription>
+  const addPwd = (bid: string) => {
+    const raw = (newPwd[bid] || '').trim();
+    if (!raw) return;
+    const parts = raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    setCands((m) => {
+      const merged = [...(m[bid] || [])];
+      for (const p of parts) if (!merged.includes(p)) merged.push(p);
+      return { ...m, [bid]: merged };
+    });
+    setNewPwd((m) => ({ ...m, [bid]: '' }));
+  };
+  const removePwd = (bid: string, idx: number) => setCands((m) => ({ ...m, [bid]: (m[bid] || []).filter((_, i) => i !== idx) }));
+
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className={cn('fixed inset-0 z-[100]', open ? 'pointer-events-auto' : 'pointer-events-none')}>
+      <div className={cn('absolute inset-0 bg-black/50 backdrop-blur-[2px] transition-opacity duration-300', open ? 'opacity-100' : 'opacity-0')} />
+      <div className={cn('absolute right-0 top-0 h-full w-full max-w-3xl bg-slate-50 dark:bg-slate-950 shadow-2xl flex flex-col transition-transform duration-300 ease-out', open ? 'translate-x-0' : 'translate-x-full')}>
+        {/* Header */}
+        <div className="shrink-0 bg-gradient-to-r from-amber-500 to-orange-600 text-white px-5 py-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/15 grid place-items-center shadow-inner"><KeyRound className="h-5 w-5" /></div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-widest font-bold text-white/70">Xavfsizlik · Bank ulanishlari</div>
+            <div className="text-lg font-black tracking-tight">Bank paroli — avtomat topish</div>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-lg hover:bg-white/15 grid place-items-center transition-colors" title="Yopish (ESC)"><X className="h-5 w-5" /></button>
         </div>
 
         {!unlocked ? (
-          <div className="p-6 space-y-3">
-            <Label className="text-[12px] font-semibold">Kirish kodi (7779)</Label>
-            <Input type="password" value={gate} onChange={(e) => setGate(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') unlockMut.mutate(gate); }} placeholder="••••" className="text-center tracking-widest" autoFocus />
-            <Button onClick={() => unlockMut.mutate(gate)} disabled={unlockMut.isPending} className="w-full gap-2">
-              {unlockMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Ochish
-            </Button>
+          <div className="flex-1 grid place-items-center p-6">
+            <div className="w-full max-w-xs text-center">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white mx-auto shadow-lg shadow-orange-500/30"><Lock className="h-7 w-7" /></div>
+              <div className="mt-3 text-[15px] font-bold text-slate-800 dark:text-slate-100">Himoyalangan</div>
+              <div className="text-[12px] text-slate-400 mt-0.5">Kirish uchun kodni kiriting</div>
+              <input type="password" inputMode="numeric" autoFocus value={gate} onChange={(e) => setGate(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') unlockMut.mutate(gate); }} placeholder="Kod" className="mt-4 w-full h-11 px-3 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[15px] text-center tracking-widest" />
+              <button onClick={() => unlockMut.mutate(gate)} disabled={unlockMut.isPending} className="mt-3 w-full h-11 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-[13px] inline-flex items-center justify-center gap-2 disabled:opacity-50">{unlockMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Ochish</button>
+            </div>
           </div>
         ) : (
-          <div className="p-6 space-y-4 overflow-y-auto">
-            {/* Taxminiy parollar (bank bo'yicha) */}
-            <div>
-              <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Taxminiy parollar (har bank uchun — har qatorda bittadan)</div>
-              <div className="space-y-3">
-                {(cfg?.banks || []).map((b) => (
-                  <div key={b.id}>
-                    <Label className="text-[11.5px] font-semibold flex items-center gap-2">{b.name} <span className="text-[10px] text-slate-400">({(cands[b.id] || '').split(/\n/).filter(Boolean).length} ta)</span></Label>
-                    <textarea
-                      value={cands[b.id] || ''}
-                      onChange={(e) => setCands((m) => ({ ...m, [b.id]: e.target.value }))}
-                      rows={2}
-                      placeholder={"parol1\nparol2\nparol3"}
-                      className="mt-1 w-full px-3 py-2 rounded-lg text-[12px] font-mono bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 resize-y"
-                    />
-                  </div>
-                ))}
+          <>
+            <div className="flex-1 overflow-auto p-5 space-y-4 max-w-3xl mx-auto w-full">
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 ring-1 ring-amber-200 dark:ring-amber-900 p-3 flex items-start gap-2 text-[12px] text-amber-800 dark:text-amber-300">
+                <ShieldCheck className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>Har bank uchun taxminiy parollarni qo'shing. <b>"Xato ulanishlarni tuzatish"</b> bosilganda ular ketma-ket sinaladi va ishlagani avtomat o'rnatiladi.</div>
               </div>
-            </div>
 
-            {/* Telegram */}
-            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-2">
-              <div className="text-[11.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Telegram xabar (parol o'zgarganda)</div>
-              <Input value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={cfg?.hasToken ? `Bot token saqlangan (${cfg.tokenHint})` : 'Bot token'} className="text-[12px]" />
-              <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="Guruh chat ID (-100…)" className="text-[12px] font-mono" />
-            </div>
-
-            {/* Amallar */}
-            <div className="flex items-center gap-2">
-              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} variant="outline" className="gap-2">
-                {saveMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Saqlash
-              </Button>
-              <Button onClick={() => tryMut.mutate()} disabled={tryMut.isPending} className="gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white">
-                {tryMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />} Xato ulanishlarni tuzatish
-              </Button>
-            </div>
-
-            {/* Natija */}
-            {result && (
-              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800 text-[12px]">
-                {(result.results || []).length === 0 && <div className="px-3 py-3 text-slate-400">Xato bergan ulanish yo'q</div>}
-                {(result.results || []).map((r: any, i: number) => (
-                  <div key={i} className="px-3 py-2 flex items-center gap-2">
-                    {r.status === 'fixed'
-                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      : r.status === 'no-candidates'
-                        ? <AlertCircle className="h-4 w-4 text-slate-400 shrink-0" />
-                        : <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />}
-                    <span className="font-semibold">{r.label}</span>
-                    <span className="text-slate-400">· {r.bank}</span>
-                    <span className="ml-auto text-[11px] font-semibold">
-                      {r.status === 'fixed' ? `tuzatildi (${r.tried}-urinish)` : r.status === 'no-candidates' ? 'parol yo\'q' : `topilmadi (${r.tried})`}
-                    </span>
+              {(cfg?.banks || []).map((b) => {
+                const list = cands[b.id] || [];
+                return (
+                  <div key={b.id} className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 grid place-items-center text-white shrink-0"><Building2 className="h-4 w-4" /></div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold text-[14px] text-slate-800 dark:text-slate-100 truncate">{b.name}</div>
+                        <div className="text-[11px] text-slate-400">{list.length} ta parol</div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <input value={newPwd[b.id] || ''} onChange={(e) => setNewPwd((m) => ({ ...m, [b.id]: e.target.value }))} onKeyDown={(e) => { if (e.key === 'Enter') addPwd(b.id); }} placeholder="Parol qo'shish (Enter yoki tugma)" className="flex-1 h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[13px] font-mono" />
+                      <button onClick={() => addPwd(b.id)} className="h-10 px-3.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-medium inline-flex items-center gap-1 shrink-0"><Plus className="h-4 w-4" /> Qo'shish</button>
+                    </div>
+                    {list.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {list.map((p, i) => (
+                          <span key={i} className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[12px] font-mono text-slate-700 dark:text-slate-200">
+                            {p}
+                            <button onClick={() => removePwd(b.id, i)} className="w-4 h-4 grid place-items-center rounded hover:bg-rose-100 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-500"><X className="h-3 w-3" /></button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="mt-3 text-[11.5px] text-slate-400 text-center py-2">Parol qo'shilmagan</div>
+                    )}
                   </div>
-                ))}
+                );
+              })}
+
+              <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 p-4 space-y-2">
+                <div className="text-[12px] font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1.5"><Send className="h-3.5 w-3.5 text-sky-500" /> Telegram xabar (parol o'zgarganda)</div>
+                <input value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={cfg?.hasToken ? `Bot token saqlangan (${cfg.tokenHint})` : 'Bot token'} className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[12px]" />
+                <input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="Guruh chat ID (-100…)" className="w-full h-10 px-3 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 text-[12px] font-mono" />
               </div>
-            )}
-          </div>
+
+              {result && (
+                <div className="rounded-2xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 overflow-hidden">
+                  <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 text-[12px] font-semibold text-slate-600 dark:text-slate-300">Natija: <b className="text-emerald-600">{result.fixed}</b>/{result.total} tuzatildi</div>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 text-[12px]">
+                    {(result.results || []).length === 0 && <div className="px-4 py-3 text-slate-400">Xato bergan ulanish yo'q</div>}
+                    {(result.results || []).map((r: any, i: number) => (
+                      <div key={i} className="px-4 py-2 flex items-center gap-2">
+                        {r.status === 'fixed' ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" /> : r.status === 'no-candidates' ? <AlertCircle className="h-4 w-4 text-slate-400 shrink-0" /> : <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />}
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">{r.label}</span>
+                        <span className="text-slate-400">· {r.bank}</span>
+                        <span className="ml-auto text-[11px] font-semibold">{r.status === 'fixed' ? `tuzatildi (${r.tried}-urinish)` : r.status === 'no-candidates' ? "parol yo'q" : `topilmadi (${r.tried})`}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="shrink-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-3 flex items-center justify-end gap-2">
+              <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="h-10 px-4 rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-[13px] font-medium inline-flex items-center gap-2 disabled:opacity-50">{saveMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Saqlash</button>
+              <button onClick={() => tryMut.mutate()} disabled={tryMut.isPending} className="h-10 px-5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-[13px] font-semibold inline-flex items-center gap-2 shadow-lg shadow-orange-500/25 disabled:opacity-50">{tryMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />} Xato ulanishlarni tuzatish</button>
+            </div>
+          </>
         )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>,
+    document.body,
   );
 }
 
