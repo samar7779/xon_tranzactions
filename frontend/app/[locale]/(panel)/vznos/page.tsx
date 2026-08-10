@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   HandCoins, Plus, Search, Edit3, Trash2, XCircle, Loader2, Wallet, FileText,
   ChevronLeft, ChevronRight, X, CheckCircle2, Ban, Sparkles, RotateCcw,
+  ChevronDown, Check, Building2,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -82,11 +83,7 @@ export default function VznosPage() {
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Shartnoma, ФИШ, loyiha, xonadon..."
                 className="w-full h-10 pl-9 pr-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[14px]" />
             </div>
-            <select value={project} onChange={(e) => setProject(e.target.value)}
-              className="h-10 px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[13px]">
-              <option value="all">Barcha loyihalar</option>
-              {(objects || []).map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
+            <ProjectSelect value={project} onChange={setProject} objects={objects || []} />
             <div className="flex rounded-xl bg-slate-100 dark:bg-slate-800 p-0.5">
               {[{ k: 'all', l: 'Barchasi' }, { k: 'active', l: 'Faol' }, { k: 'cancelled', l: 'Bekor' }].map((s) => (
                 <button key={s.k} onClick={() => setStatus(s.k)}
@@ -209,6 +206,58 @@ function StatCard({ icon: Icon, color, label, value, sub }: { icon: any; color: 
   );
 }
 
+// ─── Loyiha (obyekt) — qidiruvli dropdown ───
+function ProjectSelect({ value, onChange, objects }: { value: string; onChange: (v: string) => void; objects: string[] }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? objects.filter((o) => o.toLowerCase().includes(q)) : objects;
+  }, [objects, search]);
+  const label = value === 'all' ? 'Barcha loyihalar' : value;
+
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((v) => !v)}
+        className="h-10 min-w-[190px] px-3 rounded-xl bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[13px] flex items-center gap-2 text-left">
+        <Building2 className="h-4 w-4 text-indigo-500 shrink-0" />
+        <span className={cn('flex-1 truncate', value === 'all' && 'text-slate-400 dark:text-slate-500')}>{label}</span>
+        <ChevronDown className={cn('h-4 w-4 text-slate-400 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => { setOpen(false); setSearch(''); }} />
+          <div className="absolute z-50 left-0 mt-1 w-[260px] rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl overflow-hidden">
+            <div className="p-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+                <input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Loyiha qidirish..."
+                  className="w-full h-9 pl-8 pr-2 rounded-lg bg-slate-50 dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-indigo-400 text-[13px]" />
+              </div>
+            </div>
+            <div className="max-h-64 overflow-auto py-1">
+              <button type="button" onClick={() => { onChange('all'); setOpen(false); setSearch(''); }}
+                className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-indigo-50 dark:hover:bg-indigo-950/30 flex items-center gap-2', value === 'all' && 'bg-indigo-50/60 dark:bg-indigo-950/20')}>
+                <Building2 className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                <span className="text-slate-600 dark:text-slate-300">Barcha loyihalar</span>
+                {value === 'all' && <Check className="h-4 w-4 text-indigo-500 ml-auto shrink-0" />}
+              </button>
+              {filtered.map((o) => (
+                <button key={o} type="button" onClick={() => { onChange(o); setOpen(false); setSearch(''); }}
+                  className={cn('w-full text-left px-3 py-2 text-[13px] hover:bg-indigo-50 dark:hover:bg-indigo-950/30 flex items-center gap-2', value === o && 'bg-indigo-50/60 dark:bg-indigo-950/20')}>
+                  <span className="flex-1 truncate text-slate-700 dark:text-slate-200">{o}</span>
+                  {value === o && <Check className="h-4 w-4 text-indigo-500 shrink-0" />}
+                </button>
+              ))}
+              {filtered.length === 0 && <div className="px-3 py-6 text-center text-[12px] text-slate-400">Topilmadi</div>}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Qo'shish / tahrirlash dialogi ───
 function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClose: () => void; row: Vznos | null; objects: string[] }) {
   const qc = useQueryClient();
@@ -229,13 +278,28 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
   const set = (k: string, v: any) => setF((p: any) => ({ ...p, [k]: v }));
 
   const lookupMut = useMutation({
-    mutationFn: (cn: string) => api.get<{ found: boolean; fullName: string | null; projectName: string | null; apartmentNo: string | null }>(`/vznos/crm-lookup?contractNo=${encodeURIComponent(cn)}`),
+    mutationFn: (cn: string) => api.get<{
+      found: boolean; fullName: string | null; projectName: string | null; apartmentNo: string | null;
+      floor: string | null; block: string | null; apartmentArea: number | null; terraceArea: number | null;
+      contractDate: string | null; contractValue: number | null;
+    }>(`/vznos/crm-lookup?contractNo=${encodeURIComponent(cn)}`),
     onSuccess: (r) => {
       setCrmChecked({ found: r.found });
       if (r.found) {
-        setF((p: any) => ({ ...p, fullName: p.fullName || r.fullName || '', projectName: p.projectName || r.projectName || '', apartmentNo: p.apartmentNo || r.apartmentNo || '' }));
-        toast.success('CRM\'da topildi — ma\'lumot tortildi');
-      } else toast('CRM\'da yo\'q — to\'liq qo\'lda kiriting');
+        setF((p: any) => ({
+          ...p,
+          fullName: p.fullName || r.fullName || '',
+          projectName: p.projectName || r.projectName || '',
+          apartmentNo: p.apartmentNo || r.apartmentNo || '',
+          floor: p.floor || r.floor || '',
+          block: p.block || r.block || '',
+          apartmentArea: p.apartmentArea || (r.apartmentArea ?? ''),
+          terraceArea: p.terraceArea || (r.terraceArea ?? ''),
+          contractDate: p.contractDate || r.contractDate || '',
+          contractValue: p.contractValue || (r.contractValue ?? ''),
+        }));
+        toast.success("CRM'da topildi — ma'lumot tortildi");
+      } else toast("CRM'da yo'q — to'liq qo'lda kiriting");
     },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });

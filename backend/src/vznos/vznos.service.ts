@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmContractCacheService } from '../categorization/crm-contract-cache.service';
+import { CrmService } from '../crm/crm.service';
 
 type Actor = { id?: string | null; name?: string | null };
 
@@ -27,6 +28,7 @@ export class VznosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly crmCache: CrmContractCacheService,
+    private readonly crm: CrmService,
   ) {}
 
   /** Loyiha (obyekt) dropdown — OplataKv'dagi mavjud obyekt nomlari */
@@ -43,18 +45,55 @@ export class VznosService {
       .sort((a, b) => a.localeCompare(b, 'ru'));
   }
 
-  /** CRM lookup — qo'shishда prefill uchun (topilsa ma'lumot tortiladi) */
+  /**
+   * CRM lookup — qo'shishда prefill uchun. crm.show() to'liq detalни oladi
+   * (MySQL extras + order_apartments deep struktura) va mumkin bo'lgan barcha
+   * maydonlarni himoyalab (bir necha nomni sinab) ajratadi. Topilmaganlar bo'sh qoladi.
+   */
   async crmLookup(contractNo: string) {
     const cn = (contractNo || '').trim().toUpperCase();
     if (!cn) throw new BadRequestException('Shartnoma raqami kerak');
-    const c = await this.crmCache.lookup(cn).catch(() => null);
+
+    const basic = await this.crmCache.lookup(cn).catch(() => null);
+    let detail: any = null;
+    try {
+      const res: any = await this.crm.show({ contract: cn });
+      if (res?.ok) detail = res.detail;
+    } catch { /* live API xato — basic bilan davom */ }
+
+    const apt = detail?.order_apartments?.[0]?.apartment || null;
+    const client = detail?.client || {};
+    const pick = (...vals: any[]): any => {
+      for (const v of vals) {
+        if (v == null) continue;
+        const s = String(v).trim();
+        if (s !== '' && s !== '0' && !s.startsWith('0000-00-00')) return v;
+      }
+      return null;
+    };
+    const numOr = (...vals: any[]): number | null => {
+      const v = pick(...vals);
+      if (v == null) return null;
+      const n = Number(String(v).replace(/[^\d.\-]/g, ''));
+      return isNaN(n) || n === 0 ? null : n;
+    };
+    const objRaw = pick(apt?.block?.building?.object?.name, client.object_name, detail?.object_name);
+    const objName = objRaw && typeof objRaw === 'object' ? (objRaw.name || objRaw.uz || objRaw.ru || null) : objRaw;
+    const dateRaw = pick(detail?.date, detail?.contract_date, detail?.order_date, detail?.created_at, apt?.created_at);
+
     return {
       ok: true,
-      found: !!c?.found,
-      contractNo: c?.contractNo || cn,
-      fullName: c?.customerName || null,
-      projectName: c?.objectName || null,
-      apartmentNo: c?.apartmentNumber || null,
+      found: !!basic?.found || !!detail,
+      contractNo: pick(detail?.contract, basic?.contractNo) || cn,
+      fullName: basic?.customerName || pick(client.full_name_lotin, client.full_name_kirill, client.full_name) || null,
+      projectName: objName || basic?.objectName || null,
+      apartmentNo: pick(client.apartment_number, detail?.apartment_number, apt?.number, apt?.name, basic?.apartmentNumber)?.toString() || null,
+      floor: pick(client.floor, apt?.floor, apt?.storey)?.toString() || null,
+      block: (() => { const b = pick(apt?.block?.name, apt?.block?.title, client.block); return b && typeof b === 'object' ? (b.name || b.uz || b.ru || null) : (b?.toString() || null); })(),
+      apartmentArea: numOr(apt?.area, apt?.total_area, apt?.square, apt?.plan_area, apt?.full_area),
+      terraceArea: numOr(apt?.terrace_area, apt?.terrace, apt?.balcony_area),
+      contractDate: dateRaw ? String(dateRaw).slice(0, 10) : null,
+      contractValue: numOr(detail?.price, detail?.total_price, detail?.amount, detail?.sum, detail?.total, apt?.price, apt?.total_price),
     };
   }
 
