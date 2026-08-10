@@ -94,7 +94,10 @@ export default function CrmPage() {
     staleTime: 30_000,
   });
   const suggestions = (suggData?.items || []) as Array<any>;
-  const showDropdown = focused && debouncedQ.length >= 3;
+  // Yuklangan shartnoma joriy so'rovga teng bo'lsa — dropdown yashiriladi (aks holda
+  // detal topilib turса ham taklif qidiruvi "topilmadi" deб chalg'itadi).
+  const showDropdown = focused && debouncedQ.length >= 3
+    && activeContract.trim().toUpperCase() !== debouncedQ.trim().toUpperCase();
 
   function pushRecent(contract: string) {
     const next = [contract, ...recent.filter((x) => x !== contract)].slice(0, 8);
