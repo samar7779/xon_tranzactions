@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
 import { contractVariants } from './contract-parser';
@@ -328,29 +329,96 @@ export class CrmContractCacheService {
   /**
    * crm_status backfill uchun — FAQAT virtual_status'ni CRM'dan yangilaydi (awaitable).
    * fetchFromCrmAndCache'dan farqi: CRM javob bermasa found=true qatorni BUZMAYDI
-   * (found=false qilmaydi). Konvergensiya uchun har holda NULL'dan chiqaradi:
-   *   - /show topsa → haqiqiy qiymat (yoki '' status yo'q bo'lsa)
-   *   - /show bermasa → '' (keyingi 24h stale-refresh haqiqiy qiymat bilan to'ldiradi)
+   * (found=false qilmaydi) va NULL'ni O'ZGARTIRMAYDI — keyingi tsiklда qayta urinadi.
+   *   - /show muvaffaqiyatli → haqiqiy qiymat, yoki '' (CRM'да virtual_status yo'q)
+   *   - /show umuman javob bermadi → NULL qoladi (retry) — noto'g'ri '' YOZMAYMIZ
+   * @returns true — /show javob berdi (yozildi); false — CRM javob bermadi (NULL qoldi)
    */
-  async refreshVirtualStatus(contractNumber: string): Promise<void> {
+  async refreshVirtualStatus(contractNumber: string): Promise<boolean> {
     const key = String(contractNumber || '')
       .replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
-    if (!key) return;
+    if (!key) return false;
     const variants = contractVariants(key).slice(0, 4);
-    let vs: string | null = null;
+    let ok = false;
+    let vs = '';
     for (const v of variants) {
       try {
         const res: any = await this.crm.show({ contract: v });
         const detail: any = res?.detail;
-        if (res?.ok && detail) { vs = extractVirtualStatus(detail); break; }
+        if (res?.ok && detail) { vs = extractVirtualStatus(detail); ok = true; break; }
       } catch { /* keyingi variant */ }
     }
+    if (!ok) return false; // CRM javob bermadi — NULL qoldiramiz, backfill qayta urinadi
     try {
       await this.prisma.crmContract.updateMany({
         where: { contractNumber: { in: contractVariants(key).slice(0, 8) }, found: true },
-        data: { virtualStatus: vs ?? '' },
+        data: { virtualStatus: vs },
       });
     } catch { /* ignore */ }
+    return true;
+  }
+
+  /**
+   * DIAGNOSTIKA — bir nechta shartnoma uchun keshdagi virtual_status + JONLI /show
+   * javobidagi xom virtual_status'ni qaytaradi. Nega bo'sh ko'rinayotganini aniqlash uchun.
+   */
+  async diagVirtualStatus(contractNumbers: string[]): Promise<any[]> {
+    const out: any[] = [];
+    for (const cn of contractNumbers.slice(0, 15)) {
+      const key = String(cn || '').replace(/№/g, '').replace(/\s+/g, '').trim().toUpperCase();
+      const cached = await this.prisma.crmContract.findFirst({
+        where: { contractNumber: { in: contractVariants(key).slice(0, 8) } },
+        select: { contractNumber: true, found: true, virtualStatus: true, lastVerifiedAt: true },
+      });
+      let live: any = { ok: false };
+      for (const v of contractVariants(key).slice(0, 4)) {
+        try {
+          const res: any = await this.crm.show({ contract: v });
+          if (res?.ok && res?.detail) {
+            live = {
+              ok: true, triedVariant: v,
+              rawVirtualStatus: res.detail.virtual_status ?? null,
+              extracted: extractVirtualStatus(res.detail),
+            };
+            break;
+          }
+        } catch (e: any) { live = { ok: false, error: e?.message }; }
+      }
+      out.push({
+        input: cn,
+        cached: cached
+          ? { contractNumber: cached.contractNumber, found: cached.found,
+              virtualStatus: cached.virtualStatus,
+              vsState: cached.virtualStatus == null ? 'NULL' : (cached.virtualStatus === '' ? 'EMPTY' : 'VALUE'),
+              lastVerifiedAt: cached.lastVerifiedAt }
+          : null,
+        live,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * '' (EMPTY) belgili virtual_status'ni NULL'ga qaytaradi — backfill qayta tekshirsin.
+   * FAQAT rawSnapshot bor (/show'dan kelgan) qatorlar — fallback (rawSnapshot yo'q)
+   * shartnomalar tegilmaydi (ular /show bermaydi, abadiy retry bo'lib qolmasin).
+   */
+  async resetEmptyVirtualStatus(): Promise<{ reset: number }> {
+    const r = await this.prisma.crmContract.updateMany({
+      where: { found: true, virtualStatus: '', rawSnapshot: { not: Prisma.DbNull } },
+      data: { virtualStatus: null },
+    });
+    return { reset: r.count };
+  }
+
+  /** crm_status backfill holati — NULL/EMPTY/VALUE sonlari. */
+  async virtualStatusStats(): Promise<{ found: number; nullVs: number; emptyVs: number; valueVs: number }> {
+    const [found, nullVs, emptyVs] = await Promise.all([
+      this.prisma.crmContract.count({ where: { found: true } }),
+      this.prisma.crmContract.count({ where: { found: true, virtualStatus: null } }),
+      this.prisma.crmContract.count({ where: { found: true, virtualStatus: '' } }),
+    ]);
+    return { found, nullVs, emptyVs, valueVs: found - nullVs - emptyVs };
   }
 
   // ───────────── crm_order_id backfill (mavjud shartnomalar uchun) ─────────────

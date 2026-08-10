@@ -58,6 +58,28 @@ export class OplataKvController {
     return this.svc.list(q);
   }
 
+  @Get('crm-status/stats')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'crm_status backfill holati — NULL/EMPTY/VALUE sonlari' })
+  crmStatusStats() {
+    return this.crmCache.virtualStatusStats();
+  }
+
+  @Get('crm-status/diag')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'crm_status diagnostika — kesh + jonli /show (contracts=A,B,C)' })
+  crmStatusDiag(@Query('contracts') contracts?: string) {
+    const list = (contracts || '').split(',').map((s) => s.trim()).filter(Boolean);
+    return this.crmCache.diagVirtualStatus(list);
+  }
+
+  @Post('crm-status/reset-empty')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: "crm_status '' (EMPTY) qatorlarni NULL'ga qaytarish — backfill qayta tekshirsin" })
+  crmStatusResetEmpty() {
+    return this.crmCache.resetEmptyVirtualStatus();
+  }
+
   @Get('export')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Filtr bo\'yicha barcha qatorlarni Excel sifatida yuklab olish' })

@@ -222,19 +222,21 @@ export class OplataKvService {
       const batch = await this.prisma.crmContract.findMany({
         where: { found: true, virtualStatus: null },
         select: { contractNumber: true },
-        take: 120,
+        take: 200,
       });
       if (batch.length === 0) return; // konvergensiya — qiladigan ish yo'q
 
-      // Cheklangan konkurentlik — CRM'ni bo'kmaslik (6 tadan ketma-ket chunk)
-      const CONC = 6;
+      // Cheklangan konkurentlik — CRM'ni bo'kmaslik (8 tadan ketma-ket chunk)
+      const CONC = 8;
+      let answered = 0;
       for (let i = 0; i < batch.length; i += CONC) {
         const chunk = batch.slice(i, i + CONC);
-        await Promise.allSettled(
+        const rs = await Promise.allSettled(
           chunk.map((c) => this.crmCache.refreshVirtualStatus(c.contractNumber)),
         );
+        answered += rs.filter((r) => r.status === 'fulfilled' && r.value === true).length;
       }
-      this.log.log(`crm_status backfill: ${batch.length} shartnoma yangilandi (bu tsikl)`);
+      this.log.log(`crm_status backfill: ${batch.length} ta ishlandi, ${answered} ta CRM javob berdi (bu tsikl)`);
     } catch (e: any) {
       this.log.warn(`crm_status backfill xato: ${e?.message}`);
     } finally {
