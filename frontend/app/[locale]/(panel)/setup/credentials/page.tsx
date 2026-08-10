@@ -39,6 +39,7 @@ export default function CredentialsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
   const [pwdOpen, setPwdOpen] = useState(false);
+  const [fixTarget, setFixTarget] = useState<string | null>(null);
 
   const { data: creds, isLoading } = useQuery({
     queryKey: ['bank-credentials'],
@@ -61,7 +62,11 @@ export default function CredentialsPage() {
       toast.success(`${t('testSuccess')} (${n})`);
       qc.invalidateQueries({ queryKey: ['bank-credentials'] });
     },
-    onError: (e: any) => toast.error(`${t('testFailed')}: ${e?.message}`),
+    onError: (e: any, id: string) => {
+      toast.error(`${t('testFailed')}: ${e?.message}`);
+      // Parol xato — avtomat topish modulini ochamiz (taxminiy parollarni sinaydi)
+      if (canRevealPassword) setFixTarget(id);
+    },
   });
 
   const revealMut = useMutation({
@@ -157,7 +162,112 @@ export default function CredentialsPage() {
 
       {/* Bank parol avtomat topish/almashtirish (7779) */}
       <BankPwdDialog open={pwdOpen} onClose={() => setPwdOpen(false)} />
+
+      {/* Tekshirish xato berganда — avtomat parol topish (animatsion) */}
+      <AutoFixModal
+        credentialId={fixTarget}
+        onClose={() => setFixTarget(null)}
+        onFixed={() => qc.invalidateQueries({ queryKey: ['bank-credentials'] })}
+      />
     </>
+  );
+}
+
+// ═══════════════ Tekshirish xato berganда — avtomat parol topish (animatsion) ═══════════════
+function AutoFixModal({ credentialId, onClose, onFixed }: { credentialId: string | null; onClose: () => void; onFixed: () => void }) {
+  const [phase, setPhase] = useState<'testing' | 'trying' | 'done'>('testing');
+  const [res, setRes] = useState<any>(null);
+  const [revealCount, setRevealCount] = useState(0); // nechta urinish ko'rsatildi
+
+  const fixMut = useMutation({
+    mutationFn: (id: string) => api.post<any>('/bank-pwd/fix-one', { credentialId: id }),
+    onSuccess: (r: any) => { setRes(r); setPhase('trying'); setRevealCount(0); },
+    onError: (e: any) => { setRes({ ok: false, status: 'error', error: e?.message }); setPhase('done'); },
+  });
+
+  // Modal ochilganда fix-one chaqiramiz
+  useEffect(() => {
+    if (credentialId) { setPhase('testing'); setRes(null); setRevealCount(0); fixMut.mutate(credentialId); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [credentialId]);
+
+  // Urinishlarni ketma-ket ochamiz (animatsiya)
+  useEffect(() => {
+    if (phase !== 'trying' || !res) return;
+    const shown = res.status === 'fixed' ? res.foundAt : res.total;
+    if (revealCount >= shown) { const t = setTimeout(() => setPhase('done'), 400); return () => clearTimeout(t); }
+    const t = setTimeout(() => setRevealCount((c) => c + 1), 420);
+    return () => clearTimeout(t);
+  }, [phase, res, revealCount]);
+
+  useEffect(() => { if (phase === 'done' && res?.status === 'fixed') onFixed(); /* eslint-disable-next-line */ }, [phase]);
+
+  const total = res?.total || 0;
+  const foundAt = res?.foundAt || 0;
+
+  return (
+    <Dialog open={!!credentialId} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white">
+          <DialogTitle className="text-[15px] font-bold flex items-center gap-2"><KeyRound className="h-5 w-5" /> Avtomat parol topish</DialogTitle>
+          <DialogDescription className="text-white/80 text-[12px] mt-0.5">{res?.label ? `${res.label} · ${res.bank}` : 'Ulanish tekshirilyapti…'}</DialogDescription>
+        </div>
+        <div className="p-6 space-y-3">
+          {phase === 'testing' && (
+            <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300 text-[13px] py-4">
+              <RefreshCw className="h-5 w-5 animate-spin text-amber-500" /> Parol xato aniqlandi — taxminiy parollarni sinayapman…
+            </div>
+          )}
+
+          {(phase === 'trying' || phase === 'done') && res?.status === 'no-candidates' && (
+            <div className="flex items-start gap-2 text-[13px] text-slate-600 dark:text-slate-300 py-2">
+              <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+              <div>Bu bank uchun taxminiy parol qo&apos;shilmagan. Yuqoridagi <b>🔑 icon</b> (7779) orqali parollarni sozlang.</div>
+            </div>
+          )}
+
+          {(phase === 'trying' || phase === 'done') && res?.status === 'error' && (
+            <div className="flex items-center gap-2 text-[13px] text-rose-600 py-2"><AlertCircle className="h-5 w-5" /> Xato: {res.error}</div>
+          )}
+
+          {(phase === 'trying' || phase === 'done') && (res?.status === 'fixed' || res?.status === 'not-fixed') && (
+            <div className="space-y-1.5">
+              {Array.from({ length: total }).slice(0, revealCount).map((_, i) => {
+                const idx = i + 1;
+                const isSuccess = res.status === 'fixed' && idx === foundAt;
+                return (
+                  <div key={i} className="flex items-center gap-2 text-[13px] animate-in fade-in slide-in-from-left-2 duration-200">
+                    {isSuccess
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      : <AlertCircle className="h-4 w-4 text-rose-400 shrink-0" />}
+                    <span className="font-mono text-slate-500 dark:text-slate-400">Parol #{idx}</span>
+                    <span className={cn('ml-auto text-[12px] font-semibold', isSuccess ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500')}>
+                      {isSuccess ? 'to\'g\'ri ✓' : 'xato'}
+                    </span>
+                  </div>
+                );
+              })}
+              {phase === 'done' && res.status === 'fixed' && (
+                <div className="mt-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-200 dark:ring-emerald-900 p-3 flex items-center gap-2.5">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                  <div className="text-[13px] text-emerald-800 dark:text-emerald-300"><b>Parol topildi va almashtirildi!</b> ({foundAt}-urinishda). Telegram guruhga xabar berildi.</div>
+                </div>
+              )}
+              {phase === 'done' && res.status === 'not-fixed' && (
+                <div className="mt-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-200 dark:ring-rose-900 p-3 flex items-center gap-2.5">
+                  <AlertCircle className="h-5 w-5 text-rose-600 shrink-0" />
+                  <div className="text-[13px] text-rose-800 dark:text-rose-300">Hech bir taxminiy parol ishlamadi ({total} ta sinaldi). Yangi parolni qo&apos;shing.</div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="pt-1 flex justify-end">
+            <Button variant="outline" size="sm" onClick={onClose}>Yopish</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

@@ -89,55 +89,58 @@ export class BankPwdService {
     return this.getConfig(body.password);
   }
 
-  // ─── Parolni sinab topish (ketma-ket) ─────────────────────────────
+  /** Bitta credential uchun taxminiy parollarni ketma-ket sinaydi, ishlaganini o'rnatadi. */
+  private async tryOneCredential(c: any, bankCands: string[]): Promise<{ status: 'fixed' | 'not-fixed' | 'no-candidates'; total: number; foundAt: number }> {
+    const label = c.label || c.loginName || c.id;
+    const bankName = c.bank?.name || '—';
+    if (!bankCands.length || !c.bank?.apiBaseUrl) return { status: 'no-candidates', total: bankCands.length, foundAt: 0 };
+    const login = (c.loginPrefix || '') + c.loginName;
+    for (let i = 0; i < bankCands.length; i++) {
+      try {
+        const r: any = await this.kb.apiLogin({ baseUrl: c.bank.apiBaseUrl, login, password: bankCands[i], useProxy: c.useProxy === true });
+        if (r?.sid || (r?.clients && r.clients.length)) {
+          await this.prisma.bankCredential.update({
+            where: { id: c.id },
+            data: {
+              passwordEnc: this.crypto.encrypt(bankCands[i]),
+              lastError: null,
+              lastVerifiedAt: new Date(),
+              ...(r.sid ? { sid: r.sid, sidExpiresAt: new Date(Date.now() + 30 * 60 * 1000) } : {}),
+            },
+          });
+          await this.notify(label, bankName);
+          this.log.log(`Bank parol topildi: ${label} (${bankName}) — ${i + 1}-urinishda`);
+          return { status: 'fixed', total: bankCands.length, foundAt: i + 1 };
+        }
+      } catch { /* keyingi parolni sinaymiz */ }
+    }
+    return { status: 'not-fixed', total: bankCands.length, foundAt: 0 };
+  }
+
+  // ─── Parolni sinab topish — OMMAVIY (7779, xato bergan barcha / tanlangan) ──
   async tryCandidates(body: { password?: string; credentialId?: string }) {
     this.assertGate(body?.password);
     const candidates = await this.getCandidates();
-
-    // Nishon: berilgan credential YOKI hozir xato bergan (lastError) barchasi
     const creds = body.credentialId
       ? await this.prisma.bankCredential.findMany({ where: { id: body.credentialId }, include: { bank: true } })
       : await this.prisma.bankCredential.findMany({ where: { lastError: { not: null } }, include: { bank: true } });
-
-    const results: Array<{ label: string; bank: string; status: 'fixed' | 'not-fixed' | 'no-candidates'; tried?: number }> = [];
+    const results: Array<{ label: string; bank: string; status: string; tried: number }> = [];
     let fixedCount = 0;
-
     for (const c of creds) {
-      const label = c.label || c.loginName || c.id;
-      const bankName = c.bank?.name || '—';
-      const bankCands = candidates[c.bankId] || [];
-      if (!bankCands.length) { results.push({ label, bank: bankName, status: 'no-candidates' }); continue; }
-      if (!c.bank?.apiBaseUrl) { results.push({ label, bank: bankName, status: 'no-candidates' }); continue; }
-
-      const login = (c.loginPrefix || '') + c.loginName;
-      let fixed = false;
-      let tried = 0;
-      for (const pwd of bankCands) {
-        tried++;
-        try {
-          const r: any = await this.kb.apiLogin({ baseUrl: c.bank.apiBaseUrl, login, password: pwd, useProxy: c.useProxy === true });
-          if (r?.sid || (r?.clients && r.clients.length)) {
-            await this.prisma.bankCredential.update({
-              where: { id: c.id },
-              data: {
-                passwordEnc: this.crypto.encrypt(pwd),
-                lastError: null,
-                lastVerifiedAt: new Date(),
-                ...(r.sid ? { sid: r.sid, sidExpiresAt: new Date(Date.now() + 30 * 60 * 1000) } : {}),
-              },
-            });
-            await this.notify(label, bankName);
-            this.log.log(`Bank parol topildi: ${label} (${bankName}) — ${tried}-urinishda`);
-            results.push({ label, bank: bankName, status: 'fixed', tried });
-            fixedCount++;
-            fixed = true;
-            break;
-          }
-        } catch { /* keyingi parolni sinaymiz */ }
-      }
-      if (!fixed) results.push({ label, bank: bankName, status: 'not-fixed', tried });
+      const r = await this.tryOneCredential(c, candidates[c.bankId] || []);
+      if (r.status === 'fixed') fixedCount++;
+      results.push({ label: c.label || c.loginName || c.id, bank: c.bank?.name || '—', status: r.status, tried: r.foundAt || r.total });
     }
     return { ok: true, fixed: fixedCount, total: creds.length, results };
+  }
+
+  // ─── Bitta ulanish (Tekshirish xato berganда — 7779 kerakmas, faqat ruxsat) ──
+  async fixOne(credentialId: string) {
+    const c = await this.prisma.bankCredential.findUnique({ where: { id: credentialId }, include: { bank: true } });
+    if (!c) return { ok: false, status: 'not-found' as const, total: 0, foundAt: 0 };
+    const candidates = await this.getCandidates();
+    const r = await this.tryOneCredential(c, candidates[c.bankId] || []);
+    return { ok: true, label: c.label || c.loginName || c.id, bank: c.bank?.name || '—', ...r };
   }
 
   // ─── Telegram xabar (parol o'zgardi) ──────────────────────────────

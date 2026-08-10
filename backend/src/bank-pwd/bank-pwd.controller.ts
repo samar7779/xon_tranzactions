@@ -36,4 +36,11 @@ export class BankPwdController {
   try(@Body() body: { password?: string; credentialId?: string }) {
     return this.svc.tryCandidates(body || {});
   }
+
+  @Post('fix-one')
+  @RequirePermissions(PERMISSIONS.CREDENTIALS_MANAGE)
+  @ApiOperation({ summary: 'Bitta ulanish parolini taxminiylardan topib almashtirish (Tekshirish xato bergani uchun — 7779 kerakmas)' })
+  fixOne(@Body() body: { credentialId: string }) {
+    return this.svc.fixOne(body?.credentialId);
+  }
 }
