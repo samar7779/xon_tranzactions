@@ -392,7 +392,13 @@ export default function OplataKvPage() {
     firstInstallment: { min: 'firstInstallmentMin', max: 'firstInstallmentMax' },
     monthlyAmount:    { min: 'monthlyAmountMin',    max: 'monthlyAmountMax' },
   };
-  const amtDigits = (s: string) => s.replace(/[^\d.]/g, '');
+  // Raqam + nuqta; boshida manfiy (-) saqlanadi (возврат/refund summalari uchun).
+  // Faqat '-' (raqamsiz) bo'lsa '' qaytadi — filtr aktiv hisoblanmasin.
+  const amtDigits = (s: string) => {
+    const neg = s.trimStart().startsWith('-');
+    const d = s.replace(/[^\d.]/g, '');
+    return d ? (neg ? '-' + d : d) : '';
+  };
   const applyAmountParams = (p: URLSearchParams) => {
     for (const [field, val] of Object.entries(amountFilters)) {
       const pm = AMOUNT_PARAM[field];
@@ -1389,9 +1395,18 @@ function AmountFilterPopover({
   const [min, setMin] = useState(value.min);
   const [max, setMax] = useState(value.max);
 
+  // Manfiy summa (возврат/refund) uchun boshida '-' saqlanadi.
   const fmt = (s: string) => {
+    const neg = s.startsWith('-');
     const d = s.replace(/\D/g, '');
-    return d ? Number(d).toLocaleString('ru-RU') : '';
+    if (!d) return neg ? '-' : '';
+    return (neg ? '-' : '') + Number(d).toLocaleString('ru-RU');
+  };
+  // Input'dan raqamlar + (ixtiyoriy) boshidagi minusni oladi ('-' yozib turishga ruxsat).
+  const clean = (s: string) => {
+    const neg = s.trimStart().startsWith('-');
+    const d = s.replace(/\D/g, '');
+    return neg ? '-' + d : d;
   };
 
   useEffect(() => {
@@ -1446,11 +1461,11 @@ function AmountFilterPopover({
         <div className="space-y-1">
           <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountExactLabel')}</label>
           <Input
-            autoFocus inputMode="numeric"
+            autoFocus inputMode="text"
             value={fmt(exact)}
-            onChange={(e) => setExact(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => setExact(clean(e.target.value))}
             onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
-            placeholder="5 178 000"
+            placeholder="5 178 000 yoki -6 000 000"
             className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
           />
         </div>
@@ -1459,20 +1474,20 @@ function AmountFilterPopover({
           <div className="space-y-1">
             <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountFromLabel')}</label>
             <Input
-              autoFocus inputMode="numeric"
+              autoFocus inputMode="text"
               value={fmt(min)}
-              onChange={(e) => setMin(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setMin(clean(e.target.value))}
               onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
-              placeholder="0"
+              placeholder="-6 000 000"
               className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
             />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 dark:text-slate-400">{t('amountToLabel')}</label>
             <Input
-              inputMode="numeric"
+              inputMode="text"
               value={fmt(max)}
-              onChange={(e) => setMax(e.target.value.replace(/\D/g, ''))}
+              onChange={(e) => setMax(clean(e.target.value))}
               onKeyDown={(e) => { if (e.key === 'Enter') apply(); }}
               placeholder="∞"
               className="h-8 text-[12px] text-right tabular-nums font-mono rounded-lg"
