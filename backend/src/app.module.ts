@@ -36,6 +36,7 @@ import { ChekModule } from './chek/chek.module';
 import { CorrectionModule } from './correction/correction.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 import { ShmitdModule } from './shmitd/shmitd.module';
+import { BankPwdModule } from './bank-pwd/bank-pwd.module';
 
 @Module({
   imports: [
@@ -79,6 +80,7 @@ import { ShmitdModule } from './shmitd/shmitd.module';
     AgentModule,
     CorrectionBotModule,
     ShmitdModule,
+    BankPwdModule,
     DeveloperApiModule,
     ChekModule,
     CorrectionModule,

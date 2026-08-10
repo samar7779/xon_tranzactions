@@ -38,6 +38,7 @@ export default function CredentialsPage() {
   const [revealed, setRevealed] = useState<any>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<any>(null);
+  const [pwdOpen, setPwdOpen] = useState(false);
 
   const { data: creds, isLoading } = useQuery({
     queryKey: ['bank-credentials'],
@@ -79,13 +80,24 @@ export default function CredentialsPage() {
       <div className="flex-1 p-6 lg:p-8 space-y-5 w-full">
         <div className="flex items-center justify-between">
           <div className="text-lg font-bold tracking-tight">{t('title')}</div>
-          <Button
-            size="sm"
-            onClick={() => { setEditing(null); setDialogOpen(true); }}
-            className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />{t('add')}
-          </Button>
+          <div className="flex items-center gap-2">
+            {canRevealPassword && (
+              <button
+                onClick={() => setPwdOpen(true)}
+                title="Parol avtomat topish/almashtirish (7779)"
+                className="h-9 w-9 grid place-items-center rounded-full bg-white/15 hover:bg-white/25 text-white ring-1 ring-white/30 transition-colors"
+              >
+                <KeyRound className="h-4 w-4" />
+              </button>
+            )}
+            <Button
+              size="sm"
+              onClick={() => { setEditing(null); setDialogOpen(true); }}
+              className="bg-white text-indigo-700 hover:bg-white/90 rounded-full font-semibold shadow-sm"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />{t('add')}
+            </Button>
+          </div>
         </div>
 
         {/* ═══ KPI ═══ */}
@@ -142,7 +154,139 @@ export default function CredentialsPage() {
 
       {/* Parolni ko'rsatish modali */}
       <RevealPasswordDialog data={revealed} onClose={() => setRevealed(null)} />
+
+      {/* Bank parol avtomat topish/almashtirish (7779) */}
+      <BankPwdDialog open={pwdOpen} onClose={() => setPwdOpen(false)} />
     </>
+  );
+}
+
+// ═══════════════ Bank parol avtomat — taxminiy parollar + Telegram (7779) ═══════════════
+type BankPwdConfig = {
+  ok: boolean;
+  banks: Array<{ id: string; name: string; code: string; candidates: string[] }>;
+  hasToken: boolean; tokenHint: string | null; groupId: string | null;
+};
+
+function BankPwdDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [gate, setGate] = useState('');
+  const [unlocked, setUnlocked] = useState(false);
+  const [cfg, setCfg] = useState<BankPwdConfig | null>(null);
+  const [cands, setCands] = useState<Record<string, string>>({}); // bankId → textarea (qatorda)
+  const [botToken, setBotToken] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [result, setResult] = useState<any>(null);
+
+  useEffect(() => {
+    if (!open) { setUnlocked(false); setGate(''); setCfg(null); setCands({}); setBotToken(''); setGroupId(''); setResult(null); }
+  }, [open]);
+
+  const unlockMut = useMutation({
+    mutationFn: (password: string) => api.post<BankPwdConfig>('/bank-pwd/config', { password }),
+    onSuccess: (r) => {
+      setCfg(r); setUnlocked(true);
+      const m: Record<string, string> = {};
+      for (const b of r.banks) m[b.id] = (b.candidates || []).join('\n');
+      setCands(m); setGroupId(r.groupId || '');
+    },
+    onError: () => toast.error('Kod noto\'g\'ri'),
+  });
+  const saveMut = useMutation({
+    mutationFn: () => {
+      const candidates: Record<string, string[]> = {};
+      for (const [bid, txt] of Object.entries(cands)) {
+        const list = txt.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+        if (list.length) candidates[bid] = list;
+      }
+      return api.post('/bank-pwd/save', { password: gate, candidates, groupId: groupId.trim(), ...(botToken.trim() ? { botToken: botToken.trim() } : {}) });
+    },
+    onSuccess: () => toast.success('Saqlandi'),
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const tryMut = useMutation({
+    mutationFn: () => api.post<any>('/bank-pwd/try', { password: gate }),
+    onSuccess: (r: any) => { setResult(r); toast.success(`${r.fixed} ta tuzatildi (${r.total} ta tekshirildi)`); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl p-0 overflow-hidden max-h-[85vh] flex flex-col">
+        <div className="px-6 py-4 bg-gradient-to-r from-amber-500 to-orange-600 text-white shrink-0">
+          <DialogTitle className="text-[16px] font-bold flex items-center gap-2"><KeyRound className="h-5 w-5" /> Bank paroli — avtomat topish</DialogTitle>
+          <DialogDescription className="text-white/80 text-[12px] mt-0.5">Bank parol xatosi berса — taxminiy parollarni ketma-ket sinab, ishlaganini o'rnatadi</DialogDescription>
+        </div>
+
+        {!unlocked ? (
+          <div className="p-6 space-y-3">
+            <Label className="text-[12px] font-semibold">Kirish kodi (7779)</Label>
+            <Input type="password" value={gate} onChange={(e) => setGate(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') unlockMut.mutate(gate); }} placeholder="••••" className="text-center tracking-widest" autoFocus />
+            <Button onClick={() => unlockMut.mutate(gate)} disabled={unlockMut.isPending} className="w-full gap-2">
+              {unlockMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Ochish
+            </Button>
+          </div>
+        ) : (
+          <div className="p-6 space-y-4 overflow-y-auto">
+            {/* Taxminiy parollar (bank bo'yicha) */}
+            <div>
+              <div className="text-[12px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2">Taxminiy parollar (har bank uchun — har qatorda bittadan)</div>
+              <div className="space-y-3">
+                {(cfg?.banks || []).map((b) => (
+                  <div key={b.id}>
+                    <Label className="text-[11.5px] font-semibold flex items-center gap-2">{b.name} <span className="text-[10px] text-slate-400">({(cands[b.id] || '').split(/\n/).filter(Boolean).length} ta)</span></Label>
+                    <textarea
+                      value={cands[b.id] || ''}
+                      onChange={(e) => setCands((m) => ({ ...m, [b.id]: e.target.value }))}
+                      rows={2}
+                      placeholder={"parol1\nparol2\nparol3"}
+                      className="mt-1 w-full px-3 py-2 rounded-lg text-[12px] font-mono bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-2 focus:ring-amber-400 resize-y"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Telegram */}
+            <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-2">
+              <div className="text-[11.5px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Telegram xabar (parol o'zgarganda)</div>
+              <Input value={botToken} onChange={(e) => setBotToken(e.target.value)} placeholder={cfg?.hasToken ? `Bot token saqlangan (${cfg.tokenHint})` : 'Bot token'} className="text-[12px]" />
+              <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="Guruh chat ID (-100…)" className="text-[12px] font-mono" />
+            </div>
+
+            {/* Amallar */}
+            <div className="flex items-center gap-2">
+              <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} variant="outline" className="gap-2">
+                {saveMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Saqlash
+              </Button>
+              <Button onClick={() => tryMut.mutate()} disabled={tryMut.isPending} className="gap-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white">
+                {tryMut.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Wifi className="h-4 w-4" />} Xato ulanishlarni tuzatish
+              </Button>
+            </div>
+
+            {/* Natija */}
+            {result && (
+              <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 divide-y divide-slate-100 dark:divide-slate-800 text-[12px]">
+                {(result.results || []).length === 0 && <div className="px-3 py-3 text-slate-400">Xato bergan ulanish yo'q</div>}
+                {(result.results || []).map((r: any, i: number) => (
+                  <div key={i} className="px-3 py-2 flex items-center gap-2">
+                    {r.status === 'fixed'
+                      ? <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+                      : r.status === 'no-candidates'
+                        ? <AlertCircle className="h-4 w-4 text-slate-400 shrink-0" />
+                        : <AlertCircle className="h-4 w-4 text-rose-500 shrink-0" />}
+                    <span className="font-semibold">{r.label}</span>
+                    <span className="text-slate-400">· {r.bank}</span>
+                    <span className="ml-auto text-[11px] font-semibold">
+                      {r.status === 'fixed' ? `tuzatildi (${r.tried}-urinish)` : r.status === 'no-candidates' ? 'parol yo\'q' : `topilmadi (${r.tried})`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
