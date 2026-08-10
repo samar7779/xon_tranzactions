@@ -209,6 +209,39 @@ export class OplataKvService {
     }
   }
 
+  // ─── crm_status backfill — virtual_status hali tekshirilmagan (NULL) shartnomalarni
+  //     CRM'dan asta to'ldiradi. Konvergent: har shartnoma tekshirilgach '' yoki qiymat
+  //     bo'ladi (NULL emas), shu bois qayta olinmaydi va ish tugagach cron bo'sh yuradi.
+  private crmStatusBackfillRunning = false;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async crmStatusBackfillTick() {
+    if (this.crmStatusBackfillRunning) return;
+    this.crmStatusBackfillRunning = true;
+    try {
+      const batch = await this.prisma.crmContract.findMany({
+        where: { found: true, virtualStatus: null },
+        select: { contractNumber: true },
+        take: 120,
+      });
+      if (batch.length === 0) return; // konvergensiya — qiladigan ish yo'q
+
+      // Cheklangan konkurentlik — CRM'ni bo'kmaslik (6 tadan ketma-ket chunk)
+      const CONC = 6;
+      for (let i = 0; i < batch.length; i += CONC) {
+        const chunk = batch.slice(i, i + CONC);
+        await Promise.allSettled(
+          chunk.map((c) => this.crmCache.refreshVirtualStatus(c.contractNumber)),
+        );
+      }
+      this.log.log(`crm_status backfill: ${batch.length} shartnoma yangilandi (bu tsikl)`);
+    } catch (e: any) {
+      this.log.warn(`crm_status backfill xato: ${e?.message}`);
+    } finally {
+      this.crmStatusBackfillRunning = false;
+    }
+  }
+
   // ─── Preview cache (in-memory) ───────────────────────────
   // Foydalanuvchi katta Excel yuklasa → avval tekshiramiz va cache'da turamiz.
   // Foydalanuvchi tasdiqlasa → cache'dan o'qib bazaga qo'shamiz.
@@ -652,26 +685,17 @@ export class OplataKvService {
     const cns = Array.from(new Set(items.map((i) => (i.contractNo || '').toUpperCase()).filter(Boolean)));
     const crmRows = cns.length
       ? await this.prisma.crmContract.findMany({
-          where: { contractNumber: { in: cns }, found: true },
+          where: { contractNumber: { in: cns }, found: true, virtualStatus: { not: null } },
           select: { contractNumber: true, virtualStatus: true },
         })
       : [];
+    // Faqat haqiqiy (bo'sh bo'lmagan) status. '' = "tekshirildi, status yo'q" → ko'rsatilmaydi.
+    // Hali tekshirilmagan (NULL) shartnomalarni crmStatusBackfillTick cron to'ldiradi.
     const crmStatusMap = new Map<string, string>();
-    const needRefresh: string[] = [];
     for (const c of crmRows) {
-      if (c.virtualStatus == null) {
-        // Hali CRM'dan tekshirilmagan (eski qator) — fonda to'ldiramiz
-        needRefresh.push(c.contractNumber);
-      } else if (c.virtualStatus.trim()) {
+      if (c.virtualStatus && c.virtualStatus.trim()) {
         crmStatusMap.set(c.contractNumber.toUpperCase(), c.virtualStatus);
       }
-    }
-    // Ekrandagi hali tekshirilmagan shartnomalarni fonda CRM'dan yangilaymiz (throttled,
-    // kutmasdan). Bir marta — keyingi lookup'da virtualStatus '' yoki qiymat bo'ladi.
-    if (needRefresh.length) {
-      const batch = needRefresh.slice(0, 20);
-      Promise.allSettled(batch.map((cn) => this.crmCache.lookup(cn)))
-        .catch(() => { /* ignore — fon jarayoni */ });
     }
 
     const itemsWithStatus = items.map((i) => ({

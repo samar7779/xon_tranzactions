@@ -127,7 +127,7 @@ export class CrmContractCacheService {
         // bir marta yangilaymiz. Tekshirilgach virtualStatus '' yoki qiymat bo'ladi
         // (null EMAS), shu bois takror so'ralmaydi.
         if (cached.found && cached.virtualStatus == null) {
-          this.refreshInBackground(cached.contractNumber).catch(() => { /* ignore */ });
+          this.refreshVirtualStatus(cached.contractNumber).catch(() => { /* ignore */ });
         }
         return toCached(cached);
       }
@@ -226,15 +226,9 @@ export class CrmContractCacheService {
             64,
           );
           // virtual_status (Бартер, Ипотека, Наличные...) — CRM'dan.
-          // MUHIM: CRM tekshirilib status topilmasa '' (bo'sh string) qaytaramiz — null EMAS.
-          //   null  = hali CRM'dan tekshirilmagan (eski qatorlar) → lookup uni fonda yangilaydi.
-          //   ''    = tekshirildi, virtual_status yo'q → qayta-qayta so'ramaymiz.
-          const virtualStatus = (() => {
-            const vs = detail?.virtual_status?.value?.name || detail?.virtual_status?.name || detail?.virtual_status;
-            if (!vs) return '';
-            const s = typeof vs === 'object' ? (vs.ru || vs.uz || null) : String(vs);
-            return s ? trunc(s, 64) : '';
-          })();
+          // Topilmasa '' (null EMAS) — "tekshirildi" belgisi, qayta-qayta so'ramaymiz.
+          //   null  = hali CRM'dan tekshirilmagan (eski qator) → backfill/lookup uni yangilaydi.
+          const virtualStatus = extractVirtualStatus(detail);
           const contractKey = trunc(v.toUpperCase(), 128) as string;
 
           const saved = await this.prisma.crmContract.upsert({
@@ -329,6 +323,34 @@ export class CrmContractCacheService {
     } catch {
       // ignore — log allaqachon yozilgan
     }
+  }
+
+  /**
+   * crm_status backfill uchun — FAQAT virtual_status'ni CRM'dan yangilaydi (awaitable).
+   * fetchFromCrmAndCache'dan farqi: CRM javob bermasa found=true qatorni BUZMAYDI
+   * (found=false qilmaydi). Konvergensiya uchun har holda NULL'dan chiqaradi:
+   *   - /show topsa → haqiqiy qiymat (yoki '' status yo'q bo'lsa)
+   *   - /show bermasa → '' (keyingi 24h stale-refresh haqiqiy qiymat bilan to'ldiradi)
+   */
+  async refreshVirtualStatus(contractNumber: string): Promise<void> {
+    const key = String(contractNumber || '')
+      .replace(/№/g, '').replace(/N°/g, '').replace(/\s+/g, '').trim().toUpperCase();
+    if (!key) return;
+    const variants = contractVariants(key).slice(0, 4);
+    let vs: string | null = null;
+    for (const v of variants) {
+      try {
+        const res: any = await this.crm.show({ contract: v });
+        const detail: any = res?.detail;
+        if (res?.ok && detail) { vs = extractVirtualStatus(detail); break; }
+      } catch { /* keyingi variant */ }
+    }
+    try {
+      await this.prisma.crmContract.updateMany({
+        where: { contractNumber: { in: contractVariants(key).slice(0, 8) }, found: true },
+        data: { virtualStatus: vs ?? '' },
+      });
+    } catch { /* ignore */ }
   }
 
   // ───────────── crm_order_id backfill (mavjud shartnomalar uchun) ─────────────
@@ -513,6 +535,19 @@ function toCached(row: any): CachedContract {
 /**
  * CRM javobining keshlanadigan qismi (juda katta JSON'ni saqlamaslik uchun).
  */
+/**
+ * CRM detail'idan virtual_status (Бартер, Ипотека, Наличные...) ni ajratib oladi.
+ * Topilmasa '' qaytaradi (null EMAS) — "tekshirildi, status yo'q" belgisi.
+ * DB VarChar(64) chegarasiga qisqartiradi.
+ */
+function extractVirtualStatus(detail: any): string {
+  const vs = detail?.virtual_status?.value?.name || detail?.virtual_status?.name || detail?.virtual_status;
+  if (!vs) return '';
+  const s = typeof vs === 'object' ? (vs.ru || vs.uz || vs.uzc || null) : String(vs);
+  if (!s) return '';
+  return s.length > 64 ? s.slice(0, 64) : s;
+}
+
 function pickSnapshot(detail: any): any {
   if (!detail) return null;
   return {
