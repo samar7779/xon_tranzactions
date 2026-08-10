@@ -90,9 +90,9 @@ export default function CredentialsPage() {
               <button
                 onClick={() => setPwdOpen(true)}
                 title="Parol avtomat topish/almashtirish (7779)"
-                className="h-9 w-9 grid place-items-center rounded-full bg-white/15 hover:bg-white/25 text-white ring-1 ring-white/30 transition-colors"
+                className="h-9 px-3 grid grid-flow-col items-center gap-1.5 rounded-full bg-amber-500 hover:bg-amber-600 text-white font-semibold text-[12.5px] shadow-sm shadow-amber-500/30 transition-colors"
               >
-                <KeyRound className="h-4 w-4" />
+                <KeyRound className="h-4 w-4" /> Parol avtomat
               </button>
             )}
             <Button
