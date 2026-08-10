@@ -176,6 +176,10 @@ export class ListOplataKvDto {
   @IsOptional() @IsString()
   sources?: string;
 
+  @ApiPropertyOptional({ description: "CRM statuslar (virtual_status, vergul bilan): Бартер,Ипотека... '__none__' = bo'sh/XATO" })
+  @IsOptional() @IsString()
+  crmStatuses?: string;
+
   @ApiPropertyOptional({ description: "Faqat XATO qatorlar: 'true' bo'lsa CRM da topilmaganlar ko'rsatiladi" })
   @IsOptional() @IsString()
   xatoOnly?: string;

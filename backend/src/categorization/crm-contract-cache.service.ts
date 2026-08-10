@@ -123,6 +123,12 @@ export class CrmContractCacheService {
       const stale = cached.found ? age > STALE_AFTER_MS : age > NOT_FOUND_RETRY_AFTER_MS;
 
       if (!stale) {
+        // crm_status hali tekshirilmagan (eski, feature'dan oldingi qator) — fonda
+        // bir marta yangilaymiz. Tekshirilgach virtualStatus '' yoki qiymat bo'ladi
+        // (null EMAS), shu bois takror so'ralmaydi.
+        if (cached.found && cached.virtualStatus == null) {
+          this.refreshInBackground(cached.contractNumber).catch(() => { /* ignore */ });
+        }
         return toCached(cached);
       }
       // Eskirgan + found=false → SINXRON yangilab ko'ramiz (CRM ma'lumoti yangilangan bo'lishi mumkin)
@@ -219,18 +225,28 @@ export class CrmContractCacheService {
             detail.id != null ? String(detail.id) : (detail.order_id != null ? String(detail.order_id) : null),
             64,
           );
+          // virtual_status (Бартер, Ипотека, Наличные...) — CRM'dan.
+          // MUHIM: CRM tekshirilib status topilmasa '' (bo'sh string) qaytaramiz — null EMAS.
+          //   null  = hali CRM'dan tekshirilmagan (eski qatorlar) → lookup uni fonda yangilaydi.
+          //   ''    = tekshirildi, virtual_status yo'q → qayta-qayta so'ramaymiz.
+          const virtualStatus = (() => {
+            const vs = detail?.virtual_status?.value?.name || detail?.virtual_status?.name || detail?.virtual_status;
+            if (!vs) return '';
+            const s = typeof vs === 'object' ? (vs.ru || vs.uz || null) : String(vs);
+            return s ? trunc(s, 64) : '';
+          })();
           const contractKey = trunc(v.toUpperCase(), 128) as string;
 
           const saved = await this.prisma.crmContract.upsert({
             where: { contractNumber: contractKey },
             create: {
               contractNumber: contractKey,
-              customerName, status, objectName, apartmentNumber, phone, crmOrderId,
+              customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
               rawSnapshot: pickSnapshot(detail),
               found: true,
             },
             update: {
-              customerName, status, objectName, apartmentNumber, phone, crmOrderId,
+              customerName, status, virtualStatus, objectName, apartmentNumber, phone, crmOrderId,
               rawSnapshot: pickSnapshot(detail),
               found: true,
               lastVerifiedAt: new Date(),
@@ -263,6 +279,8 @@ export class CrmContractCacheService {
               contractNumber: contractKey,
               customerName: hit.clientFullName || null,
               status: hit.status ? String(hit.status).toLowerCase().slice(0, 128) : null,
+              // /index virtual_status bermaydi → '' (tekshirildi belgisi; qayta so'ramaymiz)
+              virtualStatus: '',
               objectName: hit.object ? String(hit.object).slice(0, 255) : null,
               apartmentNumber: hit.apartmentNumber ? String(hit.apartmentNumber).slice(0, 64) : null,
               crmOrderId: hit.id != null ? String(hit.id).slice(0, 64) : null,
@@ -501,6 +519,7 @@ function pickSnapshot(detail: any): any {
     id: detail.id ?? detail.order_id ?? null,
     contract: detail.contract,
     status: detail.status,
+    virtual_status: detail.virtual_status ?? null,
     total_amount: detail.total_amount,
     object_name: detail.object_name,
     apartment_number: detail.apartment_number,

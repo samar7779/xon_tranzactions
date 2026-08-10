@@ -66,6 +66,7 @@ interface OplataKvItem {
   importBatchId?: string | null;
   sourceTxId?: string | null;
   crmXato?: boolean;
+  crmStatus?: string | null;  // CRM virtual_status (Бартер, Ипотека...) — XATO bo'lsa bo'sh
   contractSource?: 'manual' | 'ariza' | null;  // Tranzaksiyada qanday qo'yilgan
   perereboskaGroupId?: string | null;
   perereboskaFileName?: string | null;
@@ -104,6 +105,18 @@ const CATEGORY_CLS: Record<Category, string> = {
   FIRST:   'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900',
   GENERAL: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 ring-violet-200 dark:ring-violet-900',
 };
+
+// crm_status (virtual_status) badge rangi — Бартер ajralib tursin
+function crmStatusCls(status: string): string {
+  const s = status.toLowerCase();
+  if (s.includes('бартер') || s.includes('barter'))
+    return 'bg-fuchsia-50 dark:bg-fuchsia-950/40 text-fuchsia-700 dark:text-fuchsia-300 ring-fuchsia-200 dark:ring-fuchsia-900';
+  if (s.includes('ипотек') || s.includes('ipotek'))
+    return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900';
+  if (s.includes('налич') || s.includes('naqd'))
+    return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900';
+  return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700';
+}
 
 // dd.mm.yyyy formatda chiqarish
 function fmtDateRu(iso: string | null | undefined): string {
@@ -346,6 +359,7 @@ export default function OplataKvPage() {
     paymentMethod:   'paymentMethods',
     txType:          'txTypes',
     source:          'sources',
+    crmStatus:       'crmStatuses',
   };
 
   // columnFilters Set object — JSON serialization uchun
@@ -743,6 +757,11 @@ export default function OplataKvPage() {
                     setColumnFilters={setColumnFilters}
                     openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
                     activeFilterParams={activeFilterParams} />
+                  <ColumnTh label="crm_status" column="crmStatus"
+                    filterMode={columnFilterMode} columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    openFilterColumn={openFilterColumn} setOpenFilterColumn={setOpenFilterColumn}
+                    activeFilterParams={activeFilterParams} />
                   <ColumnTh label={t('columnManba')} column="source"
                     filterMode={columnFilterMode} columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}
@@ -754,13 +773,13 @@ export default function OplataKvPage() {
               <tbody>
                 {listQuery.isLoading && Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i} className="border-t border-slate-100 dark:border-slate-700">
-                    {Array.from({ length: 10 }).map((__, j) => (
+                    {Array.from({ length: 11 }).map((__, j) => (
                       <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-full" /></td>
                     ))}
                   </tr>
                 ))}
                 {!listQuery.isLoading && items.length === 0 && (
-                  <tr><td colSpan={10} className="p-12 text-center text-slate-400 dark:text-slate-500">
+                  <tr><td colSpan={11} className="p-12 text-center text-slate-400 dark:text-slate-500">
                     {t('noRowsFound')}
                   </td></tr>
                 )}
@@ -826,6 +845,13 @@ export default function OplataKvPage() {
                     </td>
                     <td className="px-3 py-2.5 max-w-[200px] truncate" title={it.object || ''}>{it.object || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
                     <td className="px-3 py-2.5">{it.txType || <span className="text-slate-400 dark:text-slate-500">—</span>}</td>
+                    <td className="px-3 py-2.5">
+                      {it.crmStatus ? (
+                        <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold ring-1 whitespace-nowrap', crmStatusCls(it.crmStatus))}>
+                          {it.crmStatus}
+                        </span>
+                      ) : <span className="text-slate-400 dark:text-slate-500">—</span>}
+                    </td>
                     <td className="px-3 py-2.5">
                       <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ring-1 whitespace-nowrap', SOURCE_CLS[src])}>
                         {SOURCE_LABEL_KEY[src] ? t(SOURCE_LABEL_KEY[src]!) : 'Excel'}
@@ -2512,6 +2538,7 @@ function OplataKvDetailDialog({
             <DetailRow icon={<CreditCard className="h-4 w-4" />} label="Способ оплаты" value={row.paymentMethod} />
             <DetailRow icon={<FileText className="h-4 w-4" />}   label="Назначение"    value={row.purpose} multiline />
             <DetailRow icon={<TagIcon className="h-4 w-4" />}    label="Тип"           value={row.txType} />
+            <DetailRow icon={<TagIcon className="h-4 w-4" />}    label="crm_status"    value={row.crmStatus ?? null} />
             <DetailRow icon={<FileText className="h-4 w-4" />}   label="Примечание"    value={row.note} multiline />
           </div>
 

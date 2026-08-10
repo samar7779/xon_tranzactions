@@ -515,6 +515,7 @@ model CrmContract {
   contractNumber  String   @id @map("contract_number") @db.VarChar(128) // Transaction bilan teng
   customerName    String?  @map("customer_name") @db.Text // uzun org nomlari uchun
   status          String?  @db.VarChar(128)
+  virtualStatus   String?  @map("virtual_status") @db.VarChar(64) // CRM virtual_status (Бартер, Ипотека...)
   objectName      String?  @map("object_name") @db.VarChar(255)
   apartmentNumber String?  @map("apartment_number") @db.VarChar(64)
   phone           String?  @db.VarChar(64)

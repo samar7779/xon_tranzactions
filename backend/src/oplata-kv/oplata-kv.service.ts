@@ -383,6 +383,56 @@ export class OplataKvService {
   }
 
   /**
+   * crm_status (virtual_status) bo'yicha OplataKv filtri.
+   * CSV: "Бартер,Ипотека" — CrmContract.virtualStatus IN → contractNo IN.
+   * '__none__' marker — crm_status bo'sh qatorlar (found=false yoki virtual_status yo'q):
+   *   contractNo NOT IN (virtualStatus bor bo'lgan barcha shartnomalar).
+   * CRM-verified qatorda OplataKv.contractNo === CrmContract.contractNumber (kanonik),
+   * shu bois aniq `in`/`notIn` ishlaydi.
+   */
+  private async buildCrmStatusFilter(csv: string): Promise<Prisma.OplataKvWhereInput | null> {
+    const wanted = csv.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!wanted.length) return null;
+
+    const wantNone = wanted.some((w) => w === '__none__');
+    const named = wanted.filter((w) => w !== '__none__');
+
+    // Barcha virtual_status'li shartnomalar (bo'sh filtri uchun ham kerak).
+    // '' (bo'sh string) = "tekshirildi, status yo'q" — bu ham "bo'sh" hisoblanadi.
+    const withStatusRaw = await this.prisma.crmContract.findMany({
+      where: { found: true, virtualStatus: { not: null } },
+      select: { contractNumber: true, virtualStatus: true },
+    });
+    const withStatus = withStatusRaw.filter((c) => c.virtualStatus && c.virtualStatus.trim());
+
+    if (wantNone && named.length === 0) {
+      // Faqat "bo'sh" — haqiqiy status'li barcha shartnomalarni chiqarib tashlaymiz
+      const allWithStatus = withStatus.map((c) => c.contractNumber);
+      return { contractNo: { notIn: allWithStatus } };
+    }
+
+    // Tanlangan statuslarga mos shartnomalar (case-insensitive taqqoslash)
+    const namedLc = new Set(named.map((s) => s.toLowerCase()));
+    const matchNos = withStatus
+      .filter((c) => c.virtualStatus && namedLc.has(c.virtualStatus.toLowerCase()))
+      .map((c) => c.contractNumber);
+
+    if (!wantNone) {
+      // Faqat nomli statuslar — hech biri mos kelmasa hech nima chiqmasin
+      return { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } };
+    }
+
+    // Nomli statuslar + bo'sh — ikkalasi (OR)
+    const allWithStatus = withStatus.map((c) => c.contractNumber);
+    return {
+      OR: [
+        { contractNo: { in: matchNos.length ? matchNos : ['__no_match__'] } },
+        { contractNo: { notIn: allWithStatus } },
+      ],
+    };
+  }
+
+  /**
    * Hozir XATO bo'lgan oplata_kv qatorlarining DISTINCT shartnoma raqamlari.
    * "Qayta tekshirish" shu ro'yxatni CRM'ga tekshiradi — butun DB'даги 5000+
    * eski found=false qatorni emas, faqat haqiqiy XATO to'lovlarning shartnomalarini.
@@ -561,6 +611,16 @@ export class OplataKvService {
       else where.AND = [xatoFilter];
     }
 
+    // ─── crm_status (virtual_status) filtri — vergul bilan ko'p tanlov ───
+    // '__none__' = crm_status bo'sh (XATO yoki virtual_status yo'q).
+    if (q.crmStatuses && q.crmStatuses.trim()) {
+      const crmFilter = await this.buildCrmStatusFilter(q.crmStatuses);
+      if (crmFilter) {
+        if (where.AND) (where.AND as any[]).push(crmFilter);
+        else where.AND = [crmFilter];
+      }
+    }
+
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
     const orderBy: Prisma.OplataKvOrderByWithRelationInput = { [sortBy]: sortDir } as any;
@@ -586,10 +646,39 @@ export class OplataKvService {
     // XATO logikasi: faqat manual va ariza emas bo'lgan unverified contractlar XATO bo'ladi.
     // (Excel eksport bilan bir xil bo'lishi uchun umumiy helper — computeContractXato)
     const { isXato, sourceOf } = await this.computeContractXato(items);
+
+    // crm_status (virtual_status: Бартер, Ипотека...) — CrmContract keshidan, contractNo bo'yicha.
+    // Faqat CRM'da topilган (found=true) shartnomalar uchun; XATO'да bo'sh qoladi.
+    const cns = Array.from(new Set(items.map((i) => (i.contractNo || '').toUpperCase()).filter(Boolean)));
+    const crmRows = cns.length
+      ? await this.prisma.crmContract.findMany({
+          where: { contractNumber: { in: cns }, found: true },
+          select: { contractNumber: true, virtualStatus: true },
+        })
+      : [];
+    const crmStatusMap = new Map<string, string>();
+    const needRefresh: string[] = [];
+    for (const c of crmRows) {
+      if (c.virtualStatus == null) {
+        // Hali CRM'dan tekshirilmagan (eski qator) — fonda to'ldiramiz
+        needRefresh.push(c.contractNumber);
+      } else if (c.virtualStatus.trim()) {
+        crmStatusMap.set(c.contractNumber.toUpperCase(), c.virtualStatus);
+      }
+    }
+    // Ekrandagi hali tekshirilmagan shartnomalarni fonda CRM'dan yangilaymiz (throttled,
+    // kutmasdan). Bir marta — keyingi lookup'da virtualStatus '' yoki qiymat bo'ladi.
+    if (needRefresh.length) {
+      const batch = needRefresh.slice(0, 20);
+      Promise.allSettled(batch.map((cn) => this.crmCache.lookup(cn)))
+        .catch(() => { /* ignore — fon jarayoni */ });
+    }
+
     const itemsWithStatus = items.map((i) => ({
       ...i,
       crmXato: isXato(i),
       contractSource: sourceOf(i),  // 'manual' | 'ariza' | null
+      crmStatus: crmStatusMap.get((i.contractNo || '').toUpperCase()) || null,
     }));
 
     return {
@@ -3130,6 +3219,15 @@ export class OplataKvService {
       else where.AND = [xatoFilter];
     }
 
+    // crm_status filtri — list bilan bir xil
+    if (q.crmStatuses && q.crmStatuses.trim()) {
+      const crmFilter = await this.buildCrmStatusFilter(q.crmStatuses);
+      if (crmFilter) {
+        if (where.AND) (where.AND as any[]).push(crmFilter);
+        else where.AND = [crmFilter];
+      }
+    }
+
     const sortBy = q.sortBy || 'date';
     const sortDir: 'asc' | 'desc' = q.sortDir || 'desc';
     return this.prisma.oplataKv.findMany({
@@ -3231,6 +3329,26 @@ export class OplataKvService {
         ? fixed.filter((v) => v.name.toLowerCase().includes(search.toLowerCase()))
         : fixed;
       return { ok: true, values: filtered };
+    }
+
+    // crm_status ustun — CrmContract.virtualStatus (Бартер, Ипотека...) + bo'sh
+    if (column === 'crmStatus') {
+      const rows = await this.prisma.crmContract.findMany({
+        where: { found: true, virtualStatus: { not: null } },
+        select: { virtualStatus: true },
+        distinct: ['virtualStatus'],
+        take: 100,
+      });
+      let values: Array<{ id: string; name: string }> = rows
+        .map((r) => r.virtualStatus)
+        .filter((v): v is string => !!v)
+        .map((v) => ({ id: v, name: v }));
+      values.push({ id: '__none__', name: "— (bo'sh)" });
+      if (search) {
+        const s = search.toLowerCase();
+        values = values.filter((v) => v.name.toLowerCase().includes(s));
+      }
+      return { ok: true, values };
     }
 
     const field = COLUMN_TO_FIELD[column];
