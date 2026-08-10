@@ -168,6 +168,7 @@ export default function CrmPage() {
   const statusKey = detail?.status?.key || '';
   const statusName = detail?.status?.value?.name?.[apiLang] || statusKey || '—';
   const statusTone = STATUS_TONE[statusKey] || { cls: 'bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700', dot: 'bg-slate-400' };
+  const virtualStatusName = (detail as any)?.virtual_status?.value?.name?.[apiLang] || (detail as any)?.virtual_status?.value?.name?.ru || null;
 
   const initialTotal = detail?.initial?.total || {};
   const monthlyTotal = detail?.monthly?.total || {};
@@ -448,13 +449,20 @@ export default function CrmPage() {
                       <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-slate-400 dark:text-slate-500">{t('contractNumber')}</div>
                       <div className="font-mono text-base font-bold tabular-nums text-violet-700 dark:text-violet-300">{activeContract}</div>
                     </div>
-                    <span className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset',
-                      statusTone.cls,
-                    )}>
-                      <span className={cn('w-1.5 h-1.5 rounded-full', statusTone.dot)} />
-                      {statusName}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      {virtualStatusName && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold text-white bg-slate-700 dark:bg-slate-600">
+                          {virtualStatusName}
+                        </span>
+                      )}
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ring-1 ring-inset',
+                        statusTone.cls,
+                      )}>
+                        <span className={cn('w-1.5 h-1.5 rounded-full', statusTone.dot)} />
+                        {statusName}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </Card>
