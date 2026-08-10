@@ -286,17 +286,18 @@ function VznosFormDialog({ open, onClose, row, objects }: { open: boolean; onClo
     onSuccess: (r) => {
       setCrmChecked({ found: r.found });
       if (r.found) {
+        // CRM ma'lumoti bilan ALMASHTIRAMIZ (eski shartnoma qiymatlari qolib ketmasin)
         setF((p: any) => ({
           ...p,
-          fullName: p.fullName || r.fullName || '',
-          projectName: p.projectName || r.projectName || '',
-          apartmentNo: p.apartmentNo || r.apartmentNo || '',
-          floor: p.floor || r.floor || '',
-          block: p.block || r.block || '',
-          apartmentArea: p.apartmentArea || (r.apartmentArea ?? ''),
-          terraceArea: p.terraceArea || (r.terraceArea ?? ''),
-          contractDate: p.contractDate || r.contractDate || '',
-          contractValue: p.contractValue || (r.contractValue ?? ''),
+          fullName: r.fullName || '',
+          projectName: r.projectName || '',
+          apartmentNo: r.apartmentNo || '',
+          floor: r.floor || '',
+          block: r.block || '',
+          apartmentArea: r.apartmentArea ?? '',
+          terraceArea: r.terraceArea ?? '',
+          contractDate: r.contractDate || '',
+          contractValue: r.contractValue ?? '',
         }));
         toast.success("CRM'da topildi — ma'lumot tortildi");
       } else toast("CRM'da yo'q — to'liq qo'lda kiriting");
