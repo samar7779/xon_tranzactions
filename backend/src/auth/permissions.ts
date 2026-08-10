@@ -45,6 +45,10 @@ export const PERMISSIONS = {
   CHANGED_TXN_VIEW: 'changed_txn:view',                         // Sahifani ochish + ro'yxat
   CHANGED_TXN_CHECK: 'changed_txn:check',                       // Qo'lda re-verify ishga tushirish
 
+  // Tranzaksiyalar — "Взнос от имени клиента" tab (o'z shartnomalarimiz reestri)
+  VZNOS_VIEW: 'vznos:view',                                     // Tab'ni ochish + ro'yxat + kartalar
+  VZNOS_MANAGE: 'vznos:manage',                                 // Qo'shish / tahrirlash / o'chirish / bekor qilish
+
   // ОплатыКв
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',                           // Yangi qator qo'shish
@@ -201,6 +205,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_FIX, label: 'Sverka\'da sana/yozuv tuzatish' },
           { value: PERMISSIONS.CHANGED_TXN_VIEW, label: 'O\'zgargan to\'lovlar tab — ko\'rish' },
           { value: PERMISSIONS.CHANGED_TXN_CHECK, label: 'O\'zgargan to\'lovlar — qo\'lda tekshirish (sana oralig\'i)' },
+          { value: PERMISSIONS.VZNOS_VIEW, label: 'Взнос от имени клиента tab — ko\'rish' },
+          { value: PERMISSIONS.VZNOS_MANAGE, label: 'Взнос от имени клиента — qo\'shish/tahrirlash/o\'chirish/bekor' },
         ],
       },
       {

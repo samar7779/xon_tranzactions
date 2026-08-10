@@ -28,6 +28,7 @@ import { ImportModule } from './import/import.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { XonpayModule } from './xonpay/xonpay.module';
 import { OplataKvModule } from './oplata-kv/oplata-kv.module';
+import { VznosModule } from './vznos/vznos.module';
 import { GoogleExportModule } from './google-export/google-export.module';
 import { AgentModule } from './agent/agent.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
@@ -69,6 +70,7 @@ import { ShmitdModule } from './shmitd/shmitd.module';
     CounterpartiesModule,
     SverkaTelegramModule,
     CategorizationModule,
+    VznosModule,
     ImportModule,
     AttachmentsModule,
     XonpayModule,

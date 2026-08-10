@@ -31,6 +31,9 @@ export const PERMS = {
   CHANGED_TXN_VIEW: 'changed_txn:view',
   CHANGED_TXN_CHECK: 'changed_txn:check',
 
+  VZNOS_VIEW: 'vznos:view',
+  VZNOS_MANAGE: 'vznos:manage',
+
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',
   OPLATAKV_EDIT: 'oplatakv:edit',

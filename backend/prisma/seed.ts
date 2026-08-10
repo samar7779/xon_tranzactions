@@ -31,6 +31,7 @@ const ALL_PERMS = [
   'counterparties:view', 'counterparties:manage',
   'categories:view', 'categories:manage',
   'oplatakv:view', 'oplatakv:manage',
+  'vznos:view', 'vznos:manage',
   'export:view', 'export:run', 'export:manage', 'export:download', 'export:autsourcing',
   'agent:view', 'agent:manage',
 ];

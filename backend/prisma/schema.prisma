@@ -1027,6 +1027,48 @@ model PerereboskaGroup {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// VZNOS CONTRACT — "Взнос от имени клиента": bizning O'Z shartnomalarimiz
+// reestri (o'zimiz to'laydiganlar). CRM'da ko'pincha yo'q. Shu ro'yxatdagi
+// shartnoma raqami bo'yicha tushgan to'lovlar tushum sifatida sanalmaydi —
+// kategoriyasi CLIENT_VZNOS_IMENI ("Взнос от имени клиента"). Туланган сумма
+// = OplataKv qatorlaridan hisoblanadi (contractNo bo'yicha).
+// ─────────────────────────────────────────────────────────────────
+model VznosContract {
+  id            String    @id @default(cuid())
+  contractNo    String    @map("contract_no") @db.VarChar(50) // шартнома №
+  projectName   String?   @map("project_name") @db.VarChar(255) // Лойиха (obyekt nomi)
+  contractDate  DateTime? @map("contract_date") @db.Date // шартнома санаси
+  contractValue Decimal?  @map("contract_value") @db.Decimal(15, 2) // шартнома киймати
+  fullName      String?   @map("full_name") @db.VarChar(255) // ФИШ
+  apartmentArea Decimal?  @map("apartment_area") @db.Decimal(10, 2) // хонадоннинг умумий майдони
+  apartmentNo   String?   @map("apartment_no") @db.VarChar(50) // хонадоннинг тартиб рақами
+  floor         String?   @db.VarChar(20) // кават
+  block         String?   @db.VarChar(50) // блок
+  terraceArea   Decimal?  @map("terrace_area") @db.Decimal(10, 2) // терраса майдони
+  comment       String?   @db.Text // Коммент
+
+  inCrm  Boolean @default(false) @map("in_crm") // CRM'da topilganmi (qo'shishда)
+  status String  @default("active") @db.VarChar(20) // active / cancelled
+
+  // Bekor qilish → to'lovlarni boshqa shartnomaga o'tkazish (переброскаga o'xshash)
+  cancelledAt          DateTime? @map("cancelled_at")
+  cancelledById        String?   @map("cancelled_by_id") @db.VarChar(50)
+  cancelledByName      String?   @map("cancelled_by_name") @db.VarChar(190)
+  cancelReason         String?   @map("cancel_reason") @db.Text
+  transferToContractNo String?   @map("transfer_to_contract_no") @db.VarChar(50) // qaysi shartnomaga o'tkazildi
+
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdById   String?  @map("created_by_id") @db.VarChar(50)
+  createdByName String?  @map("created_by_name") @db.VarChar(190)
+
+  @@index([contractNo])
+  @@index([status])
+  @@index([projectName])
+  @@map("vznos_contract")
+}
+
+// ─────────────────────────────────────────────────────────────────
 // OPLATA KV — OBJECT NAME MAPPING (CRM → OplatyKv)
 // CRM dan "XON SAROY AFSONASI" kelsa, OplatyKv'ga "АФСОНА" deb yoziladi
 // ─────────────────────────────────────────────────────────────────
