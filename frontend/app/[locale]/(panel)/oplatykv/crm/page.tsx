@@ -94,10 +94,13 @@ export default function CrmPage() {
     staleTime: 30_000,
   });
   const suggestions = (suggData?.items || []) as Array<any>;
-  // Yuklangan shartnoma joriy so'rovga teng bo'lsa — dropdown yashiriladi (aks holda
-  // detal topilib turса ham taklif qidiruvi "topilmadi" deб chalg'itadi).
+  // Dropdown FAQAT taklif bor yoki yuklanayotган bo'lsa ko'rinadi. Bo'sh "topilmadi"
+  // holati chiqmaydi — chunki /crm/show exact shartnomani topsa ham, alohida taklif
+  // qidiruvi topmasligi mumkin (bu chalg'itardi). Yuklangan shartnoma so'rovga teng
+  // bo'lса ham yashiriladi.
   const showDropdown = focused && debouncedQ.length >= 3
-    && activeContract.trim().toUpperCase() !== debouncedQ.trim().toUpperCase();
+    && activeContract.trim().toUpperCase() !== debouncedQ.trim().toUpperCase()
+    && (suggesting || suggestions.length > 0);
 
   function pushRecent(contract: string) {
     const next = [contract, ...recent.filter((x) => x !== contract)].slice(0, 8);
