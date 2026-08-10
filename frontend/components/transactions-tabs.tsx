@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { BadgeDollarSign, FileSpreadsheet, Scale, AlertOctagon } from 'lucide-react';
+import { BadgeDollarSign, FileSpreadsheet, Scale, AlertOctagon, HandCoins } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useHasPermission } from '@/lib/auth';
 import { PERMS } from '@/lib/permissions';
@@ -20,12 +20,14 @@ export function TransactionsTabs() {
   const canSeeStatement = useHasPermission(PERMS.TRANSACTIONS_VIPISKA_VIEW);
   const canSeeCheck = useHasPermission(PERMS.TRANSACTIONS_SVERKA_VIEW);
   const canSeeChanges = useHasPermission(PERMS.CHANGED_TXN_VIEW);
+  const canSeeVznos = useHasPermission(PERMS.VZNOS_VIEW);
 
   const tabs = [
     { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  label: null as string | null, show: canSeeTransactions },
     { href: '/statement',    key: 'statement',    icon: FileSpreadsheet,  label: null as string | null, show: canSeeStatement },
     { href: '/check',        key: 'check',        icon: Scale,            label: null as string | null, show: canSeeCheck },
     { href: '/changes',      key: 'changes',      icon: AlertOctagon,     label: null as string | null, show: canSeeChanges },
+    { href: '/vznos',        key: 'vznos',        icon: HandCoins,        label: 'Взнос от имени клиента', show: canSeeVznos },
   ].filter((tab) => tab.show);
 
   return (
