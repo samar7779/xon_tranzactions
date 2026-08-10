@@ -411,6 +411,34 @@ export class CrmContractCacheService {
     return { reset: r.count };
   }
 
+  /**
+   * Allaqachon saqlangan virtual_status qiymatlaridagi mojibake'ni joyida tuzatadi
+   * (CRM'ga urilmasdan). Faqat repair natijasi o'zgargan qatorlar yangilanadi.
+   */
+  async repairExistingVirtualStatuses(): Promise<{ scanned: number; repaired: number }> {
+    const rows = await this.prisma.crmContract.findMany({
+      where: { found: true, virtualStatus: { not: null } },
+      select: { contractNumber: true, virtualStatus: true },
+    });
+    let repaired = 0;
+    for (const r of rows) {
+      const cur = r.virtualStatus || '';
+      if (!cur) continue;
+      const fixed = repairMojibake(cur);
+      if (fixed !== cur) {
+        const val = fixed.length > 64 ? fixed.slice(0, 64) : fixed;
+        try {
+          await this.prisma.crmContract.update({
+            where: { contractNumber: r.contractNumber },
+            data: { virtualStatus: val },
+          });
+          repaired++;
+        } catch { /* ignore */ }
+      }
+    }
+    return { scanned: rows.length, repaired };
+  }
+
   /** crm_status backfill holati — NULL/EMPTY/VALUE sonlari. */
   async virtualStatusStats(): Promise<{ found: number; nullVs: number; emptyVs: number; valueVs: number }> {
     const [found, nullVs, emptyVs] = await Promise.all([
@@ -603,16 +631,48 @@ function toCached(row: any): CachedContract {
 /**
  * CRM javobining keshlanadigan qismi (juda katta JSON'ni saqlamaslik uchun).
  */
+// iconv-lite (mysql2 orqali mavjud) — lazy, yo'q bo'lsa crash bo'lmasin
+let _iconv: any = null;
+function getIconv(): any {
+  if (_iconv === null) {
+    try { _iconv = require('iconv-lite'); } catch { _iconv = false; }
+  }
+  return _iconv || null;
+}
+
 /**
- * CRM detail'idan virtual_status (Бартер, Ипотека, Наличные...) ni ajratib oladi.
+ * Mojibake tuzatish — XonSaroy CRM virtual_status yorliqlarini buzuq saqlagan:
+ * "Сотилди" UTF-8 baytlari CP1251 sifatida o'qilgan → "РЎРѕС‚РёР»РґРё".
+ * Teskarilash: char'larni CP1251 bayt sifatida encode → UTF-8 dekod.
+ * Toza (kirill/lotin to'g'ri) matnni tegmaymiz — repair natijasi U+FFFD bersa rad etamiz.
+ */
+function repairMojibake(s: string): string {
+  if (!s) return s;
+  // Faqat yuqori (U+0080..U+04FF) belgilar bo'lsa mojibake ehtimoli bor
+  let hi = false;
+  for (let i = 0; i < s.length; i++) { const c = s.charCodeAt(i); if (c >= 0x80 && c <= 0x4FF) { hi = true; break; } }
+  if (!hi) return s;
+  const iconv = getIconv();
+  if (!iconv) return s;
+  try {
+    const repaired: string = iconv.decode(iconv.encode(s, 'win1251'), 'utf8');
+    // U+FFFD (replacement char) bo'lsa repair noto'g'ri — asl matnni qoldiramiz
+    if (repaired && repaired !== s && repaired.indexOf(String.fromCharCode(0xFFFD)) === -1) return repaired;
+  } catch { /* ignore */ }
+  return s;
+}
+
+/**
+ * CRM detail'idan virtual_status (Бартер, Ипотека, Наличные, Сотилди...) ni ajratadi.
  * Topilmasa '' qaytaradi (null EMAS) — "tekshirildi, status yo'q" belgisi.
- * DB VarChar(64) chegarasiga qisqartiradi.
+ * CRM yorliqlari mojibake — repairMojibake bilan tuzatiladi. VarChar(64)ga qisqartiradi.
  */
 function extractVirtualStatus(detail: any): string {
   const vs = detail?.virtual_status?.value?.name || detail?.virtual_status?.name || detail?.virtual_status;
   if (!vs) return '';
-  const s = typeof vs === 'object' ? (vs.ru || vs.uz || vs.uzc || null) : String(vs);
+  let s = typeof vs === 'object' ? (vs.ru || vs.uz || vs.uzc || null) : String(vs);
   if (!s) return '';
+  s = repairMojibake(String(s));
   return s.length > 64 ? s.slice(0, 64) : s;
 }
 

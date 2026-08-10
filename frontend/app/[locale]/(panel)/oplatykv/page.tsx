@@ -115,6 +115,10 @@ function crmStatusCls(status: string): string {
     return 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-indigo-200 dark:ring-indigo-900';
   if (s.includes('налич') || s.includes('naqd'))
     return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900';
+  if (s.includes('сотил') || s.includes('sotil') || s.includes('sold') || s.includes('продан'))
+    return 'bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300 ring-green-200 dark:ring-green-900';
+  if (s.includes('бронь') || s.includes('bron') || s.includes('reserv') || s.includes('band'))
+    return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900';
   return 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 ring-slate-200 dark:ring-slate-700';
 }
 

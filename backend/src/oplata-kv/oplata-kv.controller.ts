@@ -80,6 +80,13 @@ export class OplataKvController {
     return this.crmCache.resetEmptyVirtualStatus();
   }
 
+  @Post('crm-status/repair-mojibake')
+  @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
+  @ApiOperation({ summary: 'crm_status mojibake yorliqlarni joyida tuzatish (CRM\'ga urilmasdan)' })
+  crmStatusRepairMojibake() {
+    return this.crmCache.repairExistingVirtualStatuses();
+  }
+
   @Get('export')
   @RequirePermissions(PERMISSIONS.OPLATAKV_VIEW)
   @ApiOperation({ summary: 'Filtr bo\'yicha barcha qatorlarni Excel sifatida yuklab olish' })
