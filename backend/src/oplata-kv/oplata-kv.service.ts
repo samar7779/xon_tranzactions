@@ -725,7 +725,7 @@ export class OplataKvService {
    * Obyektlar bo'yicha to'lovlar yig'indisi — Telegram hisobotidagi kabi:
    * har obyekt uchun Сумма оплаты / 1 взнос / Ойлик, + umumiy ЖАМИ.
    */
-  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean } = {}) {
+  async byObject(opts: { dateFrom?: string; dateTo?: string; mode?: 'normal' | 'refund'; includeSchotchik?: boolean; crmStatuses?: string } = {}) {
     const where: any = {};
     if (opts.dateFrom || opts.dateTo) {
       const range: any = {};
@@ -753,6 +753,12 @@ export class OplataKvService {
       }
       // "Взнос от имени клиента" — mijoz nomidan boshqa odam to'lagan, obyekt tushumiga KIRMAYDI
       where.NOT = { txType: { contains: 'от имени', mode: 'insensitive' } };
+    }
+
+    // crm_status (virtual_status) filtri — tanlangan CRM statusdagi to'lovlar
+    if (opts.crmStatuses && opts.crmStatuses.trim()) {
+      const cf = await this.buildCrmStatusFilter(opts.crmStatuses);
+      if (cf) where.AND = [...(where.AND || []), cf];
     }
 
     // groupBy — Prisma'ning `having` mapped-type'i TS'da circular reference
@@ -942,6 +948,7 @@ export class OplataKvService {
     dateTo?: string;
     mode?: 'normal' | 'refund';
     includeSchotchik?: boolean;
+    crmStatuses?: string;
   }) {
     const where: any = {};
 
@@ -986,6 +993,12 @@ export class OplataKvService {
       }
       // "Взнос от имени клиента" — obyekt tushumiga kirmaydi (byObject summary bilan mos)
       where.NOT = { txType: { contains: 'от имени', mode: 'insensitive' } };
+    }
+
+    // crm_status (virtual_status) filtri — byObject bilan bir xil
+    if (opts.crmStatuses && opts.crmStatuses.trim()) {
+      const cf = await this.buildCrmStatusFilter(opts.crmStatuses);
+      if (cf) where.AND = [...(where.AND || []), cf];
     }
 
     const ROW_CAP = 5000;
@@ -1040,6 +1053,7 @@ export class OplataKvService {
     dateTo?: string;
     mode?: 'normal' | 'refund';
     includeSchotchik?: boolean;
+    crmStatuses?: string;
   }): Promise<{ buffer: Buffer; filename: string }> {
     const { rows, total } = await this.byObjectDetail(opts);
     const isAll = opts.object === '__ALL__';

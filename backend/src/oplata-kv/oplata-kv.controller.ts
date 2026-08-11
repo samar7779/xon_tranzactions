@@ -168,8 +168,9 @@ export class OplataKvController {
     @Query('dateTo') dateTo?: string,
     @Query('mode') mode?: 'normal' | 'refund',
     @Query('includeSchotchik') includeSchotchik?: string,
+    @Query('crmStatuses') crmStatuses?: string,
   ) {
-    return this.svc.byObject({ dateFrom, dateTo, mode, includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true' });
+    return this.svc.byObject({ dateFrom, dateTo, mode, includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true', crmStatuses });
   }
 
   @Get('daily-summary')
@@ -221,6 +222,7 @@ export class OplataKvController {
     @Query('dateTo') dateTo?: string,
     @Query('mode') mode?: 'normal' | 'refund',
     @Query('includeSchotchik') includeSchotchik?: string,
+    @Query('crmStatuses') crmStatuses?: string,
   ) {
     return this.svc.byObjectDetail({
       object,
@@ -228,6 +230,7 @@ export class OplataKvController {
       dateTo,
       mode,
       includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true',
+      crmStatuses,
     });
   }
 
@@ -241,6 +244,7 @@ export class OplataKvController {
     @Query('dateTo') dateTo?: string,
     @Query('mode') mode?: 'normal' | 'refund',
     @Query('includeSchotchik') includeSchotchik?: string,
+    @Query('crmStatuses') crmStatuses?: string,
   ) {
     const { buffer, filename } = await this.svc.byObjectDetailXlsx({
       object,
@@ -248,6 +252,7 @@ export class OplataKvController {
       dateTo,
       mode,
       includeSchotchik: includeSchotchik === '1' || includeSchotchik === 'true',
+      crmStatuses,
     });
     res.set({
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',

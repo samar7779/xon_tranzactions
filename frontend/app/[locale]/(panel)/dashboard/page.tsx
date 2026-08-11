@@ -4,14 +4,15 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useQuery } from '@tanstack/react-query';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Wallet, Building2, BarChart3,
   RefreshCw, TrendingUp, ArrowRight, ChevronRight,
   Activity, AlertTriangle, CheckCircle2, XCircle, Clock,
   Filter, MoreHorizontal, Eye, AlertCircle, Zap, Server,
   Search, Download, ChevronDown, Settings2, Database,
-  Coins, RotateCcw, EyeOff, Pin, Gauge,
+  Coins, RotateCcw, EyeOff, Pin, Gauge, Check, X, SlidersHorizontal,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card, CardContent } from '@/components/ui/card';
@@ -111,6 +112,14 @@ export default function DashboardPage() {
   const [objOpen, setObjOpen] = useState(true);
   const [objMode, setObjMode] = useState<'normal' | 'refund'>('normal');
   const [objInclSchotchik, setObjInclSchotchik] = useState(false);  // "За счетчик" ni hisobga qo'shish
+  const [objCrmStatuses, setObjCrmStatuses] = useState<Set<string>>(new Set());  // CRM status filtri (galochka)
+  const objCrmKey = useMemo(() => Array.from(objCrmStatuses).sort().join(','), [objCrmStatuses]);
+  // CRM status opsiyalari (virtual_status distinct + "— (bo'sh)")
+  const { data: crmStatusOpts } = useQuery({
+    queryKey: ['oplata-distinct-crmStatus'],
+    queryFn: () => api.get<{ ok: boolean; values: Array<{ id: string; name: string }> }>('/oplata-kv/distinct?column=crmStatus'),
+    enabled: has(PERMS.DASHBOARD_OBJECTS),
+  });
   const [objRange, setObjRange] = useState<'today' | '7d' | '30d' | 'custom'>('30d');
   const [objCustomFrom, setObjCustomFrom] = useState('');
   const [objCustomTo, setObjCustomTo] = useState('');
@@ -127,13 +136,14 @@ export default function DashboardPage() {
 
   interface ObjRow { object: string; paymentAmount: number; firstInstallment: number; monthlyAmount: number; count: number }
   const { data: objReport, isLoading: objLoading } = useQuery({
-    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik],
+    queryKey: ['oplata-by-object', objFrom, objTo, objMode, objInclSchotchik, objCrmKey],
     queryFn: () => {
       const p = new URLSearchParams();
       if (objFrom) p.set('dateFrom', objFrom);
       if (objTo) p.set('dateTo', objTo);
       p.set('mode', objMode);
       if (objInclSchotchik) p.set('includeSchotchik', '1');
+      if (objCrmKey) p.set('crmStatuses', objCrmKey);
       return api.get<{ ok: boolean; rows: ObjRow[]; total: ObjRow }>(`/oplata-kv/by-object?${p}`);
     },
     enabled: has(PERMS.DASHBOARD_OBJECTS) && (objRange !== 'custom' || (!!objCustomFrom && !!objCustomTo)),
@@ -442,35 +452,13 @@ export default function DashboardPage() {
               <div className="text-[10px] text-slate-500 dark:text-slate-400 truncate">· {objFrom || '—'} → {objTo || '—'}</div>
             </button>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* "За счетчик" toggle — hisobga счётчик to'lovlarni ham qo'shadi */}
-              <button
-                type="button"
-                aria-pressed={objInclSchotchik}
-                aria-label="За счетчик to'lovlarni hisobga qo'shish"
-                onClick={() => setObjInclSchotchik((v) => !v)}
-                title={objInclSchotchik ? 'За счетчик qo\'shilgan — bosib chiqarish' : 'За счетчик to\'lovlarni ham hisobga qo\'shish'}
-                className={cn(
-                  'inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
-                  objInclSchotchik
-                    ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-500/30'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 hover:text-cyan-600 dark:hover:text-cyan-300',
-                )}
-              >
-                <Gauge className="h-3 w-3" /> За счетчик
-              </button>
-              {/* Возврат toggle — 0 dan kichik (refund) summalar */}
-              <button
-                type="button"
-                onClick={() => setObjMode((m) => (m === 'refund' ? 'normal' : 'refund'))}
-                className={cn(
-                  'inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
-                  objMode === 'refund'
-                    ? 'bg-rose-600 text-white shadow-sm shadow-rose-500/30'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-600 dark:hover:text-rose-300',
-                )}
-              >
-                <RotateCcw className="h-3 w-3" /> Возврат
-              </button>
+              {/* Filtr ikonка — За счётчик / Возврат / CRM status galochkalari shu yerда */}
+              <ObjToolbarFilter
+                mode={objMode} setMode={setObjMode}
+                inclSchotchik={objInclSchotchik} setInclSchotchik={setObjInclSchotchik}
+                crmStatuses={objCrmStatuses} setCrmStatuses={setObjCrmStatuses}
+                crmOptions={crmStatusOpts?.values || []}
+              />
               <span className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-0.5" />
               <RangeBtn active={objRange === 'today'} onClick={() => setObjRange('today')}>{t('rangeToday')}</RangeBtn>
               <RangeBtn active={objRange === '7d'} onClick={() => setObjRange('7d')}>{t('range7d')}</RangeBtn>
@@ -586,6 +574,7 @@ export default function DashboardPage() {
           dateTo={objTo}
           mode={objMode}
           includeSchotchik={objInclSchotchik}
+          crmStatuses={objCrmKey}
           onClose={() => setObjDetail(null)}
         />
         </>)}
@@ -1450,6 +1439,203 @@ function RangeBtn({ active, onClick, children }: { active: boolean; onClick: () 
   );
 }
 
+// Obyektlar hisoboti toolbaridagi filtr — За счётчик / Возврат / CRM status galochkalari
+function ObjToolbarFilter({
+  mode, setMode, inclSchotchik, setInclSchotchik, crmStatuses, setCrmStatuses, crmOptions,
+}: {
+  mode: 'normal' | 'refund';
+  setMode: (m: 'normal' | 'refund') => void;
+  inclSchotchik: boolean;
+  setInclSchotchik: (v: boolean) => void;
+  crmStatuses: Set<string>;
+  setCrmStatuses: (s: Set<string>) => void;
+  crmOptions: Array<{ id: string; name: string }>;
+}) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+
+  const activeCount = (mode === 'refund' ? 1 : 0) + (inclSchotchik ? 1 : 0) + crmStatuses.size;
+
+  const openPop = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); setOpen(true); };
+
+  useEffect(() => {
+    if (!open) return;
+    const repos = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (popRef.current && !popRef.current.contains(target) && btnRef.current && !btnRef.current.contains(target)) setOpen(false);
+    };
+    window.addEventListener('scroll', repos, true);
+    window.addEventListener('resize', repos);
+    document.addEventListener('keydown', onKey);
+    const tm = setTimeout(() => document.addEventListener('mousedown', onClick), 0);
+    return () => {
+      window.removeEventListener('scroll', repos, true);
+      window.removeEventListener('resize', repos);
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('mousedown', onClick);
+      clearTimeout(tm);
+    };
+  }, [open]);
+
+  const toggleStatus = (id: string) => {
+    const next = new Set(crmStatuses);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setCrmStatuses(next);
+  };
+  const clearAll = () => { setMode('normal'); setInclSchotchik(false); setCrmStatuses(new Set()); };
+
+  const width = 288;
+  let left = 0, top = 0;
+  if (rect) {
+    left = rect.right - width;
+    top = rect.bottom + 6;
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1024;
+    if (left < 8) left = 8;
+    if (left + width > vw - 8) left = Math.max(8, vw - width - 8);
+  }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={() => (open ? setOpen(false) : openPop())}
+        title="Filtr — За счётчик / Возврат / CRM status"
+        className={cn(
+          'relative inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
+          activeCount > 0
+            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-300',
+        )}
+      >
+        <SlidersHorizontal className="h-3.5 w-3.5" />
+        Filtr
+        {activeCount > 0 && (
+          <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-white/25 text-white text-[9.5px] font-bold grid place-items-center tabular-nums">
+            {activeCount}
+          </span>
+        )}
+      </button>
+      {open && rect && createPortal(
+        <div
+          ref={popRef}
+          className="z-[9999] bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 rounded-xl shadow-2xl text-slate-700 dark:text-slate-300 normal-case tracking-normal"
+          style={{ position: 'fixed', top, left, width }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100 dark:border-slate-800">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Filtr</span>
+            <button type="button" onClick={() => setOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+
+          <div className="p-2.5 space-y-1">
+            <div className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 px-1 mb-0.5">Rejim</div>
+            <ToggleRow
+              active={inclSchotchik}
+              onClick={() => setInclSchotchik(!inclSchotchik)}
+              icon={<Gauge className="h-3.5 w-3.5" />}
+              label="За счётчик"
+              hint="Счётчик to'lovlarni ham qo'shish"
+              accent="cyan"
+            />
+            <ToggleRow
+              active={mode === 'refund'}
+              onClick={() => setMode(mode === 'refund' ? 'normal' : 'refund')}
+              icon={<RotateCcw className="h-3.5 w-3.5" />}
+              label="Возврат"
+              hint="Faqat manfiy (qaytarilgan) summalar"
+              accent="rose"
+            />
+          </div>
+
+          <div className="px-2.5 pb-1">
+            <div className="flex items-center justify-between px-1 mb-1">
+              <span className="text-[9.5px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">CRM status</span>
+              {crmStatuses.size > 0 && (
+                <button type="button" onClick={() => setCrmStatuses(new Set())} className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline">
+                  Tozalash
+                </button>
+              )}
+            </div>
+            <div className="max-h-52 overflow-y-auto space-y-0.5 pr-0.5">
+              {crmOptions.length === 0 ? (
+                <div className="text-[11px] text-slate-400 dark:text-slate-500 px-1 py-2">Status yo'q</div>
+              ) : crmOptions.map((o) => {
+                const checked = crmStatuses.has(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => toggleStatus(o.id)}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-1.5 py-1.5 rounded-lg text-left transition-colors',
+                      checked ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                    )}
+                  >
+                    <span className={cn(
+                      'w-4 h-4 rounded grid place-items-center ring-1 shrink-0 transition-colors',
+                      checked ? 'bg-indigo-600 ring-indigo-600 text-white' : 'ring-slate-300 dark:ring-slate-600',
+                    )}>
+                      {checked && <Check className="h-3 w-3" />}
+                    </span>
+                    <span className="text-[12px] truncate">{o.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {activeCount > 0 && (
+            <div className="px-2.5 py-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={clearAll}
+                className="w-full h-7 rounded-lg text-[11px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              >
+                Hammasini tozalash
+              </button>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
+function ToggleRow({ active, onClick, icon, label, hint, accent }: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; hint: string;
+  accent: 'cyan' | 'rose';
+}) {
+  const accentBg = accent === 'cyan' ? 'bg-cyan-600' : 'bg-rose-600';
+  const accentText = accent === 'cyan' ? 'text-cyan-600 dark:text-cyan-300' : 'text-rose-600 dark:text-rose-300';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'w-full flex items-center gap-2.5 px-2 py-2 rounded-lg transition-colors text-left',
+        active ? 'bg-slate-50 dark:bg-slate-800/60' : 'hover:bg-slate-50 dark:hover:bg-slate-800/40',
+      )}
+    >
+      <span className={cn('shrink-0', active ? accentText : 'text-slate-400 dark:text-slate-500')}>{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className={cn('block text-[12px] font-semibold', active ? 'text-slate-900 dark:text-slate-100' : 'text-slate-600 dark:text-slate-300')}>{label}</span>
+        <span className="block text-[10px] text-slate-400 dark:text-slate-500 truncate">{hint}</span>
+      </span>
+      <span className={cn('relative w-8 h-[18px] rounded-full transition-colors shrink-0', active ? accentBg : 'bg-slate-300 dark:bg-slate-600')}>
+        <span className={cn('absolute top-[2px] left-[2px] w-3.5 h-3.5 rounded-full bg-white shadow transition-transform', active && 'translate-x-3.5')} />
+      </span>
+    </button>
+  );
+}
+
 function Mini({ label, value, tone }: { label: string; value: number; tone: 'emerald' | 'amber' | 'rose' | 'blue' }) {
   const c = {
     emerald: { dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
@@ -1487,13 +1673,14 @@ interface ObjDetailRow {
 }
 
 function ObjectDetailDialog({
-  object, dateFrom, dateTo, mode, includeSchotchik, onClose,
+  object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses, onClose,
 }: {
   object: string | null;
   dateFrom: string;
   dateTo: string;
   mode: 'normal' | 'refund';
   includeSchotchik: boolean;
+  crmStatuses?: string;
   onClose: () => void;
 }) {
   const t = useTranslations('dashboard');
@@ -1501,7 +1688,7 @@ function ObjectDetailDialog({
   const isAll = object === '__ALL__';
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik],
+    queryKey: ['oplata-by-object-detail', object, dateFrom, dateTo, mode, includeSchotchik, crmStatuses],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set('object', object || '');
@@ -1509,6 +1696,7 @@ function ObjectDetailDialog({
       if (dateTo) p.set('dateTo', dateTo);
       p.set('mode', mode);
       if (includeSchotchik) p.set('includeSchotchik', '1');
+      if (crmStatuses) p.set('crmStatuses', crmStatuses);
       return api.get<{
         ok: boolean; object: string; count: number; truncated?: boolean;
         rows: ObjDetailRow[];
@@ -1529,6 +1717,7 @@ function ObjectDetailDialog({
       if (dateTo) p.set('dateTo', dateTo);
       p.set('mode', mode);
       if (includeSchotchik) p.set('includeSchotchik', '1');
+      if (crmStatuses) p.set('crmStatuses', crmStatuses);
       const safe = (object === '—' ? 'obyektsiz' : object).replace(/[^\wа-яёА-ЯЁa-zA-Z0-9]+/g, '_').slice(0, 40);
       await apiDownload(`/oplata-kv/by-object-detail/export?${p.toString()}`, `obyekt-${safe}.xlsx`);
     } catch {
