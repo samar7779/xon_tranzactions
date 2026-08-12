@@ -49,8 +49,9 @@ export const PERMISSIONS = {
   VZNOS_VIEW: 'vznos:view',                                     // Tab'ni ochish + ro'yxat + kartalar
   VZNOS_MANAGE: 'vznos:manage',                                 // Qo'shish / tahrirlash / o'chirish / bekor qilish
 
-  // Tranzaksiyalar — "Chek order" tab (memorial order → tranzaksiyada bor-yo'qligini tekshirish)
-  CHEKORDER_VIEW: 'chekorder:view',                             // Tab'ni ochish + tarix + natijalar
+  // Chek order — alohida sahifa (memorial order → tranzaksiyada bor-yo'qligini tekshirish)
+  CHEKORDER_VIEW: 'chekorder:view',                             // Sahifani ochish + natijalar
+  CHEKORDER_HISTORY: 'chekorder:history',                       // "Tarix" sub-tab — o'tgan tekshiruvlar
   CHEKORDER_MANAGE: 'chekorder:manage',                         // Order yuklash/tekshirish + o'chirish
 
   // ОплатыКв
@@ -211,8 +212,6 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.CHANGED_TXN_CHECK, label: 'O\'zgargan to\'lovlar — qo\'lda tekshirish (sana oralig\'i)' },
           { value: PERMISSIONS.VZNOS_VIEW, label: 'Взнос от имени клиента tab — ko\'rish' },
           { value: PERMISSIONS.VZNOS_MANAGE, label: 'Взнос от имени клиента — qo\'shish/tahrirlash/o\'chirish/bekor' },
-          { value: PERMISSIONS.CHEKORDER_VIEW, label: 'Chek order tab — ko\'rish + tarix' },
-          { value: PERMISSIONS.CHEKORDER_MANAGE, label: 'Chek order — order yuklash/tekshirish/o\'chirish' },
         ],
       },
       {
@@ -226,6 +225,15 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.OPLATAKV_IMPORT, label: 'Excel\'dan import' },
           { value: PERMISSIONS.OPLATAKV_SPLIT, label: 'Split / Re-split (1-vznos vs oylik)' },
           { value: PERMISSIONS.OPLATAKV_SYNC, label: 'Hozir sync (tranzaksiyalardan)' },
+        ],
+      },
+      {
+        name: 'Chek order',
+        description: 'Memorial order / kvitansiya → tranzaksiyada tekshirish',
+        items: [
+          { value: PERMISSIONS.CHEKORDER_VIEW, label: 'Sahifani ochish + tekshirish natijalari' },
+          { value: PERMISSIONS.CHEKORDER_HISTORY, label: 'Tarix sub-tab — o\'tgan tekshiruvlar' },
+          { value: PERMISSIONS.CHEKORDER_MANAGE, label: 'Order yuklash/tekshirish + o\'chirish' },
         ],
       },
     ],

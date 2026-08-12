@@ -32,7 +32,7 @@ const ALL_PERMS = [
   'categories:view', 'categories:manage',
   'oplatakv:view', 'oplatakv:manage',
   'vznos:view', 'vznos:manage',
-  'chekorder:view', 'chekorder:manage',
+  'chekorder:view', 'chekorder:history', 'chekorder:manage',
   'export:view', 'export:run', 'export:manage', 'export:download', 'export:autsourcing',
   'agent:view', 'agent:manage',
 ];

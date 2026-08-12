@@ -76,6 +76,7 @@ export default function ChekOrderPage() {
   const qc = useQueryClient();
   const canManage = useHasPermission(PERMS.CHEKORDER_MANAGE);
   const canView = useHasPermission(PERMS.CHEKORDER_VIEW);
+  const canHistory = useHasPermission(PERMS.CHEKORDER_HISTORY);
 
   const [view, setView] = useState<'check' | 'history'>('check');
   const [mode, setMode] = useState<'upload' | 'manual' | 'contract'>('upload');
@@ -123,9 +124,9 @@ export default function ChekOrderPage() {
     queryFn: () => api.get<{ items: HistoryRow[]; total: number; pageCount: number; stats: { found: number; mismatch: number; not_found: number } }>(
       `/chek-order?result=${hResult}&q=${encodeURIComponent(hQ)}&page=${hPage}`,
     ),
-    enabled: canView,
+    enabled: canHistory,
   });
-  const refreshHistory = () => qc.invalidateQueries({ queryKey: ['chek-order-history'] });
+  const refreshHistory = () => { if (canHistory) qc.invalidateQueries({ queryKey: ['chek-order-history'] }); };
 
   const analyzeMut = useMutation({
     mutationFn: (f: File) => { const fd = new FormData(); fd.append('file', f); return api.postForm<{ results: OrderResult[] }>('/chek-order/analyze', fd, { timeout: 120_000 }); },
@@ -213,8 +214,10 @@ export default function ChekOrderPage() {
         <div className="flex items-end justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-1">
             <SubTab active={view === 'check'} onClick={() => setView('check')} icon={<ClipboardList className="h-4 w-4" />} label="Tekshirish" />
-            <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label="Tarix"
-              badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
+            {canHistory && (
+              <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label="Tarix"
+                badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
+            )}
           </div>
           {(preview || results) && canManage && view === 'check' && (
             <button onClick={reset}

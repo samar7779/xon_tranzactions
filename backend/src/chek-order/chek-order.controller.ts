@@ -56,8 +56,8 @@ export class ChekOrderController {
   }
 
   @Get()
-  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
-  @ApiOperation({ summary: 'Chek order tarixi' })
+  @RequirePermissions(PERMISSIONS.CHEKORDER_HISTORY)
+  @ApiOperation({ summary: 'Chek order tarixi (Tarix sub-tab)' })
   list(@Query() q: ListChekOrderDto) {
     return this.svc.list(q);
   }
