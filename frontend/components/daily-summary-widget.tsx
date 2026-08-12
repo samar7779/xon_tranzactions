@@ -67,6 +67,8 @@ export function DailySummaryWidget() {
   const topObjects = data?.topObjects || [];
   const seriesMax = Math.max(1, ...series.map((s) => s.total));
   const topMax = Math.max(1, ...topObjects.map((o) => o.amount));
+  // "Bugun" rejimida solishtirish shu vaqtgacha (backend kechani createdAt bo'yicha cheklaydi).
+  const ySub = mode === 'today' ? t('dsumVsYesterdayNow') : t('dsumVsYesterday');
 
   return (
     <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
@@ -97,12 +99,19 @@ export function DailySummaryWidget() {
             <div className="py-10 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-slate-400" /></div>
           ) : (
             <>
-              {/* KPI kartalar — kun + kecha bilan solishtirish */}
+              {/* KPI kartalar — kun + kecha bilan solishtirish.
+                  "Bugun" rejimida solishtirish VAQT-ADOLATLI: kecha ham xuddi shu vaqtgacha olinadi. */}
+              {mode === 'today' && (
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 dark:text-slate-500">
+                  <CalendarCheck2 className="h-3 w-3 shrink-0" />
+                  <span>{t('dsumTimeAwareNote')}</span>
+                </div>
+              )}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-                <Kpi icon={Wallet} label={t('dsumTotal')} value={mask(day.total)} delta={pctDelta(day.total, prevDay.total)} tone="emerald" sub={t('dsumVsYesterday')} />
-                <Kpi icon={Coins} label={t('dsumFirst')} value={mask(day.first)} delta={pctDelta(day.first, prevDay.first)} tone="amber" sub={t('dsumVsYesterday')} />
-                <Kpi icon={Repeat} label={t('dsumMonthly')} value={mask(day.monthly)} delta={pctDelta(day.monthly, prevDay.monthly)} tone="sky" sub={t('dsumVsYesterday')} />
-                <Kpi icon={Hash} label={t('dsumCount')} value={String(day.count)} delta={pctDelta(day.count, prevDay.count)} tone="violet" sub={t('dsumVsYesterday')} />
+                <Kpi icon={Wallet} label={t('dsumTotal')} value={mask(day.total)} delta={pctDelta(day.total, prevDay.total)} tone="emerald" sub={ySub} />
+                <Kpi icon={Coins} label={t('dsumFirst')} value={mask(day.first)} delta={pctDelta(day.first, prevDay.first)} tone="amber" sub={ySub} />
+                <Kpi icon={Repeat} label={t('dsumMonthly')} value={mask(day.monthly)} delta={pctDelta(day.monthly, prevDay.monthly)} tone="sky" sub={ySub} />
+                <Kpi icon={Hash} label={t('dsumCount')} value={String(day.count)} delta={pctDelta(day.count, prevDay.count)} tone="violet" sub={ySub} />
               </div>
 
               {/* Oy boshidan + trend + top obyekt */}

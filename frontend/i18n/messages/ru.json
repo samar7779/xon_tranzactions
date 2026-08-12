@@ -424,6 +424,8 @@
     "dsumCount": "Платежи",
     "dsumMtd": "С начала месяца",
     "dsumVsYesterday": "вчера",
+    "dsumVsYesterdayNow": "вчера · на это время",
+    "dsumTimeAwareNote": "Сегодня до текущего времени ↔ вчера до этого же времени",
     "dsumVsMonth": "прошл. мес.",
     "dsumTrend": "Тренд 14 дней",
     "dsumTopObjects": "Топ объекты",

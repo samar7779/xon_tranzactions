@@ -808,10 +808,18 @@ export class OplataKvService {
     day.setHours(12, 0, 0, 0);
     const shift = (offset: number) => { const d = new Date(day); d.setDate(d.getDate() + offset); return d; };
 
+    // oplata_kv.date — DATE-only (vaqtsiz), shu bois vaqtni FAQAT createdAt (yozib
+    // olingan vaqt) beradi. Tanlangan kun BUGUN bo'lsa — kechani xuddi shu vaqtgacha
+    // (createdAt) cheklab, adolatli solishtiramiz (bugun hozirgacha ↔ kecha shu vaqtgacha).
+    const now = new Date();
+    const isToday = fmt(day) === fmt(now);
+
     const baseWhere: any = { paymentAmount: { gt: 0 }, txType: { contains: 'взнос', mode: 'insensitive' } };
-    const sumRange = async (fromStr: string, toStr: string) => {
+    const sumRange = async (fromStr: string, toStr: string, createdBefore?: Date | null) => {
+      const where: any = { ...baseWhere, date: { gte: new Date(fromStr), lte: new Date(`${toStr}T23:59:59.999`) } };
+      if (createdBefore) where.createdAt = { lte: createdBefore };
       const a = await this.prisma.oplataKv.aggregate({
-        where: { ...baseWhere, date: { gte: new Date(fromStr), lte: new Date(`${toStr}T23:59:59.999`) } },
+        where,
         _sum: { paymentAmount: true, firstInstallment: true, monthlyAmount: true },
         _count: true,
       });
@@ -826,7 +834,11 @@ export class OplataKvService {
     const dayKey = fmt(day);
     const dayS = await sumRange(dayKey, dayKey);
     const yKey = fmt(shift(-1));
-    const prevDayS = await sumRange(yKey, yKey);
+    // Bugun bo'lsa: kechagi tushumni kechagi kun 00:00 → shu vaqt (soat:daqiqa) oralig'ida olamiz.
+    const prevCutoff = isToday
+      ? new Date(`${yKey}T${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}.999`)
+      : null;
+    const prevDayS = await sumRange(yKey, yKey, prevCutoff);
 
     const monthStart = new Date(day.getFullYear(), day.getMonth(), 1, 12);
     const mtdS = await sumRange(fmt(monthStart), dayKey);

@@ -424,6 +424,8 @@
     "dsumCount": "Payments",
     "dsumMtd": "Month to date",
     "dsumVsYesterday": "vs yest.",
+    "dsumVsYesterdayNow": "vs yest. · to now",
+    "dsumTimeAwareNote": "Today so far ↔ yesterday up to the same time",
     "dsumVsMonth": "vs last mo.",
     "dsumTrend": "14-day trend",
     "dsumTopObjects": "Top objects",

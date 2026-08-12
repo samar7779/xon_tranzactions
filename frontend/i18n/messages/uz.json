@@ -424,6 +424,8 @@
     "dsumCount": "To'lovlar",
     "dsumMtd": "Oy boshidan",
     "dsumVsYesterday": "kecha",
+    "dsumVsYesterdayNow": "kecha · shu vaqtgacha",
+    "dsumTimeAwareNote": "Bugun hozirgacha ↔ kecha xuddi shu vaqtgacha solishtiriladi",
     "dsumVsMonth": "o'tgan oy",
     "dsumTrend": "14 kunlik trend",
     "dsumTopObjects": "Top obyektlar",
