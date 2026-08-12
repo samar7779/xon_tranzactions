@@ -538,10 +538,12 @@ export default function ChekOrderPage() {
         </div>
       )}
 
-      {/* AI Yordamchi — natija chiqganda ekran chekkasida (muammo → murojaat) */}
-      {canAssistant && view === 'check' && results && results.length > 0 && (
+      {/* AI Yordamchi — natija chiqganda ekran chekkasida (muammo → murojaat). Doim mount
+          bo'lib turadi — suhbat yopib-ochsa ham saqlanadi (order o'zgarsagina yangilanadi). */}
+      {canAssistant && (
         <ChekAssistant
-          context={{ orders: results.map((r) => ({ orderNos: r.orderNos, contractNo: r.extracted.contractNo, amount: r.extracted.amount, result: r.result, matchedTxExtId: r.matchedTx?.externalId })) }}
+          context={{ orders: (results || []).map((r) => ({ orderNos: r.orderNos, contractNo: r.extracted.contractNo, amount: r.extracted.amount, result: r.result, matchedTxExtId: r.matchedTx?.externalId })) }}
+          visible={view === 'check' && !!results && results.length > 0}
           onCreated={() => { if (canTickets) qc.invalidateQueries({ queryKey: ['chek-tickets'] }); }}
         />
       )}
