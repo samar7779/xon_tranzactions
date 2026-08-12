@@ -39,7 +39,7 @@ export function DailySummaryWidget() {
   const user = useAuth((s) => s.user);
   const has = (p: string) => !!user?.permissions?.includes(p);
 
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false); // default YOPIQ (hidden) — user bosганда ochiladi
   const [mode, setMode] = useState<'today' | 'yesterday' | 'custom'>('today');
   const [customDate, setCustomDate] = useState('');
 

@@ -1506,16 +1506,15 @@ function ObjToolbarFilter({
         onClick={() => (open ? setOpen(false) : openPop())}
         title="Filtr — За счётчик / Возврат / CRM status"
         className={cn(
-          'relative inline-flex items-center gap-1 px-2.5 h-7 rounded-md text-[11px] font-semibold transition-colors',
+          'relative inline-flex items-center justify-center w-7 h-7 rounded-lg transition-all active:scale-95',
           activeCount > 0
-            ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
-            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-300',
+            ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/30 ring-1 ring-indigo-400/50'
+            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 dark:hover:text-indigo-300 hover:scale-110 hover:shadow-sm',
         )}
       >
-        <SlidersHorizontal className="h-3.5 w-3.5" />
-        Filtr
+        <SlidersHorizontal className="h-4 w-4" />
         {activeCount > 0 && (
-          <span className="ml-0.5 min-w-[16px] h-[16px] px-1 rounded-full bg-white/25 text-white text-[9.5px] font-bold grid place-items-center tabular-nums">
+          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-rose-500 text-white text-[9.5px] font-bold grid place-items-center tabular-nums ring-2 ring-white dark:ring-slate-900 shadow-sm">
             {activeCount}
           </span>
         )}
