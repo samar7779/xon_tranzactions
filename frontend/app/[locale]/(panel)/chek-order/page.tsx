@@ -144,7 +144,7 @@ export default function ChekOrderPage() {
         .chek-corner.bl { bottom:12px; left:12px; border-right:0; border-top:0; border-bottom-left-radius:9px }
         .chek-corner.br { bottom:12px; right:12px; border-left:0; border-top:0; border-bottom-right-radius:9px }
         .chek-shimmer { background:linear-gradient(100deg, rgba(148,163,184,.09) 30%, rgba(148,163,184,.22) 50%, rgba(148,163,184,.09) 70%); background-size:200% 100%; animation: chekShimmer 1.4s ease-in-out infinite; border-radius:8px; }
-        .chek-ring { border-radius:9999px; border:3px solid rgba(129,140,248,.18); border-top-color:#818cf8; animation: chekSpin 1s linear infinite; }
+        .chek-loader { width:52px; height:52px; border-radius:9999px; background:conic-gradient(from 90deg, rgba(129,140,248,0) 0deg, rgba(129,140,248,.15) 90deg, #818cf8 300deg, #a78bfa 360deg); -webkit-mask:radial-gradient(closest-side, transparent 63%, #000 65%); mask:radial-gradient(closest-side, transparent 63%, #000 65%); animation: chekSpin .9s linear infinite; filter:drop-shadow(0 0 6px rgba(129,140,248,.45)); }
       `}</style>
 
       <Topbar title="Chek order" subtitle="Memorial order / kvitansiya → tranzaksiyada bor-yo'qligini tekshirish" />
@@ -251,9 +251,12 @@ export default function ChekOrderPage() {
                         <div className="space-y-3">{Array.from({ length: 6 }).map((_, i) => <div key={i} className="flex items-center gap-2"><div className="chek-shimmer w-4 h-4 rounded-full" /><div className="chek-shimmer h-3.5 flex-1" style={{ maxWidth: `${75 - i * 5}%` }} /></div>)}</div>
                       </div>
                       <div className="border-t border-slate-100 dark:border-slate-800 p-4"><div className="chek-shimmer h-28 rounded-xl" /></div>
-                      {/* markazда nozik aylanuvchi halqa (matnsiz) */}
-                      <div className="absolute inset-0 grid place-items-center">
-                        <div className="w-12 h-12 chek-ring bg-white/60 dark:bg-slate-900/60 backdrop-blur-sm" />
+                      {/* markazда pro loader — konik-gradient halqa + pulslanuvchi scan icon (matnsiz) */}
+                      <div className="absolute inset-0 grid place-items-center pointer-events-none">
+                        <div className="relative w-[68px] h-[68px] grid place-items-center rounded-2xl bg-white/75 dark:bg-slate-900/75 backdrop-blur-md shadow-lg shadow-indigo-500/10 ring-1 ring-slate-100/80 dark:ring-slate-800">
+                          <div className="chek-loader" />
+                          <ScanLine className="absolute h-5 w-5 text-indigo-500" style={{ animation: 'chekPulse 1.4s ease-in-out infinite' }} />
+                        </div>
                       </div>
                     </Card>
                   ) : results && results.length > 0 ? (
