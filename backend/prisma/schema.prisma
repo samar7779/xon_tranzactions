@@ -1119,6 +1119,44 @@ model ChekOrder {
   @@map("chek_order")
 }
 
+/// Chek order — muammo/murojaat (ticket). AI yordamchi xodim bilan suhbatlashib
+/// muammoni aniqlaydi, keyin murojaat yaratiladi va mas'ulga biriktiriladi.
+model ChekTicket {
+  id       String @id @default(cuid())
+  ticketNo Int    @default(autoincrement()) @map("ticket_no")
+
+  // Kontekst — qaysi order/shartnoma haqida
+  contractNo     String?  @map("contract_no") @db.VarChar(128)
+  orderNos       String[] @map("order_nos")
+  matchedTxExtId String?  @map("matched_tx_ext_id")
+
+  // Agent aniqlagan muammo
+  category String? @db.VarChar(80) // agent tasnifi (erkin)
+  summary  String  @db.Text // muammo xulosasi (bir-ikki jumla)
+  details  String? @db.Text // batafsil
+  transcript Json?          // suhbat tarixi (audit)
+
+  // Holat + mas'ul
+  status         String  @default("new") @db.VarChar(16) // new | in_progress | resolved | rejected
+  priority       String? @db.VarChar(16) // low | normal | high
+  assignedToId   String? @map("assigned_to_id") @db.VarChar(50)
+  assignedToName String? @map("assigned_to_name") @db.VarChar(190)
+  resolution     String? @db.Text // 2-bosqich: hal qilish izohi
+  resolvedByName String? @map("resolved_by_name") @db.VarChar(190)
+  resolvedAt     DateTime? @map("resolved_at")
+
+  createdById   String?  @map("created_by_id") @db.VarChar(50)
+  createdByName String?  @map("created_by_name") @db.VarChar(190)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([createdAt])
+  @@index([contractNo])
+  @@map("chek_ticket")
+}
+
 // ─────────────────────────────────────────────────────────────────
 // OPLATA KV — OBJECT NAME MAPPING (CRM → OplatyKv)
 // CRM dan "XON SAROY AFSONASI" kelsa, OplatyKv'ga "АФСОНА" deb yoziladi

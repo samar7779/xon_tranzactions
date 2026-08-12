@@ -36,6 +36,8 @@ export const PERMS = {
   CHEKORDER_VIEW: 'chekorder:view',
   CHEKORDER_HISTORY: 'chekorder:history',
   CHEKORDER_MANAGE: 'chekorder:manage',
+  CHEKORDER_ASSISTANT: 'chekorder:assistant',
+  CHEKORDER_TICKETS: 'chekorder:tickets',
 
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',

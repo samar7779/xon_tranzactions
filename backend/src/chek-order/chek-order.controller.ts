@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, Res,
+  BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, Res,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { Response } from 'express';
@@ -11,7 +11,10 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { ChekOrderService } from './chek-order.service';
-import { ListChekOrderDto, ManualCheckDto } from './dto/chek-order.dto';
+import {
+  ListChekOrderDto, ManualCheckDto,
+  AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto,
+} from './dto/chek-order.dto';
 
 type AuthUser = { id?: string; email?: string; fullName?: string };
 
@@ -81,6 +84,57 @@ export class ChekOrderController {
   @ApiOperation({ summary: 'Shartnoma bo\'yicha tranzaksiya (to\'lov)lar' })
   contractPayments(@Query('contract') contract: string) {
     return this.svc.contractPayments(contract);
+  }
+
+  // ─── AI yordamchi ───
+  @Post('assistant/chat')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_ASSISTANT)
+  @ApiOperation({ summary: 'AI yordamchi bilan suhbat (muammo aniqlash)' })
+  assistantChat(@Body() body: AssistantChatDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.assistantChat(body || {}, actorFrom(u));
+  }
+
+  // ─── Murojaatlar (tickets) ───
+  @Get('assignees')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Mas\'ul tanlash uchun foydalanuvchilar' })
+  assignees() {
+    return this.svc.assignees();
+  }
+
+  @Post('tickets')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Murojaat yaratish' })
+  createTicket(@Body() body: CreateTicketDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.createTicket(body, actorFrom(u));
+  }
+
+  @Get('tickets')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Murojaatlar ro\'yxati' })
+  listTickets(@Query() q: ListTicketsDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.listTickets(q, actorFrom(u));
+  }
+
+  @Get('tickets/:id')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Bitta murojaat' })
+  getTicket(@Param('id') id: string) {
+    return this.svc.getTicket(id);
+  }
+
+  @Patch('tickets/:id')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Murojaatni yangilash (holat/mas\'ul/hal qilish)' })
+  updateTicket(@Param('id') id: string, @Body() body: UpdateTicketDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.updateTicket(id, body, actorFrom(u));
+  }
+
+  @Delete('tickets/:id')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Murojaatni o\'chirish' })
+  removeTicket(@Param('id') id: string) {
+    return this.svc.removeTicket(id);
   }
 
   @Get('batch/:batchId')

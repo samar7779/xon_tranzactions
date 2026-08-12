@@ -1,0 +1,232 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import {
+  Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, User2, FileSignature,
+  MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket,
+} from 'lucide-react';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+
+type TicketRow = {
+  id: string; ticketNo: number; contractNo: string | null; orderNos: string[];
+  category: string | null; summary: string; details: string | null; transcript: any;
+  status: string; priority: string | null; assignedToId: string | null; assignedToName: string | null;
+  resolution: string | null; resolvedByName: string | null; resolvedAt: string | null;
+  createdByName: string | null; createdAt: string;
+};
+
+const STATUS: Record<string, { label: string; cls: string; Icon: any }> = {
+  new: { label: 'Yangi', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', Icon: CircleDot },
+  in_progress: { label: 'Jarayonda', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: Clock },
+  resolved: { label: 'Hal qilindi', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2 },
+  rejected: { label: 'Rad etildi', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700', Icon: XCircle },
+};
+
+const fmtDate = (s?: string | null) => {
+  if (!s) return '—';
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '—';
+  return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+};
+
+export function ChekTickets() {
+  const qc = useQueryClient();
+  const [status, setStatus] = useState('all');
+  const [mine, setMine] = useState(false);
+  const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [detail, setDetail] = useState<TicketRow | null>(null);
+  useEffect(() => { setPage(1); }, [status, mine, q]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['chek-tickets', status, mine, q, page],
+    queryFn: () => api.get<{ items: TicketRow[]; total: number; pageCount: number; stats: Record<string, number> }>(
+      `/chek-order/tickets?status=${status}&mine=${mine ? '1' : ''}&q=${encodeURIComponent(q)}&page=${page}`,
+    ),
+  });
+  const refresh = () => qc.invalidateQueries({ queryKey: ['chek-tickets'] });
+  const delMut = useMutation({
+    mutationFn: (id: string) => api.delete(`/chek-order/tickets/${id}`),
+    onSuccess: () => { refresh(); toast.success("O'chirildi"); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const st = data?.stats;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          {st && Object.entries(STATUS).map(([k, m]) => (
+            <span key={k} className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold', m.cls, 'ring-1')}>
+              <m.Icon className="h-3 w-3" /> {st[k] || 0}
+            </span>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setMine((v) => !v)} className={cn('inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold ring-1 transition-colors',
+            mine ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+            <User2 className="h-3.5 w-3.5" /> Menga biriktirilgan
+          </button>
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Muammo / shartnoma / mas'ul" className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
+          </div>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
+            <option value="all">Barchasi</option>
+            <option value="new">Yangi</option><option value="in_progress">Jarayonda</option>
+            <option value="resolved">Hal qilindi</option><option value="rejected">Rad etildi</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-2xl bg-white dark:bg-slate-900 shadow-soft border-0 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[12.5px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="text-left font-semibold px-3 py-2.5">№</th>
+                <th className="text-left font-semibold px-3 py-2.5">Muammo</th>
+                <th className="text-left font-semibold px-3 py-2.5">Shartnoma</th>
+                <th className="text-left font-semibold px-3 py-2.5">Mas'ul</th>
+                <th className="text-left font-semibold px-3 py-2.5">Holat</th>
+                <th className="text-left font-semibold px-3 py-2.5">Kim · Qachon</th>
+                <th className="px-3 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {isLoading ? (
+                <tr><td colSpan={7} className="p-10 text-center text-slate-400">…</td></tr>
+              ) : (data?.items?.length ?? 0) === 0 ? (
+                <tr><td colSpan={7} className="p-12 text-center text-slate-400">
+                  <Ticket className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  Hali murojaat yo'q
+                </td></tr>
+              ) : data!.items.map((t) => {
+                const m = STATUS[t.status] || STATUS.new;
+                return (
+                  <tr key={t.id} onClick={() => setDetail(t)} className="cursor-pointer hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <td className="px-3 py-2.5 font-mono font-bold text-slate-500 tabular-nums">#{t.ticketNo}</td>
+                    <td className="px-3 py-2.5 max-w-[360px]">
+                      <div className="font-medium text-slate-800 dark:text-slate-200 truncate">{t.summary}</div>
+                      {t.category && <div className="text-[11px] text-indigo-500">{t.category}</div>}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400">{t.contractNo || '—'}</td>
+                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400">{t.assignedToName || <span className="text-slate-400">— biriktirilmagan</span>}</td>
+                    <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', m.cls)}><m.Icon className="h-3 w-3" /> {m.label}</span></td>
+                    <td className="px-3 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{t.createdByName || '—'} · {fmtDate(t.createdAt)}</td>
+                    <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
+                      <button onClick={() => { if (confirm("O'chirilsinmi?")) delMut.mutate(t.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {(data?.pageCount ?? 1) > 1 && (
+          <div className="flex items-center justify-end gap-2 px-3 py-2.5 border-t border-slate-100 dark:border-slate-800">
+            <button disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /></button>
+            <span className="text-[12px] text-slate-500 tabular-nums">{page} / {data!.pageCount}</span>
+            <button disabled={page >= (data?.pageCount ?? 1)} onClick={() => setPage((p) => p + 1)} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+        )}
+      </div>
+
+      {detail && <TicketDetail t={detail} onClose={() => setDetail(null)} onSaved={() => { refresh(); setDetail(null); }} />}
+    </div>
+  );
+}
+
+function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => void; onSaved: () => void }) {
+  const [status, setStatus] = useState(t.status);
+  const [assignee, setAssignee] = useState(t.assignedToId || '');
+  const [resolution, setResolution] = useState(t.resolution || '');
+  const [showChat, setShowChat] = useState(false);
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
+
+  const { data: assignees } = useQuery({ queryKey: ['chek-assignees'], queryFn: () => api.get<{ items: { id: string; name: string }[] }>('/chek-order/assignees') });
+  const saveMut = useMutation({
+    mutationFn: () => api.patch(`/chek-order/tickets/${t.id}`, { status, assignedToId: assignee, resolution }),
+    onSuccess: () => { toast.success('Saqlandi'); onSaved(); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const transcript: Array<{ role: string; content: string }> = Array.isArray(t.transcript) ? t.transcript : [];
+
+  return (
+    <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="w-full max-w-2xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative">
+          <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> Murojaat #{t.ticketNo}</div>
+          <div className="text-[16px] font-bold leading-snug">{t.summary}</div>
+          {t.category && <div className="text-[12px] opacity-90 mt-1">{t.category}</div>}
+        </div>
+
+        <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+          {t.details && <div className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">{t.details}</div>}
+          <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
+            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Shartnoma</div><div className="font-mono text-slate-700 dark:text-slate-200">{t.contractNo || '—'}</div></div>
+            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Order(lar)</div><div className="font-mono text-slate-700 dark:text-slate-200 truncate">{(t.orderNos || []).join(', ') || '—'}</div></div>
+          </div>
+
+          {/* Boshqaruv */}
+          <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3 space-y-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Boshqaruv</div>
+            <div>
+              <div className="text-[11px] text-slate-500 mb-1">Holat</div>
+              <div className="flex flex-wrap gap-1.5">
+                {Object.entries(STATUS).map(([k, m]) => (
+                  <button key={k} onClick={() => setStatus(k)} className={cn('inline-flex items-center gap-1 px-2.5 h-7 rounded-lg text-[11.5px] font-semibold ring-1 transition-colors',
+                    status === k ? m.cls : 'bg-white dark:bg-slate-800 text-slate-500 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+                    <m.Icon className="h-3 w-3" /> {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500 mb-1">Mas'ul</div>
+              <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
+                <option value="">— tanlanmagan —</option>
+                {(assignees?.items || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div className="text-[11px] text-slate-500 mb-1">Hal qilish izohi (ixtiyoriy)</div>
+              <textarea value={resolution} onChange={(e) => setResolution(e.target.value)} rows={2} placeholder="Muammo qanday hal qilindi…" className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] resize-y outline-none focus:ring-2 focus:ring-indigo-500/40" />
+            </div>
+            <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12.5px] font-semibold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-1.5">
+              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Saqlash
+            </button>
+          </div>
+
+          {/* Suhbat tarixi */}
+          {transcript.length > 0 && (
+            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
+              <button onClick={() => setShowChat((v) => !v)} className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <MessageSquare className="h-3.5 w-3.5 text-slate-400" /> Suhbat tarixi ({transcript.length})
+                <span className="ml-auto text-slate-400 text-[11px]">{showChat ? 'yashirish' : 'ochish'}</span>
+              </button>
+              {showChat && (
+                <div className="p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40 max-h-64 overflow-y-auto">
+                  {transcript.map((m, i) => (
+                    <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                      <div className={cn('max-w-[85%] px-3 py-1.5 rounded-xl text-[12px] whitespace-pre-wrap', m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-100 dark:ring-slate-700')}>{m.content}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="text-[11px] text-slate-400 flex items-center gap-3 flex-wrap">
+            <span className="inline-flex items-center gap-1"><FileSignature className="h-3 w-3" /> {t.createdByName || '—'} · {fmtDate(t.createdAt)}</span>
+            {t.resolvedByName && <span className="inline-flex items-center gap-1 text-emerald-600"><CheckCircle2 className="h-3 w-3" /> {t.resolvedByName} · {fmtDate(t.resolvedAt)}</span>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

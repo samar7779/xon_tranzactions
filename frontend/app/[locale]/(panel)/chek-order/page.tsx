@@ -10,10 +10,12 @@ import {
   Hash, Search, Image as ImageIcon, ScanLine, Trash2, ChevronLeft, ChevronRight,
   Building2, CalendarDays, Coins, FileSignature, Landmark, FileText, RotateCcw,
   ZoomIn, X, ScrollText, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
-  User2, Tag, ListChecks, Eraser,
+  User2, Tag, ListChecks, Eraser, Ticket,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card } from '@/components/ui/card';
+import { ChekAssistant } from '@/components/chek-assistant';
+import { ChekTickets } from '@/components/chek-tickets';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 import { useHasPermission } from '@/lib/auth';
@@ -78,8 +80,10 @@ export default function ChekOrderPage() {
   const canManage = useHasPermission(PERMS.CHEKORDER_MANAGE);
   const canView = useHasPermission(PERMS.CHEKORDER_VIEW);
   const canHistory = useHasPermission(PERMS.CHEKORDER_HISTORY);
+  const canAssistant = useHasPermission(PERMS.CHEKORDER_ASSISTANT);
+  const canTickets = useHasPermission(PERMS.CHEKORDER_TICKETS);
 
-  const [view, setView] = useState<'check' | 'history'>('check');
+  const [view, setView] = useState<'check' | 'history' | 'tickets'>('check');
   const [mode, setMode] = useState<'upload' | 'manual' | 'contract'>('upload');
   const [orderNos, setOrderNos] = useState('');
   const [results, setResults] = useState<OrderResult[] | null>(null);
@@ -223,6 +227,9 @@ export default function ChekOrderPage() {
             {canHistory && (
               <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label="Tarix"
                 badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
+            )}
+            {canTickets && (
+              <SubTab active={view === 'tickets'} onClick={() => setView('tickets')} icon={<Ticket className="h-4 w-4" />} label="Murojaatlar" />
             )}
           </div>
           {(preview || results) && canManage && view === 'check' && (
@@ -434,6 +441,8 @@ export default function ChekOrderPage() {
             )}
             {canManage && panelContract && <ContractInfoPanel contract={panelContract} />}
           </>
+        ) : view === 'tickets' ? (
+          <ChekTickets />
         ) : (
           /* ── TARIX ── */
           <div className="space-y-3">
@@ -527,6 +536,14 @@ export default function ChekOrderPage() {
               onClick={(e) => { e.stopPropagation(); setLbZoom((v) => !v); }} />
           </div>
         </div>
+      )}
+
+      {/* AI Yordamchi — natija chiqganda ekran chekkasida (muammo → murojaat) */}
+      {canAssistant && view === 'check' && results && results.length > 0 && (
+        <ChekAssistant
+          context={{ orders: results.map((r) => ({ orderNos: r.orderNos, contractNo: r.extracted.contractNo, amount: r.extracted.amount, result: r.result, matchedTxExtId: r.matchedTx?.externalId })) }}
+          onCreated={() => { if (canTickets) qc.invalidateQueries({ queryKey: ['chek-tickets'] }); }}
+        />
       )}
     </div>
   );

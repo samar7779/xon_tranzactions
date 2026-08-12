@@ -53,6 +53,8 @@ export const PERMISSIONS = {
   CHEKORDER_VIEW: 'chekorder:view',                             // Sahifani ochish + natijalar
   CHEKORDER_HISTORY: 'chekorder:history',                       // "Tarix" sub-tab — o'tgan tekshiruvlar
   CHEKORDER_MANAGE: 'chekorder:manage',                         // Order yuklash/tekshirish + o'chirish
+  CHEKORDER_ASSISTANT: 'chekorder:assistant',                   // AI yordamchi chat — muammo aniqlash
+  CHEKORDER_TICKETS: 'chekorder:tickets',                       // "Murojaatlar" sub-tab — ko'rish/boshqarish
 
   // ОплатыКв
   OPLATAKV_VIEW: 'oplatakv:view',
@@ -234,6 +236,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.CHEKORDER_VIEW, label: 'Sahifani ochish + tekshirish natijalari' },
           { value: PERMISSIONS.CHEKORDER_HISTORY, label: 'Tarix sub-tab — o\'tgan tekshiruvlar' },
           { value: PERMISSIONS.CHEKORDER_MANAGE, label: 'Order yuklash/tekshirish + o\'chirish' },
+          { value: PERMISSIONS.CHEKORDER_ASSISTANT, label: 'AI yordamchi chat — muammo aniqlash' },
+          { value: PERMISSIONS.CHEKORDER_TICKETS, label: 'Murojaatlar sub-tab — ko\'rish/biriktirish/holat' },
         ],
       },
     ],

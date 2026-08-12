@@ -6,7 +6,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CrmService } from '../crm/crm.service';
-import { ListChekOrderDto } from './dto/chek-order.dto';
+import { ListChekOrderDto, AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto } from './dto/chek-order.dto';
 
 type Actor = { id: string | null; name: string | null };
 
@@ -705,6 +705,189 @@ export class ChekOrderService {
   }
 
   // ───────────────── CLAUDE VISION EXTRACTION ─────────────────
+  // ═════════════════ AI YORDAMCHI (muammo aniqlash) ═════════════════
+  async assistantChat(dto: AssistantChatDto, _actor: Actor) {
+    const apiKey = await this.getAiKey();
+    if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
+    const model = await this.getAiModel();
+
+    const ctx: any = dto.context || {};
+    const orders: any[] = Array.isArray(ctx.orders) ? ctx.orders : [];
+    const ctxText = orders.length
+      ? orders.map((o, i) => `  [${i + 1}] order№: ${(o.orderNos || []).join(', ') || '—'} · shartnoma: ${o.contractNo || '—'} · summa: ${o.amount ?? '—'} · natija: ${o.result || '—'}`).join('\n')
+      : '  (hozircha natija yo\'q)';
+
+    const system = [
+      "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy YORDAMCHISISAN.",
+      "Xodim 'Chek order'да to'lovni tekshirgach, o'sha to'lov/shartnoma bo'yicha MUAMMO haqida sen bilan gaplashadi.",
+      "Vazifang: xodim bilan qisqa, samimiy suhbatda muammoni ANIQLASH, keyin murojaat (ticket) taklif qilish.",
+      "Ekrandagi natija(lar):",
+      ctxText,
+      "QOIDALAR:",
+      "- Har doim O'ZBEK LOTIN yozuvida, qisqa va tushunarli gapir.",
+      "- Bir necha order bo'lsa — avval QAYSI order/shartnoma haqida ekanini so'ra (quickReplies bilan tanlov ber).",
+      "- Keyin muammoni SO'RA (erkin). Odatiy muammolar: to'lov xonadonда/CRM'да ko'rinmayapti; summa oylik/boshlang'ichга noto'g'ri o'tgan; to'lov XATO bo'lgan; va h.k. Lekin tayyor variant majburlама — xodim erkin aytadi.",
+      "- Aniq bo'lmasa ANIQLASHTIRUVCHI savol ber (1 tadan). Taxmin qilma.",
+      "- Muammo YETARLICHA aniq bo'lganда — proposeTicket to'ldir: qisqa summary (1-2 jumla), category (masalan 'CRMда ko'rinmayapti', 'Oylik/boshlang'ichга o'tgan', 'XATO', 'Boshqa'), contractNo, orderNos, details. proposeTicket berilса ham qisqa message yoz ('Murojaat tayyor, tasdiqlang').",
+      "- HAR safar FAQAT assistant_turn tool orqali javob ber.",
+      "- Foydalanuvchi '/start' yozsa — salomlash va (bir nechta bo'lsa) qaysi order haqida ekanini so'rash.",
+    ].join('\n');
+
+    const messages = (dto.messages || [])
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) }))
+      .filter((m) => m.content);
+    // Claude: birinchi xabar 'user' bo'lishi shart
+    if (!messages.length) messages.push({ role: 'user', content: '/start' });
+    if (messages[0].role !== 'user') messages.unshift({ role: 'user', content: '/start' });
+
+    const tools = [{
+      name: 'assistant_turn',
+      description: 'Yordamchining bitta javobi — xabar + (ixtiyoriy) tez javob tugmalari + (ixtiyoriy) murojaat taklifi',
+      input_schema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: "Xodimга ko'rsatiladigan xabar (o'zbek lotin, qisqa)" },
+          quickReplies: { type: 'array', items: { type: 'string' }, description: 'Tez javob tugmalari (masalan order raqamlari yoki Ha/Yo\'q)' },
+          proposeTicket: {
+            type: 'object',
+            description: "Muammo aniq bo'lganда — murojaat taklifi",
+            properties: {
+              summary: { type: 'string' },
+              category: { type: 'string' },
+              contractNo: { type: 'string' },
+              orderNos: { type: 'array', items: { type: 'string' } },
+              details: { type: 'string' },
+              priority: { type: 'string', enum: ['low', 'normal', 'high'] },
+            },
+            required: ['summary'],
+          },
+        },
+        required: ['message'],
+      },
+    }];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 1200, system, messages, tools, tool_choice: { type: 'tool', name: 'assistant_turn' } }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data: any = await res.json();
+    const toolUse = (data?.content || []).find((c: any) => c.type === 'tool_use');
+    const out: any = toolUse?.input || { message: 'Kechirasiz, javob berolmadim.' };
+    return {
+      ok: true,
+      reply: out.message || '',
+      quickReplies: Array.isArray(out.quickReplies) ? out.quickReplies.slice(0, 8) : [],
+      proposal: out.proposeTicket || null,
+    };
+  }
+
+  // ═════════════════ MUROJAATLAR (tickets) ═════════════════
+  async assignees() {
+    const rows = await this.prisma.adminUser.findMany({
+      where: { isActive: true },
+      select: { id: true, fullName: true, email: true },
+      orderBy: { fullName: 'asc' },
+      take: 200,
+    });
+    return { ok: true, items: rows.map((u) => ({ id: u.id, name: u.fullName || u.email })) };
+  }
+
+  async createTicket(dto: CreateTicketDto, actor: Actor) {
+    if (!dto?.summary || !dto.summary.trim()) throw new BadRequestException('Muammo xulosasi (summary) majburiy');
+    let assignedToName: string | null = null;
+    if (dto.assignedToId) {
+      const u = await this.prisma.adminUser.findUnique({ where: { id: dto.assignedToId }, select: { fullName: true, email: true } });
+      assignedToName = u?.fullName || u?.email || null;
+    }
+    const row = await this.prisma.chekTicket.create({
+      data: {
+        contractNo: dto.contractNo?.trim() || null,
+        orderNos: Array.isArray(dto.orderNos) ? dto.orderNos.filter(Boolean) : [],
+        matchedTxExtId: dto.matchedTxExtId || null,
+        category: dto.category?.slice(0, 80) || null,
+        summary: dto.summary.trim(),
+        details: dto.details?.trim() || null,
+        transcript: dto.transcript ?? undefined,
+        priority: dto.priority || 'normal',
+        status: 'new',
+        assignedToId: dto.assignedToId || null,
+        assignedToName,
+        createdById: actor.id,
+        createdByName: actor.name,
+      },
+    });
+    return { ok: true, id: row.id, ticketNo: row.ticketNo };
+  }
+
+  async listTickets(q: ListTicketsDto, actor: Actor) {
+    const page = Math.max(1, Number(q.page) || 1);
+    const perPage = Math.min(100, Math.max(1, Number(q.perPage) || 30));
+    const where: any = {};
+    if (q.status && q.status !== 'all') where.status = q.status;
+    if (q.mine === '1' && actor.id) where.assignedToId = actor.id;
+    if (q.q && q.q.trim()) {
+      const s = q.q.trim();
+      where.OR = [
+        { summary: { contains: s, mode: 'insensitive' } },
+        { contractNo: { contains: s, mode: 'insensitive' } },
+        { category: { contains: s, mode: 'insensitive' } },
+        { assignedToName: { contains: s, mode: 'insensitive' } },
+      ];
+    }
+    const [items, total, stats] = await Promise.all([
+      this.prisma.chekTicket.findMany({ where, orderBy: { createdAt: 'desc' }, skip: (page - 1) * perPage, take: perPage }),
+      this.prisma.chekTicket.count({ where }),
+      this.prisma.chekTicket.groupBy({ by: ['status'], _count: true }),
+    ]);
+    const statMap: Record<string, number> = {};
+    for (const s of stats) statMap[s.status] = (s as any)._count;
+    return {
+      ok: true, page, perPage, total,
+      pageCount: Math.max(1, Math.ceil(total / perPage)),
+      items,
+      stats: { new: statMap['new'] || 0, in_progress: statMap['in_progress'] || 0, resolved: statMap['resolved'] || 0, rejected: statMap['rejected'] || 0 },
+    };
+  }
+
+  async getTicket(id: string) {
+    const row = await this.prisma.chekTicket.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Murojaat topilmadi');
+    return { ok: true, item: row };
+  }
+
+  async updateTicket(id: string, dto: UpdateTicketDto, actor: Actor) {
+    const row = await this.prisma.chekTicket.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Murojaat topilmadi');
+    const data: any = {};
+    if (dto.priority) data.priority = dto.priority;
+    if (dto.status) {
+      data.status = dto.status;
+      if (dto.status === 'resolved') { data.resolvedByName = actor.name; data.resolvedAt = new Date(); }
+    }
+    if (dto.resolution !== undefined) data.resolution = dto.resolution?.trim() || null;
+    if (dto.assignedToId !== undefined) {
+      data.assignedToId = dto.assignedToId || null;
+      if (dto.assignedToId) {
+        const u = await this.prisma.adminUser.findUnique({ where: { id: dto.assignedToId }, select: { fullName: true, email: true } });
+        data.assignedToName = u?.fullName || u?.email || null;
+      } else data.assignedToName = null;
+    }
+    const updated = await this.prisma.chekTicket.update({ where: { id }, data });
+    return { ok: true, item: updated };
+  }
+
+  async removeTicket(id: string) {
+    const row = await this.prisma.chekTicket.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('Murojaat topilmadi');
+    await this.prisma.chekTicket.delete({ where: { id } });
+    return { ok: true };
+  }
+
   private async claudeExtractOrders(apiKey: string, model: string, fileBlock: any): Promise<ExtractedOrder[]> {
     const system = [
       "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy yordamchisisan.",
