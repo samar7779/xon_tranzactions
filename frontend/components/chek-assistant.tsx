@@ -16,6 +16,7 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [quickReplies, setQuickReplies] = useState<string[]>([]);
+  const [sel, setSel] = useState<Set<string>>(new Set());
   const [proposal, setProposal] = useState<Proposal>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -69,9 +70,11 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
     const t = text.trim();
     if (!t || chatMut.isPending) return;
     const next = [...messages, { role: 'user' as const, content: t }];
-    setMessages(next); setInput(''); setQuickReplies([]);
+    setMessages(next); setInput(''); setQuickReplies([]); setSel(new Set());
     chatMut.mutate(next);
   };
+  const toggleSel = (v: string) => setSel((p) => { const n = new Set(p); n.has(v) ? n.delete(v) : n.add(v); return n; });
+  const sendSelected = () => { if (sel.size) send(Array.from(sel).join(', ')); };
   const resetChat = () => { setMessages([]); setQuickReplies([]); setProposal(null); startChat(); };
 
   if (!visible && !open) return null;
@@ -95,7 +98,7 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
       {open && createPortal(
         <div className="fixed inset-0 z-[9995]">
           <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-0 bottom-0 w-full max-w-[680px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col" style={{ animation: 'chekSlideIn .22s ease' }}>
+          <div className="absolute right-0 top-0 bottom-0 w-full max-w-[780px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col" style={{ animation: 'chekSlideIn .22s ease' }}>
             <div className="p-5 bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 text-white flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-white/15 grid place-items-center ring-1 ring-white/20"><Bot className="h-6 w-6" /></div>
               <div className="flex-1 min-w-0"><div className="font-bold text-[17px]">AI Yordamchi</div><div className="text-[12px] opacity-85">Muammoni ayting — murojaat qilaman</div></div>
@@ -107,10 +110,25 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
               {messages.map((m, i) => <Bubble key={i} role={m.role} text={m.content} />)}
               {chatMut.isPending && <Bubble role="assistant" text="" typing />}
               {quickReplies.length > 0 && !chatMut.isPending && (
-                <div className="flex flex-wrap gap-2 pl-1">
-                  {quickReplies.map((q, i) => (
-                    <button key={i} onClick={() => send(q)} className="px-3.5 h-9 rounded-full bg-white dark:bg-slate-800 ring-1 ring-indigo-200 dark:ring-indigo-800 text-[12.5px] font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors">{q}</button>
-                  ))}
+                <div className="pl-1 space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    {quickReplies.map((q, i) => {
+                      const on = sel.has(q);
+                      return (
+                        <button key={i} onClick={() => toggleSel(q)}
+                          className={cn('inline-flex items-center gap-1 px-3.5 h-9 rounded-full text-[12.5px] font-medium ring-1 transition-colors',
+                            on ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white dark:bg-slate-800 ring-indigo-200 dark:ring-indigo-800 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/40')}>
+                          {on && <CheckCircle2 className="h-3.5 w-3.5" />} {q}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {sel.size > 0 && (
+                    <button onClick={sendSelected} className="inline-flex items-center gap-1.5 px-4 h-9 rounded-full bg-indigo-600 text-white text-[12.5px] font-semibold hover:bg-indigo-700 transition-colors">
+                      <Send className="h-3.5 w-3.5" /> Yuborish{sel.size > 1 ? ` (${sel.size})` : ''}
+                    </button>
+                  )}
+                  <div className="text-[10.5px] text-slate-400">Bir nechtasini belgilab, “Yuborish” bosing yoki bittasini belgilang.</div>
                 </div>
               )}
               {proposal && (

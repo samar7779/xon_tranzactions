@@ -31,7 +31,7 @@ type MatchedTx = {
   id: string; externalId: string | null; direction: string; amount: number; currency: string;
   txnDate: string; docNumber: string | null; reference: string | null;
   fromName: string | null; fromAccount: string | null; toName: string | null; toAccount: string | null;
-  description: string | null; matchAccount?: string | null;
+  description: string | null; matchAccount?: string | null; contractNumber?: string | null;
 };
 type OrderResult = {
   orderNos: string[]; extracted: Extracted; result: 'found' | 'mismatch' | 'not_found';
@@ -133,6 +133,14 @@ export default function ChekOrderPage() {
   });
   const refreshHistory = () => { if (canHistory) qc.invalidateQueries({ queryKey: ['chek-order-history'] }); };
 
+  // Murojaatlar sub-tab uchun faol (yangi + jarayonda) murojaatlar soni
+  const { data: ticketStats } = useQuery({
+    queryKey: ['chek-ticket-stats'],
+    queryFn: () => api.get<{ stats: { new: number; in_progress: number } }>('/chek-order/tickets?perPage=1'),
+    enabled: canTickets,
+  });
+  const activeTickets = (ticketStats?.stats?.new || 0) + (ticketStats?.stats?.in_progress || 0);
+
   const analyzeMut = useMutation({
     mutationFn: (f: File) => { const fd = new FormData(); fd.append('file', f); return api.postForm<{ results: OrderResult[] }>('/chek-order/analyze', fd, { timeout: 120_000 }); },
     onSuccess: (r) => { setResults(r.results); refreshHistory(); toast.success(`${r.results.length} ta hujjat tekshirildi`); },
@@ -206,6 +214,7 @@ export default function ChekOrderPage() {
         @keyframes chekPulse { 0%,100% { opacity:.5 } 50% { opacity:1 } }
         @keyframes chekShimmer { 0% { background-position:200% 0 } 100% { background-position:-200% 0 } }
         @keyframes chekSpin { to { transform: rotate(360deg) } }
+        @keyframes chekBadgePulse { 0%,100% { box-shadow:0 0 0 0 rgba(245,158,11,.5) } 50% { box-shadow:0 0 0 6px rgba(245,158,11,0) } }
         .chek-scanline { position:absolute; left:0; right:0; top:-70px; height:70px; background:linear-gradient(to bottom, transparent, rgba(129,140,248,.32) 55%, rgba(167,139,250,.12), transparent); box-shadow:0 0 40px 10px rgba(129,140,248,.30); animation: chekScan 2.2s cubic-bezier(.45,0,.55,1) infinite; }
         .chek-scangrid { background-image:linear-gradient(rgba(129,140,248,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(129,140,248,.09) 1px,transparent 1px); background-size:26px 26px; }
         .chek-corner { position:absolute; width:26px; height:26px; border:2.5px solid rgba(129,140,248,.85); box-shadow:0 0 12px rgba(129,140,248,.5); animation: chekPulse 1.6s ease-in-out infinite; }
@@ -229,7 +238,8 @@ export default function ChekOrderPage() {
                 badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
             )}
             {canTickets && (
-              <SubTab active={view === 'tickets'} onClick={() => setView('tickets')} icon={<Ticket className="h-4 w-4" />} label="Murojaatlar" />
+              <SubTab active={view === 'tickets'} onClick={() => setView('tickets')} icon={<Ticket className="h-4 w-4" />} label="Murojaatlar"
+                badge={activeTickets || undefined} badgeTone="accent" />
             )}
           </div>
           {(preview || results) && canManage && view === 'check' && (
@@ -542,9 +552,16 @@ export default function ChekOrderPage() {
           bo'lib turadi — suhbat yopib-ochsa ham saqlanadi (order o'zgarsagina yangilanadi). */}
       {canAssistant && (
         <ChekAssistant
-          context={{ orders: (results || []).map((r) => ({ orderNos: r.orderNos, contractNo: r.extracted.contractNo, amount: r.extracted.amount, result: r.result, matchedTxExtId: r.matchedTx?.externalId })) }}
+          context={{ orders: (results || []).map((r) => ({
+            orderNos: r.orderNos,
+            contractNo: r.matchedTx?.contractNumber || r.extracted.contractNo, // tranzaksiyadagi HAQIQIY shartnoma
+            docContractNo: r.extracted.contractNo, // hujjatдаги OCR (farqli bo'lsa)
+            amount: r.extracted.amount,
+            result: r.result,
+            matchedTxExtId: r.matchedTx?.externalId,
+          })) }}
           visible={view === 'check' && !!results && results.length > 0}
-          onCreated={() => { if (canTickets) qc.invalidateQueries({ queryKey: ['chek-tickets'] }); }}
+          onCreated={() => { if (canTickets) { qc.invalidateQueries({ queryKey: ['chek-tickets'] }); qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] }); } }}
         />
       )}
     </div>
@@ -974,12 +991,16 @@ function MoneyTile({ label, value, tone }: { label: string; value: string; tone:
   );
 }
 
-function SubTab({ active, onClick, icon, label, badge }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; badge?: number }) {
+function SubTab({ active, onClick, icon, label, badge, badgeTone = 'muted' }: { active: boolean; onClick: () => void; icon: React.ReactNode; label: string; badge?: number; badgeTone?: 'muted' | 'accent' }) {
   return (
     <button onClick={onClick} className={cn('relative flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold border-b-2 -mb-px transition-colors',
       active ? 'border-indigo-500 text-indigo-700 dark:text-indigo-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200')}>
       {icon} {label}
-      {badge != null && badge > 0 && <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold grid place-items-center tabular-nums">{badge}</span>}
+      {badge != null && badge > 0 && (
+        badgeTone === 'accent'
+          ? <span className="ml-1 inline-flex items-center gap-1 min-w-[24px] h-[24px] px-2 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[13px] font-extrabold shadow-md shadow-amber-500/30 grid place-items-center tabular-nums ring-2 ring-amber-200/60 dark:ring-amber-900/50" style={{ animation: 'chekBadgePulse 2s ease-in-out infinite' }}>{badge}</span>
+          : <span className="ml-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold grid place-items-center tabular-nums">{badge}</span>
+      )}
     </button>
   );
 }

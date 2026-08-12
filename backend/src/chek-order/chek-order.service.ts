@@ -314,7 +314,7 @@ export class ChekOrderService {
 
     const sel = {
       id: true, externalId: true, direction: true, amount: true, currency: true,
-      txnDate: true, docNumber: true, reference: true,
+      txnDate: true, docNumber: true, reference: true, contractNumber: true,
       fromName: true, fromAccount: true, toName: true, toAccount: true, description: true,
     };
     // ── Nomzodlarni bir necha signal bo'yicha yig'amiz ──
@@ -500,6 +500,7 @@ export class ChekOrderService {
       toName: tx.toName,
       toAccount: tx.toAccount,
       description: tx.description,
+      contractNumber: tx.contractNumber ?? null, // tranzaksiyaдаги HAQIQIY shartnoma (OCR emas)
       matchAccount: tx._matchAccount ?? null, // kvitansiya hisobiga mos kelgan tomon (to/from)
     };
   }
@@ -714,7 +715,11 @@ export class ChekOrderService {
     const ctx: any = dto.context || {};
     const orders: any[] = Array.isArray(ctx.orders) ? ctx.orders : [];
     const ctxText = orders.length
-      ? orders.map((o, i) => `  [${i + 1}] order№: ${(o.orderNos || []).join(', ') || '—'} · shartnoma: ${o.contractNo || '—'} · summa: ${o.amount ?? '—'} · natija: ${o.result || '—'}`).join('\n')
+      ? orders.map((o, i) => {
+          const real = o.contractNo || '—';
+          const doc = o.docContractNo && o.docContractNo !== o.contractNo ? ` (hujjatда OCR: ${o.docContractNo})` : '';
+          return `  [${i + 1}] order№: ${(o.orderNos || []).join(', ') || '—'} · shartnoma: ${real}${doc} · summa: ${o.amount ?? '—'} · natija: ${o.result || '—'}`;
+        }).join('\n')
       : '  (hozircha natija yo\'q)';
 
     const system = [
@@ -731,6 +736,7 @@ export class ChekOrderService {
       "- Muammoni so'raganда odatda quickReplies BERMA (erkin javob). Faqat aniq HA/YO'Q kerak bo'lсa quickReplies ber.",
       "- Aniq bo'lmasa ANIQLASHTIRUVCHI savol ber (1 tadan). Taxmin qilma.",
       "- proposeTicket.orderNos — foydalanuvchi tanlagan order(lar) ('Barchasi' bo'lsa hammasi).",
+      "- SHARTNOMA (MUHIM): proposeTicket.contractNo — kontekstдаги shartnomani (tranzaksiyaдан, ishonchli) ishlat, hujjatдаги OCR raqamini EMAS. Kontekstда shartnoma bo'lmasa, xodimдан aniqlashtir. Xato/noaniq shartnoma bilan murojaat yaratMA.",
       "- Muammo YETARLICHA aniq bo'lganда — proposeTicket to'ldir: qisqa summary (1-2 jumla), category (masalan 'CRMда ko'rinmayapti', 'Oylik/boshlang'ichга o'tgan', 'XATO', 'Boshqa'), contractNo, orderNos, details. proposeTicket berilса ham qisqa message yoz ('Murojaat tayyor, tasdiqlang').",
       "- HAR safar FAQAT assistant_turn tool orqali javob ber.",
       "- Foydalanuvchi '/start' yozsa — salomlash va (bir nechta bo'lsa) qaysi order haqida ekanini so'rash.",

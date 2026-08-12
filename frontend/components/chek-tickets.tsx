@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, User2, FileSignature,
+  Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, FileSignature,
   MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket,
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -21,8 +21,8 @@ type TicketRow = {
 const STATUS: Record<string, { label: string; cls: string; Icon: any }> = {
   new: { label: 'Yangi', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', Icon: CircleDot },
   in_progress: { label: 'Jarayonda', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: Clock },
-  resolved: { label: 'Hal qilindi', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2 },
-  rejected: { label: 'Rad etildi', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700', Icon: XCircle },
+  resolved: { label: 'Bajarildi', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2 },
+  rejected: { label: 'Bekor qilingan', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700', Icon: XCircle },
 };
 
 const fmtDate = (s?: string | null) => {
@@ -35,16 +35,15 @@ const fmtDate = (s?: string | null) => {
 export function ChekTickets() {
   const qc = useQueryClient();
   const [status, setStatus] = useState('all');
-  const [mine, setMine] = useState(false);
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<TicketRow | null>(null);
-  useEffect(() => { setPage(1); }, [status, mine, q]);
+  useEffect(() => { setPage(1); }, [status, q]);
 
   const { data, isLoading } = useQuery({
-    queryKey: ['chek-tickets', status, mine, q, page],
+    queryKey: ['chek-tickets', status, q, page],
     queryFn: () => api.get<{ items: TicketRow[]; total: number; pageCount: number; stats: Record<string, number> }>(
-      `/chek-order/tickets?status=${status}&mine=${mine ? '1' : ''}&q=${encodeURIComponent(q)}&page=${page}`,
+      `/chek-order/tickets?status=${status}&q=${encodeURIComponent(q)}&page=${page}`,
     ),
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['chek-tickets'] });
@@ -66,18 +65,14 @@ export function ChekTickets() {
           ))}
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setMine((v) => !v)} className={cn('inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold ring-1 transition-colors',
-            mine ? 'bg-indigo-600 text-white ring-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700')}>
-            <User2 className="h-3.5 w-3.5" /> Menga biriktirilgan
-          </button>
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Muammo / shartnoma / mas'ul" className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Muammo / shartnoma" className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
             <option value="all">Barchasi</option>
             <option value="new">Yangi</option><option value="in_progress">Jarayonda</option>
-            <option value="resolved">Hal qilindi</option><option value="rejected">Rad etildi</option>
+            <option value="resolved">Bajarildi</option><option value="rejected">Bekor qilingan</option>
           </select>
         </div>
       </div>
@@ -90,7 +85,6 @@ export function ChekTickets() {
                 <th className="text-left font-semibold px-3 py-2.5">№</th>
                 <th className="text-left font-semibold px-3 py-2.5">Muammo</th>
                 <th className="text-left font-semibold px-3 py-2.5">Shartnoma</th>
-                <th className="text-left font-semibold px-3 py-2.5">Mas'ul</th>
                 <th className="text-left font-semibold px-3 py-2.5">Holat</th>
                 <th className="text-left font-semibold px-3 py-2.5">Kim · Qachon</th>
                 <th className="px-3 py-2.5"></th>
@@ -98,9 +92,9 @@ export function ChekTickets() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {isLoading ? (
-                <tr><td colSpan={7} className="p-10 text-center text-slate-400">…</td></tr>
+                <tr><td colSpan={6} className="p-10 text-center text-slate-400">…</td></tr>
               ) : (data?.items?.length ?? 0) === 0 ? (
-                <tr><td colSpan={7} className="p-12 text-center text-slate-400">
+                <tr><td colSpan={6} className="p-12 text-center text-slate-400">
                   <Ticket className="h-8 w-8 mx-auto mb-2 opacity-40" />
                   Hali murojaat yo'q
                 </td></tr>
@@ -114,7 +108,6 @@ export function ChekTickets() {
                       {t.category && <div className="text-[11px] text-indigo-500">{t.category}</div>}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400">{t.contractNo || '—'}</td>
-                    <td className="px-3 py-2.5 text-slate-600 dark:text-slate-400">{t.assignedToName || <span className="text-slate-400">— biriktirilmagan</span>}</td>
                     <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', m.cls)}><m.Icon className="h-3 w-3" /> {m.label}</span></td>
                     <td className="px-3 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{t.createdByName || '—'} · {fmtDate(t.createdAt)}</td>
                     <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
@@ -142,14 +135,12 @@ export function ChekTickets() {
 
 function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => void; onSaved: () => void }) {
   const [status, setStatus] = useState(t.status);
-  const [assignee, setAssignee] = useState(t.assignedToId || '');
   const [resolution, setResolution] = useState(t.resolution || '');
   const [showChat, setShowChat] = useState(false);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
 
-  const { data: assignees } = useQuery({ queryKey: ['chek-assignees'], queryFn: () => api.get<{ items: { id: string; name: string }[] }>('/chek-order/assignees') });
   const saveMut = useMutation({
-    mutationFn: () => api.patch(`/chek-order/tickets/${t.id}`, { status, assignedToId: assignee, resolution }),
+    mutationFn: () => api.patch(`/chek-order/tickets/${t.id}`, { status, resolution }),
     onSuccess: () => { toast.success('Saqlandi'); onSaved(); },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
@@ -185,13 +176,6 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <div className="text-[11px] text-slate-500 mb-1">Mas'ul</div>
-              <select value={assignee} onChange={(e) => setAssignee(e.target.value)} className="w-full h-9 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
-                <option value="">— tanlanmagan —</option>
-                {(assignees?.items || []).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-              </select>
             </div>
             <div>
               <div className="text-[11px] text-slate-500 mb-1">Hal qilish izohi (ixtiyoriy)</div>
