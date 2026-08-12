@@ -8,6 +8,7 @@ import {
   Hash, Search, Image as ImageIcon, ScanLine, Trash2, ChevronLeft, ChevronRight,
   Building2, CalendarDays, Coins, FileSignature, Landmark, FileText, RotateCcw,
   ZoomIn, X, ScrollText, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
+  User2, Tag,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card } from '@/components/ui/card';
@@ -109,6 +110,9 @@ export default function ChekOrderPage() {
   const analyzing = analyzeMut.isPending;
   const busy = analyzing || manualMut.isPending;
   const stats = history?.stats;
+  // Natija ostidagi CRM panel — joriy natija shartnomasi (topilgan/nomuvofiq bo'lsa)
+  const activeR = results?.[activeResult];
+  const panelContract = activeR && activeR.result !== 'not_found' ? (activeR.extracted.contractNo || null) : null;
 
   const onFile = useCallback((f: File | null) => {
     if (!f) return;
@@ -286,6 +290,7 @@ export default function ChekOrderPage() {
                 </div>
               </div>
             )}
+            {canManage && panelContract && <ContractInfoPanel contract={panelContract} />}
           </>
         ) : (
           /* ── TARIX ── */
@@ -484,7 +489,7 @@ function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void })
 
   return (
     <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-lg my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-2xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {isLoading || !d ? (
           <div className="p-16 grid place-items-center"><Loader2 className="h-6 w-6 animate-spin text-indigo-500" /></div>
         ) : (
@@ -496,9 +501,9 @@ function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void })
               {(d.counterpartyDisplay || d.category?.name) && <div className="text-[12px] opacity-90 mt-0.5">{d.counterpartyDisplay || d.category?.name}</div>}
             </div>
 
-            <div className="p-4 space-y-2.5 max-h-[62vh] overflow-y-auto">
+            <div className="p-5 space-y-2.5 max-h-[74vh] overflow-y-auto">
               {/* Tepа kartalar */}
-              <div className="grid gap-2">
+              <div className="grid gap-2 sm:grid-cols-2">
                 <TopCard icon={<Building2 className="h-3.5 w-3.5" />} label="Kontragent" value={d.counterpartyDisplay || d.category?.name || '—'} />
                 <TopCard icon={<Landmark className="h-3.5 w-3.5" />} label="Kategoriya" value={[d.category?.name, d.subcategory?.name].filter(Boolean).join(' · ') || '—'} />
                 {d.contractNumber && <TopCard icon={<FileSignature className="h-3.5 w-3.5" />} label="Shartnoma" value={d.contractNumber} sub={d.contractCustomer || undefined} mono />}
@@ -591,7 +596,7 @@ function OplataKvModal({ contract, onClose }: { contract: string; onClose: () =>
   const items = data?.items || [];
   return (
     <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 text-white relative bg-gradient-to-br from-violet-500 to-indigo-600">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Home className="h-3 w-3" /> ОплатыКв · {contract}</div>
@@ -671,6 +676,78 @@ function CondDots({ c }: { c: Cond }) {
       {items.map(([k, v], i) => (
         <span key={i} title={k} className={cn('inline-grid place-items-center w-4 h-4 rounded text-[8px] font-bold', v === true ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : v === false ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400')}>{v === true ? '✓' : v === false ? '✕' : '·'}</span>
       ))}
+    </div>
+  );
+}
+
+// ─── Natija ostidagi shartnoma (CRM) paneli ───
+function ContractInfoPanel({ contract }: { contract: string }) {
+  const { data, isLoading } = useQuery({
+    queryKey: ['chek-contract-info', contract],
+    queryFn: () => api.get<any>(`/chek-order/contract-info?contract=${encodeURIComponent(contract)}`),
+  });
+  const pct = data?.contractValue ? Math.min(100, Math.max(0, Math.round((data.totalPaid / data.contractValue) * 100))) : null;
+  const money = (n: any) => (n == null ? '—' : formatMoney(Number(n), ''));
+
+  return (
+    <Card className="border-0 shadow-soft overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-50/60 to-violet-50/40 dark:from-indigo-950/20 dark:to-violet-950/10">
+        <FileSignature className="h-4 w-4 text-indigo-500" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Shartnoma ma'lumoti</span>
+        <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[13px]">{contract}</span>
+        {data && (
+          <span className={cn('ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold ring-1',
+            data.found ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 ring-slate-200 dark:ring-slate-700')}>
+            {data.found ? <><CheckCircle2 className="h-3 w-3" /> CRM'da bor</> : "CRM'da yo'q"}
+          </span>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="p-10 grid place-items-center"><Loader2 className="h-5 w-5 animate-spin text-indigo-500" /></div>
+      ) : data ? (
+        <div className="p-4 space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile icon={<User2 className="h-4 w-4" />} label="Mijoz" value={data.customerName || '—'} />
+            <StatTile icon={<Building2 className="h-4 w-4" />} label="Obyekt" value={data.objectName || '—'} />
+            <StatTile icon={<Home className="h-4 w-4" />} label="Xonadon" value={data.apartmentNumber || '—'} />
+            <StatTile icon={<Tag className="h-4 w-4" />} label="crm_status" value={data.virtualStatus || '—'} />
+          </div>
+          <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-4">
+            <div className="grid gap-3 sm:grid-cols-3 mb-3">
+              <MoneyTile label="Kelishuv qiymati" value={money(data.contractValue)} tone="slate" />
+              <MoneyTile label="To'langan" value={money(data.totalPaid)} tone="emerald" />
+              <MoneyTile label="Qoldiq" value={money(data.remaining)} tone="amber" />
+            </div>
+            {pct != null && (
+              <div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1"><span>To'lov jarayoni · {data.paymentCount} ta to'lov</span><span className="font-semibold tabular-nums">{pct}%</span></div>
+                <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all" style={{ width: `${pct}%` }} />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </Card>
+  );
+}
+
+function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3">
+      <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1"><span className="text-indigo-400">{icon}</span>{label}</div>
+      <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={value}>{value}</div>
+    </div>
+  );
+}
+
+function MoneyTile({ label, value, tone }: { label: string; value: string; tone: 'slate' | 'emerald' | 'amber' }) {
+  const cls = { slate: 'text-slate-800 dark:text-slate-200', emerald: 'text-emerald-600 dark:text-emerald-400', amber: 'text-amber-600 dark:text-amber-400' }[tone];
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">{label}</div>
+      <div className={cn('text-[15px] font-bold tabular-nums', cls)}>{value}</div>
     </div>
   );
 }

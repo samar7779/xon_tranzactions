@@ -103,6 +103,65 @@ export class ChekOrderService {
     return m || 'claude-sonnet-4-6';
   }
 
+  // ───────────────── SHARTNOMA / MIJOZ / OBYEKT (CRM) ─────────────────
+  // Chek order natijasi ostida ko'rsatish uchun — mijoz F.I.SH, obyekt, xonadon,
+  // kelishuv qiymati, to'langan/qoldiq balans. CrmContract keshi + oplataKv summasi.
+  async contractInfo(contractNo: string) {
+    const cn = String(contractNo || '').trim();
+    if (!cn) throw new BadRequestException("contractNo bo'sh");
+    const cnUpper = cn.toUpperCase();
+
+    const [crm, sums] = await Promise.all([
+      this.prisma.crmContract.findFirst({
+        where: { contractNumber: cnUpper },
+        select: {
+          customerName: true, objectName: true, apartmentNumber: true,
+          virtualStatus: true, status: true, found: true, crmOrderId: true, rawSnapshot: true,
+        },
+      }),
+      this.prisma.oplataKv.aggregate({
+        where: { contractNo: cnUpper },
+        _sum: { paymentAmount: true },
+        _count: true,
+      }),
+    ]);
+
+    // Obyekt/mijoz — kesh bo'lmasa oplataKv qatorlaridan fallback
+    let customerName = crm?.customerName || null;
+    let objectName = crm?.objectName || null;
+    if ((!customerName || !objectName)) {
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { contractNo: cnUpper, object: { not: null } },
+        select: { object: true, client: true },
+        orderBy: { date: 'desc' },
+      });
+      if (!objectName) objectName = row?.object || null;
+      if (!customerName) customerName = row?.client || null;
+    }
+
+    const snap: any = crm?.rawSnapshot || {};
+    const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+    const contractValue = num(snap.total_amount ?? snap.price ?? snap.contract_amount);
+    const totalPaid = Number(sums._sum.paymentAmount || 0);
+    const remaining = contractValue != null ? contractValue - totalPaid : null;
+
+    return {
+      ok: true,
+      contractNo: cn,
+      found: !!crm?.found,
+      customerName,
+      objectName,
+      apartmentNumber: crm?.apartmentNumber || snap.apartment_number || null,
+      virtualStatus: crm?.virtualStatus || null,
+      status: crm?.status || null,
+      crmOrderId: crm?.crmOrderId || null,
+      contractValue,
+      totalPaid,
+      remaining,
+      paymentCount: sums._count || 0,
+    };
+  }
+
   // ───────────────── SURAT / PDF YUKLASH → AGENT ─────────────────
   async analyzeFile(
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number },

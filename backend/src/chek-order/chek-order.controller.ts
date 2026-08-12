@@ -62,6 +62,13 @@ export class ChekOrderController {
     return this.svc.list(q);
   }
 
+  @Get('contract-info')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Shartnoma CRM ma\'lumoti — mijoz/obyekt/xonadon/qiymat/qoldiq' })
+  contractInfo(@Query('contract') contract: string) {
+    return this.svc.contractInfo(contract);
+  }
+
   @Get('batch/:batchId')
   @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
   @ApiOperation({ summary: 'Bitta yuklash (batch) natijalari' })
