@@ -5,6 +5,7 @@ import * as path from 'path';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { CrmService } from '../crm/crm.service';
 import { ListChekOrderDto } from './dto/chek-order.dto';
 
 type Actor = { id: string | null; name: string | null };
@@ -87,6 +88,7 @@ export class ChekOrderService {
     private readonly settings: SettingsService,
     private readonly crypto: CryptoService,
     private readonly config: ConfigService,
+    private readonly crm: CrmService,
   ) {
     this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
   }
@@ -141,18 +143,48 @@ export class ChekOrderService {
 
     const snap: any = crm?.rawSnapshot || {};
     const num = (v: any) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
-    const contractValue = num(snap.total_amount ?? snap.price ?? snap.contract_amount);
+    let contractValue = num(snap.total_amount ?? snap.price ?? snap.contract_amount);
     const totalPaid = Number(sums._sum.paymentAmount || 0);
+
+    // ── LIVE CRM detail — kesh yetarli emas (qiymat/xonadon/qavat CRM'dan keladi) ──
+    let apartmentNumber = crm?.apartmentNumber || snap.apartment_number || null;
+    let rooms: number | null = null, area: number | null = null, floor: any = null, block: any = null, contractDate: string | null = null;
+    let virtualStatus = crm?.virtualStatus || null;
+    let foundLive = false;
+    try {
+      const res: any = await this.crm.show({ contract: cnUpper });
+      const d: any = res?.ok ? res.detail : null;
+      if (d) {
+        foundLive = true;
+        contractValue = num(d.price ?? d.total_amount) ?? contractValue;
+        const info: any = d.info || {};
+        apartmentNumber = info.number ?? apartmentNumber;
+        rooms = num(info.rooms);
+        area = num(info.area);
+        floor = info.floor ?? null;
+        block = info.block ?? null;
+        contractDate = d.contract_date ?? null;
+        const vs = d?.virtual_status?.value?.name || d?.virtual_status?.name;
+        if (vs) virtualStatus = (typeof vs === 'object' ? (vs.ru || vs.uz) : vs) || virtualStatus;
+        if (!objectName) objectName = info.object_name || d.object_name || objectName;
+      }
+    } catch { /* CRM javob bermasa keshdan davom */ }
+
     const remaining = contractValue != null ? contractValue - totalPaid : null;
 
     return {
       ok: true,
       contractNo: cn,
-      found: !!crm?.found,
+      found: !!crm?.found || foundLive,
       customerName,
       objectName,
-      apartmentNumber: crm?.apartmentNumber || snap.apartment_number || null,
-      virtualStatus: crm?.virtualStatus || null,
+      apartmentNumber,
+      rooms,
+      area,
+      floor: floor != null ? String(floor) : null,
+      block: block != null ? String(block) : null,
+      contractDate,
+      virtualStatus,
       status: crm?.status || null,
       crmOrderId: crm?.crmOrderId || null,
       contractValue,

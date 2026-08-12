@@ -486,13 +486,13 @@ function ResultCard({ r }: { r: OrderResult }) {
 function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void }) {
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
   const { data: d, isLoading } = useQuery({ queryKey: ['chek-tx-detail', txId], queryFn: () => api.get<any>(`/transactions/${txId}`) });
-  const [open, setOpen] = useState<Set<string>>(new Set(['maqsad']));
+  const [open, setOpen] = useState<Set<string>>(new Set(['yub', 'qab', 'maqsad', 'vaqt', 'tizim']));
   const toggle = (k: string) => setOpen((p) => { const n = new Set(p); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const isIn = d?.direction === 'IN';
 
   return (
     <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-2xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         {isLoading || !d ? (
           <div className="p-16 grid place-items-center"><Loader2 className="h-6 w-6 animate-spin text-indigo-500" /></div>
         ) : (
@@ -712,7 +712,8 @@ function ContractInfoPanel({ contract }: { contract: string }) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile icon={<User2 className="h-4 w-4" />} label="Mijoz" value={data.customerName || '—'} />
             <StatTile icon={<Building2 className="h-4 w-4" />} label="Obyekt" value={data.objectName || '—'} />
-            <StatTile icon={<Home className="h-4 w-4" />} label="Xonadon" value={data.apartmentNumber || '—'} />
+            <StatTile icon={<Home className="h-4 w-4" />} label="Xonadon" value={data.apartmentNumber ? `№ ${data.apartmentNumber}` : '—'}
+              sub={[data.rooms && `${data.rooms} xona`, data.area && `${data.area} m²`, data.block && `Блок ${data.block}`, data.floor && `${data.floor}-qavat`].filter(Boolean).join(' · ') || undefined} />
             <StatTile icon={<Tag className="h-4 w-4" />} label="crm_status" value={data.virtualStatus || '—'} />
           </div>
           <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-4">
@@ -736,11 +737,12 @@ function ContractInfoPanel({ contract }: { contract: string }) {
   );
 }
 
-function StatTile({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function StatTile({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
   return (
     <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3">
       <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1"><span className="text-indigo-400">{icon}</span>{label}</div>
       <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-200 truncate" title={value}>{value}</div>
+      {sub && <div className="text-[11px] text-slate-400 truncate mt-0.5" title={sub}>{sub}</div>}
     </div>
   );
 }
