@@ -84,12 +84,26 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
       {visible && (
         <div className="fixed right-5 top-1/2 -translate-y-1/2 z-[9990]">
           <button onClick={() => setOpen(true)} title="AI yordamchi" className="group relative block">
-            <span className="absolute -inset-1.5 rounded-full opacity-70 group-hover:opacity-100 transition-opacity"
-              style={{ background: 'conic-gradient(from 0deg, #6366f1, #a855f7, #ec4899, #6366f1)', animation: 'chekRingSpin 4s linear infinite', filter: 'blur(7px)' }} />
-            <span className="relative flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 text-white shadow-2xl shadow-violet-500/50 ring-2 ring-white/30 group-hover:scale-110 active:scale-95 transition-transform duration-200">
-              <Bot className="h-7 w-7" />
+            {/* tovlanuvchi tashqi yog'du (aylanuvchi) */}
+            <span aria-hidden className="absolute -inset-2 rounded-full opacity-60 group-hover:opacity-90 transition-opacity"
+              style={{ background: 'conic-gradient(from 0deg, #6366f1, #22d3ee, #d946ef, #8b5cf6, #6366f1)', filter: 'blur(13px)', animation: 'chekRingSpin 7s linear infinite reverse' }} />
+            {/* Aurora Orb — ichida jonli yorug'lik oqadi */}
+            <span className="relative flex items-center justify-center w-16 h-16 rounded-full overflow-hidden ring-1 ring-white/15 group-hover:scale-110 active:scale-95 transition-transform duration-200"
+              style={{ background: '#0e0b1e', animation: 'chekBreathe 4.5s ease-in-out infinite' }}>
+              <span aria-hidden className="absolute"
+                style={{ inset: '-40%', filter: 'blur(9px) saturate(1.35)', animation: 'chekRingSpin 7s linear infinite',
+                  background: 'radial-gradient(38% 38% at 30% 28%, #22d3ee, transparent 60%), radial-gradient(42% 42% at 72% 30%, #6366f1, transparent 62%), radial-gradient(46% 46% at 68% 74%, #d946ef, transparent 60%), radial-gradient(40% 40% at 26% 70%, #8b5cf6, transparent 62%)' }} />
+              <span aria-hidden className="absolute"
+                style={{ inset: '-40%', filter: 'blur(9px) saturate(1.35)', mixBlendMode: 'screen', opacity: 0.85, animation: 'chekRingSpin 11s linear infinite reverse',
+                  background: 'radial-gradient(38% 38% at 30% 28%, #22d3ee, transparent 60%), radial-gradient(42% 42% at 72% 30%, #6366f1, transparent 62%), radial-gradient(46% 46% at 68% 74%, #d946ef, transparent 60%), radial-gradient(40% 40% at 26% 70%, #8b5cf6, transparent 62%)' }} />
+              <span aria-hidden className="absolute inset-0 rounded-full"
+                style={{ background: 'radial-gradient(70% 70% at 50% 32%, rgba(255,255,255,.32), transparent 55%)' }} />
+              <svg className="relative" width="26" height="26" viewBox="0 0 24 24"
+                style={{ stroke: '#fff', fill: 'none', strokeWidth: 1.9, strokeLinecap: 'round', strokeLinejoin: 'round', filter: 'drop-shadow(0 1px 3px rgba(10,4,40,.6))' }}>
+                <path d="M12 3.5l1.6 4.3a3 3 0 0 0 1.8 1.8L19.7 11l-4.3 1.6a3 3 0 0 0-1.8 1.8L12 18.7l-1.6-4.3a3 3 0 0 0-1.8-1.8L4.3 11l4.3-1.6a3 3 0 0 0 1.8-1.8z" />
+                <path d="M18.5 3.5l.6 1.6 1.6.6-1.6.6-.6 1.6-.6-1.6L16.3 6l1.6-.6z" />
+              </svg>
             </span>
-            <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-emerald-400 ring-2 ring-white dark:ring-slate-900 animate-pulse" />
             <span className="absolute right-full top-1/2 -translate-y-1/2 mr-3 px-3 py-1.5 rounded-xl bg-slate-900 text-white text-[12px] font-semibold whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity shadow-lg">AI Yordamchi</span>
           </button>
         </div>
@@ -162,7 +176,7 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
           </div>
           <style>{`@keyframes chekSlideIn { from { transform: translateX(100%) } to { transform: translateX(0) } } @keyframes chekBounce { 0%,80%,100% { transform: translateY(0); opacity:.4 } 40% { transform: translateY(-4px); opacity:1 } } @keyframes chekRingSpin { to { transform: rotate(360deg) } }`}</style>
         </div>, document.body)}
-      <style>{`@keyframes chekRingSpin { to { transform: rotate(360deg) } }`}</style>
+      <style>{`@keyframes chekRingSpin { to { transform: rotate(360deg) } } @keyframes chekBreathe { 0%,100% { box-shadow: 0 10px 26px -8px rgba(99,102,241,.5), inset 0 1.5px 0 rgba(255,255,255,.4) } 50% { box-shadow: 0 16px 40px -6px rgba(217,70,239,.6), inset 0 1.5px 0 rgba(255,255,255,.45) } }`}</style>
     </>
   );
 }
