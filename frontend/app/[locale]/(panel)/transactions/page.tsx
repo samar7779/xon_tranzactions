@@ -367,6 +367,18 @@ export default function TransactionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_searchParams]);
 
+  // URL'da ?q=X bo'lsa — qidiruvni oldindan to'ldiramiz (Chek order'dan "Tranzaksiyada ko'rish")
+  useEffect(() => {
+    const uq = _searchParams.get('q');
+    if (uq && uq.trim()) {
+      setQ(uq.trim());
+      const params = new URLSearchParams(_searchParams.toString());
+      params.delete('q');
+      _router.replace(_pathname + (params.toString() ? '?' + params.toString() : ''));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_searchParams]);
+
   // URL'da ?batchId=X bo'lsa — faqat shu import yuklamasidagi tranzaksiyalarni ko'rsatamiz
   // (Import sahifasidagi "ko'rish" tugmasi shu yerga olib keladi)
   const [batchFilter, setBatchFilter] = useState<string | null>(null);

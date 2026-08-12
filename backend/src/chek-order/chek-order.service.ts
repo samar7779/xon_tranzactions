@@ -40,6 +40,33 @@ export interface OrderResult {
 const norm = (s: any) => String(s ?? '').replace(/\s+/g, '').toUpperCase();
 const normContract = (s: any) => String(s ?? '').replace(/[\s\-_./№]/g, '').toUpperCase();
 const cleanOrderNo = (s: any) => String(s ?? '').replace(/[^\d]/g, '').trim();
+const digitsOnly = (s: any) => String(s ?? '').replace(/\D/g, '');
+
+// Levenshtein masofa (OCR xatosi — 1-2 raqam ortiqcha/kam bo'lishi mumkin)
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > 3) return 99;
+  const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+    }
+  }
+  return dp[m][n];
+}
+
+// Hisob raqami mosligi — OCR'ga chidamli (20 xonali raqamда nol sanash xatosi bo'ladi)
+function acctSimilar(a: any, b: any): boolean {
+  const x = digitsOnly(a), y = digitsOnly(b);
+  if (!x || !y || x.length < 6 || y.length < 6) return false;
+  if (x === y) return true;
+  // OCR bir-ikki raqam ortiqcha/kam qo'shishi mumkin
+  if (Math.abs(x.length - y.length) <= 2 && editDistance(x, y) <= 2) return true;
+  return false;
+}
 
 @Injectable()
 export class ChekOrderService {
@@ -181,16 +208,18 @@ export class ChekOrderService {
       return { ...base, result: 'not_found', conditions: hasSource ? this.emptyConds(o) : null };
     }
 
-    // Hisob mosligi — naqd kvitansiyada oluvchi hisob tranzaksiyaning to yoki from tomonida
-    // bo'lishi mumkin (oraliq hisob), shu bois ikkalasini ham tekshiramiz.
-    const accMatch = (t: any): boolean | null => {
-      if (!o.recipientAccount) return null;
-      const r = norm(o.recipientAccount);
-      return norm(t.toAccount) === r || norm(t.fromAccount) === r;
+    // Hisob mosligi — order'dan keyingi 2-darajali MUHIM kalit. Naqd kvitansiyada oluvchi
+    // hisob tranzaksiyaning to yoki from tomonида bo'lishi mumkin (oraliq hisob), OCR'ga
+    // chidamli (fuzzy). Mos kelgan tomon (to/from) qiymatini ham qaytaramiz — ko'rsatish uchun.
+    const accInfo = (t: any): { ok: boolean | null; matched: string | null } => {
+      if (!o.recipientAccount) return { ok: null, matched: null };
+      if (acctSimilar(o.recipientAccount, t.toAccount)) return { ok: true, matched: t.toAccount };
+      if (acctSimilar(o.recipientAccount, t.fromAccount)) return { ok: true, matched: t.fromAccount };
+      return { ok: false, matched: null };
     };
     const condsFor = (t: any) => ({
       order: orderNo ? (norm(t.docNumber) === norm(orderNo)) : null,
-      account: accMatch(t),
+      account: accInfo(t).ok,
       date: o.date ? this.sameDay(t.txnDate, o.date) : null,
       amount: o.amount != null ? (Math.abs(Number(t.amount) - Number(o.amount)) < 0.01) : null,
       contract: o.contractNo ? normContract(t.description).includes(normContract(o.contractNo)) : null,
@@ -198,11 +227,11 @@ export class ChekOrderService {
     const scoreOf = (t: any) => {
       const c = condsFor(t);
       let s = 0;
-      if (c.order === true) s += 55;     // order№ aniq mos — kuchli
-      if (c.contract === true) s += 35;  // shartnoma tafsilotда — ishonchli
-      if (c.amount === true) s += 30;    // summa — ishonchli
-      if (c.date === true) s += 12;
-      if (c.account === true) s += 8;
+      if (c.order === true) s += 50;     // 1-kalit: order№ aniq mos
+      if (c.account === true) s += 40;   // 2-kalit: hisob raqami (MUHIM)
+      if (c.amount === true) s += 25;    // summa
+      if (c.contract === true) s += 25;  // shartnoma
+      if (c.date === true) s += 10;      // sana
       return s;
     };
 
@@ -213,13 +242,14 @@ export class ChekOrderService {
       if (s > bestScore) { bestScore = s; best = t; }
     }
 
-    // Chegara 50: order№(55), yoki shartnoma+summa(65), yoki summa+sana+hisob(50) — ishonchli.
-    // Faqat shartnoma(35) yoki faqat summa+sana(42) — yetarli emas (soxta moslik bo'lmasin).
+    // Chegara 50: order№(50), yoki hisob+summa(65), yoki shartnoma+summa(50), yoki hisob+shartnoma(65).
+    // Faqat summa+sana(35) yoki faqat shartnoma(25) — yetarli emas (soxta moslik bo'lmasin).
     if (!best || bestScore < 50) {
       return { ...base, result: 'not_found', conditions: hasSource ? this.emptyConds(o) : null };
     }
 
     const conditions = condsFor(best);
+    (best as any)._matchAccount = accInfo(best).matched;
     // Asosiy (ishonchli) shartlar — summa va shartnoma. Aynan shular FALSE bo'lsa NOMUVOFIQ.
     // order№ yoki hisob farqi (kvitansiya ≠ bank hujjati) NOMUVOFIQ qilmaydi.
     const coreFalse = conditions.amount === false || conditions.contract === false;
@@ -238,13 +268,24 @@ export class ChekOrderService {
     };
   }
 
-  private sameDay(a: Date | null, b: string): boolean | null {
-    if (!a || !b) return null;
-    const d = new Date(b);
-    if (isNaN(d.getTime())) return null;
-    return a.getUTCFullYear() === d.getUTCFullYear()
-      && a.getUTCMonth() === d.getUTCMonth()
-      && a.getUTCDate() === d.getUTCDate();
+  // Sana solishtirish — Toshkent (+5) taqvim kuni bo'yicha. txnDate UTC'da saqlanadi
+  // (masalan 21T19:00Z = Toshkent 22-kun), shu bois +5 soatga surib kunni olamiz.
+  private sameDay(txnDate: Date | null, orderDateStr: string): boolean | null {
+    if (!txnDate || !orderDateStr) return null;
+    // Order sanasi — sof taqvim kuni (YYYY-MM-DD)
+    const m = String(orderDateStr).match(/(\d{4})-(\d{2})-(\d{2})/);
+    let orderDay: string;
+    if (m) {
+      orderDay = `${m[1]}-${Number(m[2])}-${Number(m[3])}`;
+    } else {
+      const d = new Date(orderDateStr);
+      if (isNaN(d.getTime())) return null;
+      const t = new Date(d.getTime() + 5 * 3600 * 1000);
+      orderDay = `${t.getUTCFullYear()}-${t.getUTCMonth() + 1}-${t.getUTCDate()}`;
+    }
+    const tk = new Date(txnDate.getTime() + 5 * 3600 * 1000);
+    const txDay = `${tk.getUTCFullYear()}-${tk.getUTCMonth() + 1}-${tk.getUTCDate()}`;
+    return orderDay === txDay;
   }
 
   private txSnapshot(tx: any) {
@@ -262,6 +303,7 @@ export class ChekOrderService {
       toName: tx.toName,
       toAccount: tx.toAccount,
       description: tx.description,
+      matchAccount: tx._matchAccount ?? null, // kvitansiya hisobiga mos kelgan tomon (to/from)
     };
   }
 
