@@ -29,6 +29,7 @@ import { AttachmentsModule } from './attachments/attachments.module';
 import { XonpayModule } from './xonpay/xonpay.module';
 import { OplataKvModule } from './oplata-kv/oplata-kv.module';
 import { VznosModule } from './vznos/vznos.module';
+import { ChekOrderModule } from './chek-order/chek-order.module';
 import { GoogleExportModule } from './google-export/google-export.module';
 import { AgentModule } from './agent/agent.module';
 import { DeveloperApiModule } from './developer-api/developer-api.module';
@@ -72,6 +73,7 @@ import { BankPwdModule } from './bank-pwd/bank-pwd.module';
     SverkaTelegramModule,
     CategorizationModule,
     VznosModule,
+    ChekOrderModule,
     ImportModule,
     AttachmentsModule,
     XonpayModule,

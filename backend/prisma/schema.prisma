@@ -1070,6 +1070,54 @@ model VznosContract {
   @@map("vznos_contract")
 }
 
+/// Chek order tekshiruvi — memorial orderni (rasm/PDF/qo'lda) yuklab, order № bo'yicha
+/// tranzaksiyada bor-yo'qligini va shartlarni (hisob/sana/summa/shartnoma) tekshiradi.
+model ChekOrder {
+  id        String @id @default(cuid())
+
+  // Kirish: bitta yuklash (surat) bir necha order berishi mumkin — batchId bilan bog'lanadi
+  batchId  String  @map("batch_id")
+  source   String  @db.VarChar(16) // 'photo' | 'pdf' | 'manual'
+
+  // Yuklangan fayl (photo/pdf — batch bo'yicha bir marta saqlanadi)
+  fileName String? @map("file_name")
+  fileMime String? @map("file_mime") @db.VarChar(128)
+  fileSize Int?    @map("file_size")
+  filePath String? @map("file_path")
+
+  // Agent ajratgan (yoki qo'lда kiritilgan) memorial order ma'lumoti
+  orderNo          String    @map("order_no") @db.VarChar(64) // Мемориальный ордер №
+  orderDate        DateTime? @map("order_date") @db.Date
+  amount           Decimal?  @db.Decimal(18, 2)
+  payerName        String?   @map("payer_name") @db.Text
+  payerAccount     String?   @map("payer_account") @db.VarChar(40)
+  recipientName    String?   @map("recipient_name") @db.Text
+  recipientAccount String?   @map("recipient_account") @db.VarChar(40)
+  contractNo       String?   @map("contract_no") @db.VarChar(128)
+  purpose          String?   @db.Text
+  extracted        Json? // agent ajratgan to'liq raw
+
+  // Natija
+  result        String   @db.VarChar(16) // 'found' | 'mismatch' | 'not_found'
+  matchedTxId   String?  @map("matched_tx_id")
+  matchedTxExtId String? @map("matched_tx_ext_id")
+  condAccount   Boolean? @map("cond_account")  // hisob raqami mos?
+  condDate      Boolean? @map("cond_date")     // sana mos?
+  condAmount    Boolean? @map("cond_amount")   // summa mos?
+  condContract  Boolean? @map("cond_contract") // shartnoma mos?
+  matchedTx     Json?    @map("matched_tx")    // topilgan tranzaksiya snapshot (ko'rsatish uchun)
+
+  createdById   String?  @map("created_by_id") @db.VarChar(50)
+  createdByName String?  @map("created_by_name") @db.VarChar(190)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([orderNo])
+  @@index([result])
+  @@index([batchId])
+  @@map("chek_order")
+}
+
 // ─────────────────────────────────────────────────────────────────
 // OPLATA KV — OBJECT NAME MAPPING (CRM → OplatyKv)
 // CRM dan "XON SAROY AFSONASI" kelsa, OplatyKv'ga "АФСОНА" deb yoziladi

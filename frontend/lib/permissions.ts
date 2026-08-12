@@ -33,6 +33,8 @@ export const PERMS = {
 
   VZNOS_VIEW: 'vznos:view',
   VZNOS_MANAGE: 'vznos:manage',
+  CHEKORDER_VIEW: 'chekorder:view',
+  CHEKORDER_MANAGE: 'chekorder:manage',
 
   OPLATAKV_VIEW: 'oplatakv:view',
   OPLATAKV_CREATE: 'oplatakv:create',
