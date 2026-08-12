@@ -9,7 +9,6 @@ import {
   Building2, CalendarDays, Coins, FileSignature, Landmark,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
-import { TransactionsTabs } from '@/components/transactions-tabs';
 import { Card } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
@@ -108,7 +107,6 @@ export default function ChekOrderPage() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <Topbar title="Chek order" subtitle="Memorial order → tranzaksiyada bor-yo'qligini tekshirish" />
-      <TransactionsTabs />
 
       <div className="px-6 lg:px-8 py-6 max-w-[1200px] mx-auto space-y-5">
         {/* Sarlavha */}

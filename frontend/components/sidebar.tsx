@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import {
-  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X,
+  LayoutDashboard, Building2, ShieldCheck, BadgeDollarSign, Home, X, ReceiptText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
@@ -38,6 +38,8 @@ const NAV: NavItem[] = [
   { href: '/transactions', key: 'transactions', icon: BadgeDollarSign,  group: 'main',  permissions: [PERMS.TRANSACTIONS_VIEW] },
   // ОплатыКв — CRM + Billing bitta bo'lim, tab bar bilan
   { href: '/oplatykv',     key: 'oplatykv',     icon: Home,             group: 'main',  permissions: [PERMS.CRM_VIEW, PERMS.OPLATAKV_VIEW] },
+  // Chek order — memorial orderni tranzaksiyada tekshirish (ОплатыКв'dan keyin)
+  { href: '/chek-order',   key: 'chekOrder',    icon: ReceiptText,      group: 'main',  permissions: [PERMS.CHEKORDER_VIEW] },
 
   { href: '/setup',        key: 'banks',        icon: Building2,        group: 'setup', permissions: [PERMS.BANKS_VIEW, PERMS.ACCOUNTS_VIEW, PERMS.CREDENTIALS_VIEW] },
 
