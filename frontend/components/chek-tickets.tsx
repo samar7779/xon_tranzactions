@@ -46,7 +46,10 @@ export function ChekTickets() {
       `/chek-order/tickets?status=${status}&q=${encodeURIComponent(q)}&page=${page}`,
     ),
   });
-  const refresh = () => qc.invalidateQueries({ queryKey: ['chek-tickets'] });
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['chek-tickets'] });
+    qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] }); // sub-tab badge sonini yangilash
+  };
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/chek-order/tickets/${id}`),
     onSuccess: () => { refresh(); toast.success("O'chirildi"); },
