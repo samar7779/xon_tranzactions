@@ -185,9 +185,28 @@ export class OplataKvService {
   // "Счётчик → Ежемесячный" avto-rejim — sozlangan vaqt oralig'ida har intervalMin daqiqada
   private lastSchotchikAt: Date | null = null;
 
+  /**
+   * Kelajakdagi updated_at qiymatlarini HOZIRgacha "clamp" qiladi (DB soati skew bo'lsa yakuniy tozalash).
+   * Sabab: agar biror yozuv updated_at > now() bo'lsa, delta-sync (updatedSince) kursori kelajakka
+   * sakraydi va oradagi haqiqiy to'lovlar butunlay o'tkazib yuboriladi ("ko'r" sync). DB NOW() emas,
+   * APP soatidan (parametr) foydalanamiz. Tuzatilgan qatorlar updated_at=now bo'lib, iste'molchilarga
+   * to'g'ri vaqtda qayta yetkaziladi (avval o'tkazib yuborilgan bo'lsa — endi ko'rinadi).
+   */
+  private async clampFutureUpdatedAt(): Promise<number> {
+    const appNow = new Date();
+    const n: number = await this.prisma.$executeRaw`
+      UPDATE oplata_kv SET updated_at = ${appNow} WHERE updated_at > ${appNow}
+    `;
+    if (Number(n) > 0) this.log.warn(`clampFutureUpdatedAt: ${n} qator — kelajakdagi updated_at hozirgacha tuzatildi`);
+    return Number(n);
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async schotchikAutoTick() {
     try {
+      // Har minut: kelajakdagi updated_at bo'lsa tuzatamiz (schotchik yoqilgan-yoqilmaganidan
+      // qat'i nazar). Fix 1'dan keyin yangi buzuq yozuv chiqmaydi — bu faqat eskilarni tozalaydi.
+      await this.clampFutureUpdatedAt();
       const cfg = await this.settings.getSchotchikAutoConfig();
       if (!cfg.enabled) return;
       const { hour, minute } = this.getTashkentHourMinute();
@@ -922,12 +941,18 @@ export class OplataKvService {
     }
 
     // APPLY — column-to-column (monthly_amount = payment_amount) — raw SQL (Prisma updateMany qila olmaydi)
+    // MUHIM: updated_at ni DB NOW() emas, APP soati (appNow) bilan yozamiz. Agar DB server
+    // soati UTC bo'lmasa (masalan +5s Toshkent skew), NOW() KELAJAKDAGI qiymat beradi va bu
+    // delta-sync (updatedSince) kursorini kelajakka sakratib, oradagi haqiqiy to'lovlarni
+    // "ko'r" qilib o'tkazib yuboradi. Prisma @updatedAt (qolgan barcha yozuv) app soatini
+    // ishlatadi — izchillik uchun bu yerda ham shuni beramiz.
+    const appNow = new Date();
     const updated: number = await this.prisma.$executeRaw`
       UPDATE oplata_kv
       SET monthly_amount = payment_amount,
           first_installment = NULL,
           payment_category = 'MONTHLY'::"OplataKvCategory",
-          updated_at = NOW()
+          updated_at = ${appNow}
       WHERE tx_type = 'За счетчик' AND date >= ${from} AND payment_amount IS NOT NULL
         AND (payment_category IS DISTINCT FROM 'MONTHLY'::"OplataKvCategory"
              OR first_installment IS NOT NULL

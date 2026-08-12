@@ -656,9 +656,24 @@ export class PublicApiController {
       account: it.account,
       category: it.category,
       subcategory: it.subcategory,
-      createdAt: it.createdAt,
-      updatedAt: it.updatedAt,
+      createdAt: this.clampFuture(it.createdAt),
+      updatedAt: this.clampFuture(it.updatedAt),
     };
+  }
+
+  /**
+   * Kelajakdagi timestamp'ni HOZIRgacha "clamp" qiladi — API hech qachon now()'dan katta
+   * updatedAt/createdAt qaytarmasligi uchun YAKUNIY himoya (DB soati skew bo'lsa ham).
+   * Delta-sync (updatedSince) kursori kelajakka sakramaydi → oradagi to'lovlar o'tkazib
+   * yuborilmaydi. updatedAt asc tartibi buzilmaydi: kelajak qiymat oxirda turadi va now()'ga
+   * clamp bo'lsa ham u barcha o'tmish qiymatlardan katta/teng — monoton o'sish saqlanadi.
+   */
+  private clampFuture(d: any): any {
+    if (!d) return d;
+    const t = d instanceof Date ? d.getTime() : new Date(d).getTime();
+    if (isNaN(t)) return d;
+    const now = Date.now();
+    return t > now ? new Date(now) : d;
   }
 
   private oplataKvShape(it: any, orderId: string | null = null) {
@@ -677,8 +692,8 @@ export class PublicApiController {
       object: it.object,
       client: it.client,
       paymentMethod: it.paymentMethod,
-      createdAt: it.createdAt,
-      updatedAt: it.updatedAt,
+      createdAt: this.clampFuture(it.createdAt),
+      updatedAt: this.clampFuture(it.updatedAt),
     };
   }
 }
