@@ -37,6 +37,15 @@ export interface OrderResult {
   } | null;
 }
 
+// Bir TO'LOV uchun (bir necha order — mem.order + kvitansiya — bitta to'lovga birlashadi)
+export interface PaymentResult {
+  orderNos: string[];
+  extracted: ExtractedOrder;
+  result: 'found' | 'mismatch' | 'not_found';
+  matchedTx: any | null;
+  conditions: OrderResult['conditions'];
+}
+
 const norm = (s: any) => String(s ?? '').replace(/\s+/g, '').toUpperCase();
 const normContract = (s: any) => String(s ?? '').replace(/[\s\-_./№]/g, '').toUpperCase();
 const cleanOrderNo = (s: any) => String(s ?? '').replace(/[^\d]/g, '').trim();
@@ -98,7 +107,7 @@ export class ChekOrderService {
   async analyzeFile(
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
     actor: Actor,
-  ): Promise<{ ok: true; batchId: string; results: OrderResult[] }> {
+  ): Promise<{ ok: true; batchId: string; results: PaymentResult[] }> {
     if (!file?.buffer) throw new BadRequestException('Hujjat (file) majburiy');
     if (file.size > 25 * 1024 * 1024) throw new BadRequestException('Fayl 25 MB dan oshmasligi kerak');
     const apiKey = await this.getAiKey();
@@ -125,10 +134,10 @@ export class ChekOrderService {
     const batchId = `chk_${Date.now().toString(36)}_${Math.round(Math.random() * 1e6).toString(36)}`;
     const filePath = await this.saveFile(file, batchId);
 
-    const results: OrderResult[] = [];
+    const orderResults: OrderResult[] = [];
     for (const o of orders) {
       const r = await this.matchOrder(o, true);
-      results.push(r);
+      orderResults.push(r);
       await this.persist(r, {
         batchId,
         source: isPdf ? 'pdf' : 'photo',
@@ -139,11 +148,12 @@ export class ChekOrderService {
         extractedRaw: o,
       }, actor);
     }
-    return { ok: true, batchId, results };
+    // Bir xil to'lovga tegishli orderlarni (mem.order + kvitansiya) birlashtiramiz
+    return { ok: true, batchId, results: this.groupResults(orderResults) };
   }
 
   // ───────────────── QO'LDA ORDER RAQAM(LAR)I ─────────────────
-  async checkManual(orderNosRaw: string, actor: Actor): Promise<{ ok: true; batchId: string; results: OrderResult[] }> {
+  async checkManual(orderNosRaw: string, actor: Actor): Promise<{ ok: true; batchId: string; results: PaymentResult[] }> {
     const nums = String(orderNosRaw || '')
       .split(/[\s,;\n]+/)
       .map((s) => cleanOrderNo(s))
@@ -152,14 +162,14 @@ export class ChekOrderService {
     if (!uniq.length) throw new BadRequestException('Order raqami kiritilmadi');
 
     const batchId = `chk_${Date.now().toString(36)}_${Math.round(Math.random() * 1e6).toString(36)}`;
-    const results: OrderResult[] = [];
+    const orderResults: OrderResult[] = [];
     for (const n of uniq) {
       const o: ExtractedOrder = { orderNo: n };
       const r = await this.matchOrder(o, false); // manba yo'q — shartlar N/A
-      results.push(r);
+      orderResults.push(r);
       await this.persist(r, { batchId, source: 'manual', extractedRaw: o }, actor);
     }
-    return { ok: true, batchId, results };
+    return { ok: true, batchId, results: this.groupResults(orderResults) };
   }
 
   // ───────────────── SOLISHTIRISH (order → tranzaksiya) ─────────────────
@@ -250,12 +260,65 @@ export class ChekOrderService {
 
     const conditions = condsFor(best);
     (best as any)._matchAccount = accInfo(best).matched;
-    // Asosiy (ishonchli) shartlar — summa va shartnoma. Aynan shular FALSE bo'lsa NOMUVOFIQ.
-    // order№ yoki hisob farqi (kvitansiya ≠ bank hujjati) NOMUVOFIQ qilmaydi.
-    const coreFalse = conditions.amount === false || conditions.contract === false;
-    const result: OrderResult['result'] = coreFalse ? 'mismatch' : 'found';
+    const result = this.resultOf(conditions);
 
     return { orderNo, extracted: o, result, matchedTx: this.txSnapshot(best), conditions };
+  }
+
+  /**
+   * Natija qoidasi:
+   *  - summa yoki shartnoma aniq FALSE → NOMUVOFIQ (to'lov mohiyati mos emas).
+   *  - order№ VA hisob IKKALASI ham FALSE → NOMUVOFIQ (shubhali: shartnoma+summa bor,
+   *    lekin 1 va 2-kalit mos emas — tekshirish kerak). "Yo'q" demaymiz — bazaдa bor.
+   *  - aks holda → TOPILDI (order№ yoki hisobdan bittasi mos + summa/shartnoma zid emas).
+   */
+  private resultOf(c: OrderResult['conditions']): 'found' | 'mismatch' {
+    if (!c) return 'found';
+    const hardFail = c.amount === false || c.contract === false;
+    const bothKeysFail = c.order === false && c.account === false;
+    return (hardFail || bothKeysFail) ? 'mismatch' : 'found';
+  }
+
+  // Bir necha order bitta to'lovga (bir xil tranzaksiya yoki summa+shartnoma+sana)
+  // tegishli bo'lsa — bitta natijaga birlashtiramiz (bank ham mem.order, ham kvitansiya beradi).
+  private groupResults(rs: OrderResult[]): PaymentResult[] {
+    const groups = new Map<string, OrderResult[]>();
+    for (const r of rs) {
+      let key: string;
+      if (r.matchedTx?.id) key = `tx:${r.matchedTx.id}`;
+      else if (r.extracted.contractNo || r.extracted.amount != null) {
+        key = `sig:${r.extracted.amount ?? ''}|${normContract(r.extracted.contractNo)}|${r.extracted.date ?? ''}`;
+      } else key = `u:${r.orderNo}`;
+      const arr = groups.get(key) || [];
+      arr.push(r);
+      groups.set(key, arr);
+    }
+    return Array.from(groups.values()).map((arr) => this.mergeGroup(arr));
+  }
+
+  private mergeGroup(arr: OrderResult[]): PaymentResult {
+    const orderNos = Array.from(new Set(arr.map((r) => r.orderNo).filter(Boolean)));
+    if (arr.length === 1) {
+      const r = arr[0];
+      return { orderNos, extracted: r.extracted, result: r.result, matchedTx: r.matchedTx, conditions: r.conditions };
+    }
+    const withTx = arr.find((r) => r.matchedTx);
+    const primary = withTx || arr[0];
+    // Shartlarni OR bilan birlashtiramiz — bir hujjat hisobga mos kelsa, hisob ✓ bo'ladi.
+    const orCond = (k: keyof NonNullable<OrderResult['conditions']>): boolean | null => {
+      const vals = arr.map((r) => r.conditions?.[k]);
+      if (vals.some((v) => v === true)) return true;
+      if (vals.some((v) => v === false)) return false;
+      return null;
+    };
+    const conditions = primary.matchedTx
+      ? { order: orCond('order'), account: orCond('account'), date: orCond('date'), amount: orCond('amount'), contract: orCond('contract') }
+      : null;
+    const result = primary.matchedTx ? this.resultOf(conditions) : 'not_found';
+    // Eng to'liq (ko'proq maydonli) extracted'ni tanlaymiz
+    const richness = (e: ExtractedOrder) => [e.recipientAccount, e.contractNo, e.amount, e.date, e.payerName, e.recipientName].filter((x) => x != null && x !== '').length;
+    const richest = arr.slice().sort((a, b) => richness(b.extracted) - richness(a.extracted))[0];
+    return { orderNos, extracted: richest.extracted, result, matchedTx: primary.matchedTx, conditions };
   }
 
   private emptyConds(o: ExtractedOrder) {

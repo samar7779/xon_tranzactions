@@ -1,15 +1,13 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import Link from 'next/link';
-import { useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ReceiptText, Upload, Loader2, CheckCircle2, XCircle, AlertTriangle,
   Hash, Search, Image as ImageIcon, ScanLine, Trash2, ChevronLeft, ChevronRight,
   Building2, CalendarDays, Coins, FileSignature, Landmark, FileText, RotateCcw, Sparkles,
-  ZoomIn, X, ScrollText, ExternalLink, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
+  ZoomIn, X, ScrollText, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card } from '@/components/ui/card';
@@ -31,7 +29,7 @@ type MatchedTx = {
   description: string | null; matchAccount?: string | null;
 };
 type OrderResult = {
-  orderNo: string; extracted: Extracted; result: 'found' | 'mismatch' | 'not_found';
+  orderNos: string[]; extracted: Extracted; result: 'found' | 'mismatch' | 'not_found';
   matchedTx: MatchedTx | null; conditions: Cond | null;
 };
 type HistoryRow = {
@@ -56,7 +54,6 @@ const fmtDate = (s?: string | null) => {
 
 export default function ChekOrderPage() {
   const qc = useQueryClient();
-  const { locale } = useParams<{ locale: string }>();
   const canManage = useHasPermission(PERMS.CHEKORDER_MANAGE);
   const canView = useHasPermission(PERMS.CHEKORDER_VIEW);
 
@@ -67,7 +64,11 @@ export default function ChekOrderPage() {
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<{ url: string; isPdf: boolean; name: string } | null>(null);
   const [zoom, setZoom] = useState(false);
+  const [lbZoom, setLbZoom] = useState(false);
+  const [activeResult, setActiveResult] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { setActiveResult(0); }, [results]);
 
   const [hResult, setHResult] = useState<'all' | 'found' | 'mismatch' | 'not_found'>('all');
   const [hQ, setHQ] = useState('');
@@ -167,7 +168,7 @@ export default function ChekOrderPage() {
         {view === 'check' ? (
           <>
             {canManage && (
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,520px)_1fr]">
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,640px)_1fr]">
                 {/* CHAP: surat / kirish */}
                 <Card className="border-0 shadow-soft overflow-hidden self-start">
                   <div className="flex items-center gap-1 p-1 m-3 mb-0 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
@@ -188,7 +189,7 @@ export default function ChekOrderPage() {
                           ) : (
                             <button onClick={() => setZoom(true)} className="block w-full cursor-zoom-in" title="Kattalashtirish">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={preview.url} alt="order" className="w-full max-h-[640px] object-contain" />
+                              <img src={preview.url} alt="order" className="w-full max-h-[860px] min-h-[380px] object-contain" />
                               {!analyzing && (
                                 <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 h-7 rounded-lg bg-slate-900/70 backdrop-blur text-white text-[11px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
                                   <ZoomIn className="h-3.5 w-3.5" /> Kattalashtirish
@@ -257,8 +258,26 @@ export default function ChekOrderPage() {
                     </Card>
                   ) : results && results.length > 0 ? (
                     <>
-                      <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 px-1">Natija — {results.length} ta</div>
-                      {results.map((r, i) => <ResultCard key={i} r={r} locale={locale} />)}
+                      <div className="flex items-center justify-between gap-2 px-1">
+                        <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Natija — {results.length} ta</div>
+                      </div>
+                      {results.length > 1 && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {results.map((r, i) => {
+                            const m = RESULT_META[r.result];
+                            const on = i === activeResult;
+                            return (
+                              <button key={i} onClick={() => setActiveResult(i)}
+                                className={cn('inline-flex items-center gap-1.5 px-3 h-8 rounded-lg text-[12px] font-semibold ring-1 transition-colors',
+                                  on ? 'bg-indigo-600 text-white ring-indigo-600 shadow-sm' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+                                <m.Icon className={cn('h-3.5 w-3.5', on ? 'text-white' : (r.result === 'found' ? 'text-emerald-500' : r.result === 'mismatch' ? 'text-amber-500' : 'text-rose-500'))} />
+                                <span className="font-mono tabular-nums">№ {r.orderNos[0]}{r.orderNos.length > 1 ? ` +${r.orderNos.length - 1}` : ''}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      {results[activeResult] && <ResultCard r={results[activeResult]} />}
                     </>
                   ) : (
                     <Card className="border-0 shadow-soft p-12 grid place-items-center text-center">
@@ -341,12 +360,22 @@ export default function ChekOrderPage() {
         )}
       </div>
 
-      {/* Lightbox — surat kattalashtirilgan */}
+      {/* Lightbox — surat kattalashtirilgan (bosib yana zoom) */}
       {zoom && preview && !preview.isPdf && (
-        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-sm grid place-items-center p-4" onClick={() => setZoom(false)}>
-          <button className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" onClick={() => setZoom(false)}><X className="h-5 w-5" /></button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={preview.url} alt="order" className="max-w-full max-h-full object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
+        <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-sm overflow-auto p-4" onClick={() => { setZoom(false); setLbZoom(false); }}>
+          <div className="sticky top-0 z-10 flex items-center justify-end gap-2">
+            <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" title={lbZoom ? 'Kichraytirish' : 'Kattalashtirish'} onClick={(e) => { e.stopPropagation(); setLbZoom((v) => !v); }}>
+              {lbZoom ? <ZoomIn className="h-5 w-5 rotate-45" /> : <ZoomIn className="h-5 w-5" />}
+            </button>
+            <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" onClick={(e) => { e.stopPropagation(); setZoom(false); setLbZoom(false); }}><X className="h-5 w-5" /></button>
+          </div>
+          <div className="min-h-full grid place-items-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={preview.url} alt="order"
+              className={cn('rounded-lg shadow-2xl transition-all duration-200', lbZoom ? 'max-w-none w-auto cursor-zoom-out' : 'max-w-full max-h-[86vh] object-contain cursor-zoom-in')}
+              style={lbZoom ? { width: 'min(2400px, 190vw)' } : undefined}
+              onClick={(e) => { e.stopPropagation(); setLbZoom((v) => !v); }} />
+          </div>
         </div>
       )}
     </div>
@@ -354,13 +383,14 @@ export default function ChekOrderPage() {
 }
 
 // ─── Natija kartasi ───
-function ResultCard({ r, locale }: { r: OrderResult; locale: string }) {
+function ResultCard({ r }: { r: OrderResult }) {
   const meta = RESULT_META[r.result];
   const ex = r.extracted;
   const tx = r.matchedTx;
   const c = r.conditions;
   const orderDiffers = c && c.order === false;
   const acctVal = tx?.matchAccount || tx?.toAccount;
+  const [modal, setModal] = useState<null | 'tx' | 'kv'>(null);
 
   return (
     <Card className={cn('border-0 shadow-lg overflow-hidden', meta.glow)}>
@@ -368,9 +398,14 @@ function ResultCard({ r, locale }: { r: OrderResult; locale: string }) {
         r.result === 'found' ? 'bg-emerald-50/60 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/40'
         : r.result === 'mismatch' ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/40'
         : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40')}>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ring-1 text-[11.5px] font-bold', meta.cls)}><meta.Icon className="h-3.5 w-3.5" /> {meta.label}</span>
-          <span className="font-mono font-bold text-slate-800 dark:text-slate-200 tabular-nums">№ {r.orderNo}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {r.orderNos.map((no, i) => (
+              <span key={i} className="font-mono font-bold text-slate-800 dark:text-slate-200 tabular-nums text-[13px]">№ {no}</span>
+            ))}
+            {r.orderNos.length > 1 && <span className="text-[10px] text-slate-400 font-medium">(1 to'lov · {r.orderNos.length} hujjat)</span>}
+          </div>
         </div>
         {ex.amount != null && <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{formatMoney(ex.amount, '')} <span className="text-[10px] text-slate-400">so'm</span></span>}
       </div>
@@ -410,15 +445,15 @@ function ResultCard({ r, locale }: { r: OrderResult; locale: string }) {
           <div className="flex items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"><ScrollText className="h-3.5 w-3.5" /> Topilgan tranzaksiya</div>
             <div className="flex items-center gap-1.5">
-              <Link href={`/${locale}/transactions?q=${encodeURIComponent(tx.docNumber || tx.externalId || '')}`} target="_blank"
-                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-indigo-600 text-white text-[11px] font-semibold hover:bg-indigo-700 transition-colors" title="Tranzaksiyalarда ochish">
-                <ArrowRightLeft className="h-3.5 w-3.5" /> Tranzaksiya <ExternalLink className="h-3 w-3 opacity-70" />
-              </Link>
+              <button onClick={() => setModal('tx')}
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition-colors" title="Tranzaksiya ma'lumoti">
+                <ArrowRightLeft className="h-3.5 w-3.5" /> Tranzaksiya
+              </button>
               {ex.contractNo && (
-                <Link href={`/${locale}/oplatykv?q=${encodeURIComponent(ex.contractNo)}`} target="_blank"
-                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-700 transition-colors" title="ОплатыКв'да ochish">
-                  <Home className="h-3.5 w-3.5" /> ОплатыКв <ExternalLink className="h-3 w-3 opacity-70" />
-                </Link>
+                <button onClick={() => setModal('kv')}
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-700 transition-colors" title="ОплатыКв to'lovlari">
+                  <Home className="h-3.5 w-3.5" /> ОплатыКв
+                </button>
               )}
             </div>
           </div>
@@ -436,7 +471,115 @@ function ResultCard({ r, locale }: { r: OrderResult; locale: string }) {
           </div>
         </div>
       )}
+
+      {modal === 'tx' && tx && <TxDetailModal tx={tx} onClose={() => setModal(null)} />}
+      {modal === 'kv' && ex.contractNo && <OplataKvModal contract={ex.contractNo} onClose={() => setModal(null)} />}
     </Card>
+  );
+}
+
+// ─── Tranzaksiya to'liq ma'lumot modali (read-only) ───
+function TxDetailModal({ tx, onClose }: { tx: MatchedTx; onClose: () => void }) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
+  const isIn = tx.direction === 'IN';
+  return (
+    <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className={cn('p-5 text-white relative', isIn ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-rose-500 to-red-600')}>
+          <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><ArrowRightLeft className="h-3 w-3" /> {isIn ? 'KIRIM' : 'CHIQIM'} · {fmtDate(tx.txnDate)}</div>
+          <div className="text-2xl font-bold tabular-nums">{isIn ? '+' : '−'}{formatMoney(tx.amount, '')} <span className="text-sm font-medium opacity-80">{tx.currency}</span></div>
+        </div>
+        <div className="p-4 space-y-3">
+          <ModalSection title="To'lov ma'lumoti">
+            <ModalRow label="Bank docNumber" value={tx.docNumber || '—'} mono />
+            <ModalRow label="Sana" value={fmtDate(tx.txnDate)} />
+            <ModalRow label="Yo'nalish" value={isIn ? 'Kirim' : 'Chiqim'} />
+          </ModalSection>
+          <ModalSection title="Yuboruvchi">
+            <ModalRow label="Nomi" value={tx.fromName || '—'} />
+            <ModalRow label="Hisob" value={tx.fromAccount || '—'} mono />
+          </ModalSection>
+          <ModalSection title="Qabul qiluvchi">
+            <ModalRow label="Nomi" value={tx.toName || '—'} />
+            <ModalRow label="Hisob" value={tx.toAccount || '—'} mono />
+          </ModalSection>
+          <ModalSection title="To'lov maqsadi">
+            <p className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed break-words">{tx.description || '—'}</p>
+          </ModalSection>
+          <ModalSection title="Tizim">
+            <ModalRow label="Ext ID" value={tx.externalId || tx.id} mono />
+            {tx.reference && <ModalRow label="Reference" value={tx.reference} mono />}
+          </ModalSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── ОплатыКв to'lovlari modali (shartnoma bo'yicha, read-only) ───
+function OplataKvModal({ contract, onClose }: { contract: string; onClose: () => void }) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
+  const { data, isLoading } = useQuery({
+    queryKey: ['chek-kv', contract],
+    queryFn: () => api.get<{ items: any[]; sums: { paymentAmount: number } }>(`/oplata-kv?contractNos=${encodeURIComponent(contract)}&perPage=50`),
+  });
+  const items = data?.items || [];
+  return (
+    <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-center p-4" onClick={onClose}>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 text-white relative bg-gradient-to-br from-violet-500 to-indigo-600">
+          <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Home className="h-3 w-3" /> ОплатыКв · {contract}</div>
+          <div className="text-2xl font-bold tabular-nums">{formatMoney(data?.sums?.paymentAmount || 0, '')} <span className="text-sm font-medium opacity-80">so'm</span></div>
+          <div className="text-[11px] opacity-80 mt-0.5">{items.length} ta to'lov</div>
+        </div>
+        <div className="p-3">
+          {isLoading ? (
+            <div className="p-8 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+          ) : items.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 text-[13px]">Bu shartnoma bo'yicha ОплатыКв to'lovi yo'q</div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800">
+              <table className="w-full text-[12px]">
+                <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
+                  <tr><th className="text-left px-3 py-2 font-semibold">Sana</th><th className="text-right px-3 py-2 font-semibold">Summa</th><th className="text-left px-3 py-2 font-semibold">Tip</th><th className="text-left px-3 py-2 font-semibold">Obyekt</th><th className="text-left px-3 py-2 font-semibold">crm_status</th></tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {items.map((it: any) => (
+                    <tr key={it.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                      <td className="px-3 py-2 tabular-nums whitespace-nowrap">{fmtDate(it.date)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-semibold">{it.paymentAmount != null ? formatMoney(Number(it.paymentAmount), '') : '—'}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{it.txType || '—'}</td>
+                      <td className="px-3 py-2 text-slate-600 dark:text-slate-300">{it.object || '—'}</td>
+                      <td className="px-3 py-2 text-slate-500">{it.crmStatus || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{title}</div>
+      <div className="space-y-1">{children}</div>
+    </div>
+  );
+}
+
+function ModalRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-start gap-2 text-[12px]">
+      <span className="text-slate-400 w-28 shrink-0">{label}</span>
+      <span className={cn('min-w-0 break-words text-slate-700 dark:text-slate-200', mono && 'font-mono')}>{value}</span>
+    </div>
   );
 }
 
