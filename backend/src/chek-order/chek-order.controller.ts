@@ -110,6 +110,13 @@ export class ChekOrderController {
     return this.svc.getOne(id);
   }
 
+  @Delete()
+  @RequirePermissions(PERMISSIONS.CHEKORDER_MANAGE)
+  @ApiOperation({ summary: "Butun tarixni o'chirish" })
+  clearAll() {
+    return this.svc.clearAll();
+  }
+
   @Delete(':id')
   @RequirePermissions(PERMISSIONS.CHEKORDER_MANAGE)
   @ApiOperation({ summary: "Chek order yozuvini o'chirish" })

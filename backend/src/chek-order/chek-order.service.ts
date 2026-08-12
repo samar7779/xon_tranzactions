@@ -665,6 +665,22 @@ export class ChekOrderService {
     };
   }
 
+  /** Butun tarixni o'chirish (fayllar bilan). */
+  async clearAll(): Promise<{ deleted: number }> {
+    const withFiles = await this.prisma.chekOrder.findMany({
+      where: { filePath: { not: null } },
+      select: { filePath: true },
+      distinct: ['filePath'],
+    });
+    for (const r of withFiles) {
+      if (r.filePath) {
+        try { await fs.unlink(r.filePath); await fs.rmdir(path.dirname(r.filePath)).catch(() => {}); } catch { /* skip */ }
+      }
+    }
+    const res = await this.prisma.chekOrder.deleteMany({});
+    return { deleted: res.count };
+  }
+
   async remove(id: string) {
     const row = await this.prisma.chekOrder.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('Topilmadi');

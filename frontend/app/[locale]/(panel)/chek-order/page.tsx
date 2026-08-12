@@ -2,6 +2,7 @@
 
 // Chek order — memorial/kvitansiya → tranzaksiyada tekshirish (natija xulosasi + shartlar izohi)
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -9,7 +10,7 @@ import {
   Hash, Search, Image as ImageIcon, ScanLine, Trash2, ChevronLeft, ChevronRight,
   Building2, CalendarDays, Coins, FileSignature, Landmark, FileText, RotateCcw,
   ZoomIn, X, ScrollText, ArrowRightLeft, Home, ClipboardList, History as HistoryIcon,
-  User2, Tag,
+  User2, Tag, ListChecks, Eraser,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { Card } from '@/components/ui/card';
@@ -141,6 +142,11 @@ export default function ChekOrderPage() {
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/chek-order/${id}`),
     onSuccess: () => { refreshHistory(); toast.success("O'chirildi"); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+  const clearMut = useMutation({
+    mutationFn: () => api.delete<{ deleted: number }>('/chek-order'),
+    onSuccess: (r) => { refreshHistory(); toast.success(`${r.deleted} ta yozuv o'chirildi`); },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
@@ -443,6 +449,13 @@ export default function ChekOrderPage() {
                 <select value={hResult} onChange={(e) => { setHResult(e.target.value as any); setHPage(1); }} className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
                   <option value="all">Barchasi</option><option value="found">Topildi</option><option value="mismatch">Nomuvofiq</option><option value="not_found">Topilmadi</option>
                 </select>
+                {canManage && (history?.items?.length ?? 0) > 0 && (
+                  <button onClick={() => { if (confirm("BUTUN tarix o'chirilsinmi? Bu qaytarib bo'lmaydi.")) clearMut.mutate(); }}
+                    disabled={clearMut.isPending}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 transition-colors">
+                    {clearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eraser className="h-3.5 w-3.5" />} Barchasini o'chirish
+                  </button>
+                )}
               </div>
             </div>
             <Card className="border-0 shadow-soft overflow-hidden">
@@ -475,7 +488,7 @@ export default function ChekOrderPage() {
                           <td className="px-3 py-2.5 text-right tabular-nums text-slate-700 dark:text-slate-300">{row.amount != null ? formatMoney(row.amount, '') : '—'}</td>
                           <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400">{row.contractNo || '—'}</td>
                           <td className="px-3 py-2.5 max-w-[160px] truncate text-slate-600 dark:text-slate-400" title={row.recipientName || ''}>{row.recipientName || '—'}</td>
-                          <td className="px-3 py-2.5"><CondDots c={row.conditions} /></td>
+                          <td className="px-3 py-2.5"><CondCell c={row.conditions} /></td>
                           <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', meta.cls)}><meta.Icon className="h-3 w-3" /> {meta.label}</span></td>
                           <td className="px-3 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{row.createdByName || '—'} · {fmtDate(row.createdAt)}</td>
                           <td className="px-3 py-2.5 text-right">{canManage && <button onClick={() => { if (confirm("O'chirilsinmi?")) delMut.mutate(row.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}</td>
@@ -819,14 +832,52 @@ function CondRow({ label, ok, txVal, mono, note }: { label: string; ok: boolean 
   );
 }
 
-function CondDots({ c }: { c: Cond }) {
-  const items: Array<[string, boolean | null]> = [['O', c.order], ['H', c.account], ['∑', c.amount], ['Д', c.contract], ['S', c.date]];
+// SHARTLAR ustuni — bitta icon; bosilганда to'liq "mos / mos emas" popover
+function CondCell({ c }: { c: Cond }) {
+  const [open, setOpen] = useState(false);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const items: Array<[string, boolean | null]> = [['Order №', c.order], ['Hisob', c.account], ['Summa', c.amount], ['Shartnoma', c.contract], ['Sana', c.date]];
+  const okCount = items.filter(([, v]) => v === true).length;
+  const total = items.filter(([, v]) => v !== null).length || 5;
+  const anyBad = items.some(([, v]) => v === false);
+
+  const openPop = () => { if (btnRef.current) setRect(btnRef.current.getBoundingClientRect()); setOpen(true); };
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    const t = setTimeout(() => document.addEventListener('click', close), 0);
+    return () => { window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); document.removeEventListener('click', close); clearTimeout(t); };
+  }, [open]);
+
   return (
-    <div className="flex items-center justify-center gap-1">
-      {items.map(([k, v], i) => (
-        <span key={i} title={k} className={cn('inline-grid place-items-center w-4 h-4 rounded text-[8px] font-bold', v === true ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : v === false ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-400')}>{v === true ? '✓' : v === false ? '✕' : '·'}</span>
-      ))}
-    </div>
+    <>
+      <button ref={btnRef} onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : openPop(); }}
+        title="Shartlarni ko'rish"
+        className={cn('inline-flex items-center gap-1 px-2 h-6 rounded-md ring-1 text-[11px] font-semibold transition-colors',
+          anyBad ? 'ring-rose-200 dark:ring-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
+            : 'ring-emerald-200 dark:ring-emerald-900 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40')}>
+        <ListChecks className="h-3.5 w-3.5" />
+        <span className="tabular-nums">{okCount}/{total}</span>
+      </button>
+      {open && rect && createPortal(
+        <div className="fixed z-[9999] w-56 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl p-2"
+          style={{ top: rect.bottom + 6, left: Math.min(rect.left, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 240) }}
+          onClick={(e) => e.stopPropagation()}>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5 mb-1">Shartlar tekshiruvi</div>
+          {items.map(([label, v], i) => (
+            <div key={i} className="flex items-center justify-between gap-2 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 text-[12px]">
+              <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
+              <span className={cn('inline-flex items-center gap-1 font-semibold text-[11px]', v === true ? 'text-emerald-600 dark:text-emerald-400' : v === false ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400')}>
+                {v === true ? <CheckCircle2 className="h-3.5 w-3.5" /> : v === false ? <XCircle className="h-3.5 w-3.5" /> : <span className="w-3.5 text-center">—</span>}
+                {v === true ? 'mos keldi' : v === false ? 'mos kelmadi' : 'tekshirilmadi'}
+              </span>
+            </div>
+          ))}
+        </div>, document.body)}
+    </>
   );
 }
 
