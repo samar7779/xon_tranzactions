@@ -1101,6 +1101,7 @@ model ChekOrder {
   result        String   @db.VarChar(16) // 'found' | 'mismatch' | 'not_found'
   matchedTxId   String?  @map("matched_tx_id")
   matchedTxExtId String? @map("matched_tx_ext_id")
+  condOrder     Boolean? @map("cond_order")    // order № docNumber bilan mos? (kvitansiya ≠ bank hujjati bo'lishi mumkin)
   condAccount   Boolean? @map("cond_account")  // hisob raqami mos?
   condDate      Boolean? @map("cond_date")     // sana mos?
   condAmount    Boolean? @map("cond_amount")   // summa mos?

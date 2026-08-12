@@ -29,6 +29,7 @@ export interface OrderResult {
   result: 'found' | 'mismatch' | 'not_found';
   matchedTx: any | null;
   conditions: {
+    order: boolean | null;
     account: boolean | null;
     date: boolean | null;
     amount: boolean | null;
@@ -140,45 +141,96 @@ export class ChekOrderService {
     const base: OrderResult = { orderNo, extracted: o, result: 'not_found', matchedTx: null, conditions: null };
     if (!orderNo) return base;
 
-    // Order № = tranzaksiya docNumber. IN yo'nalish afzal (bizga tushgan pul).
-    const candidates = await this.prisma.transaction.findMany({
-      where: { docNumber: orderNo },
-      orderBy: [{ direction: 'asc' }, { txnDate: 'desc' }],
-      take: 20,
-      select: {
-        id: true, externalId: true, direction: true, amount: true, currency: true,
-        txnDate: true, docNumber: true, reference: true,
-        fromName: true, fromAccount: true, toName: true, toAccount: true,
-        description: true,
-      },
-    });
-    if (!candidates.length) {
+    const sel = {
+      id: true, externalId: true, direction: true, amount: true, currency: true,
+      txnDate: true, docNumber: true, reference: true,
+      fromName: true, fromAccount: true, toName: true, toAccount: true, description: true,
+    };
+    // ── Nomzodlarni bir necha signal bo'yicha yig'amiz ──
+    // Order № (kvitansiya raqami) bank docNumber'idan farq qilishi mumkin, shu bois
+    // FAQAT order № ga tayanmaymiz — shartnoma + summa + sana ham qidiriladi.
+    const cand = new Map<string, any>();
+    const addRows = (rows: any[]) => rows.forEach((r) => cand.set(r.id, r));
+
+    // 1) Order № == docNumber (aniq mos)
+    addRows(await this.prisma.transaction.findMany({ where: { docNumber: orderNo }, take: 20, select: sel }));
+
+    // 2) Shartnoma raqami to'lov tafsilotida (kvitansiyada shartnoma bor — ishonchli)
+    const cn = String(o.contractNo || '').replace(/[№\s]/g, '').trim();
+    if (cn.length >= 5) {
+      addRows(await this.prisma.transaction.findMany({
+        where: { description: { contains: cn, mode: 'insensitive' } },
+        orderBy: { txnDate: 'desc' }, take: 40, select: sel,
+      }));
+    }
+
+    // 3) Summa + sana oynasi (± 4 kun)
+    if (o.amount != null && o.date) {
+      const d = new Date(o.date);
+      if (!isNaN(d.getTime())) {
+        const from = new Date(d); from.setDate(from.getDate() - 4); from.setHours(0, 0, 0, 0);
+        const to = new Date(d); to.setDate(to.getDate() + 4); to.setHours(23, 59, 59, 999);
+        addRows(await this.prisma.transaction.findMany({
+          where: { amount: o.amount as any, txnDate: { gte: from, lte: to } },
+          take: 40, select: sel,
+        }));
+      }
+    }
+
+    if (cand.size === 0) {
       return { ...base, result: 'not_found', conditions: hasSource ? this.emptyConds(o) : null };
     }
 
-    // Eng mos nomzod: summa mos kelgani afzal, aks holda birinchisi
-    let tx = candidates[0];
-    if (o.amount != null) {
-      const exact = candidates.find((c) => Math.abs(Number(c.amount) - Number(o.amount)) < 0.01);
-      if (exact) tx = exact;
+    // Hisob mosligi — naqd kvitansiyada oluvchi hisob tranzaksiyaning to yoki from tomonida
+    // bo'lishi mumkin (oraliq hisob), shu bois ikkalasini ham tekshiramiz.
+    const accMatch = (t: any): boolean | null => {
+      if (!o.recipientAccount) return null;
+      const r = norm(o.recipientAccount);
+      return norm(t.toAccount) === r || norm(t.fromAccount) === r;
+    };
+    const condsFor = (t: any) => ({
+      order: orderNo ? (norm(t.docNumber) === norm(orderNo)) : null,
+      account: accMatch(t),
+      date: o.date ? this.sameDay(t.txnDate, o.date) : null,
+      amount: o.amount != null ? (Math.abs(Number(t.amount) - Number(o.amount)) < 0.01) : null,
+      contract: o.contractNo ? normContract(t.description).includes(normContract(o.contractNo)) : null,
+    });
+    const scoreOf = (t: any) => {
+      const c = condsFor(t);
+      let s = 0;
+      if (c.order === true) s += 55;     // order№ aniq mos — kuchli
+      if (c.contract === true) s += 35;  // shartnoma tafsilotда — ishonchli
+      if (c.amount === true) s += 30;    // summa — ishonchli
+      if (c.date === true) s += 12;
+      if (c.account === true) s += 8;
+      return s;
+    };
+
+    let best: any = null;
+    let bestScore = -1;
+    for (const t of cand.values()) {
+      const s = scoreOf(t);
+      if (s > bestScore) { bestScore = s; best = t; }
     }
 
-    const conditions = hasSource ? {
-      account: o.recipientAccount ? (norm(tx.toAccount) === norm(o.recipientAccount)) : null,
-      date: o.date ? this.sameDay(tx.txnDate, o.date) : null,
-      amount: o.amount != null ? (Math.abs(Number(tx.amount) - Number(o.amount)) < 0.01) : null,
-      contract: o.contractNo ? normContract(tx.description).includes(normContract(o.contractNo)) : null,
-    } : null;
+    // Chegara 50: order№(55), yoki shartnoma+summa(65), yoki summa+sana+hisob(50) — ishonchli.
+    // Faqat shartnoma(35) yoki faqat summa+sana(42) — yetarli emas (soxta moslik bo'lmasin).
+    if (!best || bestScore < 50) {
+      return { ...base, result: 'not_found', conditions: hasSource ? this.emptyConds(o) : null };
+    }
 
-    // mismatch — biror shart aniq FALSE bo'lsa (null = tekshirilmadi, hisobga olinmaydi)
-    const anyFalse = conditions && Object.values(conditions).some((v) => v === false);
-    const result: OrderResult['result'] = anyFalse ? 'mismatch' : 'found';
+    const conditions = condsFor(best);
+    // Asosiy (ishonchli) shartlar — summa va shartnoma. Aynan shular FALSE bo'lsa NOMUVOFIQ.
+    // order№ yoki hisob farqi (kvitansiya ≠ bank hujjati) NOMUVOFIQ qilmaydi.
+    const coreFalse = conditions.amount === false || conditions.contract === false;
+    const result: OrderResult['result'] = coreFalse ? 'mismatch' : 'found';
 
-    return { orderNo, extracted: o, result, matchedTx: this.txSnapshot(tx), conditions };
+    return { orderNo, extracted: o, result, matchedTx: this.txSnapshot(best), conditions };
   }
 
   private emptyConds(o: ExtractedOrder) {
     return {
+      order: o.orderNo ? false : null,
       account: o.recipientAccount ? false : null,
       date: o.date ? false : null,
       amount: o.amount != null ? false : null,
@@ -261,6 +313,7 @@ export class ChekOrderService {
           result: r.result,
           matchedTxId: r.matchedTx?.id ?? null,
           matchedTxExtId: r.matchedTx?.externalId ?? null,
+          condOrder: r.conditions?.order ?? null,
           condAccount: r.conditions?.account ?? null,
           condDate: r.conditions?.date ?? null,
           condAmount: r.conditions?.amount ?? null,
@@ -350,6 +403,7 @@ export class ChekOrderService {
       contractNo: r.contractNo,
       result: r.result,
       conditions: {
+        order: r.condOrder,
         account: r.condAccount,
         date: r.condDate,
         amount: r.condAmount,
@@ -399,17 +453,19 @@ export class ChekOrderService {
   private async claudeExtractOrders(apiKey: string, model: string, fileBlock: any): Promise<ExtractedOrder[]> {
     const system = [
       "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy yordamchisisan.",
-      "Foydalanuvchi bank MEMORIAL ORDER(lar) suratini yoki PDF'ini yuklaydi. BITTA rasmда BIR NECHTA memorial order bo'lishi mumkin — HAMMASINI ajrat.",
-      "Har order uchun quyidagilarni o'qi:",
-      "- orderNo: 'Мемориальный ордер №' dan keyingi RAQAM (masalan 13473268). FAQAT raqamlar.",
-      "- date: 'Дата' (YYYY-MM-DD formatда qaytar).",
-      "- amount: 'Сумма' (faqat son, ajratuvchilarsiz — masalan 200000).",
-      "- payerName: to'lovchi shaxs ismi — odatda 'Детали платежа' ichida (masalan 'от KURYAZOV AZIZBEK MARATOVICH'). Naименование плательщика emas (u bank hisobi nomi).",
-      "- payerAccount: 'Дебет счет плательщика' raqami.",
-      "- recipientName: 'Наименование получателя' (masalan ООО ALMAZA CITY).",
-      "- recipientAccount: 'Кредит счет получателя' raqami.",
-      "- contractNo: to'lov tafsilotidagi shartnoma raqami (masalan 'дог. №34УНА263N' → 34УНА263N).",
-      "- purpose: 'Детали платежа' matni (qisqa).",
+      "Foydalanuvchi bank to'lov hujjati suratini/PDF'ini yuklaydi. Bu ikki xil bo'lishi mumkin:",
+      "  (a) МЕМОРИАЛЬНЫЙ ОРДЕР, (b) КВИТАНЦИЯ О ВЗНОСЕ НАЛИЧНЫХ ДЕНЕГ (naqd pul kvitansiyasi).",
+      "BITTA rasmда BIR NECHTA hujjat bo'lishi mumkin — HAMMASINI ajrat.",
+      "Har hujjat uchun quyidagilarni DIQQAT bilan o'qi (raqamlarni raqamma-raqam, adashmasdan):",
+      "- orderNo: yuqoridagi hujjat/kvitansiya RAQAMI — 'Мемориальный ордер №' yoki 'Квитанция ... № '. FAQAT raqamlar. Har bir raqamни aniq o'qi (0 va 8, 1 va 7 ni adashtirma).",
+      "- date: hujjat sanasi ('Дата' yoki '\"22\" ИЮЛЯ 2026') — YYYY-MM-DD formatда.",
+      "- amount: 'Сумма'/'СУММА' (faqat son, ajratuvchilarsiz — masalan 42500000).",
+      "- payerName: to'lovchi shaxs ismi — 'Вноситель наличных денег' yoki 'Детали платежа' ichida (masalan 'RASULOV ZUHRIDDIN SHOKIR OGLI').",
+      "- payerAccount: 'Дебет'/'Дебет счет плательщика' raqami.",
+      "- recipientName: 'Наименование получателя' yoki pulni oluvchi tashkilot nomi.",
+      "- recipientAccount: 'Кредит'/'Кредит счет получателя' raqami.",
+      "- contractNo: to'lov maqsadi/tafsilotidagi SHARTNOMA raqami (masalan '№3962SRH26HV SONLI SHARTNOMAGA' → 3962SRH26HV, yoki 'дог. №34УНА263N' → 34УНА263N). Bu ENG MUHIM maydon — albatta topishga harakat qil.",
+      "- purpose: 'Цель оплаты'/'Детали платежа' matni (qisqa).",
       "Aniq o'qilmagan maydonni null qoldir, taxmin qilma. extract_chek_orders tool orqali qaytar.",
     ].join(' ');
 
