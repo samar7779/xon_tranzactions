@@ -69,6 +69,20 @@ export class ChekOrderController {
     return this.svc.contractInfo(contract);
   }
 
+  @Get('crm-suggest')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Shartnoma raqami avtomatik takliflari (CRM)' })
+  crmSuggest(@Query('q') q: string) {
+    return this.svc.crmSuggest(q);
+  }
+
+  @Get('contract-payments')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
+  @ApiOperation({ summary: 'Shartnoma bo\'yicha tranzaksiya (to\'lov)lar' })
+  contractPayments(@Query('contract') contract: string) {
+    return this.svc.contractPayments(contract);
+  }
+
   @Get('batch/:batchId')
   @RequirePermissions(PERMISSIONS.CHEKORDER_VIEW)
   @ApiOperation({ summary: 'Bitta yuklash (batch) natijalari' })

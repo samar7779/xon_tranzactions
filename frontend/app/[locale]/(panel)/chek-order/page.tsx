@@ -59,9 +59,26 @@ export default function ChekOrderPage() {
   const canView = useHasPermission(PERMS.CHEKORDER_VIEW);
 
   const [view, setView] = useState<'check' | 'history'>('check');
-  const [mode, setMode] = useState<'upload' | 'manual'>('upload');
+  const [mode, setMode] = useState<'upload' | 'manual' | 'contract'>('upload');
   const [orderNos, setOrderNos] = useState('');
   const [results, setResults] = useState<OrderResult[] | null>(null);
+  // Shartnoma rejimi
+  const [contractQ, setContractQ] = useState('');
+  const [contractQDeb, setContractQDeb] = useState('');
+  const [selectedContract, setSelectedContract] = useState<string | null>(null);
+  const [suggFocused, setSuggFocused] = useState(false);
+  useEffect(() => { const id = setTimeout(() => setContractQDeb(contractQ), 300); return () => clearTimeout(id); }, [contractQ]);
+
+  const { data: sugg, isFetching: suggesting } = useQuery({
+    queryKey: ['chek-crm-suggest', contractQDeb],
+    queryFn: () => api.get<{ items: any[] }>(`/chek-order/crm-suggest?q=${encodeURIComponent(contractQDeb)}`),
+    enabled: mode === 'contract' && contractQDeb.trim().length >= 2 && !selectedContract,
+  });
+  const { data: cPayments, isLoading: payLoading } = useQuery({
+    queryKey: ['chek-contract-payments', selectedContract],
+    queryFn: () => api.get<{ items: MatchedTx[] }>(`/chek-order/contract-payments?contract=${encodeURIComponent(selectedContract || '')}`),
+    enabled: mode === 'contract' && !!selectedContract,
+  });
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState<{ url: string; isPdf: boolean; name: string } | null>(null);
   const [zoom, setZoom] = useState(false);
@@ -127,7 +144,30 @@ export default function ChekOrderPage() {
     setResults(null);
     setPreview((prev) => { if (prev?.url) URL.revokeObjectURL(prev.url); return null; });
     setOrderNos('');
+    setContractQ(''); setSelectedContract(null);
   };
+
+  const pickContract = (c: string) => {
+    setSelectedContract(c);
+    setContractQ(c);
+    setSuggFocused(false);
+    setResults(null);
+  };
+  // Shartnoma to'lovi tanlanganda — to'g'ridan-to'g'ri "topilgan" natija sifatida ko'rsatamiz
+  const pickPayment = (tx: MatchedTx) => {
+    setResults([{
+      orderNos: [tx.docNumber || tx.id],
+      extracted: {
+        orderNo: tx.docNumber || '', contractNo: selectedContract || undefined,
+        amount: tx.amount, date: tx.txnDate, recipientAccount: tx.toAccount || undefined,
+        recipientName: tx.toName || undefined, payerName: tx.fromName || undefined,
+      },
+      result: 'found',
+      matchedTx: tx,
+      conditions: { order: true, account: true, amount: true, contract: true, date: true },
+    }]);
+  };
+  const showSugg = mode === 'contract' && !selectedContract && contractQDeb.trim().length >= 2 && suggFocused && (suggesting || (sugg?.items?.length ?? 0) > 0);
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -172,11 +212,14 @@ export default function ChekOrderPage() {
                 {/* CHAP: surat / kirish */}
                 <Card className="border-0 shadow-soft overflow-hidden self-start">
                   <div className="flex items-center gap-1 p-1 m-3 mb-0 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
-                    <button onClick={() => setMode('upload')} className={cn('flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'upload' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
+                    <button onClick={() => setMode('upload')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'upload' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
                       <ImageIcon className="h-3.5 w-3.5" /> Surat / PDF
                     </button>
-                    <button onClick={() => setMode('manual')} className={cn('flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'manual' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
+                    <button onClick={() => setMode('manual')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'manual' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
                       <Hash className="h-3.5 w-3.5" /> Order raqami
+                    </button>
+                    <button onClick={() => setMode('contract')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'contract' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
+                      <FileSignature className="h-3.5 w-3.5" /> Shartnoma
                     </button>
                   </div>
 
@@ -227,7 +270,7 @@ export default function ChekOrderPage() {
                           </div>
                         </div>
                       )
-                    ) : (
+                    ) : mode === 'manual' ? (
                       <div className="space-y-2">
                         <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Order raqam(lar)i</label>
                         <textarea value={orderNos} onChange={(e) => setOrderNos(e.target.value)} placeholder="268041120&#10;13425470" rows={5}
@@ -236,6 +279,74 @@ export default function ChekOrderPage() {
                           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Tranzaksiyada tekshir
                         </button>
                         <p className="text-[11px] text-slate-400 pt-1">Eslatma: faqat raqam bo'yicha. To'liq (hisob+shartnoma+summa) tekshiruv uchun suratни yuklang.</p>
+                      </div>
+                    ) : (
+                      /* ── SHARTNOMA rejimi — CRM taklif + to'lovlar ── */
+                      <div className="space-y-3">
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Shartnoma raqami</label>
+                        <div className="relative">
+                          <FileSignature className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                          <input
+                            value={contractQ}
+                            onChange={(e) => { setContractQ(e.target.value.toUpperCase()); if (selectedContract) { setSelectedContract(null); setResults(null); } }}
+                            onFocus={() => setSuggFocused(true)}
+                            onBlur={() => setTimeout(() => setSuggFocused(false), 150)}
+                            placeholder="Shartnoma raqamini yozing — CRM'dan qidiriladi"
+                            className="w-full pl-9 pr-9 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-mono outline-none focus:ring-2 focus:ring-indigo-500/40" />
+                          {selectedContract && (
+                            <button onClick={() => { setSelectedContract(null); setContractQ(''); setResults(null); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
+                          )}
+                          {showSugg && (
+                            <div className="absolute z-20 mt-1 left-0 right-0 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl max-h-72 overflow-y-auto">
+                              {suggesting && (sugg?.items?.length ?? 0) === 0 ? (
+                                <div className="p-4 text-center text-slate-400"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></div>
+                              ) : (sugg?.items || []).map((s: any, i: number) => (
+                                <button key={i} onMouseDown={(e) => { e.preventDefault(); pickContract(s.contract); }}
+                                  className="w-full text-left px-3 py-2.5 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 border-b border-slate-50 dark:border-slate-800 last:border-0 transition-colors">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-mono font-semibold text-[13px] text-slate-800 dark:text-slate-200">{s.contract}</span>
+                                    {s.status && <span className="text-[10px] text-slate-400">{s.status}</span>}
+                                  </div>
+                                  <div className="text-[11.5px] text-slate-500 truncate">{[s.clientFullName, s.object, s.apartmentNumber && `№ ${s.apartmentNumber}`].filter(Boolean).join(' · ') || '—'}</div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        {selectedContract && (
+                          <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
+                            <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                              <span>To'lovlar</span>
+                              <span className="tabular-nums">{cPayments?.items?.length ?? 0} ta</span>
+                            </div>
+                            {payLoading ? (
+                              <div className="p-6 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
+                            ) : (cPayments?.items?.length ?? 0) === 0 ? (
+                              <div className="p-6 text-center text-[12px] text-slate-400">Bu shartnoma bo'yicha tranzaksiya topilmadi</div>
+                            ) : (
+                              <div className="max-h-80 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
+                                {(cPayments?.items || []).map((tx) => {
+                                  const active = results?.[0]?.matchedTx?.id === tx.id;
+                                  return (
+                                    <button key={tx.id} onClick={() => pickPayment(tx)}
+                                      className={cn('w-full text-left px-3 py-2.5 transition-colors', active ? 'bg-indigo-50 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800/50')}>
+                                      <div className="flex items-center justify-between gap-2">
+                                        <span className="text-[12px] tabular-nums text-slate-500">{fmtDate(tx.txnDate)}</span>
+                                        <span className={cn('text-[13px] font-bold tabular-nums', tx.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>{tx.direction === 'IN' ? '+' : '−'}{formatMoney(tx.amount, '')}</span>
+                                      </div>
+                                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                                        <span className="text-[11px] text-slate-400 font-mono">№ {tx.docNumber || '—'}</span>
+                                        <span className="text-[10.5px] text-slate-400 truncate max-w-[240px]">{tx.fromName || tx.toName || ''}</span>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {!selectedContract && <p className="text-[11px] text-slate-400">Shartnomani tanlang — to'lovlari chiqadi. Kerakli to'lovni bosing.</p>}
                       </div>
                     )}
                   </div>
@@ -286,7 +397,7 @@ export default function ChekOrderPage() {
                     <Card className="border-0 shadow-soft p-12 grid place-items-center text-center">
                       <div className="text-slate-300 dark:text-slate-600">
                         <ScanLine className="h-10 w-10 mx-auto mb-2" />
-                        <div className="text-[13px] text-slate-400">Suratni yuklang — natija shu yerда chiqadi</div>
+                        <div className="text-[13px] text-slate-400">{mode === 'contract' ? "Shartnoma va to'lovni tanlang — natija shu yerда chiqadi" : "Suratni yuklang — natija shu yerда chiqadi"}</div>
                       </div>
                     </Card>
                   )}

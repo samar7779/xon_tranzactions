@@ -194,6 +194,49 @@ export class ChekOrderService {
     };
   }
 
+  // ───────────────── SHARTNOMA BO'YICHA — CRM taklif + to'lovlar ─────────────────
+  /** Shartnoma raqami avtomatik takliflari (CRM'dan). */
+  async crmSuggest(q: string) {
+    const s = String(q || '').trim();
+    if (s.length < 2) return { ok: true, items: [] };
+    try {
+      const res: any = await this.crm.searchContracts(s, 10);
+      const items = (res?.items || []).map((it: any) => ({
+        contract: it.contract,
+        clientFullName: it.clientFullName || null,
+        object: it.object || null,
+        apartmentNumber: it.apartmentNumber || null,
+        status: it.status || null,
+      })).filter((x: any) => x.contract);
+      return { ok: true, items };
+    } catch {
+      return { ok: true, items: [] };
+    }
+  }
+
+  /** Shartnoma bo'yicha tranzaksiya (to'lov)lar ro'yxati. */
+  async contractPayments(contract: string) {
+    const cn = String(contract || '').trim();
+    if (!cn) throw new BadRequestException("contract bo'sh");
+    const cnUpper = cn.toUpperCase();
+    const rows = await this.prisma.transaction.findMany({
+      where: {
+        OR: [
+          { contractNumber: cnUpper },
+          { description: { contains: cn, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { txnDate: 'desc' },
+      take: 60,
+      select: {
+        id: true, externalId: true, direction: true, amount: true, currency: true,
+        txnDate: true, docNumber: true, reference: true,
+        fromName: true, fromAccount: true, toName: true, toAccount: true, description: true,
+      },
+    });
+    return { ok: true, contract: cn, items: rows.map((t) => ({ ...t, amount: Number(t.amount) })) };
+  }
+
   // ───────────────── SURAT / PDF YUKLASH → AGENT ─────────────────
   async analyzeFile(
     file: { buffer: Buffer; originalname: string; mimetype: string; size: number },
