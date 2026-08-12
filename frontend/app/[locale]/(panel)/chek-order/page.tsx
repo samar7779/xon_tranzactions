@@ -4,6 +4,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Upload, Loader2, CheckCircle2, XCircle, AlertTriangle,
@@ -44,11 +45,14 @@ type HistoryRow = {
   matchedTxExtId: string | null; hasFile: boolean; createdByName: string | null; createdAt: string;
 };
 
-const RESULT_META: Record<string, { label: string; cls: string; Icon: any; glow: string }> = {
-  found:     { label: 'Topildi',   cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2, glow: 'shadow-emerald-500/20' },
-  mismatch:  { label: 'Nomuvofiq', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: AlertTriangle, glow: 'shadow-amber-500/20' },
-  not_found: { label: 'Topilmadi', cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900', Icon: XCircle, glow: 'shadow-rose-500/20' },
+// Ranglar/ikonlar — yorliqlar t('chekOrder.result.*') orqali tarjima qilinadi
+const RESULT_META: Record<string, { cls: string; Icon: any; glow: string }> = {
+  found:     { cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2, glow: 'shadow-emerald-500/20' },
+  mismatch:  { cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: AlertTriangle, glow: 'shadow-amber-500/20' },
+  not_found: { cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 ring-rose-200 dark:ring-rose-900', Icon: XCircle, glow: 'shadow-rose-500/20' },
 };
+const RESULT_KEY: Record<string, string> = { found: 'found', mismatch: 'mismatch', not_found: 'notFound' };
+const resultLabel = (tr: any, k: string) => tr(`result.${RESULT_KEY[k] || 'notFound'}`);
 
 const fmtDate = (s?: string | null) => {
   if (!s) return '—';
@@ -57,25 +61,24 @@ const fmtDate = (s?: string | null) => {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 };
 
-// Oddiy tilда xulosa — begona/yangi foydalanuvchi ham tushunsin
-function verdictOf(r: OrderResult): string {
+// Oddiy tilda xulosa — begona/yangi foydalanuvchi ham tushunsin (tarjimalar tr orqali)
+function verdictOf(r: OrderResult, tr: any): string {
   const c = r.conditions;
-  if (r.result === 'not_found')
-    return "Bu to'lov bizning tranzaksiyalarda TOPILMADI — ya'ni bunday to'lov bizga tushmagan yoki hali qayd etilmagan.";
-  if (r.result === 'found')
-    return "To'lov tranzaksiyalarda TOPILDI, muhim shartlar (summa va shartnoma) mos keldi — bu bizga tushgan haqiqiy to'lov.";
+  if (r.result === 'not_found') return tr('verdict.notFound');
+  if (r.result === 'found') return tr('verdict.found');
   // mismatch
   const bad: string[] = [];
-  if (c?.amount === false) bad.push('summa');
-  if (c?.contract === false) bad.push('shartnoma');
-  if (bad.length === 0 && c?.order === false && c?.account === false) bad.push('order raqami va hisob');
-  const badTxt = bad.length ? bad.join(' va ') : "ba'zi shartlar";
-  return `O'xshash to'lov topildi, LEKIN ${badTxt} mos kelmadi. Bu boshqa to'lov bo'lishi mumkin — qo'lда tekshirish tavsiya etiladi.`;
+  if (c?.amount === false) bad.push(tr('verdict.f.amount'));
+  if (c?.contract === false) bad.push(tr('verdict.f.contract'));
+  if (bad.length === 0 && c?.order === false && c?.account === false) bad.push(tr('verdict.f.orderAndAccount'));
+  const badTxt = bad.length ? bad.join(tr('verdict.and')) : tr('verdict.f.some');
+  return tr('verdict.mismatch', { fields: badTxt });
 }
 
-const condWord = (ok: boolean | null | undefined) => ok === true ? 'mos keldi' : ok === false ? 'mos kelmadi' : 'tekshirilmadi';
+const condWord = (ok: boolean | null | undefined, tr: any) => ok === true ? tr('condWord.match') : ok === false ? tr('condWord.mismatch') : tr('condWord.notChecked');
 
 export default function ChekOrderPage() {
+  const tr = useTranslations('chekOrder');
   const qc = useQueryClient();
   const canManage = useHasPermission(PERMS.CHEKORDER_MANAGE);
   const canView = useHasPermission(PERMS.CHEKORDER_VIEW);
@@ -143,23 +146,23 @@ export default function ChekOrderPage() {
 
   const analyzeMut = useMutation({
     mutationFn: (f: File) => { const fd = new FormData(); fd.append('file', f); return api.postForm<{ results: OrderResult[] }>('/chek-order/analyze', fd, { timeout: 120_000 }); },
-    onSuccess: (r) => { setResults(r.results); refreshHistory(); toast.success(`${r.results.length} ta hujjat tekshirildi`); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: (r) => { setResults(r.results); refreshHistory(); toast.success(tr('toast.docsChecked', { n: r.results.length })); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
   const manualMut = useMutation({
     mutationFn: (nums: string) => api.post<{ results: OrderResult[] }>('/chek-order/manual', { orderNos: nums }),
-    onSuccess: (r) => { setResults(r.results); refreshHistory(); toast.success(`${r.results.length} ta order tekshirildi`); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: (r) => { setResults(r.results); refreshHistory(); toast.success(tr('toast.ordersChecked', { n: r.results.length })); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/chek-order/${id}`),
-    onSuccess: () => { refreshHistory(); toast.success("O'chirildi"); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: () => { refreshHistory(); toast.success(tr('toast.deleted')); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
   const clearMut = useMutation({
     mutationFn: () => api.delete<{ deleted: number }>('/chek-order'),
-    onSuccess: (r) => { refreshHistory(); toast.success(`${r.deleted} ta yozuv o'chirildi`); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: (r) => { refreshHistory(); toast.success(tr('toast.recordsDeleted', { n: r.deleted })); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
 
   const analyzing = analyzeMut.isPending;
@@ -171,12 +174,12 @@ export default function ChekOrderPage() {
 
   const onFile = useCallback((f: File | null) => {
     if (!f) return;
-    if (f.size > 25 * 1024 * 1024) { toast.error('Fayl 25 MB dan oshmasligi kerak'); return; }
+    if (f.size > 25 * 1024 * 1024) { toast.error(tr('toast.fileTooLarge')); return; }
     const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
     setPreview((prev) => { if (prev?.url) URL.revokeObjectURL(prev.url); return { url: URL.createObjectURL(f), isPdf, name: f.name }; });
     setResults(null);
     analyzeMut.mutate(f);
-  }, [analyzeMut]);
+  }, [analyzeMut, tr]);
 
   const reset = () => {
     setResults(null);
@@ -226,26 +229,26 @@ export default function ChekOrderPage() {
         .chek-loader { width:52px; height:52px; border-radius:9999px; background:conic-gradient(from 90deg, rgba(129,140,248,0) 0deg, rgba(129,140,248,.15) 90deg, #818cf8 300deg, #a78bfa 360deg); -webkit-mask:radial-gradient(closest-side, transparent 63%, #000 65%); mask:radial-gradient(closest-side, transparent 63%, #000 65%); animation: chekSpin .9s linear infinite; filter:drop-shadow(0 0 6px rgba(129,140,248,.45)); }
       `}</style>
 
-      <Topbar title="Chek order" subtitle="Memorial order / kvitansiya → tranzaksiyada bor-yo'qligini tekshirish" />
+      <Topbar title={tr('title')} subtitle={tr('subtitle')} />
 
       <div className="px-4 lg:px-6 py-5 w-full space-y-4">
         {/* Sub-tablar + Yangi tekshiruv */}
         <div className="flex items-end justify-between gap-3 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-1">
-            <SubTab active={view === 'check'} onClick={() => setView('check')} icon={<ClipboardList className="h-4 w-4" />} label="Tekshirish" />
+            <SubTab active={view === 'check'} onClick={() => setView('check')} icon={<ClipboardList className="h-4 w-4" />} label={tr('tabs.check')} />
             {canHistory && (
-              <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label="Tarix"
+              <SubTab active={view === 'history'} onClick={() => setView('history')} icon={<HistoryIcon className="h-4 w-4" />} label={tr('tabs.history')}
                 badge={stats ? (stats.found + stats.mismatch + stats.not_found) : undefined} />
             )}
             {canTickets && (
-              <SubTab active={view === 'tickets'} onClick={() => setView('tickets')} icon={<Ticket className="h-4 w-4" />} label="Murojaatlar"
+              <SubTab active={view === 'tickets'} onClick={() => setView('tickets')} icon={<Ticket className="h-4 w-4" />} label={tr('tabs.tickets')}
                 badge={activeTickets || undefined} badgeTone="accent" />
             )}
           </div>
           {(preview || results) && canManage && view === 'check' && (
             <button onClick={reset}
               className="group mb-1.5 inline-flex items-center gap-1.5 px-3.5 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-[12px] font-semibold shadow-md shadow-indigo-500/25 hover:shadow-lg hover:shadow-indigo-500/40 hover:-translate-y-0.5 transition-all">
-              <RotateCcw className="h-4 w-4 transition-transform duration-500 group-hover:-rotate-180" /> Yangi tekshiruv
+              <RotateCcw className="h-4 w-4 transition-transform duration-500 group-hover:-rotate-180" /> {tr('newCheck')}
             </button>
           )}
         </div>
@@ -258,13 +261,13 @@ export default function ChekOrderPage() {
                 <Card className="border-0 shadow-soft overflow-visible self-start">
                   <div className="flex items-center gap-1 p-1 m-3 mb-0 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
                     <button onClick={() => setMode('upload')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'upload' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
-                      <ImageIcon className="h-3.5 w-3.5" /> Surat / PDF
+                      <ImageIcon className="h-3.5 w-3.5" /> {tr('mode.photo')}
                     </button>
                     <button onClick={() => setMode('manual')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'manual' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
-                      <Hash className="h-3.5 w-3.5" /> Order raqami
+                      <Hash className="h-3.5 w-3.5" /> {tr('mode.orderNo')}
                     </button>
                     <button onClick={() => setMode('contract')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'contract' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
-                      <FileSignature className="h-3.5 w-3.5" /> Shartnoma
+                      <FileSignature className="h-3.5 w-3.5" /> {tr('mode.contract')}
                     </button>
                   </div>
 
@@ -275,12 +278,12 @@ export default function ChekOrderPage() {
                           {preview.isPdf ? (
                             <div className="aspect-[3/2] grid place-items-center text-slate-300"><div className="text-center"><FileText className="h-14 w-14 mx-auto mb-2 opacity-70" /><div className="text-[12px] truncate max-w-[340px] px-4">{preview.name}</div></div></div>
                           ) : (
-                            <button onClick={() => setZoom(true)} className="block w-full cursor-zoom-in" title="Kattalashtirish">
+                            <button onClick={() => setZoom(true)} className="block w-full cursor-zoom-in" title={tr('upload.zoom')}>
                               {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img src={preview.url} alt="order" className="w-full max-h-[860px] min-h-[380px] object-contain" />
                               {!analyzing && (
                                 <span className="absolute bottom-2 left-2 inline-flex items-center gap-1 px-2 h-7 rounded-lg bg-slate-900/70 backdrop-blur text-white text-[11px] font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <ZoomIn className="h-3.5 w-3.5" /> Kattalashtirish
+                                  <ZoomIn className="h-3.5 w-3.5" /> {tr('upload.zoom')}
                                 </span>
                               )}
                             </button>
@@ -297,7 +300,7 @@ export default function ChekOrderPage() {
                             </div>
                           )}
                           <button onClick={() => fileRef.current?.click()} disabled={busy} className="absolute top-2 right-2 inline-flex items-center gap-1 px-2.5 h-7 rounded-lg bg-slate-900/70 backdrop-blur text-white text-[11px] font-semibold hover:bg-slate-900 disabled:opacity-50">
-                            <Upload className="h-3 w-3" /> Boshqa
+                            <Upload className="h-3 w-3" /> {tr('upload.another')}
                           </button>
                           <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
                         </div>
@@ -310,25 +313,25 @@ export default function ChekOrderPage() {
                           <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => onFile(e.target.files?.[0] || null)} />
                           <div className="flex flex-col items-center gap-3">
                             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 dark:from-indigo-500/20 dark:to-violet-500/20 grid place-items-center"><Upload className="h-7 w-7 text-indigo-500" /></div>
-                            <div className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">Memorial order / kvitansiya suratini tashlang</div>
-                            <div className="text-[11.5px] text-slate-400">yoki bosing — rasm yoki PDF · bitta suratда bir nechta hujjat bo'lishi mumkin</div>
+                            <div className="text-[14px] font-semibold text-slate-700 dark:text-slate-200">{tr('upload.drop')}</div>
+                            <div className="text-[11.5px] text-slate-400">{tr('upload.hint')}</div>
                           </div>
                         </div>
                       )
                     ) : mode === 'manual' ? (
                       <div className="space-y-2">
-                        <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Order raqam(lar)i</label>
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{tr('manual.label')}</label>
                         <textarea value={orderNos} onChange={(e) => setOrderNos(e.target.value)} placeholder="268041120&#10;13425470" rows={5}
                           className="w-full px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] tabular-nums font-mono resize-y outline-none focus:ring-2 focus:ring-indigo-500/40" />
                         <button onClick={() => { setResults(null); manualMut.mutate(orderNos); }} disabled={busy || !orderNos.trim()} className="inline-flex items-center gap-2 px-4 h-9 rounded-xl bg-indigo-600 text-white text-[12.5px] font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} Tranzaksiyada tekshir
+                          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} {tr('manual.button')}
                         </button>
-                        <p className="text-[11px] text-slate-400 pt-1">Eslatma: faqat raqam bo'yicha. To'liq (hisob+shartnoma+summa) tekshiruv uchun suratни yuklang.</p>
+                        <p className="text-[11px] text-slate-400 pt-1">{tr('manual.note')}</p>
                       </div>
                     ) : (
                       /* ── SHARTNOMA rejimi — CRM taklif + to'lovlar ── */
                       <div className="space-y-3">
-                        <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Shartnoma raqami</label>
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{tr('contract.label')}</label>
                         <div className="relative">
                           <FileSignature className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input
@@ -336,7 +339,7 @@ export default function ChekOrderPage() {
                             onChange={(e) => { setContractQ(e.target.value.toUpperCase()); if (selectedContract) { setSelectedContract(null); setResults(null); } }}
                             onFocus={() => setSuggFocused(true)}
                             onBlur={() => setTimeout(() => setSuggFocused(false), 150)}
-                            placeholder="Shartnoma raqamini yozing — CRM'dan qidiriladi"
+                            placeholder={tr('contract.placeholder')}
                             className="w-full pl-9 pr-9 h-10 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[13px] font-mono outline-none focus:ring-2 focus:ring-indigo-500/40" />
                           {selectedContract && (
                             <button onClick={() => { setSelectedContract(null); setContractQ(''); setResults(null); }} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500"><X className="h-4 w-4" /></button>
@@ -362,13 +365,13 @@ export default function ChekOrderPage() {
                         {selectedContract && (
                           <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
                             <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center justify-between">
-                              <span>To'lovlar</span>
-                              <span className="tabular-nums">{cPayments?.items?.length ?? 0} ta</span>
+                              <span>{tr('contract.payments')}</span>
+                              <span className="tabular-nums">{tr('contract.count', { n: cPayments?.items?.length ?? 0 })}</span>
                             </div>
                             {payLoading ? (
                               <div className="p-6 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
                             ) : (cPayments?.items?.length ?? 0) === 0 ? (
-                              <div className="p-6 text-center text-[12px] text-slate-400">Bu shartnoma bo'yicha tranzaksiya topilmadi</div>
+                              <div className="p-6 text-center text-[12px] text-slate-400">{tr('contract.noTx')}</div>
                             ) : (
                               <div className="max-h-80 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800">
                                 {(cPayments?.items || []).map((tx) => {
@@ -391,7 +394,7 @@ export default function ChekOrderPage() {
                             )}
                           </div>
                         )}
-                        {!selectedContract && <p className="text-[11px] text-slate-400">Shartnomani tanlang — to'lovlari chiqadi. Kerakli to'lovni bosing.</p>}
+                        {!selectedContract && <p className="text-[11px] text-slate-400">{tr('contract.hint')}</p>}
                       </div>
                     )}
                   </div>
@@ -418,7 +421,7 @@ export default function ChekOrderPage() {
                   ) : results && results.length > 0 ? (
                     <>
                       <div className="flex items-center justify-between gap-2 px-1">
-                        <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Natija — {results.length} ta</div>
+                        <div className="text-[12px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{tr('result.count', { n: results.length })}</div>
                       </div>
                       {results.length > 1 && (
                         <div className="flex items-center gap-1.5 flex-wrap">
@@ -442,7 +445,7 @@ export default function ChekOrderPage() {
                     <Card className="border-0 shadow-soft p-12 grid place-items-center text-center">
                       <div className="text-slate-300 dark:text-slate-600">
                         <ScanLine className="h-10 w-10 mx-auto mb-2" />
-                        <div className="text-[13px] text-slate-400">{mode === 'contract' ? "Shartnoma va to'lovni tanlang — natija shu yerда chiqadi" : "Suratni yuklang — natija shu yerда chiqadi"}</div>
+                        <div className="text-[13px] text-slate-400">{mode === 'contract' ? tr('empty.contract') : tr('empty.upload')}</div>
                       </div>
                     </Card>
                   )}
@@ -458,21 +461,21 @@ export default function ChekOrderPage() {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-1.5">
-                {stats && <><StatChip n={stats.found} label="Topildi" tone="emerald" /><StatChip n={stats.mismatch} label="Nomuvofiq" tone="amber" /><StatChip n={stats.not_found} label="Topilmadi" tone="rose" /></>}
+                {stats && <><StatChip n={stats.found} label={tr('result.found')} tone="emerald" /><StatChip n={stats.mismatch} label={tr('result.mismatch')} tone="amber" /><StatChip n={stats.not_found} label={tr('result.notFound')} tone="rose" /></>}
               </div>
               <div className="flex items-center gap-2">
                 <div className="relative">
                   <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input value={hQ} onChange={(e) => { setHQ(e.target.value); setHPage(1); }} placeholder="Order / shartnoma / ism" className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
+                  <input value={hQ} onChange={(e) => { setHQ(e.target.value); setHPage(1); }} placeholder={tr('history.search')} className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
                 </div>
                 <select value={hResult} onChange={(e) => { setHResult(e.target.value as any); setHPage(1); }} className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
-                  <option value="all">Barchasi</option><option value="found">Topildi</option><option value="mismatch">Nomuvofiq</option><option value="not_found">Topilmadi</option>
+                  <option value="all">{tr('history.all')}</option><option value="found">{tr('result.found')}</option><option value="mismatch">{tr('result.mismatch')}</option><option value="not_found">{tr('result.notFound')}</option>
                 </select>
                 {canManage && (history?.items?.length ?? 0) > 0 && (
-                  <button onClick={() => { if (confirm("BUTUN tarix o'chirilsinmi? Bu qaytarib bo'lmaydi.")) clearMut.mutate(); }}
+                  <button onClick={() => { if (confirm(tr('history.confirmClear'))) clearMut.mutate(); }}
                     disabled={clearMut.isPending}
                     className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-[12px] font-semibold text-rose-600 dark:text-rose-400 ring-1 ring-rose-200 dark:ring-rose-900 hover:bg-rose-50 dark:hover:bg-rose-950/40 disabled:opacity-50 transition-colors">
-                    {clearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eraser className="h-3.5 w-3.5" />} Barchasini o'chirish
+                    {clearMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eraser className="h-3.5 w-3.5" />} {tr('history.clearAll')}
                   </button>
                 )}
               </div>
@@ -482,14 +485,14 @@ export default function ChekOrderPage() {
                 <table className="w-full text-[12.5px]">
                   <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="text-left font-semibold px-3 py-2.5">Order №</th>
-                      <th className="text-left font-semibold px-3 py-2.5">Sana</th>
-                      <th className="text-right font-semibold px-3 py-2.5">Summa</th>
-                      <th className="text-left font-semibold px-3 py-2.5">Shartnoma</th>
-                      <th className="text-left font-semibold px-3 py-2.5">Oluvchi</th>
-                      <th className="text-center font-semibold px-3 py-2.5">Shartlar</th>
-                      <th className="text-left font-semibold px-3 py-2.5">Natija</th>
-                      <th className="text-left font-semibold px-3 py-2.5">Kim · Qachon</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('history.th.orderNo')}</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('field.date')}</th>
+                      <th className="text-right font-semibold px-3 py-2.5">{tr('field.amount')}</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('field.contract')}</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('field.recipient')}</th>
+                      <th className="text-center font-semibold px-3 py-2.5">{tr('history.th.conditions')}</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('history.th.result')}</th>
+                      <th className="text-left font-semibold px-3 py-2.5">{tr('history.th.who')}</th>
                       <th className="px-3 py-2.5"></th>
                     </tr>
                   </thead>
@@ -497,7 +500,7 @@ export default function ChekOrderPage() {
                     {histLoading ? (
                       <tr><td colSpan={9} className="p-10 text-center text-slate-400">…</td></tr>
                     ) : (history?.items?.length ?? 0) === 0 ? (
-                      <tr><td colSpan={9} className="p-10 text-center text-slate-400">Hali tekshiruv yo'q</td></tr>
+                      <tr><td colSpan={9} className="p-10 text-center text-slate-400">{tr('history.empty')}</td></tr>
                     ) : history!.items.map((row) => {
                       const meta = RESULT_META[row.result];
                       return (
@@ -508,9 +511,9 @@ export default function ChekOrderPage() {
                           <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400">{row.contractNo || '—'}</td>
                           <td className="px-3 py-2.5 max-w-[160px] truncate text-slate-600 dark:text-slate-400" title={row.recipientName || ''}>{row.recipientName || '—'}</td>
                           <td className="px-3 py-2.5"><CondCell c={row.conditions} /></td>
-                          <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', meta.cls)}><meta.Icon className="h-3 w-3" /> {meta.label}</span></td>
+                          <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', meta.cls)}><meta.Icon className="h-3 w-3" /> {resultLabel(tr, row.result)}</span></td>
                           <td className="px-3 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{row.createdByName || '—'} · {fmtDate(row.createdAt)}</td>
-                          <td className="px-3 py-2.5 text-right">{canManage && <button onClick={() => { if (confirm("O'chirilsinmi?")) delMut.mutate(row.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}</td>
+                          <td className="px-3 py-2.5 text-right">{canManage && <button onClick={() => { if (confirm(tr('history.confirmDelete'))) delMut.mutate(row.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>}</td>
                         </tr>
                       );
                     })}
@@ -533,7 +536,7 @@ export default function ChekOrderPage() {
       {zoom && preview && !preview.isPdf && (
         <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-sm overflow-auto p-4" onClick={() => { setZoom(false); setLbZoom(false); }}>
           <div className="sticky top-0 z-10 flex items-center justify-end gap-2">
-            <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" title={lbZoom ? 'Kichraytirish' : 'Kattalashtirish'} onClick={(e) => { e.stopPropagation(); setLbZoom((v) => !v); }}>
+            <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" title={lbZoom ? tr('upload.shrink') : tr('upload.zoom')} onClick={(e) => { e.stopPropagation(); setLbZoom((v) => !v); }}>
               {lbZoom ? <ZoomIn className="h-5 w-5 rotate-45" /> : <ZoomIn className="h-5 w-5" />}
             </button>
             <button className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 grid place-items-center text-white transition-colors" onClick={(e) => { e.stopPropagation(); setZoom(false); setLbZoom(false); }}><X className="h-5 w-5" /></button>
@@ -570,6 +573,7 @@ export default function ChekOrderPage() {
 
 // ─── Natija kartasi ───
 function ResultCard({ r }: { r: OrderResult }) {
+  const tr = useTranslations('chekOrder');
   const meta = RESULT_META[r.result];
   const ex = r.extracted;
   const tx = r.matchedTx;
@@ -585,15 +589,15 @@ function ResultCard({ r }: { r: OrderResult }) {
         : r.result === 'mismatch' ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/40'
         : 'bg-rose-50/60 dark:bg-rose-950/20 border-rose-100 dark:border-rose-900/40')}>
         <div className="flex items-center gap-2.5 flex-wrap">
-          <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ring-1 text-[11.5px] font-bold', meta.cls)}><meta.Icon className="h-3.5 w-3.5" /> {meta.label}</span>
+          <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ring-1 text-[11.5px] font-bold', meta.cls)}><meta.Icon className="h-3.5 w-3.5" /> {resultLabel(tr, r.result)}</span>
           <div className="flex items-center gap-1.5 flex-wrap">
             {r.orderNos.map((no, i) => (
               <span key={i} className="font-mono font-bold text-slate-800 dark:text-slate-200 tabular-nums text-[13px]">№ {no}</span>
             ))}
-            {r.orderNos.length > 1 && <span className="text-[10px] text-slate-400 font-medium">(1 to'lov · {r.orderNos.length} hujjat)</span>}
+            {r.orderNos.length > 1 && <span className="text-[10px] text-slate-400 font-medium">{tr('result.onePaymentDocs', { n: r.orderNos.length })}</span>}
           </div>
         </div>
-        {ex.amount != null && <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{formatMoney(ex.amount, '')} <span className="text-[10px] text-slate-400">so'm</span></span>}
+        {ex.amount != null && <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{formatMoney(ex.amount, '')} <span className="text-[10px] text-slate-400">{tr('result.som')}</span></span>}
       </div>
 
       {/* Oddiy tildagi xulosa — begona foydalanuvchi ham tushunsin */}
@@ -602,34 +606,34 @@ function ResultCard({ r }: { r: OrderResult }) {
         : r.result === 'mismatch' ? 'bg-amber-50/40 dark:bg-amber-950/10 text-amber-800 dark:text-amber-300 border-amber-100/60 dark:border-amber-900/30'
         : 'bg-rose-50/40 dark:bg-rose-950/10 text-rose-800 dark:text-rose-300 border-rose-100/60 dark:border-rose-900/30')}>
         <meta.Icon className="h-4 w-4 shrink-0 mt-0.5" />
-        <span>{verdictOf(r)}</span>
+        <span>{verdictOf(r, tr)}</span>
       </div>
 
       <div className="p-4 grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Hujjatдan o'qildi</div>
-          <InfoRow icon={<Landmark className="h-3.5 w-3.5" />} label="Hisob (oluvchi)" value={ex.recipientAccount || '—'} mono />
-          <InfoRow icon={<Coins className="h-3.5 w-3.5" />} label="Summa" value={ex.amount != null ? formatMoney(ex.amount, '') : '—'} />
-          <InfoRow icon={<FileSignature className="h-3.5 w-3.5" />} label="Shartnoma" value={ex.contractNo || '—'} mono />
-          <InfoRow icon={<CalendarDays className="h-3.5 w-3.5" />} label="Sana" value={fmtDate(ex.date)} />
-          <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label="Oluvchi" value={ex.recipientName || '—'} />
-          {ex.payerName && <InfoRow icon={<Coins className="h-3.5 w-3.5" />} label="To'lovchi" value={ex.payerName} />}
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{tr('read.title')}</div>
+          <InfoRow icon={<Landmark className="h-3.5 w-3.5" />} label={tr('field.accountRecipient')} value={ex.recipientAccount || '—'} mono />
+          <InfoRow icon={<Coins className="h-3.5 w-3.5" />} label={tr('field.amount')} value={ex.amount != null ? formatMoney(ex.amount, '') : '—'} />
+          <InfoRow icon={<FileSignature className="h-3.5 w-3.5" />} label={tr('field.contract')} value={ex.contractNo || '—'} mono />
+          <InfoRow icon={<CalendarDays className="h-3.5 w-3.5" />} label={tr('field.date')} value={fmtDate(ex.date)} />
+          <InfoRow icon={<Building2 className="h-3.5 w-3.5" />} label={tr('field.recipient')} value={ex.recipientName || '—'} />
+          {ex.payerName && <InfoRow icon={<Coins className="h-3.5 w-3.5" />} label={tr('field.payer')} value={ex.payerName} />}
         </div>
 
         <div className="space-y-2">
           {r.result === 'not_found' ? (
             <div className="h-full grid place-items-center rounded-xl bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/40 p-4 text-center">
-              <div><XCircle className="h-7 w-7 text-rose-400 mx-auto mb-1.5" /><div className="text-[13px] font-semibold text-rose-700 dark:text-rose-300">Tranzaksiyada topilmadi</div><div className="text-[11px] text-rose-500/80 mt-0.5">Order №, hisob, shartnoma va summa bo'yicha mos to'lov yo'q</div></div>
+              <div><XCircle className="h-7 w-7 text-rose-400 mx-auto mb-1.5" /><div className="text-[13px] font-semibold text-rose-700 dark:text-rose-300">{tr('notFound.title')}</div><div className="text-[11px] text-rose-500/80 mt-0.5">{tr('notFound.sub')}</div></div>
             </div>
           ) : (
             <>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Shartlar tekshiruvi</div>
-              <div className="text-[10.5px] text-slate-400 -mt-1 mb-1">Hujjatдаги ma'lumot topilgan tranzaksiyaga mos kelishini tekshirish:</div>
-              <CondRow label="Order №" ok={c?.order} txVal={tx?.docNumber} mono note={orderDiffers ? 'kvitansiya raqami bank hujjat raqamidan farq qiladi — bu normal' : undefined} />
-              <CondRow label="Hisob" ok={c?.account} txVal={acctVal} mono />
-              <CondRow label="Summa" ok={c?.amount} txVal={tx ? formatMoney(tx.amount, '') : ''} />
-              <CondRow label="Shartnoma" ok={c?.contract} txVal={ex.contractNo || ''} mono />
-              <CondRow label="Sana" ok={c?.date} txVal={fmtDate(tx?.txnDate)} />
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{tr('cond.title')}</div>
+              <div className="text-[10.5px] text-slate-400 -mt-1 mb-1">{tr('cond.hint')}</div>
+              <CondRow tr={tr} label={tr('cond.orderNo')} ok={c?.order} txVal={tx?.docNumber} mono note={orderDiffers ? tr('cond.orderDiffersNote') : undefined} />
+              <CondRow tr={tr} label={tr('field.account')} ok={c?.account} txVal={acctVal} mono />
+              <CondRow tr={tr} label={tr('field.amount')} ok={c?.amount} txVal={tx ? formatMoney(tx.amount, '') : ''} />
+              <CondRow tr={tr} label={tr('field.contract')} ok={c?.contract} txVal={ex.contractNo || ''} mono />
+              <CondRow tr={tr} label={tr('field.date')} ok={c?.date} txVal={fmtDate(tx?.txnDate)} />
             </>
           )}
         </div>
@@ -639,31 +643,31 @@ function ResultCard({ r }: { r: OrderResult }) {
       {tx && (
         <div className="border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 p-4">
           <div className="flex items-center justify-between gap-2 mb-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"><ScrollText className="h-3.5 w-3.5" /> Topilgan tranzaksiya</div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"><ScrollText className="h-3.5 w-3.5" /> {tr('tx.foundTitle')}</div>
             <div className="flex items-center gap-1.5">
               <button onClick={() => setModal('tx')}
-                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition-colors" title="Tranzaksiya ma'lumoti">
-                <ArrowRightLeft className="h-3.5 w-3.5" /> Tranzaksiya
+                className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 transition-colors" title={tr('tx.btnTxTitle')}>
+                <ArrowRightLeft className="h-3.5 w-3.5" /> {tr('tx.btnTx')}
               </button>
               {ex.contractNo && (
                 <button onClick={() => setModal('kv')}
-                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-700 transition-colors" title="ОплатыКв to'lovlari">
+                  className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-lg bg-violet-600 text-white text-[11px] font-semibold hover:bg-violet-700 transition-colors" title={tr('tx.btnKvTitle')}>
                   <Home className="h-3.5 w-3.5" /> ОплатыКв
                 </button>
               )}
             </div>
           </div>
           <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2 text-[12px]">
-            <TxRow label="Summa" value={`${formatMoney(tx.amount, '')} ${tx.currency}`} strong />
-            <TxRow label="Sana" value={fmtDate(tx.txnDate)} />
-            <TxRow label="Bank docNumber" value={tx.docNumber || '—'} mono />
-            <TxRow label="Yo'nalish" value={tx.direction === 'IN' ? 'Kirim' : 'Chiqim'} />
-            <TxRow label="To'lovchi" value={tx.fromName || '—'} />
-            <TxRow label="Oluvchi" value={tx.toName || '—'} />
-            <TxRow label="Debet hisob" value={tx.fromAccount || '—'} mono />
-            <TxRow label="Kredit hisob" value={tx.toAccount || '—'} mono />
-            <TxRow label="Izoh" value={tx.description || '—'} full />
-            <TxRow label="Ext ID" value={tx.externalId || tx.id} mono full />
+            <TxRow label={tr('field.amount')} value={`${formatMoney(tx.amount, '')} ${tx.currency}`} strong />
+            <TxRow label={tr('field.date')} value={fmtDate(tx.txnDate)} />
+            <TxRow label={tr('tx.bankDoc')} value={tx.docNumber || '—'} mono />
+            <TxRow label={tr('tx.direction')} value={tx.direction === 'IN' ? tr('tx.in') : tr('tx.out')} />
+            <TxRow label={tr('field.payer')} value={tx.fromName || '—'} />
+            <TxRow label={tr('field.recipient')} value={tx.toName || '—'} />
+            <TxRow label={tr('tx.debit')} value={tx.fromAccount || '—'} mono />
+            <TxRow label={tr('tx.credit')} value={tx.toAccount || '—'} mono />
+            <TxRow label={tr('tx.note')} value={tx.description || '—'} full />
+            <TxRow label={tr('tx.extId')} value={tx.externalId || tx.id} mono full />
           </div>
         </div>
       )}
@@ -676,6 +680,7 @@ function ResultCard({ r }: { r: OrderResult }) {
 
 // ─── Tranzaksiya to'liq ma'lumot modali (read-only, tahrirlash tugmalarisiz) ───
 function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void }) {
+  const tr = useTranslations('chekOrder');
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
   const { data: d, isLoading } = useQuery({ queryKey: ['chek-tx-detail', txId], queryFn: () => api.get<any>(`/transactions/${txId}`) });
   const [open, setOpen] = useState<Set<string>>(new Set(['yub', 'qab', 'maqsad', 'vaqt', 'tizim']));
@@ -691,7 +696,7 @@ function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void })
           <>
             <div className={cn('p-5 text-white relative', isIn ? 'bg-gradient-to-br from-emerald-500 to-teal-600' : 'bg-gradient-to-br from-rose-500 to-red-600')}>
               <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
-              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><ArrowRightLeft className="h-3 w-3" /> {isIn ? 'KIRIM' : 'CHIQIM'} · {fmtDate(d.txnDate)}{d.operationTime ? ` · ${d.operationTime}` : ''}</div>
+              <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><ArrowRightLeft className="h-3 w-3" /> {isIn ? tr('txm.in') : tr('txm.out')} · {fmtDate(d.txnDate)}{d.operationTime ? ` · ${d.operationTime}` : ''}</div>
               <div className="text-2xl font-bold tabular-nums">{isIn ? '+' : '−'}{formatMoney(Number(d.amount), '')} <span className="text-sm font-medium opacity-80">{d.currency}</span></div>
               {(d.counterpartyDisplay || d.category?.name) && <div className="text-[12px] opacity-90 mt-0.5">{d.counterpartyDisplay || d.category?.name}</div>}
             </div>
@@ -699,42 +704,42 @@ function TxDetailModal({ txId, onClose }: { txId: string; onClose: () => void })
             <div className="p-5 space-y-2.5 max-h-[74vh] overflow-y-auto">
               {/* Tepа kartalar */}
               <div className="grid gap-2 sm:grid-cols-2">
-                <TopCard icon={<Building2 className="h-3.5 w-3.5" />} label="Kontragent" value={d.counterpartyDisplay || d.category?.name || '—'} />
-                <TopCard icon={<Landmark className="h-3.5 w-3.5" />} label="Kategoriya" value={[d.category?.name, d.subcategory?.name].filter(Boolean).join(' · ') || '—'} />
-                {d.contractNumber && <TopCard icon={<FileSignature className="h-3.5 w-3.5" />} label="Shartnoma" value={d.contractNumber} sub={d.contractCustomer || undefined} mono />}
+                <TopCard icon={<Building2 className="h-3.5 w-3.5" />} label={tr('txm.counterparty')} value={d.counterpartyDisplay || d.category?.name || '—'} />
+                <TopCard icon={<Landmark className="h-3.5 w-3.5" />} label={tr('txm.category')} value={[d.category?.name, d.subcategory?.name].filter(Boolean).join(' · ') || '—'} />
+                {d.contractNumber && <TopCard icon={<FileSignature className="h-3.5 w-3.5" />} label={tr('field.contract')} value={d.contractNumber} sub={d.contractCustomer || undefined} mono />}
               </div>
 
               {/* Yig'iladigan bo'limlar */}
-              <Collapse open={open.has('yub')} onToggle={() => toggle('yub')} icon={<Coins className="h-3.5 w-3.5" />} title="Yuboruvchi">
-                <DRow label="Nomi" value={d.fromName || '—'} />
-                <DRow label="Hisob" value={d.fromAccount || '—'} mono />
+              <Collapse open={open.has('yub')} onToggle={() => toggle('yub')} icon={<Coins className="h-3.5 w-3.5" />} title={tr('txm.sender')}>
+                <DRow label={tr('txm.name')} value={d.fromName || '—'} />
+                <DRow label={tr('field.account')} value={d.fromAccount || '—'} mono />
                 {d.fromInn && <DRow label="INN" value={d.fromInn} mono />}
               </Collapse>
-              <Collapse open={open.has('qab')} onToggle={() => toggle('qab')} icon={<Landmark className="h-3.5 w-3.5" />} title="Qabul qiluvchi">
-                <DRow label="Nomi" value={d.toName || '—'} />
-                <DRow label="Hisob" value={d.toAccount || '—'} mono />
+              <Collapse open={open.has('qab')} onToggle={() => toggle('qab')} icon={<Landmark className="h-3.5 w-3.5" />} title={tr('txm.receiver')}>
+                <DRow label={tr('txm.name')} value={d.toName || '—'} />
+                <DRow label={tr('field.account')} value={d.toAccount || '—'} mono />
                 {d.toInn && <DRow label="INN" value={d.toInn} mono />}
               </Collapse>
-              <Collapse open={open.has('maqsad')} onToggle={() => toggle('maqsad')} icon={<FileText className="h-3.5 w-3.5" />} title="To'lov maqsadi">
+              <Collapse open={open.has('maqsad')} onToggle={() => toggle('maqsad')} icon={<FileText className="h-3.5 w-3.5" />} title={tr('txm.purpose')}>
                 <p className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed break-words">{d.description || '—'}</p>
-                {d.purposeCode && <DRow label="Maqsad kodi" value={d.purposeCode} mono />}
+                {d.purposeCode && <DRow label={tr('txm.purposeCode')} value={d.purposeCode} mono />}
               </Collapse>
-              <Collapse open={open.has('vaqt')} onToggle={() => toggle('vaqt')} icon={<CalendarDays className="h-3.5 w-3.5" />} title="Vaqt ma'lumotlari">
-                <DRow label="Hujjat sanasi" value={fmtDate(d.txnDate)} />
-                {d.valueDate && <DRow label="Value date" value={fmtDate(d.valueDate)} />}
-                {d.operationTime && <DRow label="Operatsiya vaqti" value={d.operationTime} />}
-                {d.inputAt && <DRow label="Kiritilgan" value={fmtDate(d.inputAt)} />}
+              <Collapse open={open.has('vaqt')} onToggle={() => toggle('vaqt')} icon={<CalendarDays className="h-3.5 w-3.5" />} title={tr('txm.timeInfo')}>
+                <DRow label={tr('txm.docDate')} value={fmtDate(d.txnDate)} />
+                {d.valueDate && <DRow label={tr('txm.valueDate')} value={fmtDate(d.valueDate)} />}
+                {d.operationTime && <DRow label={tr('txm.opTime')} value={d.operationTime} />}
+                {d.inputAt && <DRow label={tr('txm.enteredAt')} value={fmtDate(d.inputAt)} />}
               </Collapse>
-              <Collapse open={open.has('tizim')} onToggle={() => toggle('tizim')} icon={<Hash className="h-3.5 w-3.5" />} title="Tizim ma'lumotlari">
-                {d.bank?.name && <DRow label="Bank" value={d.bank.name} />}
-                <DRow label="Bank docNumber" value={d.docNumber || '—'} mono />
+              <Collapse open={open.has('tizim')} onToggle={() => toggle('tizim')} icon={<Hash className="h-3.5 w-3.5" />} title={tr('txm.systemInfo')}>
+                {d.bank?.name && <DRow label={tr('txm.bank')} value={d.bank.name} />}
+                <DRow label={tr('tx.bankDoc')} value={d.docNumber || '—'} mono />
                 {d.bankB2Id && <DRow label="B2 ID" value={d.bankB2Id} mono />}
                 {d.bankGeneralId && <DRow label="Global ID (NCI)" value={d.bankGeneralId} mono />}
-                {d.bankClientId && <DRow label="Klient ID" value={d.bankClientId} mono />}
-                <DRow label="Ext ID" value={d.externalId || d.id} mono />
+                {d.bankClientId && <DRow label={tr('txm.clientId')} value={d.bankClientId} mono />}
+                <DRow label={tr('tx.extId')} value={d.externalId || d.id} mono />
               </Collapse>
               {d.metadata && (
-                <Collapse open={open.has('json')} onToggle={() => toggle('json')} icon={<FileText className="h-3.5 w-3.5" />} title="Bankdan kelgan to'liq JSON">
+                <Collapse open={open.has('json')} onToggle={() => toggle('json')} icon={<FileText className="h-3.5 w-3.5" />} title={tr('txm.fullJson')}>
                   <pre className="text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 rounded-lg p-2.5 overflow-x-auto max-h-64 overflow-y-auto">{JSON.stringify(d.metadata, null, 2)}</pre>
                 </Collapse>
               )}
@@ -783,6 +788,7 @@ function DRow({ label, value, mono }: { label: string; value: string; mono?: boo
 
 // ─── ОплатыКв to'lovlari modali (shartnoma bo'yicha, read-only) ───
 function OplataKvModal({ contract, onClose }: { contract: string; onClose: () => void }) {
+  const tr = useTranslations('chekOrder');
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
   const { data, isLoading } = useQuery({
     queryKey: ['chek-kv', contract],
@@ -795,19 +801,19 @@ function OplataKvModal({ contract, onClose }: { contract: string; onClose: () =>
         <div className="p-5 text-white relative bg-gradient-to-br from-violet-500 to-indigo-600">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Home className="h-3 w-3" /> ОплатыКв · {contract}</div>
-          <div className="text-2xl font-bold tabular-nums">{formatMoney(data?.sums?.paymentAmount || 0, '')} <span className="text-sm font-medium opacity-80">so'm</span></div>
-          <div className="text-[11px] opacity-80 mt-0.5">{items.length} ta to'lov</div>
+          <div className="text-2xl font-bold tabular-nums">{formatMoney(data?.sums?.paymentAmount || 0, '')} <span className="text-sm font-medium opacity-80">{tr('result.som')}</span></div>
+          <div className="text-[11px] opacity-80 mt-0.5">{tr('kv.count', { n: items.length })}</div>
         </div>
         <div className="p-3">
           {isLoading ? (
             <div className="p-8 text-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin mx-auto" /></div>
           ) : items.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 text-[13px]">Bu shartnoma bo'yicha ОплатыКв to'lovi yo'q</div>
+            <div className="p-8 text-center text-slate-400 text-[13px]">{tr('kv.none')}</div>
           ) : (
             <div className="overflow-x-auto rounded-lg ring-1 ring-slate-100 dark:ring-slate-800">
               <table className="w-full text-[12px]">
                 <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
-                  <tr><th className="text-left px-3 py-2 font-semibold">Sana</th><th className="text-right px-3 py-2 font-semibold">Summa</th><th className="text-left px-3 py-2 font-semibold">Tip</th><th className="text-left px-3 py-2 font-semibold">Obyekt</th><th className="text-left px-3 py-2 font-semibold">crm_status</th></tr>
+                  <tr><th className="text-left px-3 py-2 font-semibold">{tr('field.date')}</th><th className="text-right px-3 py-2 font-semibold">{tr('field.amount')}</th><th className="text-left px-3 py-2 font-semibold">{tr('kv.type')}</th><th className="text-left px-3 py-2 font-semibold">{tr('kv.object')}</th><th className="text-left px-3 py-2 font-semibold">crm_status</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                   {items.map((it: any) => (
@@ -849,7 +855,7 @@ function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: s
   );
 }
 
-function CondRow({ label, ok, txVal, mono, note }: { label: string; ok: boolean | null | undefined; txVal?: string | null; mono?: boolean; note?: string }) {
+function CondRow({ label, ok, txVal, mono, note, tr }: { label: string; ok: boolean | null | undefined; txVal?: string | null; mono?: boolean; note?: string; tr: any }) {
   const wordCls = ok === true ? 'text-emerald-600 dark:text-emerald-400' : ok === false ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400';
   return (
     <div className="flex items-start gap-2 text-[12px]">
@@ -859,7 +865,7 @@ function CondRow({ label, ok, txVal, mono, note }: { label: string; ok: boolean 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
-          <span className={cn('text-[11px] font-semibold', wordCls)}>· {condWord(ok)}</span>
+          <span className={cn('text-[11px] font-semibold', wordCls)}>· {condWord(ok, tr)}</span>
         </div>
         {txVal && <span className={cn('block truncate text-[11px] text-slate-400', mono && 'font-mono')} title={txVal}>{txVal}</span>}
         {note && <span className="block text-[10px] text-amber-600/80 dark:text-amber-400/70">{note}</span>}
@@ -870,10 +876,11 @@ function CondRow({ label, ok, txVal, mono, note }: { label: string; ok: boolean 
 
 // SHARTLAR ustuni — bitta icon; bosilганда to'liq "mos / mos emas" popover
 function CondCell({ c }: { c: Cond }) {
+  const tr = useTranslations('chekOrder');
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const items: Array<[string, boolean | null]> = [['Order №', c.order], ['Hisob', c.account], ['Summa', c.amount], ['Shartnoma', c.contract], ['Sana', c.date]];
+  const items: Array<[string, boolean | null]> = [[tr('cond.orderNo'), c.order], [tr('field.account'), c.account], [tr('field.amount'), c.amount], [tr('field.contract'), c.contract], [tr('field.date'), c.date]];
   const okCount = items.filter(([, v]) => v === true).length;
   const total = items.filter(([, v]) => v !== null).length || 5;
   const anyBad = items.some(([, v]) => v === false);
@@ -891,7 +898,7 @@ function CondCell({ c }: { c: Cond }) {
   return (
     <>
       <button ref={btnRef} onClick={(e) => { e.stopPropagation(); open ? setOpen(false) : openPop(); }}
-        title="Shartlarni ko'rish"
+        title={tr('condCell.title')}
         className={cn('inline-flex items-center gap-1 px-2 h-6 rounded-md ring-1 text-[11px] font-semibold transition-colors',
           anyBad ? 'ring-rose-200 dark:ring-rose-900 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
             : 'ring-emerald-200 dark:ring-emerald-900 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40')}>
@@ -902,13 +909,13 @@ function CondCell({ c }: { c: Cond }) {
         <div className="fixed z-[9999] w-56 rounded-xl bg-white dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 shadow-2xl p-2"
           style={{ top: rect.bottom + 6, left: Math.min(rect.left, (typeof window !== 'undefined' ? window.innerWidth : 1024) - 240) }}
           onClick={(e) => e.stopPropagation()}>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5 mb-1">Shartlar tekshiruvi</div>
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5 mb-1">{tr('cond.title')}</div>
           {items.map(([label, v], i) => (
             <div key={i} className="flex items-center justify-between gap-2 px-1.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 text-[12px]">
               <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
               <span className={cn('inline-flex items-center gap-1 font-semibold text-[11px]', v === true ? 'text-emerald-600 dark:text-emerald-400' : v === false ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400')}>
                 {v === true ? <CheckCircle2 className="h-3.5 w-3.5" /> : v === false ? <XCircle className="h-3.5 w-3.5" /> : <span className="w-3.5 text-center">—</span>}
-                {v === true ? 'mos keldi' : v === false ? 'mos kelmadi' : 'tekshirilmadi'}
+                {condWord(v, tr)}
               </span>
             </div>
           ))}
@@ -919,6 +926,7 @@ function CondCell({ c }: { c: Cond }) {
 
 // ─── Natija ostidagi shartnoma (CRM) paneli ───
 function ContractInfoPanel({ contract }: { contract: string }) {
+  const tr = useTranslations('chekOrder');
   const { data, isLoading } = useQuery({
     queryKey: ['chek-contract-info', contract],
     queryFn: () => api.get<any>(`/chek-order/contract-info?contract=${encodeURIComponent(contract)}`),
@@ -930,12 +938,12 @@ function ContractInfoPanel({ contract }: { contract: string }) {
     <Card className="border-0 shadow-soft overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-indigo-50/60 to-violet-50/40 dark:from-indigo-950/20 dark:to-violet-950/10">
         <FileSignature className="h-4 w-4 text-indigo-500" />
-        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">Shartnoma ma'lumoti</span>
+        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">{tr('contractInfo.heading')}</span>
         <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[13px]">{contract}</span>
         {data && (
           <span className={cn('ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-semibold ring-1',
             data.found ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 ring-slate-200 dark:ring-slate-700')}>
-            {data.found ? <><CheckCircle2 className="h-3 w-3" /> CRM'da bor</> : "CRM'da yo'q"}
+            {data.found ? <><CheckCircle2 className="h-3 w-3" /> {tr('contractInfo.inCrm')}</> : tr('contractInfo.notInCrm')}
           </span>
         )}
       </div>
@@ -944,21 +952,21 @@ function ContractInfoPanel({ contract }: { contract: string }) {
       ) : data ? (
         <div className="p-4 space-y-4">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile icon={<User2 className="h-4 w-4" />} label="Mijoz" value={data.customerName || '—'} />
-            <StatTile icon={<Building2 className="h-4 w-4" />} label="Obyekt" value={data.objectName || '—'} />
-            <StatTile icon={<Home className="h-4 w-4" />} label="Xonadon" value={data.apartmentNumber ? `№ ${data.apartmentNumber}` : '—'}
-              sub={[data.rooms && `${data.rooms} xona`, data.area && `${data.area} m²`, data.block && `Блок ${data.block}`, data.floor && `${data.floor}-qavat`].filter(Boolean).join(' · ') || undefined} />
+            <StatTile icon={<User2 className="h-4 w-4" />} label={tr('contractInfo.client')} value={data.customerName || '—'} />
+            <StatTile icon={<Building2 className="h-4 w-4" />} label={tr('contractInfo.object')} value={data.objectName || '—'} />
+            <StatTile icon={<Home className="h-4 w-4" />} label={tr('contractInfo.apartment')} value={data.apartmentNumber ? `№ ${data.apartmentNumber}` : '—'}
+              sub={[data.rooms && tr('contractInfo.rooms', { n: data.rooms }), data.area && tr('contractInfo.area', { n: data.area }), data.block && tr('contractInfo.block', { n: data.block }), data.floor && tr('contractInfo.floor', { n: data.floor })].filter(Boolean).join(' · ') || undefined} />
             <StatTile icon={<Tag className="h-4 w-4" />} label="crm_status" value={data.virtualStatus || '—'} />
           </div>
           <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-4">
             <div className="grid gap-3 sm:grid-cols-3 mb-3">
-              <MoneyTile label="Kelishuv qiymati" value={money(data.contractValue)} tone="slate" />
-              <MoneyTile label="To'langan" value={money(data.totalPaid)} tone="emerald" />
-              <MoneyTile label="Qoldiq" value={money(data.remaining)} tone="amber" />
+              <MoneyTile label={tr('contractInfo.contractValue')} value={money(data.contractValue)} tone="slate" />
+              <MoneyTile label={tr('contractInfo.paid')} value={money(data.totalPaid)} tone="emerald" />
+              <MoneyTile label={tr('contractInfo.remaining')} value={money(data.remaining)} tone="amber" />
             </div>
             {pct != null && (
               <div>
-                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1"><span>To'lov jarayoni · {data.paymentCount} ta to'lov</span><span className="font-semibold tabular-nums">{pct}%</span></div>
+                <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1"><span>{tr('contractInfo.progress', { n: data.paymentCount })}</span><span className="font-semibold tabular-nums">{pct}%</span></div>
                 <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                   <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 transition-all" style={{ width: `${pct}%` }} />
                 </div>

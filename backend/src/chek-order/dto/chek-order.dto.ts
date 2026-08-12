@@ -18,6 +18,10 @@ export class AssistantChatDto {
   @ApiPropertyOptional({ description: 'Kontekst — joriy orderlar/natijalar, shartnoma' })
   @IsOptional()
   context?: any;
+
+  @ApiPropertyOptional({ description: 'Interfeys tili (uz|ru|en) — AI shu tilda javob beradi' })
+  @IsOptional() @IsString()
+  locale?: string;
 }
 
 /** Murojaat yaratish */

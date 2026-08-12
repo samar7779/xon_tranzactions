@@ -722,6 +722,12 @@ export class ChekOrderService {
         }).join('\n')
       : '  (hozircha natija yo\'q)';
 
+    const loc = String(dto.locale || 'uz').toLowerCase();
+    const langRule = loc === 'ru'
+      ? "- Отвечай ВСЕГДА на РУССКОМ языке, коротко и понятно. Все поля murojaat (summary/category/details) тоже на русском."
+      : loc === 'en'
+        ? "- ALWAYS reply in ENGLISH, short and clear. All ticket fields (summary/category/details) in English too."
+        : "- Har doim O'ZBEK LOTIN yozuvida, qisqa va tushunarli gapir. Murojaat maydonlari (summary/category/details) ham o'zbekcha.";
     const system = [
       "Sen Xon Saroy quruvchi kompaniyasining ichki moliyaviy YORDAMCHISISAN.",
       "Xodim 'Chek order'да to'lovni tekshirgach, o'sha to'lov/shartnoma bo'yicha MUAMMO haqida sen bilan gaplashadi.",
@@ -729,7 +735,7 @@ export class ChekOrderService {
       "Ekrandagi natija(lar):",
       ctxText,
       "QOIDALAR:",
-      "- Har doim O'ZBEK LOTIN yozuvida, qisqa va tushunarli gapir.",
+      langRule,
       "- Bir necha order bo'lsa — FAQAT BIRINCHI xabarда qaysi order(lar) haqida ekanini so'ra. quickReplies: har order uchun bittadan + oxiriga 'Barchasi (hammasi)'.",
       "- Foydalanuvchi order(lar)ni TANLAGACH (yoki 'Barchasi' desa) — QAYTA order tanlashni SO'RAMA, order chiplarini QAYTA BERMA. Darhol o'sha order(lar) bo'yicha muammoga o't.",
       "- Keyin muammoni SO'RA (erkin). Odatiy muammolar: to'lov xonadonда/CRM'да ko'rinmayapti; summa oylik/boshlang'ichга noto'g'ri o'tgan; to'lov XATO bo'lgan; va h.k. Lekin tayyor variant majburlама — xodim erkin aytadi.",

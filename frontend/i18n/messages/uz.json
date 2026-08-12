@@ -2521,5 +2521,211 @@
     "externalIdLabel": "External ID",
     "chipDoc": "Док №{n}",
     "chipCode": "Код {n}"
+  },
+  "chekOrder": {
+    "title": "Chek order",
+    "subtitle": "Memorial order / kvitansiya → tranzaksiyada bor-yo'qligini tekshirish",
+    "tabs": {
+      "check": "Tekshirish",
+      "history": "Tarix",
+      "tickets": "Murojaatlar"
+    },
+    "newCheck": "Yangi tekshiruv",
+    "mode": {
+      "photo": "Surat / PDF",
+      "orderNo": "Order raqami",
+      "contract": "Shartnoma"
+    },
+    "upload": {
+      "drop": "Memorial order / kvitansiya suratini tashlang",
+      "hint": "yoki bosing — rasm yoki PDF · bitta suratda bir nechta hujjat bo'lishi mumkin",
+      "another": "Boshqa",
+      "zoom": "Kattalashtirish",
+      "shrink": "Kichraytirish"
+    },
+    "manual": {
+      "label": "Order raqam(lar)i",
+      "button": "Tranzaksiyada tekshir",
+      "note": "Eslatma: faqat raqam bo'yicha. To'liq (hisob+shartnoma+summa) tekshiruv uchun suratni yuklang."
+    },
+    "contract": {
+      "label": "Shartnoma raqami",
+      "placeholder": "Shartnoma raqamini yozing — CRM'dan qidiriladi",
+      "payments": "To'lovlar",
+      "count": "{n} ta",
+      "noTx": "Bu shartnoma bo'yicha tranzaksiya topilmadi",
+      "hint": "Shartnomani tanlang — to'lovlari chiqadi. Kerakli to'lovni bosing."
+    },
+    "empty": {
+      "contract": "Shartnoma va to'lovni tanlang — natija shu yerda chiqadi",
+      "upload": "Suratni yuklang — natija shu yerda chiqadi"
+    },
+    "result": {
+      "count": "Natija — {n} ta",
+      "found": "Topildi",
+      "mismatch": "Nomuvofiq",
+      "notFound": "Topilmadi",
+      "onePaymentDocs": "(1 to'lov · {n} hujjat)",
+      "som": "so'm"
+    },
+    "read": {
+      "title": "Hujjatdan o'qildi"
+    },
+    "field": {
+      "accountRecipient": "Hisob (oluvchi)",
+      "amount": "Summa",
+      "contract": "Shartnoma",
+      "date": "Sana",
+      "recipient": "Oluvchi",
+      "payer": "To'lovchi",
+      "account": "Hisob"
+    },
+    "cond": {
+      "title": "Shartlar tekshiruvi",
+      "hint": "Hujjatdagi ma'lumot topilgan tranzaksiyaga mos kelishini tekshirish:",
+      "orderNo": "Order №",
+      "orderDiffersNote": "kvitansiya raqami bank hujjat raqamidan farq qiladi — bu normal"
+    },
+    "condCell": {
+      "title": "Shartlarni ko'rish"
+    },
+    "condWord": {
+      "match": "mos keldi",
+      "mismatch": "mos kelmadi",
+      "notChecked": "tekshirilmadi"
+    },
+    "notFound": {
+      "title": "Tranzaksiyada topilmadi",
+      "sub": "Order №, hisob, shartnoma va summa bo'yicha mos to'lov yo'q"
+    },
+    "verdict": {
+      "notFound": "Bu to'lov bizning tranzaksiyalarda TOPILMADI — ya'ni bunday to'lov bizga tushmagan yoki hali qayd etilmagan.",
+      "found": "To'lov tranzaksiyalarda TOPILDI, muhim shartlar (summa va shartnoma) mos keldi — bu bizga tushgan haqiqiy to'lov.",
+      "mismatch": "O'xshash to'lov topildi, LEKIN {fields} mos kelmadi. Bu boshqa to'lov bo'lishi mumkin — qo'lda tekshirish tavsiya etiladi.",
+      "and": " va ",
+      "f": {
+        "amount": "summa",
+        "contract": "shartnoma",
+        "orderAndAccount": "order raqami va hisob",
+        "some": "ba'zi shartlar"
+      }
+    },
+    "tx": {
+      "foundTitle": "Topilgan tranzaksiya",
+      "btnTx": "Tranzaksiya",
+      "btnTxTitle": "Tranzaksiya ma'lumoti",
+      "btnKvTitle": "ОплатыКв to'lovlari",
+      "bankDoc": "Bank docNumber",
+      "direction": "Yo'nalish",
+      "in": "Kirim",
+      "out": "Chiqim",
+      "debit": "Debet hisob",
+      "credit": "Kredit hisob",
+      "note": "Izoh",
+      "extId": "Ext ID"
+    },
+    "txm": {
+      "in": "KIRIM",
+      "out": "CHIQIM",
+      "counterparty": "Kontragent",
+      "category": "Kategoriya",
+      "sender": "Yuboruvchi",
+      "name": "Nomi",
+      "receiver": "Qabul qiluvchi",
+      "purpose": "To'lov maqsadi",
+      "purposeCode": "Maqsad kodi",
+      "timeInfo": "Vaqt ma'lumotlari",
+      "docDate": "Hujjat sanasi",
+      "valueDate": "Value date",
+      "opTime": "Operatsiya vaqti",
+      "enteredAt": "Kiritilgan",
+      "systemInfo": "Tizim ma'lumotlari",
+      "bank": "Bank",
+      "clientId": "Klient ID",
+      "fullJson": "Bankdan kelgan to'liq JSON"
+    },
+    "kv": {
+      "count": "{n} ta to'lov",
+      "none": "Bu shartnoma bo'yicha ОплатыКв to'lovi yo'q",
+      "type": "Tip",
+      "object": "Obyekt"
+    },
+    "history": {
+      "search": "Order / shartnoma / ism",
+      "all": "Barchasi",
+      "clearAll": "Barchasini o'chirish",
+      "confirmClear": "BUTUN tarix o'chirilsinmi? Bu qaytarib bo'lmaydi.",
+      "confirmDelete": "O'chirilsinmi?",
+      "empty": "Hali tekshiruv yo'q",
+      "th": {
+        "orderNo": "Order №",
+        "conditions": "Shartlar",
+        "result": "Natija",
+        "who": "Kim · Qachon"
+      }
+    },
+    "contractInfo": {
+      "heading": "Shartnoma ma'lumoti",
+      "inCrm": "CRM'da bor",
+      "notInCrm": "CRM'da yo'q",
+      "client": "Mijoz",
+      "object": "Obyekt",
+      "apartment": "Xonadon",
+      "rooms": "{n} xona",
+      "area": "{n} m²",
+      "block": "Блок {n}",
+      "floor": "{n}-qavat",
+      "contractValue": "Kelishuv qiymati",
+      "paid": "To'langan",
+      "remaining": "Qoldiq",
+      "progress": "To'lov jarayoni · {n} ta to'lov"
+    },
+    "assistant": {
+      "title": "AI Yordamchi",
+      "subtitle": "Muammoni ayting — murojaat qilaman",
+      "newChat": "Yangi suhbat",
+      "placeholder": "Muammoni yozing…",
+      "send": "Yuborish",
+      "multiHint": "Bir nechtasini belgilab, “Yuborish” bosing yoki bittasini belgilang.",
+      "proposalTitle": "Murojaat taklifi",
+      "createBtn": "Murojaat yaratish",
+      "cancel": "Bekor",
+      "createdToast": "Murojaat yaratildi (№{no})",
+      "createdMsg": "✅ Murojaat №{no} yaratildi. \"Murojaatlar\" bo'limida ko'rasiz."
+    },
+    "tickets": {
+      "status": {
+        "new": "Yangi",
+        "in_progress": "Jarayonda",
+        "resolved": "Bajarildi",
+        "rejected": "Bekor qilingan"
+      },
+      "search": "Muammo / shartnoma",
+      "empty": "Hali murojaat yo'q",
+      "th": {
+        "problem": "Muammo",
+        "status": "Holat"
+      },
+      "detail": {
+        "ticket": "Murojaat #{no}",
+        "orders": "Order(lar)",
+        "management": "Boshqaruv",
+        "resolutionLabel": "Hal qilish izohi (ixtiyoriy)",
+        "resolutionPlaceholder": "Muammo qanday hal qilindi…",
+        "save": "Saqlash",
+        "chatHistory": "Suhbat tarixi ({n})",
+        "show": "ochish",
+        "hide": "yashirish"
+      },
+      "savedToast": "Saqlandi"
+    },
+    "toast": {
+      "docsChecked": "{n} ta hujjat tekshirildi",
+      "ordersChecked": "{n} ta order tekshirildi",
+      "deleted": "O'chirildi",
+      "recordsDeleted": "{n} ta yozuv o'chirildi",
+      "error": "Xato",
+      "fileTooLarge": "Fayl 25 MB dan oshmasligi kerak"
+    }
   }
 }

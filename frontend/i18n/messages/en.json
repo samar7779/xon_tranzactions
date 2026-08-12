@@ -2521,5 +2521,211 @@
     "externalIdLabel": "External ID",
     "chipDoc": "Doc №{n}",
     "chipCode": "Code {n}"
+  },
+  "chekOrder": {
+    "title": "Check order",
+    "subtitle": "Memorial order / receipt → check whether it exists in transactions",
+    "tabs": {
+      "check": "Check",
+      "history": "History",
+      "tickets": "Tickets"
+    },
+    "newCheck": "New check",
+    "mode": {
+      "photo": "Photo / PDF",
+      "orderNo": "Order number",
+      "contract": "Contract"
+    },
+    "upload": {
+      "drop": "Drop a photo of the memorial order / receipt",
+      "hint": "or click — image or PDF · one photo can contain several documents",
+      "another": "Another",
+      "zoom": "Zoom in",
+      "shrink": "Zoom out"
+    },
+    "manual": {
+      "label": "Order number(s)",
+      "button": "Check in transactions",
+      "note": "Note: by number only. For a full check (account+contract+amount) upload a photo."
+    },
+    "contract": {
+      "label": "Contract number",
+      "placeholder": "Type the contract number — searched in CRM",
+      "payments": "Payments",
+      "count": "{n}",
+      "noTx": "No transactions found for this contract",
+      "hint": "Select a contract — its payments appear. Click the needed payment."
+    },
+    "empty": {
+      "contract": "Select a contract and payment — the result will appear here",
+      "upload": "Upload a photo — the result will appear here"
+    },
+    "result": {
+      "count": "Result — {n}",
+      "found": "Found",
+      "mismatch": "Mismatch",
+      "notFound": "Not found",
+      "onePaymentDocs": "(1 payment · {n} docs)",
+      "som": "sum"
+    },
+    "read": {
+      "title": "Read from the document"
+    },
+    "field": {
+      "accountRecipient": "Account (recipient)",
+      "amount": "Amount",
+      "contract": "Contract",
+      "date": "Date",
+      "recipient": "Recipient",
+      "payer": "Payer",
+      "account": "Account"
+    },
+    "cond": {
+      "title": "Conditions check",
+      "hint": "Checking whether the document data matches the found transaction:",
+      "orderNo": "Order №",
+      "orderDiffersNote": "the receipt number differs from the bank document number — this is normal"
+    },
+    "condCell": {
+      "title": "Show conditions"
+    },
+    "condWord": {
+      "match": "matches",
+      "mismatch": "doesn't match",
+      "notChecked": "not checked"
+    },
+    "notFound": {
+      "title": "Not found in transactions",
+      "sub": "No payment matching order №, account, contract and amount"
+    },
+    "verdict": {
+      "notFound": "This payment was NOT FOUND in our transactions — meaning it hasn't reached us or hasn't been recorded yet.",
+      "found": "The payment was FOUND in transactions, key conditions (amount and contract) matched — this is a real received payment.",
+      "mismatch": "A similar payment was found, BUT {fields} didn't match. This may be a different payment — manual verification is recommended.",
+      "and": " and ",
+      "f": {
+        "amount": "amount",
+        "contract": "contract",
+        "orderAndAccount": "order number and account",
+        "some": "some conditions"
+      }
+    },
+    "tx": {
+      "foundTitle": "Found transaction",
+      "btnTx": "Transaction",
+      "btnTxTitle": "Transaction details",
+      "btnKvTitle": "ОплатыКв payments",
+      "bankDoc": "Bank docNumber",
+      "direction": "Direction",
+      "in": "Incoming",
+      "out": "Outgoing",
+      "debit": "Debit account",
+      "credit": "Credit account",
+      "note": "Note",
+      "extId": "Ext ID"
+    },
+    "txm": {
+      "in": "INCOMING",
+      "out": "OUTGOING",
+      "counterparty": "Counterparty",
+      "category": "Category",
+      "sender": "Sender",
+      "name": "Name",
+      "receiver": "Receiver",
+      "purpose": "Payment purpose",
+      "purposeCode": "Purpose code",
+      "timeInfo": "Time details",
+      "docDate": "Document date",
+      "valueDate": "Value date",
+      "opTime": "Operation time",
+      "enteredAt": "Entered",
+      "systemInfo": "System details",
+      "bank": "Bank",
+      "clientId": "Client ID",
+      "fullJson": "Full JSON from the bank"
+    },
+    "kv": {
+      "count": "{n} payments",
+      "none": "No ОплатыКв payments for this contract",
+      "type": "Type",
+      "object": "Object"
+    },
+    "history": {
+      "search": "Order / contract / name",
+      "all": "All",
+      "clearAll": "Delete all",
+      "confirmClear": "Delete the ENTIRE history? This cannot be undone.",
+      "confirmDelete": "Delete?",
+      "empty": "No checks yet",
+      "th": {
+        "orderNo": "Order №",
+        "conditions": "Conditions",
+        "result": "Result",
+        "who": "Who · When"
+      }
+    },
+    "contractInfo": {
+      "heading": "Contract details",
+      "inCrm": "In CRM",
+      "notInCrm": "Not in CRM",
+      "client": "Client",
+      "object": "Object",
+      "apartment": "Apartment",
+      "rooms": "{n} rooms",
+      "area": "{n} m²",
+      "block": "Block {n}",
+      "floor": "Floor {n}",
+      "contractValue": "Contract value",
+      "paid": "Paid",
+      "remaining": "Remaining",
+      "progress": "Payment progress · {n} payments"
+    },
+    "assistant": {
+      "title": "AI Assistant",
+      "subtitle": "Describe the problem — I'll create a ticket",
+      "newChat": "New chat",
+      "placeholder": "Describe the problem…",
+      "send": "Send",
+      "multiHint": "Select several and click “Send”, or pick just one.",
+      "proposalTitle": "Ticket proposal",
+      "createBtn": "Create ticket",
+      "cancel": "Cancel",
+      "createdToast": "Ticket created (№{no})",
+      "createdMsg": "✅ Ticket №{no} created. You'll see it in the \"Tickets\" section."
+    },
+    "tickets": {
+      "status": {
+        "new": "New",
+        "in_progress": "In progress",
+        "resolved": "Done",
+        "rejected": "Cancelled"
+      },
+      "search": "Problem / contract",
+      "empty": "No tickets yet",
+      "th": {
+        "problem": "Problem",
+        "status": "Status"
+      },
+      "detail": {
+        "ticket": "Ticket #{no}",
+        "orders": "Order(s)",
+        "management": "Management",
+        "resolutionLabel": "Resolution note (optional)",
+        "resolutionPlaceholder": "How the problem was resolved…",
+        "save": "Save",
+        "chatHistory": "Chat history ({n})",
+        "show": "show",
+        "hide": "hide"
+      },
+      "savedToast": "Saved"
+    },
+    "toast": {
+      "docsChecked": "{n} documents checked",
+      "ordersChecked": "{n} orders checked",
+      "deleted": "Deleted",
+      "recordsDeleted": "{n} records deleted",
+      "error": "Error",
+      "fileTooLarge": "File must not exceed 25 MB"
+    }
   }
 }

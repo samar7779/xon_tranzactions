@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, FileSignature,
@@ -18,11 +19,12 @@ type TicketRow = {
   createdByName: string | null; createdAt: string;
 };
 
-const STATUS: Record<string, { label: string; cls: string; Icon: any }> = {
-  new: { label: 'Yangi', cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', Icon: CircleDot },
-  in_progress: { label: 'Jarayonda', cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: Clock },
-  resolved: { label: 'Bajarildi', cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2 },
-  rejected: { label: 'Bekor qilingan', cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700', Icon: XCircle },
+// Holat ranglari/ikonlari — yorliqlar t('chekOrder.tickets.status.*') orqali tarjima qilinadi
+const STATUS: Record<string, { cls: string; Icon: any }> = {
+  new: { cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-blue-200 dark:ring-blue-900', Icon: CircleDot },
+  in_progress: { cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 ring-amber-200 dark:ring-amber-900', Icon: Clock },
+  resolved: { cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 ring-emerald-200 dark:ring-emerald-900', Icon: CheckCircle2 },
+  rejected: { cls: 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700', Icon: XCircle },
 };
 
 const fmtDate = (s?: string | null) => {
@@ -33,6 +35,8 @@ const fmtDate = (s?: string | null) => {
 };
 
 export function ChekTickets() {
+  const tr = useTranslations('chekOrder');
+  const stLabel = (k: string) => tr(`tickets.status.${STATUS[k] ? k : 'new'}`);
   const qc = useQueryClient();
   const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
@@ -52,8 +56,8 @@ export function ChekTickets() {
   };
   const delMut = useMutation({
     mutationFn: (id: string) => api.delete(`/chek-order/tickets/${id}`),
-    onSuccess: () => { refresh(); toast.success("O'chirildi"); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: () => { refresh(); toast.success(tr('toast.deleted')); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
   const st = data?.stats;
 
@@ -70,12 +74,12 @@ export function ChekTickets() {
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Muammo / shartnoma" className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr('tickets.search')} className="pl-8 pr-3 h-8 w-60 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] outline-none focus:ring-2 focus:ring-indigo-500/30" />
           </div>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-8 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] px-2 outline-none">
-            <option value="all">Barchasi</option>
-            <option value="new">Yangi</option><option value="in_progress">Jarayonda</option>
-            <option value="resolved">Bajarildi</option><option value="rejected">Bekor qilingan</option>
+            <option value="all">{tr('history.all')}</option>
+            <option value="new">{tr('tickets.status.new')}</option><option value="in_progress">{tr('tickets.status.in_progress')}</option>
+            <option value="resolved">{tr('tickets.status.resolved')}</option><option value="rejected">{tr('tickets.status.rejected')}</option>
           </select>
         </div>
       </div>
@@ -86,10 +90,10 @@ export function ChekTickets() {
             <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider">
               <tr>
                 <th className="text-left font-semibold px-3 py-2.5">№</th>
-                <th className="text-left font-semibold px-3 py-2.5">Muammo</th>
-                <th className="text-left font-semibold px-3 py-2.5">Shartnoma</th>
-                <th className="text-left font-semibold px-3 py-2.5">Holat</th>
-                <th className="text-left font-semibold px-3 py-2.5">Kim · Qachon</th>
+                <th className="text-left font-semibold px-3 py-2.5">{tr('tickets.th.problem')}</th>
+                <th className="text-left font-semibold px-3 py-2.5">{tr('field.contract')}</th>
+                <th className="text-left font-semibold px-3 py-2.5">{tr('tickets.th.status')}</th>
+                <th className="text-left font-semibold px-3 py-2.5">{tr('history.th.who')}</th>
                 <th className="px-3 py-2.5"></th>
               </tr>
             </thead>
@@ -99,7 +103,7 @@ export function ChekTickets() {
               ) : (data?.items?.length ?? 0) === 0 ? (
                 <tr><td colSpan={6} className="p-12 text-center text-slate-400">
                   <Ticket className="h-8 w-8 mx-auto mb-2 opacity-40" />
-                  Hali murojaat yo'q
+                  {tr('tickets.empty')}
                 </td></tr>
               ) : data!.items.map((t) => {
                 const m = STATUS[t.status] || STATUS.new;
@@ -111,10 +115,10 @@ export function ChekTickets() {
                       {t.category && <div className="text-[11px] text-indigo-500">{t.category}</div>}
                     </td>
                     <td className="px-3 py-2.5 font-mono text-slate-600 dark:text-slate-400">{t.contractNo || '—'}</td>
-                    <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', m.cls)}><m.Icon className="h-3 w-3" /> {m.label}</span></td>
+                    <td className="px-3 py-2.5"><span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-md ring-1 text-[10.5px] font-bold whitespace-nowrap', m.cls)}><m.Icon className="h-3 w-3" /> {stLabel(t.status)}</span></td>
                     <td className="px-3 py-2.5 text-[11px] text-slate-400 whitespace-nowrap">{t.createdByName || '—'} · {fmtDate(t.createdAt)}</td>
                     <td className="px-3 py-2.5 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button onClick={() => { if (confirm("O'chirilsinmi?")) delMut.mutate(t.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
+                      <button onClick={() => { if (confirm(tr('history.confirmDelete'))) delMut.mutate(t.id); }} className="text-slate-400 hover:text-rose-600 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                     </td>
                   </tr>
                 );
@@ -137,6 +141,8 @@ export function ChekTickets() {
 }
 
 function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => void; onSaved: () => void }) {
+  const tr = useTranslations('chekOrder');
+  const stLabel = (k: string) => tr(`tickets.status.${STATUS[k] ? k : 'new'}`);
   const [status, setStatus] = useState(t.status);
   const [resolution, setResolution] = useState(t.resolution || '');
   const [showChat, setShowChat] = useState(false);
@@ -144,8 +150,8 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
 
   const saveMut = useMutation({
     mutationFn: () => api.patch(`/chek-order/tickets/${t.id}`, { status, resolution }),
-    onSuccess: () => { toast.success('Saqlandi'); onSaved(); },
-    onError: (e: any) => toast.error(e?.message || 'Xato'),
+    onSuccess: () => { toast.success(tr('tickets.savedToast')); onSaved(); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
   const transcript: Array<{ role: string; content: string }> = Array.isArray(t.transcript) ? t.transcript : [];
 
@@ -154,7 +160,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
       <div className="w-full max-w-2xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
-          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> Murojaat #{t.ticketNo}</div>
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> {tr('tickets.detail.ticket', { no: t.ticketNo })}</div>
           <div className="text-[16px] font-bold leading-snug">{t.summary}</div>
           {t.category && <div className="text-[12px] opacity-90 mt-1">{t.category}</div>}
         </div>
@@ -162,30 +168,30 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
         <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
           {t.details && <div className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">{t.details}</div>}
           <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
-            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Shartnoma</div><div className="font-mono text-slate-700 dark:text-slate-200">{t.contractNo || '—'}</div></div>
-            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">Order(lar)</div><div className="font-mono text-slate-700 dark:text-slate-200 truncate">{(t.orderNos || []).join(', ') || '—'}</div></div>
+            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{tr('field.contract')}</div><div className="font-mono text-slate-700 dark:text-slate-200">{t.contractNo || '—'}</div></div>
+            <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{tr('tickets.detail.orders')}</div><div className="font-mono text-slate-700 dark:text-slate-200 truncate">{(t.orderNos || []).join(', ') || '—'}</div></div>
           </div>
 
           {/* Boshqaruv */}
           <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3 space-y-2.5">
-            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Boshqaruv</div>
+            <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">{tr('tickets.detail.management')}</div>
             <div>
-              <div className="text-[11px] text-slate-500 mb-1">Holat</div>
+              <div className="text-[11px] text-slate-500 mb-1">{tr('tickets.th.status')}</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(STATUS).map(([k, m]) => (
                   <button key={k} onClick={() => setStatus(k)} className={cn('inline-flex items-center gap-1 px-2.5 h-7 rounded-lg text-[11.5px] font-semibold ring-1 transition-colors',
                     status === k ? m.cls : 'bg-white dark:bg-slate-800 text-slate-500 ring-slate-200 dark:ring-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700')}>
-                    <m.Icon className="h-3 w-3" /> {m.label}
+                    <m.Icon className="h-3 w-3" /> {stLabel(k)}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <div className="text-[11px] text-slate-500 mb-1">Hal qilish izohi (ixtiyoriy)</div>
-              <textarea value={resolution} onChange={(e) => setResolution(e.target.value)} rows={2} placeholder="Muammo qanday hal qilindi…" className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] resize-y outline-none focus:ring-2 focus:ring-indigo-500/40" />
+              <div className="text-[11px] text-slate-500 mb-1">{tr('tickets.detail.resolutionLabel')}</div>
+              <textarea value={resolution} onChange={(e) => setResolution(e.target.value)} rows={2} placeholder={tr('tickets.detail.resolutionPlaceholder')} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] resize-y outline-none focus:ring-2 focus:ring-indigo-500/40" />
             </div>
             <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending} className="h-9 px-4 rounded-lg bg-indigo-600 text-white text-[12.5px] font-semibold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-1.5">
-              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} Saqlash
+              {saveMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {tr('tickets.detail.save')}
             </button>
           </div>
 
@@ -193,8 +199,8 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
           {transcript.length > 0 && (
             <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
               <button onClick={() => setShowChat((v) => !v)} className="w-full flex items-center gap-2 px-3 py-2.5 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <MessageSquare className="h-3.5 w-3.5 text-slate-400" /> Suhbat tarixi ({transcript.length})
-                <span className="ml-auto text-slate-400 text-[11px]">{showChat ? 'yashirish' : 'ochish'}</span>
+                <MessageSquare className="h-3.5 w-3.5 text-slate-400" /> {tr('tickets.detail.chatHistory', { n: transcript.length })}
+                <span className="ml-auto text-slate-400 text-[11px]">{showChat ? tr('tickets.detail.hide') : tr('tickets.detail.show')}</span>
               </button>
               {showChat && (
                 <div className="p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40 max-h-64 overflow-y-auto">
