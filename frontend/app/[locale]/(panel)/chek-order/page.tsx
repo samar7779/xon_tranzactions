@@ -1,5 +1,6 @@
 'use client';
 
+// Chek order — memorial/kvitansiya → tranzaksiyada tekshirish (natija xulosasi + shartlar izohi)
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
