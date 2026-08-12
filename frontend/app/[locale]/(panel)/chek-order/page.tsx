@@ -53,6 +53,24 @@ const fmtDate = (s?: string | null) => {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 };
 
+// Oddiy tilда xulosa — begona/yangi foydalanuvchi ham tushunsin
+function verdictOf(r: OrderResult): string {
+  const c = r.conditions;
+  if (r.result === 'not_found')
+    return "Bu to'lov bizning tranzaksiyalarda TOPILMADI — ya'ni bunday to'lov bizga tushmagan yoki hali qayd etilmagan.";
+  if (r.result === 'found')
+    return "To'lov tranzaksiyalarda TOPILDI, muhim shartlar (summa va shartnoma) mos keldi — bu bizga tushgan haqiqiy to'lov.";
+  // mismatch
+  const bad: string[] = [];
+  if (c?.amount === false) bad.push('summa');
+  if (c?.contract === false) bad.push('shartnoma');
+  if (bad.length === 0 && c?.order === false && c?.account === false) bad.push('order raqami va hisob');
+  const badTxt = bad.length ? bad.join(' va ') : "ba'zi shartlar";
+  return `O'xshash to'lov topildi, LEKIN ${badTxt} mos kelmadi. Bu boshqa to'lov bo'lishi mumkin — qo'lда tekshirish tavsiya etiladi.`;
+}
+
+const condWord = (ok: boolean | null | undefined) => ok === true ? 'mos keldi' : ok === false ? 'mos kelmadi' : 'tekshirilmadi';
+
 export default function ChekOrderPage() {
   const qc = useQueryClient();
   const canManage = useHasPermission(PERMS.CHEKORDER_MANAGE);
@@ -210,7 +228,7 @@ export default function ChekOrderPage() {
             {canManage && (
               <div className="grid gap-4 lg:grid-cols-[minmax(0,640px)_1fr]">
                 {/* CHAP: surat / kirish */}
-                <Card className="border-0 shadow-soft overflow-hidden self-start">
+                <Card className="border-0 shadow-soft overflow-visible self-start">
                   <div className="flex items-center gap-1 p-1 m-3 mb-0 bg-slate-100 dark:bg-slate-800 rounded-xl w-fit">
                     <button onClick={() => setMode('upload')} className={cn('flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors', mode === 'upload' ? 'bg-white dark:bg-slate-900 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700')}>
                       <ImageIcon className="h-3.5 w-3.5" /> Surat / PDF
@@ -525,6 +543,15 @@ function ResultCard({ r }: { r: OrderResult }) {
         {ex.amount != null && <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300 tabular-nums">{formatMoney(ex.amount, '')} <span className="text-[10px] text-slate-400">so'm</span></span>}
       </div>
 
+      {/* Oddiy tildagi xulosa — begona foydalanuvchi ham tushunsin */}
+      <div className={cn('flex items-start gap-2 px-4 py-2.5 text-[12px] leading-relaxed border-b',
+        r.result === 'found' ? 'bg-emerald-50/40 dark:bg-emerald-950/10 text-emerald-800 dark:text-emerald-300 border-emerald-100/60 dark:border-emerald-900/30'
+        : r.result === 'mismatch' ? 'bg-amber-50/40 dark:bg-amber-950/10 text-amber-800 dark:text-amber-300 border-amber-100/60 dark:border-amber-900/30'
+        : 'bg-rose-50/40 dark:bg-rose-950/10 text-rose-800 dark:text-rose-300 border-rose-100/60 dark:border-rose-900/30')}>
+        <meta.Icon className="h-4 w-4 shrink-0 mt-0.5" />
+        <span>{verdictOf(r)}</span>
+      </div>
+
       <div className="p-4 grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Hujjatдan o'qildi</div>
@@ -543,8 +570,9 @@ function ResultCard({ r }: { r: OrderResult }) {
             </div>
           ) : (
             <>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Shartlar</div>
-              <CondRow label="Order №" ok={c?.order} txVal={tx?.docNumber} mono note={orderDiffers ? 'kvitansiya raqami bank hujjat raqamidan farq qiladi (normal)' : undefined} />
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Shartlar tekshiruvi</div>
+              <div className="text-[10.5px] text-slate-400 -mt-1 mb-1">Hujjatдаги ma'lumot topilgan tranzaksiyaga mos kelishini tekshirish:</div>
+              <CondRow label="Order №" ok={c?.order} txVal={tx?.docNumber} mono note={orderDiffers ? 'kvitansiya raqami bank hujjat raqamidan farq qiladi — bu normal' : undefined} />
               <CondRow label="Hisob" ok={c?.account} txVal={acctVal} mono />
               <CondRow label="Summa" ok={c?.amount} txVal={tx ? formatMoney(tx.amount, '') : ''} />
               <CondRow label="Shartnoma" ok={c?.contract} txVal={ex.contractNo || ''} mono />
@@ -769,16 +797,20 @@ function InfoRow({ icon, label, value, mono }: { icon: React.ReactNode; label: s
 }
 
 function CondRow({ label, ok, txVal, mono, note }: { label: string; ok: boolean | null | undefined; txVal?: string | null; mono?: boolean; note?: string }) {
+  const wordCls = ok === true ? 'text-emerald-600 dark:text-emerald-400' : ok === false ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400';
   return (
     <div className="flex items-start gap-2 text-[12px]">
       <span className="shrink-0 mt-0.5">
         {ok === true ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : ok === false ? <XCircle className="h-4 w-4 text-rose-500" /> : <span className="inline-block w-4 h-4 rounded-full border border-slate-300 dark:border-slate-600 text-slate-400 text-[9px] leading-4 text-center">—</span>}
       </span>
-      <span className="text-slate-500 dark:text-slate-400 w-20 shrink-0">{label}</span>
-      <span className="min-w-0">
-        <span className={cn('block truncate', ok === false ? 'text-rose-600 dark:text-rose-400' : 'text-slate-700 dark:text-slate-300', mono && 'font-mono')} title={txVal || '—'}>{txVal || '—'}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-600 dark:text-slate-300 font-medium">{label}</span>
+          <span className={cn('text-[11px] font-semibold', wordCls)}>· {condWord(ok)}</span>
+        </div>
+        {txVal && <span className={cn('block truncate text-[11px] text-slate-400', mono && 'font-mono')} title={txVal}>{txVal}</span>}
         {note && <span className="block text-[10px] text-amber-600/80 dark:text-amber-400/70">{note}</span>}
-      </span>
+      </div>
     </div>
   );
 }
