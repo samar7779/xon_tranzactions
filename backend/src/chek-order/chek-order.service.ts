@@ -780,8 +780,11 @@ export class ChekOrderService {
     if (found) {
       lines.push(`  Kelishuv qiymati: ${money(info?.contractValue)} · jami to'langan: ${money(info?.totalPaid)} · qoldiq: ${money(info?.remaining)}`);
       if (schedules.length) {
-        lines.push(`  Grafik — Boshlang'ich: reja ${money(initExp)}, to'langan ${money(initPaid)}, qolgan ${money(initExp - initPaid)}`);
-        lines.push(`  Grafik — Oylik: reja ${money(monExp)}, to'langan ${money(monPaid)}, qolgan ${money(monExp - monPaid)}`);
+        const initDelta = initPaid - initExp; // >0 ortiqcha, =0 aniq, <0 kam
+        const monDelta = monPaid - monExp;
+        const stat = (d: number) => d === 0 ? "ANIQ to'liq (ortiqcha EMAS)" : d > 0 ? `ORTIQCHA to'langan ${money(d)}` : `KAM to'langan ${money(-d)}`;
+        lines.push(`  Grafik — Boshlang'ich: reja ${money(initExp)}, to'langan ${money(initPaid)}, qolgan ${money(initExp - initPaid)} → holati: ${stat(initDelta)}`);
+        lines.push(`  Grafik — Oylik: reja ${money(monExp)}, to'langan ${money(monPaid)}, qolgan ${money(monExp - monPaid)} → holati: ${stat(monDelta)}`);
       } else {
         lines.push("  Grafik: CRM'dan olinmadi.");
       }
@@ -835,10 +838,17 @@ export class ChekOrderService {
       // ── SHARTNOMA: o'zing aniqlaysan, so'ramaysan ──
       "- SHARTNOMA (MUHIM): shartnoma raqamini YUQORIDAGI 'CRM shartnoma' dan OL — u tranzaksiyadan aniqlangan, ISHONCHLI (hujjatдаги OCR raqami xato bo'lishi mumkin). proposeTicket.contractNo shu bo'lsin. CRM'da 'BOR' bo'lsa — foydalanuvchidan shartnoma raqamini SO'RAMA.",
       "- Shartnoma raqamini FAQAT quyidagi holatda so'ra: 'CRM shartnoma' umuman aniqlanmagan YOKI 'CRM'da: YO'Q' bo'lsa (ya'ni shartnoma CRM'da yo'q / xato). Boshqa hollarda so'rama.",
+      // ── ISHONCH EMAS, TEKSHIRUV ──
+      "- ISHONCH EMAS — TEKSHIR: foydalanuvchi da'vosini KO'R-KO'RONA qabul qilma. Har doim o'zingдаги ma'lumot (natija: found/mismatch/not_found, CRM 'BOR/YO'Q', grafik, ОплатыКв taqsimoti) bilan SOLISHTIR. Ma'lumot da'voga zid bo'lsa — hurmat bilan buni ayt, rozi bo'lib qo'yma.",
+      "- Order natijasi NOT_FOUND bo'lsa — bu order/to'lov bizning TRANZAKSIYALARДА topilmagan (mavjud emas yoki hali tushmagan). Bunday orderда 'shartnoma xato' kabi da'voni SHOSHIB qabul qilma: AVVAL faktni ayt ('bu 13425470-order tranzaksiyalarда topilmadi'). Ekранда TOPILGAN boshqa order bo'lsa — 'balki topilgan <order№> ni nazarda tutdingizmi?' deb ANIQLASHTIR. Order haqiqatan yo'qligini tasdiqlab, keyin yo'naltir.",
       // ── BOSHLANG'ICH ↔ OYLIK: avval tekshir, keyin xulosa ──
-      "- BOSHLANG'ICH↔OYLIK muammosi (to'lov noto'g'ri joyga — boshlang'ich/oylikка — o'tgan desa): DARHOL murojaat YARATMA. Avval YUQORIDAGI CRM grafik (Boshlang'ich reja/to'langan, Oylik reja/to'langan) va ОплатыКв taqsimotini TAHLIL qil.",
-      "- ANIQ raqamlar bilan tekshir: masalan 'grafik bo'yicha boshlang'ich reja X, to'langan Y (to'liq/to'liq emas); oylik reja Z...'. Shu asosda to'lov qayerga tegishli ekanini ayt.",
-      "- Agar foydalanuvchi ADASHGAN bo'lsa (to'lov aslida to'g'ri joyda) — hurmat bilan, raqamlar bilan tushuntir va murojaat taklif QILMA (kerak bo'lsa 'baribir murojaat yarataymi?' deb so'ra). Agar HAQIQATAN xato bo'lsa — tushuntirib, murojaat taklif qil.",
+      "- BOSHLANG'ICH↔OYLIK muammosi (to'lov noto'g'ri joyga — boshlang'ich/oylikка — o'tgan desa): DARHOL murojaat YARATMA. Avval YUQORIDAGI CRM grafik (Boshlang'ich reja/to'langan/holati, Oylik reja/to'langan/holati) va ОплатыКв taqsimotini TAHLIL qil.",
+      "- MANTIQ (JUDA MUHIM — bu yerda ko'p adashiladi, DIQQAT): CRM 'to'langan' summasi tekshirilayotgan to'lovni ALLAQACHON o'z ichiga oladi — uni ustiga qayta QO'SHMA. Har bo'lim uchun 'holati' berilgan: ANIQ to'liq / ORTIQCHA / KAM.",
+      "  · Boshlang'ich holati 'ANIQ to'liq' (reja == to'langan) yoki 'KAM' bo'lsa — to'lov boshlang'ichда TO'G'RI turibdi. Uni oylikга ko'chirsang boshlang'ich KAM bo'lib qoladi. Demak foydalanuvchi ADASHGAN — murojaat YARATMA, hurmat bilan raqamlar bilan tushuntir.",
+      "  · To'lovni boshlang'ichдан oylikга ko'chirish FAQAT boshlang'ich holati 'ORTIQCHA' bo'lsa (to'langan > reja) VA ortiqcha summa >= to'lov summasi bo'lsagina o'rinli. Teskarisi (oylik→boshlang'ich) uchun ham xuddi shu mantiq.",
+      "  · 'to'liq bajarilgan / to'liq yopilgan' = reja BAJARILDI degani, 'ortiqcha' EMAS. Ortiqcha = to'langan > reja. Bularni ARALASHTIRMA.",
+      "- Foydalanuvchi 'aynan shu joyga o'tkaz' deb TURIB olsa ham — grafik mantiqan boshqacha ko'rsatsa, ROZI BO'LIB QO'YMA. Avval to'g'risini tushuntir; foydalanuvchi baribir istasa 'baribir murojaat yarataymi?' deb so'ra.",
+      "- Agar foydalanuvchi ADASHGAN bo'lsa (to'lov aslida to'g'ri joyda) — hurmat bilan, raqamlar bilan tushuntir va murojaat taklif QILMA. Agar HAQIQATAN xato bo'lsa — tushuntirib, murojaat taklif qil.",
       "- Muammo YETARLICHA aniq va TASDIQLANGAN bo'lsa — proposeTicket to'ldir: qisqa summary (1-2 jumla), category (masalan 'CRMда ko'rinmayapti', 'Oylik/boshlang'ichга o'tgan', 'XATO', 'Boshqa'), contractNo (CRM shartnoma), orderNos, details (grafik raqamlari bilan). proposeTicket berilса ham qisqa message yoz ('Murojaat tayyor, tasdiqlang').",
       "- HAR safar FAQAT assistant_turn tool orqali javob ber.",
       "- Foydalanuvchi '/start' yozsa — salomlash va (bir nechta bo'lsa) qaysi order haqida ekanini so'rash.",
