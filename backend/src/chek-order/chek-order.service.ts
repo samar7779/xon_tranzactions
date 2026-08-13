@@ -82,6 +82,8 @@ function acctSimilar(a: any, b: any): boolean {
 export class ChekOrderService {
   private readonly log = new Logger(ChekOrderService.name);
   private readonly uploadsDir: string;
+  // AI yordamchi uchun CRM/grafik konteksti keshi (suhbat davomida qayta-qayta CRM'ga urmaslik)
+  private readonly asstCrmCache = new Map<string, { at: number; text: string }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -707,6 +709,89 @@ export class ChekOrderService {
 
   // ───────────────── CLAUDE VISION EXTRACTION ─────────────────
   // ═════════════════ AI YORDAMCHI (muammo aniqlash) ═════════════════
+  /** Tranzaksiya izohidan shartnoma raqamini ajratish (masalan "дог. №34VHA263N" → 34VHA263N). */
+  private parseContractFromText(text: string | null | undefined): string | null {
+    const s = String(text || '');
+    // "дог. №34VHA263N" / "shartnoma №34VHA263N" / oddiy "№34VHA263N"
+    const m =
+      s.match(/(?:дог[оаы]?[вб]?[оа]?р?\.?|shartnoma|contract|dog)[^0-9A-Za-z]{0,4}№?\s*([0-9]{1,4}[A-Za-z]{2,4}[0-9]{2,6}[A-Za-z]?)/i) ||
+      s.match(/№\s*([0-9]{1,4}[A-Za-z]{2,4}[0-9]{2,6}[A-Za-z]?)/);
+    return m ? m[1].toUpperCase() : null;
+  }
+
+  /**
+   * AI yordamchi uchun — HAQIQIY shartnomani (tranzaksiyadan) aniqlab, CRM'dan
+   * qiymat/to'langan/qoldiq + grafik (boshlang'ich/oylik reja va to'langan) +
+   * ОплатыКв taqsimotini yig'ib, prompt uchun matn qaytaradi. 90s kesh.
+   */
+  private async assistantContractContext(orders: any[]): Promise<{ contract: string | null; text: string }> {
+    // 1) Matched tranzaksiyalardan ishonchli shartnoma (contractNumber yoki izohdan)
+    const extIds = orders.map((o) => o?.matchedTxExtId).filter(Boolean);
+    const txContracts: string[] = [];
+    if (extIds.length) {
+      try {
+        const txs = await this.prisma.transaction.findMany({
+          where: { externalId: { in: extIds } },
+          select: { contractNumber: true, description: true },
+        });
+        for (const t of txs) {
+          const c = (t.contractNumber && t.contractNumber.trim()) || this.parseContractFromText(t.description);
+          if (c) txContracts.push(c.toUpperCase());
+        }
+      } catch { /* skip */ }
+    }
+    // 2) Nomzodlar: avval tranzaksiyadan (ishonchli), keyin kontekstdagi (OCR bo'lishi mumkin)
+    const cand: string[] = [];
+    const pushC = (v: any) => { const x = String(v || '').trim().toUpperCase(); if (x && !cand.includes(x)) cand.push(x); };
+    txContracts.forEach(pushC);
+    orders.forEach((o) => { pushC(o?.contractNo); pushC(o?.docContractNo); });
+    const primary = txContracts[0] || cand[0] || null;
+    if (!primary) return { contract: null, text: "  (shartnoma aniqlanmadi — tranzaksiya/CRM'da topilmadi)" };
+
+    const cached = this.asstCrmCache.get(primary);
+    if (cached && Date.now() - cached.at < 90_000) return { contract: primary, text: cached.text };
+
+    // 3) CRM info + grafik + ОплатыКв taqsimoti (parallel, xatolarga chidamli)
+    const [info, sched, kv] = await Promise.all([
+      this.contractInfo(primary).catch(() => null as any),
+      this.crm.getContractSchedules(primary).catch(() => null as any),
+      this.prisma.oplataKv.aggregate({
+        where: { contractNo: primary },
+        _sum: { firstInstallment: true, monthlyAmount: true, paymentAmount: true },
+        _count: true,
+      }).catch(() => null as any),
+    ]);
+
+    const money = (n: any) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
+    const schedules: any[] = sched?.schedules || [];
+    const sumBy = (kind: string, field: string) =>
+      schedules.filter((s) => s.kind === kind).reduce((a, s) => a + Number(s[field] || 0), 0);
+    const initExp = sumBy('initial', 'amount'), initPaid = sumBy('initial', 'amountPaid');
+    const monExp = sumBy('monthly', 'amount'), monPaid = sumBy('monthly', 'amountPaid');
+    const found = !!(info?.found || (sched?.ok && schedules.length));
+
+    const lines: string[] = [
+      `  CRM shartnoma: ${primary} — CRM'da: ${found ? 'BOR' : "YO'Q"}${info?.virtualStatus ? ` · holat: ${info.virtualStatus}` : ''}`,
+    ];
+    if (txContracts[0] && cand.find((c) => c !== txContracts[0] && c)) {
+      const ocr = cand.find((c) => c !== txContracts[0]);
+      if (ocr) lines.push(`  (eslatma: hujjatda OCR '${ocr}' — lekin tranzaksiyadagi haqiqiy shartnoma '${txContracts[0]}')`);
+    }
+    if (found) {
+      lines.push(`  Kelishuv qiymati: ${money(info?.contractValue)} · jami to'langan: ${money(info?.totalPaid)} · qoldiq: ${money(info?.remaining)}`);
+      if (schedules.length) {
+        lines.push(`  Grafik — Boshlang'ich: reja ${money(initExp)}, to'langan ${money(initPaid)}, qolgan ${money(initExp - initPaid)}`);
+        lines.push(`  Grafik — Oylik: reja ${money(monExp)}, to'langan ${money(monPaid)}, qolgan ${money(monExp - monPaid)}`);
+      } else {
+        lines.push("  Grafik: CRM'dan olinmadi.");
+      }
+      if (kv) lines.push(`  ОплатыКв yozuvlari: 1 взнос (boshlang'ich) jami ${money(kv._sum?.firstInstallment)} · ежемесячный (oylik) jami ${money(kv._sum?.monthlyAmount)} — ${kv._count || 0} ta yozuv`);
+    }
+    const text = lines.join('\n');
+    this.asstCrmCache.set(primary, { at: Date.now(), text });
+    return { contract: primary, text };
+  }
+
   async assistantChat(dto: AssistantChatDto, _actor: Actor) {
     const apiKey = await this.getAiKey();
     if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
@@ -722,6 +807,9 @@ export class ChekOrderService {
         }).join('\n')
       : '  (hozircha natija yo\'q)';
 
+    // CRM/grafik konteksti — shartnomani aniqlab, boshlang'ich/oylik grafikni yig'amiz
+    const crmCtx = await this.assistantContractContext(orders).catch(() => ({ contract: null as string | null, text: '' }));
+
     const loc = String(dto.locale || 'uz').toLowerCase();
     const langRule = loc === 'ru'
       ? "- Отвечай ВСЕГДА на РУССКОМ языке, коротко и понятно. Все поля murojaat (summary/category/details) тоже на русском."
@@ -734,6 +822,8 @@ export class ChekOrderService {
       "Vazifang: xodim bilan qisqa, samimiy suhbatda muammoni ANIQLASH, keyin murojaat (ticket) taklif qilish.",
       "Ekrandagi natija(lar):",
       ctxText,
+      "CRM / GRAFIK (shartnomani va boshlang'ich/oylik to'lovlarni tekshirish uchun — SENGA berilgan, o'zing foydalanasan):",
+      crmCtx.text || "  (CRM ma'lumoti yo'q)",
       "QOIDALAR:",
       langRule,
       "- Bir necha order bo'lsa — FAQAT BIRINCHI xabarда qaysi order(lar) haqida ekanini so'ra. quickReplies: har order uchun bittadan + oxiriga 'Barchasi (hammasi)'.",
@@ -742,8 +832,14 @@ export class ChekOrderService {
       "- Muammoni so'raganда odatda quickReplies BERMA (erkin javob). Faqat aniq HA/YO'Q kerak bo'lсa quickReplies ber.",
       "- Aniq bo'lmasa ANIQLASHTIRUVCHI savol ber (1 tadan). Taxmin qilma.",
       "- proposeTicket.orderNos — foydalanuvchi tanlagan order(lar) ('Barchasi' bo'lsa hammasi).",
-      "- SHARTNOMA (MUHIM): proposeTicket.contractNo — kontekstдаги shartnomani (tranzaksiyaдан, ishonchli) ishlat, hujjatдаги OCR raqamini EMAS. Kontekstда shartnoma bo'lmasa, xodimдан aniqlashtir. Xato/noaniq shartnoma bilan murojaat yaratMA.",
-      "- Muammo YETARLICHA aniq bo'lganда — proposeTicket to'ldir: qisqa summary (1-2 jumla), category (masalan 'CRMда ko'rinmayapti', 'Oylik/boshlang'ichга o'tgan', 'XATO', 'Boshqa'), contractNo, orderNos, details. proposeTicket berilса ham qisqa message yoz ('Murojaat tayyor, tasdiqlang').",
+      // ── SHARTNOMA: o'zing aniqlaysan, so'ramaysan ──
+      "- SHARTNOMA (MUHIM): shartnoma raqamini YUQORIDAGI 'CRM shartnoma' dan OL — u tranzaksiyadan aniqlangan, ISHONCHLI (hujjatдаги OCR raqami xato bo'lishi mumkin). proposeTicket.contractNo shu bo'lsin. CRM'da 'BOR' bo'lsa — foydalanuvchidan shartnoma raqamini SO'RAMA.",
+      "- Shartnoma raqamini FAQAT quyidagi holatda so'ra: 'CRM shartnoma' umuman aniqlanmagan YOKI 'CRM'da: YO'Q' bo'lsa (ya'ni shartnoma CRM'da yo'q / xato). Boshqa hollarda so'rama.",
+      // ── BOSHLANG'ICH ↔ OYLIK: avval tekshir, keyin xulosa ──
+      "- BOSHLANG'ICH↔OYLIK muammosi (to'lov noto'g'ri joyga — boshlang'ich/oylikка — o'tgan desa): DARHOL murojaat YARATMA. Avval YUQORIDAGI CRM grafik (Boshlang'ich reja/to'langan, Oylik reja/to'langan) va ОплатыКв taqsimotini TAHLIL qil.",
+      "- ANIQ raqamlar bilan tekshir: masalan 'grafik bo'yicha boshlang'ich reja X, to'langan Y (to'liq/to'liq emas); oylik reja Z...'. Shu asosda to'lov qayerga tegishli ekanini ayt.",
+      "- Agar foydalanuvchi ADASHGAN bo'lsa (to'lov aslida to'g'ri joyda) — hurmat bilan, raqamlar bilan tushuntir va murojaat taklif QILMA (kerak bo'lsa 'baribir murojaat yarataymi?' deb so'ra). Agar HAQIQATAN xato bo'lsa — tushuntirib, murojaat taklif qil.",
+      "- Muammo YETARLICHA aniq va TASDIQLANGAN bo'lsa — proposeTicket to'ldir: qisqa summary (1-2 jumla), category (masalan 'CRMда ko'rinmayapti', 'Oylik/boshlang'ichга o'tgan', 'XATO', 'Boshqa'), contractNo (CRM shartnoma), orderNos, details (grafik raqamlari bilan). proposeTicket berilса ham qisqa message yoz ('Murojaat tayyor, tasdiqlang').",
       "- HAR safar FAQAT assistant_turn tool orqali javob ber.",
       "- Foydalanuvchi '/start' yozsa — salomlash va (bir nechta bo'lsa) qaysi order haqida ekanini so'rash.",
     ].join('\n');
