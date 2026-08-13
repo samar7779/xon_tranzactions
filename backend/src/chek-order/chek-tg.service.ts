@@ -280,7 +280,11 @@ export class ChekTgService {
     if (!cfg.enabled) throw new BadRequestException('Telegram orqali kirish yoqilmagan');
     const botToken = await this.getBotToken();
     if (!botToken || !cfg.groupId) throw new BadRequestException("Bot token / guruh ID yo'q");
-    const url = `${this.appUrl()}/uz/tg/chek`;
+    // Guruhда web_app tugma MUMKIN EMAS (BUTTON_TYPE_INVALID) — URL tugma orqali
+    // Mini App'ni ochamiz: t.me/<bot>?startapp=... (BotFather'да Main Mini App sozlangan bo'lsin).
+    const uname = (cfg.botUsername || '').replace(/^@/, '');
+    if (!uname) throw new BadRequestException('Bot username kiritilmagan (guruh havolasi uchun kerak)');
+    const link = `https://t.me/${uname}?startapp=chek`;
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -288,7 +292,7 @@ export class ChekTgService {
           chat_id: cfg.groupId,
           text: "📋 <b>Chek order — to'lovni tekshirish</b>\nQuyidagi tugmani bosing (guruh a'zolari uchun):",
           parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: [[{ text: '🔍 Tekshirish', web_app: { url } }]] },
+          reply_markup: { inline_keyboard: [[{ text: '🔍 Tekshirish', url: link }]] },
         }),
       });
       const data: any = await res.json();
