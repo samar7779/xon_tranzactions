@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, FileSignature,
-  MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket,
+  MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket, Copy, Fingerprint,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -16,6 +16,7 @@ type TicketRow = {
   category: string | null; summary: string; details: string | null; transcript: any;
   status: string; priority: string | null; assignedToId: string | null; assignedToName: string | null;
   resolution: string | null; resolvedByName: string | null; resolvedAt: string | null;
+  matchedTxExtId: string | null;
   createdByName: string | null; createdAt: string;
 };
 
@@ -142,7 +143,9 @@ export function ChekTickets() {
 
 function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => void; onSaved: () => void }) {
   const tr = useTranslations('chekOrder');
+  const tcm = useTranslations('common');
   const stLabel = (k: string) => tr(`tickets.status.${STATUS[k] ? k : 'new'}`);
+  const copy = async (v: string) => { try { await navigator.clipboard.writeText(v); toast.success(tcm('copied')); } catch { /* skip */ } };
   const [status, setStatus] = useState(t.status);
   const [resolution, setResolution] = useState(t.resolution || '');
   const [showChat, setShowChat] = useState(false);
@@ -157,7 +160,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
 
   return (
     <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-2xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-3xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> {tr('tickets.detail.ticket', { no: t.ticketNo })}</div>
@@ -171,6 +174,20 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
             <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{tr('field.contract')}</div><div className="font-mono text-slate-700 dark:text-slate-200">{t.contractNo || '—'}</div></div>
             <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{tr('tickets.detail.orders')}</div><div className="font-mono text-slate-700 dark:text-slate-200 truncate">{(t.orderNos || []).join(', ') || '—'}</div></div>
           </div>
+
+          {/* Ext ID — to'lovni topish uchun (tranzaksiya/ОплатыКв'da qidiriladi) */}
+          {t.matchedTxExtId && (
+            <div className="rounded-xl ring-1 ring-indigo-100 dark:ring-indigo-900/50 bg-indigo-50/40 dark:bg-indigo-950/20 p-2.5 flex items-center gap-2">
+              <Fingerprint className="h-4 w-4 text-indigo-500 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-wider text-indigo-500/80 font-semibold mb-0.5">{tr('tx.extId')} — {tr('tx.foundTitle')}</div>
+                <div className="font-mono text-[12.5px] text-slate-700 dark:text-slate-200 truncate" title={t.matchedTxExtId}>{t.matchedTxExtId}</div>
+              </div>
+              <button onClick={() => copy(t.matchedTxExtId!)} title={tcm('copy')} className="w-8 h-8 rounded-lg grid place-items-center bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-500 hover:text-indigo-600 hover:ring-indigo-300 transition-colors shrink-0">
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Boshqaruv */}
           <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3 space-y-2.5">
