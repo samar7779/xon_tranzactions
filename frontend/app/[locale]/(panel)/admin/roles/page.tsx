@@ -580,6 +580,12 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
+  const postMut = useMutation({
+    mutationFn: () => api.post('/chek-order/tg/post-button'),
+    onSuccess: () => toast.success('Guruhga «Tekshirish» tugmasi yuborildi ✅'),
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
   const uname = (botUsername || '').replace(/^@/, '');
   const botLink = uname ? `https://t.me/${uname}?start=chek` : '';
   const copyUrl = async () => { if (!botLink) return; try { await navigator.clipboard.writeText(botLink); toast.success('Nusxalandi'); } catch { /* skip */ } };
@@ -626,9 +632,20 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
               <p className="text-[11px] text-slate-400">Bot shu guruhda <b>admin</b> bo'lishi kerak (a'zolikni o'qish uchun).</p>
             </div>
 
-            <div className="rounded-xl bg-sky-50 dark:bg-sky-950/25 ring-1 ring-sky-100 dark:ring-sky-900/40 p-3">
+            {/* TAVSIYA — guruhga tugma qo'yish (eng oson: guruhда bir bosish) */}
+            <div className="rounded-xl bg-gradient-to-br from-sky-50 to-blue-50/60 dark:from-sky-950/25 dark:to-blue-950/15 ring-1 ring-sky-200/70 dark:ring-sky-900/40 p-3.5 space-y-2">
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-700 dark:text-sky-300"><Send className="h-3.5 w-3.5" /> Tavsiya — guruhga tugma qo'yish</div>
+              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">Bot guruhga <b>“🔍 Tekshirish”</b> tugmali xabar yuboradi. A'zolar <b>guruhning o'zida</b> tugmani bosib kiradi — botga o'tish, /start, havola <b>kerak emas</b>.</p>
+              <button type="button" onClick={() => postMut.mutate()} disabled={postMut.isPending}
+                className="w-full h-10 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[13px] font-semibold shadow-md shadow-sky-500/25 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 inline-flex items-center justify-center gap-2 transition-all">
+                {postMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Guruhga tugma yuborish
+              </button>
+              <p className="text-[10px] text-slate-400">Avval <b>Saqlang</b>, keyin yuboring. Bot guruhда bo'lishi shart.</p>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 ring-1 ring-slate-100 dark:ring-slate-800 p-3">
               <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-500 font-semibold"><Link2 className="h-3.5 w-3.5" /> Kirish havolasi (xodimlarga bering)</div>
+                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-semibold"><Link2 className="h-3.5 w-3.5" /> Muqobil — shaxsiy havola (bot orqali)</div>
                 {botLink && <button type="button" onClick={copyUrl} className="shrink-0 inline-flex items-center gap-1 px-2 h-6 rounded-md bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-sky-600 dark:text-sky-400 text-[10.5px] font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40"><Copy className="h-3 w-3" /> Nusxa</button>}
               </div>
               <div className="font-mono text-[11.5px] text-slate-700 dark:text-slate-200 break-all bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 ring-1 ring-sky-100 dark:ring-sky-900/40">{botLink || 'Bot username kiriting…'}</div>

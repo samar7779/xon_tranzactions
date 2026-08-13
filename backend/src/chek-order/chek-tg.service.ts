@@ -269,4 +269,34 @@ export class ChekTgService {
     const jwt = await this.jwt.signAsync({ sub: `tg:${e.userId}`, tgGuest: true, name: e.name }, { expiresIn: '12h' });
     return { ok: true, token: jwt, user: { name: e.name, telegramId: e.userId } };
   }
+
+  /**
+   * GURUHGA "Tekshirish" tugmasini yuboradi — inline web_app tugma.
+   * Guruh a'zosi guruhда tugmani bosadi → Mini App ochiladi (o'zini taniydi).
+   * Botга kirish/start kerak emas; /setdomain ham shart emas.
+   */
+  async postGroupButton() {
+    const cfg = await this.getConfig();
+    if (!cfg.enabled) throw new BadRequestException('Telegram orqali kirish yoqilmagan');
+    const botToken = await this.getBotToken();
+    if (!botToken || !cfg.groupId) throw new BadRequestException("Bot token / guruh ID yo'q");
+    const url = `${this.appUrl()}/uz/tg/chek`;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: cfg.groupId,
+          text: "📋 <b>Chek order — to'lovni tekshirish</b>\nQuyidagi tugmani bosing (guruh a'zolari uchun):",
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '🔍 Tekshirish', web_app: { url } }]] },
+        }),
+      });
+      const data: any = await res.json();
+      if (!data?.ok) throw new BadRequestException(`Guruhga yuborilmadi: ${data?.description || 'xato'}`);
+      return { ok: true, messageId: data.result?.message_id };
+    } catch (e: any) {
+      if (e?.response) throw e;
+      throw new BadRequestException(`Guruhga yuborishда xato: ${e?.message || ''}`);
+    }
+  }
 }

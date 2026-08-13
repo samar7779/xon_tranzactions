@@ -61,7 +61,16 @@ export class ChekTgController {
   @RequirePermissions(PERMISSIONS.CHEKORDER_TELEGRAM)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Telegram kirish sozlamasini saqlash (bot token / guruh ID / yoqilgan)' })
-  setConfig(@Body() body: { enabled?: boolean; botToken?: string; groupId?: string }) {
+  setConfig(@Body() body: { enabled?: boolean; botToken?: string; groupId?: string; botUsername?: string }) {
     return this.svc.setConfig(body || {});
+  }
+
+  @Post('post-button')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TELEGRAM)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Guruhga 'Tekshirish' web_app tugmasini yuborish" })
+  postButton() {
+    return this.svc.postGroupButton();
   }
 }

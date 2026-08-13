@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { JwtPayload } from './auth.service';
+import { ALL_PERMISSIONS } from './permissions';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
@@ -32,9 +33,11 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user || !user.isActive) {
       throw new UnauthorizedException();
     }
-    // Ruxsatlar faqat biriktirilgan Role'dan olinadi — hardcode yo'q.
-    // Roli yo'q foydalanuvchida hech qanday ruxsat bo'lmaydi.
-    const permissions: string[] = user.roleRef?.permissions ?? [];
+    // Ruxsatlar biriktirilgan Role'dan olinadi. SUPERADMIN — HAR DOIM hamma ruxsat
+    // (yangi feature qo'shilгач DB sinxron kechiksa ham bosh admin qulflanmasin).
+    const permissions: string[] = user.roleRef?.name === 'SUPERADMIN'
+      ? (ALL_PERMISSIONS as string[])
+      : (user.roleRef?.permissions ?? []);
     return {
       id: user.id,
       email: user.email,
