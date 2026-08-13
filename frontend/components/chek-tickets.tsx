@@ -162,7 +162,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
   return (
     <div className="fixed inset-0 z-[9998]">
       <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[880px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col" style={{ animation: 'chekTicketSlide .26s cubic-bezier(0.22,1,0.36,1)' }} onClick={(e) => e.stopPropagation()}>
+      <div className="absolute right-0 top-0 bottom-0 w-full md:w-1/2 md:min-w-[720px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col" style={{ animation: 'chekTicketSlide .26s cubic-bezier(0.22,1,0.36,1)' }} onClick={(e) => e.stopPropagation()}>
         <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative shrink-0">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> {tr('tickets.detail.ticket', { no: t.ticketNo })}</div>
