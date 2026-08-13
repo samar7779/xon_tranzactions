@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import {
   Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, FileSignature,
   MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket, Copy, Fingerprint,
-  Send, Sparkles, Wand2, AlertTriangle, Coins, ArrowLeftRight,
+  Send, Sparkles, Wand2, AlertTriangle, Coins, ArrowLeftRight, ChevronDown,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -137,19 +137,21 @@ export function ChekTickets() {
         )}
       </div>
 
-      {detail && <TicketDetail t={detail} onClose={() => setDetail(null)} onSaved={() => { refresh(); setDetail(null); }} />}
+      {detail && <TicketDetail t={detail} onClose={() => { refresh(); setDetail(null); }} />}
     </div>
   );
 }
 
-function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => void; onSaved: () => void }) {
+function TicketDetail({ t, onClose }: { t: TicketRow; onClose: () => void }) {
   const tr = useTranslations('chekOrder');
   const tcm = useTranslations('common');
   const stLabel = (k: string) => tr(`tickets.status.${STATUS[k] ? k : 'new'}`);
   const copy = async (v: string) => { try { await navigator.clipboard.writeText(v); toast.success(tcm('copied')); } catch { /* skip */ } };
   const qc = useQueryClient();
   const [status, setStatus] = useState(t.status);
+  const [statusMenu, setStatusMenu] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const curSt = STATUS[status] || STATUS.new;
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; document.addEventListener('keydown', k); return () => document.removeEventListener('keydown', k); }, [onClose]);
 
   // Holat header'dagi icon bilan darhol o'zgaradi (modal yopilmaydi)
@@ -168,15 +170,29 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center transition-colors"><X className="h-4 w-4" /></button>
           <div className="flex items-center gap-2 mb-2.5 pr-10">
             <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold shrink-0"><Ticket className="h-3 w-3" /> {tr('tickets.detail.ticket', { no: t.ticketNo })}</div>
-            {/* Holat — icon toolbar (bosilganda darhol qo'llanadi) */}
-            <div className="flex items-center gap-1 ml-auto">
-              {Object.entries(STATUS).map(([k, m]) => (
-                <button key={k} onClick={() => statusMut.mutate(k)} disabled={statusMut.isPending} title={stLabel(k)}
-                  className={cn('w-8 h-8 rounded-lg grid place-items-center transition-all disabled:opacity-60',
-                    status === k ? 'bg-white text-indigo-700 shadow-md scale-105 ring-2 ring-white/60' : 'bg-white/15 text-white/85 hover:bg-white/30')}>
-                  <m.Icon className="h-4 w-4" />
-                </button>
-              ))}
+            {/* Holat — bitta icon, bosilganda menyu (tasdiqlash/bekor shu yerda) */}
+            <div className="relative ml-auto">
+              <button onClick={() => setStatusMenu((v) => !v)} disabled={statusMut.isPending} title={stLabel(status)}
+                className="inline-flex items-center gap-1.5 h-8 pl-2 pr-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-[12px] font-semibold transition-colors disabled:opacity-60">
+                {statusMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <curSt.Icon className="h-4 w-4" />}
+                <span className="hidden sm:inline">{stLabel(status)}</span>
+                <ChevronDown className={cn('h-3.5 w-3.5 opacity-80 transition-transform', statusMenu && 'rotate-180')} />
+              </button>
+              {statusMenu && (
+                <>
+                  <div className="fixed inset-0 z-[9]" onClick={() => setStatusMenu(false)} />
+                  <div className="absolute right-0 top-full mt-1.5 z-10 w-48 rounded-xl bg-white dark:bg-slate-800 shadow-2xl ring-1 ring-slate-200 dark:ring-slate-700 p-1.5">
+                    {Object.entries(STATUS).map(([k, m]) => (
+                      <button key={k} onClick={() => { setStatusMenu(false); if (k !== status) statusMut.mutate(k); }}
+                        className={cn('w-full flex items-center gap-2 px-2.5 h-9 rounded-lg text-[12.5px] font-medium transition-colors',
+                          status === k ? cn(m.cls, 'ring-1') : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700')}>
+                        <m.Icon className="h-4 w-4" /> {stLabel(k)}
+                        {status === k && <CheckCircle2 className="h-3.5 w-3.5 ml-auto" />}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
           <div className="text-[16px] font-bold leading-snug">{t.summary}</div>
@@ -213,7 +229,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
           )}
 
           {/* To'lovni tuzatish — agent orqali boshlang'ich/oylik taqsimotini to'g'rilash */}
-          <ResolvePanel ticket={t} onResolved={onSaved} />
+          <ResolvePanel ticket={t} status={status} onApplied={() => setStatus('resolved')} />
 
           {/* Suhbat tarixi */}
           {transcript.length > 0 && (
@@ -247,7 +263,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
 
 // ─── To'lovni tuzatish paneli — agent boshlang'ich/oylik taqsimotini to'g'rilaydi ───
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
-function ResolvePanel({ ticket, onResolved }: { ticket: TicketRow; onResolved: () => void }) {
+function ResolvePanel({ ticket, status, onApplied }: { ticket: TicketRow; status: string; onApplied: () => void }) {
   const tr = useTranslations('chekOrder');
   const locale = useLocale();
   const qc = useQueryClient();
@@ -280,11 +296,16 @@ function ResolvePanel({ ticket, onResolved }: { ticket: TicketRow; onResolved: (
       toast.success(tr('resolve.appliedToast'));
       qc.invalidateQueries({ queryKey: ['chek-tickets'] });
       qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] });
-      onResolved();
+      qc.invalidateQueries({ queryKey: ['chek-ticket-payment', ticket.id] });
+      setProposal(null);
+      setOpen(false);   // tuzatilgach chat yopiladi
+      onApplied();      // murojaat holati -> Bajarildi
     },
     onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
 
+  // Murojaat bajarildi/bekor qilingan bo'lsa — tuzatish chatini yopamiz
+  useEffect(() => { if (status === 'resolved' || status === 'rejected') setOpen(false); }, [status]);
   useEffect(() => { if (open && !messages.length && !chatMut.isPending) chatMut.mutate([]); /* eslint-disable-next-line */ }, [open]);
   useEffect(() => { scRef.current?.scrollTo({ top: scRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, chatMut.isPending, proposal]);
 
