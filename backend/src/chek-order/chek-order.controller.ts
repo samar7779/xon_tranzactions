@@ -14,7 +14,7 @@ import { ChekOrderService } from './chek-order.service';
 import {
   ListChekOrderDto, ManualCheckDto,
   AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto,
-  ResolveChatDto, ApplyCorrectionDto,
+  ResolveChatDto, ApplyCorrectionDto, LocateLinkDto,
 } from './dto/chek-order.dto';
 
 type AuthUser = { id?: string; email?: string; fullName?: string };
@@ -158,6 +158,21 @@ export class ChekOrderController {
   @ApiOperation({ summary: "Tuzatishni qo'llash (ОплатыКв taqsimoti + murojaat Bajarildi)" })
   applyCorrection(@Param('id') id: string, @Body() body: ApplyCorrectionDto, @CurrentUser() u?: AuthUser) {
     return this.svc.applyCorrection(id, body, actorFrom(u));
+  }
+
+  // ─── To'lovni topish (not_found murojaatlar) ───
+  @Post('tickets/:id/locate/chat')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: "Topuvchi agent — chek bo'yicha to'lovni qidiradi" })
+  locateChat(@Param('id') id: string, @Body() body: ResolveChatDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.locateChat(id, body || {}, actorFrom(u));
+  }
+
+  @Post('tickets/:id/locate/link')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: "Topilgan to'lovni murojaatga bog'lash" })
+  locateLink(@Param('id') id: string, @Body() body: LocateLinkDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.locateLink(id, body?.key, body?.contractNo, actorFrom(u));
   }
 
   @Get('batch/:batchId')

@@ -2741,6 +2741,17 @@
       "apply": "Tasdiqlash va qo'llash",
       "appliedToast": "Tuzatildi — murojaat bajarildi",
       "sumBadge": "yig'indi = jami"
+    },
+    "locate": {
+      "title": "To'lovni topish",
+      "open": "Agent bilan topish",
+      "placeholder": "Chek: shartnoma, summa, sana...",
+      "candidates": "Topilgan to'lovlar",
+      "link": "Bog'lash",
+      "linkedToast": "To'lov bog'landi — endi tuzatish mumkin",
+      "notFound": "Mos to'lov topilmadi",
+      "closeTitle": "Topilmadi — izoh bilan yoping",
+      "notePlaceholder": "Izoh: masalan hali bankdan sinxron bo'lmagan, kutilyapti / qo'lda kiritiladi"
     }
   }
 }

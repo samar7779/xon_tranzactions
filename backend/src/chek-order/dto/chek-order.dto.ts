@@ -77,6 +77,17 @@ export class ApplyCorrectionDto {
   monthlyAmount?: number;
 }
 
+/** Topilgan to'lovni murojaatga bog'lash */
+export class LocateLinkDto {
+  @ApiPropertyOptional({ description: "Bog'lash kaliti — ОплатыКв sourceTxId yoki id" })
+  @IsString()
+  key!: string;
+
+  @ApiPropertyOptional({ description: 'Shartnoma raqami (ixtiyoriy)' })
+  @IsOptional() @IsString()
+  contractNo?: string;
+}
+
 /** Murojaatlar ro'yxati filtri */
 export class ListTicketsDto {
   @ApiPropertyOptional({ default: 1 })

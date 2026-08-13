@@ -2741,6 +2741,17 @@
       "apply": "Confirm & apply",
       "appliedToast": "Fixed — ticket resolved",
       "sumBadge": "sum = total"
+    },
+    "locate": {
+      "title": "Find payment",
+      "open": "Find with agent",
+      "placeholder": "Receipt: contract, amount, date...",
+      "candidates": "Found payments",
+      "link": "Link",
+      "linkedToast": "Payment linked — you can now correct it",
+      "notFound": "No matching payment found",
+      "closeTitle": "Not found — close with a note",
+      "notePlaceholder": "Note: e.g. not synced from the bank yet / will be entered manually"
     }
   }
 }

@@ -1019,7 +1019,7 @@ export class ChekOrderService {
     let payment: any = null;
     if (ticket.matchedTxExtId) {
       const row = await this.prisma.oplataKv.findFirst({
-        where: { sourceTxId: ticket.matchedTxExtId },
+        where: { OR: [{ sourceTxId: ticket.matchedTxExtId }, { id: ticket.matchedTxExtId }] },
         orderBy: { date: 'desc' },
         select: { id: true, contractNo: true, date: true, paymentAmount: true, firstInstallment: true, monthlyAmount: true, paymentCategory: true, object: true },
       });
@@ -1172,6 +1172,136 @@ export class ChekOrderService {
     });
     this.asstCrmCache.clear(); // CRM/grafik konteksti keshini yangilash
     return { ok: true, allocation: alloc, ticket: updated };
+  }
+
+  // ═════════════════ TO'LOVNI TOPISH (not_found murojaatlar) ═════════════════
+  /** ОплатыКв'dan shartnoma/summa/sana bo'yicha nomzod to'lovlar qidiradi. */
+  private async locateSearch(c: { contract?: string; amount?: number; date?: string }) {
+    const and: any[] = [];
+    if (c.contract && String(c.contract).trim()) {
+      and.push({ contractNo: { contains: String(c.contract).trim().toUpperCase(), mode: 'insensitive' } });
+    }
+    if (c.amount != null && Number.isFinite(Number(c.amount))) {
+      const a = Number(c.amount);
+      and.push({ paymentAmount: { gte: a - 1, lte: a + 1 } }); // aynan summa (±1 tiyin)
+    }
+    if (c.date) {
+      const d = new Date(c.date);
+      if (!isNaN(d.getTime())) {
+        const from = new Date(d); from.setDate(from.getDate() - 3); from.setHours(0, 0, 0, 0);
+        const to = new Date(d); to.setDate(to.getDate() + 3); to.setHours(23, 59, 59, 999);
+        and.push({ date: { gte: from, lte: to } });
+      }
+    }
+    if (!and.length) return [];
+    const rows = await this.prisma.oplataKv.findMany({
+      where: { AND: and },
+      orderBy: { date: 'desc' },
+      take: 10,
+      select: { id: true, sourceTxId: true, contractNo: true, date: true, paymentAmount: true, object: true, txType: true },
+    });
+    return rows.map((r) => ({
+      key: r.sourceTxId || r.id, // bog'lash kaliti (ticket.matchedTxExtId)
+      contractNo: r.contractNo,
+      date: r.date,
+      paymentAmount: Number(r.paymentAmount || 0),
+      object: r.object,
+      txType: r.txType,
+    }));
+  }
+
+  /** TOPISH agenti — chek ma'lumotini so'rab, ОплатыКв'dan qidiradi. */
+  async locateChat(ticketId: string, dto: ResolveChatDto, _actor: Actor) {
+    const apiKey = await this.getAiKey();
+    if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
+    const model = await this.getAiModel();
+    const ticket = await this.prisma.chekTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Murojaat topilmadi');
+
+    const loc = String(dto.locale || 'uz').toLowerCase();
+    const langRule = loc === 'ru' ? '- Отвечай на РУССКОМ, коротко.' : loc === 'en' ? '- Reply in ENGLISH, short.' : "- O'ZBEK LOTIN yozuvida, qisqa gapir.";
+    const system = [
+      "Sen Xon Saroy ichki moliyaviy TOPUVCHI yordamchisisan.",
+      "Muammo: to'lov tizimda topilmagan (not_found) — order raqami bo'yicha topilmadi. Xodimда CHEK (kvitansiya) bor.",
+      `Murojaat: #${ticket.ticketNo} — ${ticket.summary}${ticket.category ? ` (${ticket.category})` : ''}. Order(lar): ${(ticket.orderNos || []).join(', ') || '—'}.`,
+      "VAZIFANG: chekdagi ma'lumotni so'rab, to'lovni tizimdan QIDIRISH (order raqami bo'yicha emas — u topilmadi).",
+      "QOIDALAR:",
+      langRule,
+      "- Chekdan quyidagilarni so'ra (bittadan, kam savol): SHARTNOMA raqami, SUMMA, SANA (kuni). Kamida shartnoma YOKI (summa+sana) bo'lsa qidirsa bo'ladi.",
+      "- Yetarli ma'lumot bo'lishi bilanoq `search` obyektini to'ldir: {contract, amount, date(YYYY-MM-DD)}. Tizim qidiradi va natijalar QUYIDA ko'rsatiladi.",
+      "- `search` bergандан keyin xabaringда 'Qidiryapman, natijalar quyida' deb yoz. Natija BO'LMASA (keyingi xabarда xodim aytadi) — maslahat ber: to'lov hali bankдан sinxron bo'lmagan bo'lishi mumkin (kutish kerak), yoki qo'lda kiritiladi, yoki chekni qayta tekshirish kerak. Keyin xodim izoh bilan murojaatni yopadi.",
+      "- KAM SAVOL, ortiqcha tasdiq so'rama.",
+      "- HAR safar FAQAT locate_turn tool orqali javob ber.",
+    ].join('\n');
+
+    const messages = (dto.messages || [])
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) }))
+      .filter((m) => m.content);
+    if (!messages.length) messages.push({ role: 'user', content: '/start' });
+    if (messages[0].role !== 'user') messages.unshift({ role: 'user', content: '/start' });
+
+    const tools = [{
+      name: 'locate_turn',
+      description: "Topuvchining bitta javobi — xabar + (ixtiyoriy) qidiruv mezoni",
+      input_schema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string' },
+          quickReplies: { type: 'array', items: { type: 'string' } },
+          search: {
+            type: 'object',
+            description: "Qidiruv mezoni (chekdan)",
+            properties: {
+              contract: { type: 'string' },
+              amount: { type: 'number' },
+              date: { type: 'string', description: 'YYYY-MM-DD' },
+            },
+          },
+        },
+        required: ['message'],
+      },
+    }];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 900, system, messages, tools, tool_choice: { type: 'tool', name: 'locate_turn' } }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data: any = await res.json();
+    const toolUse = (data?.content || []).find((c: any) => c.type === 'tool_use');
+    const out: any = toolUse?.input || { message: 'Kechirasiz, javob berolmadim.' };
+    const search = out.search && (out.search.contract || out.search.amount || out.search.date) ? out.search : null;
+    let candidates: any = null;
+    if (search) candidates = await this.locateSearch(search);
+    return {
+      ok: true,
+      reply: out.message || '',
+      quickReplies: Array.isArray(out.quickReplies) ? out.quickReplies.slice(0, 6) : [],
+      search,
+      candidates,
+    };
+  }
+
+  /** Topilgan to'lovni murojaatga BOG'LASH (keyin tuzatish mumkin bo'ladi). */
+  async locateLink(ticketId: string, key: string, contractNo: string | undefined, _actor: Actor) {
+    const ticket = await this.prisma.chekTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Murojaat topilmadi');
+    if (!key || !String(key).trim()) throw new BadRequestException('Bog\'lash kaliti bo\'sh');
+    const row = await this.prisma.oplataKv.findFirst({
+      where: { OR: [{ sourceTxId: key }, { id: key }] },
+      select: { id: true, contractNo: true },
+    });
+    if (!row) throw new NotFoundException("To'lov (ОплатыКв) topilmadi");
+    const updated = await this.prisma.chekTicket.update({
+      where: { id: ticketId },
+      data: { matchedTxExtId: key, contractNo: (contractNo || row.contractNo || ticket.contractNo) || null },
+    });
+    this.asstCrmCache.clear();
+    return { ok: true, ticket: updated };
   }
 
   private async claudeExtractOrders(apiKey: string, model: string, fileBlock: any): Promise<ExtractedOrder[]> {

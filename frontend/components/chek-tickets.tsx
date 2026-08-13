@@ -160,6 +160,12 @@ function TicketDetail({ t, onClose }: { t: TicketRow; onClose: () => void }) {
     onSuccess: (_d, s) => { setStatus(s); qc.invalidateQueries({ queryKey: ['chek-tickets'] }); qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] }); toast.success(tr('tickets.savedToast')); },
     onError: (e: any) => toast.error(e?.message || tr('toast.error')),
   });
+  // Bog'langan to'lov — bor bo'lsa tuzatish (Resolve), yo'q bo'lsa topish (Locate) paneli
+  const { data: pctx } = useQuery({
+    queryKey: ['chek-ticket-payment', t.id],
+    queryFn: () => api.get<{ payment: any }>(`/chek-order/tickets/${t.id}/payment`),
+  });
+  const payment = pctx?.payment || null;
   const transcript: Array<{ role: string; content: string }> = Array.isArray(t.transcript) ? t.transcript : [];
 
   return (
@@ -228,9 +234,13 @@ function TicketDetail({ t, onClose }: { t: TicketRow; onClose: () => void }) {
             </div>
           )}
 
-          {/* To'lovni tuzatish — faqat murojaat OCHIQ bo'lsa (bajarildi/bekor qilingan bo'lsa yashiriladi) */}
+          {/* To'lov bor → tuzatish; yo'q → topish. Bajarildi/bekor bo'lsa ikkalasi ham yashiriladi. */}
           {status !== 'resolved' && status !== 'rejected' && (
-            <ResolvePanel ticket={t} status={status} onApplied={() => setStatus('resolved')} />
+            payment
+              ? <ResolvePanel ticket={t} payment={payment} status={status} onApplied={() => setStatus('resolved')} />
+              : <LocatePanel ticket={t}
+                  onLinked={() => qc.invalidateQueries({ queryKey: ['chek-ticket-payment', t.id] })}
+                  onClosed={(s) => setStatus(s)} />
           )}
 
           {/* Suhbat tarixi */}
@@ -265,17 +275,11 @@ function TicketDetail({ t, onClose }: { t: TicketRow; onClose: () => void }) {
 
 // ─── To'lovni tuzatish paneli — agent boshlang'ich/oylik taqsimotini to'g'rilaydi ───
 type ChatMsg = { role: 'user' | 'assistant'; content: string };
-function ResolvePanel({ ticket, status, onApplied }: { ticket: TicketRow; status: string; onApplied: () => void }) {
+function ResolvePanel({ ticket, payment, status, onApplied }: { ticket: TicketRow; payment: any; status: string; onApplied: () => void }) {
   const tr = useTranslations('chekOrder');
   const locale = useLocale();
   const qc = useQueryClient();
   const money = (n: any) => Number(n || 0).toLocaleString('ru-RU');
-
-  const { data: pctx } = useQuery({
-    queryKey: ['chek-ticket-payment', ticket.id],
-    queryFn: () => api.get<{ payment: any }>(`/chek-order/tickets/${ticket.id}/payment`),
-  });
-  const payment = pctx?.payment || null;
 
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -397,6 +401,115 @@ function ResolvePanel({ ticket, status, onApplied }: { ticket: TicketRow; status
           <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 flex items-end gap-2">
             <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={1} placeholder={tr('resolve.placeholder')} className="flex-1 resize-none max-h-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] outline-none focus:ring-2 focus:ring-violet-500/40" />
             <button onClick={() => send(input)} disabled={!input.trim() || chatMut.isPending} className="w-9 h-9 rounded-lg bg-violet-600 text-white grid place-items-center hover:bg-violet-700 disabled:opacity-40 shrink-0"><Send className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── To'lovni TOPISH paneli — not_found murojaatlar uchun (qidirish + bog'lash) ───
+function LocatePanel({ ticket, onLinked, onClosed }: { ticket: TicketRow; onLinked: () => void; onClosed: (s: string) => void }) {
+  const tr = useTranslations('chekOrder');
+  const locale = useLocale();
+  const qc = useQueryClient();
+  const money = (n: any) => Number(n || 0).toLocaleString('ru-RU');
+
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [quick, setQuick] = useState<string[]>([]);
+  const [candidates, setCandidates] = useState<any[] | null>(null);
+  const [note, setNote] = useState('');
+  const scRef = useRef<HTMLDivElement>(null);
+
+  const chatMut = useMutation({
+    mutationFn: (msgs: ChatMsg[]) => api.post<{ reply: string; quickReplies: string[]; candidates: any[] | null }>(`/chek-order/tickets/${ticket.id}/locate/chat`, { messages: msgs, locale }),
+    onSuccess: (r) => { setMessages((m) => [...m, { role: 'assistant', content: r.reply }]); setQuick(r.quickReplies || []); if (r.candidates != null) setCandidates(r.candidates); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
+  });
+  const linkMut = useMutation({
+    mutationFn: (c: any) => api.post(`/chek-order/tickets/${ticket.id}/locate/link`, { key: c.key, contractNo: c.contractNo }),
+    onSuccess: () => { toast.success(tr('locate.linkedToast')); onLinked(); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
+  });
+  const closeMut = useMutation({
+    mutationFn: (s: string) => api.patch(`/chek-order/tickets/${ticket.id}`, { status: s, resolution: note || undefined }),
+    onSuccess: (_d, s) => { toast.success(tr('tickets.savedToast')); qc.invalidateQueries({ queryKey: ['chek-tickets'] }); qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] }); onClosed(s); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
+  });
+
+  useEffect(() => { if (open && !messages.length && !chatMut.isPending) chatMut.mutate([]); /* eslint-disable-next-line */ }, [open]);
+  useEffect(() => { scRef.current?.scrollTo({ top: scRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, chatMut.isPending, candidates]);
+
+  const send = (text: string) => {
+    const v = text.trim();
+    if (!v || chatMut.isPending) return;
+    const nx = [...messages, { role: 'user' as const, content: v }];
+    setMessages(nx); setInput(''); setQuick([]); chatMut.mutate(nx);
+  };
+
+  return (
+    <div className="rounded-2xl ring-1 ring-sky-200/70 dark:ring-sky-900/50 overflow-hidden shadow-sm">
+      <div className="px-4 py-3 bg-gradient-to-r from-sky-500 via-cyan-600 to-blue-600 text-white flex items-center gap-2.5">
+        <div className="w-8 h-8 rounded-xl bg-white/20 grid place-items-center ring-1 ring-white/25"><Search className="h-4 w-4" /></div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[13px] font-bold leading-tight">{tr('locate.title')}</div>
+          <div className="text-[10.5px] text-white/80">{tr('notFound.title')}</div>
+        </div>
+      </div>
+      {!open ? (
+        <div className="p-3.5">
+          <button onClick={() => setOpen(true)} className="group w-full h-10 rounded-xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-[13px] font-semibold shadow-md shadow-sky-500/25 hover:shadow-lg hover:shadow-sky-500/40 hover:-translate-y-0.5 transition-all inline-flex items-center justify-center gap-2"><Search className="h-4 w-4" /> {tr('locate.open')}</button>
+        </div>
+      ) : (
+        <div>
+          <div ref={scRef} className="max-h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40">
+            {messages.map((m, i) => (
+              <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div className={cn('max-w-[85%] px-3 py-2 rounded-2xl text-[12.5px] whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'bg-sky-600 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-100 dark:ring-slate-700 rounded-bl-md')}>{m.content}</div>
+              </div>
+            ))}
+            {chatMut.isPending && <div className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</div>}
+            {quick.length > 0 && !chatMut.isPending && (
+              <div className="flex flex-wrap gap-1.5">
+                {quick.map((q, i) => <button key={i} onClick={() => send(q)} className="px-3 h-8 rounded-full bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-[12px] font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-950/40">{q}</button>)}
+              </div>
+            )}
+            {candidates && candidates.length > 0 && (
+              <div className="rounded-xl bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 p-2.5 space-y-1.5 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">{tr('locate.candidates')}</div>
+                {candidates.map((c, i) => (
+                  <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-900/40">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-[12.5px]">
+                        <span className="font-mono font-semibold text-slate-800 dark:text-slate-100">{c.contractNo || '—'}</span>
+                        <span className="font-bold tabular-nums text-emerald-600 dark:text-emerald-400">{money(c.paymentAmount)}</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate">{fmtDate(c.date)}{c.object ? ` · ${c.object}` : ''}{c.txType ? ` · ${c.txType}` : ''}</div>
+                    </div>
+                    <button onClick={() => linkMut.mutate(c)} disabled={linkMut.isPending} className="shrink-0 inline-flex items-center gap-1 px-3 h-8 rounded-lg bg-sky-600 text-white text-[12px] font-semibold hover:bg-sky-700 disabled:opacity-50">
+                      {linkMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowLeftRight className="h-3.5 w-3.5" />} {tr('locate.link')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {candidates && candidates.length === 0 && (
+              <div className="rounded-xl bg-amber-50 dark:bg-amber-950/25 ring-1 ring-amber-200 dark:ring-amber-900/40 p-3 space-y-2">
+                <div className="text-[12px] font-semibold text-amber-700 dark:text-amber-300 inline-flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {tr('locate.notFound')}</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">{tr('locate.closeTitle')}</div>
+                <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder={tr('locate.notePlaceholder')} className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12px] resize-y outline-none focus:ring-2 focus:ring-amber-500/40" />
+                <div className="flex gap-2">
+                  <button onClick={() => closeMut.mutate('rejected')} disabled={closeMut.isPending} className="flex-1 h-9 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 text-[12px] font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 inline-flex items-center justify-center gap-1.5"><XCircle className="h-3.5 w-3.5" /> {tr('tickets.status.rejected')}</button>
+                  <button onClick={() => closeMut.mutate('resolved')} disabled={closeMut.isPending} className="flex-1 h-9 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5">{closeMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} {tr('tickets.status.resolved')}</button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 flex items-end gap-2">
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={1} placeholder={tr('locate.placeholder')} className="flex-1 resize-none max-h-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] outline-none focus:ring-2 focus:ring-sky-500/40" />
+            <button onClick={() => send(input)} disabled={!input.trim() || chatMut.isPending} className="w-9 h-9 rounded-lg bg-sky-600 text-white grid place-items-center hover:bg-sky-700 disabled:opacity-40 shrink-0"><Send className="h-4 w-4" /></button>
           </div>
         </div>
       )}
