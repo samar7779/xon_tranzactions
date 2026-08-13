@@ -8,6 +8,7 @@ import {
   Plus, ShieldCheck, Pencil, Trash2, Lock, MoreVertical,
   Users, Shield, Check, ChevronDown, ChevronRight,
   Sparkles, Activity, Crown, Zap, Eye, Search, X, CheckCheck, FolderOpen,
+  Settings, Send, Loader2, Copy, Link2,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -156,6 +157,7 @@ function RoleDialog({
   const [openModules, setOpenModules] = useState<Set<string>>(new Set());
   const [openPages, setOpenPages] = useState<Set<string>>(new Set());
   const [permQuery, setPermQuery] = useState('');
+  const [tgCfgOpen, setTgCfgOpen] = useState(false); // Telegram kirish sozlamasi modali
   // "Ko'rinish nomi" va "Tavsif" — yashirin, sarlavhaga bosib ochiladi
   const [detailsOpen, setDetailsOpen] = useState(false);
 
@@ -273,6 +275,7 @@ function RoleDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-w-5xl w-[95vw] max-h-[96vh] h-[96vh] overflow-y-auto p-0 flex flex-col"
@@ -507,6 +510,13 @@ function RoleDialog({
                                           )}>{i.label}</span>
                                           <span className="block text-[10px] font-mono text-slate-400 dark:text-slate-500 truncate">{i.value}</span>
                                         </span>
+                                        {i.value === PERMS.CHEKORDER_TELEGRAM && (
+                                          <button type="button" title="Telegram sozlama"
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setTgCfgOpen(true); }}
+                                            className="shrink-0 w-7 h-7 rounded-lg grid place-items-center bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-sky-600 dark:text-sky-400 hover:bg-sky-50 dark:hover:bg-sky-950/40 transition-colors">
+                                            <Settings className="h-3.5 w-3.5" />
+                                          </button>
+                                        )}
                                       </label>
                                     );
                                   })}
@@ -528,6 +538,94 @@ function RoleDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>{tc('cancel')}</Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending || (!editing && !name) || !label}>
             {tc('save')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    <TelegramConfigModal open={tgCfgOpen} onOpenChange={setTgCfgOpen} />
+    </>
+  );
+}
+
+/**
+ * Chek order — Telegram orqali kirish sozlamasi (bot token + guruh ID + yoqish).
+ */
+function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const qc = useQueryClient();
+  const [enabled, setEnabled] = useState(false);
+  const [groupId, setGroupId] = useState('');
+  const [botToken, setBotToken] = useState('');
+  const [hasToken, setHasToken] = useState(false);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['chek-tg-config'],
+    queryFn: () => api.get<{ enabled: boolean; groupId: string; hasToken: boolean }>('/chek-order/tg/config'),
+    enabled: open,
+  });
+  useEffect(() => {
+    if (data) { setEnabled(!!data.enabled); setGroupId(data.groupId || ''); setHasToken(!!data.hasToken); setBotToken(''); }
+  }, [data]);
+
+  const saveMut = useMutation({
+    mutationFn: () => api.post('/chek-order/tg/config', { enabled, groupId, ...(botToken.trim() ? { botToken: botToken.trim() } : {}) }),
+    onSuccess: () => { toast.success('Saqlandi'); qc.invalidateQueries({ queryKey: ['chek-tg-config'] }); onOpenChange(false); },
+    onError: (e: any) => toast.error(e?.message || 'Xato'),
+  });
+
+  const miniAppUrl = typeof window !== 'undefined' ? `${window.location.origin}/uz/tg/chek` : '/uz/tg/chek';
+  const copyUrl = async () => { try { await navigator.clipboard.writeText(miniAppUrl); toast.success('Nusxalandi'); } catch { /* skip */ } };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Send className="h-4.5 w-4.5 text-sky-500" /> Telegram orqali kirish</DialogTitle>
+          <DialogDescription>Guruh a'zolari (AdminUser'siz) faqat "Tekshirish" bo'limiga Telegram Mini App orqali kiradi.</DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="p-8 grid place-items-center"><Loader2 className="h-6 w-6 animate-spin text-sky-500" /></div>
+        ) : (
+          <div className="space-y-4">
+            <label className="flex items-center justify-between gap-3 rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 px-3.5 py-3 cursor-pointer">
+              <div>
+                <div className="text-[13px] font-semibold text-slate-800 dark:text-slate-100">Yoqilgan</div>
+                <div className="text-[11px] text-slate-400">O'chirilsa — Telegram orqali kirish ishlamaydi</div>
+              </div>
+              <button type="button" onClick={() => setEnabled((v) => !v)}
+                className={cn('relative w-11 h-6 rounded-full transition-colors shrink-0', enabled ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600')}>
+                <span className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all', enabled ? 'left-[22px]' : 'left-0.5')} />
+              </button>
+            </label>
+
+            <div className="space-y-1.5">
+              <Label>Bot token</Label>
+              <Input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)}
+                placeholder={hasToken ? '•••••••• (saqlangan — o\'zgartirish uchun yozing)' : '123456:ABC-DEF...'} className="font-mono" />
+              <p className="text-[11px] text-slate-400">@BotFather'dan olingan token. Bo'sh qoldirilsa — eski saqlangani qoladi.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Guruh chat ID</Label>
+              <Input value={groupId} onChange={(e) => setGroupId(e.target.value)} placeholder="-1001234567890" className="font-mono" />
+              <p className="text-[11px] text-slate-400">Bot shu guruhda <b>admin</b> bo'lishi kerak (a'zolikni o'qish uchun).</p>
+            </div>
+
+            <div className="rounded-xl bg-sky-50 dark:bg-sky-950/25 ring-1 ring-sky-100 dark:ring-sky-900/40 p-3">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-500 font-semibold"><Link2 className="h-3.5 w-3.5" /> Telegram link (kirish uchun)</div>
+                <button type="button" onClick={copyUrl} className="shrink-0 inline-flex items-center gap-1 px-2 h-6 rounded-md bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-sky-600 dark:text-sky-400 text-[10.5px] font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40"><Copy className="h-3 w-3" /> Nusxa</button>
+              </div>
+              <div className="font-mono text-[11.5px] text-slate-700 dark:text-slate-200 break-all bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 ring-1 ring-sky-100 dark:ring-sky-900/40">{miniAppUrl}</div>
+              <p className="text-[10.5px] text-slate-400 mt-1.5">Bu havolani BotFather'da <b>Web App URL</b> yoki guruh <b>Menu Button</b> sifatida qo'ying. Xodimlar shu orqali kiradi — faqat Telegram ichidan ishlaydi.</p>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Bekor</Button>
+          <Button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}>
+            {saveMut.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : null} Saqlash
           </Button>
         </DialogFooter>
       </DialogContent>

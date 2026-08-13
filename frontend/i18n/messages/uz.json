@@ -2752,6 +2752,16 @@
       "notFound": "Mos to'lov topilmadi",
       "closeTitle": "Topilmadi — izoh bilan yoping",
       "notePlaceholder": "Izoh: masalan hali bankdan sinxron bo'lmagan, kutilyapti / qo'lda kiritiladi"
+    },
+    "tg": {
+      "brand": "Chek order",
+      "checking": "Tekshirilyapti…",
+      "onlyTelegram": "Faqat Telegram orqali",
+      "openHint": "Bu bo'lim faqat Telegram ilovasi ichidan ochiladi. Iltimos, botdagi tugma orqali kiring.",
+      "denied": "Kirish rad etildi",
+      "welcome": "Xush kelibsiz",
+      "retry": "Qayta urinish",
+      "secured": "Telegram bilan himoyalangan"
     }
   }
 }

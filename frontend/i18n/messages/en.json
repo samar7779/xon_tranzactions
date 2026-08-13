@@ -2752,6 +2752,16 @@
       "notFound": "No matching payment found",
       "closeTitle": "Not found — close with a note",
       "notePlaceholder": "Note: e.g. not synced from the bank yet / will be entered manually"
+    },
+    "tg": {
+      "brand": "Check order",
+      "checking": "Checking…",
+      "onlyTelegram": "Only via Telegram",
+      "openHint": "This section opens only inside the Telegram app. Please enter via the button in the bot.",
+      "denied": "Access denied",
+      "welcome": "Welcome",
+      "retry": "Retry",
+      "secured": "Secured with Telegram"
     }
   }
 }
