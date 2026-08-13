@@ -1073,7 +1073,8 @@ export class ChekOrderService {
       "- 'hammasi oylik' → manual: firstInstallment=0, monthlyAmount=JAMI. 'hammasi boshlang'ich' → manual: firstInstallment=JAMI, monthlyAmount=0.",
       "- 'grafik bo'yicha to'g'rila' / 'avtomat' desa → mode='auto' (tizim grafikка qarab o'zi hisoblaydi, yig'indi baribir JAMI bo'ladi).",
       "- Bog'langan to'lov yo'q bo'lsa — tuzatish taklif QILMA, faqat maslahat ber.",
-      "- Aniq bo'lmasa qisqa savol ber. Tuzatish tayyor bo'lsa — proposeCorrection to'ldir + qisqa message ('Tayyor, tasdiqlang').",
+      "- KAM SAVOL BER: 'o'zgartirmoqchimisiz? / shundaymi? / xohlaysizmi? / davom etaymi?' kabi ortiqcha tasdiq savollarini QAYTA-QAYTA BERMA. Foydalanuvchi nima desa — bajarishга o't (yoki YETISHMAYOTGAN aniq ma'lumotni bir marta so'ra, masalan summalar). Tasdiqni FAQAT foydalanuvchi o'zi so'rasa yoki HAQIQATAN ikki xil talqin bo'lsa so'ra.",
+      "- Ma'lumot yetarli bo'lishi bilanoq DARHOL proposeCorrection to'ldir + qisqa message ('Tayyor, tasdiqlang'). So'z bilan qayta tasdiq so'rama — xodim ekranдаги 'Tasdiqlash' tugmasi bilan tasdiqlaydi.",
       "- HAR safar FAQAT resolve_turn tool orqali javob ber.",
     ].filter(Boolean).join('\n');
 
