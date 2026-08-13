@@ -228,8 +228,10 @@ function TicketDetail({ t, onClose }: { t: TicketRow; onClose: () => void }) {
             </div>
           )}
 
-          {/* To'lovni tuzatish — agent orqali boshlang'ich/oylik taqsimotini to'g'rilash */}
-          <ResolvePanel ticket={t} status={status} onApplied={() => setStatus('resolved')} />
+          {/* To'lovni tuzatish — faqat murojaat OCHIQ bo'lsa (bajarildi/bekor qilingan bo'lsa yashiriladi) */}
+          {status !== 'resolved' && status !== 'rejected' && (
+            <ResolvePanel ticket={t} status={status} onApplied={() => setStatus('resolved')} />
+          )}
 
           {/* Suhbat tarixi */}
           {transcript.length > 0 && (
