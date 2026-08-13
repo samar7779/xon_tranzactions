@@ -161,20 +161,28 @@ export class AgentAiService {
     if (claimed.count === 0) return { ok: false, error: 'Boshqa jarayon ishlamoqda' };
 
     try {
-      // 1) Ariza faylini o'qish
-      let fileBlock: any = null;
+      // 1) Ariza faylini o'qish — PDF/rasm to'g'ridan Claude'ga; Word (.docx) esa matn +
+      //    ichki rasmlar (imzo/muhr) ajratib beriladi (Claude .docx'ni to'g'ridan o'qiy olmaydi).
+      const fileBlocks: any[] = [];
+      let docText: string | null = null;
       if (req.attachmentId) {
         const att = await this.prisma.transactionAttachment.findUnique({ where: { id: req.attachmentId } });
         if (att) {
           try {
             const buf = await fs.readFile(att.storagePath);
-            const b64 = buf.toString('base64');
             const mt = att.mimeType || '';
-            if (mt === 'application/pdf' || att.filename.toLowerCase().endsWith('.pdf')) {
-              fileBlock = { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } };
-            } else if (mt.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(att.filename)) {
+            const fn = (att.filename || '').toLowerCase();
+            if (mt === 'application/pdf' || fn.endsWith('.pdf')) {
+              fileBlocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') } });
+            } else if (mt.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(fn)) {
               const media = mt.startsWith('image/') ? mt : 'image/jpeg';
-              fileBlock = { type: 'image', source: { type: 'base64', media_type: media, data: b64 } };
+              fileBlocks.push({ type: 'image', source: { type: 'base64', media_type: media, data: buf.toString('base64') } });
+            } else if (mt.includes('wordprocessingml') || fn.endsWith('.docx')) {
+              const parsed = await this.parseDocx(buf);
+              docText = parsed.text || null;
+              for (const im of parsed.images) {
+                fileBlocks.push({ type: 'image', source: { type: 'base64', media_type: im.contentType, data: im.b64 } });
+              }
             }
           } catch (e: any) {
             this.log.warn(`Ariza fayli o'qilmadi (${req.attachmentId}): ${e?.message}`);
@@ -204,7 +212,8 @@ export class AgentAiService {
         proposedObject: proposedObj || '(aniqlanmadi)',
         purposeObject: purposeObj || '(aniqlanmadi)',
         subCats,
-        fileBlock,
+        fileBlocks,
+        docText,
       });
 
       // 5) Deterministik OBYEKT guard — mos kelmasa xodimga
@@ -217,6 +226,14 @@ export class AgentAiService {
           && !this.looseSameContract(purposeContract, req.proposedContractNo)) {
         finalDecision = 'human';
         reason = `Obyekt mos emas: maqsad "${purposeObj}", taklif "${proposedObj}". Boshqa obyektga o'tkazib bo'lmaydi — xodim tekshirsin.`;
+      }
+
+      // 5.5) Deterministik IMZO guard — imzo/muhr tasdiqlanmasa HECH QACHON avtomat tasdiqlamaymiz
+      //      (imzo tekshirish majburiy). Faqat 'approve' → 'human'ga tushiriladi (reject o'zgarmaydi).
+      if (finalDecision === 'approve' && decision.hasSignature !== true) {
+        finalDecision = 'human';
+        reason = `Imzo/muhr tasdiqlanmadi — ariza tasdiqlash uchun xodimga yo'naltirildi.`
+          + (decision.reason ? ` (${decision.reason})` : '');
       }
 
       // 6) Qarorni qo'llash
@@ -374,7 +391,7 @@ export class AgentAiService {
       `SENDA QUROLLAR BOR — ularni FAOL ishlat, hech qachon "imkonim yo'q / eslay olmayman" deb rad qilma:`,
       `• "lookup" — ariza yoki to'lovni bazadan topish (shartnoma/klient/ID bo'yicha).`,
       `• "xato_query" — barcha XATO to'lovlar bo'yicha ma'lumot (soni/summa/misollar).`,
-      `• "read_ariza_file" — arizaning biriktirilgan FAYLINI (rasm yoki PDF) ochib O'QIYSAN. "Fayl ichida nima yozilgan", "arizani ko'rsat", "faylni o'qi" kabi savollarda SHU tool'ni chaqir va faylni ko'rib javob ber. Fayl har suhbatda qaytadan o'qiladi — bazada saqlangan, yo'qolmaydi.`,
+      `• "read_ariza_file" — arizaning biriktirilgan FAYLINI (rasm, PDF yoki Word .docx) ochib O'QIYSAN. "Fayl ichida nima yozilgan", "arizani ko'rsat", "faylni o'qi" kabi savollarda SHU tool'ni chaqir va faylni ko'rib javob ber. Fayl har suhbatda qaytadan o'qiladi — bazada saqlangan, yo'qolmaydi.`,
       `• "list_review_arizas" — XODIMGA QOLDIRILGAN (ko'rib chiqish kerak) arizalar ro'yxati. "xodimga qoldirilgan qaysi" deganda shuni chaqir.`,
       `• "recheck_ariza" — arizani QAYTA tekshirish (agent qaytadan ishlaydi). Admin "yana tekshir / qayta ko'r" desa shuni chaqir. query bo'sh bo'lsa — barcha needs_review qayta tekshiriladi.`,
       `• "act_on_ariza" — arizani TASDIQLASH (approve) yoki RAD ETISH (reject). Admin "qabul qil / tasdiqla / rad et" desa shuni chaqir.`,
@@ -396,7 +413,7 @@ export class AgentAiService {
       },
       {
         name: 'read_ariza_file',
-        description: 'Arizaning biriktirilgan faylini (rasm yoki PDF) ochib o\'qish — ichidagi ma\'lumotni ko\'rish uchun. Ariza ID, shartnoma raqami yoki klient ismi bo\'yicha topadi. "Fayl ichida nima yozilgan", "arizani ko\'rsat" kabi savollar uchun.',
+        description: 'Arizaning biriktirilgan faylini (rasm, PDF yoki Word .docx) ochib o\'qish — ichidagi ma\'lumotni ko\'rish uchun. Ariza ID, shartnoma raqami yoki klient ismi bo\'yicha topadi. "Fayl ichida nima yozilgan", "arizani ko\'rsat" kabi savollar uchun.',
         input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Ariza ID / shartnoma raqami / klient ismi' } }, required: ['query'] },
       },
       {
@@ -441,7 +458,7 @@ export class AgentAiService {
                 // Fayl o'qish — natijaga rasm/PDF blokini QO'SHAMIZ (Claude ko'rsin)
                 const r = await this.readArizaFileForChat(String(block.input?.query || ''));
                 const trContent: any[] = [{ type: 'text', text: r.found ? r.summary : (r.message || 'Fayl topilmadi') }];
-                if (r.found && r.fileBlock) trContent.push(r.fileBlock);
+                if (r.found && r.fileBlocks) for (const fb of r.fileBlocks) trContent.push(fb);
                 toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: trContent });
               } else {
                 let result: any;
@@ -496,7 +513,7 @@ export class AgentAiService {
   }
 
   /** Chat tool: arizaning biriktirilgan faylini (rasm/PDF) o'qish — Claude ko'rishi uchun blok qaytaradi. */
-  private async readArizaFileForChat(query: string): Promise<{ found: boolean; summary?: string; message?: string; fileBlock?: any }> {
+  private async readArizaFileForChat(query: string): Promise<{ found: boolean; summary?: string; message?: string; fileBlocks?: any[] }> {
     const q = (query || '').trim();
     if (!q) return { found: false, message: 'Qidiruv so\'zi kerak (ariza ID / shartnoma / klient).' };
     const req = await this.prisma.xatoCorrectionRequest.findFirst({
@@ -524,13 +541,20 @@ export class AgentAiService {
     const statusUz = req.status === 'approved' ? 'tasdiqlangan' : req.status === 'rejected' ? 'rad etilgan' : 'kutilmoqda';
     const summary = `Ariza fayli: ${att.filename} · shartnoma ${req.appliedContractNo || req.proposedContractNo || req.snapContractNo || '—'} · klient ${req.snapClient || '—'} · holat: ${statusUz}. Fayl ichidagi ma'lumotni o'qib, admin savoliga javob ber.`;
     if (mt === 'application/pdf' || att.filename.toLowerCase().endsWith('.pdf')) {
-      return { found: true, summary, fileBlock: { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } } };
+      return { found: true, summary, fileBlocks: [{ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } }] };
     }
     if (mt.startsWith('image/') || /\.(jpe?g|png|webp|gif)$/i.test(att.filename)) {
       const media = mt.startsWith('image/') ? mt : 'image/jpeg';
-      return { found: true, summary, fileBlock: { type: 'image', source: { type: 'base64', media_type: media, data: b64 } } };
+      return { found: true, summary, fileBlocks: [{ type: 'image', source: { type: 'base64', media_type: media, data: b64 } }] };
     }
-    return { found: false, message: `Fayl turi qo'llab-quvvatlanmaydi (${mt || att.filename}). Faqat rasm va PDF o'qiladi.` };
+    if (mt.includes('wordprocessingml') || att.filename.toLowerCase().endsWith('.docx')) {
+      const parsed = await this.parseDocx(buf);
+      const fileBlocks = parsed.images.map((im) => ({ type: 'image', source: { type: 'base64', media_type: im.contentType, data: im.b64 } }));
+      const docSummary = `${summary}\n\nWORD HUJJATI MATNI:\n${parsed.text || '(matn topilmadi)'}\n`
+        + (fileBlocks.length ? '(Hujjatdagi rasm(lar) qo\'shildi — imzo/muhr shu yerda bo\'lishi mumkin.)' : '(Hujjatda rasm yo\'q — imzo/muhr rasmi topilmadi.)');
+      return { found: true, summary: docSummary, fileBlocks };
+    }
+    return { found: false, message: `Fayl turi qo'llab-quvvatlanmaydi (${mt || att.filename}). Faqat rasm, PDF va Word (.docx) o'qiladi.` };
   }
 
   /** Chat tool: xodimga qoldirilgan (needs_review) arizalar. */
@@ -739,11 +763,47 @@ export class AgentAiService {
   }
 
   // ─── Claude Messages API (tool_use bilan structured output) ────────
+  /**
+   * Word (.docx) faylini o'qiydi — Claude .docx'ni to'g'ridan qabul qilmaydi. mammoth bilan:
+   *  - matn (shartnoma raqami/summa/klient o'qish uchun),
+   *  - ichki rasmlar (imzo/muhr bo'lishi mumkin — Claude ko'rib imzoni tekshirishi uchun).
+   * Faqat Claude qo'llab-quvvatlaydigan rasm turlari (png/jpeg/gif/webp), maks 4 ta.
+   */
+  private async parseDocx(buf: Buffer): Promise<{ text: string; images: { contentType: string; b64: string }[] }> {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mammoth = require('mammoth');
+    const images: { contentType: string; b64: string }[] = [];
+    let text = '';
+    try {
+      const r = await mammoth.extractRawText({ buffer: buf });
+      text = String(r?.value || '').replace(/\n{3,}/g, '\n\n').trim();
+    } catch (e: any) {
+      this.log.warn(`docx matn o'qilmadi: ${e?.message}`);
+    }
+    try {
+      await mammoth.convertToHtml({ buffer: buf }, {
+        convertImage: mammoth.images.imgElement(async (image: any) => {
+          try {
+            const ct = String(image.contentType || '').toLowerCase();
+            if (/^image\/(png|jpe?g|gif|webp)$/.test(ct) && images.length < 4) {
+              const b64 = await image.read('base64');
+              if (b64) images.push({ contentType: ct === 'image/jpg' ? 'image/jpeg' : ct, b64 });
+            }
+          } catch { /* skip bitta rasm */ }
+          return { src: '' };
+        }),
+      });
+    } catch (e: any) {
+      this.log.warn(`docx rasm o'qilmadi: ${e?.message}`);
+    }
+    return { text, images };
+  }
+
   private async callClaude(apiKey: string, model: string, ctx: {
     purpose: string; amount: string; client: string;
     proposedContract: string; proposedObject: string; purposeObject: string;
-    subCats: string[]; fileBlock: any;
-  }): Promise<{ decision: 'approve' | 'reject' | 'human'; reason: string; subCategory?: string; arizaValid?: boolean }> {
+    subCats: string[]; fileBlocks: any[]; docText?: string | null;
+  }): Promise<{ decision: 'approve' | 'reject' | 'human'; reason: string; subCategory?: string; arizaValid?: boolean; hasSignature?: boolean }> {
     const system = [
       'Sen "Xon Saroy" ko\'chmas mulk quruvchisi uchun to\'lov tuzatish arizalarini tekshiruvchi ehtiyotkor agentsan.',
       'QOIDALAR:',
@@ -760,9 +820,16 @@ export class AgentAiService {
       '   avtostoyanka → "Взносы за автостоянку", qaytarish/возврат → "Возврат взносов за кв.", счётчик → "За счетчик",',
       '   qayta rasmiylashtirish → "Переоформление (приход)", boshqa nomdan → "Взнос от имени клиента").',
       '5) Ishonching komil bo\'lmasa yoki ma\'lumot yetarli bo\'lmasa — DOIM "human".',
+      '6) IMZO (MAJBURIY): arizada haqiqiy IMZO (qo\'l bilan qo\'yilgan yoki skan qilingan) yoki MUHR (pechat)',
+      '   BO\'LISHI SHART. Faqat "имзо"/"imzo" degan YOZUV, bo\'sh joy yoki terilgan ism — bu imzo EMAS.',
+      '   Word hujjati faqat terilgan matndan iborat bo\'lib ichida imzo/muhr RASMI bo\'lmasa — imzo YO\'Q.',
+      '   hasSignature=true FAQAT haqiqiy imzo yoki muhr ko\'zga tashlansa. Imzo yo\'q bo\'lsa hasSignature=false',
+      '   va decision="human" (xodim tekshirsin), reason\'da "imzo yo\'q" deb yoz.',
       'submit_decision tool orqali javob ber. reason O\'ZBEK tilida qisqa bo\'lsin.',
     ].join('\n');
 
+    const hasDocText = !!(ctx.docText && ctx.docText.trim());
+    const hasFile = (ctx.fileBlocks && ctx.fileBlocks.length > 0) || hasDocText;
     const userContent: any[] = [
       { type: 'text', text:
         `TO'LOV MA'LUMOTI:\n` +
@@ -771,11 +838,19 @@ export class AgentAiService {
         `Klient: ${ctx.client || '(yo\'q)'}\n` +
         `Taklif qilingan shartnoma: ${ctx.proposedContract} (obyekt: ${ctx.proposedObject})\n` +
         `Maqsaddagi shartnoma obyekti: ${ctx.purposeObject}\n\n` +
-        `Mavjud sub-kategoriyalar: ${ctx.subCats.join(' | ') || '(yo\'q)'}\n\n` +
-        (ctx.fileBlock ? 'Quyida ariza fayli. Uni o\'qib, qoidalarga ko\'ra qaror qabul qil.' : 'DIQQAT: ariza fayli yo\'q — bunday holatda "human".'),
+        `Mavjud sub-kategoriyalar: ${ctx.subCats.join(' | ') || '(yo\'q)'}\n` +
+        (hasDocText
+          ? `\nARIZA HUJJATI MATNI (Word'dan o'qildi):\n"""\n${ctx.docText!.slice(0, 6000)}\n"""\n`
+            + (ctx.fileBlocks.length
+                ? '(Hujjat ichidagi rasm(lar) quyida — imzo/muhr shu yerda bo\'lishi mumkin, DIQQAT bilan qara.)\n'
+                : '(Hujjatda hech qanday rasm yo\'q — demak imzo/muhr RASMI topilmadi.)\n')
+          : '') +
+        '\n' + (hasFile
+          ? 'Yuqoridagi ariza ma\'lumotini o\'qib, qoidalarga (ayniqsa 6-band IMZO) ko\'ra qaror qabul qil.'
+          : 'DIQQAT: ariza fayli yo\'q — bunday holatda "human".'),
       },
     ];
-    if (ctx.fileBlock) userContent.push(ctx.fileBlock);
+    for (const fb of (ctx.fileBlocks || [])) userContent.push(fb);
 
     const body = {
       model,
@@ -790,6 +865,7 @@ export class AgentAiService {
           properties: {
             arizaContract: { type: 'string', description: 'Ariza faylidagi to\'g\'ri shartnoma raqami (topilsa)' },
             arizaValid: { type: 'boolean', description: 'Ariza fayli taklif qilingan tuzatishni tasdiqlaydimi' },
+            hasSignature: { type: 'boolean', description: 'Arizada haqiqiy IMZO yoki MUHR (pechat) bormi — terilgan "imzo" so\'zi yoki ism EMAS, faqat ko\'rinadigan imzo/muhr' },
             subCategory: { type: 'string', description: 'Ro\'yxatdan tanlangan sub-kategoriya nomi (aniq nusxa)' },
             decision: { type: 'string', enum: ['approve', 'reject', 'human'], description: 'Yakuniy qaror' },
             reason: { type: 'string', description: 'Qisqa izoh (o\'zbekcha)' },
@@ -822,6 +898,7 @@ export class AgentAiService {
       reason: String(inp.reason || '').slice(0, 1000),
       subCategory: inp.subCategory ? String(inp.subCategory) : undefined,
       arizaValid: !!inp.arizaValid,
+      hasSignature: typeof inp.hasSignature === 'boolean' ? inp.hasSignature : undefined,
     };
   }
 
