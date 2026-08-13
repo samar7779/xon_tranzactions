@@ -2726,6 +2726,21 @@
       "recordsDeleted": "{n} ta yozuv o'chirildi",
       "error": "Xato",
       "fileTooLarge": "Fayl 25 MB dan oshmasligi kerak"
+    },
+    "resolve": {
+      "title": "To'lovni tuzatish",
+      "open": "Agent bilan tuzatish",
+      "current": "Hozirgi taqsimot",
+      "total": "Jami to'langan",
+      "first": "Boshlang'ich",
+      "monthly": "Oylik",
+      "noPayment": "Bog'langan to'lov topilmadi — taqsimotni tuzatib bo'lmaydi",
+      "placeholder": "Masalan: hammasi oylikka / 150000 boshlang'ich, 50000 oylik",
+      "proposalTitle": "Tuzatish taklifi",
+      "auto": "Avtomat (grafik bo'yicha)",
+      "apply": "Tasdiqlash va qo'llash",
+      "appliedToast": "Tuzatildi — murojaat bajarildi",
+      "sumBadge": "yig'indi = jami"
     }
   }
 }

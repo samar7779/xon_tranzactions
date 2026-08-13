@@ -2816,6 +2816,75 @@ export class OplataKvService {
   }
 
   /**
+   * QO'LDA TAQSIMOT — bitta ОплатыКв qatorining boshlang'ich/oylik ulushini
+   * ANIQ qiymatlarga o'rnatadi (murojaat/agent orqali tuzatish uchun).
+   * INVARIANT (MUHIM): firstInstallment + monthlyAmount === paymentAmount.
+   * Yig'indi to'langan summadan kam yoki ko'p bo'lsa — RAD etadi (pul
+   * yo'qolmasin/qo'shilmasin). Tarixga yoziladi.
+   */
+  async manualSplit(
+    id: string,
+    firstInstallmentInput: number,
+    monthlyInput: number,
+    actor?: Actor,
+  ): Promise<{ ok: boolean; error?: string; item?: { firstInstallment: number; monthlyAmount: number; paymentCategory: string | null; paymentAmount: number } }> {
+    const row = await this.prisma.oplataKv.findUnique({
+      where: { id },
+      select: { id: true, paymentAmount: true },
+    });
+    if (!row) return { ok: false, error: 'Qator topilmadi' };
+    if (row.paymentAmount == null) return { ok: false, error: "paymentAmount yo'q" };
+
+    const total = Math.round(Number(row.paymentAmount) * 100) / 100;
+    const first = Math.round(Number(firstInstallmentInput || 0) * 100) / 100;
+    const monthly = Math.round(Number(monthlyInput || 0) * 100) / 100;
+    if (!Number.isFinite(first) || !Number.isFinite(monthly)) return { ok: false, error: "Summa noto'g'ri" };
+
+    // ── INVARIANT: boshlang'ich + oylik = to'langan summa (aynan) ──
+    const sum = Math.round((first + monthly) * 100) / 100;
+    if (Math.abs(sum - total) > 0.01) {
+      return { ok: false, error: `Taqsimot yig'indisi (${sum}) to'langan summaga (${total}) teng emas — boshlang'ich + oylik = ${total} bo'lishi SHART` };
+    }
+    // Musbat to'lovда ulushlar manfiy bo'lmasin (refund/manfiy holatда teskarisi ruxsat)
+    if (total >= 0 && (first < 0 || monthly < 0)) return { ok: false, error: "Musbat to'lovда ulush manfiy bo'lmaydi" };
+    if (total < 0 && (first > 0 || monthly > 0)) return { ok: false, error: "Refund (manfiy) to'lovда ulush musbat bo'lmaydi" };
+
+    // Kategoriya — kattasi bo'yicha (absolyut qiymat)
+    let category: 'FIRST' | 'MONTHLY' | 'GENERAL';
+    if (first === 0 && monthly === 0) category = 'GENERAL';
+    else if (monthly === 0) category = 'FIRST';
+    else if (first === 0) category = 'MONTHLY';
+    else category = Math.abs(monthly) > Math.abs(first) ? 'MONTHLY' : 'FIRST';
+
+    await this.prisma.oplataKv.update({
+      where: { id: row.id },
+      data: {
+        firstInstallment: first !== 0 ? new Prisma.Decimal(first) : null,
+        monthlyAmount:    monthly !== 0 ? new Prisma.Decimal(monthly) : null,
+        paymentCategory:  category as OplataKvCategory,
+        wasManuallyEdited: true,
+      },
+    });
+    try {
+      await this.prisma.oplataKvHistory.create({
+        data: {
+          oplataKvId: row.id,
+          action: 'edited',
+          actorType: actor?.id ? 'user' : 'system',
+          actorId: actor?.id || null,
+          actorName: actor?.name || 'manual split',
+          fieldsChanged: ['firstInstallment', 'monthlyAmount', 'paymentCategory'],
+          changes: { firstInstallment: { new: first }, monthlyAmount: { new: monthly }, paymentCategory: { new: category } } as any,
+          note: `Qo'lda taqsimot (murojaat orqali): boshlang'ich=${first}, oylik=${monthly}, jami=${total}`,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`manualSplit history xato (${id}): ${e?.message}`);
+    }
+    return { ok: true, item: { firstInstallment: first, monthlyAmount: monthly, paymentCategory: category, paymentAmount: total } };
+  }
+
+  /**
    * UI uchun — oxirgi sync vaqti.
    */
   async getLastSyncInfo() {

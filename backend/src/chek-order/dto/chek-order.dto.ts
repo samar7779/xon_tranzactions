@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, IsInt, Min, IsIn } from 'class-validator';
+import { IsOptional, IsString, IsInt, Min, IsIn, IsNumber } from 'class-validator';
 import { Type } from 'class-transformer';
 
 /** Qo'lда order raqam(lar)ini tekshirish */
@@ -45,6 +45,36 @@ export class UpdateTicketDto {
   @ApiPropertyOptional() @IsOptional() @IsString() assignedToId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() priority?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() resolution?: string;
+}
+
+/** Murojaatni hal qilish — agent bilan suhbat (to'lov taqsimotini to'g'rilash) */
+export class ResolveChatDto {
+  @ApiPropertyOptional({ description: "Suhbat tarixi [{role, content}]" })
+  @IsOptional()
+  messages?: Array<{ role: string; content: string }>;
+
+  @ApiPropertyOptional({ description: 'Interfeys tili (uz|ru|en)' })
+  @IsOptional() @IsString()
+  locale?: string;
+}
+
+/** Tuzatishni qo'llash — ОплатыКв boshlang'ich/oylik taqsimoti */
+export class ApplyCorrectionDto {
+  @ApiPropertyOptional({ description: "ОплатыКв qator id (murojaatga bog'langan to'lov)" })
+  @IsString()
+  oplataKvId!: string;
+
+  @ApiPropertyOptional({ enum: ['manual', 'auto'], description: "manual — aniq ulushlar; auto — grafik bo'yicha" })
+  @IsIn(['manual', 'auto'])
+  mode!: string;
+
+  @ApiPropertyOptional({ description: "manual: boshlang'ich ulush" })
+  @IsOptional() @Type(() => Number) @IsNumber()
+  firstInstallment?: number;
+
+  @ApiPropertyOptional({ description: 'manual: oylik ulush' })
+  @IsOptional() @Type(() => Number) @IsNumber()
+  monthlyAmount?: number;
 }
 
 /** Murojaatlar ro'yxati filtri */

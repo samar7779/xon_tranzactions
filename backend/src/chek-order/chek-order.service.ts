@@ -6,7 +6,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { SettingsService } from '../sync/settings.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { CrmService } from '../crm/crm.service';
-import { ListChekOrderDto, AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto } from './dto/chek-order.dto';
+import { OplataKvService } from '../oplata-kv/oplata-kv.service';
+import { ListChekOrderDto, AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto, ResolveChatDto, ApplyCorrectionDto } from './dto/chek-order.dto';
 
 type Actor = { id: string | null; name: string | null };
 
@@ -91,6 +92,7 @@ export class ChekOrderService {
     private readonly crypto: CryptoService,
     private readonly config: ConfigService,
     private readonly crm: CrmService,
+    private readonly oplataKv: OplataKvService,
   ) {
     this.uploadsDir = this.config.get<string>('UPLOADS_DIR') || '/var/www/xon_tranzactions/uploads';
   }
@@ -1007,6 +1009,168 @@ export class ChekOrderService {
     if (!row) throw new NotFoundException('Murojaat topilmadi');
     await this.prisma.chekTicket.delete({ where: { id } });
     return { ok: true };
+  }
+
+  // ═════════════════ MUROJAATNI HAL QILISH (resolve) ═════════════════
+  /** Murojaatga bog'langan ОплатыКв to'lovi + hozirgi taqsimoti. */
+  async ticketPaymentContext(ticketId: string) {
+    const ticket = await this.prisma.chekTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Murojaat topilmadi');
+    let payment: any = null;
+    if (ticket.matchedTxExtId) {
+      const row = await this.prisma.oplataKv.findFirst({
+        where: { sourceTxId: ticket.matchedTxExtId },
+        orderBy: { date: 'desc' },
+        select: { id: true, contractNo: true, date: true, paymentAmount: true, firstInstallment: true, monthlyAmount: true, paymentCategory: true, object: true },
+      });
+      if (row) payment = {
+        id: row.id, contractNo: row.contractNo, date: row.date,
+        paymentAmount: Number(row.paymentAmount || 0),
+        firstInstallment: Number(row.firstInstallment || 0),
+        monthlyAmount: Number(row.monthlyAmount || 0),
+        paymentCategory: row.paymentCategory, object: row.object,
+      };
+    }
+    return { ok: true, ticket, payment };
+  }
+
+  /** Murojaatni hal qilish — agent bilan suhbat, tuzatish taklifi. */
+  async resolveChat(ticketId: string, dto: ResolveChatDto, _actor: Actor) {
+    const apiKey = await this.getAiKey();
+    if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
+    const model = await this.getAiModel();
+    const { ticket, payment } = await this.ticketPaymentContext(ticketId);
+    const money = (n: any) => Number(n || 0).toLocaleString('ru-RU');
+
+    // CRM grafik (bog'langan to'lov shartnomasi bo'yicha)
+    let schedText = '';
+    if (payment?.contractNo) {
+      try {
+        const sched: any = await this.crm.getContractSchedules(payment.contractNo);
+        const s: any[] = sched?.schedules || [];
+        const sum = (k: string, f: string) => s.filter((x) => x.kind === k).reduce((a, x) => a + Number(x[f] || 0), 0);
+        schedText = `Grafik — Boshlang'ich: reja ${money(sum('initial', 'amount'))}, to'langan ${money(sum('initial', 'amountPaid'))}; Oylik: reja ${money(sum('monthly', 'amount'))}, to'langan ${money(sum('monthly', 'amountPaid'))}`;
+      } catch { /* skip */ }
+    }
+
+    const payText = payment
+      ? `To'lov: shartnoma ${payment.contractNo} · JAMI to'langan summa: ${money(payment.paymentAmount)} · hozirgi taqsimot — boshlang'ich: ${money(payment.firstInstallment)}, oylik: ${money(payment.monthlyAmount)}`
+      : "To'lov ОплатыКв'да topilmadi (bog'langan to'lov yo'q — taqsimotni tuzatib bo'lmaydi, faqat murojaatni yopish/bekor qilish mumkin).";
+
+    const loc = String(dto.locale || 'uz').toLowerCase();
+    const langRule = loc === 'ru' ? '- Отвечай на РУССКОМ, коротко.' : loc === 'en' ? '- Reply in ENGLISH, short.' : "- O'ZBEK LOTIN yozuvida, qisqa gapir.";
+
+    const system = [
+      "Sen Xon Saroy ichki moliyaviy TUZATUVCHI yordamchisisan.",
+      "Xodim murojaatni (ticket) hal qilmoqda: to'lovning BOSHLANG'ICH/OYLIK taqsimotini to'g'rilaydi.",
+      `Murojaat: #${ticket.ticketNo} — ${ticket.summary}${ticket.category ? ` (${ticket.category})` : ''}`,
+      payText,
+      schedText ? `  ${schedText}` : '',
+      "QOIDALAR:",
+      langRule,
+      "- INVARIANT (JUDA MUHIM — HUSHYOR BO'L): boshlang'ich + oylik = JAMI to'langan summa. Bir tiyin ham KAM yoki KO'P bo'lmasin. Xodim bergan raqamlar yig'indisi jami summaga TENG bo'lmasa — proposeCorrection BERMA, farqni ayt va to'g'ri raqam so'ra.",
+      "- Xodim aniq raqam bersa (masalan '150000 boshlang'ich, 50000 oylik') → mode='manual', firstInstallment/monthlyAmount to'ldir (yig'indi = JAMI bo'lsin).",
+      "- 'hammasi oylik' → manual: firstInstallment=0, monthlyAmount=JAMI. 'hammasi boshlang'ich' → manual: firstInstallment=JAMI, monthlyAmount=0.",
+      "- 'grafik bo'yicha to'g'rila' / 'avtomat' desa → mode='auto' (tizim grafikка qarab o'zi hisoblaydi, yig'indi baribir JAMI bo'ladi).",
+      "- Bog'langan to'lov yo'q bo'lsa — tuzatish taklif QILMA, faqat maslahat ber.",
+      "- Aniq bo'lmasa qisqa savol ber. Tuzatish tayyor bo'lsa — proposeCorrection to'ldir + qisqa message ('Tayyor, tasdiqlang').",
+      "- HAR safar FAQAT resolve_turn tool orqali javob ber.",
+    ].filter(Boolean).join('\n');
+
+    const messages = (dto.messages || [])
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 4000) }))
+      .filter((m) => m.content);
+    if (!messages.length) messages.push({ role: 'user', content: '/start' });
+    if (messages[0].role !== 'user') messages.unshift({ role: 'user', content: '/start' });
+
+    const tools = [{
+      name: 'resolve_turn',
+      description: "Tuzatuvchining bitta javobi — xabar + (ixtiyoriy) tuzatish taklifi",
+      input_schema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', description: 'Xodimga xabar' },
+          quickReplies: { type: 'array', items: { type: 'string' } },
+          proposeCorrection: {
+            type: 'object',
+            description: "Tuzatish taklifi (invariant: boshlang'ich+oylik=JAMI)",
+            properties: {
+              mode: { type: 'string', enum: ['manual', 'auto'] },
+              firstInstallment: { type: 'number' },
+              monthlyAmount: { type: 'number' },
+              note: { type: 'string' },
+            },
+            required: ['mode'],
+          },
+        },
+        required: ['message'],
+      },
+    }];
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model, max_tokens: 1000, system, messages, tools, tool_choice: { type: 'tool', name: 'resolve_turn' } }),
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
+    }
+    const data: any = await res.json();
+    const toolUse = (data?.content || []).find((c: any) => c.type === 'tool_use');
+    const out: any = toolUse?.input || { message: 'Kechirasiz, javob berolmadim.' };
+
+    let proposal: any = out.proposeCorrection || null;
+    // Bog'langan to'lov bo'lsa — oplataKvId + JAMI summani biriktiramiz; server baribir invariantni tekshiradi
+    if (proposal && payment) {
+      const pa = Number(payment.paymentAmount);
+      let first = proposal.mode === 'manual' ? Number(proposal.firstInstallment ?? 0) : undefined;
+      let monthly = proposal.mode === 'manual' ? Number(proposal.monthlyAmount ?? 0) : undefined;
+      let invalid = false;
+      if (proposal.mode === 'manual') {
+        const sum = Math.round((Number(first || 0) + Number(monthly || 0)) * 100) / 100;
+        if (Math.abs(sum - Math.round(pa * 100) / 100) > 0.01) invalid = true; // yig'indi JAMIга teng emas
+      }
+      proposal = invalid ? null : { ...proposal, oplataKvId: payment.id, paymentAmount: pa, firstInstallment: first, monthlyAmount: monthly };
+    } else {
+      proposal = null;
+    }
+    return {
+      ok: true,
+      reply: out.message || '',
+      quickReplies: Array.isArray(out.quickReplies) ? out.quickReplies.slice(0, 6) : [],
+      proposal,
+      payment,
+    };
+  }
+
+  /** Tuzatishni QO'LLASH — ОплатыКв taqsimotini o'zgartiradi + murojaatni "Bajarildi" qiladi. */
+  async applyCorrection(ticketId: string, dto: ApplyCorrectionDto, actor: Actor) {
+    const ticket = await this.prisma.chekTicket.findUnique({ where: { id: ticketId } });
+    if (!ticket) throw new NotFoundException('Murojaat topilmadi');
+    const row = await this.prisma.oplataKv.findUnique({ where: { id: dto.oplataKvId }, select: { id: true, sourceTxId: true } });
+    if (!row) throw new NotFoundException("To'lov (ОплатыКв) topilmadi");
+    // Xavfsizlik — to'lov shu murojaatga bog'langan bo'lishi shart
+    if (ticket.matchedTxExtId && row.sourceTxId && row.sourceTxId !== ticket.matchedTxExtId) {
+      throw new BadRequestException("To'lov bu murojaatga bog'lanmagan");
+    }
+
+    let result: any;
+    if (dto.mode === 'auto') {
+      result = await this.oplataKv.splitSingleRow(dto.oplataKvId, actor);
+    } else {
+      result = await this.oplataKv.manualSplit(dto.oplataKvId, Number(dto.firstInstallment || 0), Number(dto.monthlyAmount || 0), actor);
+    }
+    if (!result?.ok) throw new BadRequestException(result?.error || "Tuzatib bo'lmadi");
+
+    const alloc = result.item;
+    const note = `Agent orqali tuzatildi (${dto.mode === 'auto' ? 'avtomat/grafik' : "qo'lda"}): boshlang'ich=${alloc.firstInstallment}, oylik=${alloc.monthlyAmount}`;
+    const updated = await this.prisma.chekTicket.update({
+      where: { id: ticketId },
+      data: { status: 'resolved', resolution: note, resolvedByName: actor.name, resolvedAt: new Date() },
+    });
+    this.asstCrmCache.clear(); // CRM/grafik konteksti keshini yangilash
+    return { ok: true, allocation: alloc, ticket: updated };
   }
 
   private async claudeExtractOrders(apiKey: string, model: string, fileBlock: any): Promise<ExtractedOrder[]> {

@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useTranslations } from 'next-intl';
+import { useTranslations, useLocale } from 'next-intl';
 import { toast } from 'sonner';
 import {
   Search, Loader2, X, ChevronLeft, ChevronRight, Trash2, FileSignature,
   MessageSquare, CircleDot, Clock, CheckCircle2, XCircle, Ticket, Copy, Fingerprint,
+  Send, Sparkles, Wand2,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -212,6 +213,9 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
             </button>
           </div>
 
+          {/* To'lovni tuzatish — agent orqali boshlang'ich/oylik taqsimotini to'g'rilash */}
+          <ResolvePanel ticket={t} onResolved={onSaved} />
+
           {/* Suhbat tarixi */}
           {transcript.length > 0 && (
             <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 overflow-hidden">
@@ -237,6 +241,120 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── To'lovni tuzatish paneli — agent boshlang'ich/oylik taqsimotini to'g'rilaydi ───
+type ChatMsg = { role: 'user' | 'assistant'; content: string };
+function ResolvePanel({ ticket, onResolved }: { ticket: TicketRow; onResolved: () => void }) {
+  const tr = useTranslations('chekOrder');
+  const locale = useLocale();
+  const qc = useQueryClient();
+  const money = (n: any) => Number(n || 0).toLocaleString('ru-RU');
+
+  const { data: pctx } = useQuery({
+    queryKey: ['chek-ticket-payment', ticket.id],
+    queryFn: () => api.get<{ payment: any }>(`/chek-order/tickets/${ticket.id}/payment`),
+  });
+  const payment = pctx?.payment || null;
+
+  const [open, setOpen] = useState(false);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [input, setInput] = useState('');
+  const [quick, setQuick] = useState<string[]>([]);
+  const [proposal, setProposal] = useState<any>(null);
+  const scRef = useRef<HTMLDivElement>(null);
+
+  const chatMut = useMutation({
+    mutationFn: (msgs: ChatMsg[]) => api.post<{ reply: string; quickReplies: string[]; proposal: any }>(`/chek-order/tickets/${ticket.id}/resolve/chat`, { messages: msgs, locale }),
+    onSuccess: (r) => { setMessages((m) => [...m, { role: 'assistant', content: r.reply }]); setQuick(r.quickReplies || []); setProposal(r.proposal || null); },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
+  });
+  const applyMut = useMutation({
+    mutationFn: () => api.post(`/chek-order/tickets/${ticket.id}/resolve/apply`, {
+      oplataKvId: proposal.oplataKvId, mode: proposal.mode,
+      firstInstallment: proposal.firstInstallment, monthlyAmount: proposal.monthlyAmount,
+    }),
+    onSuccess: () => {
+      toast.success(tr('resolve.appliedToast'));
+      qc.invalidateQueries({ queryKey: ['chek-tickets'] });
+      qc.invalidateQueries({ queryKey: ['chek-ticket-stats'] });
+      onResolved();
+    },
+    onError: (e: any) => toast.error(e?.message || tr('toast.error')),
+  });
+
+  useEffect(() => { if (open && !messages.length && !chatMut.isPending) chatMut.mutate([]); /* eslint-disable-next-line */ }, [open]);
+  useEffect(() => { scRef.current?.scrollTo({ top: scRef.current.scrollHeight, behavior: 'smooth' }); }, [messages, chatMut.isPending, proposal]);
+
+  const send = (text: string) => {
+    const v = text.trim();
+    if (!v || chatMut.isPending) return;
+    const nx = [...messages, { role: 'user' as const, content: v }];
+    setMessages(nx); setInput(''); setQuick([]); chatMut.mutate(nx);
+  };
+
+  if (!payment) {
+    return <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-3 text-[12px] text-slate-400">{tr('resolve.noPayment')}</div>;
+  }
+
+  const propSum = proposal && proposal.mode === 'manual' ? (Number(proposal.firstInstallment || 0) + Number(proposal.monthlyAmount || 0)) : null;
+  const sumOk = propSum != null && Math.abs(propSum - Number(payment.paymentAmount)) < 0.01;
+
+  return (
+    <div className="rounded-xl ring-1 ring-violet-100 dark:ring-violet-900/40 overflow-hidden">
+      <div className="px-3 py-2 bg-gradient-to-r from-violet-50 to-indigo-50 dark:from-violet-950/30 dark:to-indigo-950/20 flex items-center gap-2">
+        <Wand2 className="h-4 w-4 text-violet-500" />
+        <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200">{tr('resolve.title')}</span>
+      </div>
+      <div className="p-3 grid grid-cols-3 gap-2 text-center">
+        <div className="rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2"><div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">{tr('resolve.total')}</div><div className="text-[13px] font-bold tabular-nums text-slate-800 dark:text-slate-100">{money(payment.paymentAmount)}</div></div>
+        <div className="rounded-lg bg-indigo-50/60 dark:bg-indigo-950/30 p-2"><div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">{tr('resolve.first')}</div><div className="text-[13px] font-bold tabular-nums text-indigo-700 dark:text-indigo-300">{money(payment.firstInstallment)}</div></div>
+        <div className="rounded-lg bg-emerald-50/60 dark:bg-emerald-950/30 p-2"><div className="text-[9px] uppercase tracking-wider text-slate-400 font-semibold">{tr('resolve.monthly')}</div><div className="text-[13px] font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{money(payment.monthlyAmount)}</div></div>
+      </div>
+      {!open ? (
+        <div className="px-3 pb-3">
+          <button onClick={() => setOpen(true)} className="w-full h-9 rounded-lg bg-violet-600 text-white text-[12.5px] font-semibold hover:bg-violet-700 inline-flex items-center justify-center gap-1.5"><Sparkles className="h-4 w-4" /> {tr('resolve.open')}</button>
+        </div>
+      ) : (
+        <div className="border-t border-slate-100 dark:border-slate-800">
+          <div ref={scRef} className="max-h-64 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40">
+            {messages.map((m, i) => (
+              <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
+                <div className={cn('max-w-[85%] px-3 py-2 rounded-2xl text-[12.5px] whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'bg-violet-600 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-100 dark:ring-slate-700 rounded-bl-md')}>{m.content}</div>
+              </div>
+            ))}
+            {chatMut.isPending && <div className="text-[11px] text-slate-400 flex items-center gap-1.5"><Loader2 className="h-3.5 w-3.5 animate-spin" /> …</div>}
+            {quick.length > 0 && !chatMut.isPending && (
+              <div className="flex flex-wrap gap-1.5">
+                {quick.map((q, i) => <button key={i} onClick={() => send(q)} className="px-3 h-8 rounded-full bg-white dark:bg-slate-800 ring-1 ring-violet-200 dark:ring-violet-800 text-[12px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40">{q}</button>)}
+              </div>
+            )}
+            {proposal && (
+              <div className="rounded-xl bg-white dark:bg-slate-800 ring-1 ring-violet-200 dark:ring-violet-800 p-3 space-y-2 shadow-sm">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-violet-600 dark:text-violet-400">{tr('resolve.proposalTitle')}</div>
+                {proposal.mode === 'auto' ? (
+                  <div className="text-[12.5px] text-slate-700 dark:text-slate-200 inline-flex items-center gap-1.5"><Wand2 className="h-3.5 w-3.5 text-violet-500" /> {tr('resolve.auto')}</div>
+                ) : (
+                  <div className="flex items-center gap-3 text-[12.5px] flex-wrap">
+                    <span><span className="text-slate-400">{tr('resolve.first')}:</span> <b className="tabular-nums text-indigo-700 dark:text-indigo-300">{money(proposal.firstInstallment)}</b></span>
+                    <span><span className="text-slate-400">{tr('resolve.monthly')}:</span> <b className="tabular-nums text-emerald-700 dark:text-emerald-300">{money(proposal.monthlyAmount)}</b></span>
+                    <span className={cn('text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md', sumOk ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400' : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400')}>{money(propSum)} {sumOk ? '✓' : '✗'}</span>
+                  </div>
+                )}
+                <button onClick={() => applyMut.mutate()} disabled={applyMut.isPending || (proposal.mode === 'manual' && !sumOk)} className="w-full h-9 rounded-lg bg-emerald-600 text-white text-[12.5px] font-semibold hover:bg-emerald-700 disabled:opacity-50 inline-flex items-center justify-center gap-1.5">
+                  {applyMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />} {tr('resolve.apply')}
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="p-2.5 border-t border-slate-100 dark:border-slate-800 flex items-end gap-2">
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); } }} rows={1} placeholder={tr('resolve.placeholder')} className="flex-1 resize-none max-h-24 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[12.5px] outline-none focus:ring-2 focus:ring-violet-500/40" />
+            <button onClick={() => send(input)} disabled={!input.trim() || chatMut.isPending} className="w-9 h-9 rounded-lg bg-violet-600 text-white grid place-items-center hover:bg-violet-700 disabled:opacity-40 shrink-0"><Send className="h-4 w-4" /></button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

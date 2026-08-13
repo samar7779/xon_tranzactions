@@ -2726,6 +2726,21 @@
       "recordsDeleted": "{n} records deleted",
       "error": "Error",
       "fileTooLarge": "File must not exceed 25 MB"
+    },
+    "resolve": {
+      "title": "Fix payment",
+      "open": "Fix with agent",
+      "current": "Current allocation",
+      "total": "Total paid",
+      "first": "Initial",
+      "monthly": "Monthly",
+      "noPayment": "No linked payment found — allocation cannot be changed",
+      "placeholder": "e.g.: all to monthly / 150000 initial, 50000 monthly",
+      "proposalTitle": "Correction proposal",
+      "auto": "Automatic (by schedule)",
+      "apply": "Confirm & apply",
+      "appliedToast": "Fixed — ticket resolved",
+      "sumBadge": "sum = total"
     }
   }
 }

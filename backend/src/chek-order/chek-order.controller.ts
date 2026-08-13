@@ -14,6 +14,7 @@ import { ChekOrderService } from './chek-order.service';
 import {
   ListChekOrderDto, ManualCheckDto,
   AssistantChatDto, CreateTicketDto, UpdateTicketDto, ListTicketsDto,
+  ResolveChatDto, ApplyCorrectionDto,
 } from './dto/chek-order.dto';
 
 type AuthUser = { id?: string; email?: string; fullName?: string };
@@ -135,6 +136,28 @@ export class ChekOrderController {
   @ApiOperation({ summary: 'Murojaatni o\'chirish' })
   removeTicket(@Param('id') id: string) {
     return this.svc.removeTicket(id);
+  }
+
+  // ─── Murojaatni hal qilish (to'lov taqsimotini tuzatish) ───
+  @Get('tickets/:id/payment')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: "Murojaatga bog'langan to'lov + hozirgi taqsimoti" })
+  ticketPayment(@Param('id') id: string) {
+    return this.svc.ticketPaymentContext(id);
+  }
+
+  @Post('tickets/:id/resolve/chat')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: 'Tuzatuvchi agent bilan suhbat' })
+  resolveChat(@Param('id') id: string, @Body() body: ResolveChatDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.resolveChat(id, body || {}, actorFrom(u));
+  }
+
+  @Post('tickets/:id/resolve/apply')
+  @RequirePermissions(PERMISSIONS.CHEKORDER_TICKETS)
+  @ApiOperation({ summary: "Tuzatishni qo'llash (ОплатыКв taqsimoti + murojaat Bajarildi)" })
+  applyCorrection(@Param('id') id: string, @Body() body: ApplyCorrectionDto, @CurrentUser() u?: AuthUser) {
+    return this.svc.applyCorrection(id, body, actorFrom(u));
   }
 
   @Get('batch/:batchId')
