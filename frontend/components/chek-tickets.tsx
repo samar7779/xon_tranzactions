@@ -160,16 +160,17 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
   const transcript: Array<{ role: string; content: string }> = Array.isArray(t.transcript) ? t.transcript : [];
 
   return (
-    <div className="fixed inset-0 z-[9998] bg-slate-950/70 backdrop-blur-sm grid place-items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
-      <div className="w-full max-w-3xl my-6 rounded-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative">
+    <div className="fixed inset-0 z-[9998]">
+      <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute right-0 top-0 bottom-0 w-full max-w-[880px] bg-white dark:bg-slate-900 shadow-2xl flex flex-col" style={{ animation: 'chekTicketSlide .26s cubic-bezier(0.22,1,0.36,1)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="p-5 bg-gradient-to-br from-indigo-500 to-violet-600 text-white relative shrink-0">
           <button onClick={onClose} className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/15 hover:bg-white/25 grid place-items-center"><X className="h-4 w-4" /></button>
           <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-white/20 text-[11px] font-bold mb-2"><Ticket className="h-3 w-3" /> {tr('tickets.detail.ticket', { no: t.ticketNo })}</div>
           <div className="text-[16px] font-bold leading-snug">{t.summary}</div>
           {t.category && <div className="text-[12px] opacity-90 mt-1">{t.category}</div>}
         </div>
 
-        <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+        <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
           {t.details && <div className="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">{t.details}</div>}
           <div className="grid gap-2 sm:grid-cols-2 text-[12px]">
             <div className="rounded-xl ring-1 ring-slate-100 dark:ring-slate-800 p-2.5"><div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-0.5">{tr('field.contract')}</div><div className="font-mono text-slate-700 dark:text-slate-200">{t.contractNo || '—'}</div></div>
@@ -241,6 +242,7 @@ function TicketDetail({ t, onClose, onSaved }: { t: TicketRow; onClose: () => vo
           </div>
         </div>
       </div>
+      <style>{`@keyframes chekTicketSlide { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
     </div>
   );
 }
@@ -319,7 +321,7 @@ function ResolvePanel({ ticket, onResolved }: { ticket: TicketRow; onResolved: (
         </div>
       ) : (
         <div className="border-t border-slate-100 dark:border-slate-800">
-          <div ref={scRef} className="max-h-64 overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40">
+          <div ref={scRef} className="max-h-[46vh] min-h-[220px] overflow-y-auto p-3 space-y-2 bg-slate-50 dark:bg-slate-950/40">
             {messages.map((m, i) => (
               <div key={i} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
                 <div className={cn('max-w-[85%] px-3 py-2 rounded-2xl text-[12.5px] whitespace-pre-wrap leading-relaxed', m.role === 'user' ? 'bg-violet-600 text-white rounded-br-md' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 ring-1 ring-slate-100 dark:ring-slate-700 rounded-bl-md')}>{m.content}</div>
