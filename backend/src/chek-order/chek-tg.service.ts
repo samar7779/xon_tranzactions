@@ -7,6 +7,7 @@ import { CryptoService } from '../common/crypto/crypto.service';
 const S_ENABLED = 'chekorder.tg.enabled';
 const S_TOKEN = 'chekorder.tg.botToken'; // shifrlangan
 const S_GROUP = 'chekorder.tg.groupId';
+const S_USERNAME = 'chekorder.tg.botUsername'; // Login Widget uchun (ochiq)
 
 /**
  * Chek order — Telegram Mini App (WebApp) orqali kirish.
@@ -16,9 +17,13 @@ const S_GROUP = 'chekorder.tg.groupId';
  *  2) getChatMember bilan foydalanuvchi guruhda a'zomi tekshiriladi.
  *  3) A'zo bo'lsa — cheklangan (chekorder:view+manage) guest JWT beriladi.
  */
+const S_WEBHOOK = 'chekorder.tg.webhookSecret';
+
 @Injectable()
 export class ChekTgService {
   private readonly log = new Logger(ChekTgService.name);
+  // Bir martalik kirish tokenlari (bot yuborgan shaxsiy havola) — 10 daqiqa
+  private readonly redeemStore = new Map<string, { userId: number; name: string; exp: number }>();
   constructor(
     private readonly settings: SettingsService,
     private readonly crypto: CryptoService,
@@ -32,26 +37,43 @@ export class ChekTgService {
   }
 
   async getConfig() {
-    const [enabled, group, tokenEnc] = await Promise.all([
+    const [enabled, group, tokenEnc, username] = await Promise.all([
       this.settings.get(S_ENABLED),
       this.settings.get(S_GROUP),
       this.settings.get(S_TOKEN),
+      this.settings.get(S_USERNAME),
     ]);
     return {
       ok: true,
       enabled: enabled === '1' || enabled === 'true',
       groupId: group || '',
+      botUsername: (username || '').replace(/^@/, ''),
       hasToken: !!tokenEnc,
     };
   }
 
-  async setConfig(dto: { enabled?: boolean; botToken?: string; groupId?: string }) {
+  /** Ochiq konfiguratsiya — Login Widget uchun (sir emas). */
+  async publicConfig() {
+    const [enabled, username] = await Promise.all([this.settings.get(S_ENABLED), this.settings.get(S_USERNAME)]);
+    return {
+      ok: true,
+      enabled: enabled === '1' || enabled === 'true',
+      botUsername: (username || '').replace(/^@/, ''),
+    };
+  }
+
+  async setConfig(dto: { enabled?: boolean; botToken?: string; groupId?: string; botUsername?: string }) {
     if (dto.enabled !== undefined) await this.settings.set(S_ENABLED, dto.enabled ? '1' : '0');
     if (dto.groupId !== undefined) await this.settings.set(S_GROUP, String(dto.groupId).trim());
+    if (dto.botUsername !== undefined) await this.settings.set(S_USERNAME, String(dto.botUsername).trim().replace(/^@/, ''));
     if (dto.botToken !== undefined && String(dto.botToken).trim()) {
       await this.settings.set(S_TOKEN, this.crypto.encrypt(String(dto.botToken).trim()));
     }
-    return this.getConfig();
+    // Bot token bor bo'lsa — webhookni (qayta) o'rnatamiz (deep-link /start uchun)
+    let webhook: any = null;
+    if (await this.getBotToken()) webhook = await this.ensureWebhook();
+    const cfg = await this.getConfig();
+    return { ...cfg, webhook };
   }
 
   // ── Telegram WebApp initData imzosini tekshirish (rasmiy algoritm) ──
@@ -124,5 +146,127 @@ export class ChekTgService {
       { expiresIn: '12h' },
     );
     return { ok: true, token, user: { name, telegramId: v.user.id } };
+  }
+
+  // ── Telegram LOGIN WIDGET tekshirish (web tugma — Mini App emas) ──
+  //   secret = SHA256(botToken); hash = HMAC_SHA256(dataCheckString, secret)
+  private verifyLoginWidget(data: Record<string, any>, botToken: string): boolean {
+    const hash = data?.hash;
+    if (!hash) return false;
+    const pairs = Object.keys(data)
+      .filter((k) => k !== 'hash' && data[k] !== undefined && data[k] !== null)
+      .sort()
+      .map((k) => `${k}=${data[k]}`);
+    const dataCheckString = pairs.join('\n');
+    const secret = crypto.createHash('sha256').update(botToken).digest();
+    const computed = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+    try {
+      return computed.length === String(hash).length &&
+        crypto.timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(String(hash), 'hex'));
+    } catch { return false; }
+  }
+
+  /** Telegram Login Widget orqali kirish (web'da tugma bosib). */
+  async loginWidget(data: any) {
+    const cfg = await this.getConfig();
+    if (!cfg.enabled) throw new BadRequestException('Telegram orqali kirish yoqilmagan');
+    const botToken = await this.getBotToken();
+    if (!botToken || !cfg.groupId) throw new BadRequestException('Telegram sozlanmagan (bot token / guruh ID)');
+    if (!data?.id || !data?.hash) throw new UnauthorizedException("Telegram ma'lumoti yo'q");
+    if (!this.verifyLoginWidget(data, botToken)) {
+      throw new UnauthorizedException("Telegram imzosi noto'g'ri");
+    }
+    const now = Math.floor(Date.now() / 1000);
+    if (data.auth_date && now - Number(data.auth_date) > 86400) {
+      throw new UnauthorizedException('Sessiya eskirgan — qayta kiring');
+    }
+    const status = await this.getChatMemberStatus(botToken, cfg.groupId, data.id);
+    const okStatuses = ['creator', 'administrator', 'member', 'restricted'];
+    if (!status || !okStatuses.includes(status)) {
+      throw new UnauthorizedException("Siz bu Telegram guruhda a'zo emassiz");
+    }
+    const name = [data.first_name, data.last_name].filter(Boolean).join(' ') || data.username || `tg${data.id}`;
+    const token = await this.jwt.signAsync(
+      { sub: `tg:${data.id}`, tgGuest: true, name },
+      { expiresIn: '12h' },
+    );
+    return { ok: true, token, user: { name, telegramId: data.id } };
+  }
+
+  // ═════════ BOT DEEP-LINK: /start → guruh tekshir → shaxsiy havola yubor ═════════
+  private appUrl() { return (process.env.APP_PUBLIC_URL || 'https://transactions.xonapps.uz').replace(/\/+$/, ''); }
+  private apiUrl() { return (process.env.API_PUBLIC_URL || `${this.appUrl()}/api`).replace(/\/+$/, ''); }
+
+  private async sendMessage(botToken: string, chatId: number | string, text: string, replyMarkup?: any) {
+    try {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', reply_markup: replyMarkup, disable_web_page_preview: true }),
+      });
+    } catch (e: any) { this.log.warn(`sendMessage xato: ${e?.message}`); }
+  }
+
+  /** Bot webhookni o'rnatadi (config saqlanganda chaqiriladi). */
+  async ensureWebhook(): Promise<{ ok: boolean; url?: string; error?: string }> {
+    const botToken = await this.getBotToken();
+    if (!botToken) return { ok: false, error: 'Bot token yo\'q' };
+    let secret = await this.settings.get(S_WEBHOOK);
+    if (!secret) { secret = crypto.randomBytes(24).toString('hex'); await this.settings.set(S_WEBHOOK, secret); }
+    const url = `${this.apiUrl()}/chek-order/tg/webhook/${secret}`;
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ url, allowed_updates: ['message'] }),
+      });
+      const data: any = await res.json();
+      if (!data?.ok) return { ok: false, error: data?.description || 'setWebhook rad etildi' };
+      return { ok: true, url };
+    } catch (e: any) { return { ok: false, error: e?.message }; }
+  }
+
+  /** Telegram webhook — /start kelganda guruhni tekshirib shaxsiy havola yuboradi. */
+  async handleWebhook(secret: string, update: any): Promise<{ ok: boolean }> {
+    const stored = await this.settings.get(S_WEBHOOK);
+    if (!stored || secret !== stored) return { ok: false };
+    const msg = update?.message;
+    const text = String(msg?.text || '');
+    if (!msg?.from?.id || !msg?.chat?.id || !text.startsWith('/start')) return { ok: true };
+
+    const cfg = await this.getConfig();
+    const botToken = await this.getBotToken();
+    if (!cfg.enabled || !botToken || !cfg.groupId) return { ok: true };
+
+    const userId = msg.from.id;
+    const name = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || msg.from.username || `tg${userId}`;
+    const status = await this.getChatMemberStatus(botToken, cfg.groupId, userId);
+    const okStatuses = ['creator', 'administrator', 'member', 'restricted'];
+    if (!status || !okStatuses.includes(status)) {
+      await this.sendMessage(botToken, msg.chat.id, "❌ Kechirasiz, siz ruxsat berilgan guruhda a'zo emassiz.");
+      return { ok: true };
+    }
+    // Eski tokenlarni tozalash
+    const now = Date.now();
+    for (const [k, v] of this.redeemStore) if (v.exp < now) this.redeemStore.delete(k);
+
+    const token = crypto.randomBytes(24).toString('hex');
+    this.redeemStore.set(token, { userId, name, exp: now + 10 * 60 * 1000 });
+    const link = `${this.appUrl()}/uz/tg/chek?k=${token}`;
+    await this.sendMessage(botToken, msg.chat.id,
+      `✅ <b>Chek order</b> — kirish tayyor, ${name}.\nQuyidagi tugmani bosing (havola 10 daqiqa amal qiladi):`,
+      { inline_keyboard: [[{ text: '🔓 Kirish — Tekshirish', url: link }]] });
+    return { ok: true };
+  }
+
+  /** Shaxsiy havoladagi (bir martalik) tokenni guest JWT'ga almashtiradi. */
+  async redeemToken(token: string) {
+    const key = String(token || '');
+    const e = this.redeemStore.get(key);
+    if (!e || e.exp < Date.now()) {
+      this.redeemStore.delete(key);
+      throw new UnauthorizedException("Havola eskirgan yoki noto'g'ri — botga /start yozib qayta oling");
+    }
+    this.redeemStore.delete(key); // bir martalik
+    const jwt = await this.jwt.signAsync({ sub: `tg:${e.userId}`, tgGuest: true, name: e.name }, { expiresIn: '12h' });
+    return { ok: true, token: jwt, user: { name: e.name, telegramId: e.userId } };
   }
 }

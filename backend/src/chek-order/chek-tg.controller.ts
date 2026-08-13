@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PermissionsGuard } from '../auth/guards/permissions.guard';
@@ -16,6 +16,34 @@ export class ChekTgController {
   @ApiOperation({ summary: 'Telegram Mini App — initData tekshirib guest token beradi' })
   auth(@Body() body: { initData?: string }) {
     return this.svc.auth(body?.initData || '');
+  }
+
+  // ── PUBLIC — Login Widget uchun ochiq config (bot username, yoqilganmi) ──
+  @Get('public-config')
+  @ApiOperation({ summary: 'Login Widget uchun ochiq config (sir emas)' })
+  publicConfig() {
+    return this.svc.publicConfig();
+  }
+
+  // ── PUBLIC — Telegram Login Widget orqali kirish (web tugma) ──
+  @Post('login')
+  @ApiOperation({ summary: 'Telegram Login Widget — imzo + guruh a\'zoligini tekshirib guest token beradi' })
+  login(@Body() body: { authData?: any }) {
+    return this.svc.loginWidget(body?.authData || {});
+  }
+
+  // ── PUBLIC — Bot webhook (/start → guruh tekshir → shaxsiy havola) ──
+  @Post('webhook/:secret')
+  @ApiOperation({ summary: 'Telegram bot webhook (deep-link /start)' })
+  webhook(@Param('secret') secret: string, @Body() body: any) {
+    return this.svc.handleWebhook(secret, body);
+  }
+
+  // ── PUBLIC — Shaxsiy havoladagi tokenni guest JWT'ga almashtirish ──
+  @Post('redeem')
+  @ApiOperation({ summary: 'Bir martalik kirish tokenini guest token\'ga almashtiradi' })
+  redeem(@Body() body: { token?: string }) {
+    return this.svc.redeemToken(body?.token || '');
   }
 
   // ── Sozlama — admin (chekorder:telegram) ──

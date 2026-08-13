@@ -555,25 +555,34 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
   const [enabled, setEnabled] = useState(false);
   const [groupId, setGroupId] = useState('');
   const [botToken, setBotToken] = useState('');
+  const [botUsername, setBotUsername] = useState('');
   const [hasToken, setHasToken] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['chek-tg-config'],
-    queryFn: () => api.get<{ enabled: boolean; groupId: string; hasToken: boolean }>('/chek-order/tg/config'),
+    queryFn: () => api.get<{ enabled: boolean; groupId: string; botUsername: string; hasToken: boolean }>('/chek-order/tg/config'),
     enabled: open,
   });
   useEffect(() => {
-    if (data) { setEnabled(!!data.enabled); setGroupId(data.groupId || ''); setHasToken(!!data.hasToken); setBotToken(''); }
+    if (data) { setEnabled(!!data.enabled); setGroupId(data.groupId || ''); setBotUsername(data.botUsername || ''); setHasToken(!!data.hasToken); setBotToken(''); }
   }, [data]);
 
   const saveMut = useMutation({
-    mutationFn: () => api.post('/chek-order/tg/config', { enabled, groupId, ...(botToken.trim() ? { botToken: botToken.trim() } : {}) }),
-    onSuccess: () => { toast.success('Saqlandi'); qc.invalidateQueries({ queryKey: ['chek-tg-config'] }); onOpenChange(false); },
+    mutationFn: () => api.post<{ webhook?: { ok: boolean; error?: string } }>('/chek-order/tg/config', {
+      enabled, groupId, botUsername, ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
+    }),
+    onSuccess: (r) => {
+      if (r?.webhook && !r.webhook.ok) toast.warning(`Saqlandi, lekin webhook: ${r.webhook.error || 'xato'}`);
+      else toast.success('Saqlandi');
+      qc.invalidateQueries({ queryKey: ['chek-tg-config'] });
+      onOpenChange(false);
+    },
     onError: (e: any) => toast.error(e?.message || 'Xato'),
   });
 
-  const miniAppUrl = typeof window !== 'undefined' ? `${window.location.origin}/uz/tg/chek` : '/uz/tg/chek';
-  const copyUrl = async () => { try { await navigator.clipboard.writeText(miniAppUrl); toast.success('Nusxalandi'); } catch { /* skip */ } };
+  const uname = (botUsername || '').replace(/^@/, '');
+  const botLink = uname ? `https://t.me/${uname}?start=chek` : '';
+  const copyUrl = async () => { if (!botLink) return; try { await navigator.clipboard.writeText(botLink); toast.success('Nusxalandi'); } catch { /* skip */ } };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -602,7 +611,13 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
               <Label>Bot token</Label>
               <Input type="password" value={botToken} onChange={(e) => setBotToken(e.target.value)}
                 placeholder={hasToken ? '•••••••• (saqlangan — o\'zgartirish uchun yozing)' : '123456:ABC-DEF...'} className="font-mono" />
-              <p className="text-[11px] text-slate-400">@BotFather'dan olingan token. Bo'sh qoldirilsa — eski saqlangani qoladi.</p>
+              <p className="text-[11px] text-slate-400">@BotFather'dan olingan token. Bo'sh qoldirilsa — eski saqlangani qoladi. Saqlaganда webhook avtomat o'rnatiladi.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Bot username</Label>
+              <Input value={botUsername} onChange={(e) => setBotUsername(e.target.value)} placeholder="XonChekBot" className="font-mono" />
+              <p className="text-[11px] text-slate-400">Bot foydalanuvchi nomi (@siz). Kirish havolasini yasash uchun.</p>
             </div>
 
             <div className="space-y-1.5">
@@ -613,11 +628,11 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
 
             <div className="rounded-xl bg-sky-50 dark:bg-sky-950/25 ring-1 ring-sky-100 dark:ring-sky-900/40 p-3">
               <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-500 font-semibold"><Link2 className="h-3.5 w-3.5" /> Telegram link (kirish uchun)</div>
-                <button type="button" onClick={copyUrl} className="shrink-0 inline-flex items-center gap-1 px-2 h-6 rounded-md bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-sky-600 dark:text-sky-400 text-[10.5px] font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40"><Copy className="h-3 w-3" /> Nusxa</button>
+                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-sky-500 font-semibold"><Link2 className="h-3.5 w-3.5" /> Kirish havolasi (xodimlarga bering)</div>
+                {botLink && <button type="button" onClick={copyUrl} className="shrink-0 inline-flex items-center gap-1 px-2 h-6 rounded-md bg-white dark:bg-slate-800 ring-1 ring-sky-200 dark:ring-sky-800 text-sky-600 dark:text-sky-400 text-[10.5px] font-semibold hover:bg-sky-50 dark:hover:bg-sky-950/40"><Copy className="h-3 w-3" /> Nusxa</button>}
               </div>
-              <div className="font-mono text-[11.5px] text-slate-700 dark:text-slate-200 break-all bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 ring-1 ring-sky-100 dark:ring-sky-900/40">{miniAppUrl}</div>
-              <p className="text-[10.5px] text-slate-400 mt-1.5">Bu havolani BotFather'da <b>Web App URL</b> yoki guruh <b>Menu Button</b> sifatida qo'ying. Xodimlar shu orqali kiradi — faqat Telegram ichidan ishlaydi.</p>
+              <div className="font-mono text-[11.5px] text-slate-700 dark:text-slate-200 break-all bg-white dark:bg-slate-900 rounded-lg px-2.5 py-2 ring-1 ring-sky-100 dark:ring-sky-900/40">{botLink || 'Bot username kiriting…'}</div>
+              <p className="text-[10.5px] text-slate-400 mt-1.5">Xodim shu havolani bosadi → bot <b>/start</b> ni oladi → guruh a'zoligini tekshiradi → botда <b>“Kirish”</b> tugmasini yuboradi → bosib web'да Tekshirish ochiladi.</p>
             </div>
           </div>
         )}
