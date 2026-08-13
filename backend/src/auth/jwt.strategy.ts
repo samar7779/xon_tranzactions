@@ -16,6 +16,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: JwtPayload) {
+    // Telegram Mini App mehmoni — AdminUser yo'q, ruxsat cheklangan (faqat Tekshirish).
+    if (payload?.tgGuest) {
+      return {
+        id: payload.sub,
+        isTelegramGuest: true,
+        fullName: payload.name || 'Telegram',
+        permissions: ['chekorder:view', 'chekorder:manage'],
+      };
+    }
     const user = await this.prisma.adminUser.findUnique({
       where: { id: payload.sub },
       include: { roleRef: true },

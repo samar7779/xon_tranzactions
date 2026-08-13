@@ -6,8 +6,11 @@ import { LoginDto } from './dto/login.dto';
 
 export interface JwtPayload {
   sub: string;
-  email: string;
-  role: string;
+  email?: string;
+  role?: string;
+  // Telegram Mini App mehmoni (AdminUser emas) — guruh a'zoligi orqali kirgan
+  tgGuest?: boolean;
+  name?: string;
 }
 
 @Injectable()

@@ -55,6 +55,7 @@ export const PERMISSIONS = {
   CHEKORDER_MANAGE: 'chekorder:manage',                         // Order yuklash/tekshirish + o'chirish
   CHEKORDER_ASSISTANT: 'chekorder:assistant',                   // AI yordamchi chat — muammo aniqlash
   CHEKORDER_TICKETS: 'chekorder:tickets',                       // "Murojaatlar" sub-tab — ko'rish/boshqarish
+  CHEKORDER_TELEGRAM: 'chekorder:telegram',                     // Telegram orqali ochish (Mini App) — sozlash
 
   // ОплатыКв
   OPLATAKV_VIEW: 'oplatakv:view',
@@ -238,6 +239,7 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.CHEKORDER_MANAGE, label: 'Order yuklash/tekshirish + o\'chirish' },
           { value: PERMISSIONS.CHEKORDER_ASSISTANT, label: 'AI yordamchi chat — muammo aniqlash' },
           { value: PERMISSIONS.CHEKORDER_TICKETS, label: 'Murojaatlar sub-tab — ko\'rish/biriktirish/holat' },
+          { value: PERMISSIONS.CHEKORDER_TELEGRAM, label: 'Telegram orqali ochish — guruh a\'zolari kirishi (sozlama)' },
         ],
       },
     ],
