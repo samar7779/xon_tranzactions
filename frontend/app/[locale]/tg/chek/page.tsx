@@ -7,7 +7,8 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Loader2, ShieldCheck, Send, RotateCcw, ScanLine } from 'lucide-react';
 import { api, setToken } from '@/lib/api';
-import { ChekCheck } from '@/components/chek-check';
+import { ChekCheck, type OrderResult } from '@/components/chek-check';
+import { ChekAssistant } from '@/components/chek-assistant';
 
 export default function TgChekPage() {
   const t = useTranslations('chekOrder');
@@ -15,6 +16,7 @@ export default function TgChekPage() {
   const [user, setUser] = useState<{ name: string } | null>(null);
   const [botUsername, setBotUsername] = useState('');
   const [err, setErr] = useState('');
+  const [results, setResults] = useState<OrderResult[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -55,16 +57,30 @@ export default function TgChekPage() {
       {phase === 'gate' && <Gate t={t} botUsername={botUsername} />}
       {phase === 'denied' && <Gate t={t} botUsername={botUsername} err={err} onRetry={() => window.location.reload()} />}
       {phase === 'ready' && (
-        <div className="max-w-6xl mx-auto px-4 py-5">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-md shrink-0"><ScanLine className="h-5 w-5 text-white" /></div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[16px] font-bold leading-tight">{t('tg.brand')}</div>
-              <div className="text-[11.5px] text-slate-400 truncate">{user?.name ? `${t('tg.welcome')}, ${user.name}` : t('subtitle')}</div>
+        <>
+          <div className="max-w-6xl mx-auto px-4 py-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 grid place-items-center shadow-md shrink-0"><ScanLine className="h-5 w-5 text-white" /></div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[16px] font-bold leading-tight">{t('tg.brand')}</div>
+                <div className="text-[11.5px] text-slate-400 truncate">{user?.name ? `${t('tg.welcome')}, ${user.name}` : t('subtitle')}</div>
+              </div>
             </div>
+            <ChekCheck guest onResultsChange={setResults} />
           </div>
-          <ChekCheck guest />
-        </div>
+          {/* AI yordamchi — muammo → murojaat (natija chiqganda ekran chekkasida) */}
+          <ChekAssistant
+            context={{ orders: (results || []).map((r) => ({
+              orderNos: r.orderNos,
+              contractNo: r.matchedTx?.contractNumber || r.extracted.contractNo,
+              docContractNo: r.extracted.contractNo,
+              amount: r.extracted.amount,
+              result: r.result,
+              matchedTxExtId: r.matchedTx?.externalId,
+            })) }}
+            visible={!!results && results.length > 0}
+          />
+        </>
       )}
     </div>
   );

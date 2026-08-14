@@ -69,11 +69,10 @@ export class ChekTgService {
     if (dto.botToken !== undefined && String(dto.botToken).trim()) {
       await this.settings.set(S_TOKEN, this.crypto.encrypt(String(dto.botToken).trim()));
     }
-    // Bot token bor bo'lsa — webhookni (qayta) o'rnatamiz (deep-link /start uchun)
-    let webhook: any = null;
-    if (await this.getBotToken()) webhook = await this.ensureWebhook();
-    const cfg = await this.getConfig();
-    return { ...cfg, webhook };
+    // Webhook O'RNATILMAYDI: guruh tugmasi ?startapp (Mini App) orqali ochiladi —
+    // bot webhook'i kerak emas. Shu bois mavjud botning (DataSyncBot) webhook'i
+    // egallanmaydi va to'qnashmaydi. (Deep-link /start endpointi ixtiyoriy qoladi.)
+    return this.getConfig();
   }
 
   // ── Telegram WebApp initData imzosini tekshirish (rasmiy algoritm) ──
@@ -275,18 +274,18 @@ export class ChekTgService {
     if (!cfg.enabled) throw new BadRequestException('Telegram orqali kirish yoqilmagan');
     const botToken = await this.getBotToken();
     if (!botToken || !cfg.groupId) throw new BadRequestException("Bot token / guruh ID yo'q");
-    // Guruhда web_app tugma MUMKIN EMAS (BUTTON_TYPE_INVALID). Shu bois URL tugma
-    // botга yo'naltiradi (t.me/<bot>?start=chek) — bot /start'ni olib, shaxsiy chatда
-    // web_app tugma yuboradi (u yerда ruxsat etiladi). "Configure Mini App" kerak emas.
+    // Guruhда web_app tugma MUMKIN EMAS (BUTTON_TYPE_INVALID). URL tugma Mini App'ni
+    // to'g'ridan-to'g'ri ochadi: t.me/<bot>?startapp=chek (1 bosish). Buning uchun
+    // BotFather'да Mini App (Menu Button / Configure Mini App) sozlangan bo'lsin.
     const uname = (cfg.botUsername || '').replace(/^@/, '');
     if (!uname) throw new BadRequestException('Bot username kiritilmagan (guruh havolasi uchun kerak)');
-    const link = `https://t.me/${uname}?start=chek`;
+    const link = `https://t.me/${uname}?startapp=chek`;
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: cfg.groupId,
-          text: "📋 <b>Chek order — to'lovni tekshirish</b>\nTugmani bosing → bot sizga kirish tugmasini yuboradi:",
+          text: "📋 <b>Chek order — to'lovni tekshirish</b>\nTugmani bosing (guruh a'zolari uchun):",
           parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[{ text: '🔍 Tekshirish', url: link }]] },
         }),

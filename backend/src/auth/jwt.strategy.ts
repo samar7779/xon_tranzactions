@@ -23,7 +23,8 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         id: payload.sub,
         isTelegramGuest: true,
         fullName: payload.name || 'Telegram',
-        permissions: ['chekorder:view', 'chekorder:manage'],
+        // Tekshirish + AI yordamchi (muammo → murojaat yaratish)
+        permissions: ['chekorder:view', 'chekorder:manage', 'chekorder:assistant', 'chekorder:tickets'],
       };
     }
     const user = await this.prisma.adminUser.findUnique({

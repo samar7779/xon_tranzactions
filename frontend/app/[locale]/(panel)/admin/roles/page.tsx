@@ -634,13 +634,13 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
 
             {/* TAVSIYA — guruhga tugma qo'yish (eng oson: guruhда bir bosish) */}
             <div className="rounded-xl bg-gradient-to-br from-sky-50 to-blue-50/60 dark:from-sky-950/25 dark:to-blue-950/15 ring-1 ring-sky-200/70 dark:ring-sky-900/40 p-3.5 space-y-2">
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-700 dark:text-sky-300"><Send className="h-3.5 w-3.5" /> Guruhga tugma qo'yish</div>
-              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">Bot guruhga <b>“🔍 Tekshirish”</b> tugmasini yuboradi. Xodim bosadi → bot unga <b>kirish tugmasini</b> yuboradi → bosib Tekshirish ochiladi.</p>
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-sky-700 dark:text-sky-300"><Send className="h-3.5 w-3.5" /> Guruhga tugma qo'yish (1 bosish)</div>
+              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 leading-relaxed">Bot guruhga <b>“🔍 Tekshirish”</b> tugmasini yuboradi. A'zolar <b>guruhning o'zida</b> bosadi → Mini App darhol ochiladi.</p>
               <button type="button" onClick={() => postMut.mutate()} disabled={postMut.isPending}
                 className="w-full h-10 rounded-xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[13px] font-semibold shadow-md shadow-sky-500/25 hover:shadow-lg active:scale-[0.98] disabled:opacity-50 inline-flex items-center justify-center gap-2 transition-all">
                 {postMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Guruhga tugma yuborish
               </button>
-              <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">⚠️ <b>ALOHIDA bot</b> ishlating (ishli bot — DataSyncBot kabi — EMAS, webhook to'qnashadi) · bot guruhда <b>admin</b> bo'lsin · avval <b>Saqlang</b>. "Configure Mini App" kerak EMAS.</p>
+              <p className="text-[10px] text-amber-600 dark:text-amber-400 leading-relaxed">⚠️ Avval <b>Saqlang</b> · bot guruhда bo'lsin · BotFather'да botда <b>Mini App</b> (Menu Button yoki Configure Mini App) URL <span className="font-mono">transactions.xonapps.uz/uz/tg/chek</span> sozlangan bo'lsin. Webhook o'rnatilmaydi — ishli bot (DataSyncBot) ham mos.</p>
             </div>
 
             <div className="rounded-xl bg-slate-50 dark:bg-slate-800/40 ring-1 ring-slate-100 dark:ring-slate-800 p-3">
