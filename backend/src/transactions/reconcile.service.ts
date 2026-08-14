@@ -143,16 +143,16 @@ export class ReconcileService {
     const bankCredit = totalCreditTiyin / 100;  // kirim oboroti
 
     // ── Bizning DB: shu hisob, shu oraliqdagi tranzaksiya summalari ──
-    // SVERKA UCHUN valueDate (vdate — pul harakat qilgan sana) ishlatamiz —
-    // bank ham kunlik oborotni shu sana bo'yicha hisoblaydi.
-    // Eski yozuvlar uchun valueDate NULL bo'lsa — txnDate'ga qaytamiz.
+    // SVERKA UCHUN txnDate (ddate — hujjat sanasi) ishlatamiz. Bank kunlik
+    // oborotni shu sana bo'yicha beradi, va tizimning qolgan qismi ham
+    // (tranzaksiyalar ro'yxati, dashboard, billing, eksport) txnDate ishlatadi —
+    // Sverka ular bilan bir xil bo'lsin, "2 xil suma" chalkashligi yo'qolsin.
+    // (Eslatma: 2026-05 da vaqtincha valueDate'ga o'tilgan edi (ddd51b4), lekin
+    //  bank oboroti aslida txnDate'ga mos — shuning uchun qaytarildi.)
     const start = new Date(`${dateFrom}T00:00:00+05:00`);
     const end   = new Date(`${dateTo}T23:59:59.999+05:00`);
     const dateFilter = {
-      OR: [
-        { valueDate: { gte: start, lte: end } },
-        { valueDate: null, txnDate: { gte: start, lte: end } },
-      ],
+      txnDate: { gte: start, lte: end },
     };
     const grouped = await this.prisma.transaction.groupBy({
       by: ['direction'],
@@ -176,14 +176,12 @@ export class ReconcileService {
     if (days > 1) {
       const dayTxns = await this.prisma.transaction.findMany({
         where: { accountId, ...dateFilter },
-        select: { txnDate: true, valueDate: true, direction: true, amount: true },
+        select: { txnDate: true, direction: true, amount: true },
       });
       const TZ = 5 * 60 * 60 * 1000;
       for (const t of dayTxns) {
-        // valueDate (vdate) — @db.Date, allaqachon kun bo'yicha. Bo'lmasa txnDate'dan +5h.
-        const key = t.valueDate
-          ? t.valueDate.toISOString().slice(0, 10)
-          : new Date(t.txnDate.getTime() + TZ).toISOString().slice(0, 10);
+        // txnDate (ddate) — Tashkent kuniga o'tkazish uchun +5h, keyin YYYY-MM-DD.
+        const key = new Date(t.txnDate.getTime() + TZ).toISOString().slice(0, 10);
         const e = dbByDay.get(key) || { inflow: 0, outflow: 0 };
         const amt = Number(t.amount);
         if (t.direction === 'IN') e.inflow += amt;
@@ -325,7 +323,7 @@ export class ReconcileService {
       const dbAmt = Number(tx.amount);
       if (Math.abs(dbAmt - amount) > tolerance) return false;
       if (bankDay) {
-        const txTime = (tx.valueDate || tx.txnDate)?.getTime?.() ?? 0;
+        const txTime = tx.txnDate?.getTime?.() ?? 0;
         if (Math.abs(txTime - bankDay.getTime()) > WINDOW_MS) return false;
       }
       return true;
@@ -569,8 +567,8 @@ export class ReconcileService {
     }
 
     // ── Qo'shnish kunlar (±2) bank yozuvlari ─────────────────────────
-    // Bank ddate va bizning valueDate har doim ham mos kelmaydi: ba'zan tranzaksiya
-    // 13.05'ga qo'yiladi (vdate), bank esa uni 14.05 content[]'ida ko'rsatadi (ddate).
+    // Bizning txnDate va bank content[] sanasi har doim ham mos kelmaydi: ba'zan
+    // tranzaksiya bizda 13.05'da, bank esa uni 14.05 content[]'ida ko'rsatadi.
     // Inspector tool kabi ±2 kun atrofini tekshiramiz — yozuv 12-15.05 oraliqda
     // istalgan joyda bo'lishi mumkin. dbOnly'ga qo'shishdan oldin neighbor'larda topish.
     const neighborBankByKey = new Map<string, { onDate: string; item: any }>();
@@ -616,17 +614,12 @@ export class ReconcileService {
       }
     }
 
-    // DB dan o'sha kun uchun tranzaksiyalarni olamiz
-    // SVERKA UCHUN valueDate (vdate) ishlatamiz — bank ham shu sana bo'yicha
-    // kunlik oborotni hisoblaydi. Eski yozuvlar uchun valueDate NULL bo'lsa
-    // txnDate'ga qaytamiz (eski xulqdan farq qilmasin).
+    // DB dan o'sha kun uchun tranzaksiyalarni olamiz — txnDate (ddate) bo'yicha
+    // (top-line reconcile va tizimning qolgan qismi bilan bir xil sana).
     const dayStart = new Date(`${date}T00:00:00+05:00`);
     const dayEnd = new Date(`${date}T23:59:59.999+05:00`);
     const dayFilter = {
-      OR: [
-        { valueDate: { gte: dayStart, lte: dayEnd } },
-        { valueDate: null, txnDate: { gte: dayStart, lte: dayEnd } },
-      ],
+      txnDate: { gte: dayStart, lte: dayEnd },
     };
     // 1) Bu kun uchun saqlangan tx'lar — bankOnly/matched tahlili uchun
     const dbItems = await this.prisma.transaction.findMany({
@@ -662,7 +655,7 @@ export class ReconcileService {
     const legacyExternalIds = [...bankB2Ids, ...bankGenIds];
     const allExternalIds = [...new Set([...bankComposites, ...legacyExternalIds])];
 
-    // offDateItems: bu kunga teglanMAGAN yozuvlar (valueDate yoki txnDate orqali).
+    // offDateItems: bu kunga teglanMAGAN yozuvlar (txnDate bu kun oraliqida emas).
     // Sverka boshqa kunda uchratganini ko'rsatish uchun ishlatiladi.
     const offDateItems = (bankB2Ids.length > 0 || bankGenIds.length > 0 || allExternalIds.length > 0)
       ? await this.prisma.transaction.findMany({
@@ -673,13 +666,9 @@ export class ReconcileService {
               bankGenIds.length > 0 ? { bankGeneralId: { in: bankGenIds } } : { id: '__never__' },
               allExternalIds.length > 0 ? { externalId: { in: allExternalIds } } : { id: '__never__' },
             ],
-            // Sverka sanasidan tashqarida bo'lganlar — valueDate (yoki fallback txnDate)
-            // bu kun oraliqida emas
+            // Sverka sanasidan tashqarida bo'lganlar — txnDate bu kun oraliqida emas
             NOT: {
-              OR: [
-                { valueDate: { gte: dayStart, lte: dayEnd } },
-                { valueDate: null, txnDate: { gte: dayStart, lte: dayEnd } },
-              ],
+              txnDate: { gte: dayStart, lte: dayEnd },
             },
           },
           select: { id: true, externalId: true, bankB2Id: true, bankGeneralId: true, txnDate: true, valueDate: true },
@@ -808,11 +797,10 @@ export class ReconcileService {
           purpose: item.purpose,
           // Agar shu tx boshqa sana ostida saqlangan bo'lsa — uni ko'rsatamiz
           // (user "qo'shish" tugmasini bosmasligi uchun — chunki dublikat bo'lmaydi)
-          // Sana tanlashda valueDate (vdate) birinchi, yo'q bo'lsa txnDate
+          // Sverka txnDate bo'yicha guruhlaydi — shuni ko'rsatamiz ("sana tuzatish"
+          // tugmasi ham txnDate'ni yangilaydi, ikkisi mos bo'lsin).
           existsOnDate: offDateMatch
-            ? (offDateMatch.valueDate
-                ? offDateMatch.valueDate.toISOString().slice(0, 10)
-                : offDateMatch.txnDate.toISOString().slice(0, 10))
+            ? offDateMatch.txnDate.toISOString().slice(0, 10)
             : undefined,
           existingTxId: offDateMatch?.id,
         });
