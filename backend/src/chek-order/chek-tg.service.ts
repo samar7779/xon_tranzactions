@@ -244,16 +244,11 @@ export class ChekTgService {
       await this.sendMessage(botToken, msg.chat.id, "❌ Kechirasiz, siz ruxsat berilgan guruhda a'zo emassiz.");
       return { ok: true };
     }
-    // Eski tokenlarni tozalash
-    const now = Date.now();
-    for (const [k, v] of this.redeemStore) if (v.exp < now) this.redeemStore.delete(k);
-
-    const token = crypto.randomBytes(24).toString('hex');
-    this.redeemStore.set(token, { userId, name, exp: now + 10 * 60 * 1000 });
-    const link = `${this.appUrl()}/uz/tg/chek?k=${token}`;
+    // Shaxsiy chatда web_app tugma RUXSAT etiladi (guruhда emas) — Mini App'ni to'g'ridan-to'g'ri ochadi.
+    const url = `${this.appUrl()}/uz/tg/chek`;
     await this.sendMessage(botToken, msg.chat.id,
-      `✅ <b>Chek order</b> — kirish tayyor, ${name}.\nQuyidagi tugmani bosing (havola 10 daqiqa amal qiladi):`,
-      { inline_keyboard: [[{ text: '🔓 Kirish — Tekshirish', url: link }]] });
+      `✅ <b>Chek order</b> — kirish tayyor, ${name}.\nTekshirish uchun tugmani bosing:`,
+      { inline_keyboard: [[{ text: '🔍 Tekshirish', web_app: { url } }]] });
     return { ok: true };
   }
 
@@ -280,17 +275,18 @@ export class ChekTgService {
     if (!cfg.enabled) throw new BadRequestException('Telegram orqali kirish yoqilmagan');
     const botToken = await this.getBotToken();
     if (!botToken || !cfg.groupId) throw new BadRequestException("Bot token / guruh ID yo'q");
-    // Guruhда web_app tugma MUMKIN EMAS (BUTTON_TYPE_INVALID) — URL tugma orqali
-    // Mini App'ni ochamiz: t.me/<bot>?startapp=... (BotFather'да Main Mini App sozlangan bo'lsin).
+    // Guruhда web_app tugma MUMKIN EMAS (BUTTON_TYPE_INVALID). Shu bois URL tugma
+    // botга yo'naltiradi (t.me/<bot>?start=chek) — bot /start'ni olib, shaxsiy chatда
+    // web_app tugma yuboradi (u yerда ruxsat etiladi). "Configure Mini App" kerak emas.
     const uname = (cfg.botUsername || '').replace(/^@/, '');
     if (!uname) throw new BadRequestException('Bot username kiritilmagan (guruh havolasi uchun kerak)');
-    const link = `https://t.me/${uname}?startapp=chek`;
+    const link = `https://t.me/${uname}?start=chek`;
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           chat_id: cfg.groupId,
-          text: "📋 <b>Chek order — to'lovni tekshirish</b>\nQuyidagi tugmani bosing (guruh a'zolari uchun):",
+          text: "📋 <b>Chek order — to'lovni tekshirish</b>\nTugmani bosing → bot sizga kirish tugmasini yuboradi:",
           parse_mode: 'HTML',
           reply_markup: { inline_keyboard: [[{ text: '🔍 Tekshirish', url: link }]] },
         }),
