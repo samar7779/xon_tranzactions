@@ -244,14 +244,14 @@ function ChatsTab() {
 
   const resetMut = useMutation({
     mutationFn: async () => {
-      // 1) Avval notified set'ni tozalaymiz
-      const reset = await api.post<{ ok: true; cleared: number }>('/sverka-telegram/reset-notified');
+      // 1) Avval notified set'ni tozalaymiz — eski bot xabarlari ham o'chiriladi (orphan qolmasin)
+      const reset = await api.post<{ ok: true; cleared: number; deleted: number }>('/sverka-telegram/reset-notified');
       // 2) Keyin reconcile/today'ni qaytadan chaqiramiz — bu safar notification fire bo'ladi
       await api.get('/transactions/reconcile/today');
       return reset;
     },
     onSuccess: (r) => {
-      toast.success(`Reset OK (${r.cleared} ta tozalandi). Sverka qayta tekshirildi — farqlar bo'lsa Telegram'ga xabar yuborildi.`);
+      toast.success(`Reset OK — ${r.cleared} ta tozalandi, ${r.deleted ?? 0} eski xabar o'chirildi. Sverka qayta tekshirildi — farqlar bo'lsa toza xabar yuboriladi.`);
       // Asosiy Sverka sahifa va history'ni invalidate qilamiz
       qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       qc.invalidateQueries({ queryKey: ['sverka-tg-history'] });

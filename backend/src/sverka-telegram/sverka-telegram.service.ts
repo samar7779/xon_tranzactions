@@ -1037,32 +1037,53 @@ export class SverkaTelegramService implements OnModuleInit {
    * Notified set'ni tozalash — keyingi sverka'da barcha mismatchlar
    * yangidan xabar yuboriladi. Test va qayta-yuborish uchun.
    */
-  async resetNotifiedToday(actor?: { id: string | null; name: string | null }): Promise<{ ok: true; cleared: number }> {
+  async resetNotifiedToday(actor?: { id: string | null; name: string | null }): Promise<{ ok: true; cleared: number; deleted: number }> {
     const setting = await this.prisma.setting.findUnique({
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
     });
     let cleared = 0;
+    // MUHIM: faqat store'ni tozalash yetarli emas — guruhdagi eski bot xabarlari
+    // "orphan" bo'lib qoladi (endi hech qachon "Hal qilindi" bo'lmaydi) va keyingi cron
+    // ularni yangidan yuboradi (dublikat). Shu bois avval o'sha xabarlarni O'CHIRAMIZ,
+    // keyin store'ni tozalaymiz — guruh toza bo'ladi, cron esa toza holatdan boshlaydi.
+    const toDelete: Array<{ chatId: string; messageId: number }> = [];
     if (setting?.value) {
       try {
         const parsed = JSON.parse(setting.value);
-        cleared = Array.isArray(parsed?.keys)
-          ? parsed.keys.length
-          : (parsed?.accounts ? Object.keys(parsed.accounts).length : 0);
+        const accounts = parsed?.accounts || {};
+        for (const accId of Object.keys(accounts)) {
+          cleared++;
+          for (const m of (accounts[accId]?.msgs || [])) {
+            if (m?.chatId && m?.messageId) toDelete.push({ chatId: String(m.chatId), messageId: Number(m.messageId) });
+          }
+        }
       } catch {}
     }
+
+    // Parallel o'chirish (20 talik to'plamlarda) — xatolarni e'tiborsiz qoldiramiz
+    let deleted = 0;
+    const BATCH = 20;
+    for (let i = 0; i < toDelete.length; i += BATCH) {
+      const batch = toDelete.slice(i, i + BATCH);
+      const res = await Promise.all(batch.map((m) =>
+        this.tgCall('deleteMessage', { chat_id: m.chatId, message_id: m.messageId }).then(() => true).catch(() => false),
+      ));
+      deleted += res.filter(Boolean).length;
+    }
+
     await this.prisma.setting.upsert({
       where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY },
-      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify({ date: '', keys: [] }), updatedBy: actor?.name || 'system' },
-      update: { value: JSON.stringify({ date: '', keys: [] }), updatedBy: actor?.name || 'system' },
+      create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify({ date: '', accounts: {} }), updatedBy: actor?.name || 'system' },
+      update: { value: JSON.stringify({ date: '', accounts: {} }), updatedBy: actor?.name || 'system' },
     });
     await this.appendHistory({
       action: 'notified_reset',
       source: 'web',
       actorId: actor?.id || null,
       actorName: actor?.name || null,
-      details: { cleared },
+      details: { cleared, deleted },
     });
-    return { ok: true, cleared };
+    return { ok: true, cleared, deleted };
   }
 
   /**
