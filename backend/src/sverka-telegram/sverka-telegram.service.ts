@@ -52,6 +52,7 @@ export class SverkaTelegramService implements OnModuleInit {
   private static readonly KEY_PASSWORD  = 'sverka.telegram.password';
   private static readonly KEY_NOTIFIED_TODAY = 'sverka.telegram.notifiedToday';
   private static readonly KEY_SENT_LOG = 'sverka.telegram.sentLog'; // /clear uchun — chat bo'yicha message_id'lar
+  private static readonly KEY_EVENING_REMINDER = 'sverka.telegram.eveningReminder'; // 20:00 eslatma xabar id'lari (23:00da o'chirish uchun)
 
   private static readonly HISTORY_LIMIT = 500;
 
@@ -92,6 +93,95 @@ export class SverkaTelegramService implements OnModuleInit {
     } catch (e: any) {
       this.log.warn(`autoSverkaNotify xato: ${e?.message}`);
     }
+  }
+
+  /**
+   * KECHKI ESLATMA — har kuni soat 20:00 (Toshkent) guruhga "otmetka": bugun hali
+   * tuzatilmagan farqlar ro'yxatini yuboradi ("mana bu kamchiliklarni ko'rib chiqing").
+   * Xabar id'lari saqlanadi — soat 23:00da avtomat o'chiriladi (deleteEveningReminder).
+   */
+  @Cron('0 20 * * *', { name: 'sverkaEveningReminder', timeZone: 'Asia/Tashkent' })
+  async eveningReminder(): Promise<void> {
+    try {
+      const chats = await this.getChats();
+      if (chats.length === 0) return;
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const result: any = await reconcile.reconcileToday();
+      const items: any[] = Array.isArray(result?.items) ? result.items : [];
+      const date: string = result?.date || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tashkent' });
+      const mismatches = items.filter((it) => it.status === 'mismatch');
+
+      // Avvalgi eslatma qolib ketgan bo'lsa (o'chirilmagan) — tozalab yuboramiz
+      await this.deleteEveningReminderMessages();
+
+      if (mismatches.length === 0) {
+        this.log.log('Kechki eslatma: tuzatilmagan farq yo\'q — yuborilmadi');
+        return;
+      }
+
+      const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
+      const lines: string[] = [];
+      lines.push(`🔔 <b>Kunlik otmetka — tuzatilmagan farqlar</b>`);
+      lines.push(`📅 ${date} · 🕗 20:00`);
+      lines.push('');
+      lines.push(`Quyidagi <b>${mismatches.length} ta</b> hisobда farq bor. Iltimos, kun yakunlanmasдан ko'rib chiqing va to'g'rilang:`);
+      lines.push('');
+      const LIMIT = 40;
+      for (const it of mismatches.slice(0, LIMIT)) {
+        const totalFarq = fmt(Math.abs(Number(it.diff?.formula) || 0));
+        const owner = it.ownerName ? ` · ${it.ownerName}` : '';
+        const bank = it.bankName ? ` · ${it.bankName}` : '';
+        lines.push(`• <code>${it.accountNo || '?'}</code>${bank} — farq <code>${totalFarq}</code> UZS${owner}`);
+      }
+      if (mismatches.length > LIMIT) lines.push(`… va yana <b>${mismatches.length - LIMIT}</b> ta`);
+      lines.push('');
+      lines.push(`<i>Bu eslatma soat 23:00da avtomat o'chiriladi.</i>`);
+
+      const r = await this.sendNotification({ text: lines.join('\n'), role: 'all' });
+      await this.prisma.setting.upsert({
+        where: { key: SverkaTelegramService.KEY_EVENING_REMINDER },
+        create: { key: SverkaTelegramService.KEY_EVENING_REMINDER, value: JSON.stringify({ date, msgs: r.messages }), updatedBy: 'system' },
+        update: { value: JSON.stringify({ date, msgs: r.messages }), updatedBy: 'system' },
+      });
+      await this.appendHistory({
+        action: 'evening_reminder', source: 'web', actorId: null, actorName: 'system',
+        details: { date, count: mismatches.length, sent: r.sent },
+      });
+      this.log.log(`Kechki eslatma yuborildi: ${mismatches.length} farq (${r.sent} chat, sana ${date})`);
+    } catch (e: any) {
+      this.log.warn(`eveningReminder xato: ${e?.message}`);
+    }
+  }
+
+  /** Har kuni 23:00 (Toshkent) — 20:00 dagi kechki eslatma xabarini o'chiradi. */
+  @Cron('0 23 * * *', { name: 'sverkaEveningReminderDelete', timeZone: 'Asia/Tashkent' })
+  async deleteEveningReminder(): Promise<void> {
+    try {
+      const n = await this.deleteEveningReminderMessages();
+      if (n > 0) this.log.log(`Kechki eslatma o'chirildi: ${n} xabar`);
+    } catch (e: any) {
+      this.log.warn(`deleteEveningReminder xato: ${e?.message}`);
+    }
+  }
+
+  /** Saqlangan kechki eslatma xabarlarini o'chirib, sozlamani tozalaydi. Nechta o'chirilganini qaytaradi. */
+  private async deleteEveningReminderMessages(): Promise<number> {
+    const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_EVENING_REMINDER } });
+    if (!s?.value) return 0;
+    let stored: { date?: string; msgs?: Array<{ chatId: string; messageId: number }> } = {};
+    try { stored = JSON.parse(s.value) || {}; } catch { stored = {}; }
+    const msgs = stored.msgs || [];
+    let deleted = 0;
+    for (const m of msgs) {
+      const ok = await this.tgCall('deleteMessage', { chat_id: m.chatId, message_id: m.messageId }).then(() => true).catch(() => false);
+      if (ok) deleted++;
+    }
+    await this.prisma.setting.upsert({
+      where: { key: SverkaTelegramService.KEY_EVENING_REMINDER },
+      create: { key: SverkaTelegramService.KEY_EVENING_REMINDER, value: JSON.stringify({ msgs: [] }), updatedBy: 'system' },
+      update: { value: JSON.stringify({ msgs: [] }), updatedBy: 'system' },
+    });
+    return deleted;
   }
 
   private async pollLoop() {
@@ -157,13 +247,14 @@ export class SverkaTelegramService implements OnModuleInit {
     await this.tgCall('answerCallbackQuery', { callback_query_id: id, text, show_alert: alert });
   }
 
-  private async editMsg(chatId: string, messageId: number | undefined, text: string): Promise<void> {
+  private async editMsg(chatId: string, messageId: number | undefined, text: string, replyMarkup?: any): Promise<void> {
     if (!messageId) return;
-    // reply_markup: { inline_keyboard: [] } — inline tugmani olib tashlaydi
-    // (amal bajarilgach tugma kerak emas, qayta bosib bo'lmasin).
+    // replyMarkup berilmasa — { inline_keyboard: [] } (tugmani olib tashlaydi, hal bo'lganda).
+    // Farq hali ham bor-u xabar joyida yangilanayotgan bo'lsa — approver tugmasini SAQLAB
+    // qolish uchun replyMarkup uzatiladi (aks holda editMessageText tugmani o'chirib yuboradi).
     await this.tgCall('editMessageText', {
       chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML',
-      reply_markup: { inline_keyboard: [] },
+      reply_markup: replyMarkup ?? { inline_keyboard: [] },
     });
   }
 
@@ -642,7 +733,7 @@ export class SverkaTelegramService implements OnModuleInit {
   }
 
   // ─── NOTIFIED STORE (farq holatini + xabar message_id'larini saqlash) ──
-  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number }> }> }> {
+  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number; role?: 'approver' | 'watcher' }> }> }> {
     const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY } });
     if (s?.value) {
       try {
@@ -659,6 +750,56 @@ export class SverkaTelegramService implements OnModuleInit {
       create: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY, value: JSON.stringify(store), updatedBy: 'system' },
       update: { value: JSON.stringify(store), updatedBy: 'system' },
     });
+  }
+
+  /** Bitta mismatch uchun Telegram xabar matni — yuborish va JOYIDA tahrir bir xil matn ishlatsin. */
+  private renderMismatch(
+    it: { accountNo?: string; ownerName?: string | null; bankName?: string | null;
+          diff?: { formula?: number }; bank?: { debit?: number; credit?: number };
+          db?: { inflow?: number; outflow?: number; inCount?: number; outCount?: number } },
+    date: string,
+    fmt: (n: number | undefined) => string,
+  ): string {
+    const bankKirim = Number(it.bank?.credit) || 0;
+    const bankChiqim = Number(it.bank?.debit) || 0;
+    const dbKirim = Number(it.db?.inflow) || 0;
+    const dbChiqim = Number(it.db?.outflow) || 0;
+    const farqKirim = bankKirim - dbKirim;   // + = bankda ko'p, − = DB'da ko'p
+    const farqChiqim = bankChiqim - dbChiqim;
+    const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
+
+    const lines: string[] = [];
+    lines.push(`⚠️ <b>Sverka farq aniqlandi</b>`);
+    lines.push('');
+    if (it.bankName) lines.push(`🏦 <b>Bank:</b> ${it.bankName}`);
+    if (it.accountNo) lines.push(`💳 <b>Hisob:</b> <code>${it.accountNo}</code>`);
+    if (it.ownerName) lines.push(`👤 <b>Egasi:</b> ${it.ownerName}`);
+    lines.push(`📅 <b>Sana:</b> ${date}`);
+    lines.push('');
+
+    if (Math.abs(farqKirim) > 0.01) {
+      const sign = farqKirim > 0 ? '+' : '−';
+      const who = farqKirim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
+      lines.push(`📥 <b>Kirim oborot:</b>`);
+      lines.push(`  • Bank: <code>${fmt(bankKirim)}</code>`);
+      lines.push(`  • DB:   <code>${fmt(dbKirim)}</code> (${it.db?.inCount || 0} ta)`);
+      lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqKirim))}</code> ${who}`);
+    }
+    if (Math.abs(farqChiqim) > 0.01) {
+      const sign = farqChiqim > 0 ? '+' : '−';
+      const who = farqChiqim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
+      lines.push(`📤 <b>Chiqim oborot:</b>`);
+      lines.push(`  • Bank: <code>${fmt(bankChiqim)}</code>`);
+      lines.push(`  • DB:   <code>${fmt(dbChiqim)}</code> (${it.db?.outCount || 0} ta)`);
+      lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqChiqim))}</code> ${who}`);
+    }
+
+    lines.push('');
+    lines.push(`💰 <b>UMUMIY FARQ:</b> <code>${fmt(totalFarq)}</code> UZS`);
+    lines.push('');
+    lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
+    lines.push(`<i>Tasdiqlovchilar quyidagi tugma orqali (bankda bor, DBda yo'q yozuvlarni qo'shadi) yoki saytda to'g'rilashi mumkin.</i>`);
+    return lines.join('\n');
   }
 
   /** Test notification — admin UI'dan chaqiriladi. */
@@ -749,84 +890,50 @@ export class SverkaTelegramService implements OnModuleInit {
         return;
       }
 
-      // ─── 2) YANGI yoki O'ZGARGAN (diff boshqa) farqlar — xabar yuboramiz ───
-      // Bir xil farq (diffKey bir xil) → qayta yubormaymiz (spam emas).
-      // Diff o'zgarsa → yangi xabar (avtomatik, reset shart emas).
-      const newOnes = mismatches.filter((it) => {
+      // ─── 2) Har farq uchun: BIRINCHI marta bo'lsa yuboramiz, farq O'ZGARGAN bo'lsa
+      //     mavjud xabarni JOYIDA tahrirlaymiz (yangi xabar EMAS), bir xil bo'lsa tegmaymiz.
+      //     Shu bilan bitta hisob = bitta xabar bo'ladi — guruh tolmaydi va eski
+      //     "orphan" xabarlar qolmaydi (avval har o'zgarishda yangi xabar ketardi).
+      let sentCount = 0;
+      let editedCount = 0;
+      // Inline tugma — faqat TASDIQLOVCHI (approver). callback_data: fix:<accountId>:<date>.
+      const mkButton = (accountId: string) => ({
+        inline_keyboard: [[
+          { text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${accountId}:${date}` },
+        ]],
+      });
+      for (const it of mismatches) {
         const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
         const existing = store.accounts[it.accountId];
-        return !existing || existing.diffKey !== diffKey;
-      });
+        const text = this.renderMismatch(it, date, fmt);
 
-      let sentCount = 0;
-      // Notification yuborish (har biri uchun alohida, BATAFSIL)
-      for (const it of newOnes) {
-        const bankKirim = Number(it.bank?.credit) || 0;
-        const bankChiqim = Number(it.bank?.debit) || 0;
-        const dbKirim = Number(it.db?.inflow) || 0;
-        const dbChiqim = Number(it.db?.outflow) || 0;
-        const farqKirim = bankKirim - dbKirim;   // + = bankda ko'p, − = DB'da ko'p
-        const farqChiqim = bankChiqim - dbChiqim;
-        const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
-
-        const lines: string[] = [];
-        lines.push(`⚠️ <b>Sverka farq aniqlandi</b>`);
-        lines.push('');
-        if (it.bankName) lines.push(`🏦 <b>Bank:</b> ${it.bankName}`);
-        if (it.accountNo) lines.push(`💳 <b>Hisob:</b> <code>${it.accountNo}</code>`);
-        if (it.ownerName) lines.push(`👤 <b>Egasi:</b> ${it.ownerName}`);
-        lines.push(`📅 <b>Sana:</b> ${date}`);
-        lines.push('');
-
-        // Tafsilot — kirim
-        if (Math.abs(farqKirim) > 0.01) {
-          const sign = farqKirim > 0 ? '+' : '−';
-          const who = farqKirim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
-          lines.push(`📥 <b>Kirim oborot:</b>`);
-          lines.push(`  • Bank: <code>${fmt(bankKirim)}</code>`);
-          lines.push(`  • DB:   <code>${fmt(dbKirim)}</code> (${it.db?.inCount || 0} ta)`);
-          lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqKirim))}</code> ${who}`);
+        if (!existing) {
+          // BIRINCHI marta — yangi xabar (approver tugma bilan, watcher faqat matn).
+          const rApprover = await this.sendNotification({ text, role: 'approver', replyMarkup: mkButton(it.accountId) });
+          const rWatcher = await this.sendNotification({ text, role: 'watcher' });
+          const msgs = [
+            ...rApprover.messages.map((m) => ({ ...m, role: 'approver' as const })),
+            ...rWatcher.messages.map((m) => ({ ...m, role: 'watcher' as const })),
+          ];
+          if (msgs.length > 0) {
+            store.accounts[it.accountId] = { diffKey, msgs };
+            sentCount++;
+            this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${rApprover.sent + rWatcher.sent})`);
+          } else {
+            const errors = [...rApprover.errors, ...rWatcher.errors];
+            this.log.warn(`Mismatch notification YUBORILMADI ${it.accountNo}: errors=${errors.join(' | ')}`);
+          }
+        } else if (existing.diffKey !== diffKey) {
+          // Farq O'ZGARGAN — mavjud xabar(lar)ni JOYIDA yangilaymiz (yangi xabar emas).
+          // approver xabarida tugma saqlanadi, watcher'da yo'q.
+          for (const m of (existing.msgs || [])) {
+            await this.editMsg(m.chatId, m.messageId, text, m.role === 'approver' ? mkButton(it.accountId) : { inline_keyboard: [] });
+          }
+          existing.diffKey = diffKey; // xabarlar o'sha — faqat holat/summa yangilandi
+          editedCount++;
+          this.log.log(`Mismatch joyida yangilandi: ${it.accountNo} → ${diffKey}`);
         }
-
-        // Tafsilot — chiqim
-        if (Math.abs(farqChiqim) > 0.01) {
-          const sign = farqChiqim > 0 ? '+' : '−';
-          const who = farqChiqim > 0 ? '(bankda ortiq)' : '(DBda ortiq)';
-          lines.push(`📤 <b>Chiqim oborot:</b>`);
-          lines.push(`  • Bank: <code>${fmt(bankChiqim)}</code>`);
-          lines.push(`  • DB:   <code>${fmt(dbChiqim)}</code> (${it.db?.outCount || 0} ta)`);
-          lines.push(`  • Farq: <code>${sign}${fmt(Math.abs(farqChiqim))}</code> ${who}`);
-        }
-
-        lines.push('');
-        lines.push(`💰 <b>UMUMIY FARQ:</b> <code>${fmt(totalFarq)}</code> UZS`);
-        lines.push('');
-        lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
-        lines.push(`<i>Tasdiqlovchilar quyidagi tugma orqali (bankda bor, DBda yo'q yozuvlarni qo'shadi) yoki saytda to'g'rilashi mumkin.</i>`);
-
-        // Inline tugma — faqat TASDIQLOVCHI (approver) chatlarga.
-        // callback_data: fix:<accountId>:<date> (64 baytdan kam bo'lishi shart).
-        const button = {
-          inline_keyboard: [[
-            { text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${it.accountId}:${date}` },
-          ]],
-        };
-
-        // SEND — approver tugma bilan, watcher faqat matn. Yuborilgan
-        // message_id'lar store'ga yoziladi (keyin "Hal qilindi" deb tahrirlash uchun).
-        const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
-        const rApprover = await this.sendNotification({ text: lines.join('\n'), role: 'approver', replyMarkup: button });
-        const rWatcher = await this.sendNotification({ text: lines.join('\n'), role: 'watcher' });
-        const msgs = [...rApprover.messages, ...rWatcher.messages];
-        const sent = rApprover.sent + rWatcher.sent;
-        if (sent > 0) {
-          store.accounts[it.accountId] = { diffKey, msgs };
-          sentCount++;
-          this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${sent})`);
-        } else {
-          const errors = [...rApprover.errors, ...rWatcher.errors];
-          this.log.warn(`Mismatch notification YUBORILMADI ${it.accountNo}: errors=${errors.join(' | ')}`);
-        }
+        // diffKey bir xil bo'lsa — hech narsa qilmaymiz (spam yo'q).
       }
 
       await this.saveNotifiedStore(store);
@@ -838,12 +945,13 @@ export class SverkaTelegramService implements OnModuleInit {
         details: {
           date,
           sent: sentCount,
+          edited: editedCount,
           resolved,
           total: mismatches.length,
         },
       });
 
-      this.log.log(`Mismatch notification: ${sentCount} yuborildi, ${resolved} hal qilindi (jami ${mismatches.length} farq, sana ${date})`);
+      this.log.log(`Mismatch notification: ${sentCount} yuborildi, ${editedCount} yangilandi, ${resolved} hal qilindi (jami ${mismatches.length} farq, sana ${date})`);
     } catch (e: any) {
       this.log.warn(`notifyNewMismatches xato: ${e?.message}`);
     }
