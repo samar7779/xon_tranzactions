@@ -5,8 +5,9 @@
 // webdagi Tekshirish UI (ChekCheck) ochiladi. Boshqa joydan → botga yo'naltirish.
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { Loader2, ShieldCheck, Send, RotateCcw, ScanLine } from 'lucide-react';
+import { Loader2, ShieldCheck, Send, RotateCcw, ScanLine, UserX, PowerOff, ShieldAlert } from 'lucide-react';
 import { api, setToken } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { ChekCheck, type OrderResult } from '@/components/chek-check';
 import { ChekAssistant } from '@/components/chek-assistant';
 
@@ -105,30 +106,49 @@ function Checking({ label }: { label: string }) {
 function Gate({ t, botUsername, err, onRetry }: { t: any; botUsername: string; err?: string; onRetry?: () => void }) {
   const uname = (botUsername || '').replace(/^@/, '');
   const botLink = uname ? `https://t.me/${uname}?start=chek` : '';
+  const kind: 'gate' | 'not_member' | 'disabled' | 'other' =
+    !err ? 'gate'
+      : /a'zo emas|не состоите|not.*(member|group)|in the group/i.test(err) ? 'not_member'
+        : /yoqilmagan|отключ|disabled|turned off/i.test(err) ? 'disabled'
+          : 'other';
+
+  const M = ({
+    gate:       { grad: 'from-sky-500 via-cyan-500 to-blue-600', glow: 'bg-sky-400/30', eyebrowCls: 'text-sky-500', ringCls: 'ring-sky-100 dark:ring-sky-900/40', Icon: Send, eyebrow: t('tg.onlyTelegram'), title: t('tg.brand'), msg: t('tg.openHint') },
+    not_member: { grad: 'from-amber-500 via-orange-500 to-rose-500', glow: 'bg-amber-400/30', eyebrowCls: 'text-amber-500', ringCls: 'ring-amber-100 dark:ring-amber-900/40', Icon: UserX, eyebrow: t('tg.denied'), title: t('tg.notMember'), msg: t('tg.notMemberHint') },
+    disabled:   { grad: 'from-slate-400 via-slate-500 to-slate-600', glow: 'bg-slate-400/30', eyebrowCls: 'text-slate-500', ringCls: 'ring-slate-100 dark:ring-slate-800', Icon: PowerOff, eyebrow: t('tg.denied'), title: t('tg.disabled'), msg: t('tg.disabledHint') },
+    other:      { grad: 'from-rose-500 via-red-500 to-rose-600', glow: 'bg-rose-400/30', eyebrowCls: 'text-rose-500', ringCls: 'ring-rose-100 dark:ring-rose-900/40', Icon: ShieldAlert, eyebrow: t('tg.denied'), title: t('tg.denied'), msg: err || t('tg.openHint') },
+  } as const)[kind];
+
   return (
-    <div className="min-h-[100dvh] grid place-items-center px-6">
-      <div className="w-full max-w-sm text-center space-y-5">
-        <div className="relative w-20 h-20 mx-auto">
-          <span className="absolute inset-0 rounded-3xl bg-sky-400/25 blur-2xl" />
-          <div className="relative w-20 h-20 rounded-3xl bg-gradient-to-br from-sky-500 via-cyan-500 to-blue-600 grid place-items-center shadow-xl shadow-sky-500/30">
-            <Send className="h-9 w-9 text-white" />
+    <div className="min-h-[100dvh] grid place-items-center px-6 py-10">
+      <div className="w-full max-w-sm">
+        <div className="relative rounded-[28px] bg-white/70 dark:bg-slate-900/60 backdrop-blur-xl ring-1 ring-slate-200/70 dark:ring-slate-800 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.4)] px-7 py-9 text-center overflow-hidden">
+          <div className={cn('absolute -top-20 left-1/2 -translate-x-1/2 w-56 h-56 rounded-full blur-3xl opacity-60 pointer-events-none', M.glow)} />
+          <div className="relative">
+            <div className="relative w-[84px] h-[84px] mx-auto mb-5">
+              <span className={cn('absolute inset-0 rounded-[24px] blur-2xl opacity-80', M.glow)} />
+              <div className={cn('relative w-[84px] h-[84px] rounded-[24px] bg-gradient-to-br grid place-items-center shadow-xl ring-[6px] ring-white/70 dark:ring-slate-900/70', M.grad)}>
+                <M.Icon className="h-9 w-9 text-white" strokeWidth={2} />
+              </div>
+            </div>
+            <div className={cn('text-[10.5px] font-bold uppercase tracking-[0.2em]', M.eyebrowCls)}>{M.eyebrow}</div>
+            <h1 className="mt-2 text-[23px] font-extrabold tracking-tight text-slate-900 dark:text-slate-50 text-balance">{M.title}</h1>
+            <p className="mt-2.5 text-[13.5px] text-slate-500 dark:text-slate-400 leading-relaxed">{M.msg}</p>
+
+            <div className="mt-6">
+              {kind === 'gate' && botLink ? (
+                <a href={botLink} target="_blank" rel="noreferrer" className={cn('inline-flex items-center gap-2 h-12 px-7 rounded-2xl bg-gradient-to-r text-white text-[15px] font-bold shadow-lg active:scale-95 transition-transform', M.grad)}>
+                  <Send className="h-4.5 w-4.5" /> Telegram orqali kirish
+                </a>
+              ) : onRetry ? (
+                <button onClick={onRetry} className="inline-flex items-center gap-2 h-11 px-6 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[14px] font-semibold shadow-lg hover:opacity-90 active:scale-95 transition-all">
+                  <RotateCcw className="h-4 w-4" /> {t('tg.retry')}
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-[11px] font-bold uppercase tracking-[0.15em] text-sky-500">{t('tg.onlyTelegram')}</div>
-          <h1 className="mt-1.5 text-[22px] font-extrabold tracking-tight">{err ? t('tg.denied') : t('tg.brand')}</h1>
-          <p className="mt-2 text-[13.5px] text-slate-500 dark:text-slate-400 leading-relaxed">{err || t('tg.openHint')}</p>
-        </div>
-        {botLink ? (
-          <a href={botLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 h-12 px-7 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 text-white text-[15px] font-bold shadow-lg shadow-sky-500/30 active:scale-95 transition-transform">
-            <Send className="h-4.5 w-4.5" /> Telegram orqali kirish
-          </a>
-        ) : onRetry ? (
-          <button onClick={onRetry} className="inline-flex items-center gap-2 h-11 px-6 rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 text-white text-[14px] font-semibold shadow-lg shadow-sky-500/25 active:scale-95 transition-transform">
-            <RotateCcw className="h-4 w-4" /> {t('tg.retry')}
-          </button>
-        ) : null}
-        <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-400 pt-2"><ShieldCheck className="h-3.5 w-3.5" /> {t('tg.secured')}</div>
+        <div className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-slate-400"><ShieldCheck className="h-3.5 w-3.5" /> {t('tg.secured')}</div>
       </div>
     </div>
   );

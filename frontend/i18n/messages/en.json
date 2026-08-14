@@ -2761,7 +2761,11 @@
       "denied": "Access denied",
       "welcome": "Welcome",
       "retry": "Retry",
-      "secured": "Secured with Telegram"
+      "secured": "Secured with Telegram",
+      "notMember": "You are not in the group",
+      "notMemberHint": "Only members of the allowed Telegram group can enter this section. Join the group and try again.",
+      "disabled": "Access temporarily disabled",
+      "disabledHint": "An administrator turned off Telegram access. Please try again later."
     }
   }
 }

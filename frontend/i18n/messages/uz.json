@@ -2761,7 +2761,11 @@
       "denied": "Kirish rad etildi",
       "welcome": "Xush kelibsiz",
       "retry": "Qayta urinish",
-      "secured": "Telegram bilan himoyalangan"
+      "secured": "Telegram bilan himoyalangan",
+      "notMember": "Guruhda a'zo emassiz",
+      "notMemberHint": "Ushbu bo'limga faqat ruxsat berilgan Telegram guruh a'zolari kiradi. Guruhga qo'shilib, qaytadan urinib ko'ring.",
+      "disabled": "Kirish vaqtincha o'chirilgan",
+      "disabledHint": "Administrator Telegram orqali kirishni o'chirgan. Keyinroq urinib ko'ring."
     }
   }
 }
