@@ -8,6 +8,7 @@ const S_ENABLED = 'chekorder.tg.enabled';
 const S_TOKEN = 'chekorder.tg.botToken'; // shifrlangan
 const S_GROUP = 'chekorder.tg.groupId';
 const S_USERNAME = 'chekorder.tg.botUsername'; // Login Widget uchun (ochiq)
+const S_APPSHORT = 'chekorder.tg.appShort'; // /newapp Mini App qisqa nomi (t.me/<bot>/<short>)
 
 /**
  * Chek order — Telegram Mini App (WebApp) orqali kirish.
@@ -37,17 +38,19 @@ export class ChekTgService {
   }
 
   async getConfig() {
-    const [enabled, group, tokenEnc, username] = await Promise.all([
+    const [enabled, group, tokenEnc, username, appShort] = await Promise.all([
       this.settings.get(S_ENABLED),
       this.settings.get(S_GROUP),
       this.settings.get(S_TOKEN),
       this.settings.get(S_USERNAME),
+      this.settings.get(S_APPSHORT),
     ]);
     return {
       ok: true,
       enabled: enabled === '1' || enabled === 'true',
       groupId: group || '',
       botUsername: (username || '').replace(/^@/, ''),
+      appShort: appShort || '',
       hasToken: !!tokenEnc,
     };
   }
@@ -62,10 +65,11 @@ export class ChekTgService {
     };
   }
 
-  async setConfig(dto: { enabled?: boolean; botToken?: string; groupId?: string; botUsername?: string }) {
+  async setConfig(dto: { enabled?: boolean; botToken?: string; groupId?: string; botUsername?: string; appShort?: string }) {
     if (dto.enabled !== undefined) await this.settings.set(S_ENABLED, dto.enabled ? '1' : '0');
     if (dto.groupId !== undefined) await this.settings.set(S_GROUP, String(dto.groupId).trim());
     if (dto.botUsername !== undefined) await this.settings.set(S_USERNAME, String(dto.botUsername).trim().replace(/^@/, ''));
+    if (dto.appShort !== undefined) await this.settings.set(S_APPSHORT, String(dto.appShort).trim().replace(/^\//, ''));
     if (dto.botToken !== undefined && String(dto.botToken).trim()) {
       await this.settings.set(S_TOKEN, this.crypto.encrypt(String(dto.botToken).trim()));
     }
@@ -279,7 +283,10 @@ export class ChekTgService {
     // BotFather'да Mini App (Menu Button / Configure Mini App) sozlangan bo'lsin.
     const uname = (cfg.botUsername || '').replace(/^@/, '');
     if (!uname) throw new BadRequestException('Bot username kiritilmagan (guruh havolasi uchun kerak)');
-    const link = `https://t.me/${uname}?startapp=chek`;
+    // /newapp bilan yaratilgan Mini App bo'lsa — to'g'ridan-to'g'ri havola (ishonchli).
+    // Aks holda — ?startapp (Configure Mini App sozlangan bo'lishi shart).
+    const short = (cfg.appShort || '').trim();
+    const link = short ? `https://t.me/${uname}/${short}` : `https://t.me/${uname}?startapp=chek`;
     try {
       const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST', headers: { 'content-type': 'application/json' },

@@ -556,20 +556,21 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
   const [groupId, setGroupId] = useState('');
   const [botToken, setBotToken] = useState('');
   const [botUsername, setBotUsername] = useState('');
+  const [appShort, setAppShort] = useState('');
   const [hasToken, setHasToken] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['chek-tg-config'],
-    queryFn: () => api.get<{ enabled: boolean; groupId: string; botUsername: string; hasToken: boolean }>('/chek-order/tg/config'),
+    queryFn: () => api.get<{ enabled: boolean; groupId: string; botUsername: string; appShort: string; hasToken: boolean }>('/chek-order/tg/config'),
     enabled: open,
   });
   useEffect(() => {
-    if (data) { setEnabled(!!data.enabled); setGroupId(data.groupId || ''); setBotUsername(data.botUsername || ''); setHasToken(!!data.hasToken); setBotToken(''); }
+    if (data) { setEnabled(!!data.enabled); setGroupId(data.groupId || ''); setBotUsername(data.botUsername || ''); setAppShort(data.appShort || ''); setHasToken(!!data.hasToken); setBotToken(''); }
   }, [data]);
 
   const saveMut = useMutation({
     mutationFn: () => api.post<{ webhook?: { ok: boolean; error?: string } }>('/chek-order/tg/config', {
-      enabled, groupId, botUsername, ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
+      enabled, groupId, botUsername, appShort, ...(botToken.trim() ? { botToken: botToken.trim() } : {}),
     }),
     onSuccess: (r) => {
       if (r?.webhook && !r.webhook.ok) toast.warning(`Saqlandi, lekin webhook: ${r.webhook.error || 'xato'}`);
@@ -624,6 +625,12 @@ function TelegramConfigModal({ open, onOpenChange }: { open: boolean; onOpenChan
               <Label>Bot username</Label>
               <Input value={botUsername} onChange={(e) => setBotUsername(e.target.value)} placeholder="XonChekBot" className="font-mono" />
               <p className="text-[11px] text-slate-400">Bot foydalanuvchi nomi (@siz). Kirish havolasini yasash uchun.</p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Mini App nomi (short name)</Label>
+              <Input value={appShort} onChange={(e) => setAppShort(e.target.value)} placeholder="chek" className="font-mono" />
+              <p className="text-[11px] text-slate-400">@BotFather → <b>/newapp</b> bilan yaratganда bergan qisqa nom. Bo'lsa — guruh tugmasi <span className="font-mono">t.me/&lt;bot&gt;/{appShort || 'chek'}</span> (1 bosishда ochiladi, eng ishonchli).</p>
             </div>
 
             <div className="space-y-1.5">
