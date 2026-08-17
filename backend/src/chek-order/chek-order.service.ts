@@ -802,12 +802,12 @@ export class ChekOrderService {
    * (tranzaksiya + ОплатыКв) bor-yo'qligini tekshiradi. OCR shartnomani xato o'qiganда
    * xodim to'g'ri raqamни yozib "tekshir" desa — yordamchi shu asosда javob beradi.
    */
-  private async assistantUserContractLookup(messages: any[], exclude: string | null): Promise<string> {
+  private async assistantUserContractLookup(messages: any[], exclude: string | null): Promise<{ text: string; tables: any[] }> {
     const userText = (messages || [])
       .filter((m) => m?.role === 'user')
       .map((m) => String(m?.content || ''))
       .join(' ');
-    if (!userText) return '';
+    if (!userText) return { text: '', tables: [] };
     const RE = /\b([0-9]{1,4}[A-Za-z]{2,5}[0-9]{2,6}[A-Za-z]{0,3})\b/g;
     const found = new Set<string>();
     let mm: RegExpExecArray | null;
@@ -815,11 +815,12 @@ export class ChekOrderService {
       const c = mm[1].toUpperCase();
       if (c && c !== String(exclude || '').toUpperCase()) found.add(c);
     }
-    if (!found.size) return '';
+    if (!found.size) return { text: '', tables: [] };
     const contracts = [...found].slice(0, 2); // ko'pi bilan 2 ta (har biri batafsil)
     const money = (n: any) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
     const dstr = (d: any) => { try { return new Date(d).toISOString().slice(0, 10); } catch { return '—'; } };
     const lines: string[] = [];
+    const tables: any[] = [];
     for (const c of contracts) {
       const [info, txList, kvList] = await Promise.all([
         this.contractInfo(c).catch(() => null as any),
@@ -837,12 +838,30 @@ export class ChekOrderService {
       const crmFound = !!info?.found;
       let txSum = 0; for (const t of txList as any[]) txSum += Number(t?.amount || 0);
       let kvSum = 0; for (const k of kvList as any[]) kvSum += Number(k?.paymentAmount || 0);
+      // Strukturali jadval (frontend chizadi)
+      tables.push({
+        contract: c,
+        crmFound,
+        status: info?.virtualStatus || null,
+        contractValue: info?.contractValue ?? null,
+        totalPaid: info?.totalPaid ?? null,
+        remaining: info?.remaining ?? null,
+        txSum, kvSum,
+        transactions: (txList as any[]).map((t) => ({
+          date: dstr(t.txnDate), amount: Number(t.amount || 0),
+          direction: t.direction, doc: t.docNumber || null,
+        })),
+        oplataKv: (kvList as any[]).map((k) => ({
+          date: dstr(k.date), paymentAmount: Number(k.paymentAmount || 0),
+          firstInstallment: Number(k.firstInstallment || 0), monthlyAmount: Number(k.monthlyAmount || 0),
+        })),
+      });
+      // Matn (Claude prompti uchun)
       lines.push(
         `  Shartnoma ${c}: CRM'да ${crmFound ? 'BOR' : "YO'Q"}${info?.virtualStatus ? ` (${info.virtualStatus})` : ''}` +
         ` · tranzaksiyalar ${txList.length}${txList.length >= 15 ? '+' : ''} ta (jami ${money(txSum)})` +
         ` · ОплатыКв ${kvList.length}${kvList.length >= 15 ? '+' : ''} ta (jami ${money(kvSum)})`,
       );
-      // HAR BIR tranzaksiya — sana + summa (aniq sana/summa savollariga javob berish uchun)
       if (txList.length) {
         lines.push('    Tranzaksiyalar (sana — summa):');
         for (const t of txList) {
@@ -856,7 +875,7 @@ export class ChekOrderService {
         }
       }
     }
-    return lines.join('\n');
+    return { text: lines.join('\n'), tables };
   }
 
   async assistantChat(dto: AssistantChatDto, _actor: Actor) {
@@ -877,7 +896,7 @@ export class ChekOrderService {
     // CRM/grafik konteksti — shartnomani aniqlab, boshlang'ich/oylik grafikni yig'amiz
     const crmCtx = await this.assistantContractContext(orders).catch(() => ({ contract: null as string | null, text: '' }));
     // Foydalanuvchi chat'да yozgan shartnomani CRM+tizimда tekshiramiz (OCR xato bo'lsa)
-    const userLookup = await this.assistantUserContractLookup(dto.messages || [], crmCtx.contract).catch(() => '');
+    const userLookup = await this.assistantUserContractLookup(dto.messages || [], crmCtx.contract).catch(() => ({ text: '', tables: [] as any[] }));
 
     const loc = String(dto.locale || 'uz').toLowerCase();
     const langRule = loc === 'ru'
@@ -893,7 +912,7 @@ export class ChekOrderService {
       ctxText,
       "CRM / GRAFIK (shartnomani va boshlang'ich/oylik to'lovlarni tekshirish uchun — SENGA berilgan, o'zing foydalanasan):",
       crmCtx.text || "  (CRM ma'lumoti yo'q)",
-      ...(userLookup ? ["FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA(LAR) — CRM va TIZIM natijasi (SENGA berilgan):", userLookup] : []),
+      ...(userLookup.text ? ["FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA(LAR) — CRM va TIZIM natijasi (SENGA berilgan):", userLookup.text] : []),
       "QOIDALAR:",
       langRule,
       "- Bir necha order bo'lsa — FAQAT BIRINCHI xabarда qaysi order(lar) haqida ekanini so'ra. quickReplies: har order uchun bittadan + oxiriga 'Barchasi (hammasi)'.",
@@ -974,6 +993,7 @@ export class ChekOrderService {
       reply: out.message || '',
       quickReplies: Array.isArray(out.quickReplies) ? out.quickReplies.slice(0, 8) : [],
       proposal: out.proposeTicket || null,
+      tables: userLookup.tables, // shartnoma to'lovlari — frontend jadval qiladi
     };
   }
 

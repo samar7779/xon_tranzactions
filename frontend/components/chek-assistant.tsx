@@ -5,11 +5,11 @@ import { createPortal } from 'react-dom';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslations, useLocale } from 'next-intl';
 import { toast } from 'sonner';
-import { Bot, X, Send, Loader2, Sparkles, CheckCircle2, Ticket } from 'lucide-react';
+import { Bot, X, Send, Loader2, Sparkles, CheckCircle2, Ticket, Table2, ChevronDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-type Msg = { role: 'user' | 'assistant'; content: string };
+type Msg = { role: 'user' | 'assistant'; content: string; tables?: any[] };
 type Proposal = { summary: string; category?: string; contractNo?: string; orderNos?: string[]; details?: string; priority?: string } | null;
 
 export function ChekAssistant({ context, visible, onCreated }: { context: any; visible: boolean; onCreated?: () => void }) {
@@ -28,9 +28,9 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
   const prevKey = useRef(ckey);
 
   const chatMut = useMutation({
-    mutationFn: (msgs: Msg[]) => api.post<{ reply: string; quickReplies: string[]; proposal: Proposal }>('/chek-order/assistant/chat', { messages: msgs, context, locale }),
+    mutationFn: (msgs: Msg[]) => api.post<{ reply: string; quickReplies: string[]; proposal: Proposal; tables?: any[] }>('/chek-order/assistant/chat', { messages: msgs, context, locale }),
     onSuccess: (r) => {
-      setMessages((m) => [...m, { role: 'assistant', content: r.reply }]);
+      setMessages((m) => [...m, { role: 'assistant', content: r.reply, tables: r.tables }]);
       setQuickReplies(r.quickReplies || []);
       if (r.proposal) setProposal(r.proposal);
     },
@@ -124,7 +124,12 @@ export function ChekAssistant({ context, visible, onCreated }: { context: any; v
             </div>
 
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-5 space-y-3.5 bg-slate-50 dark:bg-slate-950">
-              {messages.map((m, i) => <Bubble key={i} role={m.role} text={m.content} />)}
+              {messages.map((m, i) => (
+                <div key={i} className="space-y-1.5">
+                  <Bubble role={m.role} text={m.content} />
+                  {m.role === 'assistant' && m.tables && m.tables.length > 0 && <ContractTablesCard tables={m.tables} />}
+                </div>
+              ))}
               {chatMut.isPending && <Bubble role="assistant" text="" typing />}
               {quickReplies.length > 0 && !chatMut.isPending && (
                 <div className="pl-1 space-y-2">
@@ -195,6 +200,87 @@ function Bubble({ role, text, typing }: { role: 'user' | 'assistant'; text: stri
             {[0, 1, 2].map((i) => <span key={i} className="w-1.5 h-1.5 rounded-full bg-slate-400" style={{ animation: 'chekBounce 1.2s ease-in-out infinite', animationDelay: `${i * 0.15}s` }} />)}
           </span>
         ) : text}
+      </div>
+    </div>
+  );
+}
+
+// Shartnoma to'lovlari — chiroyli jadval (tugma bilan ochiladi/yopiladi)
+function ContractTablesCard({ tables }: { tables: any[] }) {
+  const [open, setOpen] = useState(false);
+  const money = (n: any) => Number(n || 0).toLocaleString('ru-RU');
+  return (
+    <div className="flex justify-start">
+      <div className="w-full max-w-[92%]">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-1.5 px-3 h-8 rounded-full bg-white dark:bg-slate-800 ring-1 ring-indigo-200 dark:ring-indigo-800 text-indigo-700 dark:text-indigo-300 text-[12px] font-semibold hover:bg-indigo-50 dark:hover:bg-indigo-950/40 transition-colors"
+        >
+          <Table2 className="h-3.5 w-3.5" /> {open ? 'Jadvalni yashirish' : "To'lovlar jadvali"}
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')} />
+        </button>
+
+        {open && (
+          <div className="mt-2 space-y-3">
+            {tables.map((t, i) => (
+              <div key={i} className="rounded-xl bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden shadow-sm">
+                {/* Sarlavha */}
+                <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/30 border-b border-slate-100 dark:border-slate-700 flex items-center gap-2 flex-wrap">
+                  <span className="font-mono font-bold text-[12.5px] text-slate-800 dark:text-slate-100">{t.contract}</span>
+                  <span className={cn('text-[9.5px] px-1.5 py-0.5 rounded font-bold',
+                    t.crmFound ? 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300')}>
+                    {t.crmFound ? 'CRM: BOR' : "CRM: YO'Q"}
+                  </span>
+                  {t.status && <span className="text-[10.5px] text-slate-500 dark:text-slate-400">{t.status}</span>}
+                </div>
+
+                {/* Shartnoma xulosasi */}
+                {t.contractValue != null && (
+                  <div className="px-3 py-1.5 text-[10.5px] text-slate-500 dark:text-slate-400 flex gap-3 flex-wrap border-b border-slate-100 dark:border-slate-700 tabular-nums">
+                    <span>Qiymat: <b className="text-slate-700 dark:text-slate-200">{money(t.contractValue)}</b></span>
+                    <span>To'langan: <b className="text-emerald-600 dark:text-emerald-400">{money(t.totalPaid)}</b></span>
+                    <span>Qoldiq: <b className="text-amber-600 dark:text-amber-400">{money(t.remaining)}</b></span>
+                  </div>
+                )}
+
+                {/* Tranzaksiyalar jadvali */}
+                {t.transactions?.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[11.5px]">
+                      <thead>
+                        <tr className="text-[9px] uppercase tracking-wide text-slate-400 dark:text-slate-500 bg-slate-50/60 dark:bg-slate-900/30">
+                          <th className="text-left px-3 py-1.5 font-semibold">Sana</th>
+                          <th className="text-right px-3 py-1.5 font-semibold">Summa</th>
+                          <th className="text-left px-3 py-1.5 font-semibold">Tur</th>
+                          <th className="text-left px-3 py-1.5 font-semibold">Hujjat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 dark:divide-slate-700/50 tabular-nums">
+                        {t.transactions.map((tx: any, k: number) => (
+                          <tr key={k} className="hover:bg-slate-50 dark:hover:bg-slate-900/30">
+                            <td className="px-3 py-1.5 font-mono text-slate-600 dark:text-slate-300">{tx.date}</td>
+                            <td className={cn('px-3 py-1.5 text-right font-bold', tx.direction === 'IN' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+                              {tx.direction === 'IN' ? '+' : '−'}{money(tx.amount)}
+                            </td>
+                            <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400">{tx.direction === 'IN' ? 'kirim' : 'chiqim'}</td>
+                            <td className="px-3 py-1.5 font-mono text-[10px] text-slate-400 dark:text-slate-500">{tx.doc ? `№${tx.doc}` : '—'}</td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-50 dark:bg-slate-900/40 font-bold text-slate-700 dark:text-slate-200">
+                          <td className="px-3 py-1.5">Jami · {t.transactions.length} ta</td>
+                          <td className="px-3 py-1.5 text-right">{money(t.txSum)}</td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="px-3 py-2.5 text-[11px] text-slate-400">Tranzaksiya topilmadi</div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
