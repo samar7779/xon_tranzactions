@@ -80,6 +80,14 @@ const ENDPOINTS: Endpoint[] = [
   },
 
   {
+    method: 'GET', path: '/api/v1/oplata-kv/changes', groupKey: 'oplatakv',
+    titleKey: 'okChangesT', descKey: 'okChangesD', scope: 'oplatakv:read',
+    params: [
+      { name: 'cursor', in: 'query', descKey: 'cursor', example: '' },
+      { name: 'limit', in: 'query', descKey: 'limitChanges', example: '100' },
+    ],
+  },
+  {
     method: 'GET', path: '/api/v1/oplata-kv', groupKey: 'oplatakv',
     titleKey: 'okListT', descKey: 'okListD', scope: 'oplatakv:read',
     params: [

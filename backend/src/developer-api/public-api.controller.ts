@@ -281,6 +281,78 @@ export class PublicApiController {
     };
   }
 
+  @Get('oplata-kv/changes')
+  @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
+  @ApiOperation({
+    summary: "Kvartira to'lovlari — yagona o'zgarishlar feed (delta + tombstone)",
+    description:
+      "ENG ISHONCHLI sync yo'li. Bitta feed: yangi/o'zgargan to'lovlar (deleted:false) VA endi kerak " +
+      "bo'lmaganlari (deleted:true — o'chirilgan yoki split olib tashlangan; mijoz o'z bazasidan olib " +
+      "tashlashi kerak, agar bu id unda bo'lsa; bo'lmasa e'tibormaydi). KEYSET kursor — hech nima tushib " +
+      "qolmaydi/takrorlanmaydi, bir xil vaqtli bulk update'da ham qotmaydi. Pul summalari ANIQ (string, " +
+      "tiyingacha). Ishlatish: 1-so'rov cursor'siz; keyin har javobdagi nextCursor'ni qaytaring; " +
+      "hasMore=false bo'lguncha o'qing. limit: default 100, max 500.",
+  })
+  async changesOplataKv(
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const lim = Math.min(500, Math.max(1, Number(limit) || 100));
+    const cur = this.parseChangesCursor(cursor);
+
+    // A) oplata_kv — keyset (updatedAt, id). Kategoriya filtri YO'Q: split bo'lsa upsert,
+    //    paymentCategory=null bo'lsa tombstone (un-split ham shu yerdan ushlanadi).
+    const aRows = await this.prisma.oplataKv.findMany({
+      where: { OR: [{ updatedAt: { gt: cur.u } }, { updatedAt: cur.u, id: { gt: cur.ui } }] },
+      orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }],
+      take: lim,
+    });
+    // B) hard-delete tombstone'lar — history keyset (createdAt, id).
+    const bRows = await this.prisma.oplataKvHistory.findMany({
+      where: { action: 'deleted', OR: [{ createdAt: { gt: cur.d } }, { createdAt: cur.d, id: { gt: cur.di } }] },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: lim,
+    });
+
+    // Merge — event vaqti bo'yicha, limitgacha kesamiz; har manba kursorini OLINGAN oxirgi elementga suramiz.
+    type Ev = { at: number; src: 'A' | 'B'; a?: any; b?: any };
+    const evs: Ev[] = [
+      ...aRows.map((a) => ({ at: new Date(a.updatedAt).getTime(), src: 'A' as const, a })),
+      ...bRows.map((b) => ({ at: new Date(b.createdAt).getTime(), src: 'B' as const, b })),
+    ].sort((x, y) => x.at - y.at);
+    const taken = evs.slice(0, lim);
+
+    const nc = { u: cur.u, ui: cur.ui, d: cur.d, di: cur.di };
+    for (const e of taken) {
+      if (e.src === 'A') { nc.u = new Date(e.a.updatedAt); nc.ui = e.a.id; }
+      else { nc.d = new Date(e.b.createdAt); nc.di = e.b.id; }
+    }
+
+    const contractNos: (string | null)[] = [
+      ...aRows.map((a) => a.contractNo),
+      ...bRows.map((b) => { const s: any = (b.changes && typeof b.changes === 'object' && !Array.isArray(b.changes)) ? b.changes : {}; return s.contractNo ?? null; }),
+    ];
+    const orderIdMap = await this.orderIdMapForContracts(contractNos);
+    const oid = (cn: string | null | undefined) => orderIdMap.get((cn || '').toUpperCase()) ?? null;
+
+    const items = taken.map((e) => {
+      if (e.src === 'A') {
+        const it = e.a;
+        if (it.paymentCategory != null) {
+          return { ...this.oplataKvShapeMoney(it, oid(it.contractNo)), deleted: false };
+        }
+        // Split emas / olib tashlangan → tombstone. Mijoz bu id'ni bazasidan o'chirsin (bo'lsa).
+        return { id: it.id, contractNo: it.contractNo, order_id: oid(it.contractNo), deleted: true, reason: 'inactive', updatedAt: this.clampFuture(it.updatedAt) };
+      }
+      const r = e.b;
+      const snap: any = (r.changes && typeof r.changes === 'object' && !Array.isArray(r.changes)) ? r.changes : {};
+      return { id: r.oplataKvId, contractNo: snap.contractNo ?? null, order_id: oid(snap.contractNo), deleted: true, reason: 'deleted', deletedAt: r.createdAt, deletedBy: r.actorName ?? null, deletedReason: r.note ?? null };
+    });
+
+    const hasMore = evs.length > lim || aRows.length === lim || bRows.length === lim;
+    return { ok: true, items, nextCursor: this.makeChangesCursor(nc), hasMore };
+  }
+
   @Get('oplata-kv/:id')
   @RequireApiScopes(API_SCOPES.OPLATA_KV_READ)
   @ApiOperation({
@@ -695,5 +767,46 @@ export class PublicApiController {
       createdAt: this.clampFuture(it.createdAt),
       updatedAt: this.clampFuture(it.updatedAt),
     };
+  }
+
+  /** oplataKvShape'ning ANIQ-PUL varianti — summalar string (Decimal → tiyingacha aniq, float emas). */
+  private oplataKvShapeMoney(it: any, orderId: string | null = null) {
+    return {
+      id: it.id,
+      contractNo: it.contractNo,
+      order_id: orderId,
+      date: it.date,
+      paymentAmount: it.paymentAmount != null ? String(it.paymentAmount) : null,
+      firstInstallment: it.firstInstallment != null ? String(it.firstInstallment) : null,
+      monthlyAmount: it.monthlyAmount != null ? String(it.monthlyAmount) : null,
+      purpose: it.purpose,
+      txType: it.txType,
+      note: it.note,
+      paymentCategory: it.paymentCategory,
+      object: it.object,
+      client: it.client,
+      paymentMethod: it.paymentMethod,
+      createdAt: this.clampFuture(it.createdAt),
+      updatedAt: this.clampFuture(it.updatedAt),
+    };
+  }
+
+  /** changes feed kursori — ikki manba (oplata_kv updatedAt/id + history deleted createdAt/id) opaque base64. */
+  private parseChangesCursor(cursor?: string): { u: Date; ui: string; d: Date; di: string } {
+    const zero = { u: new Date(0), ui: '', d: new Date(0), di: '' };
+    if (!cursor) return zero;
+    try {
+      const j = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+      return {
+        u: j?.u != null ? new Date(Number(j.u)) : new Date(0),
+        ui: typeof j?.ui === 'string' ? j.ui : '',
+        d: j?.d != null ? new Date(Number(j.d)) : new Date(0),
+        di: typeof j?.di === 'string' ? j.di : '',
+      };
+    } catch { return zero; }
+  }
+
+  private makeChangesCursor(c: { u: Date; ui: string; d: Date; di: string }): string {
+    return Buffer.from(JSON.stringify({ u: c.u.getTime(), ui: c.ui, d: c.d.getTime(), di: c.di }), 'utf8').toString('base64url');
   }
 }
