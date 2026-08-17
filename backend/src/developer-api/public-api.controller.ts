@@ -352,8 +352,16 @@ export class PublicApiController {
       return this.deletedTombstone(e.b, oid);
     });
 
+    // Eski (fix'dan oldingi) o'chirishlarda hech qanday aniqlovchi ma'lumot saqlanmagan —
+    // faqat id + sabab (sourceTxId/contractNo/client hammasi null). Bunday tombstone mijozga
+    // foydasiz (u bu ID'ni hech qachon olmagan — eski import id'lari), shuning uchun sync
+    // feed'idan chiqaramiz. Kursor baribir suriladi (qayta kelmaydi, cheksiz aylanmaydi).
+    const visible = items.filter((x: any) =>
+      !(x.deleted === true && x.reason === 'deleted' && !x.sourceTxId && !x.contractNo && !x.client),
+    );
+
     const hasMore = evs.length > lim || aRows.length === lim || bRows.length === lim;
-    return { ok: true, items, nextCursor: this.makeChangesCursor(nc), hasMore };
+    return { ok: true, items: visible, nextCursor: this.makeChangesCursor(nc), hasMore };
   }
 
   @Get('oplata-kv/:id')
