@@ -85,6 +85,8 @@ const ENDPOINTS: Endpoint[] = [
     params: [
       { name: 'cursor', in: 'query', descKey: 'cursor', example: '' },
       { name: 'limit', in: 'query', descKey: 'limitChanges', example: '100' },
+      { name: 'days', in: 'query', descKey: 'daysChanges', example: '7' },
+      { name: 'since', in: 'query', descKey: 'sinceChanges', example: '' },
     ],
   },
   {

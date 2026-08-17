@@ -2270,6 +2270,8 @@
       "okChangesD": "MOST RELIABLE sync method. Single feed: new/updated payments (deleted:false) + no-longer-active ones (deleted:true — deleted or un-split). Keyset cursor — nothing missed/duplicated. Amounts as string (exact to the tiyin). Start without cursor, pass back nextCursor from each response until hasMore=false.",
       "cursor": "Page cursor — empty on the 1st request; then pass the nextCursor value from the previous response",
       "limitChanges": "How many items (default 100, max 500)",
+      "daysChanges": "Only changes from the last N days (update + delete) — e.g. 7. When old data isn't needed. Works only when cursor is empty",
+      "sinceChanges": "From the given ISO time (e.g. 2026-08-10T00:00:00Z). Only when cursor is empty; days takes priority",
       "acListT": "Accounts list",
       "acListD": "Credentials and passwords are NOT returned.",
       "acOneT": "Account detail",

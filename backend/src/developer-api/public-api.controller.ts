@@ -284,14 +284,27 @@ export class PublicApiController {
       "tashlashi kerak, agar bu id unda bo'lsa; bo'lmasa e'tibormaydi). KEYSET kursor — hech nima tushib " +
       "qolmaydi/takrorlanmaydi, bir xil vaqtli bulk update'da ham qotmaydi. Pul summalari ANIQ (string, " +
       "tiyingacha). Ishlatish: 1-so'rov cursor'siz; keyin har javobdagi nextCursor'ni qaytaring; " +
-      "hasMore=false bo'lguncha o'qing. limit: default 100, max 500.",
+      "hasMore=false bo'lguncha o'qing. limit: default 100, max 500. " +
+      "days: faqat oxirgi N kun o'zgarishlari (update+delete) — masalan days=7 (eski ma'lumot kerak " +
+      "bo'lmasa). since: ISO vaqtdan boshlab. days/since faqat cursor bo'lmaganda ishlaydi.",
   })
   async changesOplataKv(
     @Query('cursor') cursor?: string,
     @Query('limit') limit?: string,
+    @Query('days') days?: string,
+    @Query('since') since?: string,
   ) {
     const lim = Math.min(500, Math.max(1, Number(limit) || 100));
     const cur = this.parseChangesCursor(cursor);
+    // cursor yo'q-u, days/since berilgan bo'lsa — boshlanish nuqtasini shunga suramiz
+    // (update VA delete ikkalasi ham shu vaqtdan). Eski ma'lumot kerak bo'lmasa: days=7.
+    if (!cursor) {
+      let startMs: number | null = null;
+      const dN = Number(days);
+      if (days != null && days !== '' && Number.isFinite(dN) && dN > 0) startMs = Date.now() - dN * 86400000;
+      else if (since) { const t = new Date(since).getTime(); if (!isNaN(t)) startMs = t; }
+      if (startMs != null) { cur.u = new Date(startMs); cur.ui = ''; cur.d = new Date(startMs); cur.di = ''; }
+    }
 
     // A) oplata_kv — keyset (updatedAt, id). Kategoriya filtri YO'Q: split bo'lsa upsert,
     //    paymentCategory=null bo'lsa tombstone (un-split ham shu yerdan ushlanadi).
