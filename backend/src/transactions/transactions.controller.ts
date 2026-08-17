@@ -308,21 +308,17 @@ export class TransactionsController {
   async agentApply(
     @Body() body: {
       accountId: string; date: string;
-      groups: {
-        addMissing?: Array<{ b2Id?: string | null; generalId?: string | null }>;
-        fixDates?: Array<{ txId: string; newDate: string }>;
-        fixAmounts?: Array<{ txId: string; newAmount: number }>;
-      };
+      // Qaysi guruhlarni bajarish (bool). Targetlar SERVER'da fresh diagnose'dan quriladi.
+      which?: { addMissing?: boolean; fixDates?: boolean; fixAmounts?: boolean };
     },
     @CurrentUser('email') email?: string,
   ) {
-    const result = await this.sverkaAgent.apply(
-      body?.accountId, body?.date, body?.groups || {}, email ? `agent:${email}` : 'agent',
+    const which = body?.which || { addMissing: true, fixDates: true, fixAmounts: true };
+    const result: any = await this.sverkaAgent.applyRecommended(
+      body?.accountId, body?.date, which, email ? `agent:${email}` : 'agent',
     );
-    const count =
-      (body?.groups?.addMissing?.length || 0) +
-      (body?.groups?.fixDates?.length || 0) +
-      (body?.groups?.fixAmounts?.length || 0);
+    const c = result?.counts || {};
+    const count = (c.addMissing || 0) + (c.fixDates || 0) + (c.fixAmounts || 0);
     this.sverkaTg.notifySverkaAction({
       action: 'agent-apply',
       label: 'AI agent tuzatishni bajardi',

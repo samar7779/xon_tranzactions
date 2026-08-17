@@ -57,6 +57,10 @@ export class SverkaTelegramService implements OnModuleInit {
 
   private static readonly HISTORY_LIMIT = 500;
 
+  // autoSverkaNotify run-lock — cron endi og'ir (sync + AI), 30 daqiqada tugamаsa
+  // keyingi run bilan ustma-ust ketmasin.
+  private notifyRunning = false;
+
   constructor(
     private prisma: PrismaService,
     private moduleRef: ModuleRef,
@@ -83,6 +87,11 @@ export class SverkaTelegramService implements OnModuleInit {
    */
   @Cron(process.env.SVERKA_NOTIFY_CRON || '*/30 * * * *')
   async autoSverkaNotify(): Promise<void> {
+    if (this.notifyRunning) {
+      this.log.warn("autoSverkaNotify: oldingi run hali tugamadi — o'tkazib yuborildi");
+      return;
+    }
+    this.notifyRunning = true;
     try {
       const chats = await this.getChats();
       if (chats.length === 0) return; // chat yo'q — sverka qilishning hojati yo'q
@@ -96,6 +105,8 @@ export class SverkaTelegramService implements OnModuleInit {
       }
     } catch (e: any) {
       this.log.warn(`autoSverkaNotify xato: ${e?.message}`);
+    } finally {
+      this.notifyRunning = false;
     }
   }
 

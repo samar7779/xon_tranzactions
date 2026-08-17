@@ -1175,6 +1175,17 @@ export class ReconcileService {
           skipped++;
           continue;
         }
+        // XAVFSIZLIK: tranzaksiya ОплатыКв (shartnoma to'lovi) bilan bog'langan bo'lsa —
+        // summani O'ZGARTIRMAYMIZ (billing/allokatsiya buzilmasin). Qo'lda tekshirilsin.
+        const linkKeys = [tx.externalId, tx.id].filter(Boolean) as string[];
+        const linked = linkKeys.length
+          ? await this.prisma.oplataKv.findFirst({ where: { sourceTxId: { in: linkKeys } }, select: { id: true } })
+          : null;
+        if (linked) {
+          results.push({ txId: it.txId, updated: false, oldAmount, newAmount: amt, error: "ОплатыКв to'lovi bilan bog'langan — qo'lda tekshiring" });
+          errors++;
+          continue;
+        }
         await this.prisma.transaction.update({ where: { id: it.txId }, data: { amount: amt } });
         // "O'zgargan to'lovlar"ga (EDITED) yozamiz — bank bilan solishtirishda ko'rinsin
         try {

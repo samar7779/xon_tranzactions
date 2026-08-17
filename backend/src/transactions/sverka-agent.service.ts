@@ -21,6 +21,12 @@ import { ReconcileService } from './reconcile.service';
 export class SverkaAgentService {
   private readonly log = new Logger(SverkaAgentService.name);
 
+  // analyze natijasi keshi (account:date:locale) — TTL 5 daq; apply'da invalidatsiya.
+  private analyzeCache = new Map<string, { expiresAt: number; result: any }>();
+  private static readonly ANALYZE_TTL_MS = 5 * 60 * 1000;
+  // apply lock (account:date) — bir vaqtda ikki tuzatish (race) bo'lmasin.
+  private applyLocks = new Set<string>();
+
   constructor(
     private prisma: PrismaService,
     private crypto: CryptoService,
@@ -42,6 +48,54 @@ export class SverkaAgentService {
 
   private money(n: any): number {
     return Math.round(Number(n || 0) * 100) / 100;
+  }
+
+  private sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
+
+  private cacheReturn(key: string, result: any): any {
+    this.analyzeCache.set(key, { expiresAt: Date.now() + SverkaAgentService.ANALYZE_TTL_MS, result });
+    return result;
+  }
+  /** apply'dan keyin — shu hisob+kun uchun keshni bekor qilamiz (yangi tahlil aniq bo'lsin). */
+  private invalidateAnalyze(accountId: string, date: string): void {
+    for (const k of this.analyzeCache.keys()) {
+      if (k.startsWith(`${accountId}:${date}:`)) this.analyzeCache.delete(k);
+    }
+  }
+
+  /**
+   * Claude Messages API — 429/5xx/tarmoq xatosida retry + backoff (batch yiqilmasin).
+   * Muvaffaqiyatда tool_use.input qaytaradi.
+   */
+  private async claudeCall(apiKey: string, body: any, attempts = 3): Promise<any> {
+    let lastErr: any = null;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (res.status === 429 || res.status >= 500) {
+          lastErr = new Error(`Claude ${res.status}`);
+          if (i < attempts - 1) { await this.sleep(600 * Math.pow(2, i)); continue; } // 600ms, 1.2s
+          throw lastErr;
+        }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => '');
+          throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
+        }
+        const data: any = await res.json();
+        return (data?.content || []).find((c: any) => c.type === 'tool_use')?.input || null;
+      } catch (e: any) {
+        lastErr = e;
+        // AbortError yoki tarmoq — retry; BadRequestException (4xx) — darrov tashla
+        if (e instanceof BadRequestException) throw e;
+        if (i < attempts - 1) { await this.sleep(600 * Math.pow(2, i)); continue; }
+      }
+    }
+    throw lastErr || new Error('Claude javob bermadi');
   }
 
   /**
@@ -130,6 +184,12 @@ export class SverkaAgentService {
       throw new BadRequestException("date YYYY-MM-DD bo'lishi kerak");
     }
 
+    // Kesh — 5 daq ichida takroriy tahlil (batch qayta ochish, telegram edit,
+    // qayta bosish) Claude'ni qayta chaqirmaydi. apply'da invalidatsiya bo'ladi.
+    const cacheKey = `${accountId}:${date}:${locale}`;
+    const cached = this.analyzeCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.result;
+
     // 1) Sverka (bir kun) — bank vs DB umumiy.
     // withSync=true (default): AVVAL bankdan sync qilamiz — hali AllTranzactions'ga
     // tushmagan tranzaksiyalar qo'shiladi va "sync-lag" farqlari o'z-o'zidan yo'qoladi,
@@ -154,7 +214,7 @@ export class SverkaAgentService {
 
     // Mos — Claude'siz
     if (rec?.status === 'ok' && noItemIssues) {
-      return {
+      return this.cacheReturn(cacheKey, {
         ok: true, status: 'ok',
         diagnosis: {
           summary: locale === 'ru' ? 'Банк и база полностью совпадают.'
@@ -164,7 +224,7 @@ export class SverkaAgentService {
           recommendation: '', actions: {}, cautionNote: '',
         },
         proposed, rec,
-      };
+      });
     }
 
     const apiKey = await this.getAiKey();
@@ -264,26 +324,15 @@ export class SverkaAgentService {
 
     let out: any;
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-        body: JSON.stringify({ model, max_tokens: 1400, system, messages, tools, tool_choice: { type: 'tool', name: 'sverka_diagnosis' } }),
-        signal: AbortSignal.timeout(60_000), // Claude osilib qolmasin — 60s himoya
-      });
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new BadRequestException(`Claude API xatosi (${res.status}): ${errText.slice(0, 200)}`);
-      }
-      const data: any = await res.json();
-      const toolUse = (data?.content || []).find((c: any) => c.type === 'tool_use');
-      out = toolUse?.input || null;
+      // retry/backoff bilan (429/5xx da yiqilmasin)
+      out = await this.claudeCall(apiKey, { model, max_tokens: 1400, system, messages, tools, tool_choice: { type: 'tool', name: 'sverka_diagnosis' } });
     } catch (e: any) {
       this.log.warn(`Sverka agent Claude xato: ${e?.message}`);
       throw new BadRequestException(e?.message || 'AI tahlil bajarilmadi');
     }
     if (!out) throw new BadRequestException('AI javob bermadi');
 
-    return {
+    return this.cacheReturn(cacheKey, {
       ok: true,
       status: rec?.status || 'mismatch',
       diagnosis: {
@@ -297,7 +346,7 @@ export class SverkaAgentService {
       },
       proposed,
       rec,
-    };
+    });
   }
 
   /**
@@ -353,24 +402,37 @@ export class SverkaAgentService {
     actor = 'agent',
   ) {
     if (!accountId || !date) throw new BadRequestException('accountId va date kerak');
-    const diag: any = await this.reconcile.diagnoseDay(accountId, date);
-    const p = this.buildProposedActions(diag, date);
-    const groups: any = {};
-    if (which.addMissing && p.addMissing.length) {
-      groups.addMissing = p.addMissing.map((i) => ({ b2Id: i.b2Id, generalId: i.generalId }));
+    // RACE LOCK — bir hisob+kun uchun bir vaqtda faqat bitta tuzatish (web+telegram+
+    // ko'p approver bir vaqtda bosса — ikki marta qo'shilish/konflikt bo'lmasin).
+    const lockKey = `${accountId}:${date}`;
+    if (this.applyLocks.has(lockKey)) {
+      throw new BadRequestException("Bu hisob hozir tuzatilmoqda — biroz kuting");
     }
-    if (which.fixDates && p.fixDates.length) {
-      groups.fixDates = p.fixDates.map((i) => ({ txId: i.txId, newDate: i.newDate }));
+    this.applyLocks.add(lockKey);
+    try {
+      // Targetlar FRESH diagnose'dan — eski/stale target ishlatilmaydi.
+      const diag: any = await this.reconcile.diagnoseDay(accountId, date);
+      const p = this.buildProposedActions(diag, date);
+      const groups: any = {};
+      if (which.addMissing && p.addMissing.length) {
+        groups.addMissing = p.addMissing.map((i) => ({ b2Id: i.b2Id, generalId: i.generalId }));
+      }
+      if (which.fixDates && p.fixDates.length) {
+        groups.fixDates = p.fixDates.map((i) => ({ txId: i.txId, newDate: i.newDate }));
+      }
+      if (which.fixAmounts && p.fixAmounts.length) {
+        groups.fixAmounts = p.fixAmounts.map((i) => ({ txId: i.txId, newAmount: i.newAmount }));
+      }
+      const counts = {
+        addMissing: groups.addMissing?.length || 0,
+        fixDates: groups.fixDates?.length || 0,
+        fixAmounts: groups.fixAmounts?.length || 0,
+      };
+      const applied = await this.apply(accountId, date, groups, actor);
+      this.invalidateAnalyze(accountId, date); // ma'lumot o'zgardi — kesh eskirdi
+      return { ...applied, counts };
+    } finally {
+      this.applyLocks.delete(lockKey);
     }
-    if (which.fixAmounts && p.fixAmounts.length) {
-      groups.fixAmounts = p.fixAmounts.map((i) => ({ txId: i.txId, newAmount: i.newAmount }));
-    }
-    const counts = {
-      addMissing: groups.addMissing?.length || 0,
-      fixDates: groups.fixDates?.length || 0,
-      fixAmounts: groups.fixAmounts?.length || 0,
-    };
-    const applied = await this.apply(accountId, date, groups, actor);
-    return { ...applied, counts };
   }
 }

@@ -122,16 +122,12 @@ export function SverkaAgentBatch({
 
   async function applyOne(accountId: string): Promise<boolean> {
     const c = cards[accountId];
-    const p = c?.res?.proposed;
-    if (!p) return false;
-    const groups: any = {};
-    if (c.sel.addMissing && p.addMissing.length) groups.addMissing = p.addMissing.map((i) => ({ b2Id: i.b2Id, generalId: i.generalId }));
-    if (c.sel.fixDates && p.fixDates.length) groups.fixDates = p.fixDates.map((i) => ({ txId: i.txId, newDate: i.newDate }));
-    if (c.sel.fixAmounts && p.fixAmounts.length) groups.fixAmounts = p.fixAmounts.map((i) => ({ txId: i.txId, newAmount: i.newAmount }));
-    if (!Object.keys(groups).length) return false;
+    if (!c?.res?.proposed) return false;
+    if (!c.sel.addMissing && !c.sel.fixDates && !c.sel.fixAmounts) return false;
     setCards((s) => ({ ...s, [accountId]: { ...s[accountId], status: 'applying' } }));
     try {
-      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, groups }, { timeout: 120_000 });
+      // which(bool) — server fresh diagnose'dan target quradi (stale emas, race-safe)
+      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, which: c.sel }, { timeout: 120_000 });
       setCards((s) => ({ ...s, [accountId]: { ...s[accountId], status: 'applied', applied: r } }));
       qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       if (r.rec) onUpdated(accountId, r.rec);

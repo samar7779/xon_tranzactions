@@ -84,22 +84,12 @@ export function SverkaAgentPanel({
 
   async function apply() {
     if (!res?.proposed) return;
-    const p = res.proposed;
-    const groups: any = {};
-    if (sel.addMissing && p.addMissing.length) {
-      groups.addMissing = p.addMissing.map((i) => ({ b2Id: i.b2Id, generalId: i.generalId }));
-    }
-    if (sel.fixDates && p.fixDates.length) {
-      groups.fixDates = p.fixDates.map((i) => ({ txId: i.txId, newDate: i.newDate }));
-    }
-    if (sel.fixAmounts && p.fixAmounts.length) {
-      groups.fixAmounts = p.fixAmounts.map((i) => ({ txId: i.txId, newAmount: i.newAmount }));
-    }
-    if (!Object.keys(groups).length) { toast.error(t('applyNothing')); return; }
+    if (!sel.addMissing && !sel.fixDates && !sel.fixAmounts) { toast.error(t('applyNothing')); return; }
 
     setApplying(true);
     try {
-      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, groups }, { timeout: 120_000 });
+      // which(bool) yuboramiz — targetlarni SERVER fresh diagnose'dan quradi (stale emas)
+      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, which: sel }, { timeout: 120_000 });
       setApplied(r);
       qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       onApplied?.(r.rec);
