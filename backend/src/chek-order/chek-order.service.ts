@@ -797,6 +797,51 @@ export class ChekOrderService {
     return { contract: primary, text };
   }
 
+  /**
+   * Foydalanuvchi CHAT'да yozgan shartnoma raqam(lar)ini topib, CRM'да va TIZIMDA
+   * (tranzaksiya + ОплатыКв) bor-yo'qligini tekshiradi. OCR shartnomani xato o'qiganда
+   * xodim to'g'ri raqamни yozib "tekshir" desa — yordamchi shu asosда javob beradi.
+   */
+  private async assistantUserContractLookup(messages: any[], exclude: string | null): Promise<string> {
+    const userText = (messages || [])
+      .filter((m) => m?.role === 'user')
+      .map((m) => String(m?.content || ''))
+      .join(' ');
+    if (!userText) return '';
+    const RE = /\b([0-9]{1,4}[A-Za-z]{2,5}[0-9]{2,6}[A-Za-z]{0,3})\b/g;
+    const found = new Set<string>();
+    let mm: RegExpExecArray | null;
+    while ((mm = RE.exec(userText)) !== null) {
+      const c = mm[1].toUpperCase();
+      if (c && c !== String(exclude || '').toUpperCase()) found.add(c);
+    }
+    if (!found.size) return '';
+    const contracts = [...found].slice(0, 3); // ko'pi bilan 3 ta
+    const money = (n: any) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
+    const lines: string[] = [];
+    for (const c of contracts) {
+      const [info, tx, kv] = await Promise.all([
+        this.contractInfo(c).catch(() => null as any),
+        this.prisma.transaction.aggregate({
+          where: { OR: [{ contractNumber: c }, { description: { contains: c, mode: 'insensitive' } }] },
+          _sum: { amount: true }, _count: true,
+        }).catch(() => null as any),
+        this.prisma.oplataKv.aggregate({
+          where: { contractNo: c }, _sum: { paymentAmount: true }, _count: true,
+        }).catch(() => null as any),
+      ]);
+      const crmFound = !!info?.found;
+      const txCount = tx?._count || 0;
+      const kvCount = kv?._count || 0;
+      lines.push(
+        `  Shartnoma ${c}: CRM'да ${crmFound ? 'BOR' : "YO'Q"}${info?.virtualStatus ? ` (${info.virtualStatus})` : ''}` +
+        ` · tizim tranzaksiyalarида ${txCount} ta (jami ${money(tx?._sum?.amount)})` +
+        ` · ОплатыКв ${kvCount} ta (jami ${money(kv?._sum?.paymentAmount)})`,
+      );
+    }
+    return lines.join('\n');
+  }
+
   async assistantChat(dto: AssistantChatDto, _actor: Actor) {
     const apiKey = await this.getAiKey();
     if (!apiKey) throw new BadRequestException('AI kalit sozlanmagan (Admin → Agent → AI kalit)');
@@ -814,6 +859,8 @@ export class ChekOrderService {
 
     // CRM/grafik konteksti — shartnomani aniqlab, boshlang'ich/oylik grafikni yig'amiz
     const crmCtx = await this.assistantContractContext(orders).catch(() => ({ contract: null as string | null, text: '' }));
+    // Foydalanuvchi chat'да yozgan shartnomani CRM+tizimда tekshiramiz (OCR xato bo'lsa)
+    const userLookup = await this.assistantUserContractLookup(dto.messages || [], crmCtx.contract).catch(() => '');
 
     const loc = String(dto.locale || 'uz').toLowerCase();
     const langRule = loc === 'ru'
@@ -829,6 +876,7 @@ export class ChekOrderService {
       ctxText,
       "CRM / GRAFIK (shartnomani va boshlang'ich/oylik to'lovlarni tekshirish uchun — SENGA berilgan, o'zing foydalanasan):",
       crmCtx.text || "  (CRM ma'lumoti yo'q)",
+      ...(userLookup ? ["FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA(LAR) — CRM va TIZIM natijasi (SENGA berilgan):", userLookup] : []),
       "QOIDALAR:",
       langRule,
       "- Bir necha order bo'lsa — FAQAT BIRINCHI xabarда qaysi order(lar) haqida ekanini so'ra. quickReplies: har order uchun bittadan + oxiriga 'Barchasi (hammasi)'.",
@@ -840,6 +888,8 @@ export class ChekOrderService {
       // ── SHARTNOMA: o'zing aniqlaysan, so'ramaysan ──
       "- SHARTNOMA (MUHIM): shartnoma raqamini YUQORIDAGI 'CRM shartnoma' dan OL — u tranzaksiyadan aniqlangan, ISHONCHLI (hujjatдаги OCR raqami xato bo'lishi mumkin). proposeTicket.contractNo shu bo'lsin. CRM'da 'BOR' bo'lsa — foydalanuvchidan shartnoma raqamini SO'RAMA.",
       "- Shartnoma raqamini FAQAT quyidagi holatda so'ra: 'CRM shartnoma' umuman aniqlanmagan YOKI 'CRM'da: YO'Q' bo'lsa (ya'ni shartnoma CRM'da yo'q / xato). Boshqa hollarda so'rama.",
+      "- FOYDALANUVCHI YOZGAN SHARTNOMANI TEKSHIR (MUHIM): foydalanuvchi chat'да shartnoma raqami yozib 'tekshir / bormi / qidir' desa — YUQORIDAGI \"FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA\" bo'limида uning natijasi (CRM'да bor-yo'qligi + tizim tranzaksiyalari soni/summasi + ОплатыКв) BOR. O'shanи aniq raqamlar bilan AYT. 'Qidira olmayman / imkonim yo'q' DEB JAVOB BERMA — ma'lumot senga berilgan.",
+      "- Chekдаги (OCR) shartnoma tranzaksiyадаги shartnomадан FARQ qilса va foydalanuvchi so'ragan shartnoma ham tizimда bo'lса — bu MUHIM signal: to'lov boshqa/noto'g'ri shartnomага tushган bo'lishi mumkin. Buni ayt, kerak bo'lsa murojaat taklif qil.",
       // ── ISHONCH EMAS, TEKSHIRUV ──
       "- ISHONCH EMAS — TEKSHIR: foydalanuvchi da'vosini KO'R-KO'RONA qabul qilma. Har doim o'zingдаги ma'lumot (natija: found/mismatch/not_found, CRM 'BOR/YO'Q', grafik, ОплатыКв taqsimoti) bilan SOLISHTIR. Ma'lumot da'voga zid bo'lsa — hurmat bilan buni ayt, rozi bo'lib qo'yma.",
       "- Order natijasi NOT_FOUND bo'lsa — bu order/to'lov bizning TRANZAKSIYALARДА topilmagan (mavjud emas yoki hali tushmagan). Bunday orderда 'shartnoma xato' kabi da'voni SHOSHIB qabul qilma: AVVAL faktni ayt ('bu 13425470-order tranzaksiyalarда topilmadi'). Ekранда TOPILGAN boshqa order bo'lsa — 'balki topilgan <order№> ni nazarda tutdingizmi?' deb ANIQLASHTIR. Order haqiqatan yo'qligini tasdiqlab, keyin yo'naltir.",
