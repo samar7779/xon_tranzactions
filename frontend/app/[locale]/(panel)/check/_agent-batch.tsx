@@ -69,34 +69,44 @@ export function SverkaAgentBatch({
 
   useEffect(() => { setMounted(true); requestAnimationFrame(() => setShown(true)); }, []);
 
-  // ── Ketma-ket tahlil (natijalar kelib tushadi) ──
+  // ── Parallel tahlil (bir vaqtda bir nechta) — natijalar kelib tushadi ──
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      for (const a of accounts) {
+    const analyzeOne = async (a: AccountInput) => {
+      if (cancelled) return;
+      setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'analyzing' } }));
+      try {
+        const r = await api.post<AnalyzeResult>(
+          '/transactions/reconcile/agent/analyze',
+          { accountId: a.accountId, date, locale },
+          { timeout: 120_000 },
+        );
         if (cancelled) return;
-        setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'analyzing' } }));
-        try {
-          const r = await api.post<AnalyzeResult>(
-            '/transactions/reconcile/agent/analyze',
-            { accountId: a.accountId, date, locale },
-            { timeout: 120_000 },
-          );
-          if (cancelled) return;
-          const act = r.diagnosis?.actions || {};
-          const p = r.proposed;
-          const sel: Sel = {
-            addMissing: !!p?.addMissing.length && act.addMissing !== 'skip',
-            fixDates: !!p?.fixDates.length && act.fixDates !== 'skip',
-            fixAmounts: !!p?.fixAmounts.length && act.fixAmounts === 'recommend',
-          };
-          setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'done', res: r, sel } }));
-          if (r.status === 'ok' && r.rec) onUpdated(a.accountId, r.rec); // sync-first hal qilgan bo'lsa
-        } catch (e: any) {
-          if (cancelled) return;
-          setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'error', error: e?.message || t('error') } }));
-        }
+        const act = r.diagnosis?.actions || {};
+        const p = r.proposed;
+        const sel: Sel = {
+          addMissing: !!p?.addMissing.length && act.addMissing !== 'skip',
+          fixDates: !!p?.fixDates.length && act.fixDates !== 'skip',
+          fixAmounts: !!p?.fixAmounts.length && act.fixAmounts === 'recommend',
+        };
+        setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'done', res: r, sel } }));
+        if (r.status === 'ok' && r.rec) onUpdated(a.accountId, r.rec); // sync-first hal qilgan bo'lsa
+      } catch (e: any) {
+        if (cancelled) return;
+        setCards((c) => ({ ...c, [a.accountId]: { ...c[a.accountId], status: 'error', error: e?.message || t('error') } }));
       }
+    };
+    (async () => {
+      // Concurrency pool — bir vaqtda 4 hisob (tez, lekin bank API'ni bosmaydi).
+      const CONCURRENCY = 4;
+      let idx = 0;
+      const runners = Array.from({ length: Math.min(CONCURRENCY, accounts.length) }, async () => {
+        while (idx < accounts.length && !cancelled) {
+          const i = idx++;
+          await analyzeOne(accounts[i]);
+        }
+      });
+      await Promise.all(runners);
       if (!cancelled) setRunning(false);
     })();
     return () => { cancelled = true; };

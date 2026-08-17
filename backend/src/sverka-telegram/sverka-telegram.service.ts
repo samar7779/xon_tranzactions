@@ -276,6 +276,12 @@ export class SverkaTelegramService implements OnModuleInit {
     });
   }
 
+  /** Xabarni o'chiradi — hal bo'lgan/yopilgan farqlar guruhni to'ldirmasin. */
+  private async deleteMsg(chatId: string, messageId: number | undefined): Promise<void> {
+    if (!messageId) return;
+    await this.tgCall('deleteMessage', { chat_id: chatId, message_id: messageId });
+  }
+
   // ─── SENT LOG (/clear uchun bot xabarlarini kuzatish) ─────────────────
   private async trackSentMessages(msgs: Array<{ chatId: string; messageId: number }>): Promise<void> {
     if (!msgs.length) return;
@@ -559,25 +565,27 @@ export class SverkaTelegramService implements OnModuleInit {
       if (c.fixDates) parts2.push(`📅 ${c.fixDates} sana`);
       if (c.fixAmounts) parts2.push(`⚖️ ${c.fixAmounts} summa`);
 
-      const resultText =
-        (nowOk ? `✅ <b>Tuzatildi — endi mos</b>` : `🔧 <b>Tuzatildi</b>`) + `\n\n` +
-        accLine +
-        `📅 <b>Sana:</b> ${date}\n` +
-        (parts2.length ? `${parts2.join(' · ')}\n` : `Bajarilgan amal yo'q\n`) +
-        (nowOk ? '' : `💰 Qolgan farq: <code>${newDiff.toLocaleString('ru-RU')}</code> UZS\n`) +
-        `\n👤 ${chat.name || chatId} · 🕐 ${nowTk}`;
-
-      await this.editMsg(chatId, messageId, resultText);
-
-      // Boshqa nusxalarni ham yangilaymiz + store'dan olib tashlaymiz
+      // Barcha nusxalar (joriy + boshqa chatlardagi)
+      const copies = [
+        { chatId, messageId },
+        ...(entry?.msgs || [])
+          .filter((m) => !(String(m.chatId) === chatId && m.messageId === messageId))
+          .map((m) => ({ chatId: String(m.chatId), messageId: m.messageId })),
+      ];
       try {
-        if (entry?.msgs) {
-          for (const m of entry.msgs) {
-            if (String(m.chatId) === chatId && m.messageId === messageId) continue;
-            await this.editMsg(String(m.chatId), m.messageId, resultText);
-          }
+        if (nowOk) {
+          // To'liq hal bo'ldi — xabarlarni O'CHIRAMIZ (guruh to'lmasin; tarix admin'da)
+          for (const m of copies) await this.deleteMsg(m.chatId, m.messageId);
+          delete store.accounts[accountId];
+        } else {
+          // Qisman — QISQA xabar, tugmasiz; qayta bezovta qilmasin (dismissed)
+          const shortText =
+            `🔧 <b>Tuzatildi</b>${parts2.length ? ' · ' + parts2.join(' · ') : ''}\n` +
+            `🏦 ${acc?.bank?.name || '—'} · <code>${acc?.accountNo || ''}</code>\n` +
+            `💰 Qolgan farq: <code>${newDiff.toLocaleString('ru-RU')}</code> UZS · <i>saytda ko‘ring</i>`;
+          for (const m of copies) await this.editMsg(m.chatId, m.messageId, shortText, { inline_keyboard: [] });
+          if (entry) { entry.dismissed = true; entry.apply = undefined; }
         }
-        delete store.accounts[accountId];
         await this.saveNotifiedStore(store);
       } catch { /* ignore */ }
 
@@ -613,28 +621,17 @@ export class SverkaTelegramService implements OnModuleInit {
 
     await this.answerCb(cbId, 'Yopildi');
     try {
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
-      const acc = await this.prisma.bankAccount.findUnique({
-        where: { id: accountId }, include: { bank: true },
-      }).catch(() => null);
-      const accLine = acc ? `🏦 ${acc.bank?.name || '—'} · <code>${acc.accountNo}</code>\n` : '';
-      const text =
-        `🙈 <b>E'tiborsiz qoldirildi</b>\n\n${accLine}📅 ${date}\n` +
-        `<i>Kerak bo'lsa saytda ko'rish mumkin: transactions.xonapps.uz/uz/check</i>\n\n` +
-        `👤 ${chat.name || chatId} · 🕐 ${nowTk}`;
-
-      // dismissed belgilaymiz — diff o'zgarmaguncha qayta chiqmaydi
+      // Xabar(lar)ni O'CHIRAMIZ + dismissed (shu kuni qayta chiqmaydi; ertaga store yangi).
       const store = await this.getNotifiedStore(date);
       const entry = store.accounts[accountId];
       if (entry) {
+        for (const m of (entry.msgs || [])) await this.deleteMsg(String(m.chatId), m.messageId);
         entry.dismissed = true;
         entry.apply = undefined;
-        for (const m of (entry.msgs || [])) {
-          await this.editMsg(String(m.chatId), m.messageId, text);
-        }
+        entry.msgs = [];
         await this.saveNotifiedStore(store);
       } else {
-        await this.editMsg(chatId, messageId, text);
+        await this.deleteMsg(chatId, messageId);
       }
       await this.appendHistory({
         action: 'telegram_dismiss', source: 'telegram', actorId: null,
@@ -981,30 +978,45 @@ export class SverkaTelegramService implements OnModuleInit {
     }
   }
 
-  /** AI-boyitilgan mismatch matni (Telegram, HTML). */
+  /** Culprit — qisqa (sarlavha uchun). */
+  private culpritShort(c: string): string {
+    switch (c) {
+      case 'bank': return '🔴 Bank xatosi';
+      case 'us': return '🔵 Biz tomonda';
+      case 'mixed': return '🟠 Aralash';
+      case 'none': return '🟢 Farq yo‘q';
+      default: return '⚪ Noaniq';
+    }
+  }
+
+  private truncate(s: string | undefined, n: number): string {
+    if (!s) return '';
+    return s.length > n ? s.slice(0, n - 1) + '…' : s;
+  }
+
+  /**
+   * AI-boyitilgan mismatch matni (Telegram, HTML) — QISQA (guruh to'lmasin).
+   * Faqat muhim: kim/qancha/nega(qisqa xulosa)/ayb + tuzatish rejasi. To'liq tafsilot
+   * (findings, tavsiya) saytda ko'rinadi.
+   */
   private renderAiMismatch(
     it: any, date: string, fmt: (n: number | undefined) => string,
     d: any, p: any, which: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean },
   ): string {
     const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
     const lines: string[] = [];
-    lines.push(`⚠️ <b>Sverka farq</b> · 🤖 AI tahlil`);
-    lines.push('');
-    if (it.bankName) lines.push(`🏦 ${it.bankName}`);
-    if (it.accountNo) lines.push(`💳 <code>${it.accountNo}</code>`);
+    lines.push(`⚠️ <b>Sverka farq</b> · ${this.culpritShort(d.culprit)}`);
+    lines.push(`🏦 ${it.bankName || '—'} · <code>${it.accountNo || ''}</code>`);
     if (it.ownerName) lines.push(`👤 ${it.ownerName}`);
-    lines.push(`📅 ${date} · 💰 farq <code>${fmt(totalFarq)}</code> UZS`);
-    lines.push('');
-    lines.push(this.culpritLabel(d.culprit));
-    if (d.summary) lines.push(d.summary);
-    if (d.recommendation) { lines.push(''); lines.push(`💡 <b>Tavsiya:</b> ${d.recommendation}`); }
-    if (d.cautionNote) { lines.push(''); lines.push(`⚠️ ${d.cautionNote}`); }
+    lines.push(`💰 <b>${fmt(totalFarq)}</b> UZS · 📅 ${date}`);
+    if (d.summary) { lines.push(''); lines.push(this.truncate(d.summary, 320)); }
+    if (d.cautionNote) lines.push(`⚠️ ${this.truncate(d.cautionNote, 160)}`);
     const parts: string[] = [];
     if (which.addMissing) parts.push(`➕ ${p.addMissing.length} qo‘shish`);
     if (which.fixDates) parts.push(`📅 ${p.fixDates.length} sana`);
     if (which.fixAmounts) parts.push(`⚖️ ${p.fixAmounts.length} summa`);
-    if (parts.length) { lines.push(''); lines.push(`🔧 <b>Tuzatish:</b> ${parts.join(' · ')}`); }
-    if (p.unresolved?.length) lines.push(`🔎 ${p.unresolved.length} ta qo‘lda ko‘rish kerak`);
+    if (parts.length) { lines.push(''); lines.push(`🔧 ${parts.join(' · ')}`); }
+    else if (p.unresolved?.length) { lines.push(''); lines.push(`🔎 ${p.unresolved.length} ta qo‘lda ko‘rish kerak`); }
     return lines.join('\n');
   }
 
@@ -1122,8 +1134,7 @@ export class SverkaTelegramService implements OnModuleInit {
       const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
 
       // ─── 1) HAL QILINDI: store'da bor, lekin endi MOS (ok) bo'lgan hisoblar ───
-      // Foydalanuvchi tugma bosmasdan saytda o'zi to'g'rilagan bo'lsa —
-      // botdagi xabarni "Hal qilindi" deb yangilaymiz (tugma yo'qoladi).
+      // Hal bo'lgan farq guruhni to'ldirmasin — xabarni O'CHIRAMIZ (tarix admin'da qoladi).
       const currentMismatchIds = new Set(mismatches.map((m) => m.accountId));
       let resolved = 0;
       for (const accId of Object.keys(store.accounts)) {
@@ -1132,8 +1143,7 @@ export class SverkaTelegramService implements OnModuleInit {
         if (cur && cur.status === 'ok') {
           const entry = store.accounts[accId];
           for (const m of (entry.msgs || [])) {
-            await this.editMsg(m.chatId, m.messageId,
-              `✅ <b>Hal qilindi</b>\n\nBu farq saytda to'g'rilandi — endi mos.\n\n📅 Sverka sanasi: ${date}\n🕐 ${nowTk}`);
+            await this.deleteMsg(m.chatId, m.messageId);
           }
           delete store.accounts[accId];
           resolved++;
@@ -1221,25 +1231,9 @@ export class SverkaTelegramService implements OnModuleInit {
       const store = await this.getNotifiedStore(date);
       const entry = store.accounts[accountId];
       if (!entry?.msgs?.length) return; // bu farq uchun bot xabari yo'q
-
-      const acc = await this.prisma.bankAccount.findUnique({
-        where: { id: accountId },
-        include: { bank: true },
-      }).catch(() => null);
-      const accLine = acc
-        ? `🏦 <b>Bank:</b> ${acc.bank?.name || '—'}\n💳 <b>Hisob:</b> <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 <b>Egasi:</b> ${acc.ownerName}\n` : ''}`
-        : '';
-      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
-      const text =
-        `✅ <b>Hal qilindi</b>\n\n` +
-        accLine +
-        `📅 <b>Sverka sanasi:</b> ${date}\n\n` +
-        `Bu farq <b>saytda</b> to'g'rilandi.\n` +
-        `👤 <b>Kim:</b> ${actorName || 'web'}\n` +
-        `🕐 <b>Qachon:</b> ${nowTk}`;
-
+      // Hal bo'lgan farq — bot xabar(lar)ini O'CHIRAMIZ (guruh to'lmasin; tarix admin'da qoladi).
       for (const m of entry.msgs) {
-        await this.editMsg(String(m.chatId), m.messageId, text);
+        await this.deleteMsg(String(m.chatId), m.messageId);
       }
       delete store.accounts[accountId];
       await this.saveNotifiedStore(store);
@@ -1247,7 +1241,7 @@ export class SverkaTelegramService implements OnModuleInit {
         action: 'sverka_resolved_web', source: 'web', actorId: null,
         actorName: actorName || null, details: { accountId, date },
       });
-      this.log.log(`Web fix → bot xabari yangilandi: account=${accountId} date=${date}`);
+      this.log.log(`Web fix → bot xabari o'chirildi: account=${accountId} date=${date}`);
     } catch (e: any) {
       this.log.warn(`markResolvedFromWeb xato: ${e?.message}`);
     }
