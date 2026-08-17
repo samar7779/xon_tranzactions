@@ -816,28 +816,45 @@ export class ChekOrderService {
       if (c && c !== String(exclude || '').toUpperCase()) found.add(c);
     }
     if (!found.size) return '';
-    const contracts = [...found].slice(0, 3); // ko'pi bilan 3 ta
+    const contracts = [...found].slice(0, 2); // ko'pi bilan 2 ta (har biri batafsil)
     const money = (n: any) => (n == null ? '—' : Number(n).toLocaleString('ru-RU'));
+    const dstr = (d: any) => { try { return new Date(d).toISOString().slice(0, 10); } catch { return '—'; } };
     const lines: string[] = [];
     for (const c of contracts) {
-      const [info, tx, kv] = await Promise.all([
+      const [info, txList, kvList] = await Promise.all([
         this.contractInfo(c).catch(() => null as any),
-        this.prisma.transaction.aggregate({
+        this.prisma.transaction.findMany({
           where: { OR: [{ contractNumber: c }, { description: { contains: c, mode: 'insensitive' } }] },
-          _sum: { amount: true }, _count: true,
-        }).catch(() => null as any),
-        this.prisma.oplataKv.aggregate({
-          where: { contractNo: c }, _sum: { paymentAmount: true }, _count: true,
-        }).catch(() => null as any),
+          select: { txnDate: true, amount: true, direction: true, docNumber: true },
+          orderBy: { txnDate: 'asc' }, take: 15,
+        }).catch(() => [] as any[]),
+        this.prisma.oplataKv.findMany({
+          where: { contractNo: c },
+          select: { date: true, paymentAmount: true, firstInstallment: true, monthlyAmount: true },
+          orderBy: { date: 'asc' }, take: 15,
+        }).catch(() => [] as any[]),
       ]);
       const crmFound = !!info?.found;
-      const txCount = tx?._count || 0;
-      const kvCount = kv?._count || 0;
+      let txSum = 0; for (const t of txList as any[]) txSum += Number(t?.amount || 0);
+      let kvSum = 0; for (const k of kvList as any[]) kvSum += Number(k?.paymentAmount || 0);
       lines.push(
         `  Shartnoma ${c}: CRM'да ${crmFound ? 'BOR' : "YO'Q"}${info?.virtualStatus ? ` (${info.virtualStatus})` : ''}` +
-        ` · tizim tranzaksiyalarида ${txCount} ta (jami ${money(tx?._sum?.amount)})` +
-        ` · ОплатыКв ${kvCount} ta (jami ${money(kv?._sum?.paymentAmount)})`,
+        ` · tranzaksiyalar ${txList.length}${txList.length >= 15 ? '+' : ''} ta (jami ${money(txSum)})` +
+        ` · ОплатыКв ${kvList.length}${kvList.length >= 15 ? '+' : ''} ta (jami ${money(kvSum)})`,
       );
+      // HAR BIR tranzaksiya — sana + summa (aniq sana/summa savollariga javob berish uchun)
+      if (txList.length) {
+        lines.push('    Tranzaksiyalar (sana — summa):');
+        for (const t of txList) {
+          lines.push(`      · ${dstr(t.txnDate)} — ${money(t.amount)} (${t.direction === 'IN' ? 'kirim' : 'chiqim'}${t.docNumber ? `, doc №${t.docNumber}` : ''})`);
+        }
+      }
+      if (kvList.length) {
+        lines.push("    ОплатыКв (sana — jami · boshlang'ich/oylik):");
+        for (const k of kvList) {
+          lines.push(`      · ${dstr(k.date)} — ${money(k.paymentAmount)} (boshl. ${money(k.firstInstallment)}, oylik ${money(k.monthlyAmount)})`);
+        }
+      }
     }
     return lines.join('\n');
   }
@@ -888,7 +905,8 @@ export class ChekOrderService {
       // ── SHARTNOMA: o'zing aniqlaysan, so'ramaysan ──
       "- SHARTNOMA (MUHIM): shartnoma raqamini YUQORIDAGI 'CRM shartnoma' dan OL — u tranzaksiyadan aniqlangan, ISHONCHLI (hujjatдаги OCR raqami xato bo'lishi mumkin). proposeTicket.contractNo shu bo'lsin. CRM'da 'BOR' bo'lsa — foydalanuvchidan shartnoma raqamini SO'RAMA.",
       "- Shartnoma raqamini FAQAT quyidagi holatda so'ra: 'CRM shartnoma' umuman aniqlanmagan YOKI 'CRM'da: YO'Q' bo'lsa (ya'ni shartnoma CRM'da yo'q / xato). Boshqa hollarda so'rama.",
-      "- FOYDALANUVCHI YOZGAN SHARTNOMANI TEKSHIR (MUHIM): foydalanuvchi chat'да shartnoma raqami yozib 'tekshir / bormi / qidir' desa — YUQORIDAGI \"FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA\" bo'limида uning natijasi (CRM'да bor-yo'qligi + tizim tranzaksiyalari soni/summasi + ОплатыКв) BOR. O'shanи aniq raqamlar bilan AYT. 'Qidira olmayman / imkonim yo'q' DEB JAVOB BERMA — ma'lumot senga berilgan.",
+      "- FOYDALANUVCHI YOZGAN SHARTNOMANI TEKSHIR (MUHIM): foydalanuvchi chat'да shartnoma raqami yozib 'tekshir / bormi / qidir' desa — YUQORIDAGI \"FOYDALANUVCHI CHAT'DA SO'RAGAN SHARTNOMA\" bo'limида uning natijasi bor: CRM'да bor-yo'qligi + HAR BIR tranzaksiya (sana — summa) + HAR BIR ОплатыКв (sana — summa). O'shanи aniq raqamlar bilan AYT. 'Qidira olmayman / imkonim yo'q / alohida summa ko'rinmayapti' DEB JAVOB BERMA — batafsil ro'yxat senga berilgan.",
+      "- Aniq SANA yoki SUMMA bo'yicha savolга (masalan '40 mln shu sanada bormi', 'to'lov 40+2.5 ga ajralganmi') — yuqoridagi tranzaksiya RO'YXATИДАН tekshirib ANIQ javob ber: o'sha sanada o'sha summa bor/yo'qligini ayt; kerak bo'lса ro'yxatдаги summalarни qo'shib (masalan 40+2.5=42.5) solishtir.",
       "- Chekдаги (OCR) shartnoma tranzaksiyадаги shartnomадан FARQ qilса va foydalanuvchi so'ragan shartnoma ham tizimда bo'lса — bu MUHIM signal: to'lov boshqa/noto'g'ri shartnomага tushган bo'lishi mumkin. Buni ayt, kerak bo'lsa murojaat taklif qil.",
       // ── ISHONCH EMAS, TEKSHIRUV ──
       "- ISHONCH EMAS — TEKSHIR: foydalanuvchi da'vosini KO'R-KO'RONA qabul qilma. Har doim o'zingдаги ma'lumot (natija: found/mismatch/not_found, CRM 'BOR/YO'Q', grafik, ОплатыКв taqsimoti) bilan SOLISHTIR. Ma'lumot da'voga zid bo'lsa — hurmat bilan buni ayt, rozi bo'lib qo'yma.",
