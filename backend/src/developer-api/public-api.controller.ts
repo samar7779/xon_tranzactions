@@ -338,7 +338,11 @@ export class PublicApiController {
     const items = taken.map((e) => {
       if (e.src === 'A') {
         const it = e.a;
-        if (it.paymentCategory != null) {
+        // AKTIV (upsert) = split qilingan to'lov (paymentCategory) YOKI Переброска qatori
+        // (perereboskaGroupId bor — u ataylab paymentCategory=null bilan yaratiladi, lekin
+        // real pul harakati: manba −summa, maqsad +summa). Aks holda → tombstone.
+        const isActive = it.paymentCategory != null || it.perereboskaGroupId != null;
+        if (isActive) {
           return { ...this.oplataKvShapeMoney(it, oid(it.contractNo)), deleted: false };
         }
         // Split emas / olib tashlangan → tombstone. Mijoz bu id'ni bazasidan o'chirsin (bo'lsa).
@@ -786,6 +790,8 @@ export class PublicApiController {
       object: it.object,
       client: it.client,
       paymentMethod: it.paymentMethod,
+      // Переброска guruhi — bir o'tkazmaning manba (−) va maqsad (+) qatorlarini bog'lash uchun.
+      perereboskaGroupId: it.perereboskaGroupId ?? null,
       createdAt: this.clampFuture(it.createdAt),
       updatedAt: this.clampFuture(it.updatedAt),
     };
