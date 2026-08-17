@@ -2767,5 +2767,36 @@
       "disabled": "Kirish vaqtincha o'chirilgan",
       "disabledHint": "Administrator Telegram orqali kirishni o'chirgan. Keyinroq urinib ko'ring."
     }
+  },
+  "sverkaAgent": {
+    "title": "AI tahlil",
+    "subtitle": "Agent farq sababini tushuntiradi va tuzatishni taklif qiladi",
+    "analyzeBtn": "AI bilan tahlil qilish",
+    "analyzing": "Tahlil qilinmoqda…",
+    "reanalyze": "Qayta tahlil",
+    "error": "Xatolik yuz berdi",
+    "culprit_bank": "Bank tomonda xato",
+    "culprit_us": "Biz tomonda xato",
+    "culprit_mixed": "Aralash sabab",
+    "culprit_none": "Farq yo‘q",
+    "culprit_unknown": "Aniqlanmadi",
+    "recommendation": "Tavsiya",
+    "caution": "Diqqat",
+    "proposedTitle": "Taklif qilingan tuzatishlar",
+    "groupAddMissing": "Bankdan qo‘shish",
+    "groupFixDates": "Sanani tuzatish",
+    "groupFixAmounts": "Summani tuzatish",
+    "groupUnresolved": "Qo‘lda ko‘rib chiqilsin",
+    "groupUnresolvedHint": "Bizda bor, bankda yo‘q — fantom yozuv yoki bank o‘chirgan bo‘lishi mumkin",
+    "rec_recommend": "Tavsiya etiladi",
+    "rec_caution": "Ehtiyot bo‘ling",
+    "rec_skip": "Kerak emas",
+    "amountBankVsDb": "Bank: {bank} · Baza: {db}",
+    "applyBtn": "Tasdiqlab bajarish",
+    "applying": "Bajarilmoqda…",
+    "applied": "Tuzatildi",
+    "applyNothing": "Kamida bitta guruhni tanlang",
+    "newDiff": "Yangi farq",
+    "nowMatches": "Endi bank bilan mos ✓"
   }
 }

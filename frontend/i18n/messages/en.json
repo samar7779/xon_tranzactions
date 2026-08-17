@@ -2767,5 +2767,36 @@
       "disabled": "Access temporarily disabled",
       "disabledHint": "An administrator turned off Telegram access. Please try again later."
     }
+  },
+  "sverkaAgent": {
+    "title": "AI analysis",
+    "subtitle": "The agent explains the discrepancy and proposes a fix",
+    "analyzeBtn": "Analyze with AI",
+    "analyzing": "Analyzing…",
+    "reanalyze": "Re-analyze",
+    "error": "An error occurred",
+    "culprit_bank": "Bank-side error",
+    "culprit_us": "Our-side error",
+    "culprit_mixed": "Mixed cause",
+    "culprit_none": "No discrepancy",
+    "culprit_unknown": "Undetermined",
+    "recommendation": "Recommendation",
+    "caution": "Caution",
+    "proposedTitle": "Proposed fixes",
+    "groupAddMissing": "Add from bank",
+    "groupFixDates": "Fix date",
+    "groupFixAmounts": "Fix amount",
+    "groupUnresolved": "Review manually",
+    "groupUnresolvedHint": "We have it, the bank doesn't — a phantom record or the bank deleted it",
+    "rec_recommend": "Recommended",
+    "rec_caution": "Caution",
+    "rec_skip": "Not needed",
+    "amountBankVsDb": "Bank: {bank} · DB: {db}",
+    "applyBtn": "Confirm & apply",
+    "applying": "Applying…",
+    "applied": "Fixed",
+    "applyNothing": "Select at least one group",
+    "newDiff": "New discrepancy",
+    "nowMatches": "Now matches the bank ✓"
   }
 }

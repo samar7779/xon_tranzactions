@@ -5,6 +5,7 @@ import { Response } from 'express';
 import { TransactionsService } from './transactions.service';
 import { StatementService } from './statement.service';
 import { ReconcileService } from './reconcile.service';
+import { SverkaAgentService } from './sverka-agent.service';
 import { InspectorService } from './inspector.service';
 import { ListTransactionsDto } from './dto/list-transactions.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -27,6 +28,7 @@ export class TransactionsController {
     private readonly svc: TransactionsService,
     private readonly statementSvc: StatementService,
     private readonly reconcileSvc: ReconcileService,
+    private readonly sverkaAgent: SverkaAgentService,
     private readonly inspectorSvc: InspectorService,
     private readonly syncSvc: SyncService,
     private readonly prisma: PrismaService,
@@ -282,6 +284,51 @@ export class TransactionsController {
       label: 'Sanani tuzatish (bulk)',
       count: body?.items?.length || 0,
       actorName: email || 'web',
+    }).catch(() => {});
+    return result;
+  }
+
+  // ── Sverka AI agenti ──────────────────────────────────────────────
+  @Post('reconcile/agent/analyze')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_VIEW)
+  @ApiOperation({
+    summary: 'Sverka farqini AI bilan tahlil qilish (tashxis + ayb + tuzatish takliflari)',
+    description: "Bank vs baza farqini o'qib, sababni tushuntiradi, aybni (bank/biz) tasniflaydi va tuzatish guruhlarini taklif qiladi. Bazani O'ZGARTIRMAYDI.",
+  })
+  agentAnalyze(@Body() body: { accountId: string; date: string; locale?: string }) {
+    return this.sverkaAgent.analyze(body?.accountId, body?.date, body?.locale || 'uz');
+  }
+
+  @Post('reconcile/agent/apply')
+  @RequirePermissions(PERMISSIONS.TRANSACTIONS_SVERKA_FIX)
+  @ApiOperation({
+    summary: 'AI taklif qilgan tuzatishlarni bajarish (foydalanuvchi tasdig\'i bilan)',
+    description: 'Faqat tasdiqlangan guruhlar: qo\'shish / sana tuzatish / summa tuzatish. Mavjud primitivlar orqali, keyin yangi sverka qaytadi.',
+  })
+  async agentApply(
+    @Body() body: {
+      accountId: string; date: string;
+      groups: {
+        addMissing?: Array<{ b2Id?: string | null; generalId?: string | null }>;
+        fixDates?: Array<{ txId: string; newDate: string }>;
+        fixAmounts?: Array<{ txId: string; newAmount: number }>;
+      };
+    },
+    @CurrentUser('email') email?: string,
+  ) {
+    const result = await this.sverkaAgent.apply(
+      body?.accountId, body?.date, body?.groups || {}, email ? `agent:${email}` : 'agent',
+    );
+    const count =
+      (body?.groups?.addMissing?.length || 0) +
+      (body?.groups?.fixDates?.length || 0) +
+      (body?.groups?.fixAmounts?.length || 0);
+    this.sverkaTg.notifySverkaAction({
+      action: 'agent-apply',
+      label: 'AI agent tuzatishni bajardi',
+      count,
+      actorName: email || 'web',
+      extra: { accountId: body?.accountId, date: body?.date },
     }).catch(() => {});
     return result;
   }

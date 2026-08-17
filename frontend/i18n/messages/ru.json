@@ -2767,5 +2767,36 @@
       "disabled": "Доступ временно отключён",
       "disabledHint": "Администратор отключил вход через Telegram. Попробуйте позже."
     }
+  },
+  "sverkaAgent": {
+    "title": "AI-анализ",
+    "subtitle": "Агент объяснит причину расхождения и предложит исправление",
+    "analyzeBtn": "Анализ с AI",
+    "analyzing": "Анализируем…",
+    "reanalyze": "Повторить анализ",
+    "error": "Произошла ошибка",
+    "culprit_bank": "Ошибка на стороне банка",
+    "culprit_us": "Ошибка на нашей стороне",
+    "culprit_mixed": "Смешанная причина",
+    "culprit_none": "Нет расхождения",
+    "culprit_unknown": "Не определено",
+    "recommendation": "Рекомендация",
+    "caution": "Внимание",
+    "proposedTitle": "Предлагаемые исправления",
+    "groupAddMissing": "Добавить из банка",
+    "groupFixDates": "Исправить дату",
+    "groupFixAmounts": "Исправить сумму",
+    "groupUnresolved": "Проверить вручную",
+    "groupUnresolvedHint": "Есть у нас, нет в банке — фантомная запись или банк удалил",
+    "rec_recommend": "Рекомендуется",
+    "rec_caution": "Осторожно",
+    "rec_skip": "Не нужно",
+    "amountBankVsDb": "Банк: {bank} · База: {db}",
+    "applyBtn": "Подтвердить и выполнить",
+    "applying": "Выполняем…",
+    "applied": "Исправлено",
+    "applyNothing": "Выберите хотя бы одну группу",
+    "newDiff": "Новое расхождение",
+    "nowMatches": "Теперь совпадает с банком ✓"
   }
 }

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
+import { SverkaAgentPanel } from './_sverka-agent';
 
 interface DiagnoseItem {
   b2Id?: string | null;
@@ -286,7 +287,19 @@ export function AccountDrilldown({
                 />
               )}
 
-              {/* Diagnostika tugmasi va natija */}
+              {/* AI agent — farq sababini tushuntiradi + tuzatishni taklif qiladi */}
+              {data.status === 'mismatch' && isSingleDay && (
+                <SverkaAgentPanel
+                  accountId={item.accountId}
+                  date={dateFrom}
+                  onApplied={(rec) => {
+                    if (rec) setData(rec);
+                    if (rec && dateFrom === todayIso() && dateTo === todayIso()) onUpdated(rec);
+                  }}
+                />
+              )}
+
+              {/* Diagnostika tugmasi va natija (qo'lda, batafsil) */}
               {data.status === 'mismatch' && isSingleDay && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 p-4 space-y-3">
                   <div className="flex items-center gap-3">
@@ -422,15 +435,6 @@ function DiagnoseResult({
   const mismatch = data.amountMismatch || [];
   return (
     <div className="space-y-3">
-      {data._debug && (
-        <div className="rounded-lg bg-slate-100 dark:bg-slate-800 ring-1 ring-slate-300 dark:ring-slate-700 p-2.5 text-[10px] font-mono text-slate-700 dark:text-slate-300 space-y-0.5">
-          <div className="font-bold text-slate-900 dark:text-slate-100">DEBUG (vaqtinchalik)</div>
-          <div>Qidirilgan kunlar: {data._debug.searchedDates.join(', ') || '(yo\'q)'}</div>
-          <div>Har kunda content[] hajmi: {Object.entries(data._debug.itemsPerDate).map(([d, n]) => `${d}=${n}`).join(' · ')}</div>
-          <div>Neighbor indeks o'lchami (b2/gen/ext kalitlar): <b>{data._debug.neighborIndexSize}</b></div>
-          <div>Unmatched DB: <b>{data._debug.unmatchedDbCount}</b> · Ulardan neighbor'da topilgan: <b className="text-emerald-700 dark:text-emerald-300">{data._debug.foundByNeighborCount}</b></div>
-        </div>
-      )}
       <div className="flex items-center gap-4 text-[12px] text-slate-600 dark:text-slate-300 flex-wrap">
         <span>{t('inBank')}: <b className="text-slate-900 dark:text-slate-100">{data.bankCount}</b></span>
         <span>AllTranzactions: <b className="text-slate-900 dark:text-slate-100">{data.dbCount}</b></span>

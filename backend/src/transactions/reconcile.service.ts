@@ -1133,6 +1133,84 @@ export class ReconcileService {
   }
 
   /**
+   * Summa nomuvofiqligini tuzatish — DB summasini BANK summasiga tenglaydi.
+   * amountMismatch (bir xil ID, boshqa summa) uchun: bank — haqiqat manbai,
+   * DB uning ko'zgusi. Faqat amount yangilanadi, tarixga yoziladi.
+   * Xavfsiz: har biri foydalanuvchi tasdiqi bilan, faqat summa update.
+   */
+  async fixAllTxAmount(items: Array<{ txId: string; newAmount: number }>, actor = 'manual'): Promise<{
+    ok: true;
+    summary: { total: number; updated: number; skipped: number; errors: number };
+    results: Array<{ txId: string; updated: boolean; oldAmount?: number; newAmount: number; error?: string }>;
+  }> {
+    if (!Array.isArray(items) || items.length === 0) {
+      throw new BadRequestException("Items bo'sh");
+    }
+    let updated = 0, skipped = 0, errors = 0;
+    const results: Array<{ txId: string; updated: boolean; oldAmount?: number; newAmount: number; error?: string }> = [];
+    for (const it of items) {
+      try {
+        const amt = Number(it.newAmount);
+        if (!it.txId || !Number.isFinite(amt) || amt < 0) {
+          results.push({ txId: it.txId, updated: false, newAmount: it.newAmount, error: "noto'g'ri summa" });
+          errors++;
+          continue;
+        }
+        const tx = await this.prisma.transaction.findUnique({
+          where: { id: it.txId },
+          select: {
+            id: true, amount: true, direction: true, externalId: true, accountId: true,
+            contractNumber: true, importBankNameText: true, txnDate: true,
+            account: { select: { accountNo: true } },
+          },
+        });
+        if (!tx) {
+          results.push({ txId: it.txId, updated: false, newAmount: amt, error: 'tx topilmadi' });
+          errors++;
+          continue;
+        }
+        const oldAmount = Number(tx.amount);
+        if (Math.abs(oldAmount - amt) < 0.01) {
+          results.push({ txId: it.txId, updated: false, oldAmount, newAmount: amt });
+          skipped++;
+          continue;
+        }
+        await this.prisma.transaction.update({ where: { id: it.txId }, data: { amount: amt } });
+        // "O'zgargan to'lovlar"ga (EDITED) yozamiz — bank bilan solishtirishda ko'rinsin
+        try {
+          await this.prisma.transactionChangeLog.create({
+            data: {
+              txId: tx.id,
+              externalId: tx.externalId || tx.id,
+              accountId: tx.accountId,
+              changeType: 'EDITED',
+              fieldsChanged: ['amount'],
+              oldData: { amount: { old: oldAmount, new: amt } } as any,
+              newData: { amount: amt } as any,
+              txnDate: tx.txnDate,
+              amount: amt,
+              direction: tx.direction,
+              contractNumber: tx.contractNumber,
+              bankNameSnap: tx.importBankNameText,
+              accountNoSnap: tx.account?.accountNo,
+              detectedBy: actor,
+            },
+          });
+        } catch (e: any) {
+          this.log.warn(`fixAllTxAmount change-log yozishda xato (${tx.id}): ${e?.message}`);
+        }
+        results.push({ txId: it.txId, updated: true, oldAmount, newAmount: amt });
+        updated++;
+      } catch (e: any) {
+        results.push({ txId: it.txId, updated: false, newAmount: Number(it.newAmount), error: e?.message || 'xato' });
+        errors++;
+      }
+    }
+    if (updated > 0) this.invalidateTodayCache();
+    return { ok: true, summary: { total: items.length, updated, skipped, errors }, results };
+  }
+
+  /**
    * Diagnose'da topilgan yo'qolgan tranzaksiyani DB ga qo'shadi.
    * Bankdan ushbu kun uchun ma'lumotni qaytadan oladi (eski cache emas, fresh),
    * b2_id yoki general_id orqali kerakli item'ni topib SyncService.upsertOne
