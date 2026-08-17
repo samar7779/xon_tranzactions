@@ -4,6 +4,7 @@ import { Cron } from '@nestjs/schedule';
 import axios from 'axios';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ReconcileService } from '../transactions/reconcile.service';
+import { SverkaAgentService } from '../transactions/sverka-agent.service';
 
 /**
  * Sverka uchun Telegram bot servisi.
@@ -86,7 +87,10 @@ export class SverkaTelegramService implements OnModuleInit {
       const chats = await this.getChats();
       if (chats.length === 0) return; // chat yo'q — sverka qilishning hojati yo'q
       const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
-      const result: any = await reconcile.reconcileToday();
+      // syncMismatched: avval farqli hisoblarni bankdan sync qilamiz — hali
+      // AllTranzactions'ga tushmagan tranzaksiyalar qo'shiladi, "soxta" farqlar
+      // (sync-lag) yo'qoladi va faqat HAQIQIY farqlar qoladi (kam xabar).
+      const result: any = await reconcile.reconcileToday(undefined, { syncMismatched: true });
       if (result?.items && Array.isArray(result.items) && result.date) {
         await this.notifyNewMismatches(result.items, result.date);
       }
@@ -106,7 +110,10 @@ export class SverkaTelegramService implements OnModuleInit {
       const chats = await this.getChats();
       if (chats.length === 0) return;
       const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
-      const result: any = await reconcile.reconcileToday();
+      // syncMismatched: avval farqli hisoblarni bankdan sync qilamiz — hali
+      // AllTranzactions'ga tushmagan tranzaksiyalar qo'shiladi, "soxta" farqlar
+      // (sync-lag) yo'qoladi va faqat HAQIQIY farqlar qoladi (kam xabar).
+      const result: any = await reconcile.reconcileToday(undefined, { syncMismatched: true });
       const items: any[] = Array.isArray(result?.items) ? result.items : [];
       const date: string = result?.date || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tashkent' });
       const mismatches = items.filter((it) => it.status === 'mismatch');
@@ -214,7 +221,7 @@ export class SverkaTelegramService implements OnModuleInit {
         for (const u of updates) {
           this.pollOffset = u.update_id + 1;
           try {
-            if (u.callback_query) await this.handleFixCallback(u.callback_query);
+            if (u.callback_query) await this.handleCallback(u.callback_query);
             else if (u.message) await this.handleMessage(u.message);
           } catch (e: any) {
             this.log.warn(`Update handle xato: ${e?.message}`);
@@ -483,6 +490,150 @@ export class SverkaTelegramService implements OnModuleInit {
     }
   }
 
+  /** Callback dispatcher — prefiksga qarab yo'naltiradi. */
+  private async handleCallback(cbq: any): Promise<void> {
+    const data: string = cbq?.data || '';
+    if (data.startsWith('apply:')) return this.handleApplyCallback(cbq);
+    if (data.startsWith('close:')) return this.handleCloseCallback(cbq);
+    if (data.startsWith('fix:')) return this.handleFixCallback(cbq);
+    await this.answerCb(cbq?.id, "Noma'lum amal");
+  }
+
+  /**
+   * AI tuzatishni bajaradi — callback_data: apply:<accountId>:<date>.
+   * Qaysi guruhlar — store'dagi AI qaroridan (bo'lmasa hammasi). Targetlar FRESH
+   * diagnose'dan (SverkaAgentService.applyRecommended).
+   */
+  private async handleApplyCallback(cbq: any): Promise<void> {
+    const data: string = cbq?.data || '';
+    const cbId: string = cbq?.id;
+    const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
+    const messageId: number | undefined = cbq?.message?.message_id;
+
+    const chats = await this.getChats();
+    const chat = chats.find((c) => String(c.chatId) === chatId);
+    if (!chat || chat.role !== 'approver') {
+      await this.answerCb(cbId, "Sizda ruxsat yo'q — faqat tasdiqlovchi tuzatadi", true);
+      return;
+    }
+    const parts = data.split(':');
+    const accountId = parts[1];
+    const date = parts[2];
+    if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
+
+    await this.answerCb(cbId, 'Tuzatilmoqda...');
+    try {
+      const agent = this.getSverkaAgent();
+      if (!agent) throw new Error('AI agent mavjud emas');
+
+      const store = await this.getNotifiedStore(date);
+      const entry = store.accounts[accountId];
+      const which = entry?.apply || { addMissing: true, fixDates: true, fixAmounts: true };
+
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId }, include: { bank: true },
+      }).catch(() => null);
+      const accLine = acc
+        ? `🏦 <b>${acc.bank?.name || '—'}</b>\n💳 <code>${acc.accountNo}</code>\n${acc.ownerName ? `👤 ${acc.ownerName}\n` : ''}`
+        : '';
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+
+      const res: any = await agent.applyRecommended(accountId, date, which, `agent:tg:${chat.name || chatId}`);
+      const c = res?.counts || { addMissing: 0, fixDates: 0, fixAmounts: 0 };
+      const totalApplied = (c.addMissing || 0) + (c.fixDates || 0) + (c.fixAmounts || 0);
+      const nowOk = res?.rec?.status === 'ok';
+      const newDiff = Math.abs(Number(res?.rec?.diff?.formula) || 0);
+      const parts2: string[] = [];
+      if (c.addMissing) parts2.push(`➕ ${c.addMissing} qo‘shildi`);
+      if (c.fixDates) parts2.push(`📅 ${c.fixDates} sana`);
+      if (c.fixAmounts) parts2.push(`⚖️ ${c.fixAmounts} summa`);
+
+      const resultText =
+        (nowOk ? `✅ <b>Tuzatildi — endi mos</b>` : `🔧 <b>Tuzatildi</b>`) + `\n\n` +
+        accLine +
+        `📅 <b>Sana:</b> ${date}\n` +
+        (parts2.length ? `${parts2.join(' · ')}\n` : `Bajarilgan amal yo'q\n`) +
+        (nowOk ? '' : `💰 Qolgan farq: <code>${newDiff.toLocaleString('ru-RU')}</code> UZS\n`) +
+        `\n👤 ${chat.name || chatId} · 🕐 ${nowTk}`;
+
+      await this.editMsg(chatId, messageId, resultText);
+
+      // Boshqa nusxalarni ham yangilaymiz + store'dan olib tashlaymiz
+      try {
+        if (entry?.msgs) {
+          for (const m of entry.msgs) {
+            if (String(m.chatId) === chatId && m.messageId === messageId) continue;
+            await this.editMsg(String(m.chatId), m.messageId, resultText);
+          }
+        }
+        delete store.accounts[accountId];
+        await this.saveNotifiedStore(store);
+      } catch { /* ignore */ }
+
+      await this.appendHistory({
+        action: 'telegram_agent_apply', source: 'telegram', actorId: null,
+        actorName: chat.name || chatId, chatId,
+        details: { accountId, date, counts: c, nowOk, newDiff },
+      });
+      this.log.log(`Telegram AI apply: account=${accountId} date=${date} applied=${totalApplied} ok=${nowOk}`);
+    } catch (e: any) {
+      await this.editMsg(chatId, messageId, `❌ <b>Xato:</b> ${e?.message || "noma'lum"}`);
+      this.log.warn(`Telegram AI apply xato: ${e?.message}`);
+    }
+  }
+
+  /** Farqni e'tiborsiz qoldirish — callback_data: close:<accountId>:<date>. */
+  private async handleCloseCallback(cbq: any): Promise<void> {
+    const data: string = cbq?.data || '';
+    const cbId: string = cbq?.id;
+    const chatId = String(cbq?.message?.chat?.id ?? cbq?.from?.id ?? '');
+    const messageId: number | undefined = cbq?.message?.message_id;
+
+    const chats = await this.getChats();
+    const chat = chats.find((c) => String(c.chatId) === chatId);
+    if (!chat || chat.role !== 'approver') {
+      await this.answerCb(cbId, "Sizda ruxsat yo'q", true);
+      return;
+    }
+    const parts = data.split(':');
+    const accountId = parts[1];
+    const date = parts[2];
+    if (!accountId || !date) { await this.answerCb(cbId, "Xato ma'lumot"); return; }
+
+    await this.answerCb(cbId, 'Yopildi');
+    try {
+      const nowTk = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+      const acc = await this.prisma.bankAccount.findUnique({
+        where: { id: accountId }, include: { bank: true },
+      }).catch(() => null);
+      const accLine = acc ? `🏦 ${acc.bank?.name || '—'} · <code>${acc.accountNo}</code>\n` : '';
+      const text =
+        `🙈 <b>E'tiborsiz qoldirildi</b>\n\n${accLine}📅 ${date}\n` +
+        `<i>Kerak bo'lsa saytda ko'rish mumkin: transactions.xonapps.uz/uz/check</i>\n\n` +
+        `👤 ${chat.name || chatId} · 🕐 ${nowTk}`;
+
+      // dismissed belgilaymiz — diff o'zgarmaguncha qayta chiqmaydi
+      const store = await this.getNotifiedStore(date);
+      const entry = store.accounts[accountId];
+      if (entry) {
+        entry.dismissed = true;
+        entry.apply = undefined;
+        for (const m of (entry.msgs || [])) {
+          await this.editMsg(String(m.chatId), m.messageId, text);
+        }
+        await this.saveNotifiedStore(store);
+      } else {
+        await this.editMsg(chatId, messageId, text);
+      }
+      await this.appendHistory({
+        action: 'telegram_dismiss', source: 'telegram', actorId: null,
+        actorName: chat.name || chatId, chatId, details: { accountId, date },
+      });
+    } catch (e: any) {
+      this.log.warn(`Telegram close xato: ${e?.message}`);
+    }
+  }
+
   // ─── BOT TOKEN ────────────────────────────────────────────
   async getBotToken(): Promise<string> {
     const s = await this.prisma.setting.findUnique({
@@ -733,7 +884,7 @@ export class SverkaTelegramService implements OnModuleInit {
   }
 
   // ─── NOTIFIED STORE (farq holatini + xabar message_id'larini saqlash) ──
-  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number; role?: 'approver' | 'watcher' }> }> }> {
+  private async getNotifiedStore(date: string): Promise<{ date: string; accounts: Record<string, { diffKey: string; msgs: Array<{ chatId: string; messageId: number; role?: 'approver' | 'watcher' }>; apply?: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean }; dismissed?: boolean }> }> {
     const s = await this.prisma.setting.findUnique({ where: { key: SverkaTelegramService.KEY_NOTIFIED_TODAY } });
     if (s?.value) {
       try {
@@ -800,6 +951,99 @@ export class SverkaTelegramService implements OnModuleInit {
     lines.push(`❓ <b>To'g'rilaysizmi?</b>`);
     lines.push(`<i>Tasdiqlovchilar quyidagi tugma orqali (bankda bor, DBda yo'q yozuvlarni qo'shadi) yoki saytda to'g'rilashi mumkin.</i>`);
     return lines.join('\n');
+  }
+
+  /** SverkaAgentService — moduleRef orqali (circular dep bo'lmasin). */
+  private getSverkaAgent(): SverkaAgentService | null {
+    try { return this.moduleRef.get(SverkaAgentService, { strict: false }); }
+    catch { return null; }
+  }
+
+  /** Culprit (ayb) → emoji + so'z (uz). */
+  private culpritLabel(c: string): string {
+    switch (c) {
+      case 'bank': return '🔴 <b>Bank tomonda xato</b>';
+      case 'us': return '🔵 <b>Biz tomonda xato</b>';
+      case 'mixed': return '🟠 <b>Aralash sabab</b>';
+      case 'none': return '🟢 <b>Farq yo‘q</b>';
+      default: return '⚪ <b>Sabab aniqlanmadi</b>';
+    }
+  }
+
+  /** AI-boyitilgan mismatch matni (Telegram, HTML). */
+  private renderAiMismatch(
+    it: any, date: string, fmt: (n: number | undefined) => string,
+    d: any, p: any, which: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean },
+  ): string {
+    const totalFarq = Math.abs(Number(it.diff?.formula) || 0);
+    const lines: string[] = [];
+    lines.push(`⚠️ <b>Sverka farq</b> · 🤖 AI tahlil`);
+    lines.push('');
+    if (it.bankName) lines.push(`🏦 ${it.bankName}`);
+    if (it.accountNo) lines.push(`💳 <code>${it.accountNo}</code>`);
+    if (it.ownerName) lines.push(`👤 ${it.ownerName}`);
+    lines.push(`📅 ${date} · 💰 farq <code>${fmt(totalFarq)}</code> UZS`);
+    lines.push('');
+    lines.push(this.culpritLabel(d.culprit));
+    if (d.summary) lines.push(d.summary);
+    if (d.recommendation) { lines.push(''); lines.push(`💡 <b>Tavsiya:</b> ${d.recommendation}`); }
+    if (d.cautionNote) { lines.push(''); lines.push(`⚠️ ${d.cautionNote}`); }
+    const parts: string[] = [];
+    if (which.addMissing) parts.push(`➕ ${p.addMissing.length} qo‘shish`);
+    if (which.fixDates) parts.push(`📅 ${p.fixDates.length} sana`);
+    if (which.fixAmounts) parts.push(`⚖️ ${p.fixAmounts.length} summa`);
+    if (parts.length) { lines.push(''); lines.push(`🔧 <b>Tuzatish:</b> ${parts.join(' · ')}`); }
+    if (p.unresolved?.length) lines.push(`🔎 ${p.unresolved.length} ta qo‘lda ko‘rish kerak`);
+    return lines.join('\n');
+  }
+
+  /**
+   * Bitta mismatch uchun Telegram xabari + tugmalar + apply qarori.
+   * useAi=true bo'lsa AI tahlil qiladi (sabab + tavsiya + [Tuzatish]/[Yopish]).
+   * AI o'chirilgan yoki xato bersa — eski oddiy matn + legacy "qo'shish" tugmasi.
+   */
+  private async buildMismatchNotif(
+    it: any, date: string, fmt: (n: number | undefined) => string, useAi: boolean,
+  ): Promise<{ text: string; replyMarkup: any; apply: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null; ai: boolean }> {
+    if (useAi) {
+      const agent = this.getSverkaAgent();
+      if (agent) {
+        try {
+          // withSync=false — cron (autoSverkaNotify) allaqachon syncMismatched qildi
+          const a: any = await agent.analyze(it.accountId, date, 'uz', false);
+          const d = a?.diagnosis;
+          const p = a?.proposed;
+          if (d && p) {
+            const act = d.actions || {};
+            const which = {
+              addMissing: p.addMissing.length > 0 && act.addMissing !== 'skip',
+              fixDates: p.fixDates.length > 0 && act.fixDates !== 'skip',
+              fixAmounts: p.fixAmounts.length > 0 && act.fixAmounts !== 'skip',
+            };
+            const hasFix = which.addMissing || which.fixDates || which.fixAmounts;
+            const text = this.renderAiMismatch(it, date, fmt, d, p, which);
+            const replyMarkup = hasFix
+              ? { inline_keyboard: [[
+                  { text: '✅ Tuzatish', callback_data: `apply:${it.accountId}:${date}` },
+                  { text: '❌ Yopish', callback_data: `close:${it.accountId}:${date}` },
+                ]] }
+              : { inline_keyboard: [[
+                  { text: '❌ Yopish', callback_data: `close:${it.accountId}:${date}` },
+                ]] };
+            return { text, replyMarkup, apply: hasFix ? which : null, ai: true };
+          }
+        } catch (e: any) {
+          this.log.warn(`Telegram AI tahlil xato (${it.accountNo}): ${e?.message} — oddiy xabar`);
+        }
+      }
+    }
+    // Fallback — eski xatti-harakat (bankda bor DBda yo'q yozuvni qo'shish)
+    return {
+      text: this.renderMismatch(it, date, fmt),
+      replyMarkup: { inline_keyboard: [[{ text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${it.accountId}:${date}` }]] },
+      apply: null,
+      ai: false,
+    };
   }
 
   /** Test notification — admin UI'dan chaqiriladi. */
@@ -896,44 +1140,43 @@ export class SverkaTelegramService implements OnModuleInit {
       //     "orphan" xabarlar qolmaydi (avval har o'zgarishda yangi xabar ketardi).
       let sentCount = 0;
       let editedCount = 0;
-      // Inline tugma — faqat TASDIQLOVCHI (approver). callback_data: fix:<accountId>:<date>.
-      const mkButton = (accountId: string) => ({
-        inline_keyboard: [[
-          { text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${accountId}:${date}` },
-        ]],
-      });
+      let aiCount = 0;
+      const MAX_AI = 15; // storm himoyasi — bitta tsiklda maksimal AI tahlil soni
       for (const it of mismatches) {
         const diffKey = String(Math.round(Number(it.diff?.formula) || 0));
         const existing = store.accounts[it.accountId];
-        const text = this.renderMismatch(it, date, fmt);
 
         if (!existing) {
-          // BIRINCHI marta — yangi xabar (approver tugma bilan, watcher faqat matn).
-          const rApprover = await this.sendNotification({ text, role: 'approver', replyMarkup: mkButton(it.accountId) });
-          const rWatcher = await this.sendNotification({ text, role: 'watcher' });
+          // BIRINCHI marta — AI-boyitilgan xabar (cap ichida), watcher tugmasiz.
+          const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
+          if (notif.ai) aiCount++;
+          const rApprover = await this.sendNotification({ text: notif.text, role: 'approver', replyMarkup: notif.replyMarkup });
+          const rWatcher = await this.sendNotification({ text: notif.text, role: 'watcher' });
           const msgs = [
             ...rApprover.messages.map((m) => ({ ...m, role: 'approver' as const })),
             ...rWatcher.messages.map((m) => ({ ...m, role: 'watcher' as const })),
           ];
           if (msgs.length > 0) {
-            store.accounts[it.accountId] = { diffKey, msgs };
+            store.accounts[it.accountId] = { diffKey, msgs, apply: notif.apply || undefined };
             sentCount++;
-            this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (sent=${rApprover.sent + rWatcher.sent})`);
+            this.log.log(`Mismatch notification yuborildi: ${it.accountNo} (ai=${notif.ai}, sent=${rApprover.sent + rWatcher.sent})`);
           } else {
             const errors = [...rApprover.errors, ...rWatcher.errors];
             this.log.warn(`Mismatch notification YUBORILMADI ${it.accountNo}: errors=${errors.join(' | ')}`);
           }
-        } else if (existing.diffKey !== diffKey) {
-          // Farq O'ZGARGAN — mavjud xabar(lar)ni JOYIDA yangilaymiz (yangi xabar emas).
-          // approver xabarida tugma saqlanadi, watcher'da yo'q.
+        } else if (existing.diffKey !== diffKey && !existing.dismissed) {
+          // Farq O'ZGARGAN (va yopilmagan) — joyida qayta AI tahlil + yangilash.
+          const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
+          if (notif.ai) aiCount++;
           for (const m of (existing.msgs || [])) {
-            await this.editMsg(m.chatId, m.messageId, text, m.role === 'approver' ? mkButton(it.accountId) : { inline_keyboard: [] });
+            await this.editMsg(m.chatId, m.messageId, notif.text, m.role === 'approver' ? notif.replyMarkup : { inline_keyboard: [] });
           }
-          existing.diffKey = diffKey; // xabarlar o'sha — faqat holat/summa yangilandi
+          existing.diffKey = diffKey;
+          existing.apply = notif.apply || undefined;
           editedCount++;
-          this.log.log(`Mismatch joyida yangilandi: ${it.accountNo} → ${diffKey}`);
+          this.log.log(`Mismatch joyida yangilandi: ${it.accountNo} → ${diffKey} (ai=${notif.ai})`);
         }
-        // diffKey bir xil bo'lsa — hech narsa qilmaymiz (spam yo'q).
+        // diffKey bir xil (yoki dismissed) — hech narsa qilmaymiz (spam yo'q).
       }
 
       await this.saveNotifiedStore(store);

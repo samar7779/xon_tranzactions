@@ -124,14 +124,17 @@ export class SverkaAgentService {
    * Tahlil — sverka + diagnose'ni o'qib, Claude tashxisini qaytaradi.
    * status='ok' bo'lsa Claude chaqirilmaydi (token tejash).
    */
-  async analyze(accountId: string, date: string, locale = 'uz') {
+  async analyze(accountId: string, date: string, locale = 'uz', withSync = true) {
     if (!accountId) throw new BadRequestException('accountId kerak');
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException("date YYYY-MM-DD bo'lishi kerak");
     }
 
-    // 1) Sverka (bir kun) — bank vs DB umumiy
-    const rec: any = await this.reconcile.reconcile(accountId, date, date, { withSync: false });
+    // 1) Sverka (bir kun) — bank vs DB umumiy.
+    // withSync=true (default): AVVAL bankdan sync qilamiz — hali AllTranzactions'ga
+    // tushmagan tranzaksiyalar qo'shiladi va "sync-lag" farqlari o'z-o'zidan yo'qoladi,
+    // AI faqat HAQIQIY xatoni ko'rsatadi.
+    const rec: any = await this.reconcile.reconcile(accountId, date, date, { withSync });
     if (rec?.status === 'error') {
       return { ok: true, status: 'error', error: rec.error || "Sverka bajarilmadi", diagnosis: null, proposed: null, rec };
     }
@@ -336,5 +339,38 @@ export class SverkaAgentService {
     // Tuzatishdan keyin — yangi sverka (bank fresh olinmaydi, tez)
     const rec: any = await this.reconcile.reconcile(accountId, date, date, { withSync: false });
     return { ok: true, results, rec };
+  }
+
+  /**
+   * Telegram uchun — tugma bosilganda tanlangan guruhlarni bajaradi.
+   * Targetlar FRESH diagnose'dan quriladi (eski tugma bosilса ham to'g'ri),
+   * `which` esa qaysi guruhlarni bajarishni belgilaydi (AI tavsiyasi asosida).
+   */
+  async applyRecommended(
+    accountId: string,
+    date: string,
+    which: { addMissing?: boolean; fixDates?: boolean; fixAmounts?: boolean },
+    actor = 'agent',
+  ) {
+    if (!accountId || !date) throw new BadRequestException('accountId va date kerak');
+    const diag: any = await this.reconcile.diagnoseDay(accountId, date);
+    const p = this.buildProposedActions(diag, date);
+    const groups: any = {};
+    if (which.addMissing && p.addMissing.length) {
+      groups.addMissing = p.addMissing.map((i) => ({ b2Id: i.b2Id, generalId: i.generalId }));
+    }
+    if (which.fixDates && p.fixDates.length) {
+      groups.fixDates = p.fixDates.map((i) => ({ txId: i.txId, newDate: i.newDate }));
+    }
+    if (which.fixAmounts && p.fixAmounts.length) {
+      groups.fixAmounts = p.fixAmounts.map((i) => ({ txId: i.txId, newAmount: i.newAmount }));
+    }
+    const counts = {
+      addMissing: groups.addMissing?.length || 0,
+      fixDates: groups.fixDates?.length || 0,
+      fixAmounts: groups.fixAmounts?.length || 0,
+    };
+    const applied = await this.apply(accountId, date, groups, actor);
+    return { ...applied, counts };
   }
 }
