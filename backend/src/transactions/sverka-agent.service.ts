@@ -265,6 +265,7 @@ export class SverkaAgentService {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
         body: JSON.stringify({ model, max_tokens: 1400, system, messages, tools, tool_choice: { type: 'tool', name: 'sverka_diagnosis' } }),
+        signal: AbortSignal.timeout(60_000), // Claude osilib qolmasin — 60s himoya
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => '');

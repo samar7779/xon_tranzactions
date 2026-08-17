@@ -64,7 +64,8 @@ export function SverkaAgentPanel({
     setLoading(true);
     setApplied(null);
     try {
-      const r = await api.post<AnalyzeResult>('/transactions/reconcile/agent/analyze', { accountId, date, locale });
+      // Og'ir amal: reconcile + diagnose (bank chaqiruvlari) + Claude — timeout uzun
+      const r = await api.post<AnalyzeResult>('/transactions/reconcile/agent/analyze', { accountId, date, locale }, { timeout: 120_000 });
       setRes(r);
       const a = r.diagnosis?.actions || {};
       const p = r.proposed;
@@ -98,7 +99,7 @@ export function SverkaAgentPanel({
 
     setApplying(true);
     try {
-      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, groups });
+      const r = await api.post<any>('/transactions/reconcile/agent/apply', { accountId, date, groups }, { timeout: 120_000 });
       setApplied(r);
       qc.invalidateQueries({ queryKey: ['reconcile-today'] });
       onApplied?.(r.rec);
