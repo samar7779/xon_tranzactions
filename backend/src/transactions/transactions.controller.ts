@@ -319,6 +319,10 @@ export class TransactionsController {
     );
     const c = result?.counts || {};
     const count = (c.addMissing || 0) + (c.fixDates || 0) + (c.fixAmounts || 0);
+    // To'liq hal bo'lsa — botdagi farq xabarini DARROV o'chiramiz (guruhda qolib ketmasin)
+    if (result?.rec?.status === 'ok') {
+      this.sverkaTg.markResolvedFromWeb(body?.accountId, body?.date, email || 'web').catch(() => {});
+    }
     this.sverkaTg.notifySverkaAction({
       action: 'agent-apply',
       label: 'AI agent tuzatishni bajardi',

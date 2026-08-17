@@ -573,19 +573,10 @@ export class SverkaTelegramService implements OnModuleInit {
           .map((m) => ({ chatId: String(m.chatId), messageId: m.messageId })),
       ];
       try {
-        if (nowOk) {
-          // To'liq hal bo'ldi — xabarlarni O'CHIRAMIZ (guruh to'lmasin; tarix admin'da)
-          for (const m of copies) await this.deleteMsg(m.chatId, m.messageId);
-          delete store.accounts[accountId];
-        } else {
-          // Qisman — QISQA xabar, tugmasiz; qayta bezovta qilmasin (dismissed)
-          const shortText =
-            `🔧 <b>Tuzatildi</b>${parts2.length ? ' · ' + parts2.join(' · ') : ''}\n` +
-            `🏦 ${acc?.bank?.name || '—'} · <code>${acc?.accountNo || ''}</code>\n` +
-            `💰 Qolgan farq: <code>${newDiff.toLocaleString('ru-RU')}</code> UZS · <i>saytda ko‘ring</i>`;
-          for (const m of copies) await this.editMsg(m.chatId, m.messageId, shortText, { inline_keyboard: [] });
-          if (entry) { entry.dismissed = true; entry.apply = undefined; }
-        }
+        // To'liq yoki qisman — xabar(lar)ni O'CHIRAMIZ (guruhda qolmasin). Qisman bo'lsa
+        // qolgan farq keyingi tekshiruvda YANGI (aniq) xabar bo'lib keladi.
+        for (const m of copies) await this.deleteMsg(m.chatId, m.messageId);
+        delete store.accounts[accountId];
         await this.saveNotifiedStore(store);
       } catch { /* ignore */ }
 
@@ -1027,7 +1018,7 @@ export class SverkaTelegramService implements OnModuleInit {
    */
   private async buildMismatchNotif(
     it: any, date: string, fmt: (n: number | undefined) => string, useAi: boolean,
-  ): Promise<{ text: string; replyMarkup: any; apply: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null; ai: boolean }> {
+  ): Promise<{ text: string; replyMarkup: any; apply: { addMissing: boolean; fixDates: boolean; fixAmounts: boolean } | null; ai: boolean; resolved: boolean }> {
     if (useAi) {
       const agent = this.getSverkaAgent();
       if (agent) {
@@ -1036,6 +1027,10 @@ export class SverkaTelegramService implements OnModuleInit {
           const a: any = await agent.analyze(it.accountId, date, 'uz', false);
           const d = a?.diagnosis;
           const p = a?.proposed;
+          // Tahlil (sync bilan) farqni HAL qilган bo'lsa — xabar yubormaymiz/o'chiramiz.
+          if (a?.status === 'ok') {
+            return { text: '', replyMarkup: { inline_keyboard: [] }, apply: null, ai: true, resolved: true };
+          }
           if (d && p) {
             const act = d.actions || {};
             const which = {
@@ -1053,7 +1048,7 @@ export class SverkaTelegramService implements OnModuleInit {
               : { inline_keyboard: [[
                   { text: '❌ Yopish', callback_data: `close:${it.accountId}:${date}` },
                 ]] };
-            return { text, replyMarkup, apply: hasFix ? which : null, ai: true };
+            return { text, replyMarkup, apply: hasFix ? which : null, ai: true, resolved: false };
           }
         } catch (e: any) {
           this.log.warn(`Telegram AI tahlil xato (${it.accountNo}): ${e?.message} — oddiy xabar`);
@@ -1066,6 +1061,7 @@ export class SverkaTelegramService implements OnModuleInit {
       replyMarkup: { inline_keyboard: [[{ text: "✅ To'g'rilash (qo'shish)", callback_data: `fix:${it.accountId}:${date}` }]] },
       apply: null,
       ai: false,
+      resolved: false,
     };
   }
 
@@ -1171,6 +1167,11 @@ export class SverkaTelegramService implements OnModuleInit {
           // BIRINCHI marta — AI-boyitilgan xabar (cap ichida), watcher tugmasiz.
           const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
           if (notif.ai) aiCount++;
+          // Tahlil (sync bilan) farqni HAL qilган bo'lsa — xabar YUBORMAYMIZ (guruh to'lmasin).
+          if (notif.resolved) {
+            this.log.log(`Mismatch sync bilan hal bo'ldi — xabar yuborilmadi: ${it.accountNo}`);
+            continue;
+          }
           const rApprover = await this.sendNotification({ text: notif.text, role: 'approver', replyMarkup: notif.replyMarkup });
           const rWatcher = await this.sendNotification({ text: notif.text, role: 'watcher' });
           const msgs = [
@@ -1189,6 +1190,13 @@ export class SverkaTelegramService implements OnModuleInit {
           // Farq O'ZGARGAN (va yopilmagan) — joyida qayta AI tahlil + yangilash.
           const notif = await this.buildMismatchNotif(it, date, fmt, aiCount < MAX_AI);
           if (notif.ai) aiCount++;
+          if (notif.resolved) {
+            // Endi hal bo'lgan — xabar(lar)ni o'chiramiz (bu yerda qolmasin).
+            for (const m of (existing.msgs || [])) await this.deleteMsg(m.chatId, m.messageId);
+            delete store.accounts[it.accountId];
+            this.log.log(`Mismatch endi hal bo'ldi — xabar o'chirildi: ${it.accountNo}`);
+            continue;
+          }
           for (const m of (existing.msgs || [])) {
             await this.editMsg(m.chatId, m.messageId, notif.text, m.role === 'approver' ? notif.replyMarkup : { inline_keyboard: [] });
           }
