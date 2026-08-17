@@ -8,9 +8,10 @@ import { toast } from 'sonner';
 import {
   Scale, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
   Search, X, ChevronRight, Wifi, Building2, TrendingUp, Receipt,
-  Send, History, Lock, Trash2, Plus, Eye, EyeOff, Clock,
+  Send, History, Lock, Trash2, Plus, Eye, EyeOff, Clock, Sparkles,
 } from 'lucide-react';
 import { SverkaTelegramDialog } from './_telegram-dialog';
+import { SverkaAgentBatch } from './_agent-batch';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -51,12 +52,15 @@ const AUTO_REFETCH_MS = 20 * 60 * 1000;
 export default function CheckPage() {
   const t = useTranslations('check');
   const tc = useTranslations('common');
+  const ta = useTranslations('sverkaAgent');
   const [q, setQ] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
   const [singleLoading, setSingleLoading] = useState<Set<string>>(new Set());
   const [singleResults, setSingleResults] = useState<Record<string, TodayItem>>({});
   const [showErrors, setShowErrors] = useState(false);
   const [tgDialogOpen, setTgDialogOpen] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchAccounts, setBatchAccounts] = useState<any[]>([]);
 
   // Bugungi sverka — live: 20 minutda avto + window focus'da yangilanadi
   // Default: sync'siz (tez). Manual refresh'da syncMismatched=true ishlatamiz.
@@ -181,6 +185,21 @@ export default function CheckPage() {
             >
               <Send className="h-4 w-4" />
             </button>
+            {summary.mismatch > 0 && (
+              <Button
+                onClick={() => {
+                  setBatchAccounts(
+                    items
+                      .filter((it) => it.status === 'mismatch')
+                      .map((it) => ({ accountId: it.accountId, accountNo: it.accountNo, bankName: it.bankName, ownerName: it.ownerName, diff: it.diff })),
+                  );
+                  setBatchOpen(true);
+                }}
+                className="h-10 rounded-xl font-semibold bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 gap-1.5 shadow-md shadow-fuchsia-500/25"
+              >
+                <Sparkles className="h-4 w-4" /> {ta('openBatch')} · {summary.mismatch}
+              </Button>
+            )}
             <Button
               onClick={refreshAll}
               disabled={isRefreshing}
@@ -346,6 +365,16 @@ export default function CheckPage() {
           item={selectedAccount}
           onClose={() => setSelectedAccountId(null)}
           onUpdated={(updated) => setSingleResults((r) => ({ ...r, [selectedAccount.accountId]: updated }))}
+        />
+      )}
+
+      {/* AI ommaviy tahlil — yondan ochiladigan modul (barcha farqli hisoblar) */}
+      {batchOpen && (
+        <SverkaAgentBatch
+          accounts={batchAccounts}
+          date={todayQuery.data?.date || new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString().slice(0, 10)}
+          onClose={() => setBatchOpen(false)}
+          onUpdated={(accountId, rec) => setSingleResults((r) => ({ ...r, [accountId]: rec }))}
         />
       )}
     </>

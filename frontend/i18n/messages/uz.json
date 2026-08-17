@@ -2797,6 +2797,15 @@
     "applied": "Tuzatildi",
     "applyNothing": "Kamida bitta guruhni tanlang",
     "newDiff": "Yangi farq",
-    "nowMatches": "Endi bank bilan mos ✓"
+    "nowMatches": "Endi bank bilan mos ✓",
+    "batchTitle": "AI ommaviy tahlil",
+    "batchSubtitle": "{n} ta farqli hisob",
+    "statAnalyzed": "Tahlil",
+    "statFixable": "Tuzatiladigan",
+    "statTotalDiff": "Umumiy farq",
+    "pending": "Navbatda",
+    "fixAllAccounts": "Hammasini tuzatish",
+    "applyingAll": "Bajarilmoqda…",
+    "openBatch": "AI tahlil"
   }
 }

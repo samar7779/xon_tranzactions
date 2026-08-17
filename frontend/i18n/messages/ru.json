@@ -2797,6 +2797,15 @@
     "applied": "Исправлено",
     "applyNothing": "Выберите хотя бы одну группу",
     "newDiff": "Новое расхождение",
-    "nowMatches": "Теперь совпадает с банком ✓"
+    "nowMatches": "Теперь совпадает с банком ✓",
+    "batchTitle": "AI-анализ всех",
+    "batchSubtitle": "{n} счётов с расхождением",
+    "statAnalyzed": "Анализ",
+    "statFixable": "Исправимо",
+    "statTotalDiff": "Общее расхождение",
+    "pending": "В очереди",
+    "fixAllAccounts": "Исправить всё",
+    "applyingAll": "Выполняем…",
+    "openBatch": "AI-анализ"
   }
 }

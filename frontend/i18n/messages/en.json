@@ -2797,6 +2797,15 @@
     "applied": "Fixed",
     "applyNothing": "Select at least one group",
     "newDiff": "New discrepancy",
-    "nowMatches": "Now matches the bank ✓"
+    "nowMatches": "Now matches the bank ✓",
+    "batchTitle": "Batch AI analysis",
+    "batchSubtitle": "{n} accounts with a discrepancy",
+    "statAnalyzed": "Analyzed",
+    "statFixable": "Fixable",
+    "statTotalDiff": "Total diff",
+    "pending": "Queued",
+    "fixAllAccounts": "Fix all",
+    "applyingAll": "Applying…",
+    "openBatch": "AI analysis"
   }
 }

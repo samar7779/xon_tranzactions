@@ -13,11 +13,11 @@ import {
 import { api } from '@/lib/api';
 import { cn, formatMoney } from '@/lib/utils';
 
-type Culprit = 'bank' | 'us' | 'mixed' | 'none' | 'unknown';
-type Rec = 'recommend' | 'caution' | 'skip';
+export type Culprit = 'bank' | 'us' | 'mixed' | 'none' | 'unknown';
+export type Rec = 'recommend' | 'caution' | 'skip';
 
 interface Finding { title: string; culprit?: string; detail: string }
-interface Diagnosis {
+export interface Diagnosis {
   summary: string; culprit: Culprit; severity: string;
   findings: Finding[]; recommendation: string;
   actions: { addMissing?: Rec; fixDates?: Rec; fixAmounts?: Rec };
@@ -27,13 +27,13 @@ interface AddItem { b2Id: string | null; generalId: string | null; amount: numbe
 interface DateItem { txId: string; newDate: string; fromDate: string; amount: number; direction: string | null; docNumber: string | null; name: string | null }
 interface AmtItem { txId: string; newAmount: number; dbAmount: number; bankAmount: number; diff: number; direction: string | null; docNumber: string | null; name: string | null; purpose: string | null }
 interface UnresItem { txId: string | null; amount: number; direction: string | null; docNumber: string | null; name: string | null; purpose: string | null }
-interface Proposed { addMissing: AddItem[]; fixDates: DateItem[]; fixAmounts: AmtItem[]; unresolved: UnresItem[] }
-interface AnalyzeResult {
+export interface Proposed { addMissing: AddItem[]; fixDates: DateItem[]; fixAmounts: AmtItem[]; unresolved: UnresItem[] }
+export interface AnalyzeResult {
   ok: true; status: 'ok' | 'mismatch' | 'error'; error?: string;
   diagnosis: Diagnosis | null; proposed: Proposed | null; rec?: any;
 }
 
-const CULPRIT_META: Record<Culprit, { cls: string; Icon: any }> = {
+export const CULPRIT_META: Record<Culprit, { cls: string; Icon: any }> = {
   bank:    { cls: 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 ring-rose-200 dark:ring-rose-900', Icon: Building2 },
   us:      { cls: 'text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 ring-sky-200 dark:ring-sky-900', Icon: UserCog },
   mixed:   { cls: 'text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 ring-amber-200 dark:ring-amber-900', Icon: GitFork },
@@ -41,7 +41,7 @@ const CULPRIT_META: Record<Culprit, { cls: string; Icon: any }> = {
   unknown: { cls: 'text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 ring-slate-200 dark:ring-slate-700', Icon: ShieldAlert },
 };
 
-const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
+export const m = (n: number) => formatMoney(Number(n || 0)).replace(' UZS', '');
 
 export function SverkaAgentPanel({
   accountId, date, onApplied,
@@ -314,7 +314,7 @@ export function SverkaAgentPanel({
   );
 }
 
-function ActionGroup({
+export function ActionGroup({
   keyName, Icon, tone, title, count, total, rec, checked, onToggle, expanded, onExpand, t, children,
 }: {
   keyName: string; Icon: any; tone: 'indigo' | 'emerald' | 'orange';
@@ -357,7 +357,7 @@ function ActionGroup({
   );
 }
 
-function ItemRow({ dir, amount, doc, name, note }: {
+export function ItemRow({ dir, amount, doc, name, note }: {
   dir: string | null; amount: number; doc: string | null; name: string | null; note: string | null;
 }) {
   return (
