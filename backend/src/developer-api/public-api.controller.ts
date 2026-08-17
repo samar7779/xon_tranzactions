@@ -260,24 +260,17 @@ export class PublicApiController {
       this.prisma.oplataKvHistory.count({ where }),
       this.prisma.oplataKvHistory.findMany({ where, orderBy, skip: (pageN - 1) * perPageN, take: perPageN }),
     ]);
-    // changes = o'chirish vaqtidagi to'liq OplataKv snapshot (JSON)
-    const snaps = rows.map((r) => {
-      const snap: any = (r.changes && typeof r.changes === 'object' && !Array.isArray(r.changes)) ? r.changes : {};
-      return { r, snap };
-    });
-    const orderIdMap = await this.orderIdMapForContracts(snaps.map((s) => s.snap.contractNo ?? null));
+    // Tombstone — snapshot'dan aniqlovchi maydonlar (turli formatlar robust o'qiladi) + audit.
+    const orderIdMap = await this.orderIdMapForContracts(
+      rows.map((r) => { const cn = this.snapVal(r.changes, 'contractNo'); return typeof cn === 'string' ? cn : null; }),
+    );
+    const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
     return {
       ok: true,
       total,
       page: pageN,
       perPage: perPageN,
-      items: snaps.map(({ r, snap }) => ({
-        ...this.oplataKvShape(snap, orderIdMap.get((snap.contractNo || '').toUpperCase()) ?? null),
-        deleted: true,
-        deletedAt: r.createdAt,
-        deletedBy: r.actorName ?? null,
-        deletedReason: r.note ?? null,
-      })),
+      items: rows.map((r) => this.deletedTombstone(r, oid)),
     };
   }
 
@@ -330,10 +323,10 @@ export class PublicApiController {
 
     const contractNos: (string | null)[] = [
       ...aRows.map((a) => a.contractNo),
-      ...bRows.map((b) => { const s: any = (b.changes && typeof b.changes === 'object' && !Array.isArray(b.changes)) ? b.changes : {}; return s.contractNo ?? null; }),
+      ...bRows.map((b) => { const cn = this.snapVal(b.changes, 'contractNo'); return typeof cn === 'string' ? cn : null; }),
     ];
     const orderIdMap = await this.orderIdMapForContracts(contractNos);
-    const oid = (cn: string | null | undefined) => orderIdMap.get((cn || '').toUpperCase()) ?? null;
+    const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
 
     const items = taken.map((e) => {
       if (e.src === 'A') {
@@ -345,12 +338,18 @@ export class PublicApiController {
         if (isActive) {
           return { ...this.oplataKvShapeMoney(it, oid(it.contractNo)), deleted: false };
         }
-        // Split emas / olib tashlangan → tombstone. Mijoz bu id'ni bazasidan o'chirsin (bo'lsa).
-        return { id: it.id, contractNo: it.contractNo, order_id: oid(it.contractNo), deleted: true, reason: 'inactive', updatedAt: this.clampFuture(it.updatedAt) };
+        // Split emas / olib tashlangan → tombstone. Qator hali bazada — to'liq aniqlovchi
+        // maydonlar bilan beramiz (mijoz aynan qaysi to'lovligini biladi).
+        return {
+          id: it.id, sourceTxId: it.sourceTxId ?? null,
+          contractNo: it.contractNo, order_id: oid(it.contractNo),
+          client: it.client, object: it.object,
+          paymentAmount: it.paymentAmount != null ? String(it.paymentAmount) : null,
+          date: it.date, purpose: it.purpose, txType: it.txType,
+          deleted: true, reason: 'inactive', updatedAt: this.clampFuture(it.updatedAt),
+        };
       }
-      const r = e.b;
-      const snap: any = (r.changes && typeof r.changes === 'object' && !Array.isArray(r.changes)) ? r.changes : {};
-      return { id: r.oplataKvId, contractNo: snap.contractNo ?? null, order_id: oid(snap.contractNo), deleted: true, reason: 'deleted', deletedAt: r.createdAt, deletedBy: r.actorName ?? null, deletedReason: r.note ?? null };
+      return this.deletedTombstone(e.b, oid);
     });
 
     const hasMore = evs.length > lim || aRows.length === lim || bRows.length === lim;
@@ -755,6 +754,7 @@ export class PublicApiController {
   private oplataKvShape(it: any, orderId: string | null = null) {
     return {
       id: it.id,
+      sourceTxId: it.sourceTxId ?? null,   // barqaror bank tranzaksiya id (ix id)
       contractNo: it.contractNo,
       order_id: orderId,   // CRM order/shartnoma ID (contractNo bo'yicha CrmContract'dan)
       date: it.date,
@@ -777,6 +777,7 @@ export class PublicApiController {
   private oplataKvShapeMoney(it: any, orderId: string | null = null) {
     return {
       id: it.id,
+      sourceTxId: it.sourceTxId ?? null,   // barqaror bank tranzaksiya id (ix id) — mijoz shu bo'yicha solishtiradi
       contractNo: it.contractNo,
       order_id: orderId,
       date: it.date,
@@ -794,6 +795,48 @@ export class PublicApiController {
       perereboskaGroupId: it.perereboskaGroupId ?? null,
       createdAt: this.clampFuture(it.createdAt),
       updatedAt: this.clampFuture(it.updatedAt),
+    };
+  }
+
+  /**
+   * O'chirish snapshot'idan bitta maydon qiymatini oladi. Snapshot 3 xil formatda kelishi mumkin:
+   *  - { snapshot: {...to'liq qator} }   (deleteRowById)
+   *  - { field: { old, new } }           (cleanup/diff format) → old olinadi
+   *  - { field: value }                  (tekis)
+   */
+  private snapVal(changes: any, field: string): any {
+    if (!changes || typeof changes !== 'object') return null;
+    const src = (changes.snapshot && typeof changes.snapshot === 'object' && !Array.isArray(changes.snapshot)) ? changes.snapshot : changes;
+    const v = src?.[field];
+    if (v == null) return null;
+    if (typeof v === 'object' && !Array.isArray(v) && ('old' in v || 'new' in v)) return (v as any).old ?? null;
+    return v;
+  }
+
+  /** Hard-delete tombstone — snapshot'dan BARCHA aniqlovchi maydonlar + to'liq audit (kim/nima/qachon). */
+  private deletedTombstone(r: any, oid: (cn: any) => string | null): any {
+    const cn = this.snapVal(r.changes, 'contractNo');
+    const amt = this.snapVal(r.changes, 'paymentAmount');
+    const fi = this.snapVal(r.changes, 'firstInstallment');
+    const mo = this.snapVal(r.changes, 'monthlyAmount');
+    return {
+      id: r.oplataKvId,                                   // sync = bank kompozit (Transaction.externalId)
+      sourceTxId: this.snapVal(r.changes, 'sourceTxId'),  // barqaror bank tranzaksiya id (mijoz shu bo'yicha solishtiradi)
+      contractNo: typeof cn === 'string' ? cn : null,
+      order_id: oid(cn),
+      client: this.snapVal(r.changes, 'client'),
+      object: this.snapVal(r.changes, 'object'),
+      paymentAmount: amt != null ? String(amt) : null,
+      firstInstallment: fi != null ? String(fi) : null,
+      monthlyAmount: mo != null ? String(mo) : null,
+      date: this.snapVal(r.changes, 'date'),
+      purpose: this.snapVal(r.changes, 'purpose'),
+      txType: this.snapVal(r.changes, 'txType'),
+      deleted: true,
+      reason: 'deleted',
+      deletedAt: r.createdAt,                             // QACHON o'chirilgan
+      deletedBy: r.actorName ?? null,                     // KIM o'chirgan
+      deletedReason: r.note ?? null,                      // NIMAGA o'chirilgan
     };
   }
 

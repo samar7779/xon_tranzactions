@@ -2914,7 +2914,7 @@ export class OplataKvService {
     // Faqat tranzaksiya-manba qatorlarni qaraymiz
     const rows = await this.prisma.oplataKv.findMany({
       where: { sourceTxId: { not: null } },
-      select: { id: true, contractNo: true },
+      select: { id: true, contractNo: true, sourceTxId: true, client: true, object: true, paymentAmount: true, date: true, purpose: true, txType: true },
     });
     const contractNos = Array.from(new Set(rows.map((r) => r.contractNo)));
     const verified = await this.prisma.crmContract.findMany({
@@ -2942,7 +2942,11 @@ export class OplataKvService {
           actorId: opts.actor?.id ?? null,
           actorName: opts.actor?.name || 'system · cleanupXato',
           fieldsChanged: [],
-          changes: { contractNo: { old: r.contractNo, new: null } } as any,
+          changes: { snapshot: {
+            id: r.id, sourceTxId: r.sourceTxId, contractNo: r.contractNo, client: r.client, object: r.object,
+            paymentAmount: r.paymentAmount?.toString() ?? null, date: r.date ? r.date.toISOString().slice(0, 10) : null,
+            purpose: r.purpose, txType: r.txType,
+          } } as any,
           note: `XATO contract cleanup — CRM'da topilmagan`,
         })),
       });
@@ -4219,21 +4223,25 @@ export class OplataKvService {
     while (true) {
       const rows = await this.prisma.oplataKv.findMany({
         where: { importBatchId: batchId },
-        select: { id: true },
+        select: { id: true, sourceTxId: true, contractNo: true, client: true, object: true, paymentAmount: true, date: true, purpose: true, txType: true },
         take: CHUNK,
       });
       if (rows.length === 0) break;
       const ids = rows.map((r) => r.id);
 
-      // Audit yozuvi — har bir qatorni o'chirilganini history'ga yozamiz
-      const historyData: any[] = ids.map((id) => ({
-        oplataKvId: id,
+      // Audit yozuvi — har qatorning TO'LIQ snapshot'i (mijoz aynan qaysi to'lovligini bilsin) + audit.
+      const historyData: any[] = rows.map((row) => ({
+        oplataKvId: row.id,
         action: 'deleted',
         actorType: 'system',
         actorId: null,
         actorName: `import-batch-delete (${batchId.slice(0, 8)})`,
         fieldsChanged: ['*'],
-        changes: { reason: 'Import batch o\'chirildi' },
+        changes: { snapshot: {
+          id: row.id, sourceTxId: row.sourceTxId, contractNo: row.contractNo, client: row.client, object: row.object,
+          paymentAmount: row.paymentAmount?.toString() ?? null, date: row.date ? row.date.toISOString().slice(0, 10) : null,
+          purpose: row.purpose, txType: row.txType,
+        }, reason: 'Import batch o\'chirildi' },
         note: `Import batch ${batchId.slice(0, 8)} bilan birga o'chirildi`,
       }));
       await this.prisma.oplataKvHistory.createMany({ data: historyData });
