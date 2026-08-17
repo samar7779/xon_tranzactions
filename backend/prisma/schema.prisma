@@ -982,6 +982,7 @@ model OplataKv {
   @@index([paymentCategory])
   @@index([importBatchId])
   @@index([perereboskaGroupId])
+  @@index([updatedAt, id]) // /v1/oplata-kv/changes keyset delta feed uchun (tez pagination)
   @@map("oplata_kv")
 }
 
@@ -1225,6 +1226,7 @@ model OplataKvHistory {
   @@index([oplataKvId, createdAt(sort: Desc)])
   @@index([actorId])
   @@index([action])
+  @@index([action, createdAt]) // /changes o'chirish tombstone keyset feed uchun
   @@map("oplata_kv_history")
 }
 

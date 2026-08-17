@@ -850,8 +850,12 @@ export class PublicApiController {
 
   /** changes feed kursori — ikki manba (oplata_kv updatedAt/id + history deleted createdAt/id) opaque base64. */
   private parseChangesCursor(cursor?: string): { u: Date; ui: string; d: Date; di: string } {
-    const zero = { u: new Date(0), ui: '', d: new Date(0), di: '' };
-    if (!cursor) return zero;
+    // Birinchi so'rov (cursor yo'q) yoki noto'g'ri cursor: UPSERT'lar epoch'dan (barcha aktiv
+    // to'lovlar backfill), lekin O'CHIRISHLAR HOZIRDAN (d=now). Sabab: yangi mijoz o'tmishdagi
+    // o'chirishlarni (u hech qachon ko'rmagan id'lar) olishi shart emas — bu faqat shovqin va
+    // sekinlik edi. Keyingi so'rovlarda ikkala kursor ham saqlangan qiymatdan davom etadi.
+    const fresh = () => ({ u: new Date(0), ui: '', d: new Date(), di: '' });
+    if (!cursor) return fresh();
     try {
       const j = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
       return {
@@ -860,7 +864,7 @@ export class PublicApiController {
         d: j?.d != null ? new Date(Number(j.d)) : new Date(0),
         di: typeof j?.di === 'string' ? j.di : '',
       };
-    } catch { return zero; }
+    } catch { return fresh(); }
   }
 
   private makeChangesCursor(c: { u: Date; ui: string; d: Date; di: string }): string {
