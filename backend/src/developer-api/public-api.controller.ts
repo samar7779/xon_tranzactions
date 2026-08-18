@@ -365,16 +365,12 @@ export class PublicApiController {
       return this.deletedTombstone(e.b, oid);
     });
 
-    // Eski (fix'dan oldingi) o'chirishlarda hech qanday aniqlovchi ma'lumot saqlanmagan —
-    // faqat id + sabab (sourceTxId/contractNo/client hammasi null). Bunday tombstone mijozga
-    // foydasiz (u bu ID'ni hech qachon olmagan — eski import id'lari), shuning uchun sync
-    // feed'idan chiqaramiz. Kursor baribir suriladi (qayta kelmaydi, cheksiz aylanmaydi).
-    const visible = items.filter((x: any) =>
-      !(x.deleted === true && x.reason === 'deleted' && !x.sourceTxId && !x.contractNo && !x.client),
-    );
-
+    // MUHIM: tombstone'larni FILTRLAMAYMIZ. Aniqlovchi ma'lumot (contractNo/client) bo'sh
+    // bo'lsa ham `id` bor — mijoz shu id bo'yicha o'chiradi (bo'lmasa e'tibormaydi). Avval
+    // "bo'sh" deb filtrlaganimiz import o'chirishlarini yashirib, CRM'da to'lovlar stale
+    // qolib ketgan edi — o'chirish HECH QACHON tushib qolmasligi kerak.
     const hasMore = evs.length > lim || aRows.length === lim || bRows.length === lim;
-    return { ok: true, items: visible, nextCursor: this.makeChangesCursor(nc), hasMore };
+    return { ok: true, items, nextCursor: this.makeChangesCursor(nc), hasMore };
   }
 
   @Get('oplata-kv/:id')
@@ -863,11 +859,10 @@ export class PublicApiController {
 
   /** changes feed kursori — ikki manba (oplata_kv updatedAt/id + history deleted createdAt/id) opaque base64. */
   private parseChangesCursor(cursor?: string): { u: Date; ui: string; d: Date; di: string } {
-    // Birinchi so'rov (cursor yo'q) yoki noto'g'ri cursor: UPSERT'lar epoch'dan (barcha aktiv
-    // to'lovlar backfill), lekin O'CHIRISHLAR HOZIRDAN (d=now). Sabab: yangi mijoz o'tmishdagi
-    // o'chirishlarni (u hech qachon ko'rmagan id'lar) olishi shart emas — bu faqat shovqin va
-    // sekinlik edi. Keyingi so'rovlarda ikkala kursor ham saqlangan qiymatdan davom etadi.
-    const fresh = () => ({ u: new Date(0), ui: '', d: new Date(), di: '' });
+    // Birinchi so'rov (cursor yo'q) yoki noto'g'ri cursor: upsert VA o'chirishlar epoch'dan
+    // (to'liq). O'chirish HECH QACHON o'tkazib yuborilmasligi kerak — aks holda mijozda stale
+    // to'lov qolib ketadi. Faqat yaqin davr kerak bo'lsa: days / since (ikkalasini ham suradi).
+    const fresh = () => ({ u: new Date(0), ui: '', d: new Date(0), di: '' });
     if (!cursor) return fresh();
     try {
       const j = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
