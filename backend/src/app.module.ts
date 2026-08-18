@@ -38,6 +38,7 @@ import { CorrectionModule } from './correction/correction.module';
 import { CorrectionBotModule } from './correction-bot/correction-bot.module';
 import { ShmitdModule } from './shmitd/shmitd.module';
 import { BankPwdModule } from './bank-pwd/bank-pwd.module';
+import { CrmSverkaModule } from './crm-sverka/crm-sverka.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { BankPwdModule } from './bank-pwd/bank-pwd.module';
     DeployModule,
     ApiExplorerModule,
     CrmModule,
+    CrmSverkaModule,
     CounterpartiesModule,
     SverkaTelegramModule,
     CategorizationModule,

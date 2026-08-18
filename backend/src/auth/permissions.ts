@@ -41,6 +41,10 @@ export const PERMISSIONS = {
   TRANSACTIONS_SVERKA_VIEW: 'transactions:sverka_view',
   TRANSACTIONS_SVERKA_FIX: 'transactions:sverka_fix',           // Sana tuzatish, fix-missing
 
+  // Tranzaksiyalar — Sverka CRM tab (CRM to'lovlari ↔ ОплатыКв, shartnoma kesimida)
+  TRANSACTIONS_SVERKA_CRM_VIEW: 'transactions:sverka_crm_view', // Sahifani ochish + ro'yxat + drill-down
+  TRANSACTIONS_SVERKA_CRM_RUN: 'transactions:sverka_crm_run',   // CRM'dan jonli tortish (Yangilash)
+
   // Tranzaksiyalar — O'zgargan to'lovlar tab (bank tomonida o'chirilgan/o'zgartirilganlar)
   CHANGED_TXN_VIEW: 'changed_txn:view',                         // Sahifani ochish + ro'yxat
   CHANGED_TXN_CHECK: 'changed_txn:check',                       // Qo'lda re-verify ishga tushirish
@@ -211,6 +215,8 @@ export const PERMISSION_TREE: PermModule[] = [
           { value: PERMISSIONS.TRANSACTIONS_VIPISKA_VIEW, label: 'Vipiska sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_VIEW, label: 'Sverka sahifasi' },
           { value: PERMISSIONS.TRANSACTIONS_SVERKA_FIX, label: 'Sverka\'da sana/yozuv tuzatish' },
+          { value: PERMISSIONS.TRANSACTIONS_SVERKA_CRM_VIEW, label: 'Sverka CRM sahifasi (CRM ↔ ОплатыКв)' },
+          { value: PERMISSIONS.TRANSACTIONS_SVERKA_CRM_RUN, label: 'Sverka CRM — CRM\'dan jonli yangilash' },
           { value: PERMISSIONS.CHANGED_TXN_VIEW, label: 'O\'zgargan to\'lovlar tab — ko\'rish' },
           { value: PERMISSIONS.CHANGED_TXN_CHECK, label: 'O\'zgargan to\'lovlar — qo\'lda tekshirish (sana oralig\'i)' },
           { value: PERMISSIONS.VZNOS_VIEW, label: 'Взнос от имени клиента tab — ko\'rish' },
