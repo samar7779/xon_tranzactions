@@ -36,6 +36,14 @@ export interface SheetTarget {
   // yangisini qo'shadi, DB'da yo'q qatorlarni tozalaydi.
   writeMode?: 'replace' | 'upsert';
   keyField?: string; // upsert uchun kalit maydon (default: 1-ustun field'i)
+  // Avtomatik jadval (cron): har N daqiqada, soat oralig'ida, tanlangan hafta kunlari.
+  cron?: {
+    enabled?: boolean;
+    everyMinutes?: number;  // har N daqiqa (min 1)
+    hourFrom?: number;      // 0-23 — shu soatdan (ixtiyoriy)
+    hourTo?: number;        // 0-23 — shu soatgacha (ixtiyoriy)
+    days?: number[];        // 0=Yakshanba .. 6=Shanba; bo'sh = har kun
+  };
   columns: SheetColumn[];
 }
 
@@ -272,6 +280,13 @@ export class GoogleExportService {
       },
       writeMode: s.writeMode === 'upsert' ? 'upsert' : 'replace',
       keyField: s.keyField && fieldSet.has(s.keyField) ? s.keyField : undefined,
+      cron: s.cron ? {
+        enabled: !!s.cron.enabled,
+        everyMinutes: Math.max(1, Math.floor(Number(s.cron.everyMinutes) || 60)),
+        hourFrom: s.cron.hourFrom != null ? Math.min(23, Math.max(0, Math.floor(Number(s.cron.hourFrom)))) : undefined,
+        hourTo: s.cron.hourTo != null ? Math.min(23, Math.max(0, Math.floor(Number(s.cron.hourTo)))) : undefined,
+        days: Array.isArray(s.cron.days) ? s.cron.days.map((d) => Math.floor(Number(d))).filter((d) => d >= 0 && d <= 6) : [],
+      } : undefined,
       columns: columns
         .filter((c) => c.col && c.field)
         .map((c) => ({ col: String(c.col).toUpperCase(), field: c.field })),
@@ -597,6 +612,97 @@ export class GoogleExportService {
         durationMs: Date.now() - startedAt,
       };
     }
+  }
+
+  // ═══ CRON — avtomatik jadval (har N daqiqa, soat oralig'i, hafta kunlari) ═══
+  private cronLastRun: Record<string, number> = {}; // sheetId → oxirgi ishga tushish (epoch ms)
+
+  /** Run natijasini ExportCronLog'ga yozadi (cron va qo'lda — ikkalasi ham). */
+  private async logExportRun(target: SheetTarget, result: any, mode: 'cron' | 'manual', triggeredBy: string): Promise<void> {
+    try {
+      await this.prisma.exportCronLog.create({
+        data: {
+          sheetId: target?.id || '',
+          sheetName: target?.name || '',
+          source: target?.source || 'oplatakv',
+          writeMode: target?.writeMode || 'replace',
+          mode,
+          status: result?.ok ? 'ok' : 'error',
+          rowsFetched: Number(result?.rowsFetched || 0),
+          rowsWritten: Number(result?.rowsWritten || 0),
+          durationMs: Number(result?.durationMs || 0),
+          error: result?.ok ? null : (result?.error || null),
+          triggeredBy: triggeredBy?.slice(0, 118) || null,
+        },
+      });
+    } catch (e: any) {
+      this.log.warn(`Export log yozish xato: ${e?.message}`);
+    }
+  }
+
+  /** Bitta sheet'ni ishga tushirib, natijani log'ga yozadi. */
+  async runAndLog(target: SheetTarget, mode: 'cron' | 'manual', triggeredBy: string) {
+    const result = await this.run(target);
+    await this.logExportRun(target, result, mode, triggeredBy);
+    return result;
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async exportSheetsCronTick(): Promise<void> {
+    try {
+      const sheets = await this.getRawConfig();
+      const cronSheets = sheets.filter((s) => s.cron?.enabled);
+      if (cronSheets.length === 0) return;
+
+      const tash = new Date(Date.now() + 5 * 60 * 60 * 1000); // UTC+5
+      const hour = tash.getUTCHours();
+      const dow = tash.getUTCDay(); // 0=Yakshanba .. 6=Shanba
+      const now = Date.now();
+
+      for (const s of cronSheets) {
+        const c = s.cron!;
+        if (Array.isArray(c.days) && c.days.length > 0 && !c.days.includes(dow)) continue; // kun mos emas
+        if (c.hourFrom != null && hour < c.hourFrom) continue;                              // soatdan oldin
+        if (c.hourTo != null && hour > c.hourTo) continue;                                  // soatdan keyin
+        const every = Math.max(1, Number(c.everyMinutes) || 60);
+        const last = this.cronLastRun[s.id] || 0;
+        if (now - last < every * 60 * 1000) continue; // interval hali to'lmagan
+        this.cronLastRun[s.id] = now;
+
+        this.log.log(`Export cron: "${s.name}" ishga tushdi (har ${every} daq)`);
+        const r = await this.runAndLog(s, 'cron', 'cron');
+        this.log.log(`Export cron natija "${s.name}": ${r.ok ? `OK ${r.rowsWritten} qator` : `XATO ${r.error}`}`);
+      }
+    } catch (e: any) {
+      this.log.warn(`Export cron tick xato: ${e?.message}`);
+    }
+  }
+
+  /** Cron log — paginatsiya + sana/ish/status filtri (Log sub-tab uchun). */
+  async getCronLogs(opts: { page?: number; pageSize?: number; sheetId?: string; dateFrom?: string; dateTo?: string; status?: string }) {
+    const page = Math.max(1, Number(opts.page) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(opts.pageSize) || 20));
+    const where: any = {};
+    if (opts.sheetId) where.sheetId = opts.sheetId;
+    if (opts.status === 'ok' || opts.status === 'error') where.status = opts.status;
+    if (opts.dateFrom || opts.dateTo) {
+      where.startedAt = {};
+      if (opts.dateFrom) where.startedAt.gte = new Date(opts.dateFrom);
+      if (opts.dateTo) where.startedAt.lte = new Date(`${opts.dateTo}T23:59:59.999`);
+    }
+    const [total, items] = await Promise.all([
+      this.prisma.exportCronLog.count({ where }),
+      this.prisma.exportCronLog.findMany({ where, orderBy: { startedAt: 'desc' }, skip: (page - 1) * pageSize, take: pageSize }),
+    ]);
+    // Filtr dropdowni uchun — log'da uchraydigan sheet'lar
+    const sheetsInLog = await this.prisma.exportCronLog.findMany({
+      distinct: ['sheetId'], select: { sheetId: true, sheetName: true }, orderBy: { sheetName: 'asc' }, take: 200,
+    });
+    return {
+      ok: true, page, pageSize, total, pages: Math.max(1, Math.ceil(total / pageSize)),
+      items,
+      sheets: sheetsInLog.map((s) => ({ sheetId: s.sheetId, sheetName: s.sheetName })),
+    };
   }
 
   // ─── FAYL YUKLAB OLISH (JSON/SQL/Excel/CSV/...) ────────────────────

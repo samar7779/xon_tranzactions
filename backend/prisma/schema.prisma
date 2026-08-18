@@ -1353,3 +1353,24 @@ model ShmitdLog {
   @@index([targetDate])
   @@map("shmitd_logs")
 }
+
+// Google Sheets export ishga tushishlari tarixi (cron va qo'lda) — Cron log sub-tab uchun.
+model ExportCronLog {
+  id          String   @id @default(cuid())
+  sheetId     String   @map("sheet_id") @db.VarChar(80)
+  sheetName   String   @map("sheet_name") @db.VarChar(190)
+  source      String?  @db.VarChar(20) // oplatakv | transaction
+  writeMode   String?  @map("write_mode") @db.VarChar(20) // replace | upsert
+  mode        String   @default("cron") @db.VarChar(20) // cron | manual
+  status      String   @default("ok") @db.VarChar(20) // ok | error
+  rowsFetched Int      @default(0) @map("rows_fetched")
+  rowsWritten Int      @default(0) @map("rows_written")
+  durationMs  Int      @default(0) @map("duration_ms")
+  error       String?  @db.Text
+  triggeredBy String?  @map("triggered_by") @db.VarChar(120) // cron | manual:<email>
+  startedAt   DateTime @default(now()) @map("started_at")
+
+  @@index([startedAt(sort: Desc)])
+  @@index([sheetId])
+  @@map("export_cron_logs")
+}

@@ -77,8 +77,26 @@ export class GoogleExportController {
   @Post('run')
   @RequirePermissions(PERMISSIONS.EXPORT_RUN)
   @ApiOperation({ summary: 'Bitta sheet uchun eksport (clear + yozish). To\'liq natija/xato qaytadi.' })
-  run(@Body() body: RunExportDto) {
-    return this.svc.run(body.target);
+  run(@Body() body: RunExportDto, @CurrentUser() user?: AuthUser) {
+    return this.svc.runAndLog(body.target, 'manual', `manual:${actorLabel(user)}`);
+  }
+
+  @Get('cron/logs')
+  @RequirePermissions(PERMISSIONS.EXPORT_VIEW)
+  @ApiOperation({ summary: 'Cron/qo\'lda ishga tushishlar tarixi (paginatsiya + sana/ish/status filtri)' })
+  cronLogs(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sheetId') sheetId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.svc.getCronLogs({
+      page: page ? Number(page) : 1,
+      pageSize: pageSize ? Number(pageSize) : 20,
+      sheetId, dateFrom, dateTo, status,
+    });
   }
 
   @Get('download')

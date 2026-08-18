@@ -35,6 +35,7 @@ interface SheetTarget {
   filter: { objects?: string[]; categories?: string[]; txTypes?: string[]; accounts?: string[]; amountSign?: 'pos' | 'neg' | null };
   writeMode?: 'replace' | 'upsert';
   keyField?: string;
+  cron?: { enabled?: boolean; everyMinutes?: number; hourFrom?: number; hourTo?: number; days?: number[] };
   columns: SheetColumn[];
 }
 interface ConfigResp {
@@ -158,6 +159,13 @@ export default function AdminExportPage() {
   const [sheets, setSheets] = useState<SheetTarget[]>([]);
   const [dirty, setDirty] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+
+  // Cron modal (avtomatik jadval + tarix)
+  const [cronOpen, setCronOpen] = useState(false);
+  const setSheetCron = (sheetId: string, cron: SheetTarget['cron']) => {
+    setSheets((prev) => prev.map((s) => (s.id === sheetId ? { ...s, cron } : s)));
+    setDirty(true);
+  };
 
   // Fayl yuklab olish (JSON/SQL/Excel/...)
   const [dlOpen, setDlOpen] = useState(false);
@@ -316,6 +324,13 @@ export default function AdminExportPage() {
           )}
         </div>
         <div className="flex-1" />
+        <button
+          onClick={() => setCronOpen(true)}
+          title="Cron — avtomatik jadval va ishga tushishlar tarixi"
+          className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 grid place-items-center transition-colors"
+        >
+          <Clock className="h-5 w-5" />
+        </button>
         {canDownload && (
           <button
             onClick={() => setDlOpen(true)}
@@ -326,6 +341,18 @@ export default function AdminExportPage() {
           </button>
         )}
       </div>
+
+      {/* ─── Cron modal (avtomatik jadval + tarix) ─── */}
+      <CronModal
+        open={cronOpen}
+        onClose={() => setCronOpen(false)}
+        sheets={sheets}
+        canManage={canManage}
+        dirty={dirty}
+        saving={saveMut.isPending}
+        onSetCron={setSheetCron}
+        onSave={() => saveMut.mutate()}
+      />
 
       {tab === 'sheets' && (<>
 
@@ -574,6 +601,190 @@ export default function AdminExportPage() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CRON modal — avtomatik jadval (Rejalar) + ishga tushishlar tarixi (Log)
+// ═══════════════════════════════════════════════════════════════════════
+const CRON_DAYS = [
+  { v: 1, l: 'Du' }, { v: 2, l: 'Se' }, { v: 3, l: 'Ch' }, { v: 4, l: 'Pa' },
+  { v: 5, l: 'Ju' }, { v: 6, l: 'Sh' }, { v: 0, l: 'Ya' },
+];
+
+function CronModal({
+  open, onClose, sheets, canManage, dirty, saving, onSetCron, onSave,
+}: {
+  open: boolean; onClose: () => void; sheets: SheetTarget[]; canManage: boolean;
+  dirty: boolean; saving: boolean;
+  onSetCron: (sheetId: string, cron: SheetTarget['cron']) => void; onSave: () => void;
+}) {
+  const [tab, setTab] = useState<'schedules' | 'logs'>('schedules');
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="max-w-3xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><Clock className="h-5 w-5 text-indigo-600 dark:text-indigo-400" /> Avtomatik jadval (Cron)</DialogTitle>
+          <DialogDescription className="text-[12px]">Sheetlarni belgilangan jadval bo'yicha avtomat ishga tushiring va tarixni ko'ring.</DialogDescription>
+        </DialogHeader>
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-800 w-fit">
+          {([['schedules', 'Rejalar'], ['logs', 'Log (tarix)']] as const).map(([v, l]) => (
+            <button key={v} onClick={() => setTab(v)} className={cn('px-3.5 h-8 rounded-lg text-[12.5px] font-semibold transition-colors', tab === v ? 'bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 shadow-sm' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>{l}</button>
+          ))}
+        </div>
+        {tab === 'schedules'
+          ? <CronSchedules sheets={sheets} canManage={canManage} dirty={dirty} saving={saving} onSetCron={onSetCron} onSave={onSave} />
+          : <CronLogs />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CronSchedules({ sheets, canManage, dirty, saving, onSetCron, onSave }: {
+  sheets: SheetTarget[]; canManage: boolean; dirty: boolean; saving: boolean;
+  onSetCron: (sheetId: string, cron: SheetTarget['cron']) => void; onSave: () => void;
+}) {
+  const [page, setPage] = useState(1);
+  const PAGE = 5;
+  const pages = Math.max(1, Math.ceil(sheets.length / PAGE));
+  const shown = sheets.slice((page - 1) * PAGE, page * PAGE);
+  return (
+    <div className="space-y-3">
+      <div className="max-h-[52vh] overflow-y-auto space-y-2.5 pr-1">
+        {sheets.length === 0
+          ? <div className="text-[12px] text-slate-400 py-6 text-center">Sheet yo'q — avval qo'shing</div>
+          : shown.map((s) => <CronSheetRow key={s.id} sheet={s} canManage={canManage} onSetCron={onSetCron} />)}
+      </div>
+      {pages > 1 && <Pager page={page} pages={pages} onPage={setPage} />}
+      {canManage && (
+        <div className="flex items-center justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+          <Button onClick={onSave} disabled={saving || !dirty} className="h-9 gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-[12.5px] font-semibold">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {dirty ? 'Saqlash' : 'Saqlangan'}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CronSheetRow({ sheet, canManage, onSetCron }: {
+  sheet: SheetTarget; canManage: boolean; onSetCron: (sheetId: string, cron: SheetTarget['cron']) => void;
+}) {
+  const c = sheet.cron || {};
+  const set = (patch: Partial<NonNullable<SheetTarget['cron']>>) => onSetCron(sheet.id, { ...c, ...patch });
+  const days = new Set(c.days || []);
+  const toggleDay = (d: number) => { const n = new Set(days); if (n.has(d)) n.delete(d); else n.add(d); set({ days: Array.from(n) }); };
+  return (
+    <div className={cn('rounded-xl ring-1 p-3 space-y-2.5 transition-colors', c.enabled ? 'ring-indigo-200 dark:ring-indigo-800 bg-indigo-50/30 dark:bg-indigo-950/20' : 'ring-slate-200 dark:ring-slate-700')}>
+      <div className="flex items-center gap-2">
+        <span className="w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 grid place-items-center shrink-0"><SheetIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /></span>
+        <span className="text-[13px] font-bold text-slate-800 dark:text-slate-100 flex-1 truncate">{sheet.name}</span>
+        <button disabled={!canManage} onClick={() => set({ enabled: !c.enabled })} className={cn('relative w-9 h-5 rounded-full transition-colors shrink-0 disabled:opacity-60', c.enabled ? 'bg-indigo-600' : 'bg-slate-300 dark:bg-slate-600')}>
+          <span className={cn('absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform', c.enabled && 'translate-x-4')} />
+        </button>
+      </div>
+      {c.enabled && (
+        <div className="space-y-2 pl-1">
+          <div className="flex items-center gap-2 flex-wrap text-[12px]">
+            <span className="text-slate-500 dark:text-slate-400">Har</span>
+            <input type="number" min={1} value={c.everyMinutes || 60} onChange={(e) => set({ everyMinutes: Math.max(1, Number(e.target.value) || 1) })} disabled={!canManage} className="w-16 h-8 rounded-lg text-center bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-indigo-400" />
+            <span className="text-slate-500 dark:text-slate-400">daqiqada</span>
+            <span className="mx-1 text-slate-300">·</span>
+            <span className="text-slate-500 dark:text-slate-400">soat</span>
+            <input type="number" min={0} max={23} placeholder="0" value={c.hourFrom ?? ''} onChange={(e) => set({ hourFrom: e.target.value === '' ? undefined : Math.min(23, Math.max(0, Number(e.target.value))) })} disabled={!canManage} className="w-14 h-8 rounded-lg text-center bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-indigo-400" />
+            <span className="text-slate-500 dark:text-slate-400">dan</span>
+            <input type="number" min={0} max={23} placeholder="23" value={c.hourTo ?? ''} onChange={(e) => set({ hourTo: e.target.value === '' ? undefined : Math.min(23, Math.max(0, Number(e.target.value))) })} disabled={!canManage} className="w-14 h-8 rounded-lg text-center bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-indigo-400" />
+            <span className="text-slate-500 dark:text-slate-400">gacha</span>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[12px] text-slate-500 dark:text-slate-400">Kunlar:</span>
+            {CRON_DAYS.map((d) => {
+              const on = days.has(d.v);
+              return <button key={d.v} disabled={!canManage} onClick={() => toggleDay(d.v)} className={cn('w-8 h-7 rounded-lg text-[11px] font-semibold ring-1 transition-colors', on ? 'bg-indigo-600 text-white ring-indigo-700' : 'bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 ring-slate-200 dark:ring-slate-700')}>{d.l}</button>;
+            })}
+            <span className="text-[10px] text-slate-400">(bo'sh = har kun)</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CronLogs() {
+  const [page, setPage] = useState(1);
+  const [sheetId, setSheetId] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [status, setStatus] = useState('');
+  const q = useQuery({
+    queryKey: ['export-cron-logs', page, sheetId, dateFrom, dateTo, status],
+    queryFn: () => api.get<any>(`/google-export/cron/logs?${new URLSearchParams({ page: String(page), ...(sheetId && { sheetId }), ...(dateFrom && { dateFrom }), ...(dateTo && { dateTo }), ...(status && { status }) }).toString()}`),
+  });
+  const data = q.data;
+  const items: any[] = data?.items || [];
+  const logSheets: any[] = data?.sheets || [];
+  return (
+    <div className="space-y-3">
+      <div className="flex items-end gap-2 flex-wrap">
+        <select value={sheetId} onChange={(e) => { setSheetId(e.target.value); setPage(1); }} className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-2 outline-none">
+          <option value="">Barcha ishlar</option>
+          {logSheets.map((s) => <option key={s.sheetId} value={s.sheetId}>{s.sheetName}</option>)}
+        </select>
+        <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-2 outline-none">
+          <option value="">Barcha holat</option>
+          <option value="ok">OK</option>
+          <option value="error">Xato</option>
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1); }} className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-2 outline-none" />
+        <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1); }} className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 px-2 outline-none" />
+        <button onClick={() => q.refetch()} title="Yangilash" className="h-9 w-9 rounded-lg bg-slate-100 dark:bg-slate-800 grid place-items-center text-slate-500"><RefreshCw className={cn('h-4 w-4', q.isFetching && 'animate-spin')} /></button>
+      </div>
+      <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 overflow-hidden">
+        <div className="max-h-[44vh] overflow-auto">
+          <table className="w-full text-[11.5px]">
+            <thead className="bg-slate-50 dark:bg-slate-900 sticky top-0 text-[9.5px] uppercase text-slate-400 z-10">
+              <tr>
+                <th className="text-left px-3 py-2 font-semibold">Vaqt</th>
+                <th className="text-left px-3 py-2 font-semibold">Ish</th>
+                <th className="text-left px-3 py-2 font-semibold">Rejim</th>
+                <th className="text-right px-3 py-2 font-semibold">Qator</th>
+                <th className="text-left px-3 py-2 font-semibold">Holat</th>
+                <th className="text-left px-3 py-2 font-semibold">Kim</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {q.isLoading ? (
+                <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400"><Loader2 className="h-4 w-4 animate-spin inline" /></td></tr>
+              ) : items.length === 0 ? (
+                <tr><td colSpan={6} className="px-3 py-6 text-center text-slate-400">Yozuv yo'q</td></tr>
+              ) : items.map((it) => (
+                <tr key={it.id}>
+                  <td className="px-3 py-1.5 font-mono text-slate-500 dark:text-slate-400 whitespace-nowrap">{new Date(it.startedAt).toLocaleString('ru-RU')}</td>
+                  <td className="px-3 py-1.5 font-semibold text-slate-700 dark:text-slate-200 truncate max-w-[140px]">{it.sheetName}</td>
+                  <td className="px-3 py-1.5"><span className={cn('text-[10px] px-1.5 py-0.5 rounded', it.mode === 'cron' ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500')}>{it.mode}</span></td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-slate-700 dark:text-slate-200">{it.rowsWritten}</td>
+                  <td className="px-3 py-1.5">{it.status === 'ok'
+                    ? <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400"><CheckCircle2 className="h-3 w-3" /> OK</span>
+                    : <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400" title={it.error || ''}><AlertTriangle className="h-3 w-3" /> Xato</span>}</td>
+                  <td className="px-3 py-1.5 text-slate-500 dark:text-slate-400 truncate max-w-[120px]" title={it.triggeredBy || ''}>{it.triggeredBy || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {(data?.pages || 1) > 1 && <Pager page={page} pages={data.pages} onPage={setPage} />}
+    </div>
+  );
+}
+
+function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (p: number) => void }) {
+  return (
+    <div className="flex items-center justify-center gap-2 text-[12px]">
+      <button disabled={page <= 1} onClick={() => onPage(page - 1)} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronLeft className="h-4 w-4" /></button>
+      <span className="text-slate-500 dark:text-slate-400 tabular-nums">{page} / {pages}</span>
+      <button disabled={page >= pages} onClick={() => onPage(page + 1)} className="h-8 w-8 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 grid place-items-center disabled:opacity-40 hover:bg-slate-50 dark:hover:bg-slate-800"><ChevronRight className="h-4 w-4" /></button>
     </div>
   );
 }
