@@ -1344,7 +1344,9 @@ export class OplataKvService {
         select: { txType: true }, orderBy: { txType: 'asc' }, take: 1000,
       }),
     ]);
-    const clean = (arr: (string | null)[]) => Array.from(new Set(arr.map((x) => (x || '').trim()).filter(Boolean))).sort();
+    // MUHIM: qiymatlarni TRIM QILMAYMIZ — filtr DB'dagi AYNAN qiymat bilan solishtiradi.
+    // (trim qilsak, DB'da probelli qiymat bo'lsa, tanlangan qiymat mos kelmay bo'sh qaytardi.)
+    const clean = (arr: (string | null)[]) => Array.from(new Set(arr.filter((x): x is string => !!x && !!x.trim()))).sort();
     return {
       objects: clean(objs.map((o) => o.object)),
       txTypes: clean(types.map((t) => t.txType)),

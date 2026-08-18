@@ -819,7 +819,10 @@ function MultiSelectDropdown({
     <div ref={ref} className="relative">
       <button
         type="button" disabled={disabled} onClick={() => setOpen((o) => !o)}
-        className="w-full h-9 px-3 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 flex items-center gap-2 text-left disabled:opacity-60 outline-none focus:ring-2 focus:ring-indigo-400"
+        className={cn(
+          'w-full h-11 px-3.5 rounded-xl text-[12.5px] border border-slate-200/80 dark:border-slate-700/70 bg-slate-50/60 dark:bg-slate-900/50 shadow-sm flex items-center gap-2 text-left disabled:opacity-60 outline-none transition-all hover:border-slate-300 dark:hover:border-slate-600',
+          open && 'ring-[3px] ring-indigo-500/25 border-indigo-400 bg-white dark:bg-slate-900',
+        )}
       >
         <span className={cn('flex-1 truncate', selected.length ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>
           {selected.length === 0 ? (placeholder || 'Barchasi') : selected.length === options.length ? 'Barchasi tanlangan' : `${selected.length} ta tanlangan`}
@@ -994,7 +997,7 @@ function SheetCard({
               onChange={(e) => onChange({ spreadsheetId: e.target.value })}
               disabled={!canManage}
               placeholder="1AbC…xyz  yoki  to'liq havola"
-              className="h-9 rounded-lg font-mono text-[12px]"
+              className={cn(PRO_INPUT, 'font-mono')}
             />
           </Field>
           <Field label="Jadval (list) nomi" icon={<SheetIcon className="h-3.5 w-3.5" />}>
@@ -1003,7 +1006,7 @@ function SheetCard({
               onChange={(e) => onChange({ tabName: e.target.value })}
               disabled={!canManage}
               placeholder="Ойлик"
-              className="h-9 rounded-lg text-[12px]"
+              className={cn(PRO_INPUT)}
             />
           </Field>
           <Field label="Boshlanish qatori" icon={<Hash className="h-3.5 w-3.5" />}>
@@ -1012,7 +1015,7 @@ function SheetCard({
               value={sheet.startRow}
               onChange={(e) => onChange({ startRow: Number(e.target.value) || 1 })}
               disabled={!canManage}
-              className="h-9 rounded-lg text-[12px] w-32"
+              className={cn(PRO_INPUT, 'w-32')}
             />
           </Field>
           <Field label="Sana (bundan → bugungacha)" icon={<CalendarDays className="h-3.5 w-3.5" />}>
@@ -1021,7 +1024,7 @@ function SheetCard({
               value={sheet.dateFrom || ''}
               onChange={(e) => onChange({ dateFrom: e.target.value })}
               disabled={!canManage}
-              className="h-9 rounded-lg text-[12px]"
+              className={cn(PRO_INPUT)}
             />
           </Field>
         </div>
@@ -1117,23 +1120,18 @@ function SheetCard({
                   onChange={(e) => setColumn(i, { col: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
                   disabled={!canManage}
                   placeholder="A"
-                  className="w-14 h-8 rounded-lg text-center font-mono font-bold text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-indigo-700 dark:text-indigo-300 outline-none focus:ring-indigo-400 uppercase"
+                  className="w-16 h-11 rounded-xl text-center font-mono font-bold text-[13px] bg-gradient-to-br from-indigo-50 to-violet-50 dark:from-indigo-950/40 dark:to-violet-950/30 border border-indigo-200/70 dark:border-indigo-800/60 text-indigo-700 dark:text-indigo-300 outline-none shadow-sm transition-all focus:ring-[3px] focus:ring-indigo-500/25 focus:border-indigo-400 uppercase shrink-0"
                 />
-                <ArrowRight className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                <select
-                  value={c.field}
-                  onChange={(e) => setColumn(i, { field: e.target.value })}
-                  disabled={!canManage}
-                  className="flex-1 h-8 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none focus:ring-indigo-400 px-2"
-                >
+                <ArrowRight className="h-4 w-4 text-slate-300 dark:text-slate-600 shrink-0" />
+                <ProSelect value={c.field} onChange={(v) => setColumn(i, { field: v })} disabled={!canManage} className="flex-1">
                   {fieldsForSource(sheet.source).map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
-                </select>
+                </ProSelect>
                 {canManage && (
                   <button
                     onClick={() => removeColumn(i)}
-                    className="w-8 h-8 rounded-lg grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors shrink-0"
+                    className="w-11 h-11 rounded-xl grid place-items-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 ring-1 ring-transparent hover:ring-rose-200 dark:hover:ring-rose-900 transition-all shrink-0"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 )}
               </div>
@@ -1184,16 +1182,16 @@ function SheetCard({
             <>
               <div className="flex items-end gap-3 flex-wrap">
                 <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
-                  <select
+                  <ProSelect
                     value={sheet.keyField || sheet.columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || sheet.columns[0]?.field || ''}
-                    onChange={(e) => onChange({ keyField: e.target.value })}
+                    onChange={(v) => onChange({ keyField: v })}
                     disabled={!canManage}
-                    className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none px-2 w-full max-w-xs"
+                    className="w-full max-w-xs"
                   >
                     {sheet.columns.filter((c) => c.field).map((c) => (
                       <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
                     ))}
-                  </select>
+                  </ProSelect>
                 </Field>
                 <button
                   type="button" onClick={downloadKeys}
@@ -1323,11 +1321,31 @@ function ResultView({ result }: { result: RunResult }) {
 }
 
 // ─── Yordamchi UI ─────────────────────────────────────────────────────
+// Premium input/select uslublari — barcha maydonlarda bir xil "pro" ko'rinish.
+const PRO_INPUT = 'h-11 rounded-xl border border-slate-200/80 dark:border-slate-700/70 bg-slate-50/60 dark:bg-slate-900/50 text-[12.5px] shadow-sm transition-all focus-visible:ring-[3px] focus-visible:ring-indigo-500/25 focus-visible:border-indigo-400 focus-visible:bg-white dark:focus-visible:bg-slate-900 focus-visible:ring-offset-0 hover:border-slate-300 dark:hover:border-slate-600 placeholder:text-slate-400';
+
+function ProSelect({ value, onChange, disabled, children, className }: {
+  value: string; onChange: (v: string) => void; disabled?: boolean; children: React.ReactNode; className?: string;
+}) {
+  return (
+    <div className={cn('relative', className)}>
+      <select
+        value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}
+        className="w-full h-11 pl-3.5 pr-9 rounded-xl border border-slate-200/80 dark:border-slate-700/70 bg-slate-50/60 dark:bg-slate-900/50 text-[12.5px] text-slate-700 dark:text-slate-200 shadow-sm appearance-none outline-none transition-all focus:ring-[3px] focus:ring-indigo-500/25 focus:border-indigo-400 focus:bg-white dark:focus:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-60 cursor-pointer"
+      >
+        {children}
+      </select>
+      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+    </div>
+  );
+}
+
 function Field({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="space-y-1">
-      <label className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-        {icon}{label}
+    <div className="space-y-1.5">
+      <label className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1.5">
+        {icon && <span className="w-5 h-5 rounded-md bg-indigo-50 dark:bg-indigo-950/50 text-indigo-500 dark:text-indigo-400 grid place-items-center shrink-0">{icon}</span>}
+        <span className="tracking-tight">{label}</span>
       </label>
       {children}
     </div>
