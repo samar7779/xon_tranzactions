@@ -413,8 +413,12 @@ export class GoogleExportService {
     return this.oplataKv.distinctExportFilters();
   }
 
-  /** Sheet oxirgi upsert'da yozgan kalitlar (ID'lar) — yuklab olish uchun. */
+  /** Sheet oxirgi export'da yozgan noyob row ID'lari (ix_id) — yuklab olish uchun. */
   async getUpsertKeys(sheetId: string) {
+    // Yuklab olish uchun — HAR DOIM noyob row ID (ix_id). Sana/kalit-ustun EMAS.
+    const ids = await this.loadWrittenIds(sheetId);
+    if (ids.length) return { ok: true, sheetId, count: ids.length, keys: ids };
+    // Backward-compat: writtenIds hali yozilmagan bo'lsa, eski upsertKeys'ni qaytaramiz.
     const keys = Array.from(await this.loadUpsertKeys(sheetId));
     return { ok: true, sheetId, count: keys.length, keys };
   }
@@ -431,6 +435,67 @@ export class GoogleExportService {
     try {
       await this.settings.set(`export.upsertKeys.${sheetId}`, JSON.stringify(keys.slice(0, 200000)), 'export');
     } catch { /* skip */ }
+  }
+
+  /**
+   * Sheet oxirgi export'da yozgan NOYOB row ID'lari (ix_id) — API jamosiga berish uchun.
+   * upsertKeys'dan farqli: bu HAR DOIM row.id (sana/kalit-ustun emas), mapping'ga bog'liq emas.
+   */
+  private async loadWrittenIds(sheetId: string): Promise<string[]> {
+    try {
+      const raw = await this.settings.get(`export.writtenIds.${sheetId}`);
+      if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(String); }
+    } catch { /* skip */ }
+    return [];
+  }
+  private async saveWrittenIds(sheetId: string, ids: string[]): Promise<void> {
+    try {
+      await this.settings.set(`export.writtenIds.${sheetId}`, JSON.stringify(ids.slice(0, 200000)), 'export');
+    } catch { /* skip */ }
+  }
+
+  /** Ustun harfi (A, B, …, AA) → 0-based indeks. */
+  private colToIdx(letter: string): number {
+    let n = 0; for (const ch of String(letter).toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1;
+  }
+
+  /**
+   * Google Sheets grid (qator/ustun soni) yozish uchun yetarli bo'lishini ta'minlaydi.
+   * Grid chegarasidan tashqariga yozib bo'lmaydi ("exceeds grid limits" xatosi) —
+   * shuning uchun kerak bo'lsa jadvalni oldindan kengaytiramiz (rowCount/columnCount oshiramiz).
+   * Faqat o'stiradi, hech qачон kichraytirmaydi (mavjud ma'lumot yo'qolmaydi).
+   */
+  private async ensureGrid(
+    sheetsApi: any, spreadsheetId: string, tabName: string,
+    neededRows: number, neededCols: number,
+  ): Promise<void> {
+    const meta = await sheetsApi.spreadsheets.get({
+      spreadsheetId,
+      fields: 'sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))',
+    });
+    const sheet = (meta.data.sheets || []).find((s: any) => s.properties?.title === tabName);
+    if (!sheet?.properties) return; // tab topilmasa — keyingi bosqich aniq xato beradi
+    const gp = sheet.properties.gridProperties || {};
+    const curRows = Number(gp.rowCount || 0);
+    const curCols = Number(gp.columnCount || 0);
+    const wantRows = Math.max(curRows, Math.ceil(neededRows));
+    const wantCols = Math.max(curCols, Math.ceil(neededCols));
+    if (wantRows <= curRows && wantCols <= curCols) return; // joy yetarli
+    await sheetsApi.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: {
+        requests: [{
+          updateSheetProperties: {
+            properties: {
+              sheetId: sheet.properties.sheetId,
+              gridProperties: { rowCount: wantRows, columnCount: wantCols },
+            },
+            fields: 'gridProperties.rowCount,gridProperties.columnCount',
+          },
+        }],
+      },
+    });
+    this.log.log(`Grid kengaytirildi: "${tabName}" → ${wantRows} qator × ${wantCols} ustun`);
   }
 
   /**
@@ -522,6 +587,11 @@ export class GoogleExportService {
         i = j + 1;
       }
     }
+    // Grid yetarli bo'lsin — yangi qatorlar/ustunlar grid chegarasidan ("exceeds grid limits") oshmasin.
+    let maxSheetRow = startRow;
+    for (const c of columns) for (const rr of touched[c.col].keys()) if (rr > maxSheetRow) maxSheetRow = rr;
+    await this.ensureGrid(sheetsApi, spreadsheetId, tabName, maxSheetRow, maxIdx + 1);
+
     if (data.length > 0) {
       await sheetsApi.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
     }
@@ -593,6 +663,8 @@ export class GoogleExportService {
         const prevKeys = await this.loadUpsertKeys(target.id);
         const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField, prevKeys);
         await this.saveUpsertKeys(target.id, up.dbKeys);
+        // ix_id (noyob row ID) — API jamosiga «Yuklab olish» uchun (mapping'ga bog'liq emas).
+        await this.saveWrittenIds(target.id, rows.map((r) => String(r.id ?? '')).filter(Boolean));
         writtenRange = up.writtenRange;
         rowsWritten = up.rowsWritten;
         clearedRanges = up.clearedRanges;
@@ -612,6 +684,9 @@ export class GoogleExportService {
             majorDimension: 'COLUMNS' as const,
             values: [rows.map((r) => this.cellValue(r, c.field))],
           }));
+          // Grid yetarli bo'lsin — "exceeds grid limits" xatosining oldini olamiz.
+          const maxColIdx = Math.max(...columns.map((c) => this.colToIdx(c.col)));
+          await this.ensureGrid(sheetsApi, spreadsheetId, target.tabName, startRow + rows.length - 1, maxColIdx + 1);
           await sheetsApi.spreadsheets.values.batchUpdate({
             spreadsheetId,
             requestBody: { valueInputOption: 'USER_ENTERED', data },
@@ -625,6 +700,8 @@ export class GoogleExportService {
         if (keyF) {
           await this.saveUpsertKeys(target.id, rows.map((r) => String(this.cellValue(r, keyF) ?? '').trim()).filter(Boolean));
         }
+        // ix_id (noyob row ID) — API jamosiga «Yuklab olish» uchun (mapping'ga bog'liq emas).
+        await this.saveWrittenIds(target.id, rows.map((r) => String(r.id ?? '')).filter(Boolean));
       }
 
       const durationMs = Date.now() - startedAt;
