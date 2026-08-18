@@ -325,6 +325,26 @@ export class TransactionsService {
     }));
   }
 
+  /** Export "oldindan ko'rish" — hisob(lar) + sana bo'yicha nechta tranzaksiya mos kelishini sanaydi. */
+  async countForExport(filter: { accounts?: string[]; dateFrom?: string | null; dateTo?: string | null }): Promise<{ filtered: number; total: number }> {
+    const dateWhere: Prisma.TransactionWhereInput = {};
+    if (filter.dateFrom || filter.dateTo) {
+      const range: any = {};
+      if (filter.dateFrom) range.gte = new Date(filter.dateFrom);
+      if (filter.dateTo) range.lte = new Date(`${filter.dateTo}T23:59:59.999`);
+      dateWhere.txnDate = range;
+    }
+    const where: Prisma.TransactionWhereInput = { ...dateWhere };
+    if (filter.accounts && filter.accounts.length > 0) {
+      where.account = { accountNo: { in: filter.accounts.map((a) => String(a).trim()).filter(Boolean) } };
+    }
+    const [filtered, total] = await Promise.all([
+      this.prisma.transaction.count({ where }),
+      this.prisma.transaction.count({ where: dateWhere }),
+    ]);
+    return { filtered, total };
+  }
+
   private buildListArgs(where: any, page: number, perPage: number): Prisma.TransactionFindManyArgs {
     return {
         where,

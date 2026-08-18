@@ -52,6 +52,11 @@ interface RunResult {
   rowsFetched?: number;
   rowsWritten?: number;
   writtenRange?: string | null;
+  writeMode?: 'replace' | 'upsert';
+  appliedFilter?: {
+    objects?: number; txTypes?: number; categories?: number;
+    amountSign?: 'pos' | 'neg' | null; accounts?: number;
+  };
   columns?: SheetColumn[];
   dateFrom?: string | null;
   dateTo?: string;
@@ -197,9 +202,13 @@ export default function AdminExportPage() {
   const distinctObjects = distinctQuery.data?.objects || [];
   const distinctTxTypes = distinctQuery.data?.txTypes || [];
 
-  // Config yuklangach local state'ni to'ldiramiz (bo'sh bo'lsa 2 ta shablon)
+  // Config yuklangach local state'ni to'ldiramiz (bo'sh bo'lsa 2 ta shablon).
+  // MUHIM: FAQAT bir marta (initedRef) — keyingi refetch (Saqlash/credential
+  // invalidatsiyasi) SAQLANMAGAN filtr tanlovlarini O'CHIRIB yubormasin.
+  const initedRef = useRef(false);
   useEffect(() => {
-    if (!cfgQuery.data) return;
+    if (!cfgQuery.data || initedRef.current) return;
+    initedRef.current = true;
     const s = cfgQuery.data.sheets || [];
     if (s.length > 0) setSheets(s);
     else setSheets([blankSheet(0), blankSheet(1)]);
@@ -891,6 +900,7 @@ function SheetCard({
 }) {
   const [result, setResult] = useState<RunResult | null>(null);
   const [open, setOpen] = useState(false); // kirganda yopiq tursin
+  const [preview, setPreview] = useState<{ filtered: number; total: number } | null>(null);
 
   const runMut = useMutation({
     mutationFn: () => api.post<RunResult>('/google-export/run', { target: sheet }, { timeout: 300_000 }),
@@ -903,6 +913,15 @@ function SheetCard({
     onError: (e: any) => {
       setResult({ ok: false, step: 'network', error: e?.message || 'Server bilan aloqa uzildi' });
     },
+  });
+
+  // Oldindan ko'rish — joriy (saqlanmagan) filtr bilan nechta qator mos kelishini
+  // Sheets'ga YOZMASDAN ko'rsatadi. Filtr TA'SIR qilayotganini shu yerda isbotlaydi.
+  const previewMut = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; filtered: number; total: number }>('/google-export/preview-count', { target: sheet }, { timeout: 120_000 }),
+    onMutate: () => setPreview(null),
+    onSuccess: (r) => setPreview({ filtered: r.filtered, total: r.total }),
+    onError: (e: any) => toast.error(e?.message || 'Ko\'rishda xato'),
   });
 
   const disabledRun = !canRun || !credsAvailable || runMut.isPending;
@@ -1211,7 +1230,7 @@ function SheetCard({
         </div>
 
         {/* Bajarish + natija */}
-        <div className="flex items-center gap-3 pt-1">
+        <div className="flex items-center gap-3 pt-1 flex-wrap">
           <Button
             onClick={() => runMut.mutate()}
             disabled={disabledRun}
@@ -1220,6 +1239,24 @@ function SheetCard({
             {runMut.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Play className="h-5 w-5" />}
             {runMut.isPending ? 'Bajarilmoqda…' : 'Bajarish'}
           </Button>
+          {/* Oldindan ko'rish — filtr TA'SIR qilayotganini yozmasdan tekshirish */}
+          <button
+            type="button" onClick={() => previewMut.mutate()} disabled={previewMut.isPending}
+            title="Joriy filtr bilan nechta qator mos kelishini Sheets'ga yozmasdan ko'rsatadi"
+            className="inline-flex items-center gap-1.5 h-11 px-3.5 rounded-lg text-[12px] font-semibold bg-slate-50 dark:bg-slate-900 text-slate-700 dark:text-slate-200 ring-1 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
+          >
+            {previewMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+            Nechta qator?
+          </button>
+          {preview && (
+            <span className={cn('text-[12px] font-medium px-2.5 h-8 inline-flex items-center rounded-lg ring-1',
+              preview.filtered < preview.total
+                ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40 ring-emerald-200 dark:ring-emerald-900'
+                : 'text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700')}>
+              Filtr bilan: <b className="tabular-nums mx-1">{preview.filtered.toLocaleString()}</b> / {preview.total.toLocaleString()} qator
+              {preview.filtered < preview.total ? ' · filtr ishlayapti ✓' : ' · filtr yo\'q (hammasi)'}
+            </span>
+          )}
           {!canRun && <span className="text-[11px] text-slate-400">Ishga tushirish uchun ruxsat yo'q</span>}
           {canRun && !credsAvailable && <span className="text-[11px] text-amber-600">Avval service-account'ni ulang</span>}
         </div>
@@ -1313,6 +1350,17 @@ function ResultView({ result }: { result: RunResult }) {
                 ))}
               </div>
             )}
+            {result.appliedFilter && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                <span className="text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">Serverga yetgan filtr:</span>
+                <AppliedFilterChips f={result.appliedFilter} />
+              </div>
+            )}
+            {result.writeMode === 'upsert' && (
+              <div className="text-[10.5px] text-amber-600 dark:text-amber-400 pt-0.5">
+                ⚠ «Yangilash» rejimi — jadval TOZALANMAYDI. Filtrga tushmagan ESKI qatorlar Sheets'da qoladi (shuning uchun «filtr ishlamayapti»dek ko'rinadi). Toza (faqat filtrlangan) natija uchun <b>«Tozalab qayta yozish»</b>ni tanlang.
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1358,6 +1406,24 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <div className="text-[9.5px] uppercase tracking-wider font-bold text-slate-400 dark:text-slate-500">{label}</div>
       <div className="text-[15px] font-bold tabular-nums text-slate-800 dark:text-slate-200 mt-0.5">{value}</div>
     </div>
+  );
+}
+
+// Serverga aynan yetib kelgan filtr — chipslar. Bo'sh bo'lsa "filtr yo'q" (klobber belgisi).
+function AppliedFilterChips({ f }: { f: NonNullable<RunResult['appliedFilter']> }) {
+  const chips: string[] = [];
+  if (f.objects) chips.push(`Объект: ${f.objects}`);
+  if (f.txTypes) chips.push(`Тип: ${f.txTypes}`);
+  if (f.categories) chips.push(`Оплата: ${f.categories}`);
+  if (f.amountSign) chips.push(`Сумма: ${f.amountSign === 'pos' ? '0 dan baland (+)' : '0 dan kichik (−)'}`);
+  if (f.accounts) chips.push(`Hisob: ${f.accounts}`);
+  if (chips.length === 0) return <span className="text-[10.5px] text-slate-400 italic">filtr yo'q (hammasi yoziladi)</span>;
+  return (
+    <>
+      {chips.map((c) => (
+        <span key={c} className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800 text-[10.5px] font-medium">{c}</span>
+      ))}
+    </>
   );
 }
 

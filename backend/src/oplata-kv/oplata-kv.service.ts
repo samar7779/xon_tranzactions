@@ -1332,6 +1332,36 @@ export class OplataKvService {
     return rows.map((r) => ({ ...r, crmXato: isXato(r) }));
   }
 
+  /**
+   * Export "oldindan ko'rish" — filtr bilan nechta qator mos kelishini (yozmasdan) sanaydi.
+   * `filtered` = barcha filtr qo'llangan holdagi son (eksport shuncha yozadi),
+   * `total` = FAQAT sana oralig'idagi son (filtrsiz baseline — solishtirish uchun).
+   */
+  async countForExport(filter: {
+    dateFrom?: string | null; dateTo?: string | null;
+    objects?: string[] | null; categories?: string[] | null;
+    txTypes?: string[] | null; amountSign?: 'pos' | 'neg' | null;
+  }): Promise<{ filtered: number; total: number }> {
+    const dateWhere: Prisma.OplataKvWhereInput = {};
+    if (filter.dateFrom || filter.dateTo) {
+      const range: any = {};
+      if (filter.dateFrom) range.gte = new Date(filter.dateFrom);
+      if (filter.dateTo)   range.lte = new Date(`${filter.dateTo}T23:59:59.999`);
+      dateWhere.date = range;
+    }
+    const where: Prisma.OplataKvWhereInput = { ...dateWhere };
+    if (filter.objects && filter.objects.length > 0) where.object = { in: filter.objects };
+    if (filter.categories && filter.categories.length > 0) where.paymentCategory = { in: filter.categories as OplataKvCategory[] };
+    if (filter.txTypes && filter.txTypes.length > 0) where.txType = { in: filter.txTypes };
+    if (filter.amountSign === 'pos') where.paymentAmount = { gt: 0 };
+    else if (filter.amountSign === 'neg') where.paymentAmount = { lt: 0 };
+    const [filtered, total] = await Promise.all([
+      this.prisma.oplataKv.count({ where }),
+      this.prisma.oplataKv.count({ where: dateWhere }),
+    ]);
+    return { filtered, total };
+  }
+
   /** Export filtrlari uchun mavjud (distinct) Объект va Тип qiymatlari — dropdown uchun. */
   async distinctExportFilters() {
     const [objs, types] = await Promise.all([

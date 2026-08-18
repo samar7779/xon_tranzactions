@@ -413,6 +413,27 @@ export class GoogleExportService {
     return this.oplataKv.distinctExportFilters();
   }
 
+  /**
+   * Oldindan ko'rish — joriy filtr bilan nechta qator mos kelishini (yozmasdan) qaytaradi.
+   * Foydalanuvchi «Bajarish»dan oldin filtr TA'SIR qilayotganini ko'radi (filtered < total).
+   */
+  async previewCount(target: SheetTarget) {
+    const dateTo = this.todayTashkent();
+    const res = target.source === 'transaction'
+      ? await this.transactions.countForExport({
+          accounts: target.filter?.accounts || [],
+          dateFrom: target.dateFrom || null, dateTo,
+        })
+      : await this.oplataKv.countForExport({
+          dateFrom: target.dateFrom || null, dateTo,
+          objects: target.filter?.objects || [],
+          categories: target.filter?.categories || [],
+          txTypes: target.filter?.txTypes || [],
+          amountSign: target.filter?.amountSign || null,
+        });
+    return { ok: true, ...res, dateFrom: target.dateFrom || null, dateTo };
+  }
+
   /** Sheet oxirgi export'da yozgan noyob row ID'lari (ix_id) — yuklab olish uchun. */
   async getUpsertKeys(sheetId: string) {
     // Yuklab olish uchun — HAR DOIM noyob row ID (ix_id). Sana/kalit-ustun EMAS.
@@ -715,6 +736,16 @@ export class GoogleExportService {
         rowsFetched: rows.length,
         rowsWritten,
         writtenRange,
+        writeMode: target.writeMode || 'replace',
+        // Serverga AYNAN yetib kelgan filtr (klobber/uzatilmaganini fosh qiladi).
+        appliedFilter: target.source === 'transaction'
+          ? { accounts: (target.filter?.accounts || []).length }
+          : {
+              objects: (target.filter?.objects || []).length,
+              txTypes: (target.filter?.txTypes || []).length,
+              categories: (target.filter?.categories || []).length,
+              amountSign: target.filter?.amountSign || null,
+            },
         columns: columns.map((c) => ({ col: c.col, field: c.field })),
         dateFrom: target.dateFrom || null,
         dateTo,

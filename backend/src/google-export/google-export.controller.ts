@@ -74,6 +74,13 @@ export class GoogleExportController {
     return this.svc.testConnection();
   }
 
+  @Post('preview-count')
+  @RequirePermissions(PERMISSIONS.EXPORT_VIEW)
+  @ApiOperation({ summary: 'Filtr bilan nechta qator mos kelishini oldindan ko\'rish (Sheets\'ga yozmasdan)' })
+  previewCount(@Body() body: RunExportDto) {
+    return this.svc.previewCount(body.target);
+  }
+
   @Post('run')
   @RequirePermissions(PERMISSIONS.EXPORT_RUN)
   @ApiOperation({ summary: 'Bitta sheet uchun eksport (clear + yozish). To\'liq natija/xato qaytadi.' })
