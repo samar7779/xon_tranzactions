@@ -924,7 +924,7 @@ function SheetCard({
           )}
           <div className="text-[10.5px] text-slate-400 dark:text-slate-500 pt-1">
             {sheet.writeMode === 'upsert'
-              ? "Jadval TOZALANMAYDI — kalit bo'yicha mavjud qatorlar yangilanadi, yangisi qo'shiladi, DB'da yo'qi tozalanadi."
+              ? "Jadval TOZALANMAYDI — kalit bo'yicha mavjud yangilanadi, yangisi qo'shiladi. Export o'zi yozgani ichidan DB'dan o'chgani tozalanadi; siz QO'LDA qo'shgan qatorlarga tegilmaydi."
               : `Faqat shu ustunlar ${sheet.startRow}-qatordan pastgacha tozalanadi va qayta yoziladi (boshqa ustunlarga tegilmaydi).`}
           </div>
         </div>
@@ -937,7 +937,7 @@ function SheetCard({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {([
               ['replace', 'Tozalab qayta yozish', 'Ustunlar tozalanadi, hammasi qaytadan yoziladi'],
-              ['upsert', 'Yangilash (tozalamasdan)', "Mavjudni yangilaydi, yangisini qo'shadi, DB'da yo'qini tozalaydi"],
+              ['upsert', 'Yangilash (tozalamasdan)', "Mavjudni yangilaydi, yangisini qo'shadi. Qo'lda qo'shilgan qatorlarga TEGMAYDI"],
             ] as const).map(([v, title, desc]) => {
               const active = (sheet.writeMode || 'replace') === v;
               return (

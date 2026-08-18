@@ -397,6 +397,20 @@ export class GoogleExportService {
     return this.oplataKv.distinctExportFilters();
   }
 
+  /** Upsert uchun — sheet oxirgi marta yozgan kalitlar (qo'lda qo'shilganni ajratish uchun). */
+  private async loadUpsertKeys(sheetId: string): Promise<Set<string>> {
+    try {
+      const raw = await this.settings.get(`export.upsertKeys.${sheetId}`);
+      if (raw) { const arr = JSON.parse(raw); if (Array.isArray(arr)) return new Set(arr.map(String)); }
+    } catch { /* skip */ }
+    return new Set();
+  }
+  private async saveUpsertKeys(sheetId: string, keys: string[]): Promise<void> {
+    try {
+      await this.settings.set(`export.upsertKeys.${sheetId}`, JSON.stringify(keys.slice(0, 200000)), 'export');
+    } catch { /* skip */ }
+  }
+
   /**
    * UPSERT — Google Sheets'ni tozalamasdan sinxronlaydi:
    *   keyField bo'yicha mavjud qatorni UPDATE qiladi, yangisini QO'SHADI,
@@ -404,8 +418,9 @@ export class GoogleExportService {
    */
   private async upsertRows(
     sheetsApi: any, spreadsheetId: string, quotedTab: string, tabName: string,
-    columns: Array<{ col: string; field: string }>, startRow: number, rows: any[], keyFieldOpt?: string,
-  ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[] }> {
+    columns: Array<{ col: string; field: string }>, startRow: number, rows: any[], keyFieldOpt: string | undefined,
+    prevKeys: Set<string>,
+  ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[]; dbKeys: string[] }> {
     const keyField = keyFieldOpt || columns[0]?.field;
     const keyCol = columns.find((c) => c.field === keyField)?.col;
     if (!keyCol) throw new Error(`Upsert uchun kalit maydon "${keyField}" ustun mapping'da yo'q — uni ustunga qo'shing.`);
@@ -441,10 +456,13 @@ export class GoogleExportService {
       await sheetsApi.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
     }
 
-    // Stale — sheet'da bor, DB'da yo'q kalitlar → o'sha qatorlar ustunlari tozalanadi
+    // Stale — FAQAT avval EXPORT yozgan (prevKeys) va endi DB'da yo'q kalitlar tozalanadi.
+    // Foydalanuvchi QO'LDA qo'shgan qatorlar (prevKeys'da yo'q) — TEGILMAYDI.
     const staleRanges: string[] = [];
     for (const [k, row] of keyToRow.entries()) {
-      if (!dbKeys.has(k)) for (const c of columns) staleRanges.push(`${quotedTab}!${c.col}${row}`);
+      if (prevKeys.has(k) && !dbKeys.has(k)) {
+        for (const c of columns) staleRanges.push(`${quotedTab}!${c.col}${row}`);
+      }
     }
     if (staleRanges.length > 0) {
       await sheetsApi.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: staleRanges } });
@@ -458,6 +476,7 @@ export class GoogleExportService {
       writtenRange,
       rowsWritten: updates.length + news.length,
       clearedRanges: staleRanges.map((r) => r.replace(quotedTab, tabName)),
+      dbKeys: Array.from(dbKeys),
     };
   }
 
@@ -510,10 +529,12 @@ export class GoogleExportService {
       let clearedRanges: string[];
 
       if (target.writeMode === 'upsert') {
-        // UPSERT — jadvalni tozalamaydi: keyField bo'yicha mavjudni update, yangisini
-        // qo'shadi, DB'da yo'q qatorlarni tozalaydi.
+        // UPSERT — jadvalni tozalamaydi. Export o'zi yozgan (prevKeys) qatorlar ichidan
+        // DB'dan o'chganlari tozalanadi; foydalanuvchi QO'LDA qo'shgan qatorlar saqlanadi.
         step = 'write';
-        const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField);
+        const prevKeys = await this.loadUpsertKeys(target.id);
+        const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField, prevKeys);
+        await this.saveUpsertKeys(target.id, up.dbKeys);
         writtenRange = up.writtenRange;
         rowsWritten = up.rowsWritten;
         clearedRanges = up.clearedRanges;
