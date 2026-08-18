@@ -3431,27 +3431,38 @@ export class OplataKvService {
     const sourceByTxId = new Map<string, 'manual' | 'ariza'>();
     let xatoSet = new Set<string>();
 
+    // Postgres bind-limit (32767): katta eksportda `in` ro'yxatini bo'laklarga bo'lamiz.
+    // OR: [externalId in, id in] — bir bo'lak 2× bind ishlatadi, shuning uchun 10000.
     if (sourceTxIds.length > 0) {
-      const tx = await this.prisma.transaction.findMany({
-        where: {
-          OR: [{ externalId: { in: sourceTxIds } }, { id: { in: sourceTxIds } }],
-          isContractManual: true,
-        },
-        select: { id: true, externalId: true, _count: { select: { attachments: true } } },
-      });
-      tx.forEach((t) => {
-        const src: 'manual' | 'ariza' = t._count.attachments > 0 ? 'ariza' : 'manual';
-        if (t.externalId) sourceByTxId.set(t.externalId, src);
-        sourceByTxId.set(t.id, src);
-      });
+      const CHUNK = 10000;
+      for (let i = 0; i < sourceTxIds.length; i += CHUNK) {
+        const part = sourceTxIds.slice(i, i + CHUNK);
+        const tx = await this.prisma.transaction.findMany({
+          where: {
+            OR: [{ externalId: { in: part } }, { id: { in: part } }],
+            isContractManual: true,
+          },
+          select: { id: true, externalId: true, _count: { select: { attachments: true } } },
+        });
+        tx.forEach((t) => {
+          const src: 'manual' | 'ariza' = t._count.attachments > 0 ? 'ariza' : 'manual';
+          if (t.externalId) sourceByTxId.set(t.externalId, src);
+          sourceByTxId.set(t.id, src);
+        });
+      }
     }
 
     if (txContractNos.length > 0) {
-      const verified = await this.prisma.crmContract.findMany({
-        where: { contractNumber: { in: txContractNos } },
-        select: { contractNumber: true, found: true },
-      });
-      const verifiedSet = new Set(verified.filter((c) => c.found).map((c) => c.contractNumber));
+      const CHUNK = 20000;
+      const verifiedSet = new Set<string>();
+      for (let i = 0; i < txContractNos.length; i += CHUNK) {
+        const part = txContractNos.slice(i, i + CHUNK);
+        const verified = await this.prisma.crmContract.findMany({
+          where: { contractNumber: { in: part } },
+          select: { contractNumber: true, found: true },
+        });
+        verified.forEach((c) => { if (c.found) verifiedSet.add(c.contractNumber); });
+      }
       xatoSet = new Set(txContractNos.filter((cn) => !verifiedSet.has(cn)));
     }
 
