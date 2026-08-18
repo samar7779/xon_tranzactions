@@ -246,6 +246,11 @@ export class GoogleExportService {
     if (!Array.isArray(sheets)) throw new BadRequestException("sheets massiv bo'lishi kerak");
     const clean = sheets.map((s, i) => this.validateTarget(s, i));
     await this.settings.set(SETTINGS_KEY, JSON.stringify(clean), updatedBy);
+    // Diagnostika — aynan qanday filtr saqlandi (filtr "ketvoti" shikoyati uchun).
+    const fsum = clean
+      .map((s) => `${s.name}[obj:${s.filter?.objects?.length || 0},typ:${s.filter?.txTypes?.length || 0},cat:${s.filter?.categories?.length || 0},sum:${s.filter?.amountSign || '-'}]`)
+      .join(' ');
+    this.log.log(`Export config saqlandi (${clean.length} sheet) — filtr: ${fsum}`);
     return { ok: true, sheets: clean };
   }
 
