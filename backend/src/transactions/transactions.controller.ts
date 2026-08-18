@@ -319,10 +319,9 @@ export class TransactionsController {
     );
     const c = result?.counts || {};
     const count = (c.addMissing || 0) + (c.fixDates || 0) + (c.fixAmounts || 0);
-    // To'liq hal bo'lsa — botdagi farq xabarini DARROV o'chiramiz (guruhda qolib ketmasin)
-    if (result?.rec?.status === 'ok') {
-      this.sverkaTg.markResolvedFromWeb(body?.accountId, body?.date, email || 'web').catch(() => {});
-    }
+    // Web fix'dan keyin botdagi farq xabarini JORIY holatga keltiramiz
+    // (hal bo'lsa o'chadi, hali farqli bo'lsa qayta tahlil bilan yangilanadi — stale qolmaydi)
+    this.sverkaTg.markResolvedFromWeb(body?.accountId, body?.date, email || 'web').catch(() => {});
     this.sverkaTg.notifySverkaAction({
       action: 'agent-apply',
       label: 'AI agent tuzatishni bajardi',

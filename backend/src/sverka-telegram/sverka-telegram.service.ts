@@ -1230,8 +1230,11 @@ export class SverkaTelegramService implements OnModuleInit {
   }
 
   /**
-   * Web'dan to'g'rilanganda — botdagi SHU farq xabarlarini DARROV "Hal qilindi"
-   * deb yangilaydi (barcha chatlarda, tugma yo'qoladi). reconcile'ni kutmaydi.
+   * Web'dan to'g'rilangandan keyin — botdagi SHU farq xabarini JORIY holatga keltiradi:
+   *   - hisob endi MOS bo'lsa → xabarni o'chiradi;
+   *   - hali farqli bo'lsa → xabarni QAYTA tahlil qilib yangilaydi (eski "qo'shish
+   *     kerak" stale xabar qolmasin — foydalanuvchini chalkashtirmasin);
+   *   - bank olinmasa → tegmaydi (keyingi cron hal qiladi).
    */
   async markResolvedFromWeb(accountId: string, date: string, actorName?: string | null): Promise<void> {
     try {
@@ -1239,17 +1242,42 @@ export class SverkaTelegramService implements OnModuleInit {
       const store = await this.getNotifiedStore(date);
       const entry = store.accounts[accountId];
       if (!entry?.msgs?.length) return; // bu farq uchun bot xabari yo'q
-      // Hal bo'lgan farq — bot xabar(lar)ini O'CHIRAMIZ (guruh to'lmasin; tarix admin'da qoladi).
-      for (const m of entry.msgs) {
-        await this.deleteMsg(String(m.chatId), m.messageId);
+
+      // HAQIQIY holatni tekshiramiz (web fix to'liq hal qildimi?)
+      const reconcile = this.moduleRef.get(ReconcileService, { strict: false });
+      const rec: any = await reconcile.reconcile(accountId, date, date, { withSync: false }).catch(() => null);
+      if (!rec) return; // bank olinmadi — xabarga tegmaymiz
+
+      const fmt = (n: number | undefined) => (n != null ? Number(n).toLocaleString('ru-RU') : '0');
+
+      if (rec.status === 'ok') {
+        // To'liq hal bo'ldi → xabar(lar)ni o'chiramiz
+        for (const m of entry.msgs) await this.deleteMsg(String(m.chatId), m.messageId);
+        delete store.accounts[accountId];
+        await this.saveNotifiedStore(store);
+        await this.appendHistory({
+          action: 'sverka_resolved_web', source: 'web', actorId: null,
+          actorName: actorName || null, details: { accountId, date },
+        });
+        this.log.log(`Web fix → hal bo'ldi, bot xabari o'chirildi: ${accountId} ${date}`);
+        return;
       }
-      delete store.accounts[accountId];
+
+      // Hali farqli — xabarni JORIY holatga qayta tahlil bilan yangilaymiz (stale qolmasin)
+      const notif = await this.buildMismatchNotif(rec, date, fmt, true);
+      if (notif.resolved) {
+        for (const m of entry.msgs) await this.deleteMsg(String(m.chatId), m.messageId);
+        delete store.accounts[accountId];
+      } else {
+        for (const m of entry.msgs) {
+          await this.editMsg(String(m.chatId), m.messageId, notif.text, m.role === 'approver' ? notif.replyMarkup : { inline_keyboard: [] });
+        }
+        entry.diffKey = String(Math.round(Number(rec.diff?.formula) || 0));
+        entry.apply = notif.apply || undefined;
+        entry.dismissed = false;
+      }
       await this.saveNotifiedStore(store);
-      await this.appendHistory({
-        action: 'sverka_resolved_web', source: 'web', actorId: null,
-        actorName: actorName || null, details: { accountId, date },
-      });
-      this.log.log(`Web fix → bot xabari o'chirildi: account=${accountId} date=${date}`);
+      this.log.log(`Web fix → hali farqli, bot xabari yangilandi: ${accountId} ${date}`);
     } catch (e: any) {
       this.log.warn(`markResolvedFromWeb xato: ${e?.message}`);
     }
