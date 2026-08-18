@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
@@ -153,8 +153,11 @@ const DEFAULT_PAGE_LIMIT = 2000;
 /** Bitta sahifa uchun timeout — payment-history og'ir endpoint (60s ba'zan yetmaydi) */
 const DEFAULT_PAGE_TIMEOUT_MS = 180_000;
 
+/** Run holati DB'da shu kalit ostida — server restartidan keyin ham bilinadi */
+const RUN_STATE_KEY = 'crmSverka.lastRun';
+
 @Injectable()
-export class CrmSverkaService {
+export class CrmSverkaService implements OnModuleInit {
   private readonly log = new Logger(CrmSverkaService.name);
 
   // ── Jonli tortish holati (bitta global run) ──
@@ -196,6 +199,43 @@ export class CrmSverkaService {
     private readonly crm: CrmService,
   ) {}
 
+  /**
+   * Boot: oxirgi run 'running' holatida qolgan bo'lsa — demak jarayon o'rtada
+   * uzilgan (server restart / xotira yetmagan). Buni ochiq aytamiz, aks holda
+   * foydalanuvchi sababsiz "tortilmoqda" ekranini ko'rib qoladi.
+   */
+  async onModuleInit() {
+    try {
+      const row = await this.prisma.setting.findUnique({ where: { key: RUN_STATE_KEY } });
+      if (!row?.value) return;
+      const st = JSON.parse(row.value);
+      if (st?.status !== 'running') return;
+
+      this.lastError =
+        "Oldingi tortish o'rtada uzilib qoldi (server qayta ishga tushgan bo'lishi mumkin). " +
+        'Qaytadan urinib ko\'ring — kerak bo\'lsa sahifa hajmini kichraytiring.';
+      this.progress.phase = 'error';
+      this.log.warn(`CRM sverka: uzilib qolgan run topildi (${st.startedAt}) — 'crashed' deb belgilandi`);
+      await this.saveRunState({ ...st, status: 'crashed', finishedAt: new Date().toISOString() });
+    } catch (e: any) {
+      this.log.warn(`CRM sverka run holatini o'qishda xato (jiddiy emas): ${e?.message}`);
+    }
+  }
+
+  /** Run holatini DB'ga yozamiz (restartdan keyin ham ko'rinsin) */
+  private async saveRunState(state: Record<string, any>): Promise<void> {
+    try {
+      const value = JSON.stringify(state);
+      await this.prisma.setting.upsert({
+        where: { key: RUN_STATE_KEY },
+        create: { key: RUN_STATE_KEY, value },
+        update: { value },
+      });
+    } catch (e: any) {
+      this.log.warn(`CRM sverka run holatini saqlashda xato (jiddiy emas): ${e?.message}`);
+    }
+  }
+
   // ═══════════════════ RUN (jonli tortish) ═══════════════════
 
   /**
@@ -221,13 +261,39 @@ export class CrmSverkaService {
       fetchingPage: 1, lastPageMs: 0,
     };
 
-    this.runInBackground().catch((e: any) => {
-      this.lastError = e?.message || String(e);
-      this.progress.phase = 'error';
-      this.running = false;
-      this.finishedAt = new Date();
-      this.log.error(`CRM sverka xato: ${this.lastError}`);
-    });
+    const runMeta = {
+      status: 'running',
+      startedAt: this.startedAt.toISOString(),
+      actor: this.startedBy,
+      limit: this.runLimit,
+      timeoutMs: this.runTimeoutMs,
+    };
+    void this.saveRunState(runMeta);
+
+    this.runInBackground()
+      .then(() => {
+        void this.saveRunState({
+          ...runMeta,
+          status: 'done',
+          finishedAt: new Date().toISOString(),
+          crmCount: this.snapshot?.crm.length ?? 0,
+          ourCount: this.snapshot?.our.length ?? 0,
+          warning: this.lastError,
+        });
+      })
+      .catch((e: any) => {
+        this.lastError = e?.message || String(e);
+        this.progress.phase = 'error';
+        this.running = false;
+        this.finishedAt = new Date();
+        this.log.error(`CRM sverka xato: ${this.lastError}`);
+        void this.saveRunState({
+          ...runMeta,
+          status: 'error',
+          finishedAt: new Date().toISOString(),
+          error: this.lastError,
+        });
+      });
 
     return { ok: true, started: true, message: 'CRM sverka boshlandi' };
   }
@@ -287,8 +353,10 @@ export class CrmSverkaService {
   private async fetchAllCrmPayments(): Promise<{ items: CrmPay[]; pages: number }> {
     const LIMIT = this.runLimit;
     const MAX_PAGES = 1000; // himoya chegarasi (LIMIT kichikroq bo'lgani uchun ko'proq sahifa)
+    const MAX_RECORDS = 600_000; // xotira himoyasi — bundan oshsa CRM javobida nimadir noto'g'ri
     const items: CrmPay[] = [];
     let page = 1;
+    let prevSig = '';
 
     while (page <= MAX_PAGES) {
       this.progress.fetchingPage = page;
@@ -318,6 +386,17 @@ export class CrmSverkaService {
       );
       if (pageItems.length === 0) break;
 
+      // HIMOYA: CRM `page` parametrini e'tiborsiz qoldirsa — har safar AYNAN
+      // o'sha sahifa qaytadi va sikl cheksiz aylanadi (xotira to'lib ketadi).
+      // Sahifa "imzosi" (birinchi+oxirgi external_id) takrorlansa — to'xtaymiz.
+      const sig = `${pageItems[0]?.external_id ?? ''}|${pageItems[pageItems.length - 1]?.external_id ?? ''}`;
+      if (sig !== '|' && sig === prevSig) {
+        this.lastError = `CRM paginatsiyani qo'llamadi (${page}-sahifa avvalgisi bilan bir xil) — ma'lumot to'liq emas`;
+        this.log.warn(`CRM sverka: ${this.lastError}`);
+        break;
+      }
+      prevSig = sig;
+
       for (const p of pageItems) {
         const contract = normContract(p.contract);
         if (!contract) continue;
@@ -338,6 +417,12 @@ export class CrmSverkaService {
 
       this.progress.pages = page;
       this.progress.crmFetched = items.length;
+
+      if (items.length >= MAX_RECORDS) {
+        this.lastError = `Yozuvlar soni ${MAX_RECORDS} dan oshdi — tortish to'xtatildi (ma'lumot to'liq emas)`;
+        this.log.warn(`CRM sverka: ${this.lastError}`);
+        break;
+      }
 
       if (pageItems.length < LIMIT) break;
       page++;
