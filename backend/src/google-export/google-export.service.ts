@@ -619,6 +619,12 @@ export class GoogleExportService {
           const cols = columns.map((c) => c.col);
           writtenRange = `${target.tabName}!${cols[0]}${startRow}:${cols[cols.length - 1]}${startRow + rows.length - 1}`;
         }
+        // REPLACE ham yozgan kalitlarini eslaydi — keyin filtrlangan UPSERT'da
+        // eski (filtrga tushmagan) qatorlarni tozalay olsin.
+        const keyF = target.keyField || columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || columns[0]?.field;
+        if (keyF) {
+          await this.saveUpsertKeys(target.id, rows.map((r) => String(this.cellValue(r, keyF) ?? '').trim()).filter(Boolean));
+        }
       }
 
       const durationMs = Date.now() - startedAt;
