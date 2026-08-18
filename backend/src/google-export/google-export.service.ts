@@ -397,6 +397,12 @@ export class GoogleExportService {
     return this.oplataKv.distinctExportFilters();
   }
 
+  /** Sheet oxirgi upsert'da yozgan kalitlar (ID'lar) — yuklab olish uchun. */
+  async getUpsertKeys(sheetId: string) {
+    const keys = Array.from(await this.loadUpsertKeys(sheetId));
+    return { ok: true, sheetId, count: keys.length, keys };
+  }
+
   /** Upsert uchun — sheet oxirgi marta yozgan kalitlar (qo'lda qo'shilganni ajratish uchun). */
   private async loadUpsertKeys(sheetId: string): Promise<Set<string>> {
     try {

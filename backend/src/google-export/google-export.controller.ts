@@ -39,6 +39,13 @@ export class GoogleExportController {
     return this.svc.distinctFilters();
   }
 
+  @Get('upsert-keys')
+  @RequirePermissions(PERMISSIONS.EXPORT_VIEW)
+  @ApiOperation({ summary: 'Upsert rejimida oxirgi yozilgan kalitlar (ID) ro\'yxati' })
+  getUpsertKeys(@Query('sheetId') sheetId: string) {
+    return this.svc.getUpsertKeys(sheetId);
+  }
+
   @Put('config')
   @RequirePermissions(PERMISSIONS.EXPORT_MANAGE)
   @ApiOperation({ summary: 'Export konfiguratsiyasini saqlash (sheet ID, tab, mapping, filtr)' })

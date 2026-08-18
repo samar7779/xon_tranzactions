@@ -696,6 +696,20 @@ function SheetCard({
   const setFilter = (patch: Partial<SheetTarget['filter']>) =>
     onChange({ filter: { ...sheet.filter, ...patch } });
 
+  // Upsert — oxirgi yozilgan ID'larni .txt qilib yuklab olish
+  const downloadKeys = async () => {
+    try {
+      const r = await api.get<{ keys: string[]; count: number }>(`/google-export/upsert-keys?sheetId=${encodeURIComponent(sheet.id)}`);
+      if (!r.keys?.length) { toast.message('Hali yozilgan ID yo\'q — avval upsert bajaring'); return; }
+      const blob = new Blob([r.keys.join('\n')], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${(sheet.name || 'sheet').replace(/[^\w.-]+/g, '_')}-ids.txt`; a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${r.count} ta ID yuklab olindi`);
+    } catch (e: any) { toast.error(e?.message || 'Yuklab olishda xato'); }
+  };
+
   const toggleCategory = (val: string) => {
     const set = new Set(sheet.filter?.categories || []);
     if (set.has(val)) set.delete(val); else set.add(val);
@@ -957,19 +971,32 @@ function SheetCard({
           </div>
           {sheet.writeMode === 'upsert' && (
             <>
-              <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
-                <select
-                  value={sheet.keyField || sheet.columns[0]?.field || ''}
-                  onChange={(e) => onChange({ keyField: e.target.value })}
-                  disabled={!canManage}
-                  className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none px-2 w-full max-w-xs"
+              <div className="flex items-end gap-3 flex-wrap">
+                <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
+                  <select
+                    value={sheet.keyField || sheet.columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || sheet.columns[0]?.field || ''}
+                    onChange={(e) => onChange({ keyField: e.target.value })}
+                    disabled={!canManage}
+                    className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none px-2 w-full max-w-xs"
+                  >
+                    {sheet.columns.filter((c) => c.field).map((c) => (
+                      <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
+                    ))}
+                  </select>
+                </Field>
+                <button
+                  type="button" onClick={downloadKeys}
+                  title="Export oxirgi marta yozgan ID'lar (.txt) — API jamosiga berish uchun"
+                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-lg text-[11.5px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-950/60 transition-colors"
                 >
-                  {sheet.columns.filter((c) => c.field).map((c) => (
-                    <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
-                  ))}
-                </select>
-              </Field>
-              <div className="text-[10px] text-amber-600 dark:text-amber-400">⚠ Kalit noyob bo'lsin (masalan ID). Kalit ustuni mapping'da bo'lishi shart.</div>
+                  <Download className="h-3.5 w-3.5" /> Yozilgan ID'larni yuklab olish
+                </button>
+              </div>
+              {!sheet.columns.some((c) => c.field === 'id' || c.field === 'externalId') ? (
+                <div className="text-[10.5px] text-amber-600 dark:text-amber-400">⚠ Mapping'da <b>ID (external)</b> ustuni yo'q — upsert to'g'ri ishlashi uchun ID ustunini qo'shing va uni kalit qiling (Дата / Дог № noyob emas — chalkashadi).</div>
+              ) : (
+                <div className="text-[10px] text-slate-400">Kalit noyob bo'lsin — <b>ID</b> tavsiya etiladi.</div>
+              )}
             </>
           )}
         </div>
