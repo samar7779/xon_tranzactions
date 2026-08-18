@@ -926,8 +926,10 @@ function SheetCard({
 
   const disabledRun = !canRun || !credsAvailable || runMut.isPending;
 
-  const setFilter = (patch: Partial<SheetTarget['filter']>) =>
+  const setFilter = (patch: Partial<SheetTarget['filter']>) => {
+    setPreview(null); // filtr o'zgardi — eski "Nechta qator?" soni chalkashtirmasin
     onChange({ filter: { ...sheet.filter, ...patch } });
+  };
 
   // Upsert — oxirgi yozilgan ID'larni .txt qilib yuklab olish
   const downloadKeys = async () => {
