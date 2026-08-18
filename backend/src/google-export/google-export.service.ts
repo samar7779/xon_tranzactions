@@ -323,9 +323,10 @@ export class GoogleExportService {
   private cellValue(row: any, field: string): string | number {
     switch (field) {
       case 'date':             return this.fmtDate(row.date);
-      case 'paymentAmount':    return row.paymentAmount    != null ? Number(row.paymentAmount)    : '';
-      case 'firstInstallment': return row.firstInstallment != null ? Number(row.firstInstallment) : '';
-      case 'monthlyAmount':    return row.monthlyAmount    != null ? Number(row.monthlyAmount)    : '';
+      // Summa maydonlari — HAR DOIM musbat yoziladi (manfiy/возврат ham musbat ko'rinsin).
+      case 'paymentAmount':    return row.paymentAmount    != null ? Math.abs(Number(row.paymentAmount))    : '';
+      case 'firstInstallment': return row.firstInstallment != null ? Math.abs(Number(row.firstInstallment)) : '';
+      case 'monthlyAmount':    return row.monthlyAmount    != null ? Math.abs(Number(row.monthlyAmount))    : '';
       case 'paymentCategory':  return row.paymentCategory ? (CATEGORY_LABEL[row.paymentCategory] || row.paymentCategory) : '';
       // XATO — CRM'da tasdiqlanmagan shartnoma: raqam o'rniga "XATO" yoziladi
       case 'contractNo':       return row.crmXato ? 'XATO' : (row.contractNo || '');
@@ -338,7 +339,7 @@ export class GoogleExportService {
       case 'note':             return row.note || '';
       // ─── Tranzaksiya maydonlari ───
       case 'txnDate':          return this.fmtDate(row.txnDate);
-      case 'amount':           return row.amount != null ? Number(row.amount) : '';
+      case 'amount':           return row.amount != null ? Math.abs(Number(row.amount)) : '';
       case 'direction':        return row.direction || '';
       case 'fromName':         return row.fromName || '';
       case 'fromAccount':      return row.fromAccount || '';
@@ -443,60 +444,96 @@ export class GoogleExportService {
     prevKeys: Set<string>,
   ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[]; dbKeys: string[] }> {
     const keyField = keyFieldOpt || columns[0]?.field;
-    const keyCol = columns.find((c) => c.field === keyField)?.col;
-    if (!keyCol) throw new Error(`Upsert uchun kalit maydon "${keyField}" ustun mapping'da yo'q — uni ustunga qo'shing.`);
+    const keyColLetter = columns.find((c) => c.field === keyField)?.col;
+    if (!keyColLetter) throw new Error(`Upsert uchun kalit maydon "${keyField}" ustun mapping'da yo'q — uni ustunga qo'shing.`);
 
-    // Mavjud kalit ustunini o'qiymiz (startRow'dan pastga)
-    const getResp = await sheetsApi.spreadsheets.values.get({ spreadsheetId, range: `${quotedTab}!${keyCol}${startRow}:${keyCol}` });
-    const existing: string[] = (getResp.data.values || []).map((r: any[]) => (r?.[0] != null ? String(r[0]).trim() : ''));
-    const keyToRow = new Map<string, number>();
-    let lastNonEmptyIdx = -1;
-    existing.forEach((k, i) => { if (k) { if (!keyToRow.has(k)) keyToRow.set(k, startRow + i); lastNonEmptyIdx = i; } });
-    const lastRow = lastNonEmptyIdx >= 0 ? startRow + lastNonEmptyIdx : startRow - 1;
+    // Ustun harfi ↔ indeks (A=0 … Z=25, AA=26 …)
+    const colIdx = (letter: string): number => {
+      let n = 0; for (const ch of letter.toUpperCase()) n = n * 26 + (ch.charCodeAt(0) - 64); return n - 1;
+    };
+    const idxToLetter = (i: number): string => {
+      let s = ''; let x = i + 1; while (x > 0) { const m = (x - 1) % 26; s = String.fromCharCode(65 + m) + s; x = Math.floor((x - 1) / 26); } return s;
+    };
+    const keyIdx = colIdx(keyColLetter);
+    const maxIdx = Math.max(...columns.map((c) => colIdx(c.col)));
+
+    // 1) Butun mapping oralig'ini BIR marta o'qiymiz (A..maxCol) — kalitlar + HAQIQIY oxirgi qatorni bilish uchun.
+    //    (Faqat kalit ustunini o'qisak, kalitsiz qatorlar ostidagi qo'lda ma'lumot ko'rinmasdi.)
+    const getResp = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId, range: `${quotedTab}!A${startRow}:${idxToLetter(maxIdx)}`,
+    });
+    const existing: any[][] = getResp.data.values || [];
+
+    const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (existing ichida)
+    existing.forEach((r, i) => {
+      const k = r?.[keyIdx] != null ? String(r[keyIdx]).trim() : '';
+      if (k && !keyToIdx.has(k)) keyToIdx.set(k, i);
+    });
+
+    // Tegiladigan hujayralar: ustun → (sheet qator raqami → qiymat). Boshqa (qo'lda) qatorlarga TEGMAYMIZ.
+    const touched: Record<string, Map<number, any>> = {};
+    for (const c of columns) touched[c.col] = new Map();
 
     const dbKeys = new Set<string>();
-    const updates: Array<{ row: number; r: any }> = [];
     const news: any[] = [];
+    let updated = 0;
     for (const r of rows) {
       const k = String(this.cellValue(r, keyField) ?? '').trim();
       if (k) dbKeys.add(k);
-      const existRow = k ? keyToRow.get(k) : undefined;
-      if (existRow) updates.push({ row: existRow, r });
-      else news.push(r);
+      const idx = k ? keyToIdx.get(k) : undefined;
+      if (idx != null) {
+        const sheetRow = startRow + idx;
+        for (const c of columns) touched[c.col].set(sheetRow, this.cellValue(r, c.field));
+        updated++;
+      } else {
+        news.push(r);
+      }
     }
 
-    const data: any[] = [];
-    for (const u of updates) {
-      for (const c of columns) data.push({ range: `${quotedTab}!${c.col}${u.row}`, values: [[this.cellValue(u.r, c.field)]] });
+    // Stale — export o'zi yozgan (prevKeys) va endi DB'da yo'q → o'sha qatorning mapping ustunlarini tozalaymiz.
+    let cleared = 0;
+    for (const [k, idx] of keyToIdx.entries()) {
+      if (prevKeys.has(k) && !dbKeys.has(k)) {
+        const sheetRow = startRow + idx;
+        for (const c of columns) touched[c.col].set(sheetRow, '');
+        cleared++;
+      }
     }
-    const newStart = lastRow + 1;
-    if (news.length > 0) {
-      for (const c of columns) data.push({ range: `${quotedTab}!${c.col}${newStart}`, majorDimension: 'COLUMNS', values: [news.map((r) => this.cellValue(r, c.field))] });
+
+    // Yangi qatorlar — HAQIQIY oxirgi qatordan (existing.length) KEYIN qo'shiladi (o'rtaga/ustiga emas).
+    const appendStartRow = startRow + existing.length;
+    news.forEach((r, j) => {
+      const sheetRow = appendStartRow + j;
+      for (const c of columns) touched[c.col].set(sheetRow, this.cellValue(r, c.field));
+    });
+
+    // 2) Ketma-ket qatorlarni BITTA diapazonga guruhlab yozamiz (tez! har hujayra alohida emas).
+    const data: any[] = [];
+    for (const c of columns) {
+      const entries = Array.from(touched[c.col].entries()).sort((a, b) => a[0] - b[0]); // [sheetRow, value]
+      let i = 0;
+      while (i < entries.length) {
+        let j = i;
+        while (j + 1 < entries.length && entries[j + 1][0] === entries[j][0] + 1) j++;
+        const startR = entries[i][0];
+        const endR = entries[j][0];
+        const vals = entries.slice(i, j + 1).map((e) => (e[1] == null ? '' : e[1]));
+        data.push({ range: `${quotedTab}!${c.col}${startR}:${c.col}${endR}`, majorDimension: 'COLUMNS' as const, values: [vals] });
+        i = j + 1;
+      }
     }
     if (data.length > 0) {
       await sheetsApi.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
     }
 
-    // Stale — FAQAT avval EXPORT yozgan (prevKeys) va endi DB'da yo'q kalitlar tozalanadi.
-    // Foydalanuvchi QO'LDA qo'shgan qatorlar (prevKeys'da yo'q) — TEGILMAYDI.
-    const staleRanges: string[] = [];
-    for (const [k, row] of keyToRow.entries()) {
-      if (prevKeys.has(k) && !dbKeys.has(k)) {
-        for (const c of columns) staleRanges.push(`${quotedTab}!${c.col}${row}`);
-      }
-    }
-    if (staleRanges.length > 0) {
-      await sheetsApi.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: staleRanges } });
-    }
-
     const cols = columns.map((c) => c.col);
     const writtenRange = news.length > 0
-      ? `${tabName}!${cols[0]}${newStart}:${cols[cols.length - 1]}${newStart + news.length - 1}`
-      : (updates.length > 0 ? `${tabName} · ${updates.length} qator yangilandi` : null);
+      ? `${tabName}!${cols[0]}${appendStartRow}:${cols[cols.length - 1]}${appendStartRow + news.length - 1}`
+      : `${tabName} · ${updated} yangilandi${cleared ? `, ${cleared} tozalandi` : ''}`;
     return {
       writtenRange,
-      rowsWritten: updates.length + news.length,
-      clearedRanges: staleRanges.map((r) => r.replace(quotedTab, tabName)),
+      rowsWritten: updated + news.length,
+      clearedRanges: cleared ? [`${tabName} · ${cleared} qator tozalandi`] : [],
       dbKeys: Array.from(dbKeys),
     };
   }
