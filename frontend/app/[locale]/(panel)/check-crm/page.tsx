@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   GitCompareArrows, RefreshCw, CheckCircle2, AlertTriangle, Loader2,
   Search, X, ChevronRight, ChevronLeft, Building2, FileSpreadsheet,
-  SlidersHorizontal, Database, Cloud, ArrowRightLeft, Clock,
+  SlidersHorizontal, Database, Cloud, ArrowRightLeft, Clock, Stethoscope,
 } from 'lucide-react';
 import { Topbar } from '@/components/topbar';
 import { TransactionsTabs } from '@/components/transactions-tabs';
@@ -68,11 +68,17 @@ interface StatusResponse {
   ok: true;
   running: boolean;
   phase: 'idle' | 'crm' | 'db' | 'compute' | 'done' | 'error';
-  progress: { phase: string; pages: number; crmFetched: number; ourRows: number; contracts: number };
+  progress: {
+    phase: string; pages: number; crmFetched: number; ourRows: number;
+    contracts: number; fetchingPage: number; lastPageMs: number;
+  };
   startedAt: string | null;
   finishedAt: string | null;
   startedBy: string | null;
   lastError: string | null;
+  elapsedMs: number;
+  pageLimit: number;
+  pageTimeoutMs: number;
   snapshot: {
     builtAt: string; ageSeconds: number; durationMs: number;
     pages: number; crmCount: number; ourCount: number; contracts: number;
@@ -103,6 +109,8 @@ export default function CheckCrmPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selected, setSelected] = useState<CrmSverkaRow | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [diag, setDiag] = useState<any>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
   const autoStarted = useRef(false);
 
   // Qidiruv debounce — har harfda server hisoblamasin
@@ -171,15 +179,32 @@ export default function CheckCrmPage() {
     }
   }
 
-  // Snapshot yo'q va hech kim tortmayapti — avtomatik boshlaymiz (bir marta)
+  // Snapshot yo'q va hech kim tortmayapti — avtomatik boshlaymiz (bir marta).
+  // MUHIM: oxirgi urinish xato bilan tugagan bo'lsa avtomat qayta urinmaymiz —
+  // aks holda xato ekranda ko'rinmay, har sahifa ochilishida tinmay qayta uriniladi.
   useEffect(() => {
     if (autoStarted.current) return;
     if (statusQuery.isLoading || !statusQuery.data) return;
-    if (statusQuery.data.snapshot || statusQuery.data.running) return;
+    const s = statusQuery.data;
+    if (s.snapshot || s.running || s.phase === 'error') return;
     if (!canRun) return;
     autoStarted.current = true;
     startRun();
   }, [statusQuery.data, statusQuery.isLoading, canRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Diagnostika — CRM endpointi javob beryaptimi?
+  async function runDiagnose() {
+    setDiagLoading(true);
+    setDiag(null);
+    try {
+      const r = await api.get('/crm-sverka/ping?limit=1', { timeout: 60_000 });
+      setDiag(r);
+    } catch (e: any) {
+      setDiag({ ok: false, error: e?.message || tc('error') });
+    } finally {
+      setDiagLoading(false);
+    }
+  }
 
   async function downloadExcel() {
     setExporting(true);
@@ -266,8 +291,45 @@ export default function CheckCrmPage() {
         {/* ═══ JONLI TORTISH PROGRESSI ═══ */}
         {running && <RunProgress status={statusQuery.data!} t={t} />}
 
+        {/* ═══ XATO — ko'rinib tursin, avtomat qayta urinmaymiz ═══ */}
+        {!running && statusQuery.data?.phase === 'error' && (
+          <Card className="border-0 shadow-soft">
+            <CardContent className="p-0">
+              <div className="px-5 py-4 bg-gradient-to-r from-rose-50 to-pink-50/60 dark:from-rose-950/40 dark:to-pink-950/30 space-y-3">
+                <div className="flex items-start gap-3">
+                  <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-pink-600 grid place-items-center text-white shadow-md shrink-0">
+                    <AlertTriangle className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[13px] font-bold text-rose-900 dark:text-rose-200">{t('errorTitle')}</div>
+                    <div className="text-[11.5px] text-rose-800/90 dark:text-rose-300/90 mt-0.5 break-words">
+                      {statusQuery.data.lastError || tc('error')}
+                    </div>
+                    {statusQuery.data.elapsedMs > 0 && (
+                      <div className="text-[10.5px] text-rose-700/70 dark:text-rose-400/70 mt-0.5">
+                        {t('elapsed', { t: fmtDuration(statusQuery.data.elapsedMs) })} ·{' '}
+                        {t('pageLimitInfo', { n: statusQuery.data.pageLimit })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Button onClick={startRun} disabled={!canRun} size="sm" className="h-9 rounded-lg gap-1.5 bg-rose-600 hover:bg-rose-700">
+                    <RefreshCw className="h-3.5 w-3.5" /> {t('retry')}
+                  </Button>
+                  <Button onClick={runDiagnose} disabled={diagLoading} variant="outline" size="sm" className="h-9 rounded-lg gap-1.5">
+                    {diagLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stethoscope className="h-3.5 w-3.5" />}
+                    {t('diagnose')}
+                  </Button>
+                </div>
+                {diag && <DiagResult diag={diag} t={t} />}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ═══ SNAPSHOT YO'Q ═══ */}
-        {!hasSnapshot && !running && (
+        {!hasSnapshot && !running && statusQuery.data?.phase !== 'error' && (
           <Card className="border-0 shadow-soft">
             <CardContent className="p-0">
               <div className="p-10 text-center space-y-4">
@@ -290,6 +352,17 @@ export default function CheckCrmPage() {
                 {!canRun && (
                   <div className="text-[11px] text-amber-600 dark:text-amber-400">{t('noRunPerm')}</div>
                 )}
+                <div>
+                  <button
+                    onClick={runDiagnose}
+                    disabled={diagLoading}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400"
+                  >
+                    {diagLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Stethoscope className="h-3.5 w-3.5" />}
+                    {t('diagnose')}
+                  </button>
+                </div>
+                {diag && <div className="max-w-lg mx-auto text-left"><DiagResult diag={diag} t={t} /></div>}
               </div>
             </CardContent>
           </Card>
@@ -530,6 +603,47 @@ function ageLabel(sec: number, t: any): string {
   return t('hoursAgo', { n: Math.round(sec / 3600) });
 }
 
+/** 95000 → "1:35" */
+function fmtDuration(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** Diagnostika natijasi — CRM javob berdimi, qancha vaqtda, nechta yozuv bor */
+function DiagResult({ diag, t }: { diag: any; t: any }) {
+  const ok = !!diag?.ok;
+  return (
+    <div
+      className={cn(
+        'rounded-xl ring-1 px-3.5 py-2.5 text-[11.5px] space-y-1',
+        ok
+          ? 'bg-emerald-50 dark:bg-emerald-950/30 ring-emerald-200 dark:ring-emerald-900 text-emerald-900 dark:text-emerald-200'
+          : 'bg-rose-50 dark:bg-rose-950/30 ring-rose-200 dark:ring-rose-900 text-rose-900 dark:text-rose-200',
+      )}
+    >
+      <div className="font-bold flex items-center gap-1.5">
+        {ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+        {ok ? t('diagOk') : t('diagFail')}
+        {typeof diag.ms === 'number' && <span className="font-normal opacity-80">· {(diag.ms / 1000).toFixed(1)}s</span>}
+      </div>
+      {ok ? (
+        <div className="opacity-90 space-y-0.5">
+          <div>{t('diagCount', { n: diag.count ?? 0 })}{diag.total != null && ` · ${t('diagTotal', { n: diag.total })}`}</div>
+          {diag.sample?.contract && (
+            <div className="font-mono text-[10.5px] opacity-75 break-all">
+              {diag.sample.contract} · {diag.sample.datePaid} · {diag.sample.amount} · {diag.sample.method || '—'}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="opacity-90 break-words">
+          {diag.status ? `HTTP ${diag.status} · ` : ''}{String(diag.error || '').slice(0, 400)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RunProgress({ status, t }: { status: StatusResponse; t: any }) {
   const p = status.progress;
   const phaseLabel =
@@ -546,7 +660,12 @@ function RunProgress({ status, t }: { status: StatusResponse; t: any }) {
               <Loader2 className="h-5 w-5 animate-spin" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{phaseLabel}</div>
+              <div className="text-[13px] font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                {phaseLabel}
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 tabular-nums">
+                  {fmtDuration(status.elapsedMs)}
+                </span>
+              </div>
               <div className="text-[11px] text-slate-600 dark:text-slate-400 flex items-center gap-2.5 flex-wrap mt-0.5">
                 <span>{t('progressPages', { n: p.pages })}</span>
                 <span className="text-slate-300 dark:text-slate-600">·</span>
@@ -558,6 +677,12 @@ function RunProgress({ status, t }: { status: StatusResponse; t: any }) {
                   </>
                 )}
               </div>
+              {p.phase === 'crm' && p.fetchingPage > 0 && (
+                <div className="text-[10.5px] text-slate-500 dark:text-slate-500 mt-0.5">
+                  {t('fetchingPage', { n: p.fetchingPage })}
+                  {p.lastPageMs > 0 && ` · ${t('lastPageMs', { n: (p.lastPageMs / 1000).toFixed(1) })}`}
+                </div>
+              )}
             </div>
           </div>
           <div className="mt-3 h-1.5 rounded-full bg-white/70 dark:bg-slate-800 overflow-hidden">

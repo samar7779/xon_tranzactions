@@ -144,6 +144,15 @@ export interface SverkaRow {
 
 type RunPhase = 'idle' | 'crm' | 'db' | 'compute' | 'done' | 'error';
 
+/**
+ * Sahifa hajmi. XonPay sync 5000 ishlatadi, lekin u fonda (cron) ishlaydi —
+ * bu yerda foydalanuvchi kutib turadi, shuning uchun kichikroq sahifa:
+ * birinchi javob tezroq keladi va progress "0 sahifa"da qotib qolmaydi.
+ */
+const DEFAULT_PAGE_LIMIT = 2000;
+/** Bitta sahifa uchun timeout — payment-history og'ir endpoint (60s ba'zan yetmaydi) */
+const DEFAULT_PAGE_TIMEOUT_MS = 180_000;
+
 @Injectable()
 export class CrmSverkaService {
   private readonly log = new Logger(CrmSverkaService.name);
@@ -159,9 +168,16 @@ export class CrmSverkaService {
     crmFetched: 0,
     ourRows: 0,
     contracts: 0,
+    /** Hozir so'ralayotgan sahifa (javob kutilmoqda) */
+    fetchingPage: 0,
+    /** Oxirgi sahifa necha ms'da keldi — sekinlikni ko'rish uchun */
+    lastPageMs: 0,
   };
   private snapshot: Snapshot | null = null;
   private startedBy: string | null = null;
+  /** Sahifa hajmi va timeout — run boshlanganda beriladi (diagnostika uchun sozlanadi) */
+  private runLimit = DEFAULT_PAGE_LIMIT;
+  private runTimeoutMs = DEFAULT_PAGE_TIMEOUT_MS;
 
   // String intern — 100k+ qatorda bir xil "usul/status/obyekt" matnlari
   // xotirada bitta nusxada saqlansin.
@@ -186,7 +202,10 @@ export class CrmSverkaService {
    * CRM'dan barcha to'lovlarni jonli tortadi + ОплатыКв'ni o'qiydi.
    * Fonda ishlaydi — status() orqali kuzatiladi.
    */
-  start(actorName?: string | null): { ok: true; started: boolean; message: string } {
+  start(
+    actorName?: string | null,
+    opts: { limit?: number; timeoutMs?: number } = {},
+  ): { ok: true; started: boolean; message: string } {
     if (this.running) {
       return { ok: true, started: false, message: 'Sverka allaqachon ishlamoqda' };
     }
@@ -195,7 +214,12 @@ export class CrmSverkaService {
     this.finishedAt = null;
     this.lastError = null;
     this.startedBy = actorName || null;
-    this.progress = { phase: 'crm', pages: 0, crmFetched: 0, ourRows: 0, contracts: 0 };
+    this.runLimit = Math.min(Math.max(Number(opts.limit) || DEFAULT_PAGE_LIMIT, 100), 5000);
+    this.runTimeoutMs = Math.min(Math.max(Number(opts.timeoutMs) || DEFAULT_PAGE_TIMEOUT_MS, 10_000), 300_000);
+    this.progress = {
+      phase: 'crm', pages: 0, crmFetched: 0, ourRows: 0, contracts: 0,
+      fetchingPage: 1, lastPageMs: 0,
+    };
 
     this.runInBackground().catch((e: any) => {
       this.lastError = e?.message || String(e);
@@ -261,24 +285,37 @@ export class CrmSverkaService {
 
   /** CRM /payment-history/excel — barcha sahifalar */
   private async fetchAllCrmPayments(): Promise<{ items: CrmPay[]; pages: number }> {
-    const LIMIT = 5000;
-    const MAX_PAGES = 400; // 2M yozuv — himoya chegarasi
+    const LIMIT = this.runLimit;
+    const MAX_PAGES = 1000; // himoya chegarasi (LIMIT kichikroq bo'lgani uchun ko'proq sahifa)
     const items: CrmPay[] = [];
     let page = 1;
 
     while (page <= MAX_PAGES) {
-      const r = await this.crm.getPaymentHistory(page, LIMIT);
+      this.progress.fetchingPage = page;
+      const tPage = Date.now();
+      const r = await this.crm.getPaymentHistory(page, LIMIT, this.runTimeoutMs);
+      const ms = Date.now() - tPage;
+      this.progress.lastPageMs = ms;
+
       if (!r.ok) {
+        const why = (r as any).error || `HTTP ${(r as any).status || '?'}`;
         // Birinchi sahifa yiqilsa — umuman ma'lumot yo'q, xato beramiz.
         // Keyingi sahifada yiqilsa — qisman ma'lumot bilan davom etamiz.
-        if (page === 1) throw new Error((r as any).error || 'CRM payment-history javob bermadi');
-        this.lastError = `Sahifa ${page}: ${(r as any).error || 'xato'} — qisman ma'lumot`;
+        if (page === 1) {
+          this.log.error(`CRM sverka: 1-sahifa xato (${ms}ms, limit=${LIMIT}): ${String(why).slice(0, 300)}`);
+          throw new Error(`CRM javob bermadi (${Math.round(ms / 1000)}s, limit=${LIMIT}): ${String(why).slice(0, 200)}`);
+        }
+        this.lastError = `Sahifa ${page}: ${String(why).slice(0, 150)} — qisman ma'lumot`;
         this.log.warn(`CRM sverka: ${this.lastError}`);
         break;
       }
 
       const raw: any = (r as any).data?.data ?? (r as any).data;
       const pageItems: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+      this.log.log(
+        `CRM sverka: ${page}-sahifa ${pageItems.length} ta yozuv (${Math.round(ms / 1000)}s, limit=${LIMIT}, ` +
+        `total=${raw?.total ?? '?'}, last_page=${raw?.last_page ?? '?'})`,
+      );
       if (pageItems.length === 0) break;
 
       for (const p of pageItems) {
@@ -345,6 +382,55 @@ export class CrmSverkaService {
     }));
   }
 
+  // ═══════════════════ DIAGNOSTIKA ═══════════════════
+
+  /**
+   * CRM payment-history endpointini bitta kichik so'rov bilan tekshiradi.
+   * "Tortilmoqda" holatida qotib qolganda — sabab shu yerdan ko'rinadi:
+   * javob keladimi, qancha vaqtda, javob shakli qanday, jami nechta yozuv bor.
+   */
+  async ping(limit = 1, timeoutMs = 30_000) {
+    const t0 = Date.now();
+    const r = await this.crm.getPaymentHistory(1, Math.min(Math.max(limit, 1), 5000), timeoutMs);
+    const ms = Date.now() - t0;
+
+    if (!r.ok) {
+      return {
+        ok: false as const,
+        ms,
+        limit,
+        status: (r as any).status ?? null,
+        error: String((r as any).error || 'nomalum xato').slice(0, 500),
+      };
+    }
+
+    const raw: any = (r as any).data?.data ?? (r as any).data;
+    const items: any[] = raw?.data ?? (Array.isArray(raw) ? raw : []);
+    const sample = items[0] || null;
+
+    return {
+      ok: true as const,
+      ms,
+      limit,
+      count: items.length,
+      // Paginatsiya meta — CRM'da jami nechta to'lov borligini shu yerdan bilamiz
+      total: raw?.total ?? null,
+      perPage: raw?.per_page ?? null,
+      lastPage: raw?.last_page ?? null,
+      responseKeys: raw && typeof raw === 'object' ? Object.keys(raw).slice(0, 20) : [],
+      sampleKeys: sample ? Object.keys(sample).slice(0, 40) : [],
+      sample: sample
+        ? {
+            contract: sample.contract ?? null,
+            amount: sample.amount ?? null,
+            datePaid: sample.date_paid ?? null,
+            method: getRu(sample.payment_method) || null,
+            status: getRu(sample.status) || null,
+          }
+        : null,
+    };
+  }
+
   // ═══════════════════ STATUS ═══════════════════
 
   status() {
@@ -358,6 +444,12 @@ export class CrmSverkaService {
       finishedAt: this.finishedAt?.toISOString() || null,
       startedBy: this.startedBy,
       lastError: this.lastError,
+      /** Ishlab turgan run necha soniya bo'ldi — "qotib qolganmi?" degan savolga javob */
+      elapsedMs: this.startedAt
+        ? (this.finishedAt ? this.finishedAt.getTime() : Date.now()) - this.startedAt.getTime()
+        : 0,
+      pageLimit: this.runLimit,
+      pageTimeoutMs: this.runTimeoutMs,
       snapshot: s
         ? {
             builtAt: s.builtAt.toISOString(),

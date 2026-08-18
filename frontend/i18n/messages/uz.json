@@ -1527,7 +1527,18 @@
     "ddShow": "Ko'rsatish",
     "ddHide": "Yashirish",
     "ddCopy": "Shartnoma raqamidan nusxa olish",
-    "ddCopied": "Nusxa olindi"
+    "ddCopied": "Nusxa olindi",
+    "errorTitle": "CRM'dan ma'lumot olinmadi",
+    "retry": "Qayta urinish",
+    "diagnose": "Diagnostika",
+    "diagOk": "CRM javob berdi",
+    "diagFail": "CRM javob bermadi",
+    "diagCount": "{n} ta yozuv keldi",
+    "diagTotal": "CRM'da jami {n} ta to'lov",
+    "elapsed": "Ketgan vaqt: {t}",
+    "pageLimitInfo": "sahifa hajmi {n}",
+    "fetchingPage": "{n}-sahifa so’ralmoqda...",
+    "lastPageMs": "oxirgi sahifa {n}s"
   },
   "common": {
     "save": "Saqlash",

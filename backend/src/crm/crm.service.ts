@@ -120,8 +120,8 @@ export class CrmService {
    * Python skriptdagi /payment-history/excel endpointi.
    * Bir sahifada 5000 tagacha qaytaradi (limit parametri).
    */
-  async getPaymentHistory(page = 1, limit = 5000) {
-    return this.callClient('/payment-history/excel', { page, limit }, 60_000);
+  async getPaymentHistory(page = 1, limit = 5000, timeoutMs = 60_000) {
+    return this.callClient('/payment-history/excel', { page, limit }, timeoutMs);
   }
 
   /**

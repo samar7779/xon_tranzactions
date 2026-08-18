@@ -1527,7 +1527,18 @@
     "ddShow": "Show",
     "ddHide": "Hide",
     "ddCopy": "Copy contract number",
-    "ddCopied": "Copied"
+    "ddCopied": "Copied",
+    "errorTitle": "Could not fetch data from CRM",
+    "retry": "Retry",
+    "diagnose": "Diagnose",
+    "diagOk": "CRM responded",
+    "diagFail": "CRM did not respond",
+    "diagCount": "{n} records received",
+    "diagTotal": "{n} payments in CRM total",
+    "elapsed": "Elapsed: {t}",
+    "pageLimitInfo": "page size {n}",
+    "fetchingPage": "requesting page {n}...",
+    "lastPageMs": "last page {n}s"
   },
   "common": {
     "save": "Save",
