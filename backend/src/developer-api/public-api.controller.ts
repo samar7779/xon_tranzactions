@@ -260,17 +260,22 @@ export class PublicApiController {
       this.prisma.oplataKvHistory.count({ where }),
       this.prisma.oplataKvHistory.findMany({ where, orderBy, skip: (pageN - 1) * perPageN, take: perPageN }),
     ]);
-    // Tombstone — snapshot'dan aniqlovchi maydonlar (turli formatlar robust o'qiladi) + audit.
-    const orderIdMap = await this.orderIdMapForContracts(
-      rows.map((r) => { const cn = this.snapVal(r.changes, 'contractNo'); return typeof cn === 'string' ? cn : null; }),
-    );
+    // Tombstone — snapshot'dan aniqlovchi maydonlar; bo'sh bo'lsa oldingi tarixdan tiklaymiz.
+    const priorMap = await this.buildPriorMap(rows);
+    const rCn = (r: any) => {
+      const v = this.snapVal(r.changes, 'contractNo');
+      if (typeof v === 'string') return v;
+      const pv = this.snapVal(priorMap.get(r.oplataKvId), 'contractNo');
+      return typeof pv === 'string' ? pv : null;
+    };
+    const orderIdMap = await this.orderIdMapForContracts(rows.map((r) => rCn(r)));
     const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
     return {
       ok: true,
       total,
       page: pageN,
       perPage: perPageN,
-      items: rows.map((r) => this.deletedTombstone(r, oid)),
+      items: rows.map((r) => this.deletedTombstone(r, oid, priorMap.get(r.oplataKvId))),
     };
   }
 
@@ -334,9 +339,17 @@ export class PublicApiController {
       else { nc.d = new Date(e.b.createdAt); nc.di = e.b.id; }
     }
 
+    // Bo'sh o'chirish snapshotlari uchun oldingi tarixdan tiklash xaritasi
+    const priorMap = await this.buildPriorMap(bRows);
+    const bCn = (b: any) => {
+      const v = this.snapVal(b.changes, 'contractNo');
+      if (typeof v === 'string') return v;
+      const pv = this.snapVal(priorMap.get(b.oplataKvId), 'contractNo');
+      return typeof pv === 'string' ? pv : null;
+    };
     const contractNos: (string | null)[] = [
       ...aRows.map((a) => a.contractNo),
-      ...bRows.map((b) => { const cn = this.snapVal(b.changes, 'contractNo'); return typeof cn === 'string' ? cn : null; }),
+      ...bRows.map((b) => bCn(b)),
     ];
     const orderIdMap = await this.orderIdMapForContracts(contractNos);
     const oid = (cn: any) => orderIdMap.get((typeof cn === 'string' ? cn : '').toUpperCase()) ?? null;
@@ -362,7 +375,7 @@ export class PublicApiController {
           deleted: true, reason: 'inactive', updatedAt: this.clampFuture(it.updatedAt),
         };
       }
-      return this.deletedTombstone(e.b, oid);
+      return this.deletedTombstone(e.b, oid, priorMap.get(e.b.oplataKvId));
     });
 
     // MUHIM: tombstone'larni FILTRLAMAYMIZ. Aniqlovchi ma'lumot (contractNo/client) bo'sh
@@ -830,31 +843,60 @@ export class PublicApiController {
     return v;
   }
 
-  /** Hard-delete tombstone — snapshot'dan BARCHA aniqlovchi maydonlar + to'liq audit (kim/nima/qachon). */
-  private deletedTombstone(r: any, oid: (cn: any) => string | null): any {
-    const cn = this.snapVal(r.changes, 'contractNo');
-    const amt = this.snapVal(r.changes, 'paymentAmount');
-    const fi = this.snapVal(r.changes, 'firstInstallment');
-    const mo = this.snapVal(r.changes, 'monthlyAmount');
+  /**
+   * Hard-delete tombstone — snapshot'dan BARCHA aniqlovchi maydonlar + to'liq audit.
+   * `prior`: agar o'chirish snapshoti bo'sh bo'lsa (eski import o'chirishlari faqat {reason}),
+   * to'lovning oldingi (created/imported/edited) tarixidan maydon tiklaymiz.
+   */
+  private deletedTombstone(r: any, oid: (cn: any) => string | null, prior?: any): any {
+    const g = (field: string) => {
+      const v = this.snapVal(r.changes, field);
+      if (v != null) return v;
+      return prior != null ? this.snapVal(prior, field) : null;
+    };
+    const cn = g('contractNo');
+    const amt = g('paymentAmount');
+    const fi = g('firstInstallment');
+    const mo = g('monthlyAmount');
     return {
-      id: r.oplataKvId,                                   // sync = bank kompozit (Transaction.externalId)
-      sourceTxId: this.snapVal(r.changes, 'sourceTxId'),  // barqaror bank tranzaksiya id (mijoz shu bo'yicha solishtiradi)
+      id: r.oplataKvId,                    // sync = bank kompozit (Transaction.externalId)
+      sourceTxId: g('sourceTxId'),         // barqaror bank tranzaksiya id (mijoz shu bo'yicha solishtiradi)
       contractNo: typeof cn === 'string' ? cn : null,
       order_id: oid(cn),
-      client: this.snapVal(r.changes, 'client'),
-      object: this.snapVal(r.changes, 'object'),
+      client: g('client'),
+      object: g('object'),
       paymentAmount: amt != null ? String(amt) : null,
       firstInstallment: fi != null ? String(fi) : null,
       monthlyAmount: mo != null ? String(mo) : null,
-      date: this.snapVal(r.changes, 'date'),
-      purpose: this.snapVal(r.changes, 'purpose'),
-      txType: this.snapVal(r.changes, 'txType'),
+      date: g('date'),
+      purpose: g('purpose'),
+      txType: g('txType'),
       deleted: true,
       reason: 'deleted',
-      deletedAt: r.createdAt,                             // QACHON o'chirilgan
-      deletedBy: r.actorName ?? null,                     // KIM o'chirgan
-      deletedReason: r.note ?? null,                      // NIMAGA o'chirilgan
+      deletedAt: r.createdAt,              // QACHON o'chirilgan
+      deletedBy: r.actorName ?? null,      // KIM o'chirgan
+      deletedReason: r.note ?? null,       // NIMAGA o'chirilgan
     };
+  }
+
+  /**
+   * O'chirish snapshoti BO'SH bo'lgan tombstone'lar uchun — to'lovning oldingi (o'chirishdan
+   * boshqa: created/imported/edited) tarixidan eng so'nggisini topib, xarita qaytaradi.
+   * Shu bilan eski (minimal) import o'chirishlari ham to'liq (contractNo/mijoz) chiqadi.
+   */
+  private async buildPriorMap(bRows: any[]): Promise<Map<string, any>> {
+    const map = new Map<string, any>();
+    const need = [...new Set(
+      bRows.filter((b) => !this.snapVal(b.changes, 'contractNo')).map((b) => b.oplataKvId).filter(Boolean),
+    )];
+    if (!need.length) return map;
+    const priors = await this.prisma.oplataKvHistory.findMany({
+      where: { oplataKvId: { in: need }, action: { not: 'deleted' } },
+      orderBy: [{ createdAt: 'desc' }],
+      select: { oplataKvId: true, changes: true },
+    });
+    for (const p of priors) if (!map.has(p.oplataKvId)) map.set(p.oplataKvId, p.changes);
+    return map;
   }
 
   /** changes feed kursori — ikki manba (oplata_kv updatedAt/id + history deleted createdAt/id) opaque base64. */
