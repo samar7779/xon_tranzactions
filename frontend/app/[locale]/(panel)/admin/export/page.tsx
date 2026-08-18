@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -32,7 +32,9 @@ interface SheetTarget {
   tabName: string;
   startRow: number;
   dateFrom: string | null;
-  filter: { objects?: string[]; categories?: string[]; txTypes?: string[]; accounts?: string[] };
+  filter: { objects?: string[]; categories?: string[]; txTypes?: string[]; accounts?: string[]; amountSign?: 'pos' | 'neg' | null };
+  writeMode?: 'replace' | 'upsert';
+  keyField?: string;
   columns: SheetColumn[];
 }
 interface ConfigResp {
@@ -138,7 +140,8 @@ function blankSheet(idx: number): SheetTarget {
     tabName: '',
     startRow: 2,
     dateFrom: '',
-    filter: { objects: [], categories: [], txTypes: [], accounts: [] },
+    filter: { objects: [], categories: [], txTypes: [], accounts: [], amountSign: null },
+    writeMode: 'replace',
     columns: [{ col: 'A', field: 'date' }, { col: 'B', field: 'contractNo' }],
   };
 }
@@ -176,6 +179,15 @@ export default function AdminExportPage() {
     queryKey: ['google-export-config'],
     queryFn: () => api.get<ConfigResp>('/google-export/config'),
   });
+
+  // Filtr dropdownlari uchun mavjud Объект/Тип qiymatlari
+  const distinctQuery = useQuery({
+    queryKey: ['export-distinct-filters'],
+    queryFn: () => api.get<{ objects: string[]; txTypes: string[] }>('/google-export/distinct-filters'),
+    staleTime: 300_000,
+  });
+  const distinctObjects = distinctQuery.data?.objects || [];
+  const distinctTxTypes = distinctQuery.data?.txTypes || [];
 
   // Config yuklangach local state'ni to'ldiramiz (bo'sh bo'lsa 2 ta shablon)
   useEffect(() => {
@@ -471,6 +483,8 @@ export default function AdminExportPage() {
           canManage={canManage}
           canRun={canRun}
           credsAvailable={!!creds?.available}
+          distinctObjects={distinctObjects}
+          distinctTxTypes={distinctTxTypes}
           onChange={(patch) => updateSheet(idx, patch)}
           onRemove={() => removeSheet(idx)}
         />
@@ -565,16 +579,99 @@ export default function AdminExportPage() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// Checkboxli multi-select dropdown (mavjud qiymatlardan bir nechtasini tanlash)
+// ═══════════════════════════════════════════════════════════════════════
+function MultiSelectDropdown({
+  options, selected, onChange, disabled, placeholder,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const sel = new Set(selected);
+  const filtered = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
+  const allSelected = options.length > 0 && options.every((o) => sel.has(o));
+  const toggle = (v: string) => { const n = new Set(sel); if (n.has(v)) n.delete(v); else n.add(v); onChange(Array.from(n)); };
+  const toggleAll = () => onChange(allSelected ? [] : [...options]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button" disabled={disabled} onClick={() => setOpen((o) => !o)}
+        className="w-full h-9 px-3 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 flex items-center gap-2 text-left disabled:opacity-60 outline-none focus:ring-2 focus:ring-indigo-400"
+      >
+        <span className={cn('flex-1 truncate', selected.length ? 'text-slate-700 dark:text-slate-200' : 'text-slate-400')}>
+          {selected.length === 0 ? (placeholder || 'Barchasi') : selected.length === options.length ? 'Barchasi tanlangan' : `${selected.length} ta tanlangan`}
+        </span>
+        <ChevronDown className={cn('h-3.5 w-3.5 text-slate-400 transition-transform shrink-0', open && 'rotate-180')} />
+      </button>
+      {selected.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {selected.slice(0, 8).map((s) => (
+            <span key={s} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 text-[10px] max-w-[160px]">
+              <span className="truncate">{s}</span>
+              {!disabled && <button onClick={() => toggle(s)} className="shrink-0"><X className="h-2.5 w-2.5" /></button>}
+            </span>
+          ))}
+          {selected.length > 8 && <span className="text-[10px] text-slate-400">+{selected.length - 8}</span>}
+        </div>
+      )}
+      {open && (
+        <div className="absolute z-30 mt-1 w-full max-h-64 overflow-auto rounded-lg bg-white dark:bg-slate-800 ring-1 ring-slate-200 dark:ring-slate-700 shadow-xl p-1">
+          <input
+            value={q} onChange={(e) => setQ(e.target.value)} placeholder="Qidirish…"
+            className="w-full h-8 px-2 mb-1 rounded text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 outline-none focus:ring-1 focus:ring-indigo-400"
+          />
+          {options.length === 0 ? (
+            <div className="px-2 py-2 text-[11px] text-slate-400">Ma'lumot yo'q</div>
+          ) : (
+            <>
+              <button onClick={toggleAll} className="w-full flex items-center gap-2 px-2 h-8 rounded hover:bg-slate-50 dark:hover:bg-slate-900 text-[12px] font-semibold text-indigo-600 dark:text-indigo-400">
+                <span className={cn('w-4 h-4 rounded border grid place-items-center shrink-0', allSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600')}>{allSelected && <Check className="h-3 w-3 text-white" />}</span>
+                Barchasini tanlash
+              </button>
+              {filtered.length === 0 ? (
+                <div className="px-2 py-2 text-[11px] text-slate-400">Topilmadi</div>
+              ) : filtered.map((o) => {
+                const on = sel.has(o);
+                return (
+                  <button key={o} onClick={() => toggle(o)} className="w-full flex items-center gap-2 px-2 h-8 rounded hover:bg-slate-50 dark:hover:bg-slate-900 text-[12px] text-left text-slate-700 dark:text-slate-200">
+                    <span className={cn('w-4 h-4 rounded border grid place-items-center shrink-0', on ? 'bg-indigo-600 border-indigo-600' : 'border-slate-300 dark:border-slate-600')}>{on && <Check className="h-3 w-3 text-white" />}</span>
+                    <span className="truncate">{o}</span>
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // Bitta sheet kartochkasi
 // ═══════════════════════════════════════════════════════════════════════
 function SheetCard({
-  sheet, index, canManage, canRun, credsAvailable, onChange, onRemove,
+  sheet, index, canManage, canRun, credsAvailable, distinctObjects, distinctTxTypes, onChange, onRemove,
 }: {
   sheet: SheetTarget;
   index: number;
   canManage: boolean;
   canRun: boolean;
   credsAvailable: boolean;
+  distinctObjects: string[];
+  distinctTxTypes: string[];
   onChange: (patch: Partial<SheetTarget>) => void;
   onRemove: () => void;
 }) {
@@ -596,12 +693,8 @@ function SheetCard({
 
   const disabledRun = !canRun || !credsAvailable || runMut.isPending;
 
-  // Filter helperlar (comma-separated matn ↔ massiv)
-  const objectsText = (sheet.filter?.objects || []).join(', ');
-  const txTypesText = (sheet.filter?.txTypes || []).join(', ');
   const setFilter = (patch: Partial<SheetTarget['filter']>) =>
     onChange({ filter: { ...sheet.filter, ...patch } });
-  const toArr = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
   const toggleCategory = (val: string) => {
     const set = new Set(sheet.filter?.categories || []);
@@ -745,12 +838,28 @@ function SheetCard({
             </Field>
           ) : (
             <>
+              {/* Сумма оплаты filtri — 0 dan baland / 0 dan kichik (0 skip) */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Сумма:</span>
+                {([['', 'Barchasi'], ['pos', '0 dan baland (+)'], ['neg', '0 dan kichik (−)']] as const).map(([v, lbl]) => {
+                  const active = (sheet.filter?.amountSign || '') === v;
+                  return (
+                    <button key={v || 'all'} onClick={() => canManage && setFilter({ amountSign: (v || null) as any })} disabled={!canManage}
+                      className={cn('px-2.5 h-7 rounded-lg text-[11px] font-semibold ring-1 transition-colors',
+                        active ? 'bg-indigo-600 text-white ring-indigo-700' : 'bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                      {lbl}
+                    </button>
+                  );
+                })}
+                <span className="text-[10px] text-slate-400">0 ga tenglar tashlanadi</span>
+              </div>
+              {/* Объект / Тип — checkboxli multi-select (mavjudlaridan) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field label="Объект(lar) — vergul bilan">
-                  <Input value={objectsText} onChange={(e) => setFilter({ objects: toArr(e.target.value) })} disabled={!canManage} placeholder="masalan: Xon Saroy, Yangi Bino" className="h-9 rounded-lg text-[12px]" />
+                <Field label="Объект(lar) — tanlang (bo'sh = hammasi)">
+                  <MultiSelectDropdown options={distinctObjects} selected={sheet.filter?.objects || []} onChange={(v) => setFilter({ objects: v })} disabled={!canManage} placeholder="Barcha obyektlar" />
                 </Field>
-                <Field label="Тип(lar) — vergul bilan">
-                  <Input value={txTypesText} onChange={(e) => setFilter({ txTypes: toArr(e.target.value) })} disabled={!canManage} placeholder="masalan: Взносы за квартиры" className="h-9 rounded-lg text-[12px]" />
+                <Field label="Тип(lar) — tanlang (bo'sh = hammasi)">
+                  <MultiSelectDropdown options={distinctTxTypes} selected={sheet.filter?.txTypes || []} onChange={(v) => setFilter({ txTypes: v })} disabled={!canManage} placeholder="Barcha tiplar" />
                 </Field>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
@@ -814,8 +923,55 @@ function SheetCard({
             </button>
           )}
           <div className="text-[10.5px] text-slate-400 dark:text-slate-500 pt-1">
-            Faqat shu ustunlar {sheet.startRow}-qatordan pastgacha tozalanadi va qayta yoziladi (boshqa ustunlarga tegilmaydi).
+            {sheet.writeMode === 'upsert'
+              ? "Jadval TOZALANMAYDI — kalit bo'yicha mavjud qatorlar yangilanadi, yangisi qo'shiladi, DB'da yo'qi tozalanadi."
+              : `Faqat shu ustunlar ${sheet.startRow}-qatordan pastgacha tozalanadi va qayta yoziladi (boshqa ustunlarga tegilmaydi).`}
           </div>
+        </div>
+
+        {/* Yozish rejimi */}
+        <div className="rounded-xl ring-1 ring-slate-200 dark:ring-slate-700 p-3 space-y-2.5">
+          <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            <RefreshCw className="h-3.5 w-3.5" /> Yozish rejimi
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {([
+              ['replace', 'Tozalab qayta yozish', 'Ustunlar tozalanadi, hammasi qaytadan yoziladi'],
+              ['upsert', 'Yangilash (tozalamasdan)', "Mavjudni yangilaydi, yangisini qo'shadi, DB'da yo'qini tozalaydi"],
+            ] as const).map(([v, title, desc]) => {
+              const active = (sheet.writeMode || 'replace') === v;
+              return (
+                <button key={v} onClick={() => canManage && onChange({ writeMode: v })} disabled={!canManage}
+                  className={cn('text-left px-3 py-2 rounded-lg ring-1 transition-colors',
+                    active ? 'bg-indigo-50 dark:bg-indigo-950/40 ring-indigo-300 dark:ring-indigo-800' : 'bg-slate-50 dark:bg-slate-900 ring-slate-200 dark:ring-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800')}>
+                  <div className="flex items-center gap-1.5 text-[12px] font-bold text-slate-800 dark:text-slate-100">
+                    <span className={cn('w-3.5 h-3.5 rounded-full border-2 grid place-items-center shrink-0', active ? 'border-indigo-600' : 'border-slate-300 dark:border-slate-600')}>
+                      {active && <span className="w-1.5 h-1.5 rounded-full bg-indigo-600" />}
+                    </span>
+                    {title}
+                  </div>
+                  <div className="text-[10.5px] text-slate-500 dark:text-slate-400 mt-0.5 pl-5">{desc}</div>
+                </button>
+              );
+            })}
+          </div>
+          {sheet.writeMode === 'upsert' && (
+            <>
+              <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
+                <select
+                  value={sheet.keyField || sheet.columns[0]?.field || ''}
+                  onChange={(e) => onChange({ keyField: e.target.value })}
+                  disabled={!canManage}
+                  className="h-9 rounded-lg text-[12px] bg-slate-50 dark:bg-slate-900 ring-1 ring-slate-200 dark:ring-slate-700 text-slate-700 dark:text-slate-200 outline-none px-2 w-full max-w-xs"
+                >
+                  {sheet.columns.filter((c) => c.field).map((c) => (
+                    <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
+                  ))}
+                </select>
+              </Field>
+              <div className="text-[10px] text-amber-600 dark:text-amber-400">⚠ Kalit noyob bo'lsin (masalan ID). Kalit ustuni mapping'da bo'lishi shart.</div>
+            </>
+          )}
         </div>
 
         {/* Bajarish + natija */}

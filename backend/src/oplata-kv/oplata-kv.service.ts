@@ -1296,6 +1296,7 @@ export class OplataKvService {
     objects?: string[] | null;
     categories?: string[] | null;
     txTypes?: string[] | null;
+    amountSign?: 'pos' | 'neg' | null; // Сумма оплаты: pos = >0, neg = <0 (0 skip)
     limit?: number;
   }) {
     const where: Prisma.OplataKvWhereInput = {};
@@ -1314,6 +1315,9 @@ export class OplataKvService {
     if (filter.txTypes && filter.txTypes.length > 0) {
       where.txType = { in: filter.txTypes };
     }
+    // Сумма оплаты bo'yicha filtr — 0 dan baland yoki 0 dan kichik (0 ga tenglar tashlanadi)
+    if (filter.amountSign === 'pos') where.paymentAmount = { gt: 0 };
+    else if (filter.amountSign === 'neg') where.paymentAmount = { lt: 0 };
 
     const take = Math.min(Math.max(1, filter.limit || 100000), 200000);
     const rows = await this.prisma.oplataKv.findMany({
@@ -1326,6 +1330,25 @@ export class OplataKvService {
     // bunday qatorlarda contractNo o'rniga "XATO" yoziladi.
     const { isXato } = await this.computeContractXato(rows);
     return rows.map((r) => ({ ...r, crmXato: isXato(r) }));
+  }
+
+  /** Export filtrlari uchun mavjud (distinct) Объект va Тип qiymatlari — dropdown uchun. */
+  async distinctExportFilters() {
+    const [objs, types] = await Promise.all([
+      this.prisma.oplataKv.findMany({
+        where: { object: { not: null } }, distinct: ['object'],
+        select: { object: true }, orderBy: { object: 'asc' }, take: 1000,
+      }),
+      this.prisma.oplataKv.findMany({
+        where: { txType: { not: null } }, distinct: ['txType'],
+        select: { txType: true }, orderBy: { txType: 'asc' }, take: 1000,
+      }),
+    ]);
+    const clean = (arr: (string | null)[]) => Array.from(new Set(arr.map((x) => (x || '').trim()).filter(Boolean))).sort();
+    return {
+      objects: clean(objs.map((o) => o.object)),
+      txTypes: clean(types.map((t) => t.txType)),
+    };
   }
 
   // ───────────────── AGENT: XATO to'lovlar (Telegram notifikatori) ─────────────────

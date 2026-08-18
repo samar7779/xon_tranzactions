@@ -29,7 +29,13 @@ export interface SheetTarget {
     categories?: string[]; // MONTHLY | FIRST | GENERAL
     txTypes?: string[];
     accounts?: string[];   // TRANZAKSIYA manbasi uchun — hisob raqamlari
+    amountSign?: 'pos' | 'neg' | null; // Сумма: >0 yoki <0 (0 skip)
   };
+  // Yozish rejimi: 'replace' (default) — ustunlarni tozalab qayta yozadi;
+  // 'upsert' — jadvalni tozalamaydi, keyField bo'yicha mavjudni update qiladi,
+  // yangisini qo'shadi, DB'da yo'q qatorlarni tozalaydi.
+  writeMode?: 'replace' | 'upsert';
+  keyField?: string; // upsert uchun kalit maydon (default: 1-ustun field'i)
   columns: SheetColumn[];
 }
 
@@ -262,7 +268,10 @@ export class GoogleExportService {
         categories: Array.isArray(s.filter?.categories) ? s.filter!.categories!.filter(Boolean) : [],
         txTypes: Array.isArray(s.filter?.txTypes) ? s.filter!.txTypes!.filter(Boolean) : [],
         accounts: Array.isArray(s.filter?.accounts) ? s.filter!.accounts!.map((a) => String(a).trim()).filter(Boolean) : [],
+        amountSign: s.filter?.amountSign === 'pos' || s.filter?.amountSign === 'neg' ? s.filter.amountSign : null,
       },
+      writeMode: s.writeMode === 'upsert' ? 'upsert' : 'replace',
+      keyField: s.keyField && fieldSet.has(s.keyField) ? s.keyField : undefined,
       columns: columns
         .filter((c) => c.col && c.field)
         .map((c) => ({ col: String(c.col).toUpperCase(), field: c.field })),
@@ -383,6 +392,75 @@ export class GoogleExportService {
   }
 
   // ─── Bitta sheet uchun eksport (clear + yozish) ───────────────────
+  /** Export filtrlari uchun distinct Объект/Тип — dropdown uchun. */
+  async distinctFilters() {
+    return this.oplataKv.distinctExportFilters();
+  }
+
+  /**
+   * UPSERT — Google Sheets'ni tozalamasdan sinxronlaydi:
+   *   keyField bo'yicha mavjud qatorni UPDATE qiladi, yangisini QO'SHADI,
+   *   DB'da endi yo'q qatorlarning ustunlarini TOZALAYDI (boshqa ustunlarga tegmaydi).
+   */
+  private async upsertRows(
+    sheetsApi: any, spreadsheetId: string, quotedTab: string, tabName: string,
+    columns: Array<{ col: string; field: string }>, startRow: number, rows: any[], keyFieldOpt?: string,
+  ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[] }> {
+    const keyField = keyFieldOpt || columns[0]?.field;
+    const keyCol = columns.find((c) => c.field === keyField)?.col;
+    if (!keyCol) throw new Error(`Upsert uchun kalit maydon "${keyField}" ustun mapping'da yo'q — uni ustunga qo'shing.`);
+
+    // Mavjud kalit ustunini o'qiymiz (startRow'dan pastga)
+    const getResp = await sheetsApi.spreadsheets.values.get({ spreadsheetId, range: `${quotedTab}!${keyCol}${startRow}:${keyCol}` });
+    const existing: string[] = (getResp.data.values || []).map((r: any[]) => (r?.[0] != null ? String(r[0]).trim() : ''));
+    const keyToRow = new Map<string, number>();
+    let lastNonEmptyIdx = -1;
+    existing.forEach((k, i) => { if (k) { if (!keyToRow.has(k)) keyToRow.set(k, startRow + i); lastNonEmptyIdx = i; } });
+    const lastRow = lastNonEmptyIdx >= 0 ? startRow + lastNonEmptyIdx : startRow - 1;
+
+    const dbKeys = new Set<string>();
+    const updates: Array<{ row: number; r: any }> = [];
+    const news: any[] = [];
+    for (const r of rows) {
+      const k = String(this.cellValue(r, keyField) ?? '').trim();
+      if (k) dbKeys.add(k);
+      const existRow = k ? keyToRow.get(k) : undefined;
+      if (existRow) updates.push({ row: existRow, r });
+      else news.push(r);
+    }
+
+    const data: any[] = [];
+    for (const u of updates) {
+      for (const c of columns) data.push({ range: `${quotedTab}!${c.col}${u.row}`, values: [[this.cellValue(u.r, c.field)]] });
+    }
+    const newStart = lastRow + 1;
+    if (news.length > 0) {
+      for (const c of columns) data.push({ range: `${quotedTab}!${c.col}${newStart}`, majorDimension: 'COLUMNS', values: [news.map((r) => this.cellValue(r, c.field))] });
+    }
+    if (data.length > 0) {
+      await sheetsApi.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
+    }
+
+    // Stale — sheet'da bor, DB'da yo'q kalitlar → o'sha qatorlar ustunlari tozalanadi
+    const staleRanges: string[] = [];
+    for (const [k, row] of keyToRow.entries()) {
+      if (!dbKeys.has(k)) for (const c of columns) staleRanges.push(`${quotedTab}!${c.col}${row}`);
+    }
+    if (staleRanges.length > 0) {
+      await sheetsApi.spreadsheets.values.batchClear({ spreadsheetId, requestBody: { ranges: staleRanges } });
+    }
+
+    const cols = columns.map((c) => c.col);
+    const writtenRange = news.length > 0
+      ? `${tabName}!${cols[0]}${newStart}:${cols[cols.length - 1]}${newStart + news.length - 1}`
+      : (updates.length > 0 ? `${tabName} · ${updates.length} qator yangilandi` : null);
+    return {
+      writtenRange,
+      rowsWritten: updates.length + news.length,
+      clearedRanges: staleRanges.map((r) => r.replace(quotedTab, tabName)),
+    };
+  }
+
   async run(target: SheetTarget) {
     const startedAt = Date.now();
     let step: 'auth' | 'validate' | 'clear' | 'fetch' | 'write' = 'auth';
@@ -408,15 +486,7 @@ export class GoogleExportService {
 
       const sheetsApi = this.makeSheetsClient(creds);
 
-      // 1) CLEAR — faqat mapping qilingan ustunlar, startRow'dan pastgacha
-      step = 'clear';
-      const clearRanges = columns.map((c) => `${quotedTab}!${c.col}${startRow}:${c.col}`);
-      await sheetsApi.spreadsheets.values.batchClear({
-        spreadsheetId,
-        requestBody: { ranges: clearRanges },
-      });
-
-      // 2) FETCH — manba (ОплатыКв yoki Tranzaksiya) bo'yicha
+      // 1) FETCH — manba (ОплатыКв yoki Tranzaksiya) bo'yicha
       step = 'fetch';
       const dateTo = this.todayTashkent();
       const rows = target.source === 'transaction'
@@ -431,37 +501,57 @@ export class GoogleExportService {
             objects: target.filter?.objects || [],
             categories: target.filter?.categories || [],
             txTypes: target.filter?.txTypes || [],
+            amountSign: target.filter?.amountSign || null,
           });
 
-      // 3) WRITE — har ustunni alohida (COLUMNS major) yozamiz
-      step = 'write';
+      // 2) WRITE — rejimga qarab
       let writtenRange: string | null = null;
-      if (rows.length > 0) {
-        const data = columns.map((c) => ({
-          range: `${quotedTab}!${c.col}${startRow}`,
-          majorDimension: 'COLUMNS' as const,
-          values: [rows.map((r) => this.cellValue(r, c.field))],
-        }));
-        await sheetsApi.spreadsheets.values.batchUpdate({
+      let rowsWritten = rows.length;
+      let clearedRanges: string[];
+
+      if (target.writeMode === 'upsert') {
+        // UPSERT — jadvalni tozalamaydi: keyField bo'yicha mavjudni update, yangisini
+        // qo'shadi, DB'da yo'q qatorlarni tozalaydi.
+        step = 'write';
+        const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField);
+        writtenRange = up.writtenRange;
+        rowsWritten = up.rowsWritten;
+        clearedRanges = up.clearedRanges;
+      } else {
+        // REPLACE (default) — ustunlarni tozalab qayta yozamiz
+        step = 'clear';
+        await sheetsApi.spreadsheets.values.batchClear({
           spreadsheetId,
-          requestBody: { valueInputOption: 'USER_ENTERED', data },
+          requestBody: { ranges: columns.map((c) => `${quotedTab}!${c.col}${startRow}:${c.col}`) },
         });
-        const cols = columns.map((c) => c.col);
-        const firstCol = cols[0];
-        const lastCol = cols[cols.length - 1];
-        writtenRange = `${target.tabName}!${firstCol}${startRow}:${lastCol}${startRow + rows.length - 1}`;
+        clearedRanges = columns.map((c) => `${target.tabName}!${c.col}${startRow}:${c.col}`);
+
+        step = 'write';
+        if (rows.length > 0) {
+          const data = columns.map((c) => ({
+            range: `${quotedTab}!${c.col}${startRow}`,
+            majorDimension: 'COLUMNS' as const,
+            values: [rows.map((r) => this.cellValue(r, c.field))],
+          }));
+          await sheetsApi.spreadsheets.values.batchUpdate({
+            spreadsheetId,
+            requestBody: { valueInputOption: 'USER_ENTERED', data },
+          });
+          const cols = columns.map((c) => c.col);
+          writtenRange = `${target.tabName}!${cols[0]}${startRow}:${cols[cols.length - 1]}${startRow + rows.length - 1}`;
+        }
       }
 
       const durationMs = Date.now() - startedAt;
       this.log.log(
-        `Export OK: "${target.name}" → ${spreadsheetId}/${target.tabName} · ${rows.length} qator · ${durationMs}ms`,
+        `Export OK (${target.writeMode || 'replace'}): "${target.name}" → ${spreadsheetId}/${target.tabName} · ${rowsWritten} qator · ${durationMs}ms`,
       );
       return {
         ok: true,
         sheet: { id: target.id, name: target.name, spreadsheetId, tabName: target.tabName },
-        clearedRanges: columns.map((c) => `${target.tabName}!${c.col}${startRow}:${c.col}`),
+        clearedRanges,
         rowsFetched: rows.length,
-        rowsWritten: rows.length,
+        rowsWritten,
         writtenRange,
         columns: columns.map((c) => ({ col: c.col, field: c.field })),
         dateFrom: target.dateFrom || null,

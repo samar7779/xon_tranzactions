@@ -32,6 +32,13 @@ export class GoogleExportController {
     return this.svc.getConfig();
   }
 
+  @Get('distinct-filters')
+  @RequirePermissions(PERMISSIONS.EXPORT_VIEW)
+  @ApiOperation({ summary: 'Filtr dropdownlari uchun mavjud Объект/Тип qiymatlari' })
+  distinctFilters() {
+    return this.svc.distinctFilters();
+  }
+
   @Put('config')
   @RequirePermissions(PERMISSIONS.EXPORT_MANAGE)
   @ApiOperation({ summary: 'Export konfiguratsiyasini saqlash (sheet ID, tab, mapping, filtr)' })
