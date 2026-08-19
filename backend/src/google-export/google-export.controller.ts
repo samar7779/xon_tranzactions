@@ -7,7 +7,7 @@ import { RequirePermissions } from '../auth/decorators/permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PERMISSIONS } from '../auth/permissions';
 import { GoogleExportService } from './google-export.service';
-import { SaveExportConfigDto, RunExportDto } from './dto/google-export.dto';
+import { RunExportDto } from './dto/google-export.dto';
 
 type AuthUser = { id?: string; email?: string; fullName?: string };
 
@@ -49,8 +49,12 @@ export class GoogleExportController {
   @Put('config')
   @RequirePermissions(PERMISSIONS.EXPORT_MANAGE)
   @ApiOperation({ summary: 'Export konfiguratsiyasini saqlash (sheet ID, tab, mapping, filtr)' })
-  saveConfig(@Body() body: SaveExportConfigDto, @CurrentUser() user?: AuthUser) {
-    return this.svc.saveConfig(body?.sheets || [], actorLabel(user));
+  // MUHIM: `body`ni `any` deb olamiz — global ValidationPipe (whitelist+transform)
+  // Object/any metatype'ni TEKSHIRMAYDI, shuning uchun sheet ichidagi nested `filter`
+  // (va columns/cron) QIRQILMAY to'liq o'tadi. DTO turi bilan (SaveExportConfigDto)
+  // pipe nested `filter`ni yo'q qilardi → filtr "saqlanmaydi" bug'i shundan edi.
+  saveConfig(@Body() body: any, @CurrentUser() user?: AuthUser) {
+    return this.svc.saveConfig(Array.isArray(body?.sheets) ? body.sheets : [], actorLabel(user));
   }
 
   @Post('credentials')

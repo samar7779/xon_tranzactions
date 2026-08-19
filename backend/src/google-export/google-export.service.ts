@@ -244,14 +244,17 @@ export class GoogleExportService {
 
   async saveConfig(sheets: SheetTarget[], updatedBy?: string) {
     if (!Array.isArray(sheets)) throw new BadRequestException("sheets massiv bo'lishi kerak");
+    // XOM (validateTarget'dan OLDIN) kelgan filtr — pipe qirqib tashlaganini fosh qiladi.
+    const objReceived = sheets.reduce((a, s: any) => a + (Array.isArray(s?.filter?.objects) ? s.filter.objects.length : 0), 0);
     const clean = sheets.map((s, i) => this.validateTarget(s, i));
     await this.settings.set(SETTINGS_KEY, JSON.stringify(clean), updatedBy);
-    // Diagnostika — aynan qanday filtr saqlandi (filtr "ketvoti" shikoyati uchun).
+    const objSaved = clean.reduce((a, s) => a + (s.filter?.objects?.length || 0), 0);
+    // Diagnostika — filtr "ketvoti" shikoyati uchun: XOM kelgan ↔ saqlangan.
     const fsum = clean
       .map((s) => `${s.name}[obj:${s.filter?.objects?.length || 0},typ:${s.filter?.txTypes?.length || 0},cat:${s.filter?.categories?.length || 0},sum:${s.filter?.amountSign || '-'}]`)
       .join(' ');
-    this.log.log(`Export config saqlandi (${clean.length} sheet) — filtr: ${fsum}`);
-    return { ok: true, sheets: clean };
+    this.log.log(`Export config saqlandi (${clean.length} sheet) — obj keldi=${objReceived}, saqlandi=${objSaved} · ${fsum}`);
+    return { ok: true, sheets: clean, debug: { objReceived, objSaved } };
   }
 
   private validateTarget(s: SheetTarget, idx: number): SheetTarget {

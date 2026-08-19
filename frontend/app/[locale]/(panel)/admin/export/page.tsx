@@ -231,15 +231,15 @@ export default function AdminExportPage() {
   };
 
   const saveMut = useMutation({
-    mutationFn: () => api.put<{ ok: boolean; sheets: SheetTarget[] }>('/google-export/config', { sheets }),
+    mutationFn: () => api.put<{ ok: boolean; sheets: SheetTarget[]; debug?: { objReceived: number; objSaved: number } }>('/google-export/config', { sheets }),
     onSuccess: (r) => {
       // Serverdan qaytgan (validatsiyadan o'tgan) config AUTHORITATIVE — aynan nima
       // saqlangani darrov ko'rinadi. Filtr tushib qolsa, toast'da 0 chiqadi (diagnostika).
       if (r?.sheets && Array.isArray(r.sheets)) setSheets(r.sheets);
       const objSel = (r?.sheets || []).reduce((a, s) => a + (s.filter?.objects?.length || 0), 0);
       const typSel = (r?.sheets || []).reduce((a, s) => a + (s.filter?.txTypes?.length || 0), 0);
-      const sumSel = (r?.sheets || []).filter((s) => s.filter?.amountSign).length;
-      toast.success(`Saqlandi ✓ — filtr: ${objSel} obyekt, ${typSel} tip, ${sumSel} summa`);
+      const dbg = r?.debug ? ` · (keldi ${r.debug.objReceived} → saqlandi ${r.debug.objSaved})` : '';
+      toast.success(`Saqlandi ✓ — filtr: ${objSel} obyekt, ${typSel} tip${dbg}`);
       setDirty(false);
     },
     onError: (e: any) => toast.error(e?.message || 'Saqlashda xato'),
