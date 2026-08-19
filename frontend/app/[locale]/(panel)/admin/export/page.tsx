@@ -1220,16 +1220,9 @@ function SheetCard({
                     ))}
                   </ProSelect>
                 </Field>
-                <Field label="Oxirgi qatorni aniqlash ustuni (anker)">
-                  <input
-                    value={sheet.lastRowColumn ?? 'F'}
-                    onChange={(e) => onChange({ lastRowColumn: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
-                    disabled={!canManage}
-                    placeholder="F"
-                    title="Yangi qatorlar shu ustundagi oxirgi ma'lumotdan keyin qo'shiladi (mapping ustunlari qisqa bo'lsa ham). Odatda F."
-                    className={cn(PRO_INPUT, 'w-20 text-center font-mono font-bold uppercase px-2')}
-                  />
-                </Field>
+                <div className="self-end pb-2 text-[10.5px] text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">
+                  ℹ️ Yangi qatorlar jadvaldagi <b>oxirgi ma'lumotli qatordan keyin</b> (barcha ustun bo'yicha, avtomatik) qo'shiladi — o'rtadagi bo'sh joylarga tushmaydi.
+                </div>
               </>
             )}
             <button

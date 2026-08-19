@@ -558,25 +558,28 @@ export class GoogleExportService {
     const keyIdx = colIdx(keyColLetter);
     const maxIdx = Math.max(...columns.map((c) => colIdx(c.col)));
 
-    // ANKER ustun — HAQIQIY oxirgi qatorni aniqlash uchun (default 'F'). Mapping ustunlari
-    // qisqa bo'lsa ham (bo'sh kataklar), anker ustun to'la bo'lgani uchun oxirgi qatorni
-    // ko'rsatadi. O'qish oralig'ini kamida shu ustungacha kengaytiramiz.
-    const anchorCol = (anchorColOpt || 'F').toUpperCase();
-    const anchorIdx = colIdx(anchorCol);
-    const readMaxIdx = Math.max(maxIdx, anchorIdx);
+    // HAQIQIY oxirgi qatorni BARCHA ustunlar bo'yicha aniqlaymiz. Faqat mapping yoki bitta
+    // ustunga qarasak, past qatorlar "bo'sh" ko'rinib, yangi ma'lumot O'RTADAGI ochiq joylarga
+    // tushib ketardi. Shuning uchun jadval to'liq kengligini (grid columnCount) o'qiymiz.
+    let gridCols = 0;
+    try {
+      const meta = await sheetsApi.spreadsheets.get({
+        spreadsheetId, fields: 'sheets(properties(title,gridProperties(columnCount)))',
+      });
+      const sh = (meta.data.sheets || []).find((s: any) => s.properties?.title === tabName);
+      gridCols = Number(sh?.properties?.gridProperties?.columnCount || 0);
+    } catch { /* meta o'qilmasa — mapping kengligida davom etamiz */ }
+    // Ixtiyoriy "anker" ustun — o'qishni kamida shu ustungacha kengaytiradi (majburlamaydi).
+    const anchorCol = (anchorColOpt || '').toUpperCase();
+    const anchorIdx = /^[A-Z]{1,3}$/.test(anchorCol) ? colIdx(anchorCol) : -1;
+    const readMaxIdx = Math.max(maxIdx, anchorIdx, gridCols > 0 ? gridCols - 1 : maxIdx);
 
-    // 1) Oralig'ni BIR marta o'qiymiz (A..anker/maxCol) — kalitlar + HAQIQIY oxirgi qatorni bilish uchun.
-    //    Anker ustun ham o'qilgani uchun existing.length oxirgi TO'LA qatorni ko'rsatadi.
+    // 1) Oralig'ni BIR marta o'qiymiz (A..oxirgi ustun) — kalitlar + HAQIQIY oxirgi qatorni bilish uchun.
+    //    Barcha ustun o'qilgani uchun existing.length = oxirgi ma'lumotli qator (ISTALGAN ustunda).
     const getResp = await sheetsApi.spreadsheets.values.get({
       spreadsheetId, range: `${quotedTab}!A${startRow}:${idxToLetter(readMaxIdx)}`,
     });
     const existing: any[][] = getResp.data.values || [];
-    // Anker ustundagi oxirgi TO'LA qator (nisbiy uzunlik) — undan pastga yozamiz.
-    let anchorLen = 0;
-    for (let i = 0; i < existing.length; i++) {
-      const v = existing[i]?.[anchorIdx];
-      if (v != null && String(v).trim() !== '') anchorLen = i + 1;
-    }
 
     const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (existing ichida)
     existing.forEach((r, i) => {
@@ -614,17 +617,10 @@ export class GoogleExportService {
       }
     }
 
-    // Mapping ustunlaridagi oxirgi TO'LA qator (o'z ma'lumotimizni ustiga yozib yubormaslik uchun).
-    const mapIdxs = columns.map((c) => colIdx(c.col));
-    let mappingLen = 0;
-    for (let i = 0; i < existing.length; i++) {
-      const row = existing[i];
-      if (row && mapIdxs.some((mi) => row[mi] != null && String(row[mi]).trim() !== '')) mappingLen = i + 1;
-    }
-    // Yangi qatorlar — ANKER (F) yoki mapping ustunidagi oxirgi TO'LA qatordan KEYIN qo'shiladi
-    // (o'rtaga/ustiga emas). Anker ustun to'la bo'lgani uchun odatda o'sha aniqlaydi.
-    const appendStartRow = startRow + Math.max(mappingLen, anchorLen);
-    this.log.log(`Upsert append: "${tabName}" anker=${anchorCol} (anchorLen=${anchorLen}, mappingLen=${mappingLen}) → yangi qatorlar ${appendStartRow}-qatordan`);
+    // Yangi qatorlar — jadvaldagi oxirgi ma'lumotli qatordan (BARCHA ustun bo'yicha) KEYIN
+    // qo'shiladi. existing.length aynan shuni beradi — o'rtadagi ochiq joylarga TUSHMAYDI.
+    const appendStartRow = startRow + existing.length;
+    this.log.log(`Upsert append: "${tabName}" oxirgi ma'lumotli qator=${startRow + existing.length - 1}, yangi qatorlar ${appendStartRow}-qatordan (barcha ustun bo'yicha, kenglik=${readMaxIdx + 1})`);
     news.forEach((r, j) => {
       const sheetRow = appendStartRow + j;
       for (const c of columns) touched[c.col].set(sheetRow, this.cellValue(r, c.field));
