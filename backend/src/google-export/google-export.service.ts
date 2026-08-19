@@ -558,27 +558,32 @@ export class GoogleExportService {
     const keyIdx = colIdx(keyColLetter);
     const maxIdx = Math.max(...columns.map((c) => colIdx(c.col)));
 
-    // OXIRGI QATORNI "ANKER" ustun (default H — № заявка) bo'yicha aniqlaymiz.
-    // MUHIM (to'liq ma'lumot tahlilidan): anker PER-RECORD ustun bo'lishi kerak — har yozuvga
-    // xos, ketma-ket raqam (masalan № заявка = H). STATUS ustuni (F = К оплате) YARAMAYDI:
-    // "Оплачен" kelajak qatorlarga oldindan to'ldirilgan yoki formula bilan PASTGA cho'zilgan,
-    // shuning uchun F oxirgi qatorni juda past ko'rsatib, yangi ma'lumot bo'sh zonaga tushardi.
-    // H per-record va export unga TEGMAYDI (stray bo'lmaydi) → oxirgi HAQIQIY yozuvda tugaydi.
+    // OXIRGI HAQIQIY qatorni IKKI shart bilan aniqlaymiz (bitta ustun HECH QACHON yetarli emas —
+    // biri pastga cho'zilib/qoldiq bo'lib oxirgi qatorni buzardi):
+    //   (a) TO'LOV ustunlaridan (export yozadigan, kalit G'dan tashqari: A..E) birortasida ma'lumot bor,
+    //   (b) ANKER ustunida (sheet o'zining № ustuni, default H = № заявка) ma'lumot bor.
+    // Buning natijasi:
+    //   - "bron" qatorlar (faqat №/status oldindan to'ldirilgan, to'lov A..E bo'sh) → TASHLANADI,
+    //   - eski buzuq append'dan qolgan "stray" (faqat A..G, № bo'sh, past zonada) → TASHLANADI,
+    //   - faqat REAL to'lov (to'lov + №) qatorlari qoladi → oxirgisidan keyin yoziladi.
     const anchorCol = (anchorColOpt && /^[A-Z]{1,3}$/.test(String(anchorColOpt).toUpperCase()))
       ? String(anchorColOpt).toUpperCase() : 'H';
     const anchorIdx = colIdx(anchorCol);
     const readMaxIdx = Math.max(maxIdx, anchorIdx);
 
-    // 1) Oralig'ni BIR marta o'qiymiz (A..anker/maxCol) — kalitlar (keyToIdx) + anker ustun uchun.
+    // 1) Oralig'ni BIR marta o'qiymiz (A..anker/maxCol) — kalitlar (keyToIdx) + oxirgi qator uchun.
     const getResp = await sheetsApi.spreadsheets.values.get({
       spreadsheetId, range: `${quotedTab}!A${startRow}:${idxToLetter(readMaxIdx)}`,
     });
     const existing: any[][] = getResp.data.values || [];
-    // Anker (F) ustunidagi oxirgi TO'LA qator (nisbiy) — yangi qatorlar SHUNDAN keyin yoziladi.
+    // TO'LOV ustunlari indeksi (mapping, kalit G'dan tashqari) — A..E.
+    const payIdxs = columns.map((c) => colIdx(c.col)).filter((x) => x !== keyIdx);
+    const cellFilled = (r: any[] | undefined, c: number) => { const v = r?.[c]; return v != null && String(v).trim() !== ''; };
+    // Oxirgi qator = (to'lov ustunlaridan biri to'la) VA (anker/№ ustuni to'la) bo'lgan eng oxirgisi.
     let anchorLen = 0;
     for (let i = 0; i < existing.length; i++) {
-      const v = existing[i]?.[anchorIdx];
-      if (v != null && String(v).trim() !== '') anchorLen = i + 1;
+      const r = existing[i];
+      if (payIdxs.some((c) => cellFilled(r, c)) && cellFilled(r, anchorIdx)) anchorLen = i + 1;
     }
 
     const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (existing ichida)
@@ -621,7 +626,7 @@ export class GoogleExportService {
     // (existing.length EMAS — F'dan tashqari ustunlarda yoki pastda qoldiq bo'lishi mumkin,
     //  o'sha oxirgi qatorni noto'g'ri pastga surib, yangi ma'lumotni bo'sh zonaga tashlardi.)
     const appendStartRow = startRow + anchorLen;
-    this.log.log(`Upsert append: "${tabName}" anker=${anchorCol}, oxirgi to'la qator=${startRow + anchorLen - 1}, yangi qatorlar ${appendStartRow}-qatordan`);
+    this.log.log(`Upsert append: "${tabName}" anker=${anchorCol} + to'lov(A..E), oxirgi REAL to'lov qatori=${startRow + anchorLen - 1}, yangi qatorlar ${appendStartRow}-qatordan`);
     news.forEach((r, j) => {
       const sheetRow = appendStartRow + j;
       for (const c of columns) touched[c.col].set(sheetRow, this.cellValue(r, c.field));
