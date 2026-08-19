@@ -63,6 +63,17 @@ interface RunResult {
   dateTo?: string;
   startRow?: number;
   durationMs?: number;
+  debug?: {
+    existingRows?: number;
+    anchorLen?: number;
+    blockLastRow?: number;
+    appendStartRow?: number;
+    blockKeys?: number;
+    dbRows?: number;
+    updated?: number;
+    added?: number;
+    cleared?: number;
+  } | null;
 }
 
 // ОплатыКв → hujayra maydonlari
@@ -1398,6 +1409,24 @@ function ResultView({ result }: { result: RunResult }) {
             <MiniStat label="Boshlanish" value={`${result.startRow}-qator`} />
             <MiniStat label="Davomiylik" value={`${Math.round((result.durationMs || 0) / 100) / 10}s`} />
           </div>
+          {result.debug && (
+            <div className="rounded-lg ring-1 ring-indigo-200 dark:ring-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 p-3">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-indigo-500 dark:text-indigo-400 mb-2">🔍 Diagnostika (upsert)</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[11.5px]">
+                <div className="flex justify-between gap-2"><span className="text-slate-500">DB'dan olindi:</span> <b className="tabular-nums">{result.debug.dbRows ?? '—'}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Yangilandi (bor):</span> <b className="tabular-nums text-amber-600 dark:text-amber-400">{result.debug.updated ?? '—'}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Qo'shildi (yangi):</span> <b className="tabular-nums text-emerald-600 dark:text-emerald-400">{result.debug.added ?? '—'}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">O'qildi (A–G):</span> <b className="tabular-nums">{result.debug.existingRows ?? '—'}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Blok oxiri:</span> <b className="tabular-nums">{result.debug.blockLastRow ?? '—'}-q</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Blok kalitlari:</span> <b className="tabular-nums">{result.debug.blockKeys ?? '—'}</b></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Tozalandi:</span> <b className="tabular-nums">{result.debug.cleared ?? '—'}</b></div>
+                <div className="flex justify-between gap-2 sm:col-span-2"><span className="text-slate-500">Yangi qatorlar boshi:</span> <b className="tabular-nums text-indigo-700 dark:text-indigo-300">{result.debug.appendStartRow ?? '—'}-qator</b></div>
+              </div>
+              {(result.debug.updated ?? 0) + (result.debug.added ?? 0) !== (result.debug.dbRows ?? 0) && (
+                <div className="mt-2 text-[10.5px] text-rose-600 dark:text-rose-400 font-semibold">⚠ update ({result.debug.updated}) + qo'shildi ({result.debug.added}) ≠ olindi ({result.debug.dbRows}) — yozuv yo'qolgan!</div>
+              )}
+            </div>
+          )}
           <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
             <div><b>Diapazon:</b> {result.dateFrom || '(boshi yo\'q)'} → {result.dateTo}</div>
             {result.writtenRange && <div><b>Yozildi:</b> <span className="font-mono">{result.writtenRange}</span></div>}

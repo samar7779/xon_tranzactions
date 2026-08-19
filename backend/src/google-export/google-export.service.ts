@@ -544,7 +544,7 @@ export class GoogleExportService {
     sheetsApi: any, spreadsheetId: string, quotedTab: string, tabName: string,
     columns: Array<{ col: string; field: string }>, startRow: number, rows: any[], keyFieldOpt: string | undefined,
     prevKeys: Set<string>, anchorColOpt?: string,
-  ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[]; dbKeys: string[] }> {
+  ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[]; dbKeys: string[]; debug: Record<string, number> }> {
     const keyField = keyFieldOpt || columns[0]?.field;
     const keyColLetter = columns.find((c) => c.field === keyField)?.col;
     if (!keyColLetter) throw new Error(`Upsert uchun kalit maydon "${keyField}" ustun mapping'da yo'q — uni ustunga qo'shing.`);
@@ -655,6 +655,17 @@ export class GoogleExportService {
       rowsWritten: updated + news.length,
       clearedRanges: cleared ? [`${tabName} · ${cleared} qator tozalandi`] : [],
       dbKeys: Array.from(dbKeys),
+      debug: {
+        existingRows: existing.length,   // A..G o'qishда qaytган qatorlar soni
+        anchorLen,                        // birinchi to'lov bloki uzunligi
+        blockLastRow: startRow + anchorLen - 1, // real blok oxirgi qatori (sheet raqami)
+        appendStartRow,                   // yangi qatorlar shu qatordan
+        blockKeys: keyToIdx.size,         // blokдаги kalitlar soni
+        dbRows: rows.length,              // DB'dan kelган yozuvlar (153 bo'lishi kerak)
+        updated,                          // mos kelib YANGILANган (blokда bor)
+        added: news.length,               // yangi QO'SHILган
+        cleared,                          // stale tozalanган
+      },
     };
   }
 
@@ -707,6 +718,7 @@ export class GoogleExportService {
       let writtenRange: string | null = null;
       let rowsWritten = rows.length;
       let clearedRanges: string[];
+      let upsertDebug: any = null; // diagnostika (upsert rejimida)
 
       if (target.writeMode === 'upsert') {
         // UPSERT — jadvalni tozalamaydi. Export o'zi yozgan (prevKeys) qatorlar ichidan
@@ -720,6 +732,7 @@ export class GoogleExportService {
         writtenRange = up.writtenRange;
         rowsWritten = up.rowsWritten;
         clearedRanges = up.clearedRanges;
+        upsertDebug = up.debug;
       } else {
         // REPLACE (default) — ustunlarni tozalab qayta yozamiz
         step = 'clear';
@@ -782,6 +795,7 @@ export class GoogleExportService {
         dateTo,
         startRow,
         durationMs,
+        debug: upsertDebug, // upsert diagnostikasi (nechta o'qildi/update/qo'shildi/qayerga)
       };
     } catch (e: any) {
       const error = this.extractApiError(e);
