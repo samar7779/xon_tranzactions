@@ -36,6 +36,11 @@ export interface SheetTarget {
   // yangisini qo'shadi, DB'da yo'q qatorlarni tozalaydi.
   writeMode?: 'replace' | 'upsert';
   keyField?: string; // upsert uchun kalit maydon (default: 1-ustun field'i)
+  // Upsert'da YANGI qatorni qayerdan boshlab qo'shishni aniqlash uchun "ANKER" ustun.
+  // Mapping ustunlari qisqa bo'lsa (bo'sh kataklar) ham, bu ustun to'la bo'lgani uchun
+  // HAQIQIY oxirgi qatorni ko'rsatadi. Default: 'F'. Yangi qatorlar shu ustundagi
+  // oxirgi ma'lumotdan KEYIN yoziladi (o'rtaga/ustiga emas).
+  lastRowColumn?: string;
   // Avtomatik jadval (cron): har N daqiqada, soat oralig'ida, tanlangan hafta kunlari.
   cron?: {
     enabled?: boolean;
@@ -288,6 +293,8 @@ export class GoogleExportService {
       },
       writeMode: s.writeMode === 'upsert' ? 'upsert' : 'replace',
       keyField: s.keyField && fieldSet.has(s.keyField) ? s.keyField : undefined,
+      lastRowColumn: s.lastRowColumn && /^[A-Z]{1,3}$/.test(String(s.lastRowColumn).toUpperCase())
+        ? String(s.lastRowColumn).toUpperCase() : undefined,
       cron: s.cron ? {
         enabled: !!s.cron.enabled,
         everyMinutes: Math.max(1, Math.floor(Number(s.cron.everyMinutes) || 60)),
@@ -535,7 +542,7 @@ export class GoogleExportService {
   private async upsertRows(
     sheetsApi: any, spreadsheetId: string, quotedTab: string, tabName: string,
     columns: Array<{ col: string; field: string }>, startRow: number, rows: any[], keyFieldOpt: string | undefined,
-    prevKeys: Set<string>,
+    prevKeys: Set<string>, anchorColOpt?: string,
   ): Promise<{ writtenRange: string | null; rowsWritten: number; clearedRanges: string[]; dbKeys: string[] }> {
     const keyField = keyFieldOpt || columns[0]?.field;
     const keyColLetter = columns.find((c) => c.field === keyField)?.col;
@@ -551,12 +558,25 @@ export class GoogleExportService {
     const keyIdx = colIdx(keyColLetter);
     const maxIdx = Math.max(...columns.map((c) => colIdx(c.col)));
 
-    // 1) Butun mapping oralig'ini BIR marta o'qiymiz (A..maxCol) — kalitlar + HAQIQIY oxirgi qatorni bilish uchun.
-    //    (Faqat kalit ustunini o'qisak, kalitsiz qatorlar ostidagi qo'lda ma'lumot ko'rinmasdi.)
+    // ANKER ustun — HAQIQIY oxirgi qatorni aniqlash uchun (default 'F'). Mapping ustunlari
+    // qisqa bo'lsa ham (bo'sh kataklar), anker ustun to'la bo'lgani uchun oxirgi qatorni
+    // ko'rsatadi. O'qish oralig'ini kamida shu ustungacha kengaytiramiz.
+    const anchorCol = (anchorColOpt || 'F').toUpperCase();
+    const anchorIdx = colIdx(anchorCol);
+    const readMaxIdx = Math.max(maxIdx, anchorIdx);
+
+    // 1) Oralig'ni BIR marta o'qiymiz (A..anker/maxCol) — kalitlar + HAQIQIY oxirgi qatorni bilish uchun.
+    //    Anker ustun ham o'qilgani uchun existing.length oxirgi TO'LA qatorni ko'rsatadi.
     const getResp = await sheetsApi.spreadsheets.values.get({
-      spreadsheetId, range: `${quotedTab}!A${startRow}:${idxToLetter(maxIdx)}`,
+      spreadsheetId, range: `${quotedTab}!A${startRow}:${idxToLetter(readMaxIdx)}`,
     });
     const existing: any[][] = getResp.data.values || [];
+    // Anker ustundagi oxirgi TO'LA qator (nisbiy uzunlik) — undan pastga yozamiz.
+    let anchorLen = 0;
+    for (let i = 0; i < existing.length; i++) {
+      const v = existing[i]?.[anchorIdx];
+      if (v != null && String(v).trim() !== '') anchorLen = i + 1;
+    }
 
     const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (existing ichida)
     existing.forEach((r, i) => {
@@ -594,8 +614,17 @@ export class GoogleExportService {
       }
     }
 
-    // Yangi qatorlar — HAQIQIY oxirgi qatordan (existing.length) KEYIN qo'shiladi (o'rtaga/ustiga emas).
-    const appendStartRow = startRow + existing.length;
+    // Mapping ustunlaridagi oxirgi TO'LA qator (o'z ma'lumotimizni ustiga yozib yubormaslik uchun).
+    const mapIdxs = columns.map((c) => colIdx(c.col));
+    let mappingLen = 0;
+    for (let i = 0; i < existing.length; i++) {
+      const row = existing[i];
+      if (row && mapIdxs.some((mi) => row[mi] != null && String(row[mi]).trim() !== '')) mappingLen = i + 1;
+    }
+    // Yangi qatorlar — ANKER (F) yoki mapping ustunidagi oxirgi TO'LA qatordan KEYIN qo'shiladi
+    // (o'rtaga/ustiga emas). Anker ustun to'la bo'lgani uchun odatda o'sha aniqlaydi.
+    const appendStartRow = startRow + Math.max(mappingLen, anchorLen);
+    this.log.log(`Upsert append: "${tabName}" anker=${anchorCol} (anchorLen=${anchorLen}, mappingLen=${mappingLen}) → yangi qatorlar ${appendStartRow}-qatordan`);
     news.forEach((r, j) => {
       const sheetRow = appendStartRow + j;
       for (const c of columns) touched[c.col].set(sheetRow, this.cellValue(r, c.field));
@@ -690,7 +719,7 @@ export class GoogleExportService {
         // DB'dan o'chganlari tozalanadi; foydalanuvchi QO'LDA qo'shgan qatorlar saqlanadi.
         step = 'write';
         const prevKeys = await this.loadUpsertKeys(target.id);
-        const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField, prevKeys);
+        const up = await this.upsertRows(sheetsApi, spreadsheetId, quotedTab, target.tabName, columns, startRow, rows, target.keyField, prevKeys, target.lastRowColumn);
         await this.saveUpsertKeys(target.id, up.dbKeys);
         // ix_id (noyob row ID) — API jamosiga «Yuklab olish» uchun (mapping'ga bog'liq emas).
         await this.saveWrittenIds(target.id, rows.map((r) => String(r.id ?? '')).filter(Boolean));

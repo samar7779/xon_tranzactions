@@ -35,6 +35,7 @@ interface SheetTarget {
   filter: { objects?: string[]; categories?: string[]; txTypes?: string[]; accounts?: string[]; amountSign?: 'pos' | 'neg' | null };
   writeMode?: 'replace' | 'upsert';
   keyField?: string;
+  lastRowColumn?: string; // upsert: oxirgi qatorni aniqlash uchun "anker" ustun (default F)
   cron?: { enabled?: boolean; everyMinutes?: number; hourFrom?: number; hourTo?: number; days?: number[] };
   columns: SheetColumn[];
 }
@@ -1206,18 +1207,30 @@ function SheetCard({
           </div>
           <div className="flex items-end gap-3 flex-wrap">
             {sheet.writeMode === 'upsert' && (
-              <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
-                <ProSelect
-                  value={sheet.keyField || sheet.columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || sheet.columns[0]?.field || ''}
-                  onChange={(v) => onChange({ keyField: v })}
-                  disabled={!canManage}
-                  className="w-full max-w-xs"
-                >
-                  {sheet.columns.filter((c) => c.field).map((c) => (
-                    <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
-                  ))}
-                </ProSelect>
-              </Field>
+              <>
+                <Field label="Kalit maydon (noyob — mavjud qatorni topish uchun)">
+                  <ProSelect
+                    value={sheet.keyField || sheet.columns.find((c) => c.field === 'id' || c.field === 'externalId')?.field || sheet.columns[0]?.field || ''}
+                    onChange={(v) => onChange({ keyField: v })}
+                    disabled={!canManage}
+                    className="w-full max-w-xs"
+                  >
+                    {sheet.columns.filter((c) => c.field).map((c) => (
+                      <option key={c.col} value={c.field}>{c.col} → {FIELD_LABEL[c.field] || c.field}</option>
+                    ))}
+                  </ProSelect>
+                </Field>
+                <Field label="Oxirgi qatorni aniqlash ustuni (anker)">
+                  <input
+                    value={sheet.lastRowColumn ?? 'F'}
+                    onChange={(e) => onChange({ lastRowColumn: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
+                    disabled={!canManage}
+                    placeholder="F"
+                    title="Yangi qatorlar shu ustundagi oxirgi ma'lumotdan keyin qo'shiladi (mapping ustunlari qisqa bo'lsa ham). Odatda F."
+                    className={cn(PRO_INPUT, 'w-20 text-center font-mono font-bold uppercase px-2')}
+                  />
+                </Field>
+              </>
             )}
             <button
               type="button" onClick={downloadKeys}
