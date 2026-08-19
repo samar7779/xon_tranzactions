@@ -253,6 +253,13 @@
     animation: gradient-shift 8s ease infinite;
   }
 
+  /* Export "Bajarilmoqda" — indeterminate progress bar (segment sweeps across) */
+  @keyframes export-bar-slide {
+    0%   { transform: translateX(-130%); }
+    100% { transform: translateX(560%); }
+  }
+  .animate-export-bar { animation: export-bar-slide 1.25s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+
   /* ─── Showcase sahifasi uchun animatsiyalar ─── */
   @keyframes showcase-card-in {
     from { opacity: 0; transform: rotateX(10deg) rotateY(-14deg) translateY(40px) scale(0.92); }

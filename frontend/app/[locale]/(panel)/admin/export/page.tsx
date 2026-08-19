@@ -1222,11 +1222,11 @@ function SheetCard({
                 </Field>
                 <Field label="Oxirgi qatorni aniqlash ustuni (anker)">
                   <input
-                    value={sheet.lastRowColumn ?? 'F'}
+                    value={sheet.lastRowColumn ?? 'H'}
                     onChange={(e) => onChange({ lastRowColumn: e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3) })}
                     disabled={!canManage}
-                    placeholder="F"
-                    title="Yangi qatorlar SHU ustundagi oxirgi ma'lumotdan keyin qo'shiladi. Bu ustun HAR haqiqiy qatorda to'la bo'lsin (masalan К оплате = F). ID/G da bo'sh qatorlar bor — shuning uchun G emas, F ishlatiladi."
+                    placeholder="H"
+                    title="Yangi qatorlar SHU ustundagi oxirgi ma'lumotdan keyin qo'shiladi. PER-RECORD ustun bo'lsin — har yozuvga xos raqam (masalan № заявка = H). STATUS ustun (К оплате = F) YARAMAYDI: 'Оплачен' oldindan pastga to'ldirilib/formula bo'lib, oxirgi qatorni juda past ko'rsatadi."
                     className={cn(PRO_INPUT, 'w-20 text-center font-mono font-bold uppercase px-2')}
                   />
                 </Field>
@@ -1291,21 +1291,63 @@ function SheetCard({
 
 // ─── Yozilayotgan payt animatsiya ─────────────────────────────────────
 function RunningIndicator() {
-  const phases = ['Ustunlar tozalanmoqda', 'ОплатыКв ma\'lumoti olinmoqda', 'Google Sheets\'ga yozilmoqda'];
+  const phases = [
+    { icon: Database,        label: "Ma'lumot olinmoqda",   sub: 'ОплатыКв / Tranzaksiya' },
+    { icon: FilterIcon,      label: 'Saralanmoqda',         sub: 'Filtr + tayyorlash' },
+    { icon: FileSpreadsheet, label: "Sheets'ga yozilmoqda", sub: 'Google Sheets' },
+  ];
   const [i, setI] = useState(0);
   useEffect(() => {
-    const t = setInterval(() => setI((p) => (p + 1) % phases.length), 900);
+    // Bosqichlar oldinга yuradi va oxirgисидА (yozish) to'xtaydi — orqaga qaytmaydi.
+    const t = setInterval(() => setI((p) => Math.min(p + 1, phases.length - 1)), 1500);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
-    <div className="rounded-xl ring-1 ring-emerald-200 dark:ring-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30 px-4 py-3 flex items-center gap-3">
-      <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400" />
-      <div className="text-[12px] font-medium text-emerald-800 dark:text-emerald-300">{phases[i]}…</div>
-      <div className="ml-auto flex gap-1">
-        {phases.map((_, pi) => (
-          <span key={pi} className={cn('w-1.5 h-1.5 rounded-full transition-colors', pi === i ? 'bg-emerald-500' : 'bg-emerald-200 dark:bg-emerald-800')} />
-        ))}
+    <div className="relative overflow-hidden rounded-2xl ring-1 ring-emerald-200/70 dark:ring-emerald-800/50 bg-gradient-to-br from-emerald-50 via-white to-teal-50/70 dark:from-emerald-950/40 dark:via-slate-900 dark:to-teal-950/20 p-4 shadow-[0_10px_34px_-14px_rgba(16,185,129,0.4)]">
+      {/* yumshoq nur */}
+      <div className="pointer-events-none absolute -top-16 -right-14 w-40 h-40 rounded-full bg-emerald-400/20 dark:bg-emerald-400/10 blur-3xl animate-pulse-ring" />
+      {/* bosqichlar */}
+      <div className="relative flex items-center gap-2 sm:gap-3">
+        {phases.map((p, pi) => {
+          const Icon = p.icon;
+          const done = pi < i;
+          const active = pi === i;
+          return (
+            <div key={pi} className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="relative shrink-0">
+                  {active && <span className="absolute -inset-1.5 rounded-2xl bg-emerald-500/25 animate-pulse-ring" />}
+                  <div className={cn('relative grid place-items-center w-9 h-9 rounded-xl transition-all duration-500',
+                    active ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg shadow-emerald-500/40 scale-110'
+                      : done ? 'bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 ring-1 ring-emerald-200 dark:ring-emerald-800'
+                      : 'bg-slate-100 dark:bg-slate-800/80 text-slate-400 dark:text-slate-600')}>
+                    {done ? <Check className="h-4 w-4" /> : <Icon className={cn('h-4 w-4', active && 'animate-pulse')} />}
+                  </div>
+                </div>
+                <div className="min-w-0 hidden md:block">
+                  <div className={cn('text-[12px] font-bold leading-tight truncate transition-colors',
+                    active ? 'text-emerald-800 dark:text-emerald-200' : done ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-slate-400 dark:text-slate-500')}>
+                    {p.label}
+                  </div>
+                  <div className="text-[10px] text-slate-400 dark:text-slate-500 truncate">{p.sub}</div>
+                </div>
+              </div>
+              {pi < phases.length - 1 && (
+                <div className="flex-1 h-[3px] rounded-full bg-slate-200/80 dark:bg-slate-700/70 overflow-hidden min-w-[14px]">
+                  <div className={cn('h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-[width] duration-700 ease-out', done ? 'w-full' : 'w-0')} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* mobil sarlavha + indeterminate progress */}
+      <div className="relative mt-3.5">
+        <div className="md:hidden mb-2 text-[12px] font-bold text-emerald-800 dark:text-emerald-200">{phases[i].label}…</div>
+        <div className="relative h-1.5 rounded-full bg-emerald-100/80 dark:bg-emerald-950/60 overflow-hidden">
+          <div className="absolute inset-y-0 left-0 w-1/4 rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400 animate-export-bar" />
+        </div>
       </div>
     </div>
   );

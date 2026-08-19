@@ -558,14 +558,14 @@ export class GoogleExportService {
     const keyIdx = colIdx(keyColLetter);
     const maxIdx = Math.max(...columns.map((c) => colIdx(c.col)));
 
-    // OXIRGI QATORNI faqat "ANKER" ustun (default F — К оплате) bo'yicha aniqlaymiz.
-    // MUHIM (real ma'lumotdan tasdiqlangan): anker ustun (F) HAR haqiqiy qatorda to'la —
-    // hatto to'lov tafsiloti hali kelmagan "bo'sh" qatorlarda ham (F=Оплачен). Aksincha,
-    // kalit G (ID) ba'zi qatorlarda BO'SH, va F'dan o'ngdagi ustunlarda (formulalar) pastda
-    // qoldiq bo'lishi mumkin. Shuning uchun "barcha ustun"/G ishlatsak — oxirgi qator juda
-    // past chiqib, yangi ma'lumot pastdagi bo'sh zonaga tushardi. F oxirgi HAQIQIY qatorni beradi.
+    // OXIRGI QATORNI "ANKER" ustun (default H — № заявка) bo'yicha aniqlaymiz.
+    // MUHIM (to'liq ma'lumot tahlilidan): anker PER-RECORD ustun bo'lishi kerak — har yozuvga
+    // xos, ketma-ket raqam (masalan № заявка = H). STATUS ustuni (F = К оплате) YARAMAYDI:
+    // "Оплачен" kelajak qatorlarga oldindan to'ldirilgan yoki formula bilan PASTGA cho'zilgan,
+    // shuning uchun F oxirgi qatorni juda past ko'rsatib, yangi ma'lumot bo'sh zonaga tushardi.
+    // H per-record va export unga TEGMAYDI (stray bo'lmaydi) → oxirgi HAQIQIY yozuvda tugaydi.
     const anchorCol = (anchorColOpt && /^[A-Z]{1,3}$/.test(String(anchorColOpt).toUpperCase()))
-      ? String(anchorColOpt).toUpperCase() : 'F';
+      ? String(anchorColOpt).toUpperCase() : 'H';
     const anchorIdx = colIdx(anchorCol);
     const readMaxIdx = Math.max(maxIdx, anchorIdx);
 
