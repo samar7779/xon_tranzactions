@@ -1220,8 +1220,8 @@ function SheetCard({
                     ))}
                   </ProSelect>
                 </Field>
-                <div className="self-end pb-2 text-[10.5px] text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">
-                  ℹ️ Yangi qatorlar jadvaldagi <b>oxirgi ma'lumotli qatordan keyin</b> (barcha ustun bo'yicha, avtomatik) qo'shiladi — o'rtadagi bo'sh joylarga tushmaydi.
+                <div className="self-end pb-2 text-[10.5px] text-emerald-600 dark:text-emerald-400 max-w-sm leading-relaxed">
+                  ✓ Yangi qatorlar jadvaldagi <b>eng oxirgi ma'lumotli qatordan keyin</b> (barcha ustun bo'yicha, avtomatik) qo'shiladi — o'rtadagi bo'sh joylarga <b>tushmaydi</b>.
                 </div>
               </>
             )}

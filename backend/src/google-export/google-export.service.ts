@@ -664,6 +664,8 @@ export class GoogleExportService {
 
   async run(target: SheetTarget) {
     const startedAt = Date.now();
+    // Build marker: upsert append = oxirgi qator BARCHA ustun bo'yicha (full-width) — v2.
+    this.log.log(`Export run boshlandi: "${target?.name}" (${target?.writeMode || 'replace'})`);
     let step: 'auth' | 'validate' | 'clear' | 'fetch' | 'write' = 'auth';
     try {
       const creds = await this.loadCredentials();
