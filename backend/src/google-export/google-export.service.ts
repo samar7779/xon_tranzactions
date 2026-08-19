@@ -588,11 +588,15 @@ export class GoogleExportService {
     }
     const anchorLen = lastPayIdx + 1;
 
-    const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (existing ichida)
-    existing.forEach((r, i) => {
+    // keyToIdx — FAQAT birinchi REAL blok (0..lastPayIdx) dan quramiz. Blokdan tashqari
+    // (bron/stray) qatorlarni MATCH QILMAYMIZ — aks holda yozuvlar o'sha eski qoldiq
+    // pozitsiyalarida (pastda) yangilanib, blok tepasiga qo'shilmasdan qolardi → "kam yozildi"dek.
+    const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (REAL blok ichida)
+    for (let i = 0; i <= lastPayIdx; i++) {
+      const r = existing[i];
       const k = r?.[keyIdx] != null ? String(r[keyIdx]).trim() : '';
       if (k && !keyToIdx.has(k)) keyToIdx.set(k, i);
-    });
+    }
 
     // Tegiladigan hujayralar: ustun → (sheet qator raqami → qiymat). Boshqa (qo'lda) qatorlarga TEGMAYMIZ.
     const touched: Record<string, Map<number, any>> = {};
