@@ -10,6 +10,7 @@ import { TransactionsService } from '../transactions/transactions.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { serialize, FORMATS, Dataset, ExportColumn } from './data-formats';
+import { planUpsertRows } from './google-export.plan';
 
 // ─── Config tuzilishi ───────────────────────────────────────────────
 export interface SheetColumn {
@@ -576,27 +577,10 @@ export class GoogleExportService {
     const existing: any[][] = getResp.data.values || [];
     // TO'LOV ustunlari indeksi (mapping, kalit G'dan tashqari) — masalan A..E.
     const payIdxs = columns.map((c) => colIdx(c.col)).filter((x) => x !== keyIdx);
-    const cellFilled = (r: any[] | undefined, c: number) => { const v = r?.[c]; return v != null && String(v).trim() !== ''; };
-    // Birinchi uzluksiz to'lov blokining OXIRI. GAP_LIMIT'dan katta ketma-ket to'lovsiz bo'shliq
-    // kelsa — blok tugadi (undan keyingi bron/stray e'tiborsiz qoldiriladi).
-    const GAP_LIMIT = 200;
-    let lastPayIdx = -1;
-    let gap = 0;
-    for (let i = 0; i < existing.length; i++) {
-      if (payIdxs.some((c) => cellFilled(existing[i], c))) { lastPayIdx = i; gap = 0; }
-      else if (lastPayIdx >= 0 && ++gap > GAP_LIMIT) break;
-    }
-    const anchorLen = lastPayIdx + 1;
-
-    // keyToIdx — FAQAT birinchi REAL blok (0..lastPayIdx) dan quramiz. Blokdan tashqari
-    // (bron/stray) qatorlarni MATCH QILMAYMIZ — aks holda yozuvlar o'sha eski qoldiq
-    // pozitsiyalarida (pastda) yangilanib, blok tepasiga qo'shilmasdan qolardi → "kam yozildi"dek.
-    const keyToIdx = new Map<string, number>(); // kalit → 0-based indeks (REAL blok ichida)
-    for (let i = 0; i <= lastPayIdx; i++) {
-      const r = existing[i];
-      const k = r?.[keyIdx] != null ? String(r[keyIdx]).trim() : '';
-      if (k && !keyToIdx.has(k)) keyToIdx.set(k, i);
-    }
+    // Append REJASI — SOF funksiya (google-export.plan.spec.ts da haqiqiy «Заявки» tuzilishi bilan
+    // test qilingan): anchorLen = birinchi to'lov blokining oxiri (bron/stray tashlanadi);
+    // keyToIdx = FAQAT shu blok kalitlari (bron/stray match QILINMAYDI → hech qaysi yozuv yo'qolmaydi).
+    const { anchorLen, keyToIdx } = planUpsertRows(existing, payIdxs, keyIdx, 200);
 
     // Tegiladigan hujayralar: ustun → (sheet qator raqami → qiymat). Boshqa (qo'lda) qatorlarga TEGMAYMIZ.
     const touched: Record<string, Map<number, any>> = {};
