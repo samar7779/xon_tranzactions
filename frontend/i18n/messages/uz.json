@@ -2392,6 +2392,7 @@
       "txId": "Tranzaksiya ID",
       "contractNo": "Shartnoma raqami",
       "qOplata": "Mijoz, obyekt yoki izoh bo'yicha qidirish",
+      "typeOplata": "Тип (to'lov turi) bo'yicha filtr — masalan 'Взносы за квартиры', 'За счетчик', 'Возврат', 'Переброска'. Qisman/registrsiz mos keladi",
       "updatedSince": "Delta-sync: ISO vaqt (masalan 2026-07-09T10:00:00Z). Shu vaqt va undan keyin o'zgargan to'lovlar updatedAt bo'yicha qaytariladi",
       "deletedSince": "Delta-sync: ISO vaqt. Shu vaqt va undan keyin o'chirilgan to'lovlar deletedAt bo'yicha qaytariladi",
       "compositeId": "Composite ID (bank kompozit / sourceTxId) — aniq yoki qisman qidirish. Muayyan to'lov o'chirilganini tekshirish uchun",

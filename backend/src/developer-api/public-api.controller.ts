@@ -161,6 +161,7 @@ export class PublicApiController {
     @Query('dateTo') dateTo?: string,
     @Query('q') q?: string,
     @Query('updatedSince') updatedSince?: string,
+    @Query('type') type?: string,
   ) {
     const pageN = Math.max(1, Number(page) || 1);
     const perPageN = Math.min(200, Math.max(1, Number(perPage) || 50));
@@ -168,6 +169,9 @@ export class PublicApiController {
     // Split bo'lmagan qatorlar API'da ko'rinmaydi — split qilinganda avtomatik chiqadi.
     const where: any = { paymentCategory: { not: null } };
     if (contractNo) where.contractNo = contractNo;
+    // Тип (txType) bo'yicha ixtiyoriy filtr — qisman, registrsiz mos keladi
+    // (masalan "счетчик" → "За счетчик", "возврат" → "Возврат взносов за кв.").
+    if (type && type.trim()) where.txType = { contains: type.trim(), mode: 'insensitive' };
     if (dateFrom || dateTo) {
       where.date = {};
       if (dateFrom) where.date.gte = new Date(`${dateFrom}T00:00:00Z`);

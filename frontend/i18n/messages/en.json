@@ -2392,6 +2392,7 @@
       "txId": "Transaction ID",
       "contractNo": "Contract number",
       "qOplata": "Search by client, object or description",
+      "typeOplata": "Filter by type (txType) — e.g. 'Взносы за квартиры', 'За счетчик', 'Возврат', 'Переброска'. Partial/case-insensitive",
       "updatedSince": "Delta-sync: ISO time (e.g. 2026-07-09T10:00:00Z). Returns payments changed at/after this time, ordered by updatedAt",
       "deletedSince": "Delta-sync: ISO time. Returns payments deleted at/after this time, ordered by deletedAt",
       "compositeId": "Composite ID (bank composite / sourceTxId) — exact or partial search. To check if a specific payment was deleted",
