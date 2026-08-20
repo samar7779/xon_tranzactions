@@ -587,10 +587,11 @@ export class OplataKvController {
   @RequirePermissions(PERMISSIONS.OPLATAKV_SPLIT)
   @ApiOperation({ summary: "paymentAmount'ni 1-vznos/oylik'ga ajratish (CRM asosida). contractNo berilsa faqat shu shartnoma." })
   async splitInstallments(
-    @Body() body: { limit?: number; contractNo?: string },
+    @Body() body: { limit?: number; contractNo?: string; force?: boolean },
     @CurrentUser() user?: AuthUser,
   ) {
-    return this.svc.splitInstallments({ limit: body?.limit, contractNo: body?.contractNo, actor: actorFrom(user) });
+    // force=true — mavjud (eski) split qiymatlarni ham qayta hisoblaydi (grafik waterfall bilan).
+    return this.svc.splitInstallments({ limit: body?.limit, contractNo: body?.contractNo, force: body?.force, actor: actorFrom(user) });
   }
 
   @Post('cleanup-xato-splits')

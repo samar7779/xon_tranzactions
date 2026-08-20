@@ -10,6 +10,7 @@ import * as ExcelJS from 'exceljs';
 import { Prisma, OplataKvCategory } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CrmService } from '../crm/crm.service';
+import { buildSchedule, allocatePayment, categoryOf } from './installment-split';
 import { CrmContractCacheService, ReverifyStatus } from '../categorization/crm-contract-cache.service';
 import { CategorizationService } from '../categorization/categorization.service';
 import { SettingsService } from '../sync/settings.service';
@@ -2571,8 +2572,9 @@ export class OplataKvService {
             notFound += items.length;
             return;
           }
-          // CRM dagi initial total reja (1-vznos jami summasi shartnoma bo'yicha)
-          const initialPlan = Number(detail?.initial?.total?.amount || 0);
+          // CRM to'lov grafigi — SANA tartibida boshlang'ich+oylik qadamlar (ARALASH).
+          // Split shu grafik bo'ylab waterfall qilinadi (bitta yaxlit initial.total EMAS).
+          const schedule = buildSchedule(detail);
 
           // Eski running totals — shu contractda BU BATCH'gacha bo'lgan jami
           const firstDate = items[0].date;
@@ -2612,67 +2614,14 @@ export class OplataKvService {
               continue; // running totals'ga qo'shmaymiz
             }
 
-            let firstInstallment = 0;
-            let monthlyAmount = 0;
-            let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
+            if (amount === 0) continue; // 0 — hech narsa
 
-            if (amount > 0) {
-              // POZITIV — initialPlan chegarasiga qarab ajratamiz
-              // runningInitial = shu contractda hozirgacha jami 1-vznos
-              // remaining = initialPlan - runningInitial (qancha qoldi)
-              const remainingInitial = initialPlan > 0
-                ? Math.max(0, initialPlan - runningInitial)
-                : 0;
-
-              if (initialPlan <= 0 || remainingInitial <= 0) {
-                // Initial yo'q yoki to'liq to'langan -> hammasi monthly
-                monthlyAmount = amount;
-                runningMonthly += amount;
-              } else if (remainingInitial >= amount) {
-                // Hammasi initialga sig'adi
-                firstInstallment = amount;
-                runningInitial += amount;
-              } else {
-                // SPLIT — bir qismi initial, qolgani monthly
-                firstInstallment = remainingInitial;
-                monthlyAmount = amount - remainingInitial;
-                runningInitial += remainingInitial;
-                runningMonthly += monthlyAmount;
-              }
-            } else if (amount < 0) {
-              // NEGATIV (refund) — avval monthly'dan, yetmasa initial'dan
-              const refund = -amount;
-              if (refund <= runningMonthly) {
-                monthlyAmount = amount;
-                runningMonthly -= refund;
-              } else if (runningMonthly > 0) {
-                // Split: monthly o'zining qancha bo'lsa shuncha oladi, qolgani initial'dan
-                monthlyAmount = -runningMonthly;
-                firstInstallment = -(refund - runningMonthly);
-                runningInitial -= refund - runningMonthly;
-                runningMonthly = 0;
-              } else {
-                // Monthly umuman yo'q — hammasi initial'dan
-                firstInstallment = amount;
-                runningInitial -= refund;
-              }
-            } else {
-              continue; // 0 - hech narsa
-            }
-
-            // Category aniqlash — qaysi qism ko'p bo'lsa shu kategoriya
-            // (teng bo'lsa boshlang'ich) — GENERAL endi ishlatilmaydi
-            if (firstInstallment === 0 && monthlyAmount === 0) {
-              category = 'MONTHLY';
-            } else if (firstInstallment !== 0 && monthlyAmount === 0) {
-              category = 'FIRST';
-            } else if (firstInstallment === 0 && monthlyAmount !== 0) {
-              category = 'MONTHLY';
-            } else {
-              const absFirst = Math.abs(firstInstallment);
-              const absMonthly = Math.abs(monthlyAmount);
-              category = absMonthly > absFirst ? 'MONTHLY' : 'FIRST';
-            }
+            // WATERFALL — grafik bo'ylab taqsimlash (auto = qo'lda tugma, BIR XIL shared qoida).
+            // alreadyPaid = shu shartnomada shu to'lovgacha jami NET (running first + monthly).
+            const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount);
+            runningInitial += firstInstallment;
+            runningMonthly += monthlyAmount;
+            const category = categoryOf(firstInstallment, monthlyAmount);
 
             updates.push(this.prisma.oplataKv.update({
               where: { id: item.id },
@@ -2763,7 +2712,8 @@ export class OplataKvService {
     if (!detail) {
       return { ok: false, error: 'Shartnoma CRM da topilmadi — split mumkin emas (XATO)' };
     }
-    const initialPlan = Number(detail?.initial?.total?.amount || 0);
+    // CRM grafigi — SANA tartibida boshlang'ich+oylik qadamlar (waterfall uchun).
+    const schedule = buildSchedule(detail);
 
     // Running totals — shu shartnomadagi date < shu_qator.date bo'lganlardan
     const existingSums = await this.prisma.oplataKv.aggregate({
@@ -2783,55 +2733,12 @@ export class OplataKvService {
     let runningMonthly = Number(existingSums._sum.monthlyAmount || 0);
 
     const amount = Number(row.paymentAmount);
-    let firstInstallment = 0;
-    let monthlyAmount = 0;
-    let category: 'FIRST' | 'MONTHLY' | 'GENERAL' = 'MONTHLY';
+    if (amount === 0) return { ok: false, error: 'Summa 0 — split kerak emas' };
 
-    if (amount > 0) {
-      const remainingInitial = initialPlan > 0
-        ? Math.max(0, initialPlan - runningInitial)
-        : 0;
-      if (initialPlan <= 0 || remainingInitial <= 0) {
-        monthlyAmount = amount;
-      } else if (remainingInitial >= amount) {
-        firstInstallment = amount;
-      } else {
-        firstInstallment = remainingInitial;
-        monthlyAmount = amount - remainingInitial;
-      }
-    } else if (amount < 0) {
-      const refund = -amount;
-      if (refund <= runningMonthly) {
-        monthlyAmount = amount;
-      } else if (runningMonthly > 0) {
-        monthlyAmount = -runningMonthly;
-        firstInstallment = -(refund - runningMonthly);
-      } else {
-        firstInstallment = amount;
-      }
-    } else {
-      return { ok: false, error: 'Summa 0 — split kerak emas' };
-    }
-
-    // Kategoriya — qaysi qism ko'p bo'lsa, shu kategoriya tanlanadi:
-    //   firstInstallment > monthlyAmount   → FIRST  (boshlang'ich ko'p)
-    //   monthlyAmount > firstInstallment   → MONTHLY (oylik ko'p)
-    //   teng (har ikkisi 0 emas)           → FIRST (default boshlang'ich)
-    //   biri 0                              → boshqasiga teng
-    // Qiyoslashda absolyut qiymat olinadi — refund (manfiy) holatlar ham
-    // to'g'ri taqsimlanadi.
-    if (firstInstallment === 0 && monthlyAmount === 0) {
-      category = 'MONTHLY'; // hech narsa yo'q — default
-    } else if (firstInstallment !== 0 && monthlyAmount === 0) {
-      category = 'FIRST';
-    } else if (firstInstallment === 0 && monthlyAmount !== 0) {
-      category = 'MONTHLY';
-    } else {
-      // Ikkalasi ham non-zero — qaysi katta?
-      const absFirst = Math.abs(firstInstallment);
-      const absMonthly = Math.abs(monthlyAmount);
-      category = absMonthly > absFirst ? 'MONTHLY' : 'FIRST';
-    }
+    // WATERFALL — grafik bo'ylab taqsimlash (auto splitInstallments bilan BIR XIL shared qoida).
+    // alreadyPaid = shu qatorgacha jami NET (running first + monthly).
+    const { firstInstallment, monthlyAmount } = allocatePayment(schedule, runningInitial + runningMonthly, amount);
+    const category = categoryOf(firstInstallment, monthlyAmount);
 
     await this.prisma.oplataKv.update({
       where: { id: row.id },
@@ -2857,7 +2764,7 @@ export class OplataKvService {
             monthlyAmount: { new: monthlyAmount },
             paymentCategory: { new: category },
           } as any,
-          note: `Bitta qator uchun split qayta hisoblandi (runningInitial=${runningInitial}, runningMonthly=${runningMonthly}, initialPlan=${initialPlan})`,
+          note: `Bitta qator uchun split qayta hisoblandi (runningInitial=${runningInitial}, runningMonthly=${runningMonthly}, grafik-qadam=${schedule.length})`,
         },
       });
     } catch (e: any) {
